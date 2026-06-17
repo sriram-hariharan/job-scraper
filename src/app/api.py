@@ -324,6 +324,14 @@ class HumanReviewedInfluenceApprovalRequest(BaseModel):
     job_id: str = ""
 
 
+class AgentRecommendationOverlayRequest(BaseModel):
+    deterministic_score_context: dict[str, Any] = Field(default_factory=dict)
+    shadow_score_comparison_context: dict[str, Any] = Field(default_factory=dict)
+    human_reviewed_influence_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    influence_approval_request_payload: dict[str, Any] = Field(default_factory=dict)
+    overlay_config: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -3857,6 +3865,86 @@ def human_reviewed_influence_approval_request(
         **payload,
         "explicit_user_action": True,
         "api_surface": "human_reviewed_influence_approval_request",
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/agent-recommendation-overlay")
+def agent_recommendation_overlay(request: AgentRecommendationOverlayRequest):
+    try:
+        response = services.agent_recommendation_overlay_service_payload(
+            deterministic_score_context=request.deterministic_score_context,
+            shadow_score_comparison_context=request.shadow_score_comparison_context,
+            human_reviewed_influence_preview_payload=(
+                request.human_reviewed_influence_preview_payload
+            ),
+            influence_approval_request_payload=request.influence_approval_request_payload,
+            overlay_config=request.overlay_config,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase6_agent_recommendation_overlay_v1",
+            "overlay_status": "overlay_failed_non_blocking",
+            "overlay_type": "agent_recommendation_overlay",
+            "overlay_enabled": True,
+            "deterministic_decision_context": {},
+            "shadow_score_comparison": {},
+            "human_reviewed_influence_preview": {},
+            "approval_request_context": {},
+            "recommended_review_action": "insufficient_context",
+            "recommended_review_label": "Insufficient Context",
+            "overlay_findings": [],
+            "operator_review_summary": {
+                "summary_type": "agent_recommendation_overlay",
+                "review_status": "overlay_failed_non_blocking",
+                "recommended_review_action": "insufficient_context",
+                "operator_review_only": True,
+                "read_only": True,
+                "advisory_only": True,
+                "human_review_required": True,
+                "approval_gate_required_for_influence": True,
+            },
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "advisory_only": True,
+                "service_helper_only": True,
+                "overlay_only": True,
+                "human_review_required": True,
+                "approval_gate_required_for_influence": True,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["api_readback_only"] = True
+    safety["overlay_only"] = True
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "agent_recommendation_overlay",
+        "api_readback_only": True,
         "ui_action_added": False,
     }
 

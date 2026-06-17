@@ -1043,6 +1043,24 @@ function humanReviewedInfluenceApprovalRequestPayload(tracePayload = {}, options
   };
 }
 
+function agentRecommendationOverlayRequestPayload(tracePayload = {}) {
+  const previewRequest = humanReviewedInfluencePreviewRequestPayload(tracePayload);
+  const comparisonContext = hasAgentTraceSummaryObject(tracePayload?.shadow_sidecar_score_comparison_result)
+    ? tracePayload.shadow_sidecar_score_comparison_result
+    : {};
+  return {
+    deterministic_score_context: previewRequest.deterministic_score_context,
+    shadow_score_comparison_context: comparisonContext,
+    human_reviewed_influence_preview_payload: hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
+      ? tracePayload.human_reviewed_influence_preview_result
+      : {},
+    influence_approval_request_payload: hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_approval_request_result)
+      ? tracePayload.human_reviewed_influence_approval_request_result
+      : {},
+    overlay_config: {},
+  };
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -1102,6 +1120,60 @@ function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
         </button>
         <span class="agentic-review-muted" data-human-reviewed-influence-preview-status>
           Manual read-only. Safe states include not-enabled, blocked by kill switch, missing deterministic context, and missing shadow comparison.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentRecommendationOverlaySection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.agent_recommendation_overlay_result)
+    ? tracePayload.agent_recommendation_overlay_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const status = result.overlay_status || "not run";
+  return `
+    <article class="agent-trace-summary" aria-label="Agent recommendation overlay">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Agent Recommendation Overlay</h4>
+          <p>Manual read-only overlay combining deterministic score context, shadow comparison, influence preview, and approval request status. It is advisory only and never changes scoring, ranking, queues, approvals, resumes, execution requests, launch requests, applications, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off overlay</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Overlay", status)}
+        ${renderWorkflowSummaryMetric("Recommendation", result.recommended_review_action || "-")}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Advisory", safety.advisory_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Scoring mutation", safety.did_mutate_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking mutation", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "overlay_not_enabled" ? renderAgentTraceReadOnlyState("Agent recommendation overlay is not enabled. Default-off display is safe.", "info", "Agent overlay not enabled") : ""}
+      ${status === "overlay_blocked_by_kill_switch" ? renderAgentTraceReadOnlyState("Agent recommendation overlay is blocked by the shadow sidecar kill switch.", "warning", "Agent overlay blocked") : ""}
+      ${status === "overlay_blocked_missing_deterministic_context" ? renderAgentTraceReadOnlyState("Deterministic score context is missing. The overlay cannot recommend an advisory action.", "info", "Agent overlay missing deterministic context") : ""}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Deterministic decision context", result.deterministic_decision_context || {}, { helper: "Read-only deterministic decision context. It is not changed by the overlay." })}
+        ${renderAgentTraceReadOnlyDetails("Shadow score comparison", result.shadow_score_comparison || {}, { helper: "Read-only shadow comparison status and agreement." })}
+        ${renderAgentTraceReadOnlyDetails("Human-reviewed influence preview", result.human_reviewed_influence_preview || {}, { helper: "Read-only influence preview status." })}
+        ${renderAgentTraceReadOnlyDetails("Approval request context", result.approval_request_context || {}, { helper: "Read-only approval request context. Overlay does not create approvals." })}
+        ${renderAgentTraceReadOnlyDetails("Recommended review action", result.recommended_review_action || "", { helper: "Advisory label only. It does not alter score, rank, queue, or approvals." })}
+        ${renderAgentTraceReadOnlyDetails("Overlay findings", result.overlay_findings || [], { helper: "Read-only findings supporting the advisory overlay." })}
+        ${renderAgentTraceReadOnlyDetails("Operator review summary", result.operator_review_summary || {}, { helper: "Operator-facing advisory summary." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety metadata for the recommendation overlay." })}
+      </div>
+      <div class="agentic-feedback-actions">
+        <button type="button" class="agentic-feedback-action" data-agent-recommendation-overlay>
+          Build Agent Recommendation Overlay
+        </button>
+        <span class="agentic-review-muted" data-agent-recommendation-overlay-status>
+          Manual read-only and default-off. Safe states include not-enabled, kill switch blocked, missing deterministic context, and partial context.
         </span>
       </div>
     </article>
@@ -3789,6 +3861,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderShadowSidecarScoreComparisonSection(tracePayload)}
       ${renderHumanReviewedInfluencePreviewSection(tracePayload)}
       ${renderHumanReviewedInfluenceApprovalRequestSection(tracePayload)}
+      ${renderAgentRecommendationOverlaySection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5624,6 +5697,44 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Human-reviewed influence approval request failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-agent-recommendation-overlay]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-agent-recommendation-overlay-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Building read-only agent recommendation overlay...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const overlayResult = await fetchJson(
+        "/api/agent-recommendation-overlay",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(agentRecommendationOverlayRequestPayload(tracePayload)),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        agent_recommendation_overlay_result: overlayResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Agent recommendation overlay failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

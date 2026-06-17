@@ -184,6 +184,8 @@ ALLOWED_CHANGED = {
     "tests/test_shadow_sidecar_trace_readback_ui_default_off.py",
     "docs/phase5_shadow_sidecar_end_to_end_readiness_audit.md",
     "tests/test_phase5_shadow_sidecar_end_to_end_readiness_audit.py",
+    "src/agents/shadow_sidecar_evidence_snapshot.py",
+    "tests/test_shadow_sidecar_evidence_snapshot_default_off_readonly.py",
 }
 
 def _changed_files():
@@ -230,6 +232,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/shadow_sidecar_hook.py",
         "src/agents/shadow_sidecar_trace_persistence.py",
         "src/agents/shadow_sidecar_trace_readback.py",
+        "src/agents/shadow_sidecar_evidence_snapshot.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

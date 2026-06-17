@@ -206,11 +206,10 @@ def test_service_helper_slice_has_no_api_ui_storage_pipeline_or_mutation_calls()
         assert marker not in helper_source
 
 
-def test_no_api_ui_pipeline_or_schema_file_uses_service_helper():
+def test_no_ui_pipeline_or_schema_file_uses_service_helper():
     helper_marker = "shadow_sidecar_score_comparison_service_payload"
     protected_paths = [
         "src/pipeline/collector.py",
-        "src/app/api.py",
         "src/app/static/agentic_review.js",
         "src/storage/agent_trace/schema.sql",
     ]

@@ -3643,6 +3643,96 @@ def shadow_sidecar_trace_readback(payload: dict | None = Body(default=None)):
     }
 
 
+@app.post("/api/shadow-sidecar/score-comparison")
+def shadow_sidecar_score_comparison(payload: dict | None = Body(default=None)):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    try:
+        response = services.shadow_sidecar_score_comparison_service_payload(
+            deterministic_score_context=(
+                dict(request_payload.get("deterministic_score_context") or {})
+                if isinstance(request_payload.get("deterministic_score_context"), dict)
+                else {}
+            ),
+            shadow_evidence_snapshot_payload=(
+                dict(request_payload.get("shadow_evidence_snapshot_payload") or {})
+                if isinstance(
+                    request_payload.get("shadow_evidence_snapshot_payload"), dict
+                )
+                else {}
+            ),
+            sidecar_config=(
+                dict(request_payload.get("sidecar_config") or {})
+                if isinstance(request_payload.get("sidecar_config"), dict)
+                else {}
+            ),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase5_shadow_sidecar_trace_v1",
+            "comparison_status": "comparison_failed_non_blocking",
+            "comparison_type": "shadow_sidecar_vs_deterministic_score",
+            "comparison_enabled": True,
+            "deterministic_score": None,
+            "deterministic_decision": "",
+            "shadow_snapshot_status": "",
+            "shadow_agent_names": [],
+            "shadow_risk_flag_count": 0,
+            "shadow_blocking_finding_count": 0,
+            "agreement_level": "",
+            "operator_review_summary": {
+                "summary_type": "shadow_sidecar_score_comparison",
+                "review_status": "failed_non_blocking",
+                "operator_review_only": True,
+                "read_only": True,
+                "recommended_review_focus": ["retry_comparison_with_safe_inputs"],
+            },
+            "comparison_findings": [],
+            "source_deterministic_context": {},
+            "source_shadow_snapshot_context": {},
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "shadow_only": True,
+                "service_helper_only": True,
+                "score_comparison_only": True,
+                "operator_review_only": True,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["api_readback_only"] = True
+    safety["score_comparison_only"] = True
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "shadow_sidecar_score_comparison",
+        "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
 @app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")
 def profile_pipeline_run_agentic_review_data(run_id: str, http_request: Request):
     try:

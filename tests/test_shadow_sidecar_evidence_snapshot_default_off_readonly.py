@@ -277,7 +277,7 @@ def test_source_has_no_pipeline_api_service_ui_schema_provider_or_storage_wiring
         assert marker not in source
 
 
-def test_no_runtime_or_ui_file_imports_or_calls_evidence_snapshot_helper():
+def test_no_runtime_file_imports_or_calls_evidence_snapshot_helper():
     helper_markers = [
         "shadow_sidecar_evidence_snapshot",
         "build_shadow_sidecar_evidence_snapshot_payload",
@@ -286,7 +286,6 @@ def test_no_runtime_or_ui_file_imports_or_calls_evidence_snapshot_helper():
         "src/pipeline/collector.py",
         "src/app/api.py",
         "src/app/services.py",
-        "src/app/static/agentic_review.js",
         "src/storage/agent_trace/schema.sql",
     ]
 

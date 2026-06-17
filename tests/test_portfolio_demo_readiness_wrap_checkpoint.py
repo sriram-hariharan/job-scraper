@@ -186,6 +186,14 @@ ALLOWED_CHANGED = {
     "tests/test_phase5_shadow_sidecar_end_to_end_readiness_audit.py",
     "src/agents/shadow_sidecar_evidence_snapshot.py",
     "tests/test_shadow_sidecar_evidence_snapshot_default_off_readonly.py",
+    "src/agents/shadow_sidecar_score_comparison.py",
+    "tests/test_shadow_sidecar_score_comparison_readonly.py",
+    "tests/test_shadow_sidecar_score_comparison_service_helper_no_api_ui.py",
+    "tests/test_shadow_sidecar_score_comparison_api_default_off_no_ui.py",
+    "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",
+    "docs/phase6_shadow_score_comparison_ui_readiness_audit.md",
+    "tests/test_phase6_shadow_score_comparison_ui_readiness_audit.py",
+    "tests/test_shadow_sidecar_score_comparison_ui_default_off.py",
 }
 
 def _changed_files():
@@ -233,6 +241,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/shadow_sidecar_trace_persistence.py",
         "src/agents/shadow_sidecar_trace_readback.py",
         "src/agents/shadow_sidecar_evidence_snapshot.py",
+        "src/agents/shadow_sidecar_score_comparison.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

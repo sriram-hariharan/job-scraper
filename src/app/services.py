@@ -46,6 +46,7 @@ from src.agents import (
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
     resume_match_agent,
+    shadow_sidecar_score_comparison,
     shadow_sidecar_trace_readback,
     tailoring_decision_agent,
     workflow_runner,
@@ -1603,6 +1604,39 @@ def shadow_sidecar_trace_readback_service_payload(
     return {
         **payload,
         "service_surface": "shadow_sidecar_trace_readback_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+    }
+
+
+def shadow_sidecar_score_comparison_service_payload(
+    *,
+    deterministic_score_context: Dict[str, Any] | None = None,
+    shadow_evidence_snapshot_payload: Dict[str, Any] | None = None,
+    sidecar_config: Dict[str, Any] | None = None,
+    comparison_builder: Any = None,
+) -> Dict[str, Any]:
+    payload = (
+        shadow_sidecar_score_comparison.build_shadow_sidecar_score_comparison_payload(
+            deterministic_score_context=deepcopy(deterministic_score_context or {})
+            if isinstance(deterministic_score_context, dict)
+            else None,
+            shadow_evidence_snapshot_payload=deepcopy(
+                shadow_evidence_snapshot_payload or {}
+            )
+            if isinstance(shadow_evidence_snapshot_payload, dict)
+            else None,
+            sidecar_config=deepcopy(sidecar_config or {}),
+            comparison_builder=comparison_builder,
+        )
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["service_helper_only"] = True
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "shadow_sidecar_score_comparison_service",
         "service_helper_only": True,
         "api_route_added": False,
         "ui_action_added": False,

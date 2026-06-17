@@ -4,6 +4,9 @@ from copy import deepcopy
 from typing import Any
 
 from src.agents import shadow_sidecar
+from src.agents.shadow_sidecar_trace_persistence import (
+    build_shadow_sidecar_trace_persistence_payload,
+)
 from src.storage.agent_trace.store import build_agent_trace_summary_payload
 
 
@@ -235,6 +238,57 @@ def _safe_shadow_sidecar_hook_trace_capture_payload(
         }
 
 
+def _safe_shadow_sidecar_trace_persistence_payload(
+    hook_payload: dict[str, Any],
+    *,
+    persistence_writer: Any = None,
+) -> dict[str, Any]:
+    try:
+        return build_shadow_sidecar_trace_persistence_payload(
+            trace_capture_payload=_snapshot(hook_payload.get("trace_capture") or {}),
+            sidecar_config=_snapshot(hook_payload.get("sidecar_config") or {}),
+            owner_user_id="shadow_sidecar",
+            pipeline_run_id=_clean_text(hook_payload.get("source_deterministic_stage")),
+            context_id=_clean_text(hook_payload.get("source_deterministic_decision")),
+            persistence_writer=persistence_writer,
+            called_by_hook=True,
+        )
+    except Exception as exc:
+        return {
+            "schema_version": shadow_sidecar.SCHEMA_VERSION,
+            "trace_persistence_status": "trace_persistence_failed_non_blocking",
+            "trace_persistence_only": True,
+            "persistence_attempted": False,
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "safety_metadata": {
+                "read_only": True,
+                "shadow_only": True,
+                "trace_persistence_only": True,
+                "trace_persistence_called_by_hook": True,
+                "pipeline_hook_called_by_pipeline": False,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_write_agent_trace_run": False,
+                "did_write_agent_trace_step": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+            },
+        }
+
+
 def _base_hook_payload(
     *,
     preview_payload: dict[str, Any],
@@ -244,6 +298,7 @@ def _base_hook_payload(
     chain_payload: dict[str, Any] | None = None,
     observability_payload: dict[str, Any] | None = None,
     next_safe_step: str = "",
+    trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
     preview = deepcopy(preview_payload or {})
     chain = deepcopy(chain_payload) if isinstance(chain_payload, dict) else {}
@@ -275,6 +330,7 @@ def _base_hook_payload(
         ),
         "chain_payload": chain,
         "observability_payload": observability,
+        "sidecar_config": deepcopy(preview.get("sidecar_config") or {}),
         "readiness_decision": deepcopy(
             observability.get("readiness_decision")
             or preview.get("readiness_decision")
@@ -291,6 +347,10 @@ def _base_hook_payload(
         "live_agents_allowed_to_automate_mutations": 0,
     }
     payload["trace_capture"] = _safe_shadow_sidecar_hook_trace_capture_payload(payload)
+    payload["trace_persistence"] = _safe_shadow_sidecar_trace_persistence_payload(
+        payload,
+        persistence_writer=trace_persistence_writer,
+    )
     return payload
 
 
@@ -310,6 +370,7 @@ def run_shadow_sidecar_pipeline_hook(
     resume_profile_payload: dict[str, Any] | None = None,
     existing_trace_context: dict[str, Any] | None = None,
     called_by_pipeline: bool = False,
+    trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
@@ -332,6 +393,7 @@ def run_shadow_sidecar_pipeline_hook(
             hook_status=_clean_text(preview.get("hook_preview_status")),
             chain_attempted=False,
             called_by_pipeline=called_by_pipeline,
+            trace_persistence_writer=trace_persistence_writer,
             next_safe_step=_clean_text(preview.get("next_safe_step")),
         )
 
@@ -363,6 +425,7 @@ def run_shadow_sidecar_pipeline_hook(
             hook_status=_hook_status_from_chain(chain_payload),
             chain_attempted=True,
             called_by_pipeline=called_by_pipeline,
+            trace_persistence_writer=trace_persistence_writer,
             chain_payload=chain_payload,
             observability_payload=observability,
             next_safe_step="inspect_shadow_sidecar_observability",
@@ -373,6 +436,7 @@ def run_shadow_sidecar_pipeline_hook(
             hook_status="hook_failed_non_blocking",
             chain_attempted=True,
             called_by_pipeline=called_by_pipeline,
+            trace_persistence_writer=trace_persistence_writer,
             observability_payload={
                 "observability_status": "observed_failed_non_blocking",
                 "readiness_decision": {

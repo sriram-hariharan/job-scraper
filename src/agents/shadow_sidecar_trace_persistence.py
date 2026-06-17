@@ -52,11 +52,14 @@ def _config_bool(config: dict[str, Any], *keys: str, default: bool = False) -> b
     return default
 
 
-def evaluate_shadow_sidecar_trace_persistence_safety() -> dict[str, bool]:
+def evaluate_shadow_sidecar_trace_persistence_safety(
+    *, called_by_hook: bool = False
+) -> dict[str, bool]:
     return {
         "read_only": True,
         "shadow_only": True,
         "trace_persistence_only": True,
+        "trace_persistence_called_by_hook": bool(called_by_hook),
         "pipeline_hook_called_by_pipeline": False,
         "did_read_database": False,
         "did_write_database": False,
@@ -121,6 +124,7 @@ def build_shadow_sidecar_trace_persistence_records(
     owner_user_id: str = "shadow_sidecar",
     pipeline_run_id: str = "",
     context_id: str = "",
+    called_by_hook: bool = False,
 ) -> dict[str, Any]:
     trace_capture = _snapshot(trace_capture_payload)
     trace_status = _clean_text(trace_capture.get("trace_capture_status"))
@@ -195,7 +199,9 @@ def build_shadow_sidecar_trace_persistence_records(
         "agent_run_record": run_record,
         "agent_step_record": step_record,
         "trace_summary": trace_summary,
-        "safety_metadata": evaluate_shadow_sidecar_trace_persistence_safety(),
+        "safety_metadata": evaluate_shadow_sidecar_trace_persistence_safety(
+            called_by_hook=called_by_hook
+        ),
     }
 
 
@@ -207,6 +213,7 @@ def build_shadow_sidecar_trace_persistence_payload(
     pipeline_run_id: str = "",
     context_id: str = "",
     persistence_writer: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    called_by_hook: bool = False,
 ) -> dict[str, Any]:
     trace_capture = (
         _snapshot(trace_capture_payload)
@@ -226,6 +233,7 @@ def build_shadow_sidecar_trace_persistence_payload(
             owner_user_id=owner_user_id,
             pipeline_run_id=pipeline_run_id,
             context_id=context_id,
+            called_by_hook=called_by_hook,
         )
         if persistence_writer is None:
             status = STATUS_SKIPPED_NO_SAFE_SINK
@@ -262,7 +270,9 @@ def build_shadow_sidecar_trace_persistence_payload(
         "requires_live_database": False,
         "live_provider_backed_automated_agents": 0,
         "mutation_authorized_agents": 0,
-        "safety_metadata": evaluate_shadow_sidecar_trace_persistence_safety(),
+        "safety_metadata": evaluate_shadow_sidecar_trace_persistence_safety(
+            called_by_hook=called_by_hook
+        ),
     }
 
 

@@ -200,6 +200,8 @@ ALLOWED_CHANGED = {
     "tests/test_human_reviewed_influence_preview_readonly.py",
     "tests/test_human_reviewed_influence_preview_service_helper_no_api_ui.py",
     "tests/test_human_reviewed_influence_preview_api_default_off_no_ui.py",
+    "docs/phase6_human_reviewed_influence_preview_ui_readiness_audit.md",
+    "tests/test_phase6_human_reviewed_influence_preview_ui_readiness_audit.py",
 }
 
 def _changed_files():

@@ -204,6 +204,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase6_human_reviewed_influence_preview_ui_readiness_audit.py",
     "tests/test_human_reviewed_influence_preview_ui_default_off.py",
     "tests/test_human_reviewed_influence_approval_request_manual_only.py",
+    "src/agents/agent_recommendation_overlay.py",
+    "tests/test_agent_recommendation_overlay_readonly.py",
 }
 
 def _changed_files():
@@ -253,6 +255,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/shadow_sidecar_evidence_snapshot.py",
         "src/agents/shadow_sidecar_score_comparison.py",
         "src/agents/human_reviewed_influence_preview.py",
+        "src/agents/agent_recommendation_overlay.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

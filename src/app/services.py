@@ -38,6 +38,7 @@ from src.config.settings import (
     SCHEDULER_RUN_HISTORY_PATH,
 )
 from src.agents import (
+    agent_recommendation_overlay,
     critic_agent,
     dry_run_execution_simulator,
     human_reviewed_influence_preview,
@@ -1671,6 +1672,47 @@ def human_reviewed_influence_preview_service_payload(
     return {
         **payload,
         "service_surface": "human_reviewed_influence_preview_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+    }
+
+
+def agent_recommendation_overlay_service_payload(
+    *,
+    deterministic_score_context: Dict[str, Any] | None = None,
+    shadow_score_comparison_context: Dict[str, Any] | None = None,
+    human_reviewed_influence_preview_payload: Dict[str, Any] | None = None,
+    influence_approval_request_payload: Dict[str, Any] | None = None,
+    overlay_config: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    payload = agent_recommendation_overlay.build_agent_recommendation_overlay_payload(
+        deterministic_score_context=deepcopy(deterministic_score_context or {})
+        if isinstance(deterministic_score_context, dict)
+        else None,
+        shadow_score_comparison_context=deepcopy(
+            shadow_score_comparison_context or {}
+        )
+        if isinstance(shadow_score_comparison_context, dict)
+        else None,
+        human_reviewed_influence_preview_payload=deepcopy(
+            human_reviewed_influence_preview_payload or {}
+        )
+        if isinstance(human_reviewed_influence_preview_payload, dict)
+        else None,
+        influence_approval_request_payload=deepcopy(
+            influence_approval_request_payload or {}
+        )
+        if isinstance(influence_approval_request_payload, dict)
+        else None,
+        overlay_config=deepcopy(overlay_config or {}),
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["service_helper_only"] = True
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "agent_recommendation_overlay_service",
         "service_helper_only": True,
         "api_route_added": False,
         "ui_action_added": False,

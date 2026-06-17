@@ -178,6 +178,7 @@ ALLOWED_CHANGED = {
     "src/agents/shadow_sidecar_trace_readback.py",
     "tests/test_shadow_sidecar_trace_readback_helper_default_off_no_api_ui.py",
     "tests/test_shadow_sidecar_trace_readback_service_helper_no_api_ui.py",
+    "tests/test_shadow_sidecar_trace_readback_api_default_off_no_ui.py",
 }
 
 def _changed_files():

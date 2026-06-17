@@ -207,6 +207,8 @@ ALLOWED_CHANGED = {
     "src/agents/agent_recommendation_overlay.py",
     "tests/test_agent_recommendation_overlay_readonly.py",
     "tests/test_agent_recommendation_overlay_pipeline_auto_default_off.py",
+    "src/agents/agent_recommendation_overlay_readback.py",
+    "tests/test_pipeline_generated_agent_recommendation_overlay_readback_readonly.py",
 }
 
 def _changed_files():
@@ -257,6 +259,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/shadow_sidecar_score_comparison.py",
         "src/agents/human_reviewed_influence_preview.py",
         "src/agents/agent_recommendation_overlay.py",
+        "src/agents/agent_recommendation_overlay_readback.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

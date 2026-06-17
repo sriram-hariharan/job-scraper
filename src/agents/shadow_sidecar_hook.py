@@ -250,6 +250,9 @@ def build_shadow_sidecar_hook_trace_capture_payload(
         ),
         "trace_bundle": trace_bundle,
         "evidence_pack": evidence_pack,
+        "agent_recommendation_overlay_auto_generation": deepcopy(
+            hook.get("agent_recommendation_overlay_auto_generation") or {}
+        ),
         "trace_summary": trace_summary,
         "provider_calls_disabled_in_tests": True,
         "safety_metadata": evaluate_shadow_sidecar_hook_trace_capture_safety(
@@ -599,13 +602,13 @@ def _base_hook_payload(
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }
+    payload["agent_recommendation_overlay_auto_generation"] = (
+        _safe_agent_recommendation_overlay_auto_generation_payload(payload)
+    )
     payload["trace_capture"] = _safe_shadow_sidecar_hook_trace_capture_payload(payload)
     payload["trace_persistence"] = _safe_shadow_sidecar_trace_persistence_payload(
         payload,
         persistence_writer=trace_persistence_writer,
-    )
-    payload["agent_recommendation_overlay_auto_generation"] = (
-        _safe_agent_recommendation_overlay_auto_generation_payload(payload)
     )
     return payload
 

@@ -39,6 +39,7 @@ from src.config.settings import (
 )
 from src.agents import (
     agent_recommendation_overlay,
+    agent_recommendation_overlay_readback,
     critic_agent,
     dry_run_execution_simulator,
     human_reviewed_influence_preview,
@@ -1713,6 +1714,45 @@ def agent_recommendation_overlay_service_payload(
     return {
         **payload,
         "service_surface": "agent_recommendation_overlay_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+    }
+
+
+def pipeline_generated_agent_recommendation_overlay_readback_service_payload(
+    *,
+    hook_payload: Dict[str, Any] | None = None,
+    trace_capture_payload: Dict[str, Any] | None = None,
+    trace_persistence_payload: Dict[str, Any] | None = None,
+    trace_readback_payload: Dict[str, Any] | None = None,
+    readback_source: Dict[str, Any] | None = None,
+    readback_reader: Any = None,
+) -> Dict[str, Any]:
+    payload = (
+        agent_recommendation_overlay_readback.build_pipeline_generated_agent_recommendation_overlay_readback_payload(
+            hook_payload=deepcopy(hook_payload or {}) if isinstance(hook_payload, dict) else None,
+            trace_capture_payload=deepcopy(trace_capture_payload or {})
+            if isinstance(trace_capture_payload, dict)
+            else None,
+            trace_persistence_payload=deepcopy(trace_persistence_payload or {})
+            if isinstance(trace_persistence_payload, dict)
+            else None,
+            trace_readback_payload=deepcopy(trace_readback_payload or {})
+            if isinstance(trace_readback_payload, dict)
+            else None,
+            readback_source=deepcopy(readback_source or {})
+            if isinstance(readback_source, dict)
+            else None,
+            readback_reader=readback_reader,
+        )
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["service_helper_only"] = True
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "pipeline_generated_agent_recommendation_overlay_readback_service",
         "service_helper_only": True,
         "api_route_added": False,
         "ui_action_added": False,

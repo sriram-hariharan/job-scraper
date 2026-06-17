@@ -332,6 +332,14 @@ class AgentRecommendationOverlayRequest(BaseModel):
     overlay_config: dict[str, Any] = Field(default_factory=dict)
 
 
+class PipelineGeneratedAgentRecommendationOverlayReadbackRequest(BaseModel):
+    hook_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_capture_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_persistence_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    readback_source: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -3944,6 +3952,73 @@ def agent_recommendation_overlay(request: AgentRecommendationOverlayRequest):
     return {
         **response,
         "api_surface": "agent_recommendation_overlay",
+        "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/pipeline-generated-agent-recommendation-overlay-readback")
+def pipeline_generated_agent_recommendation_overlay_readback(
+    request: PipelineGeneratedAgentRecommendationOverlayReadbackRequest,
+):
+    try:
+        response = (
+            services.pipeline_generated_agent_recommendation_overlay_readback_service_payload(
+                hook_payload=request.hook_payload,
+                trace_capture_payload=request.trace_capture_payload,
+                trace_persistence_payload=request.trace_persistence_payload,
+                trace_readback_payload=request.trace_readback_payload,
+                readback_source=request.readback_source,
+            )
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase5_shadow_sidecar_trace_v1",
+            "readback_status": "pipeline_generated_overlay_readback_failed_non_blocking",
+            "readback_only": True,
+            "readback_attempted": False,
+            "reader_result": {"ok": False, "error_type": exc.__class__.__name__},
+            "pipeline_generated_overlay_found": False,
+            "pipeline_generated_overlay": {},
+            "agent_recommendation_overlay": {},
+            "auto_generation_status": "",
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "readback_only": True,
+                "advisory_only": True,
+                "pipeline_generated_overlay_readback": True,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["api_readback_only"] = True
+    safety["pipeline_generated_overlay_readback"] = True
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "pipeline_generated_agent_recommendation_overlay_readback",
         "api_readback_only": True,
         "ui_action_added": False,
     }

@@ -313,6 +313,17 @@ class ManualGuardedApprovalRequestCreateRequest(BaseModel):
     job_id: str = ""
 
 
+class HumanReviewedInfluenceApprovalRequest(BaseModel):
+    human_reviewed_influence_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    deterministic_score_context: dict[str, Any] = Field(default_factory=dict)
+    shadow_score_comparison_context: dict[str, Any] = Field(default_factory=dict)
+    preview_config: dict[str, Any] = Field(default_factory=dict)
+    reviewer_confirmation: bool = False
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -3821,6 +3832,31 @@ def human_reviewed_influence_preview(payload: dict | None = Body(default=None)):
         **response,
         "api_surface": "human_reviewed_influence_preview",
         "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/human-reviewed-influence-approval-request")
+def human_reviewed_influence_approval_request(
+    request: HumanReviewedInfluenceApprovalRequest,
+):
+    payload = services.build_human_reviewed_influence_approval_request_payload(
+        human_reviewed_influence_preview_payload=(
+            request.human_reviewed_influence_preview_payload
+        ),
+        deterministic_score_context=request.deterministic_score_context,
+        shadow_score_comparison_context=request.shadow_score_comparison_context,
+        preview_config=request.preview_config,
+        reviewer_confirmation=request.reviewer_confirmation,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+        connection_provider=_agentic_approval_storage_connection,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "human_reviewed_influence_approval_request",
         "ui_action_added": False,
     }
 

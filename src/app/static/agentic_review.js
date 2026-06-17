@@ -1026,6 +1026,23 @@ function humanReviewedInfluencePreviewRequestPayload(tracePayload = {}) {
   };
 }
 
+function humanReviewedInfluenceApprovalRequestPayload(tracePayload = {}, options = {}) {
+  const previewResult = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
+    ? tracePayload.human_reviewed_influence_preview_result
+    : {};
+  const previewRequest = humanReviewedInfluencePreviewRequestPayload(tracePayload);
+  return {
+    human_reviewed_influence_preview_payload: previewResult,
+    deterministic_score_context: previewRequest.deterministic_score_context,
+    shadow_score_comparison_context: previewRequest.shadow_score_comparison_context,
+    preview_config: {},
+    reviewer_confirmation: Boolean(options.reviewerConfirmation),
+    reviewer_note: "",
+    context_id: options.contextId || "",
+    job_id: options.jobId || "",
+  };
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -1085,6 +1102,69 @@ function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
         </button>
         <span class="agentic-review-muted" data-human-reviewed-influence-preview-status>
           Manual read-only. Safe states include not-enabled, blocked by kill switch, missing deterministic context, and missing shadow comparison.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
+function renderHumanReviewedInfluenceApprovalRequestSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_approval_request_result)
+    ? tracePayload.human_reviewed_influence_approval_request_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const status = result.request_status || "not run";
+  return `
+    <article class="agent-trace-summary" aria-label="Human-reviewed influence approval request">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Human-reviewed Influence Approval Request</h4>
+          <p>Manual approval-request creation for a human-reviewed influence preview. It creates no score, ranking, queue, resume, execution, launch, application, or submission changes and never applies influence.</p>
+        </div>
+        <span class="agentic-workflow-badge">Manual approval gate</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Request", status)}
+        ${renderWorkflowSummaryMetric("Created id", result.created_approval_request_id || "-")}
+        ${renderWorkflowSummaryMetric("Approval created", safety.did_create_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Influence applied", safety.influence_not_applied === true ? "no" : "unknown")}
+        ${renderWorkflowSummaryMetric("Scoring mutation", safety.did_mutate_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking mutation", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "not_enabled" ? renderAgentTraceReadOnlyState("Human-reviewed influence approval request is not enabled. Default-off state is safe.", "info", "Influence approval request not enabled") : ""}
+      ${status === "blocked_by_kill_switch" ? renderAgentTraceReadOnlyState("Influence approval request is blocked by the shadow sidecar kill switch.", "warning", "Influence approval request blocked") : ""}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Created approval request id", result.created_approval_request_id || "", { helper: "Created approval request identifier when the manual approval-gated path succeeds." })}
+        ${renderAgentTraceReadOnlyDetails("Influence preview payload", result.influence_preview_payload || {}, { helper: "Source human-reviewed influence preview used for this approval request." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed influence summary", result.proposed_influence_summary || {}, { helper: "Advisory influence summary. Influence is not applied." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed score adjustment preview", result.proposed_score_adjustment_preview || {}, { helper: "Preview only; no score mutation is performed." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed ranking effect preview", result.proposed_ranking_effect_preview || {}, { helper: "Preview only; no ranking mutation is performed." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Manual approval request blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Manual approval-gated influence request rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-influence-application safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-human-reviewed-influence-approval-request-confirmation>
+          Explicitly create influence approval request
+        </label>
+        <button type="button" class="agentic-feedback-action" data-human-reviewed-influence-approval-request data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Request Influence Approval
+        </button>
+        <span class="agentic-review-muted" data-human-reviewed-influence-approval-request-status>
+          Manual only and default-off. Creates only an approval request record when explicitly enabled and confirmed.
         </span>
       </div>
     </article>
@@ -3708,6 +3788,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderShadowSidecarTraceReadbackSection(tracePayload)}
       ${renderShadowSidecarScoreComparisonSection(tracePayload)}
       ${renderHumanReviewedInfluencePreviewSection(tracePayload)}
+      ${renderHumanReviewedInfluenceApprovalRequestSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5499,6 +5580,50 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Human-reviewed influence preview failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-human-reviewed-influence-approval-request]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-human-reviewed-influence-approval-request-status]");
+    const confirmation = section?.querySelector("[data-human-reviewed-influence-approval-request-confirmation]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Requesting manual influence approval gate...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const requestResult = await fetchJson(
+        "/api/human-reviewed-influence-approval-request",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(humanReviewedInfluenceApprovalRequestPayload(tracePayload, {
+            reviewerConfirmation: Boolean(confirmation?.checked),
+            contextId: button.dataset.contextId || "",
+            jobId: button.dataset.jobId || "",
+          })),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        human_reviewed_influence_approval_request_result: requestResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Human-reviewed influence approval request failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

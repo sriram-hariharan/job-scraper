@@ -3569,6 +3569,80 @@ def profile_pipeline_run_agent_trace(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/api/shadow-sidecar/trace-readback")
+def shadow_sidecar_trace_readback(payload: dict | None = Body(default=None)):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    try:
+        response = services.shadow_sidecar_trace_readback_service_payload(
+            owner_user_id=request_payload.get("owner_user_id", ""),
+            pipeline_run_id=request_payload.get("pipeline_run_id", ""),
+            context_id=request_payload.get("context_id", ""),
+            agent_run_id=request_payload.get("agent_run_id", ""),
+            sidecar_config=(
+                dict(request_payload.get("sidecar_config") or {})
+                if isinstance(request_payload.get("sidecar_config"), dict)
+                else {}
+            ),
+            readback_source=(
+                dict(request_payload.get("readback_source") or {})
+                if isinstance(request_payload.get("readback_source"), dict)
+                else None
+            ),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "trace_readback_status": "trace_readback_failed_non_blocking",
+            "trace_readback_only": True,
+            "readback_attempted": False,
+            "source_trace_context": {
+                "owner_user_id": str(request_payload.get("owner_user_id", "") or "").strip(),
+                "pipeline_run_id": str(request_payload.get("pipeline_run_id", "") or "").strip(),
+                "context_id": str(request_payload.get("context_id", "") or "").strip(),
+                "agent_run_id": str(request_payload.get("agent_run_id", "") or "").strip(),
+            },
+            "trace_readback": {},
+            "reader_result": {"ok": False, "error_type": exc.__class__.__name__},
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "shadow_only": True,
+                "service_helper_only": True,
+                "trace_readback_only": True,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["api_readback_only"] = True
+    safety["trace_readback_only"] = True
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "shadow_sidecar_trace_readback",
+        "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
 @app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")
 def profile_pipeline_run_agentic_review_data(run_id: str, http_request: Request):
     try:

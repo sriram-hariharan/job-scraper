@@ -1007,6 +1007,90 @@ function renderShadowSidecarScoreComparisonSection(tracePayload = {}) {
   `;
 }
 
+function humanReviewedInfluencePreviewRequestPayload(tracePayload = {}) {
+  const deterministicContext = hasAgentTraceSummaryObject(tracePayload?.shadow_sidecar_score_comparison_result?.source_deterministic_context)
+    ? tracePayload.shadow_sidecar_score_comparison_result.source_deterministic_context
+    : hasAgentTraceSummaryObject(tracePayload?.shadow_score_comparison_deterministic_context)
+      ? tracePayload.shadow_score_comparison_deterministic_context
+      : hasAgentTraceSummaryObject(tracePayload?.source_deterministic_context)
+        ? tracePayload.source_deterministic_context
+        : hasAgentTraceSummaryObject(tracePayload?.agent_run?.summary_json)
+          ? tracePayload.agent_run.summary_json
+          : {};
+  const comparisonContext = hasAgentTraceSummaryObject(tracePayload?.shadow_sidecar_score_comparison_result)
+    ? tracePayload.shadow_sidecar_score_comparison_result
+    : {};
+  return {
+    deterministic_score_context: deterministicContext,
+    shadow_score_comparison_context: comparisonContext,
+  };
+}
+
+function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
+    ? tracePayload.human_reviewed_influence_preview_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const operatorSummary = hasAgentTraceSummaryObject(result.operator_review_summary)
+    ? result.operator_review_summary
+    : {};
+  const findings = Array.isArray(result.preview_findings)
+    ? result.preview_findings
+    : [];
+  const status = result.preview_status || "not run";
+  return `
+    <article class="agent-trace-summary" aria-label="Human-reviewed influence preview">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Human-reviewed Influence Preview</h4>
+          <p>Manual read-only preview of possible human-reviewed influence from shadow comparison evidence. It is advisory only, requires human review plus an approval gate, and never changes scoring, ranking, queues, approvals, resumes, execution requests, launch requests, applications, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Preview", status)}
+        ${renderWorkflowSummaryMetric("Human review", result.required_human_review === true || safety.human_review_required === true ? "required" : "unknown")}
+        ${renderWorkflowSummaryMetric("Approval gate", result.approval_gate_required === true || safety.approval_gate_required === true ? "required" : "unknown")}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Advisory", safety.advisory_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Scoring mutation", safety.did_mutate_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking mutation", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume mutation", safety.did_mutate_resume ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution request", safety.did_create_execution_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Launch request", safety.did_create_execution_launch_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "preview_not_enabled" ? renderAgentTraceReadOnlyState("Human-reviewed influence preview is not enabled. Default-off display is safe.", "info", "Influence preview not enabled") : ""}
+      ${status === "preview_blocked_by_kill_switch" ? renderAgentTraceReadOnlyState("Human-reviewed influence preview is blocked by the kill switch. No influence mutation is attempted.", "warning", "Influence preview blocked by kill switch") : ""}
+      ${status === "preview_blocked_missing_deterministic_context" ? renderAgentTraceReadOnlyState("Deterministic score context is missing. The read-only influence preview remains unavailable.", "info", "Influence preview missing deterministic context") : ""}
+      ${status === "preview_blocked_missing_shadow_comparison" ? renderAgentTraceReadOnlyState("Shadow score comparison context is missing. Run the read-only comparison first or provide comparison context.", "info", "Influence preview missing shadow comparison") : ""}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Preview findings", findings, { helper: "Read-only advisory findings. They do not change deterministic scoring or ranking." })}
+        ${renderAgentTraceReadOnlyDetails("Deterministic score context", result.deterministic_score_context || {}, { helper: "Read-only deterministic score context used for influence preview." })}
+        ${renderAgentTraceReadOnlyDetails("Shadow comparison context", result.shadow_comparison_context || {}, { helper: "Read-only shadow comparison context used for influence preview." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed influence summary", result.proposed_influence_summary || {}, { helper: "Advisory summary only; no influence is applied." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed score adjustment preview", result.proposed_score_adjustment_preview || {}, { helper: "Preview only; no score mutation is performed." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed ranking effect preview", result.proposed_ranking_effect_preview || {}, { helper: "Preview only; no ranking mutation is performed." })}
+        ${renderAgentTraceReadOnlyDetails("Operator review summary", operatorSummary, { helper: "Human-review and approval-gate summary from the default-off preview API." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety metadata for human-reviewed influence preview." })}
+      </div>
+      <div class="agentic-feedback-actions">
+        <button type="button" class="agentic-feedback-action" data-human-reviewed-influence-preview>
+          Preview Human-reviewed Influence
+        </button>
+        <span class="agentic-review-muted" data-human-reviewed-influence-preview-status>
+          Manual read-only. Safe states include not-enabled, blocked by kill switch, missing deterministic context, and missing shadow comparison.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceDetailedSections(tracePayload = {}) {
   const detailedSections = [
     renderAgentTraceSummarySection(tracePayload?.trace_summary),
@@ -3623,6 +3707,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
       ${renderShadowSidecarTraceReadbackSection(tracePayload)}
       ${renderShadowSidecarScoreComparisonSection(tracePayload)}
+      ${renderHumanReviewedInfluencePreviewSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5376,6 +5461,44 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Shadow score comparison failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-human-reviewed-influence-preview]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-human-reviewed-influence-preview-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Previewing human-reviewed influence in read-only mode...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const previewResult = await fetchJson(
+        "/api/human-reviewed-influence-preview",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(humanReviewedInfluencePreviewRequestPayload(tracePayload)),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        human_reviewed_influence_preview_result: previewResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Human-reviewed influence preview failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

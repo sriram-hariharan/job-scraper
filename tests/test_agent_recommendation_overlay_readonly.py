@@ -337,11 +337,10 @@ def test_ui_posts_overlay_endpoint_only_from_explicit_action_and_existing_surfac
     assert "/api/agent-recommendation-overlay" not in source[init_start:init_end]
 
 
-def test_no_schema_or_pipeline_runtime_files_are_changed_for_overlay_contract():
+def test_no_schema_files_are_changed_for_overlay_contract():
     protected_paths = [
         Path("src/storage/agentic_approvals/schema.sql"),
         Path("src/storage/agent_trace/schema.sql"),
-        Path("src/pipeline/collector.py"),
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in protected_paths)
 

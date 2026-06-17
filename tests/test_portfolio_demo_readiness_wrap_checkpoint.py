@@ -189,6 +189,8 @@ ALLOWED_CHANGED = {
     "src/agents/shadow_sidecar_score_comparison.py",
     "tests/test_shadow_sidecar_score_comparison_readonly.py",
     "tests/test_shadow_sidecar_score_comparison_service_helper_no_api_ui.py",
+    "tests/test_shadow_sidecar_score_comparison_api_default_off_no_ui.py",
+    "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",
 }
 
 def _changed_files():

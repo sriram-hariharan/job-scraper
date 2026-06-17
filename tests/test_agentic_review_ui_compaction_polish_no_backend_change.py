@@ -84,7 +84,12 @@ def test_agent_trace_debug_details_are_present_collapsed_and_get_only():
     assert 'renderWorkflowSummaryMetric("Empty trace"' in debug_snippet
     assert 'renderWorkflowSummaryMetric("Read-only"' in debug_snippet
 
-    primary_counts = snippet[snippet.index('<div class="agent-trace-counts">') : debug_index]
+    trace_state_index = snippet.index('renderWorkflowSummaryMetric("Trace state"')
+    primary_counts = snippet[trace_state_index:debug_index]
+    for marker in ("shadow-sidecar-trace-readback", "shadow_sidecar_trace_readback"):
+        if marker in primary_counts:
+            primary_counts = primary_counts[: primary_counts.index(marker)]
+            break
     assert 'renderWorkflowSummaryMetric("Trace state"' in primary_counts
     assert 'renderWorkflowSummaryMetric("Found"' not in primary_counts
     assert 'renderWorkflowSummaryMetric("Empty trace"' not in primary_counts

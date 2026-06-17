@@ -863,6 +863,66 @@ function renderAgentTraceEvidencePackSection(traceEvidencePack = {}) {
   `;
 }
 
+function renderShadowSidecarTraceReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.shadow_sidecar_trace_readback_result)
+    ? tracePayload.shadow_sidecar_trace_readback_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const sourceContext = hasAgentTraceSummaryObject(result.source_trace_context)
+    ? result.source_trace_context
+    : {};
+  const traceReadback = hasAgentTraceSummaryObject(result.trace_readback)
+    ? result.trace_readback
+    : {};
+  const contextId = String(tracePayload?.context_id || tracePayload?.agent_run?.context_id || sourceContext.context_id || "").trim();
+  const agentRunId = String(tracePayload?.agent_run_id || tracePayload?.agent_run?.agent_run_id || sourceContext.agent_run_id || "").trim();
+  const pipelineRunId = String(tracePayload?.pipeline_run_id || getAgenticReviewRunId() || sourceContext.pipeline_run_id || "").trim();
+  const status = result.trace_readback_status || "not run";
+  return `
+    <article class="agent-trace-summary" aria-label="Shadow sidecar trace readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Shadow Sidecar Trace Readback</h4>
+          <p>Manual read-only shadow trace readback. It uses the default-off readback API only when clicked and does not mutate scoring, ranking, queues, approvals, resumes, execution requests, launch requests, applications, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readback", status)}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Shadow-only", safety.shadow_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Scoring mutation", safety.did_mutate_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking mutation", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume mutation", safety.did_mutate_resume ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution request", safety.did_create_execution_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Launch request", safety.did_create_execution_launch_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "trace_readback_not_enabled" ? renderAgentTraceReadOnlyState("Shadow sidecar trace readback is not enabled. Default-off display is safe.", "info", "Shadow sidecar trace readback not enabled") : ""}
+      ${status === "trace_readback_blocked_by_kill_switch" ? renderAgentTraceReadOnlyState("Shadow sidecar trace readback is blocked by the kill switch. No readback mutation is attempted.", "warning", "Shadow sidecar trace readback blocked by kill switch") : ""}
+      ${status === "trace_readback_skipped_no_safe_source" ? renderAgentTraceReadOnlyState("No safe shadow sidecar trace source is available yet. The read-only UI remains stable.", "info", "Shadow sidecar trace readback no safe source") : ""}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Source trace context", sourceContext, { helper: "Read-only source trace context returned by the readback API." })}
+        ${renderAgentTraceReadOnlyDetails("Trace readback", traceReadback, { helper: "Read-only shadow sidecar trace readback envelope." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety metadata for shadow sidecar trace readback." })}
+      </div>
+      <div class="agentic-feedback-actions">
+        <button type="button" class="agentic-feedback-action" data-shadow-sidecar-trace-readback data-pipeline-run-id="${escapeHtml(pipelineRunId)}" data-context-id="${escapeHtml(contextId)}" data-agent-run-id="${escapeHtml(agentRunId)}">
+          Read Shadow Trace
+        </button>
+        <span class="agentic-review-muted" data-shadow-sidecar-trace-readback-status>
+          Manual read-only. Safe states include not-enabled, blocked by kill switch, and no safe source.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceDetailedSections(tracePayload = {}) {
   const detailedSections = [
     renderAgentTraceSummarySection(tracePayload?.trace_summary),
@@ -3477,6 +3537,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
         ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
       ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
+      ${renderShadowSidecarTraceReadbackSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5150,6 +5211,48 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual shadow chain dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-shadow-sidecar-trace-readback]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-shadow-sidecar-trace-readback-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Reading shadow sidecar trace in read-only mode...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readbackResult = await fetchJson(
+        "/api/shadow-sidecar/trace-readback",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            pipeline_run_id: button.dataset.pipelineRunId || getAgenticReviewRunId() || "",
+            context_id: button.dataset.contextId || tracePayload.context_id || "",
+            agent_run_id: button.dataset.agentRunId || tracePayload.agent_run_id || tracePayload.agent_run?.agent_run_id || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        shadow_sidecar_trace_readback_result: readbackResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Shadow sidecar trace readback failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

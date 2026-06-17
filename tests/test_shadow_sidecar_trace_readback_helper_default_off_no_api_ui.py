@@ -257,7 +257,6 @@ def test_source_has_no_pipeline_api_ui_schema_or_provider_wiring():
         "src.pipeline",
         "src.app.api",
         "src.app.services",
-        "agentic_review.js",
         "schema.sql",
         "connect(",
         "get_agent_run_postgres_payload(",
@@ -280,10 +279,9 @@ def test_source_has_no_pipeline_api_ui_schema_or_provider_wiring():
         assert marker not in source
 
 
-def test_runtime_pipeline_ui_storage_schema_files_do_not_call_trace_readback_helper():
+def test_runtime_pipeline_storage_schema_files_do_not_call_trace_readback_helper():
     protected_paths = [
         Path("src/pipeline/collector.py"),
-        Path("src/app/static/agentic_review.js"),
         Path("src/storage/agent_trace/schema.sql"),
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in protected_paths)

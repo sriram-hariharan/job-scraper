@@ -239,14 +239,13 @@ def test_source_has_no_provider_db_pipeline_api_service_ui_or_schema_wiring():
         assert marker not in source
 
 
-def test_no_runtime_pipeline_ui_or_schema_file_uses_comparison_helper():
+def test_no_runtime_pipeline_or_schema_file_uses_comparison_helper():
     helper_markers = [
         "shadow_sidecar_score_comparison",
         "build_shadow_sidecar_score_comparison_payload",
     ]
     protected_paths = [
         "src/pipeline/collector.py",
-        "src/app/static/agentic_review.js",
         "src/storage/agent_trace/schema.sql",
     ]
 

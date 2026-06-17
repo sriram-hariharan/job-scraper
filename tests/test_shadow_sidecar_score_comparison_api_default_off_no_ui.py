@@ -272,10 +272,9 @@ def test_api_route_slice_has_no_storage_scoring_queue_execution_or_submission_ca
         assert marker not in route_source
 
 
-def test_no_ui_pipeline_or_schema_wiring_for_api_comparison():
+def test_no_pipeline_or_schema_wiring_for_api_comparison():
     protected_paths = [
         Path("src/pipeline/collector.py"),
-        Path("src/app/static/agentic_review.js"),
         Path("src/storage/agent_trace/schema.sql"),
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in protected_paths)

@@ -194,6 +194,8 @@ ALLOWED_CHANGED = {
     "docs/phase6_shadow_score_comparison_ui_readiness_audit.md",
     "tests/test_phase6_shadow_score_comparison_ui_readiness_audit.py",
     "tests/test_shadow_sidecar_score_comparison_ui_default_off.py",
+    "docs/phase6_human_reviewed_influence_preview_readiness_audit.md",
+    "tests/test_phase6_human_reviewed_influence_preview_readiness_audit.py",
 }
 
 def _changed_files():

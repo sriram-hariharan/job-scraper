@@ -46,6 +46,7 @@ from src.agents import (
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
     resume_match_agent,
+    shadow_sidecar_trace_readback,
     tailoring_decision_agent,
     workflow_runner,
 )
@@ -1575,6 +1576,37 @@ def agent_trace_payload(
             stage_trace_readiness=stage_trace_readiness or {},
         )
     return payload
+
+
+def shadow_sidecar_trace_readback_service_payload(
+    *,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    agent_run_id: str = "",
+    sidecar_config: Dict[str, Any] | None = None,
+    readback_source: Dict[str, Any] | None = None,
+    readback_reader: Any = None,
+) -> Dict[str, Any]:
+    payload = shadow_sidecar_trace_readback.build_shadow_sidecar_trace_readback_payload(
+        owner_user_id=owner_user_id,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+        agent_run_id=agent_run_id,
+        sidecar_config=deepcopy(sidecar_config or {}),
+        readback_source=deepcopy(readback_source or {}) if isinstance(readback_source, dict) else None,
+        readback_reader=readback_reader,
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["service_helper_only"] = True
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "shadow_sidecar_trace_readback_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+    }
 
 
 def record_agent_feedback_payload(

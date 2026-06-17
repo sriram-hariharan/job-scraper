@@ -172,6 +172,7 @@ ALLOWED_CHANGED = {
     "tests/test_phase5_shadow_sidecar_trace_persistence_readiness_audit.py",
     "src/agents/shadow_sidecar_trace_persistence.py",
     "tests/test_shadow_sidecar_trace_persistence_helper_default_off_not_called.py",
+    "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
 }
 
 def _changed_files():

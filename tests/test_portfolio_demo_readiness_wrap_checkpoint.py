@@ -206,6 +206,7 @@ ALLOWED_CHANGED = {
     "tests/test_human_reviewed_influence_approval_request_manual_only.py",
     "src/agents/agent_recommendation_overlay.py",
     "tests/test_agent_recommendation_overlay_readonly.py",
+    "tests/test_agent_recommendation_overlay_pipeline_auto_default_off.py",
 }
 
 def _changed_files():

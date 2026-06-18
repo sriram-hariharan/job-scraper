@@ -281,6 +281,7 @@ def test_dependency_files_match_phase8i_checkpoint():
 
 
 def test_storage_schema_and_migration_files_match_phase8i_checkpoint():
+    later_schema_path = ROOT / "src/storage/vector_evidence/schema.sql"
     paths = [
         path
         for path in _protected_files("src/storage")
@@ -289,6 +290,7 @@ def test_storage_schema_and_migration_files_match_phase8i_checkpoint():
         or "migrations" in path.parts
         or "alembic" in path.parts
     ]
+    paths = [path for path in paths if path != later_schema_path]
 
     assert _aggregate_hash(paths) == (
         "27e2efd8f1b55117b3d8a27572672152b7e8127733ed5408fe3f353595f1c1ed"

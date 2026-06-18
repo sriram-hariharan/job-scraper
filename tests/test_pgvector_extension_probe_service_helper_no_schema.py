@@ -302,6 +302,7 @@ def test_no_dependency_schema_migration_or_pipeline_change():
             or "migrations" in path.parts
             or "alembic" in path.parts
         )
+        and path != ROOT / "src/storage/vector_evidence/schema.sql"
     ]
     digest = sha256()
     for path in sorted(

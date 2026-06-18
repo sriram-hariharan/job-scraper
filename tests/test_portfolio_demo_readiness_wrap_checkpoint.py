@@ -250,6 +250,8 @@ ALLOWED_CHANGED = {
     "tests/test_vector_evidence_service_connection_provider_bridge_default_off.py",
     "src/storage/vector_evidence/smoke.py",
     "tests/test_pgvector_local_smoke_default_off.py",
+    "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
+    "tests/test_pgvector_real_local_smoke_command_default_off.py",
 }
 
 def _changed_files():
@@ -312,6 +314,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/storage/vector_evidence/store.py",
         "src/storage/vector_evidence/connection.py",
         "src/storage/vector_evidence/smoke.py",
+        "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

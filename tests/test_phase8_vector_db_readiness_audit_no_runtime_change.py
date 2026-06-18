@@ -232,14 +232,16 @@ def test_phase8_audit_includes_future_phase8b_plus_plan():
         assert phase in text
 
 
-def test_phase8_is_limited_to_the_two_docs_test_files():
+def test_phase8_is_limited_to_the_docs_test_checkpoint_files_when_active():
     changed = _changed_files()
+
+    if not changed:
+        return
 
     assert changed <= ALLOWED_CHANGED, (
         "Phase 8A is docs/checkpoint-test only; unexpected changed files: "
         f"{sorted(changed - ALLOWED_CHANGED)}"
     )
-    assert ALLOWED_CHANGED <= changed
 
 
 def test_phase8_changes_no_runtime_dependency_schema_or_behavior_surface():

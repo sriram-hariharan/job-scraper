@@ -217,6 +217,7 @@ ALLOWED_CHANGED = {
     "tests/test_pipeline_generated_overlay_readiness_summary_ui_readonly.py",
     "src/agents/pipeline_agent_review_packet.py",
     "tests/test_pipeline_agent_review_packet_readonly.py",
+    "tests/test_pipeline_agent_review_packet_service_helper_no_api_ui.py",
 }
 
 def _changed_files():

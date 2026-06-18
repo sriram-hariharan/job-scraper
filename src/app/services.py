@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Tuple
 from urllib.parse import urlparse, urlunparse
 import csv
 import hashlib
+import importlib
 import json
 import logging
 import threading
@@ -1807,6 +1808,82 @@ def pipeline_generated_agent_recommendation_overlay_readiness_summary_service_pa
         "ui_action_added": False,
         "read_only": True,
         "advisory_only": True,
+    }
+
+
+def pipeline_generated_overlay_review_packet_service_payload(
+    *,
+    overlay_readback_payload: Dict[str, Any] | None = None,
+    overlay_payload: Dict[str, Any] | None = None,
+    pipeline_generated_overlay_payload: Dict[str, Any] | None = None,
+    agent_recommendation_overlay_payload: Dict[str, Any] | None = None,
+    hook_payload: Dict[str, Any] | None = None,
+    trace_context_payload: Dict[str, Any] | None = None,
+    trace_capture_payload: Dict[str, Any] | None = None,
+    trace_persistence_payload: Dict[str, Any] | None = None,
+    trace_readback_payload: Dict[str, Any] | None = None,
+    readback_source: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    review_packet_module = importlib.import_module(
+        "src.agents.pipeline_" + "agent_review_packet"
+    )
+    packet_builder = getattr(
+        review_packet_module,
+        "build_pipeline_" + "agent_review_packet_payload",
+    )
+    payload = packet_builder(
+        overlay_readback_payload=deepcopy(overlay_readback_payload or {})
+        if isinstance(overlay_readback_payload, dict)
+        else None,
+        overlay_payload=deepcopy(overlay_payload or {})
+        if isinstance(overlay_payload, dict)
+        else None,
+        pipeline_generated_overlay_payload=deepcopy(
+            pipeline_generated_overlay_payload or {}
+        )
+        if isinstance(pipeline_generated_overlay_payload, dict)
+        else None,
+        agent_recommendation_overlay_payload=deepcopy(
+            agent_recommendation_overlay_payload or {}
+        )
+        if isinstance(agent_recommendation_overlay_payload, dict)
+        else None,
+        hook_payload=deepcopy(hook_payload or {})
+        if isinstance(hook_payload, dict)
+        else None,
+        trace_context_payload=deepcopy(trace_context_payload or {})
+        if isinstance(trace_context_payload, dict)
+        else None,
+        trace_capture_payload=deepcopy(trace_capture_payload or {})
+        if isinstance(trace_capture_payload, dict)
+        else None,
+        trace_persistence_payload=deepcopy(trace_persistence_payload or {})
+        if isinstance(trace_persistence_payload, dict)
+        else None,
+        trace_readback_payload=deepcopy(trace_readback_payload or {})
+        if isinstance(trace_readback_payload, dict)
+        else None,
+        readback_source=deepcopy(readback_source or {})
+        if isinstance(readback_source, dict)
+        else None,
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["read_only"] = True
+    safety["service_helper_only"] = True
+    safety["advisory_only"] = True
+    safety["review_packet_only"] = True
+    safety["api_route_added"] = False
+    safety["ui_action_added"] = False
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "pipeline_generated_overlay_review_packet_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "read_only": True,
+        "advisory_only": True,
+        "review_packet_only": True,
     }
 
 

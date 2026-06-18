@@ -1890,6 +1890,7 @@ def pipeline_generated_overlay_review_packet_service_payload(
 def _vector_evidence_pgvector_store_path_payload(
     *,
     path_requested: bool,
+    db_executor_path_requested: bool,
     owner_user_id: str,
     query_text: str,
     filters: Dict[str, Any],
@@ -1897,6 +1898,7 @@ def _vector_evidence_pgvector_store_path_payload(
     indexing_payload: Dict[str, Any],
     retrieval_payload: Dict[str, Any],
     store_executor: Any = None,
+    db_executor: Any = None,
     store_module: Any = None,
 ) -> Dict[str, Any]:
     summary: Dict[str, Any] = {
@@ -1913,6 +1915,18 @@ def _vector_evidence_pgvector_store_path_payload(
         "pgvector_store_path_used": False,
         "pgvector_store_path_default_off": not bool(path_requested),
         "pgvector_store_summary": summary,
+        "pgvector_db_executor_path_requested": bool(
+            path_requested and db_executor_path_requested
+        ),
+        "pgvector_db_executor_supplied": db_executor is not None,
+        "pgvector_db_executor_path_used": False,
+        "pgvector_db_executor_default_off": not bool(
+            path_requested and db_executor_path_requested
+        ),
+        "chunks_write_attempted": 0,
+        "chunks_written": 0,
+        "retrieval_events_write_attempted": 0,
+        "retrieval_events_written": 0,
         "did_write_database": False,
         "vector_db_connected": False,
     }
@@ -1924,7 +1938,14 @@ def _vector_evidence_pgvector_store_path_payload(
         summary["status"] = "pgvector_store_path_blocked_missing_owner"
         summary["errors"] = ["owner_user_id_required"]
         return result
-    if not callable(store_executor):
+    use_db_executor = bool(db_executor_path_requested)
+    if use_db_executor and db_executor is None:
+        summary["status"] = "pgvector_db_executor_path_not_configured"
+        summary["errors"] = ["pgvector_db_executor_required"]
+        result["pgvector_store_path_default_off"] = False
+        result["pgvector_db_executor_default_off"] = False
+        return result
+    if not use_db_executor and not callable(store_executor):
         summary["status"] = "pgvector_store_path_blocked_missing_executor"
         summary["errors"] = ["store_executor_required"]
         return result
@@ -1938,10 +1959,20 @@ def _vector_evidence_pgvector_store_path_payload(
             adapter,
             "prepare_retrieval_event_insert_payload",
         )
-        execute_prepared = getattr(
-            adapter,
-            "execute_prepared_pgvector_payload",
-        )
+        if use_db_executor:
+            execute_chunk = getattr(
+                adapter,
+                "execute_vector_evidence_chunk_insert",
+            )
+            execute_event = getattr(
+                adapter,
+                "execute_vector_evidence_retrieval_event_insert",
+            )
+        else:
+            execute_prepared = getattr(
+                adapter,
+                "execute_prepared_pgvector_payload",
+            )
     except (AttributeError, ImportError) as exc:
         result["pgvector_store_adapter_available"] = False
         summary["status"] = "pgvector_store_path_adapter_unavailable"
@@ -2031,10 +2062,24 @@ def _vector_evidence_pgvector_store_path_payload(
     execution_results: List[Dict[str, Any]] = []
     try:
         for prepared in prepared_operations:
-            execution = execute_prepared(
-                deepcopy(prepared),
-                executor=store_executor,
-            )
+            if use_db_executor:
+                if prepared.get("table") == "vector_evidence_chunks":
+                    result["chunks_write_attempted"] += 1
+                    execution = execute_chunk(
+                        deepcopy(prepared),
+                        db_executor=db_executor,
+                    )
+                else:
+                    result["retrieval_events_write_attempted"] += 1
+                    execution = execute_event(
+                        deepcopy(prepared),
+                        db_executor=db_executor,
+                    )
+            else:
+                execution = execute_prepared(
+                    deepcopy(prepared),
+                    executor=store_executor,
+                )
             execution_results.append(
                 deepcopy(execution) if isinstance(execution, dict) else {}
             )
@@ -2049,16 +2094,43 @@ def _vector_evidence_pgvector_store_path_payload(
     summary["executed_operation_count"] = len(executed_results)
     result["pgvector_store_path_used"] = bool(executed_results)
     result["pgvector_store_path_default_off"] = False
-    result["did_write_database"] = any(
-        isinstance(item.get("executor_result"), dict)
-        and item["executor_result"].get("did_write_database") is True
-        for item in executed_results
-    )
-    result["vector_db_connected"] = any(
-        isinstance(item.get("executor_result"), dict)
-        and item["executor_result"].get("vector_db_connected") is True
-        for item in executed_results
-    )
+    if use_db_executor:
+        result["pgvector_db_executor_path_used"] = bool(executed_results)
+        result["pgvector_db_executor_default_off"] = False
+        result["chunks_written"] = sum(
+            1
+            for item in executed_results
+            if (
+                item.get("safety_metadata", {}).get("chunks_written")
+                is True
+            )
+        )
+        result["retrieval_events_written"] = sum(
+            1
+            for item in executed_results
+            if (
+                item.get("safety_metadata", {}).get(
+                    "retrieval_events_written"
+                )
+                is True
+            )
+        )
+        result["did_write_database"] = any(
+            item.get("safety_metadata", {}).get("did_write_database") is True
+            for item in executed_results
+        )
+        result["vector_db_connected"] = bool(executed_results)
+    else:
+        result["did_write_database"] = any(
+            isinstance(item.get("executor_result"), dict)
+            and item["executor_result"].get("did_write_database") is True
+            for item in executed_results
+        )
+        result["vector_db_connected"] = any(
+            isinstance(item.get("executor_result"), dict)
+            and item["executor_result"].get("vector_db_connected") is True
+            for item in executed_results
+        )
     summary["status"] = (
         "pgvector_store_path_used"
         if executed_results
@@ -2086,6 +2158,8 @@ def vector_evidence_service_helper_payload(
     owner_user_id: str = "",
     pgvector_store_enabled: bool = False,
     pgvector_store_executor: Any = None,
+    pgvector_db_executor_enabled: bool = False,
+    pgvector_db_executor: Any = None,
     pgvector_store_module: Any = None,
 ) -> Dict[str, Any]:
     """Compose dry-run retrieval with an optional injected pgvector store path."""
@@ -2178,6 +2252,7 @@ def vector_evidence_service_helper_payload(
     }
     pgvector_store = _vector_evidence_pgvector_store_path_payload(
         path_requested=pgvector_store_enabled is True,
+        db_executor_path_requested=pgvector_db_executor_enabled is True,
         owner_user_id=owner_user_id,
         query_text=str(query_text or ""),
         filters=deepcopy(filters or {}) if isinstance(filters, dict) else {},
@@ -2185,6 +2260,7 @@ def vector_evidence_service_helper_payload(
         indexing_payload=deepcopy(indexing_payload),
         retrieval_payload=deepcopy(retrieval_payload),
         store_executor=pgvector_store_executor,
+        db_executor=pgvector_db_executor,
         store_module=pgvector_store_module,
     )
     safety = dict(retrieval_payload.get("safety_metadata", {}) or {})
@@ -2210,6 +2286,31 @@ def vector_evidence_service_helper_payload(
             ),
             "pgvector_store_path_default_off": bool(
                 pgvector_store["pgvector_store_path_default_off"]
+            ),
+            "pgvector_db_executor_path_requested": bool(
+                pgvector_store["pgvector_db_executor_path_requested"]
+            ),
+            "pgvector_db_executor_supplied": bool(
+                pgvector_store["pgvector_db_executor_supplied"]
+            ),
+            "pgvector_db_executor_path_used": bool(
+                pgvector_store["pgvector_db_executor_path_used"]
+            ),
+            "pgvector_db_executor_default_off": bool(
+                pgvector_store["pgvector_db_executor_default_off"]
+            ),
+            "db_executor_supplied": bool(
+                pgvector_store["pgvector_db_executor_supplied"]
+            ),
+            "chunks_write_attempted": int(
+                pgvector_store["chunks_write_attempted"]
+            ),
+            "chunks_written": int(pgvector_store["chunks_written"]),
+            "retrieval_events_write_attempted": int(
+                pgvector_store["retrieval_events_write_attempted"]
+            ),
+            "retrieval_events_written": int(
+                pgvector_store["retrieval_events_written"]
             ),
             "embeddings_created": False,
             "provider_calls_made": False,
@@ -2268,6 +2369,28 @@ def vector_evidence_service_helper_payload(
         ),
         "pgvector_store_summary": deepcopy(
             pgvector_store["pgvector_store_summary"]
+        ),
+        "pgvector_db_executor_path_requested": bool(
+            pgvector_store["pgvector_db_executor_path_requested"]
+        ),
+        "pgvector_db_executor_supplied": bool(
+            pgvector_store["pgvector_db_executor_supplied"]
+        ),
+        "pgvector_db_executor_path_used": bool(
+            pgvector_store["pgvector_db_executor_path_used"]
+        ),
+        "pgvector_db_executor_default_off": bool(
+            pgvector_store["pgvector_db_executor_default_off"]
+        ),
+        "chunks_write_attempted": int(
+            pgvector_store["chunks_write_attempted"]
+        ),
+        "chunks_written": int(pgvector_store["chunks_written"]),
+        "retrieval_events_write_attempted": int(
+            pgvector_store["retrieval_events_write_attempted"]
+        ),
+        "retrieval_events_written": int(
+            pgvector_store["retrieval_events_written"]
         ),
         "provider_backed_automated_agents": 0,
         "live_provider_backed_automated_agents": 0,

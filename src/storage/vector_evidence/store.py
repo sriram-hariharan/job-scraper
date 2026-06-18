@@ -1,9 +1,9 @@
-"""Default-off pgvector storage adapter for vector evidence.
+"""Default-off pgvector storage and injected DB executor for vector evidence.
 
-The module prepares deterministic rows and parameterized SQL only. It imports
-no database driver, opens no connection, creates no embedding, calls no
-provider, and is not wired into pipeline, API, service, UI, or startup code.
-An optional caller-supplied executor is the only execution boundary.
+The module prepares deterministic rows and parameterized SQL. Execution is
+available only through a caller-supplied callable or already-open connection.
+It imports no database driver, opens no connection, commits no transaction,
+creates no embedding, calls no provider, and has no pipeline or startup hook.
 """
 
 from __future__ import annotations
@@ -13,13 +13,14 @@ from hashlib import sha256
 import json
 import math
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Mapping
 
 from src.agents import vector_evidence_contract
 
 
 DEFAULT_SCHEMA_SQL_PATH = Path("src/storage/vector_evidence/schema.sql")
 STORE_ADAPTER_VERSION = "phase-8n-pgvector-store-adapter-v1"
+DB_EXECUTOR_VERSION = "phase-8p-pgvector-db-executor-v1"
 
 PreparedExecutor = Callable[[dict[str, Any]], Any]
 
@@ -68,6 +69,56 @@ def pgvector_store_safety_metadata() -> dict[str, bool]:
         "did_submit_application": False,
         "mutation_authorized": False,
     }
+
+
+def pgvector_db_executor_safety_metadata(
+    *,
+    executor_supplied: bool = False,
+    read_only: bool = True,
+    schema_setup_executed: bool = False,
+    chunks_written: bool = False,
+    embeddings_written: bool = False,
+    retrieval_events_written: bool = False,
+    did_read_database: bool = False,
+) -> dict[str, bool]:
+    safety = pgvector_store_safety_metadata()
+    safety.update(
+        {
+            "read_only": bool(read_only),
+            "advisory_only": True,
+            "pgvector_store_db_executor": True,
+            "db_executor_required": True,
+            "db_executor_supplied": bool(executor_supplied),
+            "schema_setup_executed": bool(schema_setup_executed),
+            "chunks_written": bool(chunks_written),
+            "embeddings_written": bool(embeddings_written),
+            "retrieval_events_written": bool(retrieval_events_written),
+            "embeddings_created": False,
+            "provider_calls_made": False,
+            "vector_db_connected": bool(executor_supplied),
+            "did_read_database": bool(did_read_database),
+            "did_write_database": bool(
+                schema_setup_executed
+                or chunks_written
+                or embeddings_written
+                or retrieval_events_written
+            ),
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "pipeline_stage_added": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+        }
+    )
+    return safety
 
 
 def pgvector_schema_sql_text(
@@ -504,6 +555,374 @@ def execute_prepared_pgvector_payload(
         "executor_required": True,
         "executor_result": _snapshot(result),
     }
+
+
+def _db_executor_base_payload(
+    *,
+    operation: str,
+    executor_supplied: bool,
+    read_only: bool,
+) -> dict[str, Any]:
+    return {
+        "adapter_version": STORE_ADAPTER_VERSION,
+        "db_executor_version": DB_EXECUTOR_VERSION,
+        "status": (
+            "pgvector_store_db_executor_ready"
+            if executor_supplied
+            else "pgvector_store_db_executor_not_configured"
+        ),
+        "operation": operation,
+        "executed": False,
+        "db_executor_required": True,
+        "db_executor_supplied": bool(executor_supplied),
+        "provider_backed_automated_agents": 0,
+        "live_provider_backed_automated_agents": 0,
+        "mutation_authorized_agents": 0,
+        "mutation_authorized_scoring_agents": 0,
+        "mutation_authorized_ranking_agents": 0,
+        "mutation_authorized_application_agents": 0,
+        "safety_metadata": pgvector_db_executor_safety_metadata(
+            executor_supplied=executor_supplied,
+            read_only=read_only,
+        ),
+    }
+
+
+def _row_to_dict(row: Any, description: Iterable[Any]) -> dict[str, Any]:
+    if isinstance(row, Mapping):
+        return deepcopy(dict(row))
+    columns: list[str] = []
+    for item in description:
+        columns.append(str(item if isinstance(item, str) else item[0]))
+    return {
+        column: deepcopy(row[index])
+        for index, column in enumerate(columns)
+        if index < len(row)
+    }
+
+
+def _execute_with_injected_db(
+    request_payload: dict[str, Any],
+    *,
+    db_executor: Any = None,
+    fetch_rows: bool = False,
+) -> dict[str, Any]:
+    request = _plain_dict(request_payload)
+    if db_executor is None:
+        return {"executed": False, "rows": [], "executor_result": {}}
+    if callable(db_executor):
+        raw_result = db_executor(deepcopy(request))
+        if isinstance(raw_result, dict):
+            rows = raw_result.get("rows", [])
+            return {
+                "executed": True,
+                "rows": deepcopy(rows) if isinstance(rows, list) else [],
+                "executor_result": deepcopy(raw_result),
+            }
+        if isinstance(raw_result, list):
+            return {
+                "executed": True,
+                "rows": deepcopy(raw_result),
+                "executor_result": {"rows": deepcopy(raw_result)},
+            }
+        return {
+            "executed": True,
+            "rows": [],
+            "executor_result": {"result": deepcopy(raw_result)},
+        }
+    if not hasattr(db_executor, "cursor"):
+        raise TypeError("db_executor must be callable or connection-like.")
+
+    cursor = db_executor.cursor()
+    try:
+        sql = _require_text(request.get("sql"), "sql")
+        params = request.get("params", ())
+        if params:
+            cursor.execute(sql, tuple(params))
+        else:
+            cursor.execute(sql)
+        rows = cursor.fetchall() if fetch_rows and hasattr(cursor, "fetchall") else []
+        description = getattr(cursor, "description", None) or []
+        normalized_rows = [_row_to_dict(row, description) for row in rows]
+        return {
+            "executed": True,
+            "rows": normalized_rows,
+            "executor_result": {
+                "driver": "injected_connection",
+                "row_count": len(normalized_rows),
+            },
+        }
+    finally:
+        close = getattr(cursor, "close", None)
+        if callable(close):
+            close()
+
+
+def execute_pgvector_schema_setup(
+    *,
+    db_executor: Any = None,
+    schema_path: Path = DEFAULT_SCHEMA_SQL_PATH,
+) -> dict[str, Any]:
+    """Execute static schema SQL only through an explicitly injected boundary."""
+
+    supplied = db_executor is not None
+    payload = _db_executor_base_payload(
+        operation="execute_pgvector_schema_setup",
+        executor_supplied=supplied,
+        read_only=False,
+    )
+    payload["sql"] = pgvector_schema_sql_text(schema_path)
+    payload["params"] = ()
+    if not supplied:
+        return payload
+    execution = _execute_with_injected_db(payload, db_executor=db_executor)
+    executed = execution["executed"] is True
+    payload.update(
+        {
+            "status": (
+                "pgvector_schema_setup_executed"
+                if executed
+                else "pgvector_store_db_executor_not_configured"
+            ),
+            "executed": executed,
+            "executor_result": execution["executor_result"],
+            "safety_metadata": pgvector_db_executor_safety_metadata(
+                executor_supplied=True,
+                read_only=False,
+                schema_setup_executed=executed,
+            ),
+        }
+    )
+    return payload
+
+
+def _execute_prepared_write(
+    prepared_payload: dict[str, Any],
+    *,
+    db_executor: Any = None,
+    expected_table: str,
+    operation: str,
+    write_flag: str,
+) -> dict[str, Any]:
+    prepared = _plain_dict(prepared_payload)
+    if prepared.get("table") != expected_table:
+        raise ValueError(f"prepared payload must target {expected_table}.")
+    supplied = db_executor is not None
+    payload = {
+        **_db_executor_base_payload(
+            operation=operation,
+            executor_supplied=supplied,
+            read_only=False,
+        ),
+        "prepared_payload": deepcopy(prepared),
+        "sql": _require_text(prepared.get("sql"), "sql"),
+        "params": tuple(prepared.get("params", ()) or ()),
+    }
+    if not supplied:
+        return payload
+    execution = _execute_with_injected_db(
+        payload,
+        db_executor=db_executor,
+        fetch_rows=True,
+    )
+    executed = execution["executed"] is True
+    flags = {
+        "chunks_written": False,
+        "embeddings_written": False,
+        "retrieval_events_written": False,
+    }
+    flags[write_flag] = executed
+    payload.update(
+        {
+            "status": (
+                "pgvector_store_write_executed"
+                if executed
+                else "pgvector_store_db_executor_not_configured"
+            ),
+            "executed": executed,
+            "rows": execution["rows"],
+            "executor_result": execution["executor_result"],
+            "safety_metadata": pgvector_db_executor_safety_metadata(
+                executor_supplied=True,
+                read_only=False,
+                **flags,
+            ),
+        }
+    )
+    return payload
+
+
+def execute_vector_evidence_chunk_insert(
+    prepared_payload: dict[str, Any],
+    *,
+    db_executor: Any = None,
+) -> dict[str, Any]:
+    return _execute_prepared_write(
+        prepared_payload,
+        db_executor=db_executor,
+        expected_table="vector_evidence_chunks",
+        operation="execute_vector_evidence_chunk_insert",
+        write_flag="chunks_written",
+    )
+
+
+def execute_vector_evidence_embedding_insert(
+    prepared_payload: dict[str, Any],
+    *,
+    db_executor: Any = None,
+) -> dict[str, Any]:
+    return _execute_prepared_write(
+        prepared_payload,
+        db_executor=db_executor,
+        expected_table="vector_evidence_embeddings",
+        operation="execute_vector_evidence_embedding_insert",
+        write_flag="embeddings_written",
+    )
+
+
+def execute_vector_evidence_retrieval_event_insert(
+    prepared_payload: dict[str, Any],
+    *,
+    db_executor: Any = None,
+) -> dict[str, Any]:
+    return _execute_prepared_write(
+        prepared_payload,
+        db_executor=db_executor,
+        expected_table="vector_evidence_retrieval_events",
+        operation="execute_vector_evidence_retrieval_event_insert",
+        write_flag="retrieval_events_written",
+    )
+
+
+def prepare_vector_evidence_retrieval_select_payload(
+    *,
+    owner_user_id: str,
+    query_embedding: list[float] | tuple[float, ...],
+    embedding_model_id: str,
+    top_k: int = 5,
+    filters: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Prepare an exact pgvector candidate query from an explicit vector."""
+
+    normalized = _normalized_embedding(query_embedding)
+    vector_text = "[" + ",".join(format(value, ".17g") for value in normalized) + "]"
+    normalized_filters = _plain_dict(filters)
+    clauses = [
+        "chunks.owner_user_id = %s",
+        "embeddings.embedding_model_id = %s",
+        "embeddings.embedding_dimension = %s",
+        "chunks.deleted_at IS NULL",
+        "embeddings.deleted_at IS NULL",
+    ]
+    safe_owner_user_id = _require_text(owner_user_id, "owner_user_id")
+    safe_embedding_model_id = _require_text(
+        embedding_model_id,
+        "embedding_model_id",
+    )
+    where_params: list[Any] = [
+        safe_owner_user_id,
+        safe_embedding_model_id,
+        len(normalized),
+    ]
+    for field in ("chunk_type", "job_id", "company", "stage", "agent_name"):
+        value = _clean_text(normalized_filters.get(field))
+        if value:
+            column = "chunks.chunk_type" if field == "chunk_type" else f"chunks.{field}"
+            clauses.append(f"{column} = %s")
+            where_params.append(value)
+    safe_top_k = _positive_int(top_k, "top_k")
+    params = [vector_text, vector_text, *where_params, safe_top_k]
+    sql = f"""
+SELECT
+    chunks.chunk_id,
+    chunks.chunk_type,
+    chunks.chunk_version,
+    chunks.content_hash,
+    chunks.normalized_text AS evidence_text,
+    chunks.metadata_json AS metadata,
+    chunks.job_id,
+    chunks.company,
+    chunks.title,
+    chunks.source,
+    chunks.stage,
+    chunks.agent_name,
+    chunks.trace_id,
+    chunks.run_id,
+    chunks.resume_version,
+    chunks.profile_version,
+    embeddings.embedding_model_id,
+    embeddings.embedding_dimension,
+    embeddings.embedding <=> %s::vector AS vector_distance,
+    1 - (embeddings.embedding <=> %s::vector) AS retrieval_score
+FROM vector_evidence_chunks AS chunks
+JOIN vector_evidence_embeddings AS embeddings
+  ON embeddings.chunk_id = chunks.chunk_id
+WHERE {" AND ".join(clauses)}
+ORDER BY vector_distance ASC, chunks.chunk_type ASC, chunks.chunk_id ASC
+LIMIT %s
+""".strip()
+    return _prepared_payload(
+        operation="prepare_vector_evidence_retrieval_select",
+        table="vector_evidence_embeddings",
+        row={
+            "owner_user_id": safe_owner_user_id,
+            "embedding_model_id": safe_embedding_model_id,
+            "embedding_dimension": len(normalized),
+            "query_embedding": normalized,
+            "filters": normalized_filters,
+            "top_k": safe_top_k,
+        },
+        sql=sql,
+        params=tuple(params),
+    )
+
+
+def select_vector_evidence_retrieval_candidates(
+    prepared_payload: dict[str, Any],
+    *,
+    db_executor: Any = None,
+) -> dict[str, Any]:
+    """Run one prepared candidate select through an injected executor."""
+
+    prepared = _plain_dict(prepared_payload)
+    supplied = db_executor is not None
+    payload = {
+        **_db_executor_base_payload(
+            operation="select_vector_evidence_retrieval_candidates",
+            executor_supplied=supplied,
+            read_only=True,
+        ),
+        "prepared_payload": deepcopy(prepared),
+        "sql": _require_text(prepared.get("sql"), "sql"),
+        "params": tuple(prepared.get("params", ()) or ()),
+        "retrieval_candidates": [],
+        "result_count": 0,
+    }
+    if not supplied:
+        return payload
+    execution = _execute_with_injected_db(
+        payload,
+        db_executor=db_executor,
+        fetch_rows=True,
+    )
+    candidates = [
+        deepcopy(row) for row in execution["rows"] if isinstance(row, dict)
+    ]
+    payload.update(
+        {
+            "status": "pgvector_retrieval_candidates_selected",
+            "executed": execution["executed"] is True,
+            "retrieval_candidates": candidates,
+            "result_count": len(candidates),
+            "executor_result": execution["executor_result"],
+            "safety_metadata": pgvector_db_executor_safety_metadata(
+                executor_supplied=True,
+                read_only=True,
+                did_read_database=execution["executed"] is True,
+            ),
+        }
+    )
+    return payload
 
 
 # Short aliases for callers that use storage-domain naming.

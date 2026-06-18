@@ -229,6 +229,7 @@ ALLOWED_CHANGED = {
     "src/agents/vector_evidence_retrieval_dry_run.py",
     "tests/test_vector_evidence_retrieval_dry_run_no_db.py",
     "tests/test_vector_evidence_service_helper_no_db_no_api_ui.py",
+    "tests/test_vector_evidence_api_no_db_no_ui.py",
 }
 
 def _changed_files():

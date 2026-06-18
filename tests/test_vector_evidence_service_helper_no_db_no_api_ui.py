@@ -289,9 +289,8 @@ def test_service_helper_slice_has_no_api_ui_storage_pipeline_or_mutation_calls()
         assert marker not in helper_source
 
 
-def test_no_api_ui_schema_or_pipeline_uses_service_helper():
+def test_no_ui_schema_or_pipeline_uses_service_helper():
     protected_paths = (
-        "src/app/api.py",
         "src/app/static/agentic_review.js",
         "src/pipeline/collector.py",
         "src/pipeline/application_scorer.py",

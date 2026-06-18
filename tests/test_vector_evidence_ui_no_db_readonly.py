@@ -225,7 +225,6 @@ def test_ui_has_no_embedding_vector_db_or_provider_implementation():
         "pinecone",
         "chromadb",
         "faiss",
-        "pgvector",
         "openai",
         "anthropic",
         "llm_client",

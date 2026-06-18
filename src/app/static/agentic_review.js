@@ -1249,6 +1249,56 @@ function renderVectorEvidenceSection(tracePayload = {}) {
   `;
 }
 
+function renderPgvectorExtensionProbeSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.pgvector_extension_probe_result)
+    ? tracePayload.pgvector_extension_probe_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const skippedReasons = Array.isArray(result.skipped_reasons)
+    ? result.skipped_reasons
+    : [];
+  const status = result.status || "not checked";
+  const extensionVersion = String(result.extension_version || "").trim();
+  const dimensionSupported = result.embedding_dimension_supported;
+  return `
+    <article class="agent-trace-summary" aria-label="Read-only pgvector extension probe">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>pgvector Extension Probe</h4>
+          <p>Operator-triggered extension visibility only. Read-only and advisory: the app does not install pgvector, create schema or migrations, create embeddings, call providers, or connect automatically to Postgres.</p>
+        </div>
+        <span class="agentic-workflow-badge">Advisory read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Probe status", status)}
+        ${renderWorkflowSummaryMetric("Extension available", result.extension_available === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Extension version", extensionVersion || "not reported")}
+        ${renderWorkflowSummaryMetric("Embedding dimension supported", dimensionSupported === true ? "yes" : dimensionSupported === false ? "no" : "not reported")}
+        ${renderWorkflowSummaryMetric("pgvector installed by app", safety.pgvector_installed_by_app === true ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Schema created", safety.schema_created === true ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Migration created", safety.migration_created === true ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Embeddings created", safety.embeddings_created === true ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Automatic DB connection", safety.vector_db_connected === true ? "true" : "false / default-off")}
+        ${renderWorkflowSummaryMetric("Provider calls", safety.provider_calls_made === true ? "true" : "false")}
+      </div>
+      <div class="agentic-review-section-counts">
+        <strong>Skipped reasons</strong>
+        <span>${renderReasonChips(skippedReasons)}</span>
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-pgvector-extension-probe>
+          Check Probe Status
+        </button>
+        <span class="agentic-review-muted" data-pgvector-extension-probe-status>
+          Manual read-only advisory check. Automatic DB connection remains false and default-off.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4238,6 +4288,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySection(tracePayload)}
       ${renderPipelineGeneratedOverlayReviewPacketSection(tracePayload)}
       ${renderVectorEvidenceSection(tracePayload)}
+      ${renderPgvectorExtensionProbeSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -6279,6 +6330,53 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Vector evidence retrieval failed safely.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-pgvector-extension-probe]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-pgvector-extension-probe-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Checking read-only advisory pgvector probe status...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const probeResult = await fetchJson(
+        "/api/pgvector-extension-probe",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            extension_name: "vector",
+            requested_dimension: null,
+            probe_context: {
+              source: "agentic_review_ui",
+              read_only: true,
+              advisory_only: true,
+            },
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        pgvector_extension_probe_result: probeResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "pgvector probe check failed safely.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

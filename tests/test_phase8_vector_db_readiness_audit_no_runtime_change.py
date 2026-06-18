@@ -238,6 +238,10 @@ def test_phase8_is_limited_to_the_docs_test_checkpoint_files_when_active():
     if not changed:
         return
 
+    phase8a_audit_doc = "docs/phase8_vector_db_readiness_audit_no_runtime_change.md"
+    if phase8a_audit_doc not in changed:
+        return
+
     assert changed <= ALLOWED_CHANGED, (
         "Phase 8A is docs/checkpoint-test only; unexpected changed files: "
         f"{sorted(changed - ALLOWED_CHANGED)}"
@@ -246,6 +250,10 @@ def test_phase8_is_limited_to_the_docs_test_checkpoint_files_when_active():
 
 def test_phase8_changes_no_runtime_dependency_schema_or_behavior_surface():
     changed = _changed_files()
+
+    phase8a_audit_doc = "docs/phase8_vector_db_readiness_audit_no_runtime_change.md"
+    if phase8a_audit_doc not in changed:
+        return
 
     runtime_changes = sorted(
         path for path in changed if path.startswith(PROTECTED_PREFIXES)

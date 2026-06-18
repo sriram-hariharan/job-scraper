@@ -222,6 +222,8 @@ ALLOWED_CHANGED = {
     "tests/test_pipeline_agent_review_packet_ui_readonly.py",
     "docs/phase8_vector_db_readiness_audit_no_runtime_change.md",
     "tests/test_phase8_vector_db_readiness_audit_no_runtime_change.py",
+    "src/agents/vector_evidence_contract.py",
+    "tests/test_vector_evidence_contract_default_off_no_dependency.py",
 }
 
 def _changed_files():
@@ -275,6 +277,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/agent_recommendation_overlay_readback.py",
         "src/agents/agent_recommendation_overlay_readiness.py",
         "src/agents/pipeline_agent_review_packet.py",
+        "src/agents/vector_evidence_contract.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

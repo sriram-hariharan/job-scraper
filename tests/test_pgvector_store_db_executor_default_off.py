@@ -328,7 +328,7 @@ def test_no_api_ui_pipeline_schema_or_dependency_change():
             "e2bb58c1c22eba596d73cc18ca336b57b7f9e3cf41ebaf26ec8cb549d10339f3"
         ),
         "src/app/services.py": (
-            "086a4ea865426ac64ba60414678b7be6c5979594708e66e4cfa9afd9b386f19d"
+            "645fce160e220790d934492c34bb0420797ad275588d115e923fd08c9a467ba9"
         ),
         "src/app/static/agentic_review.js": (
             "2bbaf699e5b65ec0fd2022246f1d2cb161ecf9bdaa0b5ed7234e12789346c790"

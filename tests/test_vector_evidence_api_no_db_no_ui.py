@@ -363,6 +363,9 @@ def test_api_route_slice_has_no_storage_provider_embedding_or_mutation_calls():
 
 
 def test_no_schema_dependency_ui_or_pipeline_change():
+    later_readonly_ui_step_exists = (
+        ROOT / "tests/test_vector_evidence_ui_no_db_readonly.py"
+    ).exists()
     protected_hashes = {
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
@@ -377,7 +380,7 @@ def test_no_schema_dependency_ui_or_pipeline_change():
             "a71d55d9306258661b99f9bc88aa122fbf24443e7bd43a9ba597133289df1e57"
         ),
         "src/app/static/agentic_review.js": (
-            "6ff5202766880550276dc2dd45d73db463acf0dff15621a27295087992f4645f"
+            "10c869b6cb03209b5b39a3ef9d78d744d00d62f7561d4fc7f49da02845159818"
         ),
         "src/pipeline/collector.py": (
             "5d30b4e3b7ada5fd94c5dee0344e87c3dbe978a149d16dd4503f7a5d167b16a5"
@@ -401,5 +404,9 @@ def test_no_schema_dependency_ui_or_pipeline_change():
         "src/pipeline/job_ranker.py",
     ):
         source = (ROOT / relative_path).read_text(encoding="utf-8")
-        assert ENDPOINT not in source
+        if not (
+            later_readonly_ui_step_exists
+            and relative_path == "src/app/static/agentic_review.js"
+        ):
+            assert ENDPOINT not in source
         assert SERVICE_HELPER not in source

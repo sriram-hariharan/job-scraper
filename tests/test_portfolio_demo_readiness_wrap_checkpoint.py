@@ -247,6 +247,7 @@ ALLOWED_CHANGED = {
     "tests/test_vector_evidence_service_db_executor_bridge_default_off.py",
     "src/storage/vector_evidence/connection.py",
     "tests/test_pgvector_connection_provider_default_off.py",
+    "tests/test_vector_evidence_service_connection_provider_bridge_default_off.py",
 }
 
 def _changed_files():

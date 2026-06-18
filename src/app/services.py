@@ -2139,6 +2139,89 @@ def _vector_evidence_pgvector_store_path_payload(
     return result
 
 
+def _vector_evidence_pgvector_connection_provider_payload(
+    *,
+    provider_requested: bool,
+    owner_user_id: str = "",
+    database_url: str = "",
+    environ: Any = None,
+    connector: Any = None,
+    connection_module: Any = None,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "pgvector_connection_provider_requested": bool(provider_requested),
+        "pgvector_connection_provider_enabled": False,
+        "pgvector_connection_provider_used": False,
+        "pgvector_connection_provider_default_off": not bool(
+            provider_requested
+        ),
+        "db_executor_created": False,
+        "db_connection_opened": False,
+        "provider_status": "pgvector_connection_provider_default_off",
+        "provider_error": "",
+        "db_executor": None,
+    }
+    if not provider_requested:
+        return result
+
+    result["pgvector_connection_provider_enabled"] = True
+    result["pgvector_connection_provider_default_off"] = False
+    if not str(owner_user_id or "").strip():
+        result["provider_status"] = (
+            "pgvector_connection_provider_blocked_missing_owner"
+        )
+        result["provider_error"] = "owner_user_id_required"
+        return result
+    try:
+        provider_module = connection_module or importlib.import_module(
+            "src.storage.vector_evidence.connection"
+        )
+        build_executor = getattr(
+            provider_module,
+            "build_vector_evidence_db_executor",
+        )
+        provider_payload = build_executor(
+            enabled=True,
+            database_url=str(database_url or ""),
+            environ=environ,
+            connector=connector,
+        )
+    except (AttributeError, ImportError) as exc:
+        result["provider_status"] = (
+            "pgvector_connection_provider_unavailable"
+        )
+        result["provider_error"] = type(exc).__name__
+        return result
+    except Exception as exc:
+        result["provider_status"] = (
+            "pgvector_connection_provider_failed_non_blocking"
+        )
+        result["provider_error"] = type(exc).__name__
+        return result
+
+    safe_payload = provider_payload if isinstance(provider_payload, dict) else {}
+    db_executor = safe_payload.get("db_executor")
+    result.update(
+        {
+            "pgvector_connection_provider_used": db_executor is not None,
+            "db_executor_created": bool(
+                safe_payload.get("db_executor_created")
+            ),
+            "db_connection_opened": bool(
+                safe_payload.get("db_connection_opened")
+            ),
+            "provider_status": str(
+                safe_payload.get("status", "") or ""
+            ),
+            "provider_error": str(
+                safe_payload.get("error", "") or ""
+            ),
+            "db_executor": db_executor,
+        }
+    )
+    return result
+
+
 def vector_evidence_service_helper_payload(
     *,
     query_text: str,
@@ -2160,6 +2243,11 @@ def vector_evidence_service_helper_payload(
     pgvector_store_executor: Any = None,
     pgvector_db_executor_enabled: bool = False,
     pgvector_db_executor: Any = None,
+    pgvector_connection_provider_enabled: bool = False,
+    pgvector_connection_database_url: str = "",
+    pgvector_connection_environ: Any = None,
+    pgvector_connection_connector: Any = None,
+    pgvector_connection_module: Any = None,
     pgvector_store_module: Any = None,
 ) -> Dict[str, Any]:
     """Compose dry-run retrieval with an optional injected pgvector store path."""
@@ -2250,9 +2338,33 @@ def vector_evidence_service_helper_payload(
         "match_count": int(retrieval_payload.get("match_count", 0) or 0),
         "fallback": deepcopy(retrieval_payload.get("fallback", {}) or {}),
     }
+    pgvector_connection_provider = (
+        _vector_evidence_pgvector_connection_provider_payload(
+            provider_requested=pgvector_connection_provider_enabled is True,
+            owner_user_id=owner_user_id,
+            database_url=pgvector_connection_database_url,
+            environ=pgvector_connection_environ,
+            connector=pgvector_connection_connector,
+            connection_module=pgvector_connection_module,
+        )
+    )
+    provider_db_executor = pgvector_connection_provider["db_executor"]
+    effective_db_executor = (
+        provider_db_executor
+        if pgvector_connection_provider_enabled is True
+        else pgvector_db_executor
+    )
+    effective_store_enabled = bool(
+        pgvector_store_enabled is True
+        or pgvector_connection_provider_enabled is True
+    )
+    effective_db_executor_enabled = bool(
+        pgvector_db_executor_enabled is True
+        or pgvector_connection_provider_enabled is True
+    )
     pgvector_store = _vector_evidence_pgvector_store_path_payload(
-        path_requested=pgvector_store_enabled is True,
-        db_executor_path_requested=pgvector_db_executor_enabled is True,
+        path_requested=effective_store_enabled,
+        db_executor_path_requested=effective_db_executor_enabled,
         owner_user_id=owner_user_id,
         query_text=str(query_text or ""),
         filters=deepcopy(filters or {}) if isinstance(filters, dict) else {},
@@ -2260,9 +2372,27 @@ def vector_evidence_service_helper_payload(
         indexing_payload=deepcopy(indexing_payload),
         retrieval_payload=deepcopy(retrieval_payload),
         store_executor=pgvector_store_executor,
-        db_executor=pgvector_db_executor,
+        db_executor=effective_db_executor,
         store_module=pgvector_store_module,
     )
+    if provider_db_executor is not None and not callable(provider_db_executor):
+        close_connection = getattr(provider_db_executor, "close", None)
+        if callable(close_connection):
+            try:
+                close_connection()
+            except Exception:
+                pass
+    if (
+        pgvector_connection_provider_enabled is True
+        and provider_db_executor is None
+    ):
+        pgvector_store["pgvector_store_summary"]["status"] = (
+            pgvector_connection_provider["provider_status"]
+        )
+        provider_error = pgvector_connection_provider["provider_error"]
+        pgvector_store["pgvector_store_summary"]["errors"] = (
+            [provider_error] if provider_error else []
+        )
     safety = dict(retrieval_payload.get("safety_metadata", {}) or {})
     safety.update(
         {
@@ -2301,6 +2431,32 @@ def vector_evidence_service_helper_payload(
             ),
             "db_executor_supplied": bool(
                 pgvector_store["pgvector_db_executor_supplied"]
+            ),
+            "pgvector_connection_provider_requested": bool(
+                pgvector_connection_provider[
+                    "pgvector_connection_provider_requested"
+                ]
+            ),
+            "pgvector_connection_provider_enabled": bool(
+                pgvector_connection_provider[
+                    "pgvector_connection_provider_enabled"
+                ]
+            ),
+            "pgvector_connection_provider_used": bool(
+                pgvector_connection_provider[
+                    "pgvector_connection_provider_used"
+                ]
+            ),
+            "pgvector_connection_provider_default_off": bool(
+                pgvector_connection_provider[
+                    "pgvector_connection_provider_default_off"
+                ]
+            ),
+            "db_executor_created": bool(
+                pgvector_connection_provider["db_executor_created"]
+            ),
+            "db_connection_opened": bool(
+                pgvector_connection_provider["db_connection_opened"]
             ),
             "chunks_write_attempted": int(
                 pgvector_store["chunks_write_attempted"]
@@ -2381,6 +2537,35 @@ def vector_evidence_service_helper_payload(
         ),
         "pgvector_db_executor_default_off": bool(
             pgvector_store["pgvector_db_executor_default_off"]
+        ),
+        "pgvector_connection_provider_requested": bool(
+            pgvector_connection_provider[
+                "pgvector_connection_provider_requested"
+            ]
+        ),
+        "pgvector_connection_provider_enabled": bool(
+            pgvector_connection_provider[
+                "pgvector_connection_provider_enabled"
+            ]
+        ),
+        "pgvector_connection_provider_used": bool(
+            pgvector_connection_provider[
+                "pgvector_connection_provider_used"
+            ]
+        ),
+        "pgvector_connection_provider_default_off": bool(
+            pgvector_connection_provider[
+                "pgvector_connection_provider_default_off"
+            ]
+        ),
+        "pgvector_connection_provider_status": str(
+            pgvector_connection_provider["provider_status"]
+        ),
+        "db_executor_created": bool(
+            pgvector_connection_provider["db_executor_created"]
+        ),
+        "db_connection_opened": bool(
+            pgvector_connection_provider["db_connection_opened"]
         ),
         "chunks_write_attempted": int(
             pgvector_store["chunks_write_attempted"]

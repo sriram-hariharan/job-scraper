@@ -213,6 +213,7 @@ ALLOWED_CHANGED = {
     "src/agents/agent_recommendation_overlay_readiness.py",
     "tests/test_pipeline_generated_overlay_readiness_summary_readonly.py",
     "tests/test_pipeline_generated_overlay_readiness_summary_service_helper_no_api_ui.py",
+    "tests/test_pipeline_generated_overlay_readiness_summary_api_default_off_no_ui.py",
 }
 
 def _changed_files():

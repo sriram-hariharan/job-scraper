@@ -1118,6 +1118,137 @@ function pipelineGeneratedOverlayReviewPacketRequestPayload(tracePayload = {}) {
   };
 }
 
+function vectorEvidenceRequestPayload(tracePayload = {}, queryText = "") {
+  const agentRun = hasAgentTraceSummaryObject(tracePayload?.agent_run)
+    ? tracePayload.agent_run
+    : {};
+  const sourceContext = hasAgentTraceSummaryObject(tracePayload?.source_trace_context)
+    ? tracePayload.source_trace_context
+    : {};
+  return {
+    query_text: String(queryText || "").trim(),
+    job_payload: {
+      ...(hasAgentTraceSummaryObject(agentRun.summary_json) ? agentRun.summary_json : {}),
+      ...sourceContext,
+    },
+    job_description_payload: hasAgentTraceSummaryObject(tracePayload?.manual_jd_intelligence_dry_run_result)
+      ? tracePayload.manual_jd_intelligence_dry_run_result
+      : {},
+    resume_profile_payload: hasAgentTraceSummaryObject(tracePayload?.manual_resume_match_dry_run_result)
+      ? tracePayload.manual_resume_match_dry_run_result
+      : {},
+    trace_evidence_payload: {
+      trace_evidence_pack: hasAgentTraceSummaryObject(tracePayload?.trace_evidence_pack)
+        ? tracePayload.trace_evidence_pack
+        : {},
+      trace_summary: hasAgentTraceSummaryObject(tracePayload?.trace_summary)
+        ? tracePayload.trace_summary
+        : {},
+      stage_trace_health: hasAgentTraceSummaryObject(tracePayload?.stage_trace_health)
+        ? tracePayload.stage_trace_health
+        : {},
+      stage_trace_readiness: hasAgentTraceSummaryObject(tracePayload?.stage_trace_readiness)
+        ? tracePayload.stage_trace_readiness
+        : {},
+      agent_steps: Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [],
+    },
+    operator_review_packet_payload: hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_overlay_review_packet_result)
+      ? tracePayload.pipeline_generated_overlay_review_packet_result
+      : {},
+    top_k: 5,
+  };
+}
+
+function renderVectorEvidenceSnippets(matchedChunks = []) {
+  const chunks = Array.isArray(matchedChunks) ? matchedChunks.slice(0, 5) : [];
+  if (!chunks.length) {
+    return `<div class="agentic-review-muted">No matched evidence snippets.</div>`;
+  }
+  return `
+    <div class="agent-trace-step-list" aria-label="Top matched vector evidence snippets">
+      ${chunks.map((chunk) => {
+        const text = String(chunk?.evidence_text || "").trim();
+        const snippet = text.length > 280 ? `${text.slice(0, 277)}...` : text;
+        return `
+          <article class="agent-trace-step">
+            <div class="agent-trace-step-header">
+              <strong>${escapeHtml(formatReviewLabel(chunk?.chunk_type || "evidence"))}</strong>
+              ${renderReviewPill(chunk?.retrieval_score ?? "-", "agentic-review-run-status")}
+            </div>
+            <div class="agentic-review-muted">${escapeHtml(snippet || "No evidence text supplied.")}</div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderVectorEvidenceSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.vector_evidence_result)
+    ? tracePayload.vector_evidence_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const indexingSummary = hasAgentTraceSummaryObject(result.indexing_summary)
+    ? result.indexing_summary
+    : {};
+  const retrievalSummary = hasAgentTraceSummaryObject(result.retrieval_summary)
+    ? result.retrieval_summary
+    : {};
+  const matchedChunks = Array.isArray(result.matched_chunks) ? result.matched_chunks : [];
+  const matchedChunkTypes = [...new Set(
+    matchedChunks.map((chunk) => String(chunk?.chunk_type || "").trim()).filter(Boolean),
+  )];
+  const status = result.status || "not run";
+  const query = retrievalSummary.query || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Read-only vector evidence retrieval">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Vector Evidence</h4>
+          <p>Operator-triggered lexical evidence retrieval. Read-only and advisory only: no embeddings are created, no vector database is connected, no provider is called, and no scoring, ranking, queue, approval, resume, execution, application, or submission state is changed.</p>
+        </div>
+        <span class="agentic-workflow-badge">Advisory read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Retrieval status", status)}
+        ${renderWorkflowSummaryMetric("Indexed chunks", indexingSummary.chunk_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Matched chunks", matchedChunks.length)}
+        ${renderWorkflowSummaryMetric("Matched types", matchedChunkTypes.length ? matchedChunkTypes.join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "yes" : "yes")}
+        ${renderWorkflowSummaryMetric("Advisory", safety.advisory_only === true ? "yes" : "yes")}
+        ${renderWorkflowSummaryMetric("Embeddings created", safety.embeddings_created ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Vector DB connected", safety.vector_db_connected ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider calls", safety.provider_calls_made ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Scoring/ranking mutation", safety.did_mutate_scoring || safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue/application mutation", safety.did_mutate_queue || safety.did_execute_application || safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "vector_evidence_service_invalid_query" ? renderAgentTraceReadOnlyState("Enter a query to retrieve read-only vector evidence. No result was produced and no state was changed.", "info", "Vector evidence missing query") : ""}
+      ${status === "vector_evidence_service_no_chunks" ? renderAgentTraceReadOnlyState("No usable evidence chunks are available. Continue without retrieval influence.", "info", "Vector evidence no chunks") : ""}
+      ${status === "vector_evidence_service_no_results" ? renderAgentTraceReadOnlyState("No evidence matched this query. Continue without retrieval influence.", "info", "Vector evidence no results") : ""}
+      ${renderVectorEvidenceSnippets(matchedChunks)}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Indexing summary", indexingSummary, { helper: "Read-only in-memory indexing summary." })}
+        ${renderAgentTraceReadOnlyDetails("Retrieval summary", retrievalSummary, { helper: "Read-only deterministic retrieval summary." })}
+        ${renderAgentTraceReadOnlyDetails("Skipped reasons", result.skipped_reasons || {}, { helper: "Evidence omitted by validation, metadata filters, or lexical matching." })}
+      </div>
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          Evidence query
+          <input type="search" value="${escapeHtml(query)}" placeholder="Search job, resume, trace, or review evidence" data-vector-evidence-query>
+        </label>
+        <button type="button" class="agentic-feedback-action" data-vector-evidence-retrieve>
+          Retrieve Evidence
+        </button>
+        <span class="agentic-review-muted" data-vector-evidence-status>
+          Manual read-only advisory retrieval. No embeddings, vector DB, provider calls, or application mutations.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4106,6 +4237,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderPipelineGeneratedAgentRecommendationOverlayReadbackSection(tracePayload)}
       ${renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySection(tracePayload)}
       ${renderPipelineGeneratedOverlayReviewPacketSection(tracePayload)}
+      ${renderVectorEvidenceSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -6104,6 +6236,49 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Pipeline review packet failed non-blocking.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-vector-evidence-retrieve]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const queryInput = section?.querySelector("[data-vector-evidence-query]");
+    const status = section?.querySelector("[data-vector-evidence-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Retrieving read-only advisory vector evidence...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const vectorEvidenceResult = await fetchJson(
+        "/api/vector-evidence",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(vectorEvidenceRequestPayload(
+            tracePayload,
+            queryInput?.value || "",
+          )),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        vector_evidence_result: vectorEvidenceResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Vector evidence retrieval failed safely.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

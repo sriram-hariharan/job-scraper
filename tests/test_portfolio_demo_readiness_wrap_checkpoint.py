@@ -220,6 +220,17 @@ ALLOWED_CHANGED = {
     "tests/test_pipeline_agent_review_packet_service_helper_no_api_ui.py",
     "tests/test_pipeline_agent_review_packet_api_no_ui.py",
     "tests/test_pipeline_agent_review_packet_ui_readonly.py",
+    "docs/phase8_vector_db_readiness_audit_no_runtime_change.md",
+    "tests/test_phase8_vector_db_readiness_audit_no_runtime_change.py",
+    "src/agents/vector_evidence_contract.py",
+    "tests/test_vector_evidence_contract_default_off_no_dependency.py",
+    "src/agents/vector_evidence_indexing_dry_run.py",
+    "tests/test_vector_evidence_indexing_dry_run_no_db.py",
+    "src/agents/vector_evidence_retrieval_dry_run.py",
+    "tests/test_vector_evidence_retrieval_dry_run_no_db.py",
+    "tests/test_vector_evidence_service_helper_no_db_no_api_ui.py",
+    "tests/test_vector_evidence_api_no_db_no_ui.py",
+    "tests/test_vector_evidence_ui_no_db_readonly.py",
 }
 
 def _changed_files():
@@ -273,6 +284,9 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/agent_recommendation_overlay_readback.py",
         "src/agents/agent_recommendation_overlay_readiness.py",
         "src/agents/pipeline_agent_review_packet.py",
+        "src/agents/vector_evidence_contract.py",
+        "src/agents/vector_evidence_indexing_dry_run.py",
+        "src/agents/vector_evidence_retrieval_dry_run.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

@@ -362,6 +362,22 @@ class PipelineGeneratedOverlayReviewPacketRequest(BaseModel):
     readback_source: dict[str, Any] = Field(default_factory=dict)
 
 
+class VectorEvidenceRequest(BaseModel):
+    query_text: str = ""
+    job_payload: dict[str, Any] = Field(default_factory=dict)
+    job_description_payload: dict[str, Any] = Field(default_factory=dict)
+    resume_profile_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_evidence_payload: dict[str, Any] = Field(default_factory=dict)
+    operator_review_packet_payload: dict[str, Any] = Field(default_factory=dict)
+    filters: dict[str, Any] = Field(default_factory=dict)
+    chunk_type: str = ""
+    job_id: str = ""
+    company: str = ""
+    agent_name: str = ""
+    stage: str = ""
+    top_k: int = 5
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -4265,6 +4281,66 @@ def pipeline_generated_overlay_review_packet(
         "read_only": True,
         "advisory_only": True,
         "ui_action_added": False,
+    }
+
+
+@app.post("/api/vector-evidence")
+def vector_evidence(request: VectorEvidenceRequest):
+    response = services.vector_evidence_service_helper_payload(
+        query_text=request.query_text,
+        job_payload=request.job_payload,
+        job_description_payload=request.job_description_payload,
+        resume_profile_payload=request.resume_profile_payload,
+        trace_evidence_payload=request.trace_evidence_payload,
+        operator_review_packet_payload=request.operator_review_packet_payload,
+        filters=request.filters,
+        chunk_type=request.chunk_type,
+        job_id=request.job_id,
+        company=request.company,
+        agent_name=request.agent_name,
+        stage=request.stage,
+        top_k=request.top_k,
+    )
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "vector_evidence_api": True,
+            "vector_evidence_service_helper": True,
+            "embeddings_created": False,
+            "vector_db_connected": False,
+            "provider_calls_made": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **response,
+        "api_surface": "vector_evidence",
+        "vector_evidence_api": True,
+        "vector_evidence_service_helper": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "safety_metadata": safety,
     }
 
 

@@ -233,6 +233,8 @@ ALLOWED_CHANGED = {
     "tests/test_vector_evidence_ui_no_db_readonly.py",
     "docs/phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.md",
     "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    "src/agents/pgvector_extension_probe.py",
+    "tests/test_pgvector_extension_probe_contract_no_schema.py",
 }
 
 def _changed_files():
@@ -289,6 +291,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/vector_evidence_contract.py",
         "src/agents/vector_evidence_indexing_dry_run.py",
         "src/agents/vector_evidence_retrieval_dry_run.py",
+        "src/agents/pgvector_extension_probe.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

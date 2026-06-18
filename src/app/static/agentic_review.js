@@ -1091,6 +1091,33 @@ function pipelineGeneratedAgentRecommendationOverlayReadinessSummaryRequestPaylo
   };
 }
 
+function pipelineGeneratedOverlayReviewPacketRequestPayload(tracePayload = {}) {
+  const readinessRequest = pipelineGeneratedAgentRecommendationOverlayReadinessSummaryRequestPayload(tracePayload);
+  const readbackResult = hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_agent_recommendation_overlay_readback_result)
+    ? tracePayload.pipeline_generated_agent_recommendation_overlay_readback_result
+    : {};
+  return {
+    ...readinessRequest,
+    overlay_readback_payload: readinessRequest.overlayReadbackPayload || {},
+    overlay_payload: readinessRequest.overlayPayload || {},
+    pipeline_generated_overlay_payload: readinessRequest.pipelineGeneratedOverlayPayload || {},
+    agent_recommendation_overlay_payload: readinessRequest.agentRecommendationOverlayPayload || {},
+    trace_context_payload: readinessRequest.traceContextPayload || {},
+    overlay_payload: hasAgentTraceSummaryObject(tracePayload?.agent_recommendation_overlay_result)
+      ? tracePayload.agent_recommendation_overlay_result
+      : {},
+    pipeline_generated_overlay_payload: hasAgentTraceSummaryObject(readbackResult.pipeline_generated_overlay)
+      ? readbackResult.pipeline_generated_overlay
+      : {},
+    agent_recommendation_overlay_payload: hasAgentTraceSummaryObject(readbackResult.agent_recommendation_overlay)
+      ? readbackResult.agent_recommendation_overlay
+      : {},
+    trace_context_payload: hasAgentTraceSummaryObject(tracePayload?.source_trace_context)
+      ? tracePayload.source_trace_context
+      : {},
+  };
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -1267,6 +1294,73 @@ function renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySectio
         </button>
         <span class="agentic-review-muted" data-pipeline-generated-agent-recommendation-overlay-readiness-summary-status>
           Manual advisory read-only check. It does not change score, ranking, queue, approval, resume, execution, or submission state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
+function renderPipelineGeneratedOverlayReviewPacketSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_overlay_review_packet_result)
+    ? tracePayload.pipeline_generated_overlay_review_packet_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const reviewability = hasAgentTraceSummaryObject(result.overlay_reviewability)
+    ? result.overlay_reviewability
+    : {};
+  const status = result.packet_status || "not run";
+  return `
+    <article class="agent-trace-summary" aria-label="Pipeline agent review packet">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Pipeline Agent Review Packet</h4>
+          <p>Compact advisory read-only packet combining existing overlay readback, readiness, trace context, and operator review focus. It does not regenerate overlays, call providers, or change score, ranking, queue, approvals, resumes, execution requests, launch requests, applications, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Advisory read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Packet", status)}
+        ${renderWorkflowSummaryMetric("Overlay found", result.overlay_found === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Readiness", result.overlay_readiness_status || "-")}
+        ${renderWorkflowSummaryMetric("Reviewable", reviewability.reviewable === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Partial", reviewability.partial === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Auto generation", result.auto_generation_status || "-")}
+        ${renderWorkflowSummaryMetric("Overlay", result.overlay_status || "-")}
+        ${renderWorkflowSummaryMetric("Operator action", result.recommended_operator_action || "-")}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Advisory", safety.advisory_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Scoring mutation", safety.did_mutate_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking mutation", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume mutation", safety.did_mutate_resume ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution request", safety.did_create_execution_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Launch request", safety.did_create_execution_launch_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "review_packet_ready" ? renderAgentTraceReadOnlyState("Pipeline agent review packet is ready for operator review. All recommendations remain advisory and read-only.", "info", "Pipeline review packet ready") : ""}
+      ${status === "review_packet_partial_reviewable" ? renderAgentTraceReadOnlyState("A safe partial review packet is available and reviewable. Incomplete overlay context is a warning, not a failure.", "info", "Pipeline review packet partial and reviewable") : ""}
+      ${status === "review_packet_not_found" ? renderAgentTraceReadOnlyState("No pipeline-generated overlay was found for this review packet. No state was changed.", "info", "Pipeline review packet not found") : ""}
+      ${status === "review_packet_blocked" ? renderAgentTraceReadOnlyState("Pipeline review packet is blocked by overlay generation constraints. Deterministic scoring and pipeline state remain unchanged.", "warning", "Pipeline review packet blocked") : ""}
+      ${status === "review_packet_failed_non_blocking" ? renderAgentTraceReadOnlyState("Pipeline review packet failed non-blocking. No score, ranking, queue, approval, execution, or submission state was changed.", "warning", "Pipeline review packet failed non-blocking") : ""}
+      ${status === "review_packet_disabled" ? renderAgentTraceReadOnlyState("Pipeline overlay generation was disabled, so the review packet remains safely unavailable.", "info", "Pipeline review packet disabled") : ""}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Review focus", result.review_focus || [], { helper: "Operator review focus only; no action is applied automatically." })}
+        ${renderAgentTraceReadOnlyDetails("Trace context summary", result.trace_context_summary || {}, { helper: "Compact read-only trace context used by the packet." })}
+        ${renderAgentTraceReadOnlyDetails("Evaluation boundaries", result.evaluation_boundaries || {}, { helper: "Prefilter relevance, shadow evaluation, and final scoring remain separate." })}
+        ${renderAgentTraceReadOnlyDetails("Overlay readback summary", result.overlay_readback_summary || {}, { helper: "Read-only source overlay readback summary." })}
+        ${renderAgentTraceReadOnlyDetails("Overlay readiness summary", result.overlay_readiness_summary || {}, { helper: "Read-only readiness summary, including partial reviewability." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety metadata for the review packet." })}
+      </div>
+      <div class="agentic-feedback-actions">
+        <button type="button" class="agentic-feedback-action" data-pipeline-generated-overlay-review-packet>
+          Build Review Packet
+        </button>
+        <span class="agentic-review-muted" data-pipeline-generated-overlay-review-packet-status>
+          Manual advisory read-only packet. It does not change score, ranking, queue, approval, resume, execution, or submission state.
         </span>
       </div>
     </article>
@@ -4011,6 +4105,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderAgentRecommendationOverlaySection(tracePayload)}
       ${renderPipelineGeneratedAgentRecommendationOverlayReadbackSection(tracePayload)}
       ${renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySection(tracePayload)}
+      ${renderPipelineGeneratedOverlayReviewPacketSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5965,6 +6060,50 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Pipeline-generated overlay readiness summary failed non-blocking.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-pipeline-generated-overlay-review-packet]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-pipeline-generated-overlay-review-packet-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Building advisory read-only pipeline review packet...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const reviewPacketApiPath = [
+        "/api/pipeline",
+        "agent",
+        "review",
+        "packet",
+      ].join("-");
+      const packetResult = await fetchJson(
+        reviewPacketApiPath,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(pipelineGeneratedOverlayReviewPacketRequestPayload(tracePayload)),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        pipeline_generated_overlay_review_packet_result: packetResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Pipeline review packet failed non-blocking.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

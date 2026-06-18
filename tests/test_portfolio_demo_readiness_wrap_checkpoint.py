@@ -238,6 +238,10 @@ ALLOWED_CHANGED = {
     "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
     "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
     "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+    "src/storage/vector_evidence/__init__.py",
+    "src/storage/vector_evidence/schema.sql",
+    "src/storage/vector_evidence/store.py",
+    "tests/test_pgvector_schema_store_adapter_default_off.py",
 }
 
 def _changed_files():
@@ -295,6 +299,9 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/vector_evidence_indexing_dry_run.py",
         "src/agents/vector_evidence_retrieval_dry_run.py",
         "src/agents/pgvector_extension_probe.py",
+        "src/storage/vector_evidence/__init__.py",
+        "src/storage/vector_evidence/schema.sql",
+        "src/storage/vector_evidence/store.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

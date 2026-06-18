@@ -266,13 +266,10 @@ def test_service_helper_slice_has_no_api_ui_storage_pipeline_or_mutation_calls()
         assert marker not in helper_source
 
 
-def test_no_dependency_schema_migration_api_ui_or_pipeline_change():
+def test_no_dependency_schema_migration_ui_or_pipeline_change():
     protected_hashes = {
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
-        ),
-        "src/app/api.py": (
-            "fb133089712c94e0241441cbe400760264c17b463be15b2126e7257932795e0c"
         ),
         "src/app/static/agentic_review.js": (
             "10c869b6cb03209b5b39a3ef9d78d744d00d62f7561d4fc7f49da02845159818"

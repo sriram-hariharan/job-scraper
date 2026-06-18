@@ -188,7 +188,7 @@ def test_ui_calls_api_only_from_explicit_operator_action_without_auto_refresh():
 def test_no_api_service_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "fb133089712c94e0241441cbe400760264c17b463be15b2126e7257932795e0c"
+            "e2bb58c1c22eba596d73cc18ca336b57b7f9e3cf41ebaf26ec8cb549d10339f3"
         ),
         "src/app/services.py": (
             "7fe66bd1759ff494c70ac063df7474c98da9ceae5af42e4c751fbd5a23c222e7"

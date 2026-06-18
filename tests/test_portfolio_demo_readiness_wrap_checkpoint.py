@@ -242,6 +242,7 @@ ALLOWED_CHANGED = {
     "src/storage/vector_evidence/schema.sql",
     "src/storage/vector_evidence/store.py",
     "tests/test_pgvector_schema_store_adapter_default_off.py",
+    "tests/test_vector_evidence_service_pgvector_store_flagged_default_off.py",
 }
 
 def _changed_files():

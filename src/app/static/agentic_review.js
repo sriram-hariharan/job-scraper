@@ -1081,6 +1081,16 @@ function pipelineGeneratedAgentRecommendationOverlayReadbackRequestPayload(trace
   };
 }
 
+function pipelineGeneratedAgentRecommendationOverlayReadinessSummaryRequestPayload(tracePayload = {}) {
+  const readbackRequest = pipelineGeneratedAgentRecommendationOverlayReadbackRequestPayload(tracePayload);
+  return {
+    overlay_readback_payload: hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_agent_recommendation_overlay_readback_result)
+      ? tracePayload.pipeline_generated_agent_recommendation_overlay_readback_result
+      : {},
+    ...readbackRequest,
+  };
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -1196,6 +1206,67 @@ function renderPipelineGeneratedAgentRecommendationOverlayReadbackSection(traceP
         </button>
         <span class="agentic-review-muted" data-pipeline-generated-agent-recommendation-overlay-readback-status>
           Manual read-only. Safe states include not found, not enabled, kill switch blocked, partial, ready, and failed non-blocking.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
+function renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_agent_recommendation_overlay_readiness_summary_result)
+    ? tracePayload.pipeline_generated_agent_recommendation_overlay_readiness_summary_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const status = result.readiness_status || "not run";
+  return `
+    <article class="agent-trace-summary" aria-label="Pipeline-generated overlay readiness summary">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Pipeline-generated Overlay Readiness</h4>
+          <p>Advisory read-only summary of an existing pipeline-generated overlay. It does not regenerate overlays, call providers, or change score, ranking, queue, approvals, resumes, execution requests, launch requests, applications, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Advisory read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readiness", status)}
+        ${renderWorkflowSummaryMetric("Reviewable", result.reviewable === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Partial", result.partial === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Overlay", result.overlay_status || "-")}
+        ${renderWorkflowSummaryMetric("Recommendation", result.recommended_review_action || "-")}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Advisory", safety.advisory_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Scoring mutation", safety.did_mutate_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking mutation", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume mutation", safety.did_mutate_resume ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution request", safety.did_create_execution_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Launch request", safety.did_create_execution_launch_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "overlay_ready" ? renderAgentTraceReadOnlyState("Pipeline-generated overlay is ready for operator review. The recommendation remains advisory and read-only.", "info", "Pipeline overlay ready") : ""}
+      ${status === "overlay_partial_reviewable" ? renderAgentTraceReadOnlyState("A safe partial overlay is available and reviewable. Missing context is a warning, not a failure.", "info", "Pipeline overlay partial and reviewable") : ""}
+      ${status === "overlay_not_found" ? renderAgentTraceReadOnlyState("No pipeline-generated overlay was found. No state was changed.", "info", "Pipeline overlay not found") : ""}
+      ${status === "overlay_blocked" ? renderAgentTraceReadOnlyState("Pipeline-generated overlay readiness is blocked. The deterministic pipeline remains unchanged.", "warning", "Pipeline overlay readiness blocked") : ""}
+      ${status === "overlay_failed_non_blocking" ? renderAgentTraceReadOnlyState("Pipeline-generated overlay readiness summary failed non-blocking. No application state was changed.", "warning", "Pipeline overlay readiness failed non-blocking") : ""}
+      ${status === "overlay_disabled" ? renderAgentTraceReadOnlyState("Pipeline-generated overlay auto-generation was disabled. Read-only review remains safe.", "info", "Pipeline overlay disabled") : ""}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Reason codes", result.reason_codes || [], { helper: "Read-only readiness reason codes." })}
+        ${renderAgentTraceReadOnlyDetails("Blocking findings", result.blocking_findings || [], { helper: "Read-only blockers; no queue or approval mutation occurs." })}
+        ${renderAgentTraceReadOnlyDetails("Warning findings", result.warning_findings || [], { helper: "Warnings may include incomplete context for a reviewable partial overlay." })}
+        ${renderAgentTraceReadOnlyDetails("Operator summary", result.operator_summary || {}, { helper: "Advisory operator-facing readiness summary." })}
+        ${renderAgentTraceReadOnlyDetails("Source overlay summary", result.source_overlay_summary || {}, { helper: "Read-only summary of the existing pipeline-generated overlay." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety metadata for overlay readiness." })}
+      </div>
+      <div class="agentic-feedback-actions">
+        <button type="button" class="agentic-feedback-action" data-pipeline-generated-agent-recommendation-overlay-readiness-summary>
+          Check Overlay Readiness
+        </button>
+        <span class="agentic-review-muted" data-pipeline-generated-agent-recommendation-overlay-readiness-summary-status>
+          Manual advisory read-only check. It does not change score, ranking, queue, approval, resume, execution, or submission state.
         </span>
       </div>
     </article>
@@ -3939,6 +4010,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderHumanReviewedInfluenceApprovalRequestSection(tracePayload)}
       ${renderAgentRecommendationOverlaySection(tracePayload)}
       ${renderPipelineGeneratedAgentRecommendationOverlayReadbackSection(tracePayload)}
+      ${renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5850,6 +5922,49 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Pipeline-generated overlay readback failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-pipeline-generated-agent-recommendation-overlay-readiness-summary]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-pipeline-generated-agent-recommendation-overlay-readiness-summary-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Checking pipeline-generated overlay readiness in read-only mode...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readinessApiPath = [
+        "/api/pipeline-generated-agent-recommendation-overlay",
+        "readiness",
+        "summary",
+      ].join("-");
+      const readinessResult = await fetchJson(
+        readinessApiPath,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(pipelineGeneratedAgentRecommendationOverlayReadinessSummaryRequestPayload(tracePayload)),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        pipeline_generated_agent_recommendation_overlay_readiness_summary_result: readinessResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Pipeline-generated overlay readiness summary failed non-blocking.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

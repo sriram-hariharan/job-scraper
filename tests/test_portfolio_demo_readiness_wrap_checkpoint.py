@@ -220,6 +220,8 @@ ALLOWED_CHANGED = {
     "tests/test_pipeline_agent_review_packet_service_helper_no_api_ui.py",
     "tests/test_pipeline_agent_review_packet_api_no_ui.py",
     "tests/test_pipeline_agent_review_packet_ui_readonly.py",
+    "docs/phase8_vector_db_readiness_audit_no_runtime_change.md",
+    "tests/test_phase8_vector_db_readiness_audit_no_runtime_change.py",
 }
 
 def _changed_files():

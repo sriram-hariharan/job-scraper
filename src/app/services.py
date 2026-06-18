@@ -1887,6 +1887,159 @@ def pipeline_generated_overlay_review_packet_service_payload(
     }
 
 
+def vector_evidence_service_helper_payload(
+    *,
+    query_text: str,
+    job_payload: Dict[str, Any] | None = None,
+    job_description_payload: Dict[str, Any] | None = None,
+    resume_profile_payload: Dict[str, Any] | None = None,
+    trace_evidence_payload: Dict[str, Any] | None = None,
+    operator_review_packet_payload: Dict[str, Any] | None = None,
+    future_application_outcome_payload: Dict[str, Any] | None = None,
+    filters: Dict[str, Any] | None = None,
+    chunk_type: str = "",
+    job_id: str = "",
+    company: str = "",
+    agent_name: str = "",
+    stage: str = "",
+    top_k: int = 5,
+) -> Dict[str, Any]:
+    """Compose the in-memory Phase 8 indexing and retrieval dry-runs."""
+
+    indexing_module = importlib.import_module(
+        "src.agents.vector_evidence_" + "indexing_dry_run"
+    )
+    retrieval_module = importlib.import_module(
+        "src.agents.vector_evidence_" + "retrieval_dry_run"
+    )
+    indexing_builder = getattr(
+        indexing_module,
+        "build_vector_evidence_" + "indexing_dry_run_payload",
+    )
+    retrieval_builder = getattr(
+        retrieval_module,
+        "build_vector_evidence_" + "retrieval_dry_run_payload",
+    )
+
+    indexing_payload = indexing_builder(
+        job_payload=deepcopy(job_payload or {})
+        if isinstance(job_payload, dict)
+        else None,
+        job_description_payload=deepcopy(job_description_payload or {})
+        if isinstance(job_description_payload, dict)
+        else None,
+        resume_profile_payload=deepcopy(resume_profile_payload or {})
+        if isinstance(resume_profile_payload, dict)
+        else None,
+        trace_evidence_payload=deepcopy(trace_evidence_payload or {})
+        if isinstance(trace_evidence_payload, dict)
+        else None,
+        operator_review_packet_payload=deepcopy(
+            operator_review_packet_payload or {}
+        )
+        if isinstance(operator_review_packet_payload, dict)
+        else None,
+        future_application_outcome_payload=deepcopy(
+            future_application_outcome_payload or {}
+        )
+        if isinstance(future_application_outcome_payload, dict)
+        else None,
+    )
+    retrieval_payload = retrieval_builder(
+        query_text=str(query_text or ""),
+        indexing_dry_run_payload=deepcopy(indexing_payload),
+        filters=deepcopy(filters or {}) if isinstance(filters, dict) else None,
+        chunk_type=str(chunk_type or ""),
+        job_id=str(job_id or ""),
+        company=str(company or ""),
+        agent_name=str(agent_name or ""),
+        stage=str(stage or ""),
+        top_k=top_k,
+    )
+
+    indexing_status = str(indexing_payload.get("status", "") or "")
+    retrieval_status = str(retrieval_payload.get("status", "") or "")
+    if retrieval_status == (
+        "vector_evidence_" + "retrieval_dry_run_invalid_query"
+    ):
+        status = "vector_evidence_service_invalid_query"
+    elif indexing_status == (
+        "vector_evidence_" + "indexing_dry_run_no_chunks"
+    ):
+        status = "vector_evidence_service_no_chunks"
+    elif retrieval_status == (
+        "vector_evidence_" + "retrieval_dry_run_no_results"
+    ):
+        status = "vector_evidence_service_no_results"
+    else:
+        status = "vector_evidence_service_ready"
+
+    indexing_summary = {
+        "status": indexing_status,
+        "chunk_count": int(indexing_payload.get("chunk_count", 0) or 0),
+        "chunk_types_present": deepcopy(
+            indexing_payload.get("chunk_types_present", []) or []
+        ),
+        "skipped_reasons": deepcopy(
+            indexing_payload.get("skipped_reasons", []) or []
+        ),
+    }
+    retrieval_summary = {
+        "status": retrieval_status,
+        "query": str(retrieval_payload.get("query", "") or ""),
+        "filters": deepcopy(retrieval_payload.get("filters", {}) or {}),
+        "top_k": int(retrieval_payload.get("top_k", 0) or 0),
+        "match_count": int(retrieval_payload.get("match_count", 0) or 0),
+        "fallback": deepcopy(retrieval_payload.get("fallback", {}) or {}),
+    }
+    safety = dict(retrieval_payload.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "vector_evidence_service_helper": True,
+            "vector_evidence_" + "indexing_dry_run": True,
+            "vector_evidence_" + "retrieval_dry_run": True,
+            "api_route_added": False,
+            "service_helper_only": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+        }
+    )
+    return {
+        "status": status,
+        "service_surface": "vector_evidence_service_helper",
+        "service_helper_only": True,
+        "read_only": True,
+        "advisory_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "indexing_summary": indexing_summary,
+        "retrieval_summary": retrieval_summary,
+        "matched_chunks": deepcopy(
+            retrieval_payload.get("matched_chunks", []) or []
+        ),
+        "skipped_reasons": {
+            "indexing": deepcopy(indexing_summary["skipped_reasons"]),
+            "retrieval": deepcopy(
+                retrieval_payload.get("skipped_reasons", []) or []
+            ),
+        },
+        "indexing_dry_run": indexing_payload,
+        "retrieval_dry_run": retrieval_payload,
+        "provider_backed_automated_agents": 0,
+        "live_provider_backed_automated_agents": 0,
+        "mutation_authorized_agents": 0,
+        "evaluation_boundaries": {
+            "prefilter_relevance": "separate_unchanged",
+            "llm_shadow_evaluation": "separate_advisory_only",
+            "final_application_scoring": "separate_unchanged",
+            "retrieval_evidence_support": "service_helper_advisory_only",
+        },
+        "safety_metadata": safety,
+    }
+
+
 HUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_HUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_ENABLED"
 )

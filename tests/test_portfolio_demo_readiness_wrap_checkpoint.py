@@ -218,6 +218,7 @@ ALLOWED_CHANGED = {
     "src/agents/pipeline_agent_review_packet.py",
     "tests/test_pipeline_agent_review_packet_readonly.py",
     "tests/test_pipeline_agent_review_packet_service_helper_no_api_ui.py",
+    "tests/test_pipeline_agent_review_packet_api_no_ui.py",
 }
 
 def _changed_files():

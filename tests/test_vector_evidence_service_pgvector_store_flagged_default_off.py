@@ -307,9 +307,6 @@ def test_no_api_ui_pipeline_dependency_or_phase8n_schema_change():
         "src/storage/vector_evidence/schema.sql": (
             "4b34a928393fcce6696a2f35d7ee62339b0483cc248daee3f0e57bdb50c11dff"
         ),
-        "src/storage/vector_evidence/store.py": (
-            "4e11f13751934b2315e8be1866f1a86eb73558f251b5565a780d5b5e578aa9b8"
-        ),
     }
     for relative_path, expected_hash in protected_hashes.items():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (

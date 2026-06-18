@@ -215,6 +215,8 @@ ALLOWED_CHANGED = {
     "tests/test_pipeline_generated_overlay_readiness_summary_service_helper_no_api_ui.py",
     "tests/test_pipeline_generated_overlay_readiness_summary_api_default_off_no_ui.py",
     "tests/test_pipeline_generated_overlay_readiness_summary_ui_readonly.py",
+    "src/agents/pipeline_agent_review_packet.py",
+    "tests/test_pipeline_agent_review_packet_readonly.py",
 }
 
 def _changed_files():
@@ -267,6 +269,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/agent_recommendation_overlay.py",
         "src/agents/agent_recommendation_overlay_readback.py",
         "src/agents/agent_recommendation_overlay_readiness.py",
+        "src/agents/pipeline_agent_review_packet.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

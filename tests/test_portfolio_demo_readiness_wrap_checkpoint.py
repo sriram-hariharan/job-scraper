@@ -237,6 +237,7 @@ ALLOWED_CHANGED = {
     "tests/test_pgvector_extension_probe_contract_no_schema.py",
     "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
     "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+    "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
 }
 
 def _changed_files():

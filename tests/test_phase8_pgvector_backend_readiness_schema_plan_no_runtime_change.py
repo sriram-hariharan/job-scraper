@@ -265,7 +265,7 @@ def test_all_src_runtime_files_match_phase8i_checkpoint_when_phase8i_is_active()
         return
 
     assert _aggregate_hash(_protected_files("src")) == (
-        "7d590a0f3e591a4a3a31d69d0295c0138962d5d170385543001732cba02ffe96"
+        "ad202387fe228b7d82101bd832cda20a41a2ff6151eb709c40943444e2c7c6bf"
     )
 
 

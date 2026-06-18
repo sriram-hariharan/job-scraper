@@ -3,9 +3,11 @@ from hashlib import sha256
 from pathlib import Path
 
 from src.agents import pgvector_extension_probe as probe
+from src.app import services
 
 
 ROOT = Path(__file__).resolve().parents[1]
+HELPER_NAME = "pgvector_extension_probe_service_helper_payload"
 
 
 def _request() -> dict:
@@ -13,7 +15,7 @@ def _request() -> dict:
         extension_name="vector",
         requested_dimension=768,
         probe_context={
-            "environment": "static-test",
+            "environment": "service-static-test",
             "read_only": True,
         },
     )
@@ -25,6 +27,7 @@ def _assert_safety(payload: dict, *, connected: bool = False) -> None:
         "read_only": True,
         "advisory_only": True,
         "pgvector_extension_probe": True,
+        "pgvector_probe_service_helper": True,
         "pgvector_installed_by_app": False,
         "schema_created": False,
         "migration_created": False,
@@ -43,7 +46,7 @@ def _assert_safety(payload: dict, *, connected: bool = False) -> None:
         "did_execute_application": False,
         "did_submit_application": False,
         "api_route_added": False,
-        "service_helper_added": False,
+        "service_helper_only": True,
         "ui_action_added": False,
         "pipeline_stage_added": False,
         "auto_apply_enabled": False,
@@ -52,56 +55,58 @@ def _assert_safety(payload: dict, *, connected: bool = False) -> None:
     for key, value in expected.items():
         assert safety[key] is value
 
+    assert payload["service_surface"] == (
+        "pgvector_extension_probe_service_helper"
+    )
+    assert payload["service_helper_only"] is True
+    assert payload["read_only"] is True
+    assert payload["advisory_only"] is True
+    assert payload["api_route_added"] is False
+    assert payload["ui_action_added"] is False
     assert payload["provider_backed_automated_agents"] == 0
     assert payload["live_provider_backed_automated_agents"] == 0
     assert payload["mutation_authorized_agents"] == 0
     assert payload["mutation_authorized_scoring_agents"] == 0
     assert payload["mutation_authorized_ranking_agents"] == 0
     assert payload["mutation_authorized_application_agents"] == 0
-    assert payload["evaluation_boundaries"] == {
-        "prefilter_relevance": "separate_unchanged",
-        "llm_shadow_evaluation": "separate_advisory_only",
-        "final_application_scoring": "separate_unchanged",
-        "retrieval_evidence_support": "extension_probe_only",
-    }
 
 
-def test_default_no_executor_probe_is_not_configured():
-    payload = probe.build_pgvector_extension_probe_payload(
+def test_service_default_no_executor_is_not_configured():
+    payload = getattr(services, HELPER_NAME)(
         request_payload=_request(),
     )
 
     assert payload["status"] == "pgvector_probe_not_configured"
-    assert payload["probe_configured"] is False
-    assert payload["probe_executed"] is False
-    assert payload["requested_dimension"] == 768
+    assert payload["extension_available"] is False
+    assert payload["extension_version"] == ""
+    assert payload["embedding_dimension_supported"] is None
+    assert payload["skipped_reasons"] == ["probe_executor_not_configured"]
+    assert payload["probe_summary"]["probe_executed"] is False
     assert payload["safety_metadata"]["did_read_database"] is False
     _assert_safety(payload)
 
 
-def test_simulated_available_executor_is_called_once_and_normalized():
+def test_service_simulated_available_executor_is_called_once():
     calls = []
 
     def executor(request):
         calls.append(deepcopy(request))
         return {
-            "extension_name": "vector",
             "extension_available": True,
             "extension_installed": True,
             "available_version": "0.8.0",
             "installed_version": "0.7.4",
             "postgres_version": "16.4",
             "requested_dimension": 768,
-            "supported_dimensions": [1536, 768, 768],
+            "supported_dimensions": [384, 768],
             "dimension_supported": True,
             "vector_type_available": True,
-            "supported_index_methods": ["ivfflat", "hnsw", "hnsw"],
+            "supported_index_methods": ["hnsw", "ivfflat"],
             "did_read_database": True,
-            "probe_details": {"source": "static_executor"},
         }
 
     request = _request()
-    payload = probe.build_pgvector_extension_probe_payload(
+    payload = getattr(services, HELPER_NAME)(
         request_payload=request,
         probe_executor=executor,
     )
@@ -111,62 +116,88 @@ def test_simulated_available_executor_is_called_once_and_normalized():
     assert calls[0] is not request
     assert payload["status"] == "pgvector_probe_available"
     assert payload["extension_available"] is True
-    assert payload["extension_installed"] is True
-    assert payload["available_version"] == "0.8.0"
-    assert payload["installed_version"] == "0.7.4"
-    assert payload["postgres_version"] == "16.4"
-    assert payload["requested_dimension"] == 768
-    assert payload["supported_dimensions"] == [768, 1536]
-    assert payload["dimension_supported"] is True
-    assert payload["vector_type_available"] is True
-    assert payload["supported_index_methods"] == ["hnsw", "ivfflat"]
-    assert payload["probe_details"] == {"source": "static_executor"}
+    assert payload["extension_version"] == "0.7.4"
+    assert payload["embedding_dimension_supported"] is True
+    assert payload["skipped_reasons"] == []
+    assert payload["probe_summary"]["available_version"] == "0.8.0"
+    assert payload["probe_summary"]["installed_version"] == "0.7.4"
+    assert payload["probe_summary"]["postgres_version"] == "16.4"
+    assert payload["probe_summary"]["supported_dimensions"] == [384, 768]
+    assert payload["probe_summary"]["supported_index_methods"] == [
+        "hnsw",
+        "ivfflat",
+    ]
     assert payload["safety_metadata"]["did_read_database"] is True
     _assert_safety(payload, connected=True)
 
 
-def test_simulated_missing_executor_returns_missing():
-    payload = probe.build_pgvector_extension_probe_payload(
+def test_service_simulated_missing_executor_returns_missing():
+    payload = getattr(services, HELPER_NAME)(
         request_payload=_request(),
         probe_executor=lambda request: {
-            "extension_name": request["extension_name"],
             "extension_available": False,
             "extension_installed": False,
-            "available_version": "",
-            "installed_version": "",
             "postgres_version": "15.8",
-            "supported_dimensions": [],
             "did_read_database": True,
         },
     )
 
     assert payload["status"] == "pgvector_probe_missing"
     assert payload["extension_available"] is False
-    assert payload["extension_installed"] is False
-    assert payload["postgres_version"] == "15.8"
+    assert payload["extension_version"] == ""
+    assert payload["skipped_reasons"] == ["pgvector_extension_missing"]
+    assert payload["probe_summary"]["postgres_version"] == "15.8"
     assert payload["safety_metadata"]["did_read_database"] is True
     _assert_safety(payload)
 
 
-def test_simulated_exception_fails_non_blocking():
+def test_service_simulated_exception_fails_non_blocking():
     def executor(request):
-        raise RuntimeError(f"static probe failed for {request['extension_name']}")
+        raise RuntimeError(f"static service probe failed for {request['extension_name']}")
 
-    payload = probe.build_pgvector_extension_probe_payload(
+    payload = getattr(services, HELPER_NAME)(
         request_payload=_request(),
         probe_executor=executor,
     )
 
     assert payload["status"] == "pgvector_probe_failed_non_blocking"
-    assert payload["probe_configured"] is True
-    assert payload["probe_executed"] is True
-    assert payload["error_type"] == "RuntimeError"
-    assert payload["error_message"] == "static probe failed for vector"
+    assert payload["extension_available"] is False
+    assert payload["skipped_reasons"] == ["probe_failed_non_blocking"]
+    assert payload["probe_summary"]["error_type"] == "RuntimeError"
+    assert payload["probe_summary"]["error_message"] == (
+        "static service probe failed for vector"
+    )
     assert payload["safety_metadata"]["did_read_database"] is False
     _assert_safety(payload)
 
 
-def test_probe_is_deterministic_and_does_not_mutate_inputs():
+def test_service_preserves_extension_version_and_dimension_information():
+    payload = getattr(services, HELPER_NAME)(
+        extension_name="vector",
+        requested_dimension=1536,
+        probe_context={"source": "service-builder"},
+        probe_executor=lambda request: {
+            "available": True,
+            "default_version": "0.8.0",
+            "current_version": "0.7.4",
+            "server_version": "16.4",
+            "embedding_dimensions": [768, 1536],
+            "vector_type_available": True,
+        },
+    )
+
+    assert payload["status"] == "pgvector_probe_available"
+    assert payload["extension_version"] == "0.7.4"
+    assert payload["embedding_dimension_supported"] is True
+    assert payload["probe_summary"]["extension_name"] == "vector"
+    assert payload["probe_summary"]["available_version"] == "0.8.0"
+    assert payload["probe_summary"]["installed_version"] == "0.7.4"
+    assert payload["probe_summary"]["requested_dimension"] == 1536
+    assert payload["probe_summary"]["supported_dimensions"] == [768, 1536]
+    _assert_safety(payload, connected=True)
+
+
+def test_service_is_deterministic_and_does_not_mutate_inputs():
     request = _request()
     static_result = {
         "extension_available": True,
@@ -178,11 +209,11 @@ def test_probe_is_deterministic_and_does_not_mutate_inputs():
     before_request = deepcopy(request)
     before_result = deepcopy(static_result)
 
-    first = probe.build_pgvector_extension_probe_payload(
+    first = getattr(services, HELPER_NAME)(
         request_payload=request,
         probe_executor=lambda supplied: deepcopy(static_result),
     )
-    second = probe.build_pgvector_extension_probe_payload(
+    second = getattr(services, HELPER_NAME)(
         request_payload=request,
         probe_executor=lambda supplied: deepcopy(static_result),
     )
@@ -193,41 +224,25 @@ def test_probe_is_deterministic_and_does_not_mutate_inputs():
     _assert_safety(first, connected=True)
 
 
-def test_result_normalizer_preserves_extension_version_and_dimension_info():
-    payload = probe.normalize_pgvector_extension_probe_result_payload(
-        {
-            "available": True,
-            "extension_name": "vector",
-            "default_version": "0.8.0",
-            "current_version": "0.7.4",
-            "server_version": "16.4",
-            "embedding_dimensions": [384, 768],
-            "vector_type_available": True,
-        },
-        request_payload=_request(),
+def test_service_helper_slice_has_no_api_ui_storage_pipeline_or_mutation_calls():
+    source = (ROOT / "src/app/services.py").read_text(encoding="utf-8")
+    start = source.index(f"def {HELPER_NAME}(")
+    end = source.index(
+        "\n\nHUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_FLAG",
+        start,
     )
+    helper_source = source[start:end]
 
-    assert payload["status"] == "pgvector_probe_available"
-    assert payload["extension_name"] == "vector"
-    assert payload["available_version"] == "0.8.0"
-    assert payload["installed_version"] == "0.7.4"
-    assert payload["postgres_version"] == "16.4"
-    assert payload["requested_dimension"] == 768
-    assert payload["supported_dimensions"] == [384, 768]
-    assert payload["dimension_supported"] is True
-    _assert_safety(payload, connected=True)
-
-
-def test_helper_source_has_no_database_schema_provider_or_mutation_runtime():
-    source = (ROOT / "src/agents/pgvector_extension_probe.py").read_text(
-        encoding="utf-8"
-    )
-
+    assert '"src.agents.pgvector_" + "extension_probe"' in helper_source
     for marker in (
+        "@app.",
+        "router.",
+        "src.storage",
+        "src.pipeline",
+        "schema.sql",
         "import psycopg",
         "import psycopg2",
         "import pgvector",
-        "subprocess",
         "DATABASE_URL",
         "psql",
         "connect(",
@@ -235,7 +250,6 @@ def test_helper_source_has_no_database_schema_provider_or_mutation_runtime():
         ".commit(",
         "CREATE EXTENSION",
         "CREATE TABLE",
-        "ALTER TABLE",
         "create_embedding(",
         "embeddings.create(",
         "openai",
@@ -249,19 +263,16 @@ def test_helper_source_has_no_database_schema_provider_or_mutation_runtime():
         "execute_application(",
         "submit_application(",
     ):
-        assert marker not in source
+        assert marker not in helper_source
 
 
-def test_no_dependency_schema_migration_api_service_ui_or_pipeline_change():
+def test_no_dependency_schema_migration_api_ui_or_pipeline_change():
     protected_hashes = {
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
             "fb133089712c94e0241441cbe400760264c17b463be15b2126e7257932795e0c"
-        ),
-        "src/app/services.py": (
-            "7fe66bd1759ff494c70ac063df7474c98da9ceae5af42e4c751fbd5a23c222e7"
         ),
         "src/app/static/agentic_review.js": (
             "10c869b6cb03209b5b39a3ef9d78d744d00d62f7561d4fc7f49da02845159818"

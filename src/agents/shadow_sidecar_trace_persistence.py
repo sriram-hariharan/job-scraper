@@ -82,6 +82,41 @@ def evaluate_shadow_sidecar_trace_persistence_safety(
     }
 
 
+def evaluate_pipeline_generated_overlay_context_propagation_safety() -> dict[str, bool]:
+    return {
+        "read_only": True,
+        "trace_context_only": True,
+        "advisory_only": True,
+        "pipeline_generated_overlay_context_propagation": True,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_resume": False,
+        "did_create_execution_request": False,
+        "did_create_execution_launch_request": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "auto_apply_enabled": False,
+        "mutation_authorized": False,
+    }
+
+
+def _overlay_context_from_trace_capture(
+    trace_capture: dict[str, Any],
+) -> dict[str, Any]:
+    direct = trace_capture.get("agent_recommendation_overlay_auto_generation")
+    if isinstance(direct, dict):
+        return _snapshot(direct)
+    existing = trace_capture.get("existing_trace_context")
+    if isinstance(existing, dict):
+        nested = existing.get("agent_recommendation_overlay_auto_generation")
+        if isinstance(nested, dict):
+            return _snapshot(nested)
+    return {}
+
+
 def _trace_capture_valid(trace_capture_payload: dict[str, Any]) -> bool:
     if not isinstance(trace_capture_payload, dict):
         return False
@@ -136,6 +171,7 @@ def build_shadow_sidecar_trace_persistence_records(
         trace_capture.get("source_deterministic_decision")
     )
     owner = _clean_text(owner_user_id) or "shadow_sidecar"
+    overlay_context = _overlay_context_from_trace_capture(trace_capture)
     run_id = "shadow_sidecar_trace_persistence"
     step_id = "shadow_sidecar_trace_persistence_step"
     run_record = {
@@ -156,6 +192,9 @@ def build_shadow_sidecar_trace_persistence_records(
             "source_deterministic_decision": _clean_text(
                 trace_capture.get("source_deterministic_decision")
             ),
+            "agent_recommendation_overlay_auto_generation": _snapshot(
+                overlay_context
+            ),
         },
         "error": "",
     }
@@ -175,10 +214,14 @@ def build_shadow_sidecar_trace_persistence_records(
             "trace_capture": trace_capture,
             "trace_bundle": _snapshot(trace_capture.get("trace_bundle") or {}),
             "evidence_pack": _snapshot(trace_capture.get("evidence_pack") or {}),
+            "agent_recommendation_overlay_auto_generation": _snapshot(
+                overlay_context
+            ),
         },
         "validation_json": {
             "trace_capture_valid": True,
             "persistence_flag_required": TRACE_PERSISTENCE_FLAG,
+            "pipeline_generated_overlay_context_propagation": True,
         },
         "status": "ready",
         "started_at": "in_memory",
@@ -199,6 +242,12 @@ def build_shadow_sidecar_trace_persistence_records(
         "agent_run_record": run_record,
         "agent_step_record": step_record,
         "trace_summary": trace_summary,
+        "source_trace_context": {
+            "agent_recommendation_overlay_auto_generation": _snapshot(
+                overlay_context
+            ),
+            "safety_metadata": evaluate_pipeline_generated_overlay_context_propagation_safety(),
+        },
         "safety_metadata": evaluate_shadow_sidecar_trace_persistence_safety(
             called_by_hook=called_by_hook
         ),
@@ -227,6 +276,7 @@ def build_shadow_sidecar_trace_persistence_payload(
     )
     records: dict[str, Any] = {}
     writer_result: dict[str, Any] = {}
+    overlay_context = _overlay_context_from_trace_capture(trace_capture or {})
     if status == STATUS_READY and trace_capture is not None:
         records = build_shadow_sidecar_trace_persistence_records(
             trace_capture_payload=trace_capture,
@@ -265,6 +315,10 @@ def build_shadow_sidecar_trace_persistence_payload(
             "source_deterministic_decision": _clean_text(
                 (trace_capture or {}).get("source_deterministic_decision")
             ),
+            "agent_recommendation_overlay_auto_generation": _snapshot(
+                overlay_context
+            ),
+            "safety_metadata": evaluate_pipeline_generated_overlay_context_propagation_safety(),
         },
         "provider_calls_disabled_in_tests": True,
         "requires_live_database": False,

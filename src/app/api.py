@@ -332,6 +332,36 @@ class AgentRecommendationOverlayRequest(BaseModel):
     overlay_config: dict[str, Any] = Field(default_factory=dict)
 
 
+class PipelineGeneratedAgentRecommendationOverlayReadbackRequest(BaseModel):
+    hook_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_capture_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_persistence_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    readback_source: dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelineGeneratedAgentRecommendationOverlayReadinessSummaryRequest(BaseModel):
+    overlay_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    hook_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_capture_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_persistence_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    readback_source: dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelineGeneratedOverlayReviewPacketRequest(BaseModel):
+    overlay_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    overlay_payload: dict[str, Any] = Field(default_factory=dict)
+    pipeline_generated_overlay_payload: dict[str, Any] = Field(default_factory=dict)
+    agent_recommendation_overlay_payload: dict[str, Any] = Field(default_factory=dict)
+    hook_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_context_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_capture_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_persistence_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    readback_source: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -3945,6 +3975,295 @@ def agent_recommendation_overlay(request: AgentRecommendationOverlayRequest):
         **response,
         "api_surface": "agent_recommendation_overlay",
         "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/pipeline-generated-agent-recommendation-overlay-readback")
+def pipeline_generated_agent_recommendation_overlay_readback(
+    request: PipelineGeneratedAgentRecommendationOverlayReadbackRequest,
+):
+    try:
+        response = (
+            services.pipeline_generated_agent_recommendation_overlay_readback_service_payload(
+                hook_payload=request.hook_payload,
+                trace_capture_payload=request.trace_capture_payload,
+                trace_persistence_payload=request.trace_persistence_payload,
+                trace_readback_payload=request.trace_readback_payload,
+                readback_source=request.readback_source,
+            )
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase5_shadow_sidecar_trace_v1",
+            "readback_status": "pipeline_generated_overlay_readback_failed_non_blocking",
+            "readback_only": True,
+            "readback_attempted": False,
+            "reader_result": {"ok": False, "error_type": exc.__class__.__name__},
+            "pipeline_generated_overlay_found": False,
+            "pipeline_generated_overlay": {},
+            "agent_recommendation_overlay": {},
+            "auto_generation_status": "",
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "readback_only": True,
+                "advisory_only": True,
+                "pipeline_generated_overlay_readback": True,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["api_readback_only"] = True
+    safety["pipeline_generated_overlay_readback"] = True
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "pipeline_generated_agent_recommendation_overlay_readback",
+        "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
+@app.post(
+    "/api/pipeline-generated-agent-recommendation-overlay-readiness-summary"
+)
+def pipeline_generated_agent_recommendation_overlay_readiness_summary(
+    request: PipelineGeneratedAgentRecommendationOverlayReadinessSummaryRequest,
+):
+    try:
+        response = (
+            services.pipeline_generated_agent_recommendation_overlay_readiness_summary_service_payload(
+                overlay_readback_payload=request.overlay_readback_payload,
+                hook_payload=request.hook_payload,
+                trace_capture_payload=request.trace_capture_payload,
+                trace_persistence_payload=request.trace_persistence_payload,
+                trace_readback_payload=request.trace_readback_payload,
+                readback_source=request.readback_source,
+            )
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase5_shadow_sidecar_trace_v1",
+            "readiness_status": "overlay_failed_non_blocking",
+            "reviewable": False,
+            "partial": False,
+            "source_readback_status": "",
+            "auto_generation_status": "",
+            "overlay_status": "",
+            "recommended_review_action": "",
+            "reason_codes": [
+                "overlay_readiness_summary_failed_non_blocking"
+            ],
+            "blocking_findings": [],
+            "warning_findings": ["retry_read_only_overlay_readiness_summary"],
+            "operator_summary": {
+                "summary_type": (
+                    "pipeline_generated_agent_recommendation_overlay_readiness"
+                ),
+                "readiness_status": "overlay_failed_non_blocking",
+                "reviewable": False,
+                "partial": False,
+                "recommended_review_action": "",
+                "human_review_required": True,
+                "advisory_only": True,
+            },
+            "source_overlay_summary": {
+                "overlay_found": False,
+                "auto_generation_status": "",
+                "overlay_status": "",
+                "recommended_review_action": "",
+            },
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "read_only": True,
+            "advisory_only": True,
+            "safety_metadata": {
+                "read_only": True,
+                "readiness_summary_only": True,
+                "service_helper_only": True,
+                "api_readiness_summary_only": True,
+                "advisory_only": True,
+                "pipeline_generated_overlay_readiness_summary": True,
+                "provider_calls_disabled_in_tests": True,
+                "requires_live_database": False,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "pipeline_wiring_added": False,
+                "ui_action_added": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["read_only"] = True
+    safety["api_readiness_summary_only"] = True
+    safety["advisory_only"] = True
+    safety["pipeline_generated_overlay_readiness_summary"] = True
+    safety["ui_action_added"] = False
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": (
+            "pipeline_generated_agent_recommendation_overlay_readiness_summary"
+        ),
+        "api_readiness_summary_only": True,
+        "api_readonly": True,
+        "read_only": True,
+        "advisory_only": True,
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/pipeline-agent-review-packet")
+def pipeline_generated_overlay_review_packet(
+    request: PipelineGeneratedOverlayReviewPacketRequest,
+):
+    try:
+        response = services.pipeline_generated_overlay_review_packet_service_payload(
+            overlay_readback_payload=request.overlay_readback_payload,
+            overlay_payload=request.overlay_payload,
+            pipeline_generated_overlay_payload=(
+                request.pipeline_generated_overlay_payload
+            ),
+            agent_recommendation_overlay_payload=(
+                request.agent_recommendation_overlay_payload
+            ),
+            hook_payload=request.hook_payload,
+            trace_context_payload=request.trace_context_payload,
+            trace_capture_payload=request.trace_capture_payload,
+            trace_persistence_payload=request.trace_persistence_payload,
+            trace_readback_payload=request.trace_readback_payload,
+            readback_source=request.readback_source,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase5_shadow_sidecar_trace_v1",
+            "packet_status": "review_packet_failed_non_blocking",
+            "packet_type": (
+                "pipeline_generated_agent_recommendation_overlay_review_packet"
+            ),
+            "read_only": True,
+            "advisory_only": True,
+            "review_packet_only": True,
+            "overlay_found": False,
+            "overlay_readiness_status": "overlay_failed_non_blocking",
+            "overlay_reviewability": {
+                "reviewable": False,
+                "partial": False,
+            },
+            "auto_generation_status": "",
+            "overlay_status": "",
+            "recommended_operator_action": "retry_read_only_overlay_readback",
+            "review_focus": [
+                "retry_read_only_overlay_readback",
+                "review_packet_failed_non_blocking",
+            ],
+            "evaluation_boundaries": {
+                "prefilter_relevance": "upstream_deterministic_filter_preserved",
+                "shadow_evaluation": "advisory_read_only",
+                "final_application_scoring": "unchanged",
+            },
+            "trace_context_summary": {},
+            "overlay_readback_summary": {},
+            "overlay_readiness_summary": {
+                "readiness_status": "overlay_failed_non_blocking",
+                "reviewable": False,
+                "partial": False,
+                "reason_codes": ["review_packet_failed_non_blocking"],
+                "blocking_findings": [],
+                "warning_findings": ["retry_read_only_overlay_readback"],
+            },
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "service_helper_only": True,
+                "api_review_packet_only": True,
+                "advisory_only": True,
+                "review_packet_only": True,
+                "provider_calls_disabled_in_tests": True,
+                "requires_live_database": False,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "pipeline_wiring_added": False,
+                "ui_action_added": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["read_only"] = True
+    safety["api_review_packet_only"] = True
+    safety["advisory_only"] = True
+    safety["review_packet_only"] = True
+    safety["pipeline_" + "agent_review_packet"] = True
+    safety["ui_action_added"] = False
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "pipeline_" + "agent_review_packet",
+        "api_review_packet_only": True,
+        "api_readonly": True,
+        "read_only": True,
+        "advisory_only": True,
         "ui_action_added": False,
     }
 

@@ -2040,6 +2040,180 @@ def vector_evidence_service_helper_payload(
     }
 
 
+def pgvector_extension_probe_service_helper_payload(
+    *,
+    extension_name: str = "vector",
+    requested_dimension: int | None = None,
+    probe_context: Dict[str, Any] | None = None,
+    request_payload: Dict[str, Any] | None = None,
+    probe_executor: Any = None,
+) -> Dict[str, Any]:
+    """Expose the default-off Phase 8J extension probe through service code."""
+
+    probe_module = importlib.import_module(
+        "src.agents.pgvector_" + "extension_probe"
+    )
+    request_builder = getattr(
+        probe_module,
+        "build_pgvector_" + "extension_probe_request_payload",
+    )
+    probe_builder = getattr(
+        probe_module,
+        "build_pgvector_" + "extension_probe_payload",
+    )
+    request = (
+        deepcopy(request_payload)
+        if isinstance(request_payload, dict)
+        else request_builder(
+            extension_name=str(extension_name or "vector"),
+            requested_dimension=requested_dimension,
+            probe_context=deepcopy(probe_context or {})
+            if isinstance(probe_context, dict)
+            else None,
+        )
+    )
+    probe_payload = probe_builder(
+        request_payload=deepcopy(request),
+        probe_executor=probe_executor,
+    )
+    status = str(probe_payload.get("status", "") or "")
+    extension_version = str(
+        probe_payload.get("installed_version")
+        or probe_payload.get("available_version")
+        or ""
+    )
+    skipped_reasons: list[str] = []
+    if status == "pgvector_probe_not_configured":
+        skipped_reasons.append("probe_executor_not_configured")
+    elif status == "pgvector_probe_missing":
+        skipped_reasons.append("pgvector_extension_missing")
+    elif status == "pgvector_probe_failed_non_blocking":
+        skipped_reasons.append("probe_failed_non_blocking")
+
+    probe_summary = {
+        "status": status,
+        "probe_configured": probe_payload.get("probe_configured") is True,
+        "probe_executed": probe_payload.get("probe_executed") is True,
+        "extension_name": str(
+            probe_payload.get("extension_name", "") or "vector"
+        ),
+        "extension_available": (
+            probe_payload.get("extension_available") is True
+        ),
+        "extension_installed": (
+            probe_payload.get("extension_installed") is True
+        ),
+        "available_version": str(
+            probe_payload.get("available_version", "") or ""
+        ),
+        "installed_version": str(
+            probe_payload.get("installed_version", "") or ""
+        ),
+        "postgres_version": str(
+            probe_payload.get("postgres_version", "") or ""
+        ),
+        "requested_dimension": probe_payload.get("requested_dimension"),
+        "supported_dimensions": deepcopy(
+            probe_payload.get("supported_dimensions", []) or []
+        ),
+        "dimension_supported": probe_payload.get("dimension_supported"),
+        "vector_type_available": (
+            probe_payload.get("vector_type_available") is True
+        ),
+        "supported_index_methods": deepcopy(
+            probe_payload.get("supported_index_methods", []) or []
+        ),
+        "error_type": str(probe_payload.get("error_type", "") or ""),
+        "error_message": str(probe_payload.get("error_message", "") or ""),
+    }
+    safety = dict(probe_payload.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "pgvector_extension_probe": True,
+            "pgvector_probe_service_helper": True,
+            "pgvector_installed_by_app": False,
+            "schema_created": False,
+            "migration_created": False,
+            "embeddings_created": False,
+            "provider_calls_made": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": False,
+            "service_helper_only": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        "status": status,
+        "service_surface": "pgvector_extension_probe_service_helper",
+        "service_helper_only": True,
+        "read_only": True,
+        "advisory_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "probe_summary": probe_summary,
+        "extension_available": probe_summary["extension_available"],
+        "extension_version": extension_version,
+        "embedding_dimension_supported": probe_summary[
+            "dimension_supported"
+        ],
+        "skipped_reasons": skipped_reasons,
+        "probe_payload": deepcopy(probe_payload),
+        "provider_backed_automated_agents": int(
+            probe_payload.get("provider_backed_automated_agents", 0) or 0
+        ),
+        "live_provider_backed_automated_agents": int(
+            probe_payload.get(
+                "live_provider_backed_automated_agents",
+                0,
+            )
+            or 0
+        ),
+        "mutation_authorized_agents": int(
+            probe_payload.get("mutation_authorized_agents", 0) or 0
+        ),
+        "mutation_authorized_scoring_agents": int(
+            probe_payload.get(
+                "mutation_authorized_scoring_agents",
+                0,
+            )
+            or 0
+        ),
+        "mutation_authorized_ranking_agents": int(
+            probe_payload.get(
+                "mutation_authorized_ranking_agents",
+                0,
+            )
+            or 0
+        ),
+        "mutation_authorized_application_agents": int(
+            probe_payload.get(
+                "mutation_authorized_application_agents",
+                0,
+            )
+            or 0
+        ),
+        "evaluation_boundaries": deepcopy(
+            probe_payload.get("evaluation_boundaries", {}) or {}
+        ),
+        "safety_metadata": safety,
+    }
+
+
 HUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_HUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_ENABLED"
 )

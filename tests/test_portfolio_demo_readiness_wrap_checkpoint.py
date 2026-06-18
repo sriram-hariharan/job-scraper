@@ -235,6 +235,7 @@ ALLOWED_CHANGED = {
     "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
     "src/agents/pgvector_extension_probe.py",
     "tests/test_pgvector_extension_probe_contract_no_schema.py",
+    "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
 }
 
 def _changed_files():

@@ -1887,6 +1887,186 @@ def pipeline_generated_overlay_review_packet_service_payload(
     }
 
 
+def _vector_evidence_pgvector_store_path_payload(
+    *,
+    path_requested: bool,
+    owner_user_id: str,
+    query_text: str,
+    filters: Dict[str, Any],
+    top_k: int,
+    indexing_payload: Dict[str, Any],
+    retrieval_payload: Dict[str, Any],
+    store_executor: Any = None,
+    store_module: Any = None,
+) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {
+        "status": "pgvector_store_path_default_off",
+        "prepared_operation_count": 0,
+        "executed_operation_count": 0,
+        "chunk_operation_count": 0,
+        "retrieval_event_operation_count": 0,
+        "errors": [],
+    }
+    result = {
+        "pgvector_store_adapter_available": True,
+        "pgvector_store_path_requested": bool(path_requested),
+        "pgvector_store_path_used": False,
+        "pgvector_store_path_default_off": not bool(path_requested),
+        "pgvector_store_summary": summary,
+        "did_write_database": False,
+        "vector_db_connected": False,
+    }
+    if not path_requested:
+        return result
+
+    safe_owner_user_id = str(owner_user_id or "").strip()
+    if not safe_owner_user_id:
+        summary["status"] = "pgvector_store_path_blocked_missing_owner"
+        summary["errors"] = ["owner_user_id_required"]
+        return result
+    if not callable(store_executor):
+        summary["status"] = "pgvector_store_path_blocked_missing_executor"
+        summary["errors"] = ["store_executor_required"]
+        return result
+
+    try:
+        adapter = store_module or importlib.import_module(
+            "src.storage.vector_evidence.store"
+        )
+        prepare_chunk = getattr(adapter, "prepare_chunk_insert_payload")
+        prepare_event = getattr(
+            adapter,
+            "prepare_retrieval_event_insert_payload",
+        )
+        execute_prepared = getattr(
+            adapter,
+            "execute_prepared_pgvector_payload",
+        )
+    except (AttributeError, ImportError) as exc:
+        result["pgvector_store_adapter_available"] = False
+        summary["status"] = "pgvector_store_path_adapter_unavailable"
+        summary["errors"] = [type(exc).__name__]
+        return result
+
+    prepared_operations: List[Dict[str, Any]] = []
+    try:
+        for candidate in indexing_payload.get("chunk_candidates", []) or []:
+            chunk = deepcopy(candidate) if isinstance(candidate, dict) else {}
+            metadata = (
+                deepcopy(chunk.get("metadata", {}))
+                if isinstance(chunk.get("metadata"), dict)
+                else {}
+            )
+            prepared_operations.append(
+                prepare_chunk(
+                    chunk,
+                    owner_user_id=safe_owner_user_id,
+                    source_record_id=str(
+                        metadata.get("job_id")
+                        or metadata.get("trace_id")
+                        or metadata.get("resume_version")
+                        or chunk.get("chunk_id")
+                        or ""
+                    ),
+                    source_updated_at=str(metadata.get("created_at") or ""),
+                )
+            )
+            summary["chunk_operation_count"] += 1
+
+        retrieval_filters = (
+            deepcopy(retrieval_payload.get("filters", {}))
+            if isinstance(retrieval_payload.get("filters"), dict)
+            else deepcopy(filters)
+        )
+        prepared_operations.append(
+            prepare_event(
+                {
+                    "owner_user_id": safe_owner_user_id,
+                    "request_id": "",
+                    "query_hash": hashlib.sha256(
+                        str(query_text or "").strip().encode("utf-8")
+                    ).hexdigest(),
+                    "query_purpose": "vector_evidence_service_advisory",
+                    "chunk_type": str(
+                        retrieval_filters.get("chunk_type") or ""
+                    ),
+                    "metadata": retrieval_filters,
+                    "job_id": str(retrieval_filters.get("job_id") or ""),
+                    "company": str(retrieval_filters.get("company") or ""),
+                    "stage": str(retrieval_filters.get("stage") or ""),
+                    "agent_name": str(
+                        retrieval_filters.get("agent_name") or ""
+                    ),
+                    "top_k": int(
+                        retrieval_payload.get("top_k", top_k) or top_k
+                    ),
+                    "result_count": int(
+                        retrieval_payload.get("match_count", 0) or 0
+                    ),
+                    "fallback_reason": str(
+                        (
+                            retrieval_payload.get("fallback", {})
+                            if isinstance(
+                                retrieval_payload.get("fallback"),
+                                dict,
+                            )
+                            else {}
+                        ).get("reason", "")
+                        or ""
+                    ),
+                    "backend_status": str(
+                        retrieval_payload.get("status", "") or ""
+                    ),
+                }
+            )
+        )
+        summary["retrieval_event_operation_count"] = 1
+    except Exception as exc:
+        summary["status"] = "pgvector_store_path_failed_non_blocking"
+        summary["errors"] = [type(exc).__name__]
+        return result
+
+    summary["prepared_operation_count"] = len(prepared_operations)
+
+    execution_results: List[Dict[str, Any]] = []
+    try:
+        for prepared in prepared_operations:
+            execution = execute_prepared(
+                deepcopy(prepared),
+                executor=store_executor,
+            )
+            execution_results.append(
+                deepcopy(execution) if isinstance(execution, dict) else {}
+            )
+    except Exception as exc:
+        summary["status"] = "pgvector_store_path_failed_non_blocking"
+        summary["errors"] = [type(exc).__name__]
+        return result
+
+    executed_results = [
+        item for item in execution_results if item.get("executed") is True
+    ]
+    summary["executed_operation_count"] = len(executed_results)
+    result["pgvector_store_path_used"] = bool(executed_results)
+    result["pgvector_store_path_default_off"] = False
+    result["did_write_database"] = any(
+        isinstance(item.get("executor_result"), dict)
+        and item["executor_result"].get("did_write_database") is True
+        for item in executed_results
+    )
+    result["vector_db_connected"] = any(
+        isinstance(item.get("executor_result"), dict)
+        and item["executor_result"].get("vector_db_connected") is True
+        for item in executed_results
+    )
+    summary["status"] = (
+        "pgvector_store_path_used"
+        if executed_results
+        else "pgvector_store_path_not_used"
+    )
+    return result
+
+
 def vector_evidence_service_helper_payload(
     *,
     query_text: str,
@@ -1903,8 +2083,12 @@ def vector_evidence_service_helper_payload(
     agent_name: str = "",
     stage: str = "",
     top_k: int = 5,
+    owner_user_id: str = "",
+    pgvector_store_enabled: bool = False,
+    pgvector_store_executor: Any = None,
+    pgvector_store_module: Any = None,
 ) -> Dict[str, Any]:
-    """Compose the in-memory Phase 8 indexing and retrieval dry-runs."""
+    """Compose dry-run retrieval with an optional injected pgvector store path."""
 
     indexing_module = importlib.import_module(
         "src.agents.vector_evidence_" + "indexing_dry_run"
@@ -1992,6 +2176,17 @@ def vector_evidence_service_helper_payload(
         "match_count": int(retrieval_payload.get("match_count", 0) or 0),
         "fallback": deepcopy(retrieval_payload.get("fallback", {}) or {}),
     }
+    pgvector_store = _vector_evidence_pgvector_store_path_payload(
+        path_requested=pgvector_store_enabled is True,
+        owner_user_id=owner_user_id,
+        query_text=str(query_text or ""),
+        filters=deepcopy(filters or {}) if isinstance(filters, dict) else {},
+        top_k=top_k,
+        indexing_payload=deepcopy(indexing_payload),
+        retrieval_payload=deepcopy(retrieval_payload),
+        store_executor=pgvector_store_executor,
+        store_module=pgvector_store_module,
+    )
     safety = dict(retrieval_payload.get("safety_metadata", {}) or {})
     safety.update(
         {
@@ -2004,6 +2199,38 @@ def vector_evidence_service_helper_payload(
             "service_helper_only": True,
             "ui_action_added": False,
             "pipeline_stage_added": False,
+            "pgvector_store_adapter_available": bool(
+                pgvector_store["pgvector_store_adapter_available"]
+            ),
+            "pgvector_store_path_requested": bool(
+                pgvector_store["pgvector_store_path_requested"]
+            ),
+            "pgvector_store_path_used": bool(
+                pgvector_store["pgvector_store_path_used"]
+            ),
+            "pgvector_store_path_default_off": bool(
+                pgvector_store["pgvector_store_path_default_off"]
+            ),
+            "embeddings_created": False,
+            "provider_calls_made": False,
+            "did_write_database": bool(
+                pgvector_store["did_write_database"]
+            ),
+            "vector_db_connected": bool(
+                pgvector_store["vector_db_connected"]
+            ),
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
         }
     )
     return {
@@ -2027,9 +2254,27 @@ def vector_evidence_service_helper_payload(
         },
         "indexing_dry_run": indexing_payload,
         "retrieval_dry_run": retrieval_payload,
+        "pgvector_store_adapter_available": bool(
+            pgvector_store["pgvector_store_adapter_available"]
+        ),
+        "pgvector_store_path_requested": bool(
+            pgvector_store["pgvector_store_path_requested"]
+        ),
+        "pgvector_store_path_used": bool(
+            pgvector_store["pgvector_store_path_used"]
+        ),
+        "pgvector_store_path_default_off": bool(
+            pgvector_store["pgvector_store_path_default_off"]
+        ),
+        "pgvector_store_summary": deepcopy(
+            pgvector_store["pgvector_store_summary"]
+        ),
         "provider_backed_automated_agents": 0,
         "live_provider_backed_automated_agents": 0,
         "mutation_authorized_agents": 0,
+        "mutation_authorized_scoring_agents": 0,
+        "mutation_authorized_ranking_agents": 0,
+        "mutation_authorized_application_agents": 0,
         "evaluation_boundaries": {
             "prefilter_relevance": "separate_unchanged",
             "llm_shadow_evaluation": "separate_advisory_only",

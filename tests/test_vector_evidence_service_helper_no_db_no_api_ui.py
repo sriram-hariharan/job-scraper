@@ -110,9 +110,23 @@ def _assert_safety(payload: dict) -> None:
     assert safety["pipeline_stage_added"] is False
     assert safety["auto_apply_enabled"] is False
     assert safety["mutation_authorized"] is False
+    assert safety["pgvector_store_adapter_available"] is True
+    assert safety["pgvector_store_path_requested"] is False
+    assert safety["pgvector_store_path_used"] is False
+    assert safety["pgvector_store_path_default_off"] is True
+    assert payload["pgvector_store_adapter_available"] is True
+    assert payload["pgvector_store_path_requested"] is False
+    assert payload["pgvector_store_path_used"] is False
+    assert payload["pgvector_store_path_default_off"] is True
+    assert payload["pgvector_store_summary"]["status"] == (
+        "pgvector_store_path_default_off"
+    )
     assert payload["provider_backed_automated_agents"] == 0
     assert payload["live_provider_backed_automated_agents"] == 0
     assert payload["mutation_authorized_agents"] == 0
+    assert payload["mutation_authorized_scoring_agents"] == 0
+    assert payload["mutation_authorized_ranking_agents"] == 0
+    assert payload["mutation_authorized_application_agents"] == 0
 
 
 def _assert_match(query: str, chunk_type: str) -> None:
@@ -252,7 +266,7 @@ def test_service_preserves_indexing_and_retrieval_summaries():
     _assert_safety(payload)
 
 
-def test_service_helper_slice_has_no_api_ui_storage_pipeline_or_mutation_calls():
+def test_service_helper_slice_uses_guarded_store_path_without_runtime_calls():
     source = (ROOT / "src/app/services.py").read_text(encoding="utf-8")
     start = source.index(f"def {HELPER_NAME}(")
     end = source.index(
@@ -263,12 +277,12 @@ def test_service_helper_slice_has_no_api_ui_storage_pipeline_or_mutation_calls()
 
     assert '"src.agents.vector_evidence_" + "indexing_dry_run"' in helper_source
     assert '"src.agents.vector_evidence_" + "retrieval_dry_run"' in helper_source
+    assert "_vector_evidence_pgvector_store_path_payload(" in helper_source
     for marker in (
         "@app.",
         "router.",
         "agentic_review",
         "src.pipeline",
-        "src.storage",
         "schema.sql",
         "create_embedding(",
         "embed(",
@@ -307,4 +321,3 @@ def test_no_ui_schema_or_pipeline_uses_service_helper():
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
     for dependency in ("pgvector", "pinecone", "chromadb", "faiss", "langgraph"):
         assert dependency not in requirements
-

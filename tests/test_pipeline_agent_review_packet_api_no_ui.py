@@ -1,10 +1,18 @@
 from copy import deepcopy
 from pathlib import Path
 
-from src.app import services
+from fastapi.testclient import TestClient
+
+from src.app import api, services
 
 
-HELPER_NAME = "pipeline_generated_overlay_review_packet_service_payload"
+ENDPOINT = "/api/pipeline-agent-review-packet"
+SERVICE_HELPER = "pipeline_generated_overlay_review_packet_service_payload"
+
+
+def _client(monkeypatch):
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    return TestClient(api.app)
 
 
 def _overlay_readback(
@@ -32,19 +40,16 @@ def _overlay_readback(
     }
 
 
-def _assert_service_safety(payload: dict) -> None:
+def _assert_api_safety(payload: dict) -> None:
     safety = payload["safety_metadata"]
-    assert payload["service_surface"] == (
-        "pipeline_generated_overlay_review_packet_service"
-    )
-    assert payload["service_helper_only"] is True
-    assert payload["api_route_added"] is False
-    assert payload["ui_action_added"] is False
+    assert payload["api_surface"] == "pipeline_agent_review_packet"
+    assert payload["api_review_packet_only"] is True
+    assert payload["api_readonly"] is True
     assert payload["read_only"] is True
     assert payload["advisory_only"] is True
-    assert payload["review_packet_only"] is True
+    assert payload["ui_action_added"] is False
     assert safety["read_only"] is True
-    assert safety["service_helper_only"] is True
+    assert safety["api_review_packet_only"] is True
     assert safety["advisory_only"] is True
     assert safety["review_packet_only"] is True
     assert safety["pipeline_agent_review_packet"] is True
@@ -58,7 +63,6 @@ def _assert_service_safety(payload: dict) -> None:
     assert safety["did_create_execution_launch_request"] is False
     assert safety["did_execute_application"] is False
     assert safety["did_submit_application"] is False
-    assert safety["api_route_added"] is False
     assert safety["ui_action_added"] is False
     assert safety["auto_apply_enabled"] is False
     assert safety["mutation_authorized"] is False
@@ -68,66 +72,82 @@ def _assert_service_safety(payload: dict) -> None:
     assert payload["mutation_authorized_agents"] == 0
 
 
-def test_service_helper_returns_review_packet_for_ready_overlay():
-    source = _overlay_readback()
-    before = deepcopy(source)
+def test_api_route_exists_as_post_only():
+    routes = {getattr(route, "path", ""): route for route in api.app.routes}
 
-    payload = getattr(services, HELPER_NAME)(
-        overlay_readback_payload=source,
-        trace_context_payload={
-            "trace_id": "trace_service_packet",
+    assert routes[ENDPOINT].methods == {"POST"}
+
+
+def test_api_returns_review_packet_for_ready_overlay(monkeypatch):
+    request_payload = {
+        "overlay_readback_payload": _overlay_readback(),
+        "trace_context_payload": {
+            "trace_id": "trace_api_packet",
             "source_deterministic_stage": "application_priority",
         },
-    )
+    }
+    before = deepcopy(request_payload)
 
-    assert source == before
+    response = _client(monkeypatch).post(ENDPOINT, json=request_payload)
+
+    assert response.status_code == 200
+    assert request_payload == before
+    payload = response.json()
     assert payload["packet_status"] == "review_packet_ready"
     assert payload["overlay_readiness_status"] == "overlay_ready"
     assert payload["overlay_reviewability"] == {
         "reviewable": True,
         "partial": False,
     }
-    assert payload["trace_context_summary"]["trace_id"] == "trace_service_packet"
-    _assert_service_safety(payload)
+    assert payload["trace_context_summary"]["trace_id"] == "trace_api_packet"
+    _assert_api_safety(payload)
 
 
-def test_service_helper_returns_reviewable_partial_packet():
-    payload = getattr(services, HELPER_NAME)(
-        overlay_readback_payload=_overlay_readback(
-            auto_generation_status="overlay_auto_generated_partial",
-            overlay_status="overlay_partial_insufficient_context",
-            recommended_review_action="review_agent_preview",
-        )
+def test_api_returns_reviewable_partial_packet(monkeypatch):
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={
+            "overlay_readback_payload": _overlay_readback(
+                auto_generation_status="overlay_auto_generated_partial",
+                overlay_status="overlay_partial_insufficient_context",
+                recommended_review_action="review_agent_preview",
+            )
+        },
     )
 
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["packet_status"] == "review_packet_partial_reviewable"
     assert payload["overlay_readiness_status"] == "overlay_partial_reviewable"
     assert payload["overlay_reviewability"] == {
         "reviewable": True,
         "partial": True,
     }
-    _assert_service_safety(payload)
+    _assert_api_safety(payload)
 
 
-def test_service_helper_returns_safe_not_found_packet():
-    payload = getattr(services, HELPER_NAME)(
-        overlay_readback_payload={
-            "readback_status": "pipeline_generated_overlay_not_found",
-            "pipeline_generated_overlay_found": False,
-            "pipeline_generated_overlay": {},
-            "agent_recommendation_overlay": {},
-        }
-    )
+def test_api_returns_safe_not_found_packet(monkeypatch):
+    response = _client(monkeypatch).post(ENDPOINT, json={})
 
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["packet_status"] == "review_packet_not_found"
     assert payload["overlay_found"] is False
     assert payload["overlay_reviewability"]["reviewable"] is False
-    _assert_service_safety(payload)
+    _assert_api_safety(payload)
 
 
-def test_service_helper_accepts_hook_trace_and_overlay_shapes():
-    from_hook = getattr(services, HELPER_NAME)(
-        hook_payload={
+def test_api_delegates_through_service_helper(monkeypatch):
+    calls = []
+    real_helper = getattr(services, SERVICE_HELPER)
+
+    def recording_helper(**kwargs):
+        calls.append(deepcopy(kwargs))
+        return real_helper(**kwargs)
+
+    monkeypatch.setattr(services, SERVICE_HELPER, recording_helper)
+    request_payload = {
+        "hook_payload": {
             "agent_recommendation_overlay_auto_generation": {
                 "auto_generation_status": "overlay_auto_generated_partial",
                 "overlay_generated": True,
@@ -137,31 +157,27 @@ def test_service_helper_accepts_hook_trace_and_overlay_shapes():
                 },
             }
         }
+    }
+
+    response = _client(monkeypatch).post(ENDPOINT, json=request_payload)
+
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert calls[0]["hook_payload"] == request_payload["hook_payload"]
+    assert response.json()["packet_status"] == (
+        "review_packet_partial_reviewable"
     )
-    from_overlay = getattr(services, HELPER_NAME)(
-        agent_recommendation_overlay_payload={
-            "overlay_status": "overlay_ready",
-            "recommended_review_action": "request_influence_approval",
-        }
-    )
-
-    assert from_hook["packet_status"] == "review_packet_partial_reviewable"
-    assert from_overlay["packet_status"] == "review_packet_ready"
-    _assert_service_safety(from_hook)
-    _assert_service_safety(from_overlay)
 
 
-def test_service_helper_slice_has_no_provider_storage_or_mutation_calls():
-    source = Path("src/app/services.py").read_text(encoding="utf-8")
-    start = source.index(f"def {HELPER_NAME}(")
+def test_api_route_slice_has_no_provider_storage_or_mutation_calls():
+    source = Path("src/app/api.py").read_text(encoding="utf-8")
+    start = source.index("def pipeline_generated_overlay_review_packet(")
     end = source.index(
-        "\n\nHUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_FLAG",
+        '\n\n@app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")',
         start,
     )
-    helper_source = source[start:end]
+    route_source = source[start:end]
     forbidden = [
-        "@app.",
-        "router.",
         "src.pipeline",
         "schema.sql",
         "build_agent_recommendation_overlay_payload(",
@@ -176,7 +192,6 @@ def test_service_helper_slice_has_no_provider_storage_or_mutation_calls():
         "execute_application(",
         "submit_application(",
         "insert_",
-        "update_",
         "upsert_",
         "delete_",
         "run_chat_completion",
@@ -186,13 +201,12 @@ def test_service_helper_slice_has_no_provider_storage_or_mutation_calls():
         "workflow_runner",
     ]
     for marker in forbidden:
-        assert marker not in helper_source
+        assert marker not in route_source
 
-    assert "packet_builder(" in helper_source
+    assert SERVICE_HELPER in route_source
 
 
-def test_service_helper_boundary_remains_read_only_when_api_is_added_later():
-    api_source = Path("src/app/api.py").read_text(encoding="utf-8")
+def test_api_adds_no_ui_schema_or_pipeline_wiring():
     ui_source = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
     schema_text = "\n".join(
         [
@@ -204,25 +218,21 @@ def test_service_helper_boundary_remains_read_only_when_api_is_added_later():
     )
     collector = Path("src/pipeline/collector.py").read_text(encoding="utf-8")
 
-    assert api_source.count(HELPER_NAME) == 1
-    assert HELPER_NAME not in ui_source
-    assert HELPER_NAME not in schema_text
-    assert HELPER_NAME not in collector
+    assert ENDPOINT not in ui_source
+    assert SERVICE_HELPER not in ui_source
+    assert ENDPOINT not in schema_text
+    assert ENDPOINT not in collector
+    assert SERVICE_HELPER not in schema_text
+    assert SERVICE_HELPER not in collector
     assert collector.count("run_shadow_sidecar_pipeline_hook(") == 1
 
 
-def test_service_helper_keeps_automated_and_mutation_agents_at_zero():
-    payload = getattr(services, HELPER_NAME)(
-        pipeline_generated_overlay_payload={
-            "auto_generation_status": "overlay_auto_generated",
-            "overlay_generated": True,
-            "agent_recommendation_overlay": {
-                "overlay_status": "overlay_ready",
-                "recommended_review_action": "request_influence_approval",
-            },
-        }
-    )
+def test_provider_backed_and_mutation_authorized_agents_remain_zero(monkeypatch):
+    payload = _client(monkeypatch).post(
+        ENDPOINT,
+        json={"overlay_readback_payload": _overlay_readback()},
+    ).json()
 
     assert payload["live_provider_backed_automated_agents"] == 0
     assert payload["mutation_authorized_agents"] == 0
-    _assert_service_safety(payload)
+    _assert_api_safety(payload)

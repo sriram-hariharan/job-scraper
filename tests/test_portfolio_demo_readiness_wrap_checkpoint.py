@@ -231,6 +231,8 @@ ALLOWED_CHANGED = {
     "tests/test_vector_evidence_service_helper_no_db_no_api_ui.py",
     "tests/test_vector_evidence_api_no_db_no_ui.py",
     "tests/test_vector_evidence_ui_no_db_readonly.py",
+    "docs/phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.md",
+    "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
 }
 
 def _changed_files():

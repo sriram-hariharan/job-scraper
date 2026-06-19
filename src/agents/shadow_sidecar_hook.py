@@ -55,6 +55,10 @@ def evaluate_shadow_sidecar_pipeline_hook_safety(
     called_by_pipeline: bool = False,
     vector_evidence_context_available: bool = False,
     vector_evidence_context_attached: bool = False,
+    semantic_evidence_input_available: bool = False,
+    semantic_evidence_input_attached: bool = False,
+    provider_calls_made: bool = False,
+    embeddings_created: bool = False,
 ) -> dict[str, bool]:
     return {
         "read_only": True,
@@ -85,8 +89,20 @@ def evaluate_shadow_sidecar_pipeline_hook_safety(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "semantic_evidence_input_available": bool(
+            semantic_evidence_input_available
+        ),
+        "semantic_evidence_input_attached": bool(
+            semantic_evidence_input_attached
+        ),
+        "semantic_evidence_input_shadow_only": True,
+        "semantic_evidence_used_for_scoring": False,
+        "semantic_evidence_used_for_ranking": False,
+        "semantic_evidence_used_for_queue": False,
+        "semantic_evidence_used_for_application": False,
+        "did_write_database": False,
+        "provider_calls_made": bool(provider_calls_made),
+        "embeddings_created": bool(embeddings_created),
     }
 
 
@@ -498,7 +514,18 @@ def _advisory_vector_evidence_context(
     )
     if not context_available:
         return {}
-    return {
+    semantic_source = _plain_dict(evidence_context.get("semantic_retrieval"))
+    semantic_attached = bool(
+        semantic_source
+        and source_safety.get("semantic_evidence_attached") is True
+    )
+    provider_calls_made = bool(
+        source_safety.get("provider_calls_made")
+    ) if semantic_attached else False
+    embeddings_created = bool(
+        source_safety.get("embeddings_created")
+    ) if semantic_attached else False
+    context = {
         "status": _clean_text(source.get("status")),
         "hook_surface": _clean_text(source.get("hook_surface")),
         "run_id": _clean_text(source.get("run_id")),
@@ -510,8 +537,16 @@ def _advisory_vector_evidence_context(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "semantic_evidence_input_available": semantic_attached,
+        "semantic_evidence_input_attached": semantic_attached,
+        "semantic_evidence_input_shadow_only": True,
+        "semantic_evidence_used_for_scoring": False,
+        "semantic_evidence_used_for_ranking": False,
+        "semantic_evidence_used_for_queue": False,
+        "semantic_evidence_used_for_application": False,
+        "did_write_database": False,
+        "provider_calls_made": provider_calls_made,
+        "embeddings_created": embeddings_created,
         "safety_metadata": {
             "read_only": True,
             "advisory_only": True,
@@ -523,10 +558,53 @@ def _advisory_vector_evidence_context(
             "vector_evidence_used_for_ranking": False,
             "vector_evidence_used_for_queue": False,
             "vector_evidence_used_for_application": False,
-            "provider_calls_made": False,
-            "embeddings_created": False,
+            "semantic_evidence_input_available": semantic_attached,
+            "semantic_evidence_input_attached": semantic_attached,
+            "semantic_evidence_input_shadow_only": True,
+            "semantic_evidence_used_for_scoring": False,
+            "semantic_evidence_used_for_ranking": False,
+            "semantic_evidence_used_for_queue": False,
+            "semantic_evidence_used_for_application": False,
+            "did_write_database": False,
+            "provider_calls_made": provider_calls_made,
+            "embeddings_created": embeddings_created,
         },
     }
+    if semantic_attached:
+        context["semantic_evidence_context"] = {
+            "status": _clean_text(semantic_source.get("status")),
+            "result_count": int(semantic_source.get("result_count") or 0),
+            "retrieval_candidates": [
+                {
+                    key: deepcopy(candidate.get(key))
+                    for key in (
+                        "chunk_id",
+                        "chunk_type",
+                        "source_type",
+                        "source_id",
+                        "retrieval_score",
+                        "distance",
+                    )
+                    if candidate.get(key) is not None
+                }
+                for candidate in semantic_source.get("retrieval_candidates", [])
+                if isinstance(candidate, dict)
+            ],
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+            "semantic_evidence_input_available": True,
+            "semantic_evidence_input_attached": True,
+            "semantic_evidence_input_shadow_only": True,
+            "semantic_evidence_used_for_scoring": False,
+            "semantic_evidence_used_for_ranking": False,
+            "semantic_evidence_used_for_queue": False,
+            "semantic_evidence_used_for_application": False,
+            "did_write_database": False,
+            "provider_calls_made": provider_calls_made,
+            "embeddings_created": embeddings_created,
+        }
+    return context
 
 
 def _safe_agent_recommendation_overlay_auto_generation_payload(
@@ -678,10 +756,21 @@ def _base_hook_payload(
     vector_context = _plain_dict(
         payload["existing_trace_context"].get("vector_evidence_context")
     )
+    semantic_context = _plain_dict(
+        vector_context.get("semantic_evidence_context")
+    )
     payload["safety_metadata"] = evaluate_shadow_sidecar_pipeline_hook_safety(
         called_by_pipeline=called_by_pipeline,
         vector_evidence_context_available=bool(vector_context),
         vector_evidence_context_attached=bool(vector_context),
+        semantic_evidence_input_available=bool(semantic_context),
+        semantic_evidence_input_attached=bool(semantic_context),
+        provider_calls_made=bool(
+            semantic_context.get("provider_calls_made")
+        ),
+        embeddings_created=bool(
+            semantic_context.get("embeddings_created")
+        ),
     )
     payload["agent_recommendation_overlay_auto_generation"] = (
         _safe_agent_recommendation_overlay_auto_generation_payload(payload)

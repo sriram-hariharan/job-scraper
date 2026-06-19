@@ -261,6 +261,7 @@ ALLOWED_CHANGED = {
     "tests/test_pipeline_vector_evidence_hook_default_off.py",
     "tests/test_shadow_vector_evidence_context_default_off.py",
     "tests/test_shadow_agent_vector_evidence_input_default_off.py",
+    "tests/test_shadow_semantic_evidence_agent_input_default_off.py",
     "src/storage/vector_evidence/embedding_provider.py",
     "tests/test_vector_evidence_embedding_provider_contract_default_off.py",
     "src/storage/vector_evidence/embedding_indexing.py",

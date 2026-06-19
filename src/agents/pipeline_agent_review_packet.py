@@ -38,6 +38,10 @@ def evaluate_pipeline_agent_review_packet_safety(
     *,
     vector_evidence_context_available: bool = False,
     vector_evidence_context_attached: bool = False,
+    semantic_evidence_input_available: bool = False,
+    semantic_evidence_input_attached: bool = False,
+    provider_calls_made: bool = False,
+    embeddings_created: bool = False,
 ) -> dict[str, bool]:
     return {
         "read_only": True,
@@ -74,8 +78,19 @@ def evaluate_pipeline_agent_review_packet_safety(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "semantic_evidence_input_available": bool(
+            semantic_evidence_input_available
+        ),
+        "semantic_evidence_input_attached": bool(
+            semantic_evidence_input_attached
+        ),
+        "semantic_evidence_input_shadow_only": True,
+        "semantic_evidence_used_for_scoring": False,
+        "semantic_evidence_used_for_ranking": False,
+        "semantic_evidence_used_for_queue": False,
+        "semantic_evidence_used_for_application": False,
+        "provider_calls_made": bool(provider_calls_made),
+        "embeddings_created": bool(embeddings_created),
     }
 
 
@@ -168,7 +183,8 @@ def _vector_evidence_context(*values: Any) -> dict[str, Any]:
     if not context or safety.get("vector_evidence_context_attached") is not True:
         return {}
     evidence = _plain_dict(context.get("evidence_context"))
-    return {
+    semantic_context = _plain_dict(context.get("semantic_evidence_context"))
+    payload = {
         "status": _clean_text(context.get("status")),
         "hook_surface": _clean_text(context.get("hook_surface")),
         "run_id": _clean_text(context.get("run_id")),
@@ -183,9 +199,12 @@ def _vector_evidence_context(*values: Any) -> dict[str, Any]:
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "provider_calls_made": bool(context.get("provider_calls_made")),
+        "embeddings_created": bool(context.get("embeddings_created")),
     }
+    if semantic_context:
+        payload["semantic_evidence_context"] = semantic_context
+    return payload
 
 
 def _review_focus(readiness_payload: dict[str, Any]) -> list[str]:
@@ -342,6 +361,9 @@ def build_pipeline_agent_review_packet_payload(
         trace_readback_payload,
         readback_source,
     )
+    semantic_evidence_context = _plain_dict(
+        vector_evidence_context.get("semantic_evidence_context")
+    )
     return {
         "schema_version": shadow_sidecar.SCHEMA_VERSION,
         "packet_status": _packet_status(readiness_status),
@@ -374,6 +396,7 @@ def build_pipeline_agent_review_packet_payload(
             readback_source,
         ),
         "vector_evidence_context": vector_evidence_context,
+        "semantic_evidence_context": semantic_evidence_context,
         "overlay_readback_summary": {
             "readback_status": _clean_text(readback.get("readback_status")),
             "overlay_found": bool(
@@ -404,6 +427,18 @@ def build_pipeline_agent_review_packet_payload(
         "safety_metadata": evaluate_pipeline_agent_review_packet_safety(
             vector_evidence_context_available=bool(vector_evidence_context),
             vector_evidence_context_attached=bool(vector_evidence_context),
+            semantic_evidence_input_available=bool(
+                semantic_evidence_context
+            ),
+            semantic_evidence_input_attached=bool(
+                semantic_evidence_context
+            ),
+            provider_calls_made=bool(
+                semantic_evidence_context.get("provider_calls_made")
+            ),
+            embeddings_created=bool(
+                semantic_evidence_context.get("embeddings_created")
+            ),
         ),
     }
 

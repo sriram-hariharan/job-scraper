@@ -296,6 +296,7 @@ ALLOWED_CHANGED = {
     "tests/test_provider_runtime_readiness_default_off.py",
     "src/agents/provider_runtime_adapter.py",
     "tests/test_provider_runtime_adapter_default_off.py",
+    "tests/test_provider_runtime_shadow_bridge_default_off.py",
 }
 
 def _changed_files():

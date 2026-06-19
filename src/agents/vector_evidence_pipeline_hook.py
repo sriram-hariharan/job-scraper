@@ -16,6 +16,8 @@ def _safety_metadata(
     embedding_retrieval_enabled: bool = False,
     embedding_retrieval_attempted: bool = False,
     semantic_evidence_attached: bool = False,
+    runtime_embedding_bridge_enabled: bool = False,
+    runtime_embedding_attempted: bool = False,
     provider_calls_made: bool = False,
     embeddings_created: bool = False,
 ) -> dict[str, bool]:
@@ -29,6 +31,8 @@ def _safety_metadata(
         "embedding_retrieval_enabled": embedding_retrieval_enabled,
         "embedding_retrieval_attempted": embedding_retrieval_attempted,
         "semantic_evidence_attached": semantic_evidence_attached,
+        "runtime_embedding_bridge_enabled": runtime_embedding_bridge_enabled,
+        "runtime_embedding_attempted": runtime_embedding_attempted,
         "did_read_database": did_read_database,
         "did_write_database": False,
         "did_mutate_scoring": False,
@@ -66,6 +70,10 @@ def run_vector_evidence_pipeline_hook(
     embedding_retrieval_read_enabled: bool = False,
     embedding_retrieval_db_executor: Any = None,
     embedding_retrieval_helper: Any = None,
+    runtime_embedding_bridge_enabled: bool = False,
+    runtime_embedding_provider: Any = None,
+    runtime_embedding_client: Any = None,
+    runtime_embedding_service_helper: Any = None,
 ) -> dict[str, Any]:
     """Collect isolated advisory evidence without influencing pipeline decisions."""
 
@@ -112,6 +120,8 @@ def run_vector_evidence_pipeline_hook(
         service_safety = {}
     semantic_payload: dict[str, Any] = {}
     semantic_safety: dict[str, Any] = {}
+    runtime_embedding_payload: dict[str, Any] = {}
+    runtime_embedding_attempted = False
     if embedding_retrieval_enabled is True:
         retrieval_helper = embedding_retrieval_helper
         if retrieval_helper is None:
@@ -120,6 +130,46 @@ def run_vector_evidence_pipeline_hook(
             )
 
             retrieval_helper = run_vector_evidence_embedding_retrieval
+        retrieval_provider = embedding_retrieval_provider
+        if runtime_embedding_bridge_enabled is True:
+            runtime_service = runtime_embedding_service_helper
+            if runtime_service is None:
+                from src.app.services import (
+                    vector_evidence_embedding_runtime_service_helper_payload,
+                )
+
+                runtime_service = (
+                    vector_evidence_embedding_runtime_service_helper_payload
+                )
+
+            def runtime_provider(request: dict[str, Any]) -> Any:
+                nonlocal runtime_embedding_attempted
+                nonlocal runtime_embedding_payload
+                runtime_embedding_attempted = True
+                result = runtime_service(
+                    enabled=True,
+                    text=str(request.get("text", "") or ""),
+                    embedding_model_id=str(
+                        request.get("embedding_model_id", "") or ""
+                    ),
+                    expected_dimension=request.get(
+                        "expected_dimension",
+                        embedding_retrieval_dimension,
+                    ),
+                    request_id=str(request.get("request_id", "") or ""),
+                    provider_callable=runtime_embedding_provider,
+                    provider_client=runtime_embedding_client,
+                )
+                runtime_embedding_payload = (
+                    deepcopy(result) if isinstance(result, dict) else {}
+                )
+                return {
+                    "embedding": deepcopy(
+                        runtime_embedding_payload.get("embedding", []) or []
+                    )
+                }
+
+            retrieval_provider = runtime_provider
         try:
             result = retrieval_helper(
                 enabled=True,
@@ -131,7 +181,7 @@ def run_vector_evidence_pipeline_hook(
                 expected_dimension=embedding_retrieval_dimension,
                 top_k=embedding_retrieval_top_k,
                 filters=deepcopy(embedding_retrieval_filters or {}),
-                provider=embedding_retrieval_provider,
+                provider=retrieval_provider,
                 read_enabled=embedding_retrieval_read_enabled is True,
                 db_executor=embedding_retrieval_db_executor,
             )
@@ -189,6 +239,25 @@ def run_vector_evidence_pipeline_hook(
             "advisory_only": True,
             "shadow_only": True,
         }
+        if runtime_embedding_bridge_enabled is True:
+            evidence_context["semantic_retrieval"][
+                "runtime_embedding_bridge"
+            ] = {
+                "status": str(
+                    runtime_embedding_payload.get("status", "") or ""
+                ),
+                "provider_mechanism": str(
+                    runtime_embedding_payload.get(
+                        "provider_mechanism",
+                        "",
+                    )
+                    or ""
+                ),
+                "runtime_embedding_attempted": runtime_embedding_attempted,
+                "read_only": True,
+                "advisory_only": True,
+                "shadow_only": True,
+            }
     return {
         "status": "vector_evidence_pipeline_hook_context_attached",
         "hook_surface": "vector_evidence_pipeline_hook",
@@ -204,6 +273,10 @@ def run_vector_evidence_pipeline_hook(
             embedding_retrieval_enabled=embedding_retrieval_enabled is True,
             embedding_retrieval_attempted=embedding_retrieval_enabled is True,
             semantic_evidence_attached=semantic_evidence_attached,
+            runtime_embedding_bridge_enabled=(
+                runtime_embedding_bridge_enabled is True
+            ),
+            runtime_embedding_attempted=runtime_embedding_attempted,
             provider_calls_made=bool(
                 semantic_safety.get("provider_calls_made")
             ),

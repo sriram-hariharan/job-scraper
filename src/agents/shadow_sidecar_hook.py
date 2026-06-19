@@ -854,6 +854,19 @@ def _base_hook_payload(
         {},
     )
     jd_safety = _plain_dict(jd_result.get("safety_metadata"))
+    tailoring_result = next(
+        (
+            result
+            for result in chain.get("ordered_agent_results", [])
+            if isinstance(result, dict)
+            and _clean_text(result.get("agent_name"))
+            == "tailoring_suggestion"
+        ),
+        {},
+    )
+    tailoring_safety = _plain_dict(
+        tailoring_result.get("safety_metadata")
+    )
     payload["safety_metadata"].update(
         {
             "jd_intelligence_provider_enabled": bool(
@@ -867,6 +880,18 @@ def _base_hook_payload(
             ),
             "jd_intelligence_schema_validated": bool(
                 jd_safety.get("jd_intelligence_schema_validated")
+            ),
+            "tailoring_provider_enabled": bool(
+                tailoring_safety.get("tailoring_provider_enabled")
+            ),
+            "tailoring_provider_attempted": bool(
+                tailoring_safety.get("tailoring_provider_attempted")
+            ),
+            "tailoring_provider_succeeded": bool(
+                tailoring_safety.get("tailoring_provider_succeeded")
+            ),
+            "tailoring_schema_validated": bool(
+                tailoring_safety.get("tailoring_schema_validated")
             ),
         }
     )
@@ -924,6 +949,9 @@ def run_shadow_sidecar_pipeline_hook(
     jd_intelligence_provider_enabled: bool = False,
     jd_intelligence_provider: Any = None,
     jd_intelligence_provider_metadata: dict[str, Any] | None = None,
+    tailoring_provider_enabled: bool = False,
+    tailoring_provider: Any = None,
+    tailoring_provider_metadata: dict[str, Any] | None = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -959,7 +987,10 @@ def run_shadow_sidecar_pipeline_hook(
         )
     if (
         three_agent_shadow_workflow_enabled is True
-        and jd_intelligence_provider_enabled is True
+        and (
+            jd_intelligence_provider_enabled is True
+            or tailoring_provider_enabled is True
+        )
     ):
         effective_sidecar_config["provider_execution_allowed"] = True
 
@@ -1113,6 +1144,172 @@ def run_shadow_sidecar_pipeline_hook(
                 "agent_output_payload": provider_payload,
             }
 
+    tailoring_shadow_agent = None
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and tailoring_provider_enabled is True
+    ):
+        from src.agents.tailoring_decision_agent import (
+            build_live_tailoring_suggestion_shadow_payload,
+        )
+
+        def tailoring_shadow_agent(
+            sidecar_input: dict[str, Any],
+        ) -> dict[str, Any]:
+            job = _plain_dict(sidecar_input.get("job_payload"))
+            resume = _plain_dict(
+                sidecar_input.get("resume_profile_payload")
+            )
+            provider_payload = (
+                build_live_tailoring_suggestion_shadow_payload(
+                    jd_intelligence={
+                        key: deepcopy(job.get(key))
+                        for key in (
+                            "required_skills",
+                            "preferred_skills",
+                            "required_tools",
+                            "preferred_tools",
+                            "workflows",
+                            "methods",
+                            "business_contexts",
+                            "stakeholder_contexts",
+                            "ownership_signals",
+                            "seniority_signals",
+                        )
+                    },
+                    resume_profile=resume,
+                    context_id=sidecar_input.get("run_id"),
+                    job_id=sidecar_input.get("job_id"),
+                    adapter=tailoring_provider,
+                    feature_enabled=True,
+                )
+            )
+            validation_status = _clean_text(
+                provider_payload.get("validation_status")
+            )
+            provider_called = bool(
+                _plain_dict(
+                    provider_payload.get("safety_metadata")
+                ).get("did_call_llm")
+            )
+            succeeded = validation_status == "valid"
+            supplied_metadata = _plain_dict(
+                tailoring_provider_metadata
+            )
+            token_usage = _plain_dict(
+                provider_payload.get("token_usage")
+            )
+            cost = _plain_dict(provider_payload.get("cost"))
+            metadata = {
+                "model_provider": _clean_text(
+                    provider_payload.get("model_provider")
+                ),
+                "model_name": _clean_text(
+                    provider_payload.get("model_name")
+                ),
+                "prompt_version": _clean_text(
+                    provider_payload.get("prompt_version")
+                ),
+                "latency_ms": int(
+                    provider_payload.get("latency_ms") or 0
+                ),
+                "fallback_used": bool(
+                    provider_payload.get("fallback_used")
+                    or not succeeded
+                ),
+                "schema_validation_status": validation_status,
+                "error_type": (
+                    _clean_text(
+                        (provider_payload.get("validation_errors") or [""])[0]
+                    )
+                    if validation_status not in {"valid", ""}
+                    else ""
+                ),
+                "provider_call_made": provider_called,
+            }
+            metadata.update(supplied_metadata)
+            metadata.update(
+                {
+                    "input_tokens": int(
+                        metadata.get("input_tokens")
+                        or token_usage.get("input_token_count")
+                        or token_usage.get("prompt_tokens")
+                        or 0
+                    ),
+                    "output_tokens": int(
+                        metadata.get("output_tokens")
+                        or token_usage.get("output_token_count")
+                        or token_usage.get("completion_tokens")
+                        or 0
+                    ),
+                    "estimated_cost": float(
+                        metadata.get("estimated_cost")
+                        or cost.get("estimated_cost")
+                        or cost.get("usd")
+                        or 0
+                    ),
+                    "retry_count": int(
+                        metadata.get("retry_count") or 0
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = metadata
+            provider_payload["fallback_used"] = bool(
+                provider_payload.get("fallback_used") or not succeeded
+            )
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(provider_payload.get("safety_metadata")),
+                "tailoring_provider_enabled": True,
+                "tailoring_provider_attempted": provider_called,
+                "tailoring_provider_succeeded": succeeded,
+                "tailoring_schema_validated": succeeded,
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            suggestion_count = sum(
+                len(provider_payload.get(field, []) or [])
+                for field in (
+                    "patch_ready_suggestions",
+                    "guidance_only_suggestions",
+                    "rejected_suggestions",
+                )
+            )
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": 1.0 if succeeded else 0.0,
+                "agent_reason_codes": list(
+                    provider_payload.get("validation_errors") or []
+                ),
+                "agent_evidence_refs": [
+                    f"tailoring_provider.suggestion_{index + 1}"
+                    for index in range(suggestion_count)
+                ],
+                "agent_risk_flags": [
+                    _clean_text(item)
+                    for suggestion in (
+                        provider_payload.get("rejected_suggestions") or []
+                    )
+                    if isinstance(suggestion, dict)
+                    for item in suggestion.get("risk_flags", [])
+                    if _clean_text(item)
+                ],
+                "agent_output_payload": provider_payload,
+            }
+
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
         batch_id=batch_id,
@@ -1159,10 +1356,12 @@ def run_shadow_sidecar_pipeline_hook(
         chain_payload = shadow_sidecar.run_shadow_sidecar_chain(
             sidecar_input=sidecar_input,
             jd_intelligence_shadow_agent=jd_shadow_agent,
+            tailoring_shadow_agent=tailoring_shadow_agent,
         )
         if (
             llmops_trace_contract_enabled is True
             or jd_intelligence_provider_enabled is True
+            or tailoring_provider_enabled is True
         ):
             trace_contract = llmops_trace_contract_helper
             if trace_contract is None:

@@ -279,6 +279,7 @@ ALLOWED_CHANGED = {
     "src/agents/agent_llmops_trace_contract.py",
     "tests/test_three_agent_llmops_trace_contract_default_off.py",
     "tests/test_jd_intelligence_provider_shadow_default_off.py",
+    "tests/test_tailoring_provider_shadow_default_off.py",
 }
 
 def _changed_files():

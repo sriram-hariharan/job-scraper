@@ -615,6 +615,20 @@ def _tailoring_suggestion_list(value: Any) -> List[str]:
     return [_clean_text(item) for item in re.split(r"[;,|]", text) if _clean_text(item)]
 
 
+def _tailoring_suggestion_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _tailoring_suggestion_int(value: Any) -> int:
+    try:
+        return max(0, int(float(value or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _tailoring_suggestion_norm(value: Any) -> str:
     return re.sub(r"[^a-z0-9+#.$%]+", " ", _clean_text(value).lower()).strip()
 
@@ -878,3 +892,187 @@ def build_tailoring_suggestion_dry_run_payload(
         "job_id": _clean_text(job_id),
         "safety_metadata": _tailoring_suggestion_safety_metadata(),
     }
+
+
+def build_live_tailoring_suggestion_shadow_payload(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    resume_profile: Dict[str, Any] | None = None,
+    context_id: str = "",
+    job_id: str = "",
+    adapter: Any = None,
+    feature_enabled: bool = False,
+) -> Dict[str, Any]:
+    """Validate one injected tailoring provider response without applying edits."""
+
+    fallback = build_tailoring_suggestion_dry_run_payload(
+        jd_intelligence=jd_intelligence,
+        resume_match_payload={"selected_resume_id": "shadow-resume"},
+        resume_evidence_rows=[
+            {
+                "resume_id": "shadow-resume",
+                **deepcopy(resume_profile or {}),
+            }
+        ],
+        selected_resume_id="shadow-resume",
+        context_id=context_id,
+        job_id=job_id,
+    )
+    base = {
+        **deepcopy(fallback),
+        "read_only": True,
+        "advisory_only": True,
+        "suggestion_plan_only": True,
+        "validation_status": "disabled",
+        "validation_errors": ["feature_flag_disabled"],
+        "fallback_used": True,
+        "model_provider": "deterministic",
+        "model_name": "tailoring_suggestion_shadow_fallback",
+        "prompt_version": "tailoring-suggestion-shadow-v1",
+        "token_usage": {},
+        "cost": {},
+        "latency_ms": 0,
+    }
+    base["safety_metadata"] = {
+        **_tailoring_suggestion_safety_metadata(),
+        "feature_flag_required": True,
+        "did_call_llm": False,
+        "did_write_database": False,
+        "did_create_approval": False,
+    }
+    if feature_enabled is not True:
+        return base
+    if not callable(adapter):
+        base["validation_status"] = "fallback"
+        base["validation_errors"] = ["adapter_missing"]
+        return base
+
+    adapter_input = {
+        "jd_intelligence": deepcopy(jd_intelligence or {}),
+        "resume_profile": deepcopy(resume_profile or {}),
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "prompt_version": "tailoring-suggestion-shadow-v1",
+    }
+    try:
+        raw = adapter(deepcopy(adapter_input))
+    except Exception as exc:
+        base["validation_status"] = "fallback"
+        base["validation_errors"] = [
+            f"adapter_error:{exc.__class__.__name__}"
+        ]
+        base["safety_metadata"]["did_call_llm"] = True
+        base["safety_metadata"]["deterministic_only"] = False
+        return base
+
+    parsed = raw
+    if isinstance(raw, dict) and "raw_response" in raw:
+        raw_response = raw.get("raw_response")
+        if isinstance(raw_response, dict):
+            parsed = {**deepcopy(raw_response), **{
+                key: deepcopy(value)
+                for key, value in raw.items()
+                if key != "raw_response"
+            }}
+        else:
+            try:
+                decoded = json.loads(str(raw_response))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                decoded = None
+            if not isinstance(decoded, dict):
+                base["validation_status"] = "fallback"
+                base["validation_errors"] = ["invalid_json_response"]
+                base["safety_metadata"]["did_call_llm"] = True
+                base["safety_metadata"]["deterministic_only"] = False
+                return base
+            parsed = {
+                **decoded,
+                **{
+                    key: deepcopy(value)
+                    for key, value in raw.items()
+                    if key != "raw_response"
+                },
+            }
+    if not isinstance(parsed, dict):
+        base["validation_status"] = "fallback"
+        base["validation_errors"] = ["adapter_response_not_object"]
+        base["safety_metadata"]["did_call_llm"] = True
+        base["safety_metadata"]["deterministic_only"] = False
+        return base
+
+    errors: List[str] = []
+    normalized_groups: Dict[str, List[Dict[str, Any]]] = {}
+    for field_name in (
+        "patch_ready_suggestions",
+        "guidance_only_suggestions",
+        "rejected_suggestions",
+    ):
+        value = parsed.get(field_name, [])
+        if not isinstance(value, list):
+            errors.append(f"{field_name}_not_list")
+            normalized_groups[field_name] = []
+            continue
+        normalized_groups[field_name] = [
+            deepcopy(item) for item in value if isinstance(item, dict)
+        ]
+        if len(normalized_groups[field_name]) != len(value):
+            errors.append(f"{field_name}_items_must_be_objects")
+    if not any(normalized_groups.values()):
+        errors.append("provider_suggestions_missing")
+
+    token_usage = parsed.get("token_usage")
+    cost = parsed.get("cost")
+    payload = {
+        **deepcopy(base),
+        **normalized_groups,
+        "missing_evidence": _tailoring_suggestion_list(
+            parsed.get("missing_evidence")
+        ),
+        "unsupported_claim_risks": [
+            deepcopy(item)
+            for item in parsed.get("unsupported_claim_risks", [])
+            if isinstance(item, dict)
+        ]
+        if isinstance(parsed.get("unsupported_claim_risks", []), list)
+        else [],
+        "projected_score_delta": _tailoring_suggestion_float(
+            parsed.get("projected_score_delta")
+        ),
+        "rationale": _clean_text(parsed.get("rationale")),
+        "validation_status": "valid" if not errors else "invalid",
+        "validation_errors": errors,
+        "fallback_used": bool(errors),
+        "model_provider": _clean_text(
+            parsed.get("model_provider") or parsed.get("provider")
+        ),
+        "model_name": _clean_text(
+            parsed.get("model_name") or parsed.get("model")
+        ),
+        "prompt_version": _clean_text(
+            parsed.get("prompt_version")
+        )
+        or "tailoring-suggestion-shadow-v1",
+        "token_usage": deepcopy(token_usage)
+        if isinstance(token_usage, dict)
+        else {},
+        "cost": deepcopy(cost) if isinstance(cost, dict) else {},
+        "latency_ms": _tailoring_suggestion_int(parsed.get("latency_ms")),
+    }
+    payload["suggestion_status"] = (
+        "patch_ready_available"
+        if payload["patch_ready_suggestions"]
+        else "guidance_only"
+        if payload["guidance_only_suggestions"]
+        else "rejected_unsupported_claims"
+        if payload["rejected_suggestions"]
+        else "insufficient_evidence"
+    )
+    payload["safety_metadata"] = {
+        **_tailoring_suggestion_safety_metadata(),
+        "feature_flag_required": True,
+        "deterministic_only": False,
+        "did_call_llm": True,
+        "did_write_database": False,
+        "did_create_approval": False,
+    }
+    return payload

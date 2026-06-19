@@ -971,6 +971,8 @@ def run_shadow_sidecar_pipeline_hook(
     llmops_trace_contract_helper: Any = None,
     llmops_aggregate_enabled: bool = False,
     llmops_aggregate_helper: Any = None,
+    workflow_readiness_enabled: bool = False,
+    workflow_readiness_helper: Any = None,
     jd_intelligence_provider_enabled: bool = False,
     jd_intelligence_provider: Any = None,
     jd_intelligence_provider_metadata: dict[str, Any] | None = None,
@@ -1605,6 +1607,18 @@ def run_shadow_sidecar_pipeline_hook(
 
                 aggregate_helper = attach_three_agent_llmops_aggregate
             chain_payload = aggregate_helper(
+                chain_payload=chain_payload,
+                enabled=True,
+            )
+        if workflow_readiness_enabled is True:
+            readiness_helper = workflow_readiness_helper
+            if readiness_helper is None:
+                from src.agents.three_agent_workflow_readiness import (
+                    attach_three_agent_workflow_readiness,
+                )
+
+                readiness_helper = attach_three_agent_workflow_readiness
+            chain_payload = readiness_helper(
                 chain_payload=chain_payload,
                 enabled=True,
             )

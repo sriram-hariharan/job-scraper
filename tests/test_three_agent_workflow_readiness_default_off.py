@@ -1,0 +1,174 @@
+import hashlib
+from pathlib import Path
+
+from src.agents import pipeline_agent_review_packet
+from src.agents import shadow_sidecar_hook
+
+
+ROOT = Path(__file__).resolve().parents[1]
+ORDERED_AGENTS = [
+    "jd_intelligence",
+    "tailoring_suggestion",
+    "critic_guardrail",
+]
+
+
+def _provider_trace_metadata():
+    return {
+        agent_name: {
+            "provider_call_made": True,
+            "schema_validation_status": "valid",
+            "input_tokens": index + 1,
+            "output_tokens": index + 2,
+            "estimated_cost": 0.001 * (index + 1),
+            "latency_ms": 10 * (index + 1),
+        }
+        for index, agent_name in enumerate(ORDERED_AGENTS)
+    }
+
+
+def _run(**updates):
+    kwargs = {
+        "run_id": "run-phase-9q",
+        "batch_id": "batch-phase-9q",
+        "job_id": "job-phase-9q",
+        "stage_name": "post_final_scoring",
+        "source_deterministic_stage": "application_priority",
+        "source_deterministic_status": "completed",
+        "source_deterministic_score": 0.94,
+        "source_deterministic_decision": "qualified_for_review",
+        "three_agent_shadow_workflow_enabled": True,
+        "provider_handoff_enabled": True,
+        "llmops_aggregate_enabled": True,
+        "llmops_trace_metadata_by_agent": _provider_trace_metadata(),
+    }
+    kwargs.update(updates)
+    return shadow_sidecar_hook.run_shadow_sidecar_pipeline_hook(**kwargs)
+
+
+def test_default_off_does_not_attach_readiness_summary():
+    chain = _run()["chain_payload"]
+
+    assert "three_agent_workflow_readiness" not in chain
+
+
+def test_enabled_summary_reports_three_provider_backed_agents():
+    summary = _run(
+        workflow_readiness_enabled=True
+    )["chain_payload"]["three_agent_workflow_readiness"]
+
+    assert summary["readiness_status"] == (
+        "ready_shadow_provider_workflow"
+    )
+    assert summary["ordered_agent_count"] == 3
+    assert summary["ordered_agent_names"] == ORDERED_AGENTS
+    assert summary["provider_backed_agent_count"] == 3
+    assert summary["provider_backed_agent_names"] == ORDERED_AGENTS
+
+
+def test_summary_reports_handoff_traces_and_aggregate_available():
+    summary = _run(
+        workflow_readiness_enabled=True
+    )["chain_payload"]["three_agent_workflow_readiness"]
+
+    assert summary["structured_handoff_available"] is True
+    assert summary["llmops_trace_available"] is True
+    assert summary["llmops_aggregate_available"] is True
+    assert summary["semantic_evidence_quality_gate_available"] is False
+
+
+def test_incomplete_summary_is_deterministic_when_proof_is_missing():
+    summary = _run(
+        workflow_readiness_enabled=True,
+        provider_handoff_enabled=False,
+        llmops_aggregate_enabled=False,
+    )["chain_payload"]["three_agent_workflow_readiness"]
+
+    assert summary["readiness_status"] == (
+        "incomplete_shadow_provider_workflow"
+    )
+    assert summary["structured_handoff_available"] is False
+    assert summary["llmops_aggregate_available"] is False
+
+
+def test_summary_reports_zero_mutation_authority():
+    summary = _run(
+        workflow_readiness_enabled=True
+    )["chain_payload"]["three_agent_workflow_readiness"]
+
+    assert summary["mutation_authorized_agent_count"] == 0
+    assert summary["final_scoring_mutation_enabled"] is False
+    assert summary["ranking_mutation_enabled"] is False
+    assert summary["queue_mutation_enabled"] is False
+    assert summary["approval_mutation_enabled"] is False
+    assert summary["resume_mutation_enabled"] is False
+    assert summary["execution_enabled"] is False
+    assert summary["submission_enabled"] is False
+
+
+def test_review_packet_exposes_existing_readiness_summary():
+    hook = _run(workflow_readiness_enabled=True)
+    packet = (
+        pipeline_agent_review_packet.build_pipeline_agent_review_packet_payload(
+            hook_payload=hook
+        )
+    )
+
+    assert packet["three_agent_workflow_readiness"] == (
+        hook["chain_payload"]["three_agent_workflow_readiness"]
+    )
+    assert packet["provider_backed_automated_agents"] == 3
+    assert packet["mutation_authorized_agents"] == 0
+
+
+def test_readiness_is_advisory_without_external_or_mutation_wiring():
+    summary = _run(
+        workflow_readiness_enabled=True
+    )["chain_payload"]["three_agent_workflow_readiness"]
+    safety = summary["safety_metadata"]
+
+    assert safety["read_only"] is True
+    assert safety["advisory_only"] is True
+    assert safety["did_write_database"] is False
+    assert safety["did_mutate_scoring"] is False
+    assert safety["did_change_ranking"] is False
+    assert safety["did_mutate_queue"] is False
+    assert safety["did_create_approval"] is False
+    assert safety["did_mutate_resume"] is False
+    assert safety["did_execute_application"] is False
+    assert safety["did_submit_application"] is False
+
+    source = (
+        ROOT / "src/agents/three_agent_workflow_readiness.py"
+    ).read_text(encoding="utf-8").lower()
+    for marker in (
+        "openai",
+        "anthropic",
+        "langchain",
+        "create_embedding(",
+        "database_url",
+        "connect(",
+        "score_jobs(",
+        "rank_jobs(",
+        "create_approval_request(",
+        "mutate_resume(",
+        "create_execution_request(",
+        "execute_application(",
+        "submit_application(",
+    ):
+        assert marker not in source
+
+
+def test_api_ui_pipeline_dependencies_and_decision_modules_are_unchanged():
+    expected = {
+        "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
+        "src/app/api.py": "4daeda11d22dd8f1ddf1be0b47571e8443d48d290a962771a3ec7eb9c63e11f9",
+        "src/app/static/agentic_review.js": "450b95cdb1a838854a8be1ed11f3ae9f0fa886d11cc0724eb5e63384936f75bc",
+        "src/pipeline/collector.py": "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7",
+        "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
+        "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
+    }
+    for relative_path, expected_hash in expected.items():
+        assert hashlib.sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
+            expected_hash
+        )

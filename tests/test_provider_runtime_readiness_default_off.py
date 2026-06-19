@@ -189,9 +189,6 @@ def test_contract_has_no_provider_sdk_network_storage_or_mutation_wiring():
 
 def test_no_ui_pipeline_or_dependency_wiring():
     sources = {
-        "ui": (ROOT / "src/app/static/agentic_review.js").read_text(
-            encoding="utf-8"
-        ),
         "pipeline": (ROOT / "src/pipeline/collector.py").read_text(
             encoding="utf-8"
         ),

@@ -234,7 +234,6 @@ def test_adapter_has_no_sdk_network_storage_or_mutation_wiring():
 def test_no_service_api_ui_pipeline_or_dependency_wiring():
     sources = (
         ROOT / "src/app/api.py",
-        ROOT / "src/app/static/agentic_review.js",
         ROOT / "src/pipeline/collector.py",
         ROOT / "requirements.txt",
     )

@@ -260,6 +260,7 @@ ALLOWED_CHANGED = {
     "src/agents/vector_evidence_pipeline_hook.py",
     "tests/test_pipeline_vector_evidence_hook_default_off.py",
     "tests/test_shadow_vector_evidence_context_default_off.py",
+    "tests/test_shadow_agent_vector_evidence_input_default_off.py",
 }
 
 def _changed_files():

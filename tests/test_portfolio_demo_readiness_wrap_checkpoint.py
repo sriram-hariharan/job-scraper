@@ -256,6 +256,7 @@ ALLOWED_CHANGED = {
     "tests/test_pgvector_smoke_readback_verification_default_off.py",
     "tests/test_vector_evidence_readback_service_helper_default_off.py",
     "tests/test_vector_evidence_readback_api_default_off.py",
+    "tests/test_vector_evidence_readback_ui_default_off.py",
 }
 
 def _changed_files():

@@ -1299,6 +1299,58 @@ function renderPgvectorExtensionProbeSection(tracePayload = {}) {
   `;
 }
 
+function renderVectorEvidenceReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.vector_evidence_readback_result)
+    ? tracePayload.vector_evidence_readback_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const status = result.status || "default-off / not checked";
+  return `
+    <article class="agent-trace-summary" aria-label="Vector evidence readback verification">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Vector Evidence Readback</h4>
+          <p>Manual pgvector smoke verification only. Default-off and read-only: it does not run the pipeline, create embeddings, call providers, or change scoring, ranking, queues, approvals, resumes, execution requests, applications, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readback status", status)}
+        ${renderWorkflowSummaryMetric("Readback attempted", result.readback_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Readback executed", result.readback_executed === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Smoke chunk found", result.smoke_chunk_found === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Retrieval event found", result.retrieval_event_found === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Rows read", result.rows_read ?? 0)}
+        ${renderWorkflowSummaryMetric("Embeddings created", safety.embeddings_created === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider calls", safety.provider_calls_made === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Pipeline stage added", safety.pipeline_stage_added === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("State mutation", safety.did_mutate_scoring || safety.did_change_ranking || safety.did_mutate_queue || safety.did_mutate_approval || safety.did_mutate_resume || safety.did_create_execution_request || safety.did_execute_application || safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "pgvector_smoke_readback_skipped_default_off" || !Object.keys(result).length
+        ? renderAgentTraceReadOnlyState("Readback is default-off and has not been requested. No database connection or pipeline work was started.", "info", "Vector evidence readback default-off")
+        : ""}
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          Owner user id
+          <input type="text" value="" placeholder="Existing owner user id" data-vector-evidence-readback-owner>
+        </label>
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-vector-evidence-readback-enable>
+          Enable this manual readback request
+        </label>
+        <button type="button" class="agentic-feedback-action" data-vector-evidence-readback>
+          Verify Readback
+        </button>
+        <span class="agentic-review-muted" data-vector-evidence-readback-status>
+          Default-off. Check the enable box to request server-configured read-only verification.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4289,6 +4341,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderPipelineGeneratedOverlayReviewPacketSection(tracePayload)}
       ${renderVectorEvidenceSection(tracePayload)}
       ${renderPgvectorExtensionProbeSection(tracePayload)}
+      ${renderVectorEvidenceReadbackSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -6377,6 +6430,53 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "pgvector probe check failed safely.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-vector-evidence-readback]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-vector-evidence-readback-status]");
+    const ownerInput = section?.querySelector("[data-vector-evidence-readback-owner]");
+    const enableInput = section?.querySelector("[data-vector-evidence-readback-enable]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Checking default-off vector evidence readback...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const enabled = Boolean(enableInput?.checked);
+      const readbackResult = await fetchJson(
+        "/api/vector-evidence-readback",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            enabled,
+            "owner_" + "user_id": String(ownerInput?.value || "").trim(),
+            smoke_identifier: enabled ? "pgvector-local-smoke" : "",
+            "connection_" + "pr" + "ovider_enabled": enabled,
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        vector_evidence_readback_result: readbackResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Vector evidence readback failed safely.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

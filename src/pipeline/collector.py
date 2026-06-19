@@ -113,6 +113,8 @@ def _shadow_sidecar_pipeline_config_from_env() -> Dict[str, Any]:
 
 def _maybe_run_shadow_sidecar_after_application_priority(
     scored_jobs: List[Dict[str, Any]],
+    *,
+    vector_evidence_hook_payload: Dict[str, Any] | None = None,
 ) -> Dict[str, Any] | None:
     sidecar_config = _shadow_sidecar_pipeline_config_from_env()
     if not _truthy_env_value(
@@ -145,6 +147,7 @@ def _maybe_run_shadow_sidecar_after_application_priority(
                 "shadow_sidecar_call_site": "collector.application_priority",
                 "scored_job_count": len(scored_jobs),
             },
+            vector_evidence_hook_payload=vector_evidence_hook_payload,
             called_by_pipeline=True,
         )
         logger.info(
@@ -691,8 +694,13 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     scored_jobs = score_jobs(ai_jobs)
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
-    _maybe_run_shadow_sidecar_after_application_priority(scored_jobs)
-    _maybe_collect_vector_evidence_after_application_priority(scored_jobs)
+    vector_evidence_hook_payload = (
+        _maybe_collect_vector_evidence_after_application_priority(scored_jobs)
+    )
+    _maybe_run_shadow_sidecar_after_application_priority(
+        scored_jobs,
+        vector_evidence_hook_payload=vector_evidence_hook_payload,
+    )
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")

@@ -205,7 +205,7 @@ def test_collector_passes_auto_overlay_flag_without_new_pipeline_stage():
     assert source.count("run_shadow_sidecar_pipeline_hook(") == 1
     assert "agent_recommendation_overlay" not in source
     assert "score_jobs(ai_jobs)" in source
-    assert "_maybe_run_shadow_sidecar_after_application_priority(scored_jobs)" in source
+    assert "_maybe_run_shadow_sidecar_after_application_priority(" in source
 
 
 def test_hook_overlay_path_has_no_provider_api_service_storage_or_mutation_calls():

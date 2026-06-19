@@ -114,7 +114,7 @@ def test_no_api_ui_pipeline_schema_or_dependency_change():
             "450b95cdb1a838854a8be1ed11f3ae9f0fa886d11cc0724eb5e63384936f75bc"
         ),
         "src/pipeline/collector.py": (
-            "0b06febc07f2da4470470a12255da7afd61f412a4d6be9026cfbe9a1c139bd55"
+            "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

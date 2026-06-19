@@ -729,6 +729,18 @@ def build_shadow_sidecar_trace_payload(
             "jd_intelligence_schema_validated": bool(
                 provider_safety.get("jd_intelligence_schema_validated")
             ),
+            "tailoring_provider_enabled": bool(
+                provider_safety.get("tailoring_provider_enabled")
+            ),
+            "tailoring_provider_attempted": bool(
+                provider_safety.get("tailoring_provider_attempted")
+            ),
+            "tailoring_provider_succeeded": bool(
+                provider_safety.get("tailoring_provider_succeeded")
+            ),
+            "tailoring_schema_validated": bool(
+                provider_safety.get("tailoring_schema_validated")
+            ),
             "provider_calls_made": bool(
                 provider_safety.get("provider_calls_made")
                 or payload["safety_metadata"].get("provider_calls_made")
@@ -744,6 +756,8 @@ def build_shadow_sidecar_trace_payload(
             payload["provider_metadata"] = provider_metadata
         if provider_safety.get("jd_intelligence_provider_attempted") is True:
             payload["provider_mode"] = "injected_shadow_jd_provider"
+        elif provider_safety.get("tailoring_provider_attempted") is True:
+            payload["provider_mode"] = "injected_shadow_tailoring_provider"
     if vector_input:
         payload["vector_evidence_input"] = vector_input
     if semantic_input:
@@ -1111,6 +1125,10 @@ def run_shadow_sidecar_chain(
         [dict[str, Any]], dict[str, Any]
     ]
     | None = None,
+    tailoring_shadow_agent: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
 ) -> dict[str, Any]:
     source = deepcopy(sidecar_input or {})
     config = _sidecar_config(source.get("sidecar_config"))
@@ -1162,6 +1180,8 @@ def run_shadow_sidecar_chain(
             shadow_agent = (
                 jd_intelligence_shadow_agent
                 if agent_name == "jd_intelligence"
+                else tailoring_shadow_agent
+                if agent_name == "tailoring_suggestion"
                 else None
             )
             agent_results.append(

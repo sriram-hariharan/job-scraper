@@ -318,7 +318,6 @@ def test_bridge_has_no_sdk_storage_or_mutation_wiring():
 
 def test_no_service_api_ui_pipeline_or_dependency_wiring():
     paths = (
-        "src/app/services.py",
         "src/app/api.py",
         "src/app/static/agentic_review.js",
         "src/pipeline/collector.py",

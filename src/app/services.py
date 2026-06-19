@@ -2669,6 +2669,163 @@ def three_agent_llmops_observability_readback_service_payload(
     }
 
 
+def provider_runtime_readiness_service_payload(
+    *,
+    enabled: bool = False,
+    config: Dict[str, Any] | None = None,
+    provider_calls_allowed: bool = False,
+    shadow_payload: Dict[str, Any] | None = None,
+    readiness_builder: Any = None,
+) -> Dict[str, Any]:
+    """Expose provider runtime readiness and existing adapter bridge status."""
+
+    source_config = deepcopy(config) if isinstance(config, dict) else {}
+    source_shadow = (
+        deepcopy(shadow_payload) if isinstance(shadow_payload, dict) else {}
+    )
+
+    builder = readiness_builder
+    if builder is None:
+        readiness_module = importlib.import_module(
+            "src.agents.provider_runtime_readiness"
+        )
+        builder = getattr(
+            readiness_module,
+            "build_provider_runtime_readiness_payload",
+        )
+
+    readiness = builder(
+        enabled=enabled is True,
+        config=deepcopy(source_config),
+        provider_calls_allowed=provider_calls_allowed is True,
+    )
+    if not isinstance(readiness, dict):
+        readiness = {}
+
+    chain = source_shadow.get("chain_payload")
+    if not isinstance(chain, dict):
+        chain = source_shadow
+    ordered_results = chain.get("ordered_agent_results")
+    if not isinstance(ordered_results, list):
+        ordered_results = chain.get("agent_results")
+    if not isinstance(ordered_results, list):
+        ordered_results = []
+
+    adapter_agents = []
+    for result in ordered_results:
+        if not isinstance(result, dict):
+            continue
+        trace = result.get("llmops_trace_metadata")
+        safety_metadata = result.get("safety_metadata")
+        trace = trace if isinstance(trace, dict) else {}
+        safety_metadata = (
+            safety_metadata if isinstance(safety_metadata, dict) else {}
+        )
+        metadata = {
+            key: trace.get(key, safety_metadata.get(key))
+            for key in (
+                "provider_runtime_adapter_enabled",
+                "provider_runtime_adapter_attempted",
+                "provider_runtime_adapter_succeeded",
+                "provider_runtime_adapter_blocked",
+            )
+        }
+        if not any(value is not None for value in metadata.values()):
+            continue
+        adapter_agents.append(
+            {
+                "agent_name": str(result.get("agent_name") or ""),
+                "provider_runtime_adapter_enabled": (
+                    metadata["provider_runtime_adapter_enabled"] is True
+                ),
+                "provider_runtime_adapter_attempted": (
+                    metadata["provider_runtime_adapter_attempted"] is True
+                ),
+                "provider_runtime_adapter_succeeded": (
+                    metadata["provider_runtime_adapter_succeeded"] is True
+                ),
+                "provider_runtime_adapter_blocked": (
+                    metadata["provider_runtime_adapter_blocked"] is True
+                ),
+                "provider_call_made": (
+                    trace.get(
+                        "provider_call_made",
+                        safety_metadata.get("provider_calls_made"),
+                    )
+                    is True
+                ),
+            }
+        )
+
+    attempted_count = sum(
+        item["provider_runtime_adapter_attempted"]
+        for item in adapter_agents
+    )
+    succeeded_count = sum(
+        item["provider_runtime_adapter_succeeded"]
+        for item in adapter_agents
+    )
+    blocked_count = sum(
+        item["provider_runtime_adapter_blocked"]
+        for item in adapter_agents
+    )
+    adapter_summary = {
+        "adapter_bridge_metadata_available": bool(adapter_agents),
+        "adapter_bridge_default_off": attempted_count == 0,
+        "adapter_bridge_agent_count": len(adapter_agents),
+        "adapter_bridge_agent_names": [
+            item["agent_name"] for item in adapter_agents
+        ],
+        "adapter_bridge_attempted_count": attempted_count,
+        "adapter_bridge_succeeded_count": succeeded_count,
+        "adapter_bridge_blocked_count": blocked_count,
+        "adapter_bridge_provider_call_count": sum(
+            item["provider_call_made"] for item in adapter_agents
+        ),
+        "adapter_bridge_agents": adapter_agents,
+    }
+
+    safety = dict(readiness.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+            "service_helper_only": True,
+            "provider_calls_made": False,
+            "embeddings_created": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": False,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **deepcopy(readiness),
+        "service_surface": "provider_runtime_readiness_service",
+        "service_helper_only": True,
+        "default_off": enabled is not True,
+        "adapter_bridge_summary": adapter_summary,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "mutation_authorized": False,
+        "mutation_authorized_agent_count": 0,
+        "safety_metadata": safety,
+    }
+
+
 def vector_evidence_readback_service_helper_payload(
     *,
     enabled: bool = False,

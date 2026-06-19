@@ -291,6 +291,7 @@ ALLOWED_CHANGED = {
     "tests/test_three_agent_llmops_observability_service_bridge_default_off.py",
     "tests/test_three_agent_llmops_observability_api_default_off.py",
     "tests/test_three_agent_llmops_observability_ui_default_off.py",
+    "tests/test_phase10_llmops_observability_readiness_checkpoint.py",
 }
 
 def _changed_files():

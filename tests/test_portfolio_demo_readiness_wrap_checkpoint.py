@@ -252,6 +252,7 @@ ALLOWED_CHANGED = {
     "tests/test_pgvector_local_smoke_default_off.py",
     "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
     "tests/test_pgvector_real_local_smoke_command_default_off.py",
+    "tests/test_pgvector_schema_executor_preserves_sql_newlines.py",
 }
 
 def _changed_files():

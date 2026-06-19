@@ -24,9 +24,13 @@ def _command_payload(
     status: str,
     provider_status: str,
     smoke_payload: dict[str, Any] | None = None,
+    readback_payload: dict[str, Any] | None = None,
     errors: list[str] | None = None,
 ) -> dict[str, Any]:
     result = smoke_payload if isinstance(smoke_payload, dict) else {}
+    readback = (
+        readback_payload if isinstance(readback_payload, dict) else {}
+    )
     safety_metadata = dict(result.get("safety_metadata", {}) or {})
     if not safety_metadata:
         safety_metadata = smoke.pgvector_local_smoke_safety_metadata()
@@ -48,9 +52,18 @@ def _command_payload(
             if result.get("retrieval_event_insert_executed") is True
             else "not_executed"
         ),
+        "readback_status": str(
+            readback.get("status", "") or "not_requested"
+        ),
+        "smoke_chunk_found": bool(readback.get("smoke_chunk_found")),
+        "retrieval_event_found": bool(
+            readback.get("retrieval_event_found")
+        ),
+        "rows_read": int(readback.get("rows_read", 0) or 0),
         "errors": list(errors or result.get("errors", []) or []),
         "safety_metadata": safety_metadata,
         "smoke_payload": result,
+        "readback_payload": readback,
     }
 
 
@@ -60,6 +73,7 @@ def run_pgvector_real_local_smoke_command(
     database_url: str = "",
     environ: Mapping[str, str] | None = None,
     connector: Any = None,
+    verify_readback: bool = False,
 ) -> dict[str, Any]:
     """Preflight configuration and explicitly invoke the local smoke helper."""
 
@@ -112,6 +126,12 @@ def run_pgvector_real_local_smoke_command(
         database_url=str(config["database_url"]),
         environ=source,
         connector=selected_connector,
+        verify_readback=verify_readback,
+    )
+    readback_result = (
+        dict(result.get("readback_payload", {}) or {})
+        if verify_readback is True
+        else {}
     )
     provider_status = (
         "pgvector_connection_provider_ready"
@@ -122,6 +142,7 @@ def run_pgvector_real_local_smoke_command(
         status=str(result.get("status", "") or "pgvector_real_local_smoke_failed"),
         provider_status=provider_status,
         smoke_payload=result,
+        readback_payload=readback_result,
     )
 
 
@@ -148,6 +169,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "APPLYLENS_VECTOR_EVIDENCE_DATABASE_URL or DATABASE_URL."
         ),
     )
+    parser.add_argument(
+        "--verify-readback",
+        action="store_true",
+        help=(
+            "After the explicit write smoke, open an explicit read executor "
+            "and verify the deterministic smoke chunk and retrieval event."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -156,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = run_pgvector_real_local_smoke_command(
         owner_user_id=args.owner_user_id,
         database_url=args.database_url,
+        verify_readback=bool(args.verify_readback),
     )
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
     return 0 if payload["status"] in {

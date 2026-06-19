@@ -98,7 +98,7 @@ def test_ui_requires_explicit_enablement_and_does_not_auto_fetch():
     init = _init()
 
     assert "Boolean(enableInput?.checked)" in handler
-    assert "\"connection_\" + \"pr\" + \"ovider_enabled\": enabled" in handler
+    assert '["connection_" + "pr" + "ovider_enabled"]: enabled' in handler
     assert 'smoke_identifier: enabled ? "pgvector-local-smoke" : ""' in handler
     assert ENDPOINT not in init
     assert "setInterval" not in handler

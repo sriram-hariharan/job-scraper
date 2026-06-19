@@ -1351,6 +1351,117 @@ function renderVectorEvidenceReadbackSection(tracePayload = {}) {
   `;
 }
 
+function llmopsObservabilityRequestPayload(tracePayload = {}, enabled = false) {
+  const reviewPacket = hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_overlay_review_packet_result)
+    ? tracePayload.pipeline_generated_overlay_review_packet_result
+    : {};
+  const chainPayload = hasAgentTraceSummaryObject(tracePayload?.manual_shadow_agentic_workflow_chain_dry_run_result)
+    ? tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result
+    : {};
+  return {
+    enabled: enabled === true,
+    payload: {},
+    chain_payload: chainPayload,
+    review_packet_payload: reviewPacket,
+  };
+}
+
+function renderThreeAgentLlmopsObservabilitySection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.three_agent_llmops_observability_readback_result)
+    ? tracePayload.three_agent_llmops_observability_readback_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const aggregate = hasAgentTraceSummaryObject(result.aggregate)
+    ? result.aggregate
+    : {};
+  const readiness = hasAgentTraceSummaryObject(result.workflow_readiness)
+    ? result.workflow_readiness
+    : {};
+  const agents = Array.isArray(result.agents) ? result.agents : [];
+  const status = result.readback_status || "not enabled";
+  const agentRows = agents.length
+    ? `
+      <div class="agentic-review-table-wrap">
+        <table class="agentic-review-table" aria-label="Three-agent LLMOps observability">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Provider</th>
+              <th>Model</th>
+              <th>Latency</th>
+              <th>Tokens</th>
+              <th>Cost</th>
+              <th>Fallback</th>
+              <th>Validation</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${agents.map((agent) => `
+              <tr>
+                <td>${escapeHtml(formatReviewLabel(agent.agent_name || "-"))}</td>
+                <td>${escapeHtml(agent.provider_call_made === true ? "provider-backed" : "not called")}</td>
+                <td>${escapeHtml([agent.model_provider, agent.model_name].filter(Boolean).join(" / ") || "not reported")}</td>
+                <td>${escapeHtml(String(agent.latency_ms ?? 0))} ms</td>
+                <td>${escapeHtml(`${agent.input_tokens ?? 0} in / ${agent.output_tokens ?? 0} out / ${agent.total_tokens ?? 0} total`)}</td>
+                <td>${escapeHtml(String(agent.estimated_cost ?? 0))}</td>
+                <td>${escapeHtml(agent.fallback_used === true ? "yes" : "no")}</td>
+                <td>${escapeHtml(formatReviewLabel(agent.schema_validation_status || "not reported"))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+    : renderAgentTraceReadOnlyState(
+      "No LLMOps observability data yet. This readback remains disabled until explicitly requested.",
+      "info",
+      "LLMOps observability not enabled",
+    );
+  return `
+    <article class="agent-trace-summary" aria-label="Three-agent LLMOps observability readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Three-Agent LLMOps Observability</h4>
+          <p>Manual advisory readback of existing shadow workflow metrics. It does not call providers, create embeddings, write storage, or change scoring, ranking, queues, approvals, resumes, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readback status", status)}
+        ${renderWorkflowSummaryMetric("Agent count", result.agent_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Provider-backed agents", result.provider_backed_agent_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Workflow readiness", readiness.readiness_status || "not reported")}
+        ${renderWorkflowSummaryMetric("Input tokens", aggregate.total_input_tokens ?? 0)}
+        ${renderWorkflowSummaryMetric("Output tokens", aggregate.total_output_tokens ?? 0)}
+        ${renderWorkflowSummaryMetric("Total tokens", aggregate.total_tokens ?? 0)}
+        ${renderWorkflowSummaryMetric("Estimated cost", aggregate.total_estimated_cost ?? 0)}
+        ${renderWorkflowSummaryMetric("Total latency", `${aggregate.total_latency_ms ?? 0} ms`)}
+        ${renderWorkflowSummaryMetric("Max agent latency", `${aggregate.max_agent_latency_ms ?? 0} ms`)}
+        ${renderWorkflowSummaryMetric("Fallback count", aggregate.fallback_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Schema valid / invalid", `${aggregate.schema_valid_count ?? 0} / ${aggregate.schema_invalid_count ?? 0}`)}
+        ${renderWorkflowSummaryMetric("Mutation authority", readiness.mutation_authorized_agent_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Database writes", safety.did_write_database === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Pipeline stage added", safety.pipeline_stage_added === true ? "yes" : "no")}
+      </div>
+      ${agentRows}
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-llmops-observability-enable>
+          Enable this manual observability readback
+        </label>
+        <button type="button" class="agentic-feedback-action" data-three-agent-llmops-observability-readback>
+          Read LLMOps Metrics
+        </button>
+        <span class="agentic-review-muted" data-three-agent-llmops-observability-readback-status>
+          Not enabled. Existing shadow metrics are read only after explicit operator request.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4342,6 +4453,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderVectorEvidenceSection(tracePayload)}
       ${renderPgvectorExtensionProbeSection(tracePayload)}
       ${renderVectorEvidenceReadbackSection(tracePayload)}
+      ${renderThreeAgentLlmopsObservabilitySection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -6461,9 +6573,9 @@ function bindAgenticReviewTabs() {
           },
           body: JSON.stringify({
             enabled,
-            "owner_" + "user_id": String(ownerInput?.value || "").trim(),
+            ["owner_" + "user_id"]: String(ownerInput?.value || "").trim(),
             smoke_identifier: enabled ? "pgvector-local-smoke" : "",
-            "connection_" + "pr" + "ovider_enabled": enabled,
+            ["connection_" + "pr" + "ovider_enabled"]: enabled,
           }),
         },
       );
@@ -6477,6 +6589,51 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Vector evidence readback failed safely.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-three-agent-llmops-observability-readback]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-three-agent-llmops-observability-readback-status]");
+    const enableInput = section?.querySelector("[data-llmops-observability-enable]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Reading default-off LLMOps observability...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readbackResult = await fetchJson(
+        "/api/three-agent-llmops-observability-readback",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            llmopsObservabilityRequestPayload(
+              tracePayload,
+              Boolean(enableInput?.checked),
+            ),
+          ),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        three_agent_llmops_observability_readback_result: readbackResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "LLMOps observability readback failed safely.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

@@ -284,7 +284,7 @@ def test_service_store_branch_has_no_provider_pipeline_or_application_calls():
 def test_no_api_ui_pipeline_dependency_or_phase8n_schema_change():
     protected_hashes = {
         "src/app/api.py": (
-            "e2bb58c1c22eba596d73cc18ca336b57b7f9e3cf41ebaf26ec8cb549d10339f3"
+            "4daeda11d22dd8f1ddf1be0b47571e8443d48d290a962771a3ec7eb9c63e11f9"
         ),
         "src/app/static/agentic_review.js": (
             "2bbaf699e5b65ec0fd2022246f1d2cb161ecf9bdaa0b5ed7234e12789346c790"

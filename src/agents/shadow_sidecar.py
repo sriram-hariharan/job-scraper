@@ -54,6 +54,9 @@ CHAIN_AGENT_ORDER = (
     "tailoring_suggestion",
     "critic_guardrail",
 )
+PROVIDER_HANDOFF_SCHEMA_VERSION = (
+    "phase-9o-three-agent-provider-handoff-v1"
+)
 
 SUPPORTED_PIPELINE_HOOK_STAGES = (
     "post_filter_evaluation",
@@ -1147,8 +1150,10 @@ def run_shadow_sidecar_chain(
         [dict[str, Any]], dict[str, Any]
     ]
     | None = None,
+    provider_handoff_enabled: bool = False,
 ) -> dict[str, Any]:
     source = deepcopy(sidecar_input or {})
+    runtime_source = deepcopy(source)
     config = _sidecar_config(source.get("sidecar_config"))
     kill_switch_enabled = _config_bool(
         config,
@@ -1189,11 +1194,43 @@ def run_shadow_sidecar_chain(
 
     agent_results: list[dict[str, Any]] = []
     for agent_name in enabled_agents:
+        runtime_trace = _plain_dict(
+            runtime_source.get("existing_trace_context")
+        )
+        jd_output = _plain_dict(
+            runtime_trace.get("jd_intelligence_provider_output")
+        )
+        tailoring_output = _plain_dict(
+            runtime_trace.get("tailoring_suggestion_provider_output")
+        )
         agent_input = _shadow_chain_agent_input(
-            source,
+            runtime_source,
             agent_name=agent_name,
             config=config,
         )
+        handoff_metadata = {
+            "upstream_jd_intelligence_available": bool(jd_output),
+            "upstream_tailoring_suggestions_available": bool(
+                tailoring_output
+            ),
+            "handoff_source_agent": (
+                "jd_intelligence"
+                if agent_name == "tailoring_suggestion" and jd_output
+                else "tailoring_suggestion"
+                if agent_name == "critic_guardrail" and tailoring_output
+                else ""
+            ),
+            "handoff_payload_schema_version": (
+                PROVIDER_HANDOFF_SCHEMA_VERSION
+            ),
+            "handoff_used_for_scoring": False,
+            "handoff_used_for_ranking": False,
+            "handoff_used_for_queue": False,
+            "handoff_used_for_application": False,
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+        }
         try:
             shadow_agent = (
                 jd_intelligence_shadow_agent
@@ -1204,28 +1241,65 @@ def run_shadow_sidecar_chain(
                 if agent_name == "critic_guardrail"
                 else None
             )
-            agent_results.append(
-                run_shadow_sidecar_agent(
-                    sidecar_input=agent_input,
-                    shadow_agent=shadow_agent,
-                )
+            result = run_shadow_sidecar_agent(
+                sidecar_input=agent_input,
+                shadow_agent=shadow_agent,
             )
         except Exception as exc:
-            agent_results.append(
-                build_shadow_sidecar_fallback_payload(
-                    sidecar_input=agent_input,
-                    sidecar_stage_status=STATUS_FAILED_NON_BLOCKING,
-                    reason_codes=["shadow_chain_stage_error"],
-                    error_type=exc.__class__.__name__,
-                    error_message=str(exc),
-                )
+            result = build_shadow_sidecar_fallback_payload(
+                sidecar_input=agent_input,
+                sidecar_stage_status=STATUS_FAILED_NON_BLOCKING,
+                reason_codes=["shadow_chain_stage_error"],
+                error_type=exc.__class__.__name__,
+                error_message=str(exc),
             )
+        if provider_handoff_enabled is True:
+            result["provider_handoff_metadata"] = handoff_metadata
+            output = _plain_dict(result.get("agent_output_payload"))
+            if output.get("validation_status") == "valid":
+                if agent_name == "jd_intelligence":
+                    runtime_trace["jd_intelligence_provider_output"] = output
+                elif agent_name == "tailoring_suggestion":
+                    runtime_trace["tailoring_suggestion_provider_output"] = (
+                        output
+                    )
+                runtime_source["existing_trace_context"] = runtime_trace
+        agent_results.append(result)
 
-    return build_shadow_sidecar_chain_payload(
+    chain = build_shadow_sidecar_chain_payload(
         sidecar_input=source,
         chain_status=_shadow_chain_status(agent_results),
         agent_results=agent_results,
     )
+    if provider_handoff_enabled is True:
+        chain["three_agent_provider_handoff"] = {
+            "handoff_payload_schema_version": (
+                PROVIDER_HANDOFF_SCHEMA_VERSION
+            ),
+            "provider_handoff_enabled": True,
+            "ordered_agent_names": [
+                _clean_text(result.get("agent_name"))
+                for result in agent_results
+            ],
+            "upstream_jd_intelligence_available": bool(
+                _plain_dict(
+                    runtime_source.get("existing_trace_context")
+                ).get("jd_intelligence_provider_output")
+            ),
+            "upstream_tailoring_suggestions_available": bool(
+                _plain_dict(
+                    runtime_source.get("existing_trace_context")
+                ).get("tailoring_suggestion_provider_output")
+            ),
+            "handoff_used_for_scoring": False,
+            "handoff_used_for_ranking": False,
+            "handoff_used_for_queue": False,
+            "handoff_used_for_application": False,
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+        }
+    return chain
 
 
 def build_shadow_sidecar_chain_evidence_summary(

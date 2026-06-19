@@ -207,6 +207,16 @@ def _vector_evidence_context(*values: Any) -> dict[str, Any]:
     return payload
 
 
+def _three_agent_shadow_workflow(*values: Any) -> dict[str, Any]:
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        workflow = _plain_dict(chain.get("three_agent_shadow_workflow"))
+        if workflow:
+            return workflow
+    return {}
+
+
 def _review_focus(readiness_payload: dict[str, Any]) -> list[str]:
     status = _clean_text(readiness_payload.get("readiness_status"))
     focus_by_status = {
@@ -364,6 +374,14 @@ def build_pipeline_agent_review_packet_payload(
     semantic_evidence_context = _plain_dict(
         vector_evidence_context.get("semantic_evidence_context")
     )
+    three_agent_shadow_workflow = _three_agent_shadow_workflow(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
     return {
         "schema_version": shadow_sidecar.SCHEMA_VERSION,
         "packet_status": _packet_status(readiness_status),
@@ -397,6 +415,7 @@ def build_pipeline_agent_review_packet_payload(
         ),
         "vector_evidence_context": vector_evidence_context,
         "semantic_evidence_context": semantic_evidence_context,
+        "three_agent_shadow_workflow": three_agent_shadow_workflow,
         "overlay_readback_summary": {
             "readback_status": _clean_text(readback.get("readback_status")),
             "overlay_found": bool(

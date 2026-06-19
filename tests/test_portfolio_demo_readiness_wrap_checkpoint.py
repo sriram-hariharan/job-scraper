@@ -275,6 +275,7 @@ ALLOWED_CHANGED = {
     "tests/test_pipeline_runtime_embedding_bridge_default_off.py",
     "src/agents/semantic_evidence_quality_gate.py",
     "tests/test_semantic_evidence_quality_gate_default_off.py",
+    "tests/test_three_agent_shadow_workflow_default_off.py",
 }
 
 def _changed_files():

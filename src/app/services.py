@@ -2593,6 +2593,168 @@ def vector_evidence_service_helper_payload(
     }
 
 
+def vector_evidence_readback_service_helper_payload(
+    *,
+    enabled: bool = False,
+    owner_user_id: str = "",
+    smoke_identifier: str = "",
+    db_executor: Any = None,
+    connection_provider_enabled: bool = False,
+    connection_database_url: str = "",
+    connection_environ: Any = None,
+    connection_connector: Any = None,
+    connection_module: Any = None,
+    smoke_module: Any = None,
+) -> Dict[str, Any]:
+    """Expose explicit pgvector smoke readback through the service boundary."""
+
+    readback_module = smoke_module
+    if readback_module is None:
+        readback_module = importlib.import_module(
+            "src.storage.vector_evidence.smoke"
+        )
+    verify_readback = getattr(
+        readback_module,
+        "verify_vector_evidence_pgvector_smoke_readback",
+    )
+
+    safe_owner_user_id = str(owner_user_id or "").strip()
+    safe_smoke_identifier = str(smoke_identifier or "").strip()
+    provider_requested = bool(
+        enabled is True and connection_provider_enabled is True
+    )
+    provider = {
+        "pgvector_connection_provider_requested": provider_requested,
+        "pgvector_connection_provider_enabled": provider_requested,
+        "pgvector_connection_provider_used": False,
+        "pgvector_connection_provider_default_off": not provider_requested,
+        "db_executor_created": False,
+        "db_connection_opened": False,
+        "provider_status": "pgvector_connection_provider_default_off",
+        "provider_error": "",
+        "db_executor": None,
+    }
+
+    effective_executor = db_executor
+    if (
+        enabled is True
+        and safe_owner_user_id
+        and safe_smoke_identifier
+        and effective_executor is None
+        and provider_requested
+    ):
+        provider = _vector_evidence_pgvector_connection_provider_payload(
+            provider_requested=True,
+            owner_user_id=safe_owner_user_id,
+            database_url=connection_database_url,
+            environ=connection_environ,
+            connector=connection_connector,
+            connection_module=connection_module,
+        )
+        effective_executor = provider["db_executor"]
+
+    payload = verify_readback(
+        enabled=enabled is True,
+        owner_user_id=safe_owner_user_id,
+        smoke_identifier=safe_smoke_identifier,
+        db_executor=effective_executor,
+    )
+    if not isinstance(payload, dict):
+        payload = {}
+
+    if (
+        provider_requested
+        and effective_executor is None
+        and payload.get("status") == "pgvector_smoke_readback_not_configured"
+    ):
+        provider_status = str(provider.get("provider_status", "") or "")
+        if provider_status and provider_status != (
+            "pgvector_connection_provider_default_off"
+        ):
+            payload["status"] = provider_status
+        provider_error = str(provider.get("provider_error", "") or "")
+        if provider_error:
+            payload["errors"] = [provider_error]
+
+    if (
+        provider.get("db_executor") is not None
+        and not callable(provider["db_executor"])
+    ):
+        close_connection = getattr(provider["db_executor"], "close", None)
+        if callable(close_connection):
+            try:
+                close_connection()
+            except Exception:
+                pass
+
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "vector_evidence_readback_service_helper": True,
+            "operator_triggered_only": True,
+            "service_helper_only": True,
+            "api_route_added": False,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "embeddings_created": False,
+            "provider_calls_made": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+            "pgvector_connection_provider_requested": provider_requested,
+            "pgvector_connection_provider_used": bool(
+                provider.get("pgvector_connection_provider_used")
+            ),
+            "db_executor_created": bool(
+                provider.get("db_executor_created")
+            ),
+            "db_connection_opened": bool(
+                provider.get("db_connection_opened")
+            ),
+        }
+    )
+    return {
+        **deepcopy(payload),
+        "service_surface": "vector_evidence_readback_service_helper",
+        "service_helper_only": True,
+        "operator_triggered_only": True,
+        "default_off": enabled is not True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "pgvector_connection_provider_requested": provider_requested,
+        "pgvector_connection_provider_used": bool(
+            provider.get("pgvector_connection_provider_used")
+        ),
+        "pgvector_connection_provider_status": str(
+            provider.get("provider_status", "") or ""
+        ),
+        "db_executor_supplied": effective_executor is not None,
+        "db_executor_created": bool(provider.get("db_executor_created")),
+        "db_connection_opened": bool(
+            provider.get("db_connection_opened")
+        ),
+        "provider_backed_automated_agents": 0,
+        "live_provider_backed_automated_agents": 0,
+        "mutation_authorized_agents": 0,
+        "mutation_authorized_scoring_agents": 0,
+        "mutation_authorized_ranking_agents": 0,
+        "mutation_authorized_application_agents": 0,
+        "safety_metadata": safety,
+    }
+
+
 def pgvector_extension_probe_service_helper_payload(
     *,
     extension_name: str = "vector",

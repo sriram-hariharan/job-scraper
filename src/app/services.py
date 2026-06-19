@@ -2593,6 +2593,82 @@ def vector_evidence_service_helper_payload(
     }
 
 
+def three_agent_llmops_observability_readback_service_payload(
+    *,
+    enabled: bool = False,
+    payload: Dict[str, Any] | None = None,
+    chain_payload: Dict[str, Any] | None = None,
+    review_packet_payload: Dict[str, Any] | None = None,
+    readback_builder: Any = None,
+) -> Dict[str, Any]:
+    """Expose dashboard-ready three-agent LLMOps readback at service scope."""
+
+    source_payload: Dict[str, Any] = {}
+    for candidate in (
+        payload,
+        chain_payload,
+        review_packet_payload,
+    ):
+        if isinstance(candidate, dict) and candidate:
+            source_payload = deepcopy(candidate)
+            break
+
+    builder = readback_builder
+    if builder is None:
+        readback_module = importlib.import_module(
+            "src.agents.three_agent_llmops_observability_readback"
+        )
+        builder = getattr(
+            readback_module,
+            "build_three_agent_llmops_observability_readback_payload",
+        )
+
+    result = builder(
+        payload=deepcopy(source_payload),
+        enabled=enabled is True,
+    )
+    if not isinstance(result, dict):
+        result = {}
+    safety = dict(result.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "readback_only": True,
+            "service_helper_only": True,
+            "provider_calls_made": False,
+            "embeddings_created": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": False,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **deepcopy(result),
+        "service_surface": (
+            "three_agent_llmops_observability_readback_service"
+        ),
+        "service_helper_only": True,
+        "default_off": enabled is not True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "safety_metadata": safety,
+    }
+
+
 def vector_evidence_readback_service_helper_payload(
     *,
     enabled: bool = False,

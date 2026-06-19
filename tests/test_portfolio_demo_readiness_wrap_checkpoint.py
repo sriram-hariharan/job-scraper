@@ -292,6 +292,8 @@ ALLOWED_CHANGED = {
     "tests/test_three_agent_llmops_observability_api_default_off.py",
     "tests/test_three_agent_llmops_observability_ui_default_off.py",
     "tests/test_phase10_llmops_observability_readiness_checkpoint.py",
+    "src/agents/provider_runtime_readiness.py",
+    "tests/test_provider_runtime_readiness_default_off.py",
 }
 
 def _changed_files():
@@ -355,6 +357,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/three_agent_llmops_aggregate.py",
         "src/agents/three_agent_workflow_readiness.py",
         "src/agents/three_agent_llmops_observability_readback.py",
+        "src/agents/provider_runtime_readiness.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

@@ -2755,6 +2755,99 @@ def vector_evidence_readback_service_helper_payload(
     }
 
 
+def vector_evidence_embedding_runtime_service_helper_payload(
+    *,
+    enabled: bool = False,
+    text: str = "",
+    embedding_model_id: str = "",
+    expected_dimension: int = 0,
+    request_id: str = "",
+    provider_callable: Any = None,
+    provider_client: Any = None,
+    runtime_adapter_module: Any = None,
+    embedding_provider_module: Any = None,
+) -> Dict[str, Any]:
+    """Expose the default-off embedding runtime adapter through services."""
+
+    adapter_module = runtime_adapter_module
+    if adapter_module is None:
+        adapter_module = importlib.import_module(
+            "src.storage.vector_evidence.embedding_runtime_adapter"
+        )
+    run_adapter = getattr(
+        adapter_module,
+        "run_vector_evidence_embedding_runtime_adapter",
+    )
+    payload = run_adapter(
+        enabled=enabled is True,
+        text=str(text or ""),
+        embedding_model_id=str(embedding_model_id or ""),
+        expected_dimension=expected_dimension,
+        request_id=str(request_id or ""),
+        provider_callable=provider_callable,
+        provider_client=provider_client,
+        embedding_provider_module=embedding_provider_module,
+    )
+    if not isinstance(payload, dict):
+        payload = {}
+
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "embedding_runtime_service_bridge": True,
+            "service_helper_only": True,
+            "operator_triggered_only": True,
+            "runtime_adapter_enabled": enabled is True,
+            "provider_configured": bool(
+                payload.get("provider_configured")
+            ),
+            "provider_calls_made": bool(
+                safety.get("provider_calls_made")
+            ),
+            "embeddings_created": bool(
+                safety.get("embeddings_created")
+            ),
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": False,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **deepcopy(payload),
+        "service_surface": (
+            "vector_evidence_embedding_runtime_service_helper"
+        ),
+        "service_helper_only": True,
+        "operator_triggered_only": True,
+        "default_off": enabled is not True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "provider_backed_automated_agents": 0,
+        "live_provider_backed_automated_agents": 0,
+        "mutation_authorized_agents": 0,
+        "mutation_authorized_scoring_agents": 0,
+        "mutation_authorized_ranking_agents": 0,
+        "mutation_authorized_application_agents": 0,
+        "safety_metadata": safety,
+    }
+
+
 def pgvector_extension_probe_service_helper_payload(
     *,
     extension_name: str = "vector",

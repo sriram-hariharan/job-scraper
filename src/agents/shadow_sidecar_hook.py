@@ -504,6 +504,12 @@ def _approval_request_context_from_hook_payload(
 
 def _advisory_vector_evidence_context(
     vector_evidence_hook_payload: Any,
+    *,
+    semantic_evidence_quality_gate_enabled: bool = False,
+    semantic_evidence_minimum_similarity_score: float = 0.75,
+    semantic_evidence_minimum_count: int = 1,
+    semantic_evidence_max_count: int = 5,
+    semantic_evidence_quality_gate_helper: Any = None,
 ) -> dict[str, Any]:
     source = _plain_dict(vector_evidence_hook_payload)
     source_safety = _plain_dict(source.get("safety_metadata"))
@@ -519,6 +525,49 @@ def _advisory_vector_evidence_context(
         semantic_source
         and source_safety.get("semantic_evidence_attached") is True
     )
+    quality_gate_payload: dict[str, Any] = {}
+    if semantic_attached and semantic_evidence_quality_gate_enabled is True:
+        quality_gate = semantic_evidence_quality_gate_helper
+        if quality_gate is None:
+            from src.agents.semantic_evidence_quality_gate import (
+                run_semantic_evidence_quality_gate,
+            )
+
+            quality_gate = run_semantic_evidence_quality_gate
+        quality_result = quality_gate(
+            enabled=True,
+            evidence_items=deepcopy(
+                semantic_source.get("retrieval_candidates", []) or []
+            ),
+            minimum_similarity_score=(
+                semantic_evidence_minimum_similarity_score
+            ),
+            minimum_evidence_count=semantic_evidence_minimum_count,
+            max_evidence_count=semantic_evidence_max_count,
+        )
+        quality_gate_payload = (
+            deepcopy(quality_result)
+            if isinstance(quality_result, dict)
+            else {}
+        )
+        semantic_attached = bool(
+            quality_gate_payload.get("status") == "evidence_quality_passed"
+            and quality_gate_payload.get(
+                "semantic_evidence_quality_passed"
+            )
+        )
+        if semantic_attached:
+            semantic_source["retrieval_candidates"] = deepcopy(
+                quality_gate_payload.get("quality_evidence", []) or []
+            )
+            semantic_source["result_count"] = len(
+                semantic_source["retrieval_candidates"]
+            )
+            evidence_context["semantic_retrieval"] = deepcopy(
+                semantic_source
+            )
+        else:
+            evidence_context.pop("semantic_retrieval", None)
     provider_calls_made = bool(
         source_safety.get("provider_calls_made")
     ) if semantic_attached else False
@@ -570,6 +619,14 @@ def _advisory_vector_evidence_context(
             "embeddings_created": embeddings_created,
         },
     }
+    if semantic_evidence_quality_gate_enabled is True:
+        context["semantic_evidence_quality_gate"] = quality_gate_payload
+        context["safety_metadata"].update(
+            {
+                "semantic_evidence_quality_gate_enabled": True,
+                "semantic_evidence_quality_passed": semantic_attached,
+            }
+        )
     if semantic_attached:
         context["semantic_evidence_context"] = {
             "status": _clean_text(semantic_source.get("status")),
@@ -604,6 +661,10 @@ def _advisory_vector_evidence_context(
             "provider_calls_made": provider_calls_made,
             "embeddings_created": embeddings_created,
         }
+        if semantic_evidence_quality_gate_enabled is True:
+            context["semantic_evidence_context"][
+                "semantic_evidence_quality_gate"
+            ] = deepcopy(quality_gate_payload)
     return context
 
 
@@ -814,12 +875,28 @@ def run_shadow_sidecar_pipeline_hook(
     resume_profile_payload: dict[str, Any] | None = None,
     existing_trace_context: dict[str, Any] | None = None,
     vector_evidence_hook_payload: dict[str, Any] | None = None,
+    semantic_evidence_quality_gate_enabled: bool = False,
+    semantic_evidence_minimum_similarity_score: float = 0.75,
+    semantic_evidence_minimum_count: int = 1,
+    semantic_evidence_max_count: int = 5,
+    semantic_evidence_quality_gate_helper: Any = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
     trace_context = _snapshot(existing_trace_context or {})
     vector_evidence_context = _advisory_vector_evidence_context(
-        vector_evidence_hook_payload
+        vector_evidence_hook_payload,
+        semantic_evidence_quality_gate_enabled=(
+            semantic_evidence_quality_gate_enabled
+        ),
+        semantic_evidence_minimum_similarity_score=(
+            semantic_evidence_minimum_similarity_score
+        ),
+        semantic_evidence_minimum_count=semantic_evidence_minimum_count,
+        semantic_evidence_max_count=semantic_evidence_max_count,
+        semantic_evidence_quality_gate_helper=(
+            semantic_evidence_quality_gate_helper
+        ),
     )
     if vector_evidence_context:
         trace_context["vector_evidence_context"] = vector_evidence_context

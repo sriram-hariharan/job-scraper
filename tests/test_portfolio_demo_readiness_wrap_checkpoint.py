@@ -269,6 +269,8 @@ ALLOWED_CHANGED = {
     "src/storage/vector_evidence/embedding_retrieval.py",
     "tests/test_vector_evidence_embedding_retrieval_helper_default_off.py",
     "tests/test_pipeline_embedding_retrieval_hook_default_off.py",
+    "src/storage/vector_evidence/embedding_runtime_adapter.py",
+    "tests/test_vector_evidence_embedding_runtime_adapter_default_off.py",
 }
 
 def _changed_files():
@@ -335,6 +337,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/storage/vector_evidence/embedding_provider.py",
         "src/storage/vector_evidence/embedding_indexing.py",
         "src/storage/vector_evidence/embedding_retrieval.py",
+        "src/storage/vector_evidence/embedding_runtime_adapter.py",
         "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
         "src/pipeline/collector.py",
     }

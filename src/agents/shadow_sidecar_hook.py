@@ -811,6 +811,16 @@ def _base_hook_payload(
         "provider_calls_disabled_in_tests": True,
         "safety_metadata": {},
         "default_off_pipeline_hook_call_sites": 1 if called_by_pipeline else 0,
+        "provider_backed_automated_agents": int(
+            chain.get("provider_backed_automated_agents", 0) or 0
+        ),
+        "live_provider_backed_automated_agents": int(
+            chain.get("live_provider_backed_automated_agents", 0) or 0
+        ),
+        "mutation_authorized_agents": 0,
+        "mutation_authorized_scoring_agents": 0,
+        "mutation_authorized_ranking_agents": 0,
+        "mutation_authorized_application_agents": 0,
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }
@@ -828,10 +838,37 @@ def _base_hook_payload(
         semantic_evidence_input_attached=bool(semantic_context),
         provider_calls_made=bool(
             semantic_context.get("provider_calls_made")
+            or chain.get("provider_backed_automated_agents")
         ),
         embeddings_created=bool(
             semantic_context.get("embeddings_created")
         ),
+    )
+    jd_result = next(
+        (
+            result
+            for result in chain.get("ordered_agent_results", [])
+            if isinstance(result, dict)
+            and _clean_text(result.get("agent_name")) == "jd_intelligence"
+        ),
+        {},
+    )
+    jd_safety = _plain_dict(jd_result.get("safety_metadata"))
+    payload["safety_metadata"].update(
+        {
+            "jd_intelligence_provider_enabled": bool(
+                jd_safety.get("jd_intelligence_provider_enabled")
+            ),
+            "jd_intelligence_provider_attempted": bool(
+                jd_safety.get("jd_intelligence_provider_attempted")
+            ),
+            "jd_intelligence_provider_succeeded": bool(
+                jd_safety.get("jd_intelligence_provider_succeeded")
+            ),
+            "jd_intelligence_schema_validated": bool(
+                jd_safety.get("jd_intelligence_schema_validated")
+            ),
+        }
     )
     payload["agent_recommendation_overlay_auto_generation"] = (
         _safe_agent_recommendation_overlay_auto_generation_payload(payload)
@@ -884,6 +921,9 @@ def run_shadow_sidecar_pipeline_hook(
     llmops_trace_contract_enabled: bool = False,
     llmops_trace_metadata_by_agent: dict[str, dict[str, Any]] | None = None,
     llmops_trace_contract_helper: Any = None,
+    jd_intelligence_provider_enabled: bool = False,
+    jd_intelligence_provider: Any = None,
+    jd_intelligence_provider_metadata: dict[str, Any] | None = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -917,6 +957,161 @@ def run_shadow_sidecar_pipeline_hook(
                 "provider_execution_allowed": False,
             }
         )
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and jd_intelligence_provider_enabled is True
+    ):
+        effective_sidecar_config["provider_execution_allowed"] = True
+
+    jd_shadow_agent = None
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and jd_intelligence_provider_enabled is True
+    ):
+        from src.agents.jd_intelligence import (
+            build_live_jd_intelligence_dry_run_payload,
+        )
+
+        def jd_shadow_agent(sidecar_input: dict[str, Any]) -> dict[str, Any]:
+            job = _plain_dict(sidecar_input.get("job_payload"))
+            provider_payload = build_live_jd_intelligence_dry_run_payload(
+                job_title=job.get("title"),
+                company=job.get("company"),
+                location=job.get("location"),
+                job_description=(
+                    job.get("job_description") or job.get("description")
+                ),
+                source_metadata=_plain_dict(job.get("source_metadata")),
+                context_id=sidecar_input.get("run_id"),
+                job_id=sidecar_input.get("job_id"),
+                adapter=jd_intelligence_provider,
+                feature_enabled=True,
+            )
+            validation_status = _clean_text(
+                provider_payload.get("validation_status")
+            )
+            provider_called = bool(
+                _plain_dict(
+                    provider_payload.get("safety_metadata")
+                ).get("did_call_llm")
+            )
+            succeeded = validation_status == "valid"
+            supplied_metadata = _plain_dict(
+                jd_intelligence_provider_metadata
+            )
+            metadata = {
+                "model_provider": _clean_text(
+                    provider_payload.get("model_provider")
+                ),
+                "model_name": _clean_text(
+                    provider_payload.get("model_name")
+                ),
+                "prompt_version": _clean_text(
+                    provider_payload.get("prompt_version")
+                ),
+                "latency_ms": int(
+                    provider_payload.get("latency_ms") or 0
+                ),
+                "fallback_used": bool(
+                    provider_payload.get("fallback_used")
+                    or not succeeded
+                ),
+                "schema_validation_status": validation_status,
+                "error_type": (
+                    _clean_text(
+                        (provider_payload.get("validation_errors") or [""])[0]
+                    )
+                    if validation_status not in {"valid", ""}
+                    else ""
+                ),
+                "provider_call_made": provider_called,
+            }
+            metadata.update(supplied_metadata)
+            token_usage = _plain_dict(
+                provider_payload.get("token_usage")
+            )
+            cost = _plain_dict(provider_payload.get("cost"))
+            metadata.update(
+                {
+                    "input_tokens": int(
+                        metadata.get("input_tokens")
+                        or token_usage.get("input_token_count")
+                        or token_usage.get("prompt_tokens")
+                        or 0
+                    ),
+                    "output_tokens": int(
+                        metadata.get("output_tokens")
+                        or token_usage.get("output_token_count")
+                        or token_usage.get("completion_tokens")
+                        or 0
+                    ),
+                    "estimated_cost": float(
+                        metadata.get("estimated_cost")
+                        or cost.get("estimated_cost")
+                        or cost.get("usd")
+                        or 0
+                    ),
+                    "retry_count": int(
+                        metadata.get("retry_count") or 0
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = metadata
+            provider_payload["fallback_used"] = bool(
+                provider_payload.get("fallback_used") or not succeeded
+            )
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(provider_payload.get("safety_metadata")),
+                "jd_intelligence_provider_enabled": True,
+                "jd_intelligence_provider_attempted": provider_called,
+                "jd_intelligence_provider_succeeded": succeeded,
+                "jd_intelligence_schema_validated": succeeded,
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": float(
+                    provider_payload.get("extraction_confidence") or 0
+                ),
+                "agent_reason_codes": list(
+                    provider_payload.get("validation_errors") or []
+                ),
+                "agent_evidence_refs": [
+                    f"jd_provider.{field}"
+                    for field in (
+                        "required_skills",
+                        "preferred_skills",
+                        "required_tools",
+                        "preferred_tools",
+                        "workflows",
+                        "methods",
+                        "business_contexts",
+                        "stakeholder_contexts",
+                        "ownership_signals",
+                        "seniority_signals",
+                    )
+                    if provider_payload.get(field)
+                ],
+                "agent_risk_flags": list(
+                    provider_payload.get("risk_flags") or []
+                ),
+                "agent_output_payload": provider_payload,
+            }
 
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
@@ -962,9 +1157,13 @@ def run_shadow_sidecar_pipeline_hook(
             agent_name="shadow_sidecar_chain",
         )
         chain_payload = shadow_sidecar.run_shadow_sidecar_chain(
-            sidecar_input=sidecar_input
+            sidecar_input=sidecar_input,
+            jd_intelligence_shadow_agent=jd_shadow_agent,
         )
-        if llmops_trace_contract_enabled is True:
+        if (
+            llmops_trace_contract_enabled is True
+            or jd_intelligence_provider_enabled is True
+        ):
             trace_contract = llmops_trace_contract_helper
             if trace_contract is None:
                 from src.agents.agent_llmops_trace_contract import (

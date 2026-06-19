@@ -15,6 +15,7 @@ from src.storage.vector_evidence import connection, store
 
 
 SMOKE_VERSION = "phase-8t-pgvector-local-smoke-v1"
+SMOKE_IDENTIFIER = "pgvector-local-smoke"
 
 
 def pgvector_local_smoke_safety_metadata(
@@ -116,6 +117,114 @@ def _smoke_chunk(owner_user_id: str) -> dict[str, Any]:
     }
 
 
+def pgvector_smoke_readback_safety_metadata(
+    *,
+    readback_executed: bool = False,
+) -> dict[str, bool]:
+    safety = pgvector_local_smoke_safety_metadata()
+    safety.update(
+        {
+            "read_only": True,
+            "pgvector_smoke_readback": True,
+            "did_read_database": bool(readback_executed),
+            "did_write_database": False,
+            "schema_setup_executed": False,
+            "chunks_written": False,
+            "retrieval_events_written": False,
+        }
+    )
+    return safety
+
+
+def verify_vector_evidence_pgvector_smoke_readback(
+    *,
+    enabled: bool = False,
+    owner_user_id: str = "",
+    smoke_identifier: str = "",
+    db_executor: Any = None,
+    store_module: Any = None,
+) -> dict[str, Any]:
+    """Verify smoke records through an explicit, injected read-only path."""
+
+    payload = {
+        "status": "pgvector_smoke_readback_skipped_default_off",
+        "readback_attempted": False,
+        "readback_executed": False,
+        "smoke_chunk_found": False,
+        "retrieval_event_found": False,
+        "rows_read": 0,
+        "rows": [],
+        "errors": [],
+        "provider_backed_automated_agents": 0,
+        "live_provider_backed_automated_agents": 0,
+        "mutation_authorized_agents": 0,
+        "mutation_authorized_scoring_agents": 0,
+        "mutation_authorized_ranking_agents": 0,
+        "mutation_authorized_application_agents": 0,
+        "safety_metadata": pgvector_smoke_readback_safety_metadata(),
+    }
+    if enabled is not True:
+        return payload
+
+    safe_owner_user_id = str(owner_user_id or "").strip()
+    safe_smoke_identifier = str(smoke_identifier or "").strip()
+    if not safe_owner_user_id or not safe_smoke_identifier:
+        payload["status"] = "pgvector_smoke_readback_not_configured"
+        payload["errors"] = [
+            reason
+            for value, reason in (
+                (safe_owner_user_id, "owner_user_id_required"),
+                (safe_smoke_identifier, "smoke_identifier_required"),
+            )
+            if not value
+        ]
+        return payload
+    if db_executor is None:
+        payload["status"] = "pgvector_smoke_readback_not_configured"
+        payload["errors"] = ["db_executor_required"]
+        return payload
+
+    payload["readback_attempted"] = True
+    storage_module = store_module or store
+    try:
+        result = storage_module.read_vector_evidence_smoke_records(
+            owner_user_id=safe_owner_user_id,
+            smoke_identifier=safe_smoke_identifier,
+            db_executor=db_executor,
+        )
+    except Exception as exc:
+        payload["status"] = "pgvector_smoke_readback_failed_non_blocking"
+        payload["errors"] = [type(exc).__name__]
+        return payload
+
+    executed = result.get("readback_executed") is True
+    payload.update(
+        {
+            "status": (
+                "pgvector_smoke_readback_verified"
+                if (
+                    result.get("smoke_chunk_found") is True
+                    and result.get("retrieval_event_found") is True
+                )
+                else "pgvector_smoke_readback_incomplete"
+            ),
+            "readback_executed": executed,
+            "smoke_chunk_found": bool(
+                result.get("smoke_chunk_found")
+            ),
+            "retrieval_event_found": bool(
+                result.get("retrieval_event_found")
+            ),
+            "rows_read": int(result.get("rows_read", 0) or 0),
+            "rows": list(result.get("rows", []) or []),
+            "safety_metadata": pgvector_smoke_readback_safety_metadata(
+                readback_executed=executed
+            ),
+        }
+    )
+    return payload
+
+
 def run_vector_evidence_pgvector_smoke(
     *,
     enabled: bool = False,
@@ -123,6 +232,7 @@ def run_vector_evidence_pgvector_smoke(
     database_url: str = "",
     environ: Mapping[str, str] | None = None,
     connector: Any = None,
+    verify_readback: bool = False,
     connection_module: Any = None,
     store_module: Any = None,
 ) -> dict[str, Any]:
@@ -185,6 +295,7 @@ def run_vector_evidence_pgvector_smoke(
     schema_executed = False
     chunk_executed = False
     event_executed = False
+    readback_payload: dict[str, Any] = {}
     try:
         payload["operations_attempted"].append("schema_setup")
         schema_result = storage_module.execute_pgvector_schema_setup(
@@ -238,6 +349,19 @@ def run_vector_evidence_pgvector_smoke(
             payload["operations_completed"].append(
                 "retrieval_event_insert"
             )
+        if verify_readback is True:
+            payload["operations_attempted"].append("readback")
+            readback_payload = (
+                verify_vector_evidence_pgvector_smoke_readback(
+                    enabled=True,
+                    owner_user_id=safe_owner_user_id,
+                    smoke_identifier=SMOKE_IDENTIFIER,
+                    db_executor=db_executor,
+                    store_module=storage_module,
+                )
+            )
+            if readback_payload.get("readback_executed") is True:
+                payload["operations_completed"].append("readback")
     except Exception as exc:
         payload["status"] = "pgvector_local_smoke_failed_non_blocking"
         payload["errors"] = [type(exc).__name__]
@@ -260,6 +384,7 @@ def run_vector_evidence_pgvector_smoke(
             "schema_setup_executed": schema_executed,
             "chunk_insert_executed": chunk_executed,
             "retrieval_event_insert_executed": event_executed,
+            "readback_payload": readback_payload,
             "safety_metadata": pgvector_local_smoke_safety_metadata(
                 connection_opened=payload["db_connection_opened"],
                 schema_setup_executed=schema_executed,

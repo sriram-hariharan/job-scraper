@@ -928,6 +928,103 @@ def select_vector_evidence_retrieval_candidates(
     return payload
 
 
+def read_vector_evidence_smoke_records(
+    *,
+    owner_user_id: str,
+    smoke_identifier: str,
+    db_executor: Any = None,
+) -> dict[str, Any]:
+    """Read deterministic smoke chunk/event records through an injected DB."""
+
+    safe_owner_user_id = _require_text(owner_user_id, "owner_user_id")
+    safe_smoke_identifier = _require_text(
+        smoke_identifier,
+        "smoke_identifier",
+    )
+    supplied = db_executor is not None
+    sql = """
+SELECT
+    'chunk' AS record_type,
+    chunk_id AS record_id
+FROM vector_evidence_chunks
+WHERE owner_user_id = %s
+  AND source_record_id = %s
+  AND source = 'operator_local_smoke'
+  AND deleted_at IS NULL
+ORDER BY chunk_id
+LIMIT 1
+"""
+    event_sql = """
+SELECT
+    'retrieval_event' AS record_type,
+    retrieval_event_id AS record_id
+FROM vector_evidence_retrieval_events
+WHERE owner_user_id = %s
+  AND request_id = %s
+  AND query_purpose = 'pgvector_local_smoke'
+  AND deleted_at IS NULL
+ORDER BY retrieval_event_id
+LIMIT 1
+"""
+    payload = {
+        **_db_executor_base_payload(
+            operation="read_vector_evidence_smoke_records",
+            executor_supplied=supplied,
+            read_only=True,
+        ),
+        "readback_attempted": supplied,
+        "readback_executed": False,
+        "smoke_chunk_found": False,
+        "retrieval_event_found": False,
+        "rows_read": 0,
+        "rows": [],
+        "sql": f"({sql.strip()})\nUNION ALL\n({event_sql.strip()})",
+        "params": (
+            safe_owner_user_id,
+            safe_smoke_identifier,
+            safe_owner_user_id,
+            safe_smoke_identifier,
+        ),
+    }
+    if not supplied:
+        return payload
+
+    execution = _execute_with_injected_db(
+        payload,
+        db_executor=db_executor,
+        fetch_rows=True,
+    )
+    rows = [
+        deepcopy(row) for row in execution["rows"] if isinstance(row, dict)
+    ]
+    record_types = {
+        str(row.get("record_type", "") or "") for row in rows
+    }
+    executed = execution["executed"] is True
+    payload.update(
+        {
+            "status": (
+                "pgvector_smoke_readback_executed"
+                if executed
+                else "pgvector_store_db_executor_not_configured"
+            ),
+            "executed": executed,
+            "readback_executed": executed,
+            "smoke_chunk_found": "chunk" in record_types,
+            "retrieval_event_found": "retrieval_event" in record_types,
+            "rows_read": len(rows),
+            "rows": rows,
+            "executor_result": execution["executor_result"],
+            "safety_metadata": pgvector_db_executor_safety_metadata(
+                executor_supplied=True,
+                read_only=True,
+                did_read_database=executed,
+            ),
+        }
+    )
+    return payload
+
+
 # Short aliases for callers that use storage-domain naming.
 prepare_chunk_insert_payload = prepare_vector_evidence_chunk_insert_payload
 prepare_embedding_insert_payload = prepare_vector_evidence_embedding_insert_payload

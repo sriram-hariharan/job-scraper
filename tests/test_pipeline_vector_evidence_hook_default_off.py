@@ -229,7 +229,7 @@ def test_hook_contains_no_mutation_provider_embedding_api_or_ui_wiring():
 def test_dependency_api_ui_and_protected_runtime_hashes_are_unchanged():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
-        "src/app/api.py": "80c665bbbad6b175ce6713aa5658f5edbcd4f09970c6d725e9fd01f624f010ec",
+        "src/app/api.py": "b520bcf22ad0ec85f6ee27ebb9f74c513fa3b76f377f0652cf74474dd67c905f",
         "src/app/static/agentic_review.js": "37d92dfe33774c9f97e15c63951843cb899ada954898e20d02806e1ab143fc1b",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",

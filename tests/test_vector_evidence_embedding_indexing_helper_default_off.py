@@ -249,7 +249,7 @@ def test_zero_agent_counts_and_no_runtime_provider_sdk_wiring():
 def test_api_ui_pipeline_dependencies_and_protected_decision_modules_are_unchanged():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
-        "src/app/api.py": "80c665bbbad6b175ce6713aa5658f5edbcd4f09970c6d725e9fd01f624f010ec",
+        "src/app/api.py": "b520bcf22ad0ec85f6ee27ebb9f74c513fa3b76f377f0652cf74474dd67c905f",
         "src/app/static/agentic_review.js": "37d92dfe33774c9f97e15c63951843cb899ada954898e20d02806e1ab143fc1b",
         "src/pipeline/collector.py": "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",

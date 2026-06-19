@@ -267,6 +267,7 @@ ALLOWED_CHANGED = {
     "tests/test_vector_evidence_embedding_indexing_helper_default_off.py",
     "src/storage/vector_evidence/embedding_retrieval.py",
     "tests/test_vector_evidence_embedding_retrieval_helper_default_off.py",
+    "tests/test_pipeline_embedding_retrieval_hook_default_off.py",
 }
 
 def _changed_files():

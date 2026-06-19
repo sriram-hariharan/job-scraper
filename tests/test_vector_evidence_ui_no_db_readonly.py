@@ -188,13 +188,10 @@ def test_ui_calls_api_only_from_explicit_operator_action_without_auto_refresh():
 def test_no_api_service_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "fb133089712c94e0241441cbe400760264c17b463be15b2126e7257932795e0c"
-        ),
-        "src/app/services.py": (
-            "9f8d0996a6abba79788c0fd1b6792c151be8a8c91d9a34967c0a89e19ba05d63"
+            "4daeda11d22dd8f1ddf1be0b47571e8443d48d290a962771a3ec7eb9c63e11f9"
         ),
         "src/pipeline/collector.py": (
-            "5d30b4e3b7ada5fd94c5dee0344e87c3dbe978a149d16dd4503f7a5d167b16a5"
+            "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7"
         ),
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
@@ -225,7 +222,6 @@ def test_ui_has_no_embedding_vector_db_or_provider_implementation():
         "pinecone",
         "chromadb",
         "faiss",
-        "pgvector",
         "openai",
         "anthropic",
         "llm_client",

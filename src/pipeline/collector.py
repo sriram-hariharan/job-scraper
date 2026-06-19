@@ -113,6 +113,8 @@ def _shadow_sidecar_pipeline_config_from_env() -> Dict[str, Any]:
 
 def _maybe_run_shadow_sidecar_after_application_priority(
     scored_jobs: List[Dict[str, Any]],
+    *,
+    vector_evidence_hook_payload: Dict[str, Any] | None = None,
 ) -> Dict[str, Any] | None:
     sidecar_config = _shadow_sidecar_pipeline_config_from_env()
     if not _truthy_env_value(
@@ -145,6 +147,7 @@ def _maybe_run_shadow_sidecar_after_application_priority(
                 "shadow_sidecar_call_site": "collector.application_priority",
                 "scored_job_count": len(scored_jobs),
             },
+            vector_evidence_hook_payload=vector_evidence_hook_payload,
             called_by_pipeline=True,
         )
         logger.info(
@@ -155,6 +158,66 @@ def _maybe_run_shadow_sidecar_after_application_priority(
     except Exception as exc:
         logger.warning(
             "Shadow sidecar hook failed non-blocking after application_priority: %s",
+            exc,
+        )
+        return None
+
+
+def _maybe_collect_vector_evidence_after_application_priority(
+    scored_jobs: List[Dict[str, Any]],
+    *,
+    enabled: bool | None = None,
+    vector_evidence_service: Any = None,
+) -> Dict[str, Any] | None:
+    hook_enabled = (
+        _truthy_env_value(
+            os.environ.get("APPLYLENS_PIPELINE_VECTOR_EVIDENCE_HOOK_ENABLED")
+        )
+        if enabled is None
+        else enabled is True
+    )
+    if not hook_enabled:
+        return None
+
+    try:
+        from src.agents.vector_evidence_pipeline_hook import (
+            run_vector_evidence_pipeline_hook,
+        )
+
+        source_job = dict(scored_jobs[0]) if scored_jobs else {}
+        job_id = str(
+            source_job.get("id")
+            or source_job.get("job_id")
+            or "application_priority_scored_jobs"
+        )
+        query_text = " ".join(
+            value
+            for value in (
+                str(source_job.get("title", "") or "").strip(),
+                str(source_job.get("company", "") or "").strip(),
+            )
+            if value
+        )
+        payload = run_vector_evidence_pipeline_hook(
+            enabled=True,
+            run_id=str(
+                os.environ.get("JOB_STACK_PIPELINE_RUN_ID", "") or "collector"
+            ),
+            job_id=job_id,
+            stage_name="post_final_scoring",
+            query_text=query_text,
+            job_payload=source_job,
+            vector_evidence_service=vector_evidence_service,
+        )
+        logger.info(
+            "Vector evidence advisory hook evaluated after application_priority: %s",
+            payload.get("status", "unknown"),
+        )
+        return payload
+    except Exception as exc:
+        logger.warning(
+            "Vector evidence advisory hook failed non-blocking after "
+            "application_priority: %s",
             exc,
         )
         return None
@@ -631,7 +694,13 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     scored_jobs = score_jobs(ai_jobs)
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
-    _maybe_run_shadow_sidecar_after_application_priority(scored_jobs)
+    vector_evidence_hook_payload = (
+        _maybe_collect_vector_evidence_after_application_priority(scored_jobs)
+    )
+    _maybe_run_shadow_sidecar_after_application_priority(
+        scored_jobs,
+        vector_evidence_hook_payload=vector_evidence_hook_payload,
+    )
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")

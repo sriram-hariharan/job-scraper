@@ -378,6 +378,19 @@ class VectorEvidenceRequest(BaseModel):
     top_k: int = 5
 
 
+class PgvectorExtensionProbeRequest(BaseModel):
+    extension_name: str = "vector"
+    requested_dimension: int | None = None
+    probe_context: dict[str, Any] = Field(default_factory=dict)
+
+
+class VectorEvidenceReadbackRequest(BaseModel):
+    enabled: bool = False
+    owner_user_id: str = ""
+    smoke_identifier: str = ""
+    connection_provider_enabled: bool = False
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -4338,6 +4351,110 @@ def vector_evidence(request: VectorEvidenceRequest):
         "api_route_added": True,
         "read_only": True,
         "advisory_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "safety_metadata": safety,
+    }
+
+
+@app.post("/api/pgvector-extension-probe")
+def pgvector_extension_probe(request: PgvectorExtensionProbeRequest):
+    response = services.pgvector_extension_probe_service_helper_payload(
+        extension_name=request.extension_name,
+        requested_dimension=request.requested_dimension,
+        probe_context=request.probe_context,
+    )
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "pgvector_extension_probe": True,
+            "pgvector_probe_service_helper": True,
+            "pgvector_probe_api": True,
+            "pgvector_installed_by_app": False,
+            "schema_created": False,
+            "migration_created": False,
+            "embeddings_created": False,
+            "provider_calls_made": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+        }
+    )
+    safety.setdefault("vector_db_connected", False)
+    safety.setdefault("did_read_database", False)
+    return {
+        **response,
+        "api_surface": "pgvector_extension_probe",
+        "pgvector_probe_api": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "safety_metadata": safety,
+    }
+
+
+@app.post("/api/vector-evidence-readback")
+def vector_evidence_readback(request: VectorEvidenceReadbackRequest):
+    response = services.vector_evidence_readback_service_helper_payload(
+        enabled=request.enabled,
+        owner_user_id=request.owner_user_id,
+        smoke_identifier=request.smoke_identifier,
+        connection_provider_enabled=request.connection_provider_enabled,
+    )
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "vector_evidence_readback_api": True,
+            "vector_evidence_readback_service_helper": True,
+            "operator_triggered_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "embeddings_created": False,
+            "provider_calls_made": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+        }
+    )
+    safety.setdefault("did_read_database", False)
+    return {
+        **response,
+        "api_surface": "vector_evidence_readback",
+        "vector_evidence_readback_api": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
+        "operator_triggered_only": True,
         "ui_action_added": False,
         "pipeline_stage_added": False,
         "safety_metadata": safety,

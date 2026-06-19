@@ -34,7 +34,11 @@ def _text_list(value: Any) -> list[str]:
     ]
 
 
-def evaluate_pipeline_agent_review_packet_safety() -> dict[str, bool]:
+def evaluate_pipeline_agent_review_packet_safety(
+    *,
+    vector_evidence_context_available: bool = False,
+    vector_evidence_context_attached: bool = False,
+) -> dict[str, bool]:
     return {
         "read_only": True,
         "advisory_only": True,
@@ -59,6 +63,19 @@ def evaluate_pipeline_agent_review_packet_safety() -> dict[str, bool]:
         "ui_action_added": False,
         "auto_apply_enabled": False,
         "mutation_authorized": False,
+        "vector_evidence_context_available": bool(
+            vector_evidence_context_available
+        ),
+        "vector_evidence_context_attached": bool(
+            vector_evidence_context_attached
+        ),
+        "vector_evidence_context_shadow_only": True,
+        "vector_evidence_used_for_scoring": False,
+        "vector_evidence_used_for_ranking": False,
+        "vector_evidence_used_for_queue": False,
+        "vector_evidence_used_for_application": False,
+        "provider_calls_made": False,
+        "embeddings_created": False,
     }
 
 
@@ -141,6 +158,33 @@ def _trace_context_summary(*values: Any) -> dict[str, Any]:
         "source_deterministic_reason_codes": _text_list(
             _first_value(sources, "source_deterministic_reason_codes")
         ),
+    }
+
+
+def _vector_evidence_context(*values: Any) -> dict[str, Any]:
+    sources = _trace_sources(*values)
+    context = _plain_dict(_first_value(sources, "vector_evidence_context"))
+    safety = _plain_dict(context.get("safety_metadata"))
+    if not context or safety.get("vector_evidence_context_attached") is not True:
+        return {}
+    evidence = _plain_dict(context.get("evidence_context"))
+    return {
+        "status": _clean_text(context.get("status")),
+        "hook_surface": _clean_text(context.get("hook_surface")),
+        "run_id": _clean_text(context.get("run_id")),
+        "job_id": _clean_text(context.get("job_id")),
+        "stage_name": _clean_text(context.get("stage_name")),
+        "evidence_context": evidence,
+        "read_only": True,
+        "advisory_only": True,
+        "shadow_only": True,
+        "vector_evidence_context_shadow_only": True,
+        "vector_evidence_used_for_scoring": False,
+        "vector_evidence_used_for_ranking": False,
+        "vector_evidence_used_for_queue": False,
+        "vector_evidence_used_for_application": False,
+        "provider_calls_made": False,
+        "embeddings_created": False,
     }
 
 
@@ -290,6 +334,14 @@ def build_pipeline_agent_review_packet_payload(
     )
     readiness_status = _clean_text(readiness.get("readiness_status"))
     recommended_action = _recommended_operator_action(readiness)
+    vector_evidence_context = _vector_evidence_context(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
     return {
         "schema_version": shadow_sidecar.SCHEMA_VERSION,
         "packet_status": _packet_status(readiness_status),
@@ -321,6 +373,7 @@ def build_pipeline_agent_review_packet_payload(
             trace_readback_payload,
             readback_source,
         ),
+        "vector_evidence_context": vector_evidence_context,
         "overlay_readback_summary": {
             "readback_status": _clean_text(readback.get("readback_status")),
             "overlay_found": bool(
@@ -348,7 +401,10 @@ def build_pipeline_agent_review_packet_payload(
         "requires_live_database": False,
         "live_provider_backed_automated_agents": 0,
         "mutation_authorized_agents": 0,
-        "safety_metadata": evaluate_pipeline_agent_review_packet_safety(),
+        "safety_metadata": evaluate_pipeline_agent_review_packet_safety(
+            vector_evidence_context_available=bool(vector_evidence_context),
+            vector_evidence_context_attached=bool(vector_evidence_context),
+        ),
     }
 
 

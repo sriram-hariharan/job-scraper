@@ -51,7 +51,10 @@ def _config_bool(config: dict[str, Any], *keys: str, default: bool = False) -> b
 
 
 def evaluate_shadow_sidecar_pipeline_hook_safety(
-    *, called_by_pipeline: bool = False
+    *,
+    called_by_pipeline: bool = False,
+    vector_evidence_context_available: bool = False,
+    vector_evidence_context_attached: bool = False,
 ) -> dict[str, bool]:
     return {
         "read_only": True,
@@ -71,6 +74,19 @@ def evaluate_shadow_sidecar_pipeline_hook_safety(
         "did_submit_application": False,
         "pipeline_wiring_added": False,
         "auto_apply_enabled": False,
+        "vector_evidence_context_available": bool(
+            vector_evidence_context_available
+        ),
+        "vector_evidence_context_attached": bool(
+            vector_evidence_context_attached
+        ),
+        "vector_evidence_context_shadow_only": True,
+        "vector_evidence_used_for_scoring": False,
+        "vector_evidence_used_for_ranking": False,
+        "vector_evidence_used_for_queue": False,
+        "vector_evidence_used_for_application": False,
+        "provider_calls_made": False,
+        "embeddings_created": False,
     }
 
 
@@ -470,6 +486,49 @@ def _approval_request_context_from_hook_payload(
     )
 
 
+def _advisory_vector_evidence_context(
+    vector_evidence_hook_payload: Any,
+) -> dict[str, Any]:
+    source = _plain_dict(vector_evidence_hook_payload)
+    source_safety = _plain_dict(source.get("safety_metadata"))
+    evidence_context = _plain_dict(source.get("evidence_context"))
+    context_available = bool(
+        evidence_context
+        and source_safety.get("vector_evidence_context_attached") is True
+    )
+    if not context_available:
+        return {}
+    return {
+        "status": _clean_text(source.get("status")),
+        "hook_surface": _clean_text(source.get("hook_surface")),
+        "run_id": _clean_text(source.get("run_id")),
+        "job_id": _clean_text(source.get("job_id")),
+        "stage_name": _clean_text(source.get("stage_name")),
+        "evidence_context": evidence_context,
+        "vector_evidence_context_shadow_only": True,
+        "vector_evidence_used_for_scoring": False,
+        "vector_evidence_used_for_ranking": False,
+        "vector_evidence_used_for_queue": False,
+        "vector_evidence_used_for_application": False,
+        "provider_calls_made": False,
+        "embeddings_created": False,
+        "safety_metadata": {
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+            "vector_evidence_context_available": True,
+            "vector_evidence_context_attached": True,
+            "vector_evidence_context_shadow_only": True,
+            "vector_evidence_used_for_scoring": False,
+            "vector_evidence_used_for_ranking": False,
+            "vector_evidence_used_for_queue": False,
+            "vector_evidence_used_for_application": False,
+            "provider_calls_made": False,
+            "embeddings_created": False,
+        },
+    }
+
+
 def _safe_agent_recommendation_overlay_auto_generation_payload(
     hook_payload: dict[str, Any],
 ) -> dict[str, Any]:
@@ -569,6 +628,7 @@ def _base_hook_payload(
     observability_payload: dict[str, Any] | None = None,
     next_safe_step: str = "",
     trace_persistence_writer: Any = None,
+    existing_trace_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     preview = deepcopy(preview_payload or {})
     chain = deepcopy(chain_payload) if isinstance(chain_payload, dict) else {}
@@ -598,7 +658,7 @@ def _base_hook_payload(
         "source_deterministic_reason_codes": list(
             preview.get("source_deterministic_reason_codes") or []
         ),
-        "existing_trace_context": deepcopy(preview.get("existing_trace_context") or {}),
+        "existing_trace_context": deepcopy(existing_trace_context or {}),
         "chain_payload": chain,
         "observability_payload": observability,
         "sidecar_config": deepcopy(preview.get("sidecar_config") or {}),
@@ -610,13 +670,19 @@ def _base_hook_payload(
         "next_safe_step": _clean_text(next_safe_step)
         or _clean_text(preview.get("next_safe_step")),
         "provider_calls_disabled_in_tests": True,
-        "safety_metadata": evaluate_shadow_sidecar_pipeline_hook_safety(
-            called_by_pipeline=called_by_pipeline
-        ),
+        "safety_metadata": {},
         "default_off_pipeline_hook_call_sites": 1 if called_by_pipeline else 0,
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }
+    vector_context = _plain_dict(
+        payload["existing_trace_context"].get("vector_evidence_context")
+    )
+    payload["safety_metadata"] = evaluate_shadow_sidecar_pipeline_hook_safety(
+        called_by_pipeline=called_by_pipeline,
+        vector_evidence_context_available=bool(vector_context),
+        vector_evidence_context_attached=bool(vector_context),
+    )
     payload["agent_recommendation_overlay_auto_generation"] = (
         _safe_agent_recommendation_overlay_auto_generation_payload(payload)
     )
@@ -658,9 +724,17 @@ def run_shadow_sidecar_pipeline_hook(
     job_payload: dict[str, Any] | None = None,
     resume_profile_payload: dict[str, Any] | None = None,
     existing_trace_context: dict[str, Any] | None = None,
+    vector_evidence_hook_payload: dict[str, Any] | None = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
+    trace_context = _snapshot(existing_trace_context or {})
+    vector_evidence_context = _advisory_vector_evidence_context(
+        vector_evidence_hook_payload
+    )
+    if vector_evidence_context:
+        trace_context["vector_evidence_context"] = vector_evidence_context
+
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
         batch_id=batch_id,
@@ -674,7 +748,7 @@ def run_shadow_sidecar_pipeline_hook(
         sidecar_config=_snapshot(sidecar_config or {}),
         job_payload=_snapshot(job_payload or {}),
         resume_profile_payload=_snapshot(resume_profile_payload or {}),
-        existing_trace_context=_snapshot(existing_trace_context or {}),
+        existing_trace_context=_snapshot(trace_context),
     )
     if preview.get("hook_preview_status") != "hook_ready_for_shadow_sidecar":
         return _base_hook_payload(
@@ -684,6 +758,7 @@ def run_shadow_sidecar_pipeline_hook(
             called_by_pipeline=called_by_pipeline,
             trace_persistence_writer=trace_persistence_writer,
             next_safe_step=_clean_text(preview.get("next_safe_step")),
+            existing_trace_context=trace_context,
         )
 
     try:
@@ -699,7 +774,7 @@ def run_shadow_sidecar_pipeline_hook(
             source_deterministic_reason_codes=source_deterministic_reason_codes,
             job_payload=_snapshot(job_payload or {}),
             resume_profile_payload=_snapshot(resume_profile_payload or {}),
-            existing_trace_context=_snapshot(existing_trace_context or {}),
+            existing_trace_context=_snapshot(trace_context),
             sidecar_config=_snapshot(sidecar_config or {}),
             agent_name="shadow_sidecar_chain",
         )
@@ -718,6 +793,7 @@ def run_shadow_sidecar_pipeline_hook(
             chain_payload=chain_payload,
             observability_payload=observability,
             next_safe_step="inspect_shadow_sidecar_observability",
+            existing_trace_context=trace_context,
         )
     except Exception as exc:
         return _base_hook_payload(
@@ -736,6 +812,7 @@ def run_shadow_sidecar_pipeline_hook(
                 },
             },
             next_safe_step="preserve_deterministic_pipeline_result",
+            existing_trace_context=trace_context,
         )
 
 

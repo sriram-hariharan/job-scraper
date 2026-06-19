@@ -176,6 +176,8 @@ def _bool_value(value: Any, *, default: bool = False) -> bool:
 
 
 def _config_bool(config: dict[str, Any], *keys: str, default: bool = False) -> bool:
+    if not isinstance(config, dict):
+        config = {}
     for key in keys:
         if key in config:
             return _bool_value(config.get(key), default=default)
@@ -203,6 +205,8 @@ def _is_critic_guardrail_agent(agent_name: str) -> bool:
 
 
 def _agent_enabled(config: dict[str, Any], agent_name: str) -> bool:
+    if not isinstance(config, dict):
+        config = {}
     agent_flag_name = _agent_flag_name(agent_name)
     explicit = config.get("per_agent_enabled")
     if isinstance(explicit, dict):
@@ -216,7 +220,7 @@ def _agent_enabled(config: dict[str, Any], agent_name: str) -> bool:
 
 def _sidecar_config(config: dict[str, Any] | None) -> dict[str, Any]:
     source = deepcopy(config) if isinstance(config, dict) else {}
-    return {
+    payload = {
         **source,
         "global_flag_name": GLOBAL_SIDECAR_FLAG,
         "jd_intelligence_flag_name": JD_INTELLIGENCE_FLAG,
@@ -226,6 +230,7 @@ def _sidecar_config(config: dict[str, Any] | None) -> dict[str, Any]:
         "provider_calls_disabled_in_tests": True,
         "pipeline_wiring_added": False,
     }
+    return payload
 
 
 def _plain_dict(value: Any) -> dict[str, Any]:
@@ -434,8 +439,12 @@ def _critic_blocking_findings(source: dict[str, Any]) -> list[str]:
     )
 
 
-def evaluate_shadow_sidecar_safety() -> dict[str, bool]:
-    return {
+def evaluate_shadow_sidecar_safety(
+    *,
+    vector_evidence_input_available: bool = False,
+    vector_evidence_input_attached: bool = False,
+) -> dict[str, bool]:
+    payload = {
         "read_only": True,
         "shadow_only": True,
         "manual_review_required": True,
@@ -451,7 +460,21 @@ def evaluate_shadow_sidecar_safety() -> dict[str, bool]:
         "did_submit_application": False,
         "pipeline_wiring_added": False,
         "auto_apply_enabled": False,
+        "vector_evidence_input_available": bool(
+            vector_evidence_input_available
+        ),
+        "vector_evidence_input_attached": bool(
+            vector_evidence_input_attached
+        ),
+        "vector_evidence_input_shadow_only": True,
+        "vector_evidence_used_for_scoring": False,
+        "vector_evidence_used_for_ranking": False,
+        "vector_evidence_used_for_queue": False,
+        "vector_evidence_used_for_application": False,
+        "provider_calls_made": False,
+        "embeddings_created": False,
     }
+    return payload
 
 
 def evaluate_shadow_sidecar_chain_safety() -> dict[str, bool]:
@@ -468,6 +491,36 @@ def evaluate_shadow_sidecar_pipeline_hook_safety() -> dict[str, bool]:
     safety = evaluate_shadow_sidecar_safety()
     safety["hook_preview_only"] = True
     return safety
+
+
+def _vector_evidence_input(
+    existing_trace_context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    trace_context = _plain_dict(existing_trace_context)
+    context = _plain_dict(trace_context.get("vector_evidence_context"))
+    safety = _plain_dict(context.get("safety_metadata"))
+    if not context or safety.get("vector_evidence_context_attached") is not True:
+        return {}
+    return {
+        "status": _clean_text(context.get("status")),
+        "hook_surface": _clean_text(context.get("hook_surface")),
+        "run_id": _clean_text(context.get("run_id")),
+        "job_id": _clean_text(context.get("job_id")),
+        "stage_name": _clean_text(context.get("stage_name")),
+        "evidence_context": _plain_dict(context.get("evidence_context")),
+        "read_only": True,
+        "advisory_only": True,
+        "shadow_only": True,
+        "vector_evidence_input_available": True,
+        "vector_evidence_input_attached": True,
+        "vector_evidence_input_shadow_only": True,
+        "vector_evidence_used_for_scoring": False,
+        "vector_evidence_used_for_ranking": False,
+        "vector_evidence_used_for_queue": False,
+        "vector_evidence_used_for_application": False,
+        "provider_calls_made": False,
+        "embeddings_created": False,
+    }
 
 
 def build_shadow_sidecar_input_payload(
@@ -490,7 +543,8 @@ def build_shadow_sidecar_input_payload(
     completed_at_utc: str = "",
     duration_ms: int = 0,
 ) -> dict[str, Any]:
-    return {
+    trace_context = _snapshot(existing_trace_context or {})
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "run_id": _clean_text(run_id),
         "batch_id": _clean_text(batch_id),
@@ -505,13 +559,17 @@ def build_shadow_sidecar_input_payload(
         ),
         "job_payload": _snapshot(job_payload or {}),
         "resume_profile_payload": _snapshot(resume_profile_payload or {}),
-        "existing_trace_context": _snapshot(existing_trace_context or {}),
+        "existing_trace_context": trace_context,
         "sidecar_config": _sidecar_config(sidecar_config),
         "agent_name": _clean_text(agent_name) or "JD Intelligence Agent",
         "started_at_utc": _clean_text(started_at_utc),
         "completed_at_utc": _clean_text(completed_at_utc),
         "duration_ms": int(duration_ms or 0),
     }
+    vector_input = _vector_evidence_input(trace_context)
+    if vector_input:
+        payload["vector_evidence_input"] = vector_input
+    return payload
 
 
 def build_shadow_sidecar_trace_payload(
@@ -537,6 +595,7 @@ def build_shadow_sidecar_trace_payload(
         error_type = _clean_text(error_type) or "invalid_sidecar_stage_status"
     reason_codes = _text_list(agent_reason_codes)
     blocking_findings = _text_list(agent_blocking_findings)
+    vector_input = _plain_dict(source.get("vector_evidence_input"))
     health_status = "healthy" if status == STATUS_COMPLETED_SHADOW else "warning"
     readiness_status = "ready" if status == STATUS_COMPLETED_SHADOW else "blocked"
     trace_bundle = {
@@ -569,7 +628,7 @@ def build_shadow_sidecar_trace_payload(
         "agent_risk_flags": _text_list(agent_risk_flags),
         "fallback_used": bool(fallback_used),
     }
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "run_id": _clean_text(source.get("run_id")),
         "batch_id": _clean_text(source.get("batch_id")),
@@ -612,8 +671,14 @@ def build_shadow_sidecar_trace_payload(
         "error_type": _clean_text(error_type),
         "error_message": _clean_text(error_message),
         "sidecar_config": config,
-        "safety_metadata": evaluate_shadow_sidecar_safety(),
+        "safety_metadata": evaluate_shadow_sidecar_safety(
+            vector_evidence_input_available=bool(vector_input),
+            vector_evidence_input_attached=bool(vector_input),
+        ),
     }
+    if vector_input:
+        payload["vector_evidence_input"] = vector_input
+    return payload
 
 
 def build_shadow_sidecar_fallback_payload(

@@ -118,11 +118,10 @@ def test_service_helper_returns_safe_not_found_for_missing_overlay():
 def test_service_helper_slice_has_no_provider_storage_or_mutation_calls():
     source = Path("src/app/services.py").read_text(encoding="utf-8")
     start = source.index(f"def {HELPER_NAME}(")
-    end = source.index(
-        "\n\nHUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_FLAG",
-        start,
-    )
-    helper_source = source[start:end]
+    next_function = source.find("\ndef ", start + 1)
+    if next_function == -1:
+        next_function = len(source)
+    helper_source = source[start:next_function]
     forbidden = [
         "@app.",
         "router.",

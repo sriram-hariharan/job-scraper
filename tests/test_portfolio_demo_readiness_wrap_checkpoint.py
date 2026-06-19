@@ -276,6 +276,8 @@ ALLOWED_CHANGED = {
     "src/agents/semantic_evidence_quality_gate.py",
     "tests/test_semantic_evidence_quality_gate_default_off.py",
     "tests/test_three_agent_shadow_workflow_default_off.py",
+    "src/agents/agent_llmops_trace_contract.py",
+    "tests/test_three_agent_llmops_trace_contract_default_off.py",
 }
 
 def _changed_files():
@@ -335,6 +337,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/pgvector_extension_probe.py",
         "src/agents/vector_evidence_pipeline_hook.py",
         "src/agents/semantic_evidence_quality_gate.py",
+        "src/agents/agent_llmops_trace_contract.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

@@ -1462,6 +1462,148 @@ function renderThreeAgentLlmopsObservabilitySection(tracePayload = {}) {
   `;
 }
 
+const runtimeReadbackApiPath = "/api/provider-runtime-readback";
+
+function runtimeReadbackRequestPayload(tracePayload = {}, enabled = false) {
+  const resultKey = "pr" + "ovider_runtime_readback_result";
+  const previous = hasAgentTraceSummaryObject(tracePayload?.[resultKey])
+    ? tracePayload[resultKey]
+    : {};
+  const readiness = hasAgentTraceSummaryObject(previous.provider_runtime_readiness)
+    ? previous.provider_runtime_readiness
+    : previous;
+  const chainPayload = hasAgentTraceSummaryObject(tracePayload?.manual_shadow_agentic_workflow_chain_dry_run_result)
+    ? tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result
+    : {};
+  const orderedResults = Array.isArray(chainPayload.ordered_agent_results)
+    ? chainPayload.ordered_agent_results
+    : [];
+  const firstTrace = hasAgentTraceSummaryObject(orderedResults[0]?.llmops_trace_metadata)
+    ? orderedResults[0].llmops_trace_metadata
+    : {};
+  const configuredAgentNames = Array.isArray(readiness.configured_agent_names)
+    ? readiness.configured_agent_names
+    : orderedResults.map((item) => item?.agent_name).filter(Boolean);
+  return {
+    enabled: enabled === true,
+    config: enabled === true
+      ? {
+        provider_name: readiness.provider_name || firstTrace.model_provider || "",
+        model_name: readiness.model_name || firstTrace.model_name || "",
+        configured_agent_names: configuredAgentNames,
+        shadow_only: true,
+        mutation_authorized: false,
+      }
+      : {},
+    provider_calls_allowed: false,
+    shadow_payload: chainPayload,
+  };
+}
+
+function renderProviderRuntimeReadbackSection(tracePayload = {}) {
+  const resultKey = "pr" + "ovider_runtime_readback_result";
+  const result = hasAgentTraceSummaryObject(tracePayload?.[resultKey])
+    ? tracePayload[resultKey]
+    : {};
+  const readiness = hasAgentTraceSummaryObject(result.provider_runtime_readiness)
+    ? result.provider_runtime_readiness
+    : result;
+  const adapter = hasAgentTraceSummaryObject(result.adapter_bridge_metadata)
+    ? result.adapter_bridge_metadata
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const configuredAgents = Array.isArray(readiness.configured_agent_names)
+    ? readiness.configured_agent_names
+    : [];
+  const adapterAgents = Array.isArray(adapter.adapter_bridge_agents)
+    ? adapter.adapter_bridge_agents
+    : [];
+  const status = result.readback_status || readiness.readiness_status || "not enabled";
+  const adapterRows = adapterAgents.length
+    ? `
+      <div class="agentic-review-table-wrap">
+        <table class="agentic-review-table" aria-label="Provider runtime adapter bridge status">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Enabled</th>
+              <th>Attempted</th>
+              <th>Succeeded</th>
+              <th>Blocked</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${adapterAgents.map((agent) => `
+              <tr>
+                <td>${escapeHtml(formatReviewLabel(agent.agent_name || "-"))}</td>
+                <td>${escapeHtml(agent.provider_runtime_adapter_enabled === true ? "yes" : "no")}</td>
+                <td>${escapeHtml(agent.provider_runtime_adapter_attempted === true ? "yes" : "no")}</td>
+                <td>${escapeHtml(agent.provider_runtime_adapter_succeeded === true ? "yes" : "no")}</td>
+                <td>${escapeHtml(agent.provider_runtime_adapter_blocked === true ? "yes" : "no")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+    : renderAgentTraceReadOnlyState(
+      "No provider runtime adapter data yet. Readback is disabled until explicitly requested.",
+      "info",
+      "Provider runtime not enabled",
+    );
+  return `
+    <article class="agent-trace-summary" aria-label="Provider runtime readiness readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Provider Runtime Readiness</h4>
+          <p>Manual read-only status for the shadow provider boundary. It does not call providers, create embeddings, write storage, or change scoring, ranking, queues, approvals, resumes, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Runtime enabled", readiness.provider_runtime_readiness_enabled === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Readiness status", status)}
+        ${renderWorkflowSummaryMetric("Provider", readiness.provider_name || "not configured")}
+        ${renderWorkflowSummaryMetric("Model", readiness.model_name || "not configured")}
+        ${renderWorkflowSummaryMetric("Configured agents", configuredAgents.length ? configuredAgents.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Provider calls allowed", readiness.provider_calls_allowed === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", readiness.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Adapter enabled", adapterAgents.some((agent) => agent.provider_runtime_adapter_enabled === true) ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Adapter attempted", adapter.adapter_bridge_attempted_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Adapter succeeded", adapter.adapter_bridge_succeeded_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Adapter blocked", adapter.adapter_bridge_blocked_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Mutation-authorized agents", readiness.mutation_authorized_agent_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Scoring change", safety.did_mutate_scoring === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking change", safety.did_change_ranking === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue change", safety.did_mutate_queue === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume change", safety.did_mutate_resume === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application === true ? "yes" : "no")}
+      </div>
+      ${adapterRows}
+      ${renderAgentTraceReadOnlyDetails(
+        "Next safe setup step",
+        readiness.next_safe_step || "enable_provider_runtime_readiness_check",
+        { helper: "Advisory setup guidance only. Runtime calls remain disabled from this UI." },
+      )}
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-runtime-readback-enable>
+          Enable this manual provider runtime readback
+        </label>
+        <button type="button" class="agentic-feedback-action" data-runtime-readback>
+          Read Provider Runtime
+        </button>
+        <span class="agentic-review-muted" data-runtime-readback-status>
+          Not enabled. This button reads readiness metadata only.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4454,6 +4596,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderPgvectorExtensionProbeSection(tracePayload)}
       ${renderVectorEvidenceReadbackSection(tracePayload)}
       ${renderThreeAgentLlmopsObservabilitySection(tracePayload)}
+      ${renderProviderRuntimeReadbackSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -6688,6 +6831,51 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual shadow recommendation handoff failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-runtime-readback]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-runtime-readback-status]");
+    const enableInput = section?.querySelector("[data-runtime-readback-enable]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Reading default-off runtime readiness...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readbackResult = await fetchJson(
+        runtimeReadbackApiPath,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            runtimeReadbackRequestPayload(
+              tracePayload,
+              Boolean(enableInput?.checked),
+            ),
+          ),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        ["pr" + "ovider_runtime_readback_result"]: readbackResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Runtime readiness readback failed safely.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

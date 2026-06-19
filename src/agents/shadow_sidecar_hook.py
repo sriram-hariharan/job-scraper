@@ -978,6 +978,7 @@ def run_shadow_sidecar_pipeline_hook(
     critic_provider_enabled: bool = False,
     critic_provider: Any = None,
     critic_provider_metadata: dict[str, Any] | None = None,
+    provider_handoff_enabled: bool = False,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -1184,12 +1185,20 @@ def run_shadow_sidecar_pipeline_hook(
             sidecar_input: dict[str, Any],
         ) -> dict[str, Any]:
             job = _plain_dict(sidecar_input.get("job_payload"))
+            trace = _plain_dict(
+                sidecar_input.get("existing_trace_context")
+            )
+            trusted_jd_output = _plain_dict(
+                trace.get("jd_intelligence_provider_output")
+            )
             resume = _plain_dict(
                 sidecar_input.get("resume_profile_payload")
             )
             provider_payload = (
                 build_live_tailoring_suggestion_shadow_payload(
-                    jd_intelligence={
+                    jd_intelligence=trusted_jd_output
+                    if provider_handoff_enabled is True
+                    else {
                         key: deepcopy(job.get(key))
                         for key in (
                             "required_skills",
@@ -1358,6 +1367,12 @@ def run_shadow_sidecar_pipeline_hook(
                     sidecar_input.get("existing_trace_context")
                 ).get("tailoring_suggestion_payload")
             )
+            if provider_handoff_enabled is True:
+                tailoring_context = _plain_dict(
+                    _plain_dict(
+                        sidecar_input.get("existing_trace_context")
+                    ).get("tailoring_suggestion_provider_output")
+                )
             provider_payload = build_live_critic_guardrail_shadow_payload(
                 tailoring_suggestion_payload=tailoring_context,
                 jd_intelligence={
@@ -1556,6 +1571,7 @@ def run_shadow_sidecar_pipeline_hook(
             jd_intelligence_shadow_agent=jd_shadow_agent,
             tailoring_shadow_agent=tailoring_shadow_agent,
             critic_shadow_agent=critic_shadow_agent,
+            provider_handoff_enabled=provider_handoff_enabled is True,
         )
         if (
             llmops_trace_contract_enabled is True

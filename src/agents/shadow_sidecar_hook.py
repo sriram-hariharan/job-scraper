@@ -867,6 +867,17 @@ def _base_hook_payload(
     tailoring_safety = _plain_dict(
         tailoring_result.get("safety_metadata")
     )
+    critic_result = next(
+        (
+            result
+            for result in chain.get("ordered_agent_results", [])
+            if isinstance(result, dict)
+            and _clean_text(result.get("agent_name"))
+            == "critic_guardrail"
+        ),
+        {},
+    )
+    critic_safety = _plain_dict(critic_result.get("safety_metadata"))
     payload["safety_metadata"].update(
         {
             "jd_intelligence_provider_enabled": bool(
@@ -892,6 +903,18 @@ def _base_hook_payload(
             ),
             "tailoring_schema_validated": bool(
                 tailoring_safety.get("tailoring_schema_validated")
+            ),
+            "critic_provider_enabled": bool(
+                critic_safety.get("critic_provider_enabled")
+            ),
+            "critic_provider_attempted": bool(
+                critic_safety.get("critic_provider_attempted")
+            ),
+            "critic_provider_succeeded": bool(
+                critic_safety.get("critic_provider_succeeded")
+            ),
+            "critic_schema_validated": bool(
+                critic_safety.get("critic_schema_validated")
             ),
         }
     )
@@ -952,6 +975,9 @@ def run_shadow_sidecar_pipeline_hook(
     tailoring_provider_enabled: bool = False,
     tailoring_provider: Any = None,
     tailoring_provider_metadata: dict[str, Any] | None = None,
+    critic_provider_enabled: bool = False,
+    critic_provider: Any = None,
+    critic_provider_metadata: dict[str, Any] | None = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -990,6 +1016,7 @@ def run_shadow_sidecar_pipeline_hook(
         and (
             jd_intelligence_provider_enabled is True
             or tailoring_provider_enabled is True
+            or critic_provider_enabled is True
         )
     ):
         effective_sidecar_config["provider_execution_allowed"] = True
@@ -1310,6 +1337,177 @@ def run_shadow_sidecar_pipeline_hook(
                 "agent_output_payload": provider_payload,
             }
 
+    critic_shadow_agent = None
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and critic_provider_enabled is True
+    ):
+        from src.agents.critic_agent import (
+            build_live_critic_guardrail_shadow_payload,
+        )
+
+        def critic_shadow_agent(
+            sidecar_input: dict[str, Any],
+        ) -> dict[str, Any]:
+            job = _plain_dict(sidecar_input.get("job_payload"))
+            resume = _plain_dict(
+                sidecar_input.get("resume_profile_payload")
+            )
+            tailoring_context = _plain_dict(
+                _plain_dict(
+                    sidecar_input.get("existing_trace_context")
+                ).get("tailoring_suggestion_payload")
+            )
+            provider_payload = build_live_critic_guardrail_shadow_payload(
+                tailoring_suggestion_payload=tailoring_context,
+                jd_intelligence={
+                    key: deepcopy(job.get(key))
+                    for key in (
+                        "required_skills",
+                        "preferred_skills",
+                        "required_tools",
+                        "preferred_tools",
+                        "workflows",
+                        "methods",
+                        "business_contexts",
+                        "stakeholder_contexts",
+                        "ownership_signals",
+                        "seniority_signals",
+                    )
+                },
+                resume_profile=resume,
+                context_id=sidecar_input.get("run_id"),
+                job_id=sidecar_input.get("job_id"),
+                adapter=critic_provider,
+                feature_enabled=True,
+            )
+            validation_status = _clean_text(
+                provider_payload.get("validation_status")
+            )
+            provider_called = bool(
+                _plain_dict(
+                    provider_payload.get("safety_metadata")
+                ).get("did_call_llm")
+            )
+            succeeded = validation_status == "valid"
+            supplied_metadata = _plain_dict(critic_provider_metadata)
+            token_usage = _plain_dict(
+                provider_payload.get("token_usage")
+            )
+            cost = _plain_dict(provider_payload.get("cost"))
+            metadata = {
+                "model_provider": _clean_text(
+                    provider_payload.get("model_provider")
+                ),
+                "model_name": _clean_text(
+                    provider_payload.get("model_name")
+                ),
+                "prompt_version": _clean_text(
+                    provider_payload.get("prompt_version")
+                ),
+                "latency_ms": int(
+                    provider_payload.get("latency_ms") or 0
+                ),
+                "fallback_used": bool(
+                    provider_payload.get("fallback_used")
+                    or not succeeded
+                ),
+                "schema_validation_status": validation_status,
+                "error_type": (
+                    _clean_text(
+                        (provider_payload.get("validation_errors") or [""])[0]
+                    )
+                    if validation_status not in {"valid", ""}
+                    else ""
+                ),
+                "provider_call_made": provider_called,
+            }
+            metadata.update(supplied_metadata)
+            metadata.update(
+                {
+                    "input_tokens": int(
+                        metadata.get("input_tokens")
+                        or token_usage.get("input_token_count")
+                        or token_usage.get("prompt_tokens")
+                        or 0
+                    ),
+                    "output_tokens": int(
+                        metadata.get("output_tokens")
+                        or token_usage.get("output_token_count")
+                        or token_usage.get("completion_tokens")
+                        or 0
+                    ),
+                    "estimated_cost": float(
+                        metadata.get("estimated_cost")
+                        or cost.get("estimated_cost")
+                        or cost.get("usd")
+                        or 0
+                    ),
+                    "retry_count": int(
+                        metadata.get("retry_count") or 0
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = metadata
+            provider_payload["fallback_used"] = bool(
+                provider_payload.get("fallback_used") or not succeeded
+            )
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(provider_payload.get("safety_metadata")),
+                "critic_provider_enabled": True,
+                "critic_provider_attempted": provider_called,
+                "critic_provider_succeeded": succeeded,
+                "critic_schema_validated": succeeded,
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": float(
+                    provider_payload.get("confidence") or 0
+                ),
+                "agent_reason_codes": list(
+                    provider_payload.get("reason_codes") or []
+                )
+                + list(provider_payload.get("validation_errors") or []),
+                "agent_evidence_refs": [
+                    f"critic_provider.decision_{index + 1}"
+                    for index in range(
+                        sum(
+                            len(provider_payload.get(field, []) or [])
+                            for field in (
+                                "approved_suggestions",
+                                "downgraded_suggestions",
+                                "rejected_suggestions",
+                            )
+                        )
+                    )
+                ],
+                "agent_risk_flags": list(
+                    provider_payload.get("unsupported_claim_risks") or []
+                )
+                + list(provider_payload.get("ats_risks") or [])
+                + list(provider_payload.get("readability_risks") or []),
+                "agent_blocking_findings": list(
+                    provider_payload.get("evidence_gaps") or []
+                ),
+                "agent_output_payload": provider_payload,
+            }
+
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
         batch_id=batch_id,
@@ -1357,11 +1555,13 @@ def run_shadow_sidecar_pipeline_hook(
             sidecar_input=sidecar_input,
             jd_intelligence_shadow_agent=jd_shadow_agent,
             tailoring_shadow_agent=tailoring_shadow_agent,
+            critic_shadow_agent=critic_shadow_agent,
         )
         if (
             llmops_trace_contract_enabled is True
             or jd_intelligence_provider_enabled is True
             or tailoring_provider_enabled is True
+            or critic_provider_enabled is True
         ):
             trace_contract = llmops_trace_contract_helper
             if trace_contract is None:

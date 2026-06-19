@@ -45,6 +45,8 @@ def _agent_trace_metadata(
 ) -> dict[str, Any]:
     agent_name = _clean_text(result.get("agent_name"))
     defaults = DEFAULT_AGENT_METADATA.get(agent_name, {})
+    result_metadata = _plain_dict(result.get("provider_metadata"))
+    supplied = {**result_metadata, **supplied}
     latency_ms = supplied.get("latency_ms", 0) or 0
     metadata = llmops.build_llmops_metadata(
         agent_name=agent_name,
@@ -92,7 +94,9 @@ def _agent_trace_metadata(
             "trace_contract_version": TRACE_CONTRACT_VERSION,
             "input_tokens": metadata["input_token_count"],
             "output_tokens": metadata["output_token_count"],
-            "provider_call_made": False,
+            "provider_call_made": bool(
+                supplied.get("provider_call_made")
+            ),
         }
     )
     return metadata
@@ -104,13 +108,14 @@ def three_agent_llmops_trace_safety_metadata(
     token_usage_recorded: bool = False,
     cost_recorded: bool = False,
     latency_recorded: bool = False,
+    provider_calls_made: bool = False,
 ) -> dict[str, bool]:
     return {
         "read_only": True,
         "advisory_only": True,
         "shadow_only": True,
         "llmops_trace_contract_enabled": bool(enabled),
-        "provider_calls_made": False,
+        "provider_calls_made": bool(provider_calls_made),
         "token_usage_recorded": bool(token_usage_recorded),
         "cost_recorded": bool(cost_recorded),
         "latency_recorded": bool(latency_recorded),
@@ -150,6 +155,7 @@ def attach_three_agent_llmops_trace_contract(
     source_results = source_results if isinstance(source_results, list) else []
     results: list[dict[str, Any]] = []
     trace_rows: list[dict[str, Any]] = []
+    provider_backed_agent_names: list[str] = []
     for source_result in source_results:
         result = _plain_dict(source_result)
         agent_name = _clean_text(result.get("agent_name"))
@@ -164,11 +170,16 @@ def attach_three_agent_llmops_trace_contract(
                 token_usage_recorded=True,
                 cost_recorded=True,
                 latency_recorded=True,
+                provider_calls_made=bool(
+                    trace.get("provider_call_made")
+                ),
             )
         )
         result["safety_metadata"] = result_safety
         results.append(result)
         trace_rows.append(deepcopy(trace))
+        if trace.get("provider_call_made") is True:
+            provider_backed_agent_names.append(agent_name)
 
     chain["ordered_agent_results"] = results
     chain["agent_results"] = deepcopy(results)
@@ -180,7 +191,9 @@ def attach_three_agent_llmops_trace_contract(
             _clean_text(result.get("agent_name")) for result in results
         ],
         "agent_traces": trace_rows,
-        "provider_calls_made": False,
+        "provider_calls_made": bool(provider_backed_agent_names),
+        "provider_backed_agent_count": len(provider_backed_agent_names),
+        "provider_backed_agent_names": provider_backed_agent_names,
         "token_usage_recorded": True,
         "cost_recorded": True,
         "latency_recorded": True,
@@ -189,6 +202,7 @@ def attach_three_agent_llmops_trace_contract(
             token_usage_recorded=True,
             cost_recorded=True,
             latency_recorded=True,
+            provider_calls_made=bool(provider_backed_agent_names),
         ),
     }
     chain_safety = _plain_dict(chain.get("safety_metadata"))
@@ -198,7 +212,18 @@ def attach_three_agent_llmops_trace_contract(
             token_usage_recorded=True,
             cost_recorded=True,
             latency_recorded=True,
+            provider_calls_made=bool(provider_backed_agent_names),
         )
     )
     chain["safety_metadata"] = chain_safety
+    chain["provider_backed_automated_agents"] = len(
+        provider_backed_agent_names
+    )
+    chain["live_provider_backed_automated_agents"] = len(
+        provider_backed_agent_names
+    )
+    chain["mutation_authorized_agents"] = 0
+    chain["mutation_authorized_scoring_agents"] = 0
+    chain["mutation_authorized_ranking_agents"] = 0
+    chain["mutation_authorized_application_agents"] = 0
     return chain

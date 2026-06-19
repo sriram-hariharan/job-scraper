@@ -609,6 +609,7 @@ def build_shadow_sidecar_trace_payload(
     fallback_used: bool = False,
     error_type: str = "",
     error_message: str = "",
+    agent_output_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     source = deepcopy(sidecar_input or {})
     config = _sidecar_config(source.get("sidecar_config"))
@@ -621,6 +622,10 @@ def build_shadow_sidecar_trace_payload(
     vector_input = _plain_dict(source.get("vector_evidence_input"))
     semantic_input = _plain_dict(
         vector_input.get("semantic_evidence_input")
+    )
+    structured_agent_output = _plain_dict(agent_output_payload)
+    provider_safety = _plain_dict(
+        structured_agent_output.get("safety_metadata")
     )
     health_status = "healthy" if status == STATUS_COMPLETED_SHADOW else "warning"
     readiness_status = "ready" if status == STATUS_COMPLETED_SHADOW else "blocked"
@@ -710,6 +715,35 @@ def build_shadow_sidecar_trace_payload(
             ),
         ),
     }
+    payload["safety_metadata"].update(
+        {
+            "jd_intelligence_provider_enabled": bool(
+                provider_safety.get("jd_intelligence_provider_enabled")
+            ),
+            "jd_intelligence_provider_attempted": bool(
+                provider_safety.get("jd_intelligence_provider_attempted")
+            ),
+            "jd_intelligence_provider_succeeded": bool(
+                provider_safety.get("jd_intelligence_provider_succeeded")
+            ),
+            "jd_intelligence_schema_validated": bool(
+                provider_safety.get("jd_intelligence_schema_validated")
+            ),
+            "provider_calls_made": bool(
+                provider_safety.get("provider_calls_made")
+                or payload["safety_metadata"].get("provider_calls_made")
+            ),
+        }
+    )
+    if structured_agent_output:
+        payload["agent_output_payload"] = structured_agent_output
+        provider_metadata = _plain_dict(
+            structured_agent_output.get("provider_metadata")
+        )
+        if provider_metadata:
+            payload["provider_metadata"] = provider_metadata
+        if provider_safety.get("jd_intelligence_provider_attempted") is True:
+            payload["provider_mode"] = "injected_shadow_jd_provider"
     if vector_input:
         payload["vector_evidence_input"] = vector_input
     if semantic_input:
@@ -855,11 +889,16 @@ def run_shadow_sidecar_agent(
         )
 
     result = dict(raw_result or {}) if isinstance(raw_result, dict) else {}
+    result_status = _clean_text(result.get("agent_output_status"))
+    completed_with_fallback = result_status == STATUS_COMPLETED_WITH_FALLBACK
     return build_shadow_sidecar_trace_payload(
         sidecar_input=source,
-        sidecar_stage_status=STATUS_COMPLETED_SHADOW,
-        agent_output_status=_clean_text(result.get("agent_output_status"))
-        or STATUS_COMPLETED_SHADOW,
+        sidecar_stage_status=(
+            STATUS_COMPLETED_WITH_FALLBACK
+            if completed_with_fallback
+            else STATUS_COMPLETED_SHADOW
+        ),
+        agent_output_status=result_status or STATUS_COMPLETED_SHADOW,
         agent_recommendation=_clean_text(result.get("agent_recommendation"))
         or "preserve_source_deterministic_decision",
         agent_confidence=float(result.get("agent_confidence") or 0.0),
@@ -867,7 +906,8 @@ def run_shadow_sidecar_agent(
         agent_evidence_refs=_text_list(result.get("agent_evidence_refs")),
         agent_risk_flags=_text_list(result.get("agent_risk_flags")),
         agent_blocking_findings=_text_list(result.get("agent_blocking_findings")),
-        fallback_used=False,
+        fallback_used=completed_with_fallback,
+        agent_output_payload=_plain_dict(result.get("agent_output_payload")),
     )
 
 
@@ -1067,6 +1107,10 @@ def build_shadow_sidecar_chain_payload(
 def run_shadow_sidecar_chain(
     *,
     sidecar_input: dict[str, Any],
+    jd_intelligence_shadow_agent: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
 ) -> dict[str, Any]:
     source = deepcopy(sidecar_input or {})
     config = _sidecar_config(source.get("sidecar_config"))
@@ -1115,7 +1159,17 @@ def run_shadow_sidecar_chain(
             config=config,
         )
         try:
-            agent_results.append(run_shadow_sidecar_agent(sidecar_input=agent_input))
+            shadow_agent = (
+                jd_intelligence_shadow_agent
+                if agent_name == "jd_intelligence"
+                else None
+            )
+            agent_results.append(
+                run_shadow_sidecar_agent(
+                    sidecar_input=agent_input,
+                    shadow_agent=shadow_agent,
+                )
+            )
         except Exception as exc:
             agent_results.append(
                 build_shadow_sidecar_fallback_payload(

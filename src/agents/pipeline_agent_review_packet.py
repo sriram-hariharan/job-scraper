@@ -404,6 +404,13 @@ def build_pipeline_agent_review_packet_payload(
             readback_source,
         )
     )
+    provider_backed_agent_count = int(
+        three_agent_llmops_trace_contract.get(
+            "provider_backed_agent_count",
+            0,
+        )
+        or 0
+    )
     return {
         "schema_version": shadow_sidecar.SCHEMA_VERSION,
         "packet_status": _packet_status(readiness_status),
@@ -466,7 +473,8 @@ def build_pipeline_agent_review_packet_payload(
         },
         "provider_calls_disabled_in_tests": True,
         "requires_live_database": False,
-        "live_provider_backed_automated_agents": 0,
+        "provider_backed_automated_agents": provider_backed_agent_count,
+        "live_provider_backed_automated_agents": provider_backed_agent_count,
         "mutation_authorized_agents": 0,
         "safety_metadata": evaluate_pipeline_agent_review_packet_safety(
             vector_evidence_context_available=bool(vector_evidence_context),

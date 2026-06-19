@@ -11,6 +11,9 @@ JD_INTELLIGENCE_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_JD_INTELLIGENCE_ENABLE
 TAILORING_SUGGESTION_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_TAILORING_SUGGESTION_ENABLED"
 CRITIC_GUARDRAIL_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_CRITIC_GUARDRAIL_ENABLED"
 KILL_SWITCH_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_KILL_SWITCH"
+THREE_AGENT_SHADOW_WORKFLOW_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_THREE_AGENT_SHADOW_WORKFLOW_ENABLED"
+)
 
 STATUS_NOT_ENABLED = "not_enabled"
 STATUS_SKIPPED_BY_CONFIG = "skipped_by_config"
@@ -984,6 +987,38 @@ def build_shadow_sidecar_chain_payload(
         "blocking_findings": all_blocking_findings,
         "warning_findings": [] if readiness_status == "ready" else all_reason_codes,
     }
+    workflow_enabled = _config_bool(
+        config,
+        THREE_AGENT_SHADOW_WORKFLOW_FLAG,
+        "three_agent_shadow_workflow_enabled",
+        default=False,
+    )
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    vector_context = _plain_dict(trace_context.get("vector_evidence_context"))
+    quality_gate = _plain_dict(
+        vector_context.get("semantic_evidence_quality_gate")
+    )
+    workflow_safety = {
+        "three_agent_shadow_workflow_enabled": workflow_enabled,
+        "ordered_agent_count": len(results),
+        "ordered_agent_names": ordered_names,
+        "semantic_evidence_quality_gate_status": _clean_text(
+            quality_gate.get("status")
+        )
+        or "semantic_evidence_quality_gate_not_enabled",
+        "did_call_provider": False,
+        "did_create_embeddings": False,
+        "did_write_database": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_create_approval": False,
+        "did_mutate_resume": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+    }
+    safety = evaluate_shadow_sidecar_chain_safety()
+    safety.update(workflow_safety)
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": _clean_text(source.get("run_id")),
@@ -999,6 +1034,7 @@ def build_shadow_sidecar_chain_payload(
         "stage_statuses": stage_statuses,
         "ordered_agent_results": results,
         "agent_results": results,
+        "three_agent_shadow_workflow": deepcopy(workflow_safety),
         "source_deterministic_stage": _clean_text(
             source.get("source_deterministic_stage")
         ),
@@ -1022,7 +1058,7 @@ def build_shadow_sidecar_chain_payload(
         "error_type": _clean_text(error_type),
         "error_message": _clean_text(error_message),
         "sidecar_config": config,
-        "safety_metadata": evaluate_shadow_sidecar_chain_safety(),
+        "safety_metadata": safety,
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }

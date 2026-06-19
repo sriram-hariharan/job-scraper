@@ -880,6 +880,7 @@ def run_shadow_sidecar_pipeline_hook(
     semantic_evidence_minimum_count: int = 1,
     semantic_evidence_max_count: int = 5,
     semantic_evidence_quality_gate_helper: Any = None,
+    three_agent_shadow_workflow_enabled: bool = False,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -901,6 +902,19 @@ def run_shadow_sidecar_pipeline_hook(
     if vector_evidence_context:
         trace_context["vector_evidence_context"] = vector_evidence_context
 
+    effective_sidecar_config = _snapshot(sidecar_config or {})
+    if three_agent_shadow_workflow_enabled is True:
+        effective_sidecar_config.update(
+            {
+                shadow_sidecar.GLOBAL_SIDECAR_FLAG: True,
+                shadow_sidecar.JD_INTELLIGENCE_FLAG: True,
+                shadow_sidecar.TAILORING_SUGGESTION_FLAG: True,
+                shadow_sidecar.CRITIC_GUARDRAIL_FLAG: True,
+                shadow_sidecar.THREE_AGENT_SHADOW_WORKFLOW_FLAG: True,
+                "provider_execution_allowed": False,
+            }
+        )
+
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
         batch_id=batch_id,
@@ -911,7 +925,7 @@ def run_shadow_sidecar_pipeline_hook(
         source_deterministic_score=source_deterministic_score,
         source_deterministic_decision=source_deterministic_decision,
         source_deterministic_reason_codes=source_deterministic_reason_codes,
-        sidecar_config=_snapshot(sidecar_config or {}),
+        sidecar_config=effective_sidecar_config,
         job_payload=_snapshot(job_payload or {}),
         resume_profile_payload=_snapshot(resume_profile_payload or {}),
         existing_trace_context=_snapshot(trace_context),
@@ -941,7 +955,7 @@ def run_shadow_sidecar_pipeline_hook(
             job_payload=_snapshot(job_payload or {}),
             resume_profile_payload=_snapshot(resume_profile_payload or {}),
             existing_trace_context=_snapshot(trace_context),
-            sidecar_config=_snapshot(sidecar_config or {}),
+            sidecar_config=effective_sidecar_config,
             agent_name="shadow_sidecar_chain",
         )
         chain_payload = shadow_sidecar.run_shadow_sidecar_chain(

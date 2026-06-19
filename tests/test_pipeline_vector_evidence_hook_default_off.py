@@ -181,7 +181,7 @@ def test_pipeline_call_site_is_adjacent_and_output_is_not_consumed():
     complete_marker = (
         'complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})'
     )
-    shadow_marker = "_maybe_run_shadow_sidecar_after_application_priority(scored_jobs)"
+    shadow_marker = "_maybe_run_shadow_sidecar_after_application_priority("
     vector_marker = (
         "_maybe_collect_vector_evidence_after_application_priority(scored_jobs)"
     )
@@ -190,8 +190,8 @@ def test_pipeline_call_site_is_adjacent_and_output_is_not_consumed():
     assert source.count(vector_marker) == 1
     assert (
         source.index(complete_marker)
-        < source.index(shadow_marker)
         < source.index(vector_marker)
+        < source.index(shadow_marker, source.index(vector_marker))
         < source.index(source_health_marker, source.index(vector_marker))
     )
     assert f"{vector_marker}." not in source

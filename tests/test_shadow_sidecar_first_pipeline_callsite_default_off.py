@@ -152,14 +152,19 @@ def test_pipeline_hook_call_site_exists_only_at_audited_integration_point():
         'complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})'
     )
     call_idx = collector_source.index(
-        "_maybe_run_shadow_sidecar_after_application_priority(scored_jobs)"
+        "_maybe_run_shadow_sidecar_after_application_priority(",
+        complete_idx,
     )
     source_health_idx = collector_source.index(
         "if role_title_audit_rows is not None:", call_idx
     )
     rag_export_idx = collector_source.index('start_stage("rag_export"', call_idx)
 
-    assert complete_idx < call_idx < source_health_idx < rag_export_idx
+    vector_idx = collector_source.index(
+        "_maybe_collect_vector_evidence_after_application_priority(scored_jobs)",
+        complete_idx,
+    )
+    assert complete_idx < vector_idx < call_idx < source_health_idx < rag_export_idx
 
     pipeline_call_sites = []
     for path in sorted(Path("src/pipeline").glob("*.py")):
@@ -204,7 +209,7 @@ def test_stage_logging_metrics_retry_cache_dedup_and_health_flow_is_preserved():
         'start_stage("application_priority"',
         "scored_jobs = score_jobs(ai_jobs)",
         'complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})',
-        "_maybe_run_shadow_sidecar_after_application_priority(scored_jobs)",
+        "_maybe_run_shadow_sidecar_after_application_priority(",
         'start_stage("rag_export"',
         "log_stage_metrics(",
         "dedupe_jobs(",

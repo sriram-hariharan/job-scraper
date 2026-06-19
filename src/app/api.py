@@ -398,6 +398,13 @@ class ThreeAgentLlmopsObservabilityReadbackRequest(BaseModel):
     review_packet_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProviderRuntimeReadbackRequest(BaseModel):
+    enabled: bool = False
+    config: dict[str, Any] = Field(default_factory=dict)
+    provider_calls_allowed: bool = False
+    shadow_payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -4517,6 +4524,87 @@ def three_agent_llmops_observability_readback(
         "advisory_only": True,
         "ui_action_added": False,
         "pipeline_stage_added": False,
+        "safety_metadata": safety,
+    }
+
+
+@app.post("/api/provider-runtime-readback")
+def provider_runtime_readback(request: ProviderRuntimeReadbackRequest):
+    response = services.provider_runtime_readiness_service_payload(
+        enabled=request.enabled,
+        config=request.config,
+        provider_calls_allowed=request.provider_calls_allowed,
+        shadow_payload=request.shadow_payload,
+    )
+    adapter_bridge_metadata = dict(
+        response.get("adapter_bridge_summary", {}) or {}
+    )
+    provider_runtime_readiness = {
+        key: response.get(key)
+        for key in (
+            "provider_runtime_readiness_enabled",
+            "readiness_status",
+            "provider_runtime_configured",
+            "provider_name",
+            "model_name",
+            "provider_calls_allowed",
+            "provider_runtime_default_off",
+            "shadow_only",
+            "configured_agent_names",
+            "provider_backed_agent_count",
+            "missing_configuration_keys",
+            "next_safe_step",
+            "mutation_authorized",
+            "mutation_authorized_agent_count",
+        )
+    }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+            "readback_only": True,
+            "provider_runtime_readback_api": True,
+            "provider_runtime_service_bridge": True,
+            "provider_calls_made": False,
+            "embeddings_created": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **response,
+        "api_surface": "provider_runtime_readback",
+        "provider_runtime_readback_enabled": request.enabled is True,
+        "readback_status": str(
+            response.get("readiness_status") or "skipped_default_off"
+        ),
+        "provider_runtime_readiness": provider_runtime_readiness,
+        "adapter_bridge_metadata": adapter_bridge_metadata,
+        "api_readback_only": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
+        "shadow_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "mutation_authorized": False,
+        "mutation_authorized_agent_count": 0,
         "safety_metadata": safety,
     }
 

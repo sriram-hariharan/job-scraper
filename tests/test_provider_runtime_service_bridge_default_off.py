@@ -193,9 +193,6 @@ def test_service_bridge_has_no_sdk_provider_storage_or_mutation_calls():
 
 def test_no_api_ui_pipeline_or_dependency_changes():
     expected = {
-        "src/app/api.py": (
-            "80c665bbbad6b175ce6713aa5658f5edbcd4f09970c6d725e9fd01f624f010ec"
-        ),
         "src/app/static/agentic_review.js": (
             "37d92dfe33774c9f97e15c63951843cb899ada954898e20d02806e1ab143fc1b"
         ),
@@ -219,3 +216,16 @@ def test_no_api_ui_pipeline_or_dependency_changes():
             (ROOT / relative_path).read_bytes()
         ).hexdigest()
         assert actual_hash == expected_hash
+
+
+def test_api_bridge_delegates_to_service_without_provider_execution():
+    source = (ROOT / "src/app/api.py").read_text(encoding="utf-8")
+    start = source.index('@app.post("/api/provider-runtime-readback")')
+    end = source.index(
+        '\n\n@app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")',
+        start,
+    )
+    snippet = source[start:end]
+
+    assert "services.provider_runtime_readiness_service_payload(" in snippet
+    assert '"provider_calls_made": False' in snippet

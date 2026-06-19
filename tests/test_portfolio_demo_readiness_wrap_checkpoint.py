@@ -257,6 +257,8 @@ ALLOWED_CHANGED = {
     "tests/test_vector_evidence_readback_service_helper_default_off.py",
     "tests/test_vector_evidence_readback_api_default_off.py",
     "tests/test_vector_evidence_readback_ui_default_off.py",
+    "src/agents/vector_evidence_pipeline_hook.py",
+    "tests/test_pipeline_vector_evidence_hook_default_off.py",
 }
 
 def _changed_files():
@@ -314,6 +316,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/vector_evidence_indexing_dry_run.py",
         "src/agents/vector_evidence_retrieval_dry_run.py",
         "src/agents/pgvector_extension_probe.py",
+        "src/agents/vector_evidence_pipeline_hook.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

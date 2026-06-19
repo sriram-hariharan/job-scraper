@@ -286,6 +286,12 @@ ALLOWED_CHANGED = {
     "tests/test_three_agent_llmops_aggregate_default_off.py",
     "src/agents/three_agent_workflow_readiness.py",
     "tests/test_three_agent_workflow_readiness_default_off.py",
+    "src/agents/three_agent_llmops_observability_readback.py",
+    "tests/test_three_agent_llmops_observability_readback_default_off.py",
+    "tests/test_three_agent_llmops_observability_service_bridge_default_off.py",
+    "tests/test_three_agent_llmops_observability_api_default_off.py",
+    "tests/test_three_agent_llmops_observability_ui_default_off.py",
+    "tests/test_phase10_llmops_observability_readiness_checkpoint.py",
 }
 
 def _changed_files():
@@ -348,6 +354,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/agent_llmops_trace_contract.py",
         "src/agents/three_agent_llmops_aggregate.py",
         "src/agents/three_agent_workflow_readiness.py",
+        "src/agents/three_agent_llmops_observability_readback.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

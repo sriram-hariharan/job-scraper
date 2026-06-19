@@ -391,6 +391,13 @@ class VectorEvidenceReadbackRequest(BaseModel):
     connection_provider_enabled: bool = False
 
 
+class ThreeAgentLlmopsObservabilityReadbackRequest(BaseModel):
+    enabled: bool = False
+    payload: dict[str, Any] = Field(default_factory=dict)
+    chain_payload: dict[str, Any] = Field(default_factory=dict)
+    review_packet_payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -4455,6 +4462,59 @@ def vector_evidence_readback(request: VectorEvidenceReadbackRequest):
         "read_only": True,
         "advisory_only": True,
         "operator_triggered_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "safety_metadata": safety,
+    }
+
+
+@app.post("/api/three-agent-llmops-observability-readback")
+def three_agent_llmops_observability_readback(
+    request: ThreeAgentLlmopsObservabilityReadbackRequest,
+):
+    response = (
+        services.three_agent_llmops_observability_readback_service_payload(
+            enabled=request.enabled,
+            payload=request.payload,
+            chain_payload=request.chain_payload,
+            review_packet_payload=request.review_packet_payload,
+        )
+    )
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "readback_only": True,
+            "llmops_observability_readback_api": True,
+            "llmops_observability_service_bridge": True,
+            "provider_calls_made": False,
+            "embeddings_created": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **response,
+        "api_surface": "three_agent_llmops_observability_readback",
+        "api_readback_only": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
         "ui_action_added": False,
         "pipeline_stage_added": False,
         "safety_metadata": safety,

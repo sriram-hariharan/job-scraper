@@ -153,7 +153,7 @@ def test_import_opens_no_connection_and_executes_no_storage_operation():
 def test_api_ui_pipeline_schema_and_dependencies_remain_unchanged():
     protected_hashes = {
         "src/app/api.py": (
-            "4daeda11d22dd8f1ddf1be0b47571e8443d48d290a962771a3ec7eb9c63e11f9"
+            "80c665bbbad6b175ce6713aa5658f5edbcd4f09970c6d725e9fd01f624f010ec"
         ),
         "src/app/static/agentic_review.js": (
             "450b95cdb1a838854a8be1ed11f3ae9f0fa886d11cc0724eb5e63384936f75bc"

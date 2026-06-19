@@ -2,15 +2,19 @@ import hashlib
 from copy import deepcopy
 from pathlib import Path
 
-from src.app import services
+from fastapi.testclient import TestClient
+
+from src.app import api, services
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ENDPOINT = "/api/three-agent-llmops-observability-readback"
 SERVICE = "three_agent_llmops_observability_readback_service_payload"
 
 
-def _call(**updates):
-    return getattr(services, SERVICE)(**updates)
+def _client(monkeypatch):
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    return TestClient(api.app)
 
 
 def _chain():
@@ -66,16 +70,20 @@ def _chain():
 
 def _assert_safety(payload):
     safety = payload["safety_metadata"]
-    assert payload["service_surface"] == (
-        "three_agent_llmops_observability_readback_service"
+    assert payload["api_surface"] == (
+        "three_agent_llmops_observability_readback"
     )
-    assert payload["service_helper_only"] is True
-    assert payload["api_route_added"] is False
+    assert payload["api_readback_only"] is True
+    assert payload["api_route_added"] is True
+    assert payload["read_only"] is True
+    assert payload["advisory_only"] is True
     assert payload["ui_action_added"] is False
+    assert payload["pipeline_stage_added"] is False
     assert safety["read_only"] is True
     assert safety["advisory_only"] is True
     assert safety["readback_only"] is True
-    assert safety["service_helper_only"] is True
+    assert safety["llmops_observability_readback_api"] is True
+    assert safety["llmops_observability_service_bridge"] is True
     assert safety["provider_calls_made"] is False
     assert safety["embeddings_created"] is False
     assert safety["did_read_database"] is False
@@ -89,9 +97,17 @@ def _assert_safety(payload):
     assert safety["did_submit_application"] is False
 
 
-def test_service_bridge_default_off_skips_safely():
-    payload = _call()
+def test_api_route_exists_as_post_only():
+    routes = {getattr(route, "path", ""): route for route in api.app.routes}
 
+    assert routes[ENDPOINT].methods == {"POST"}
+
+
+def test_api_default_off_skips_safely(monkeypatch):
+    response = _client(monkeypatch).post(ENDPOINT, json={})
+
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["readback_status"] == "skipped_default_off"
     assert payload["observability_readback_enabled"] is False
     assert payload["default_off"] is True
@@ -99,60 +115,38 @@ def test_service_bridge_default_off_skips_safely():
     _assert_safety(payload)
 
 
-def test_enabled_service_bridge_delegates_to_readback_helper():
+def test_api_enabled_delegates_through_service_bridge(monkeypatch):
     calls = []
+    real_service = getattr(services, SERVICE)
 
-    def fake_builder(*, payload, enabled):
-        calls.append((deepcopy(payload), enabled))
-        return {
-            "observability_readback_enabled": enabled,
-            "readback_status": "ready",
-            "agent_count": 0,
-            "provider_backed_agent_count": 0,
-            "provider_backed_agent_names": [],
-            "agents": [],
-            "aggregate": {},
-            "workflow_readiness": {},
-            "safety_metadata": {
-                "read_only": True,
-                "advisory_only": True,
-            },
-        }
+    def recording_service(**kwargs):
+        calls.append(deepcopy(kwargs))
+        return real_service(**kwargs)
 
-    source = {"chain_payload": _chain()}
-    payload = _call(
-        enabled=True,
-        payload=source,
-        readback_builder=fake_builder,
+    monkeypatch.setattr(services, SERVICE, recording_service)
+    chain = _chain()
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={"enabled": True, "chain_payload": chain},
     )
 
-    assert calls == [(source, True)]
-    assert payload["readback_status"] == "ready"
-    assert payload["default_off"] is False
-    _assert_safety(payload)
-
-
-def test_enabled_service_returns_per_agent_rows_from_chain_payload():
-    payload = _call(enabled=True, chain_payload=_chain())
-
-    assert payload["readback_status"] == "ready"
-    assert payload["agent_count"] == 3
-    assert payload["provider_backed_agent_count"] == 3
-    assert [row["agent_name"] for row in payload["agents"]] == [
-        "jd_intelligence",
-        "tailoring_suggestion",
-        "critic_guardrail",
+    assert response.status_code == 200
+    assert calls == [
+        {
+            "enabled": True,
+            "payload": {},
+            "chain_payload": chain,
+            "review_packet_payload": {},
+        }
     ]
-    assert payload["agents"][0]["input_tokens"] == 10
-    assert payload["agents"][1]["fallback_used"] is True
-    _assert_safety(payload)
+    assert response.json()["readback_status"] == "ready"
 
 
-def test_service_surfaces_existing_aggregate_and_readiness():
+def test_api_returns_rows_aggregate_and_readiness(monkeypatch):
     chain = _chain()
-    payload = _call(
-        enabled=True,
-        review_packet_payload={
+    request_payload = {
+        "enabled": True,
+        "review_packet_payload": {
             "three_agent_llmops_trace_contract": {
                 "agent_traces": [
                     result["llmops_trace_metadata"]
@@ -167,8 +161,18 @@ def test_service_surfaces_existing_aggregate_and_readiness():
                 "three_agent_workflow_readiness"
             ],
         },
-    )
+    }
+    before = deepcopy(request_payload)
+    response = _client(monkeypatch).post(ENDPOINT, json=request_payload)
 
+    assert response.status_code == 200
+    assert request_payload == before
+    payload = response.json()
+    assert payload["agent_count"] == 3
+    assert payload["provider_backed_agent_count"] == 3
+    assert payload["agents"][0]["agent_name"] == "jd_intelligence"
+    assert payload["agents"][0]["latency_ms"] == 5
+    assert payload["agents"][1]["fallback_used"] is True
     assert payload["aggregate"] == chain[
         "three_agent_llmops_aggregate"
     ]
@@ -178,56 +182,44 @@ def test_service_surfaces_existing_aggregate_and_readiness():
     _assert_safety(payload)
 
 
-def test_missing_chain_and_metrics_are_safe_and_deterministic():
-    missing = _call(enabled=True)
-    partial = _call(
-        enabled=True,
-        chain_payload={
-            "ordered_agent_results": [
-                {
-                    "agent_name": "jd_intelligence",
-                    "llmops_trace_metadata": {},
-                }
-            ]
-        },
+def test_api_enabled_missing_payload_returns_safe_status(monkeypatch):
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={"enabled": True},
     )
 
-    assert missing["readback_status"] == "missing_three_agent_chain"
-    assert partial["agents"][0]["input_tokens"] == 0
-    assert partial["agents"][0]["estimated_cost"] == 0.0
-    assert partial["agents"][0]["latency_ms"] == 0
-    _assert_safety(missing)
-    _assert_safety(partial)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["readback_status"] == "missing_three_agent_chain"
+    assert payload["agent_count"] == 0
+    assert payload["aggregate"]["total_tokens"] == 0
+    _assert_safety(payload)
 
 
-def test_service_bridge_does_not_mutate_input_payload():
-    source = {"chain_payload": _chain()}
-    before = deepcopy(source)
-
-    _call(enabled=True, payload=source)
-
-    assert source == before
-
-
-def test_service_slice_has_no_external_storage_or_mutation_wiring():
-    source = (ROOT / "src/app/services.py").read_text(encoding="utf-8")
+def test_route_slice_has_no_provider_storage_or_mutation_wiring():
+    source = (ROOT / "src/app/api.py").read_text(encoding="utf-8")
     start = source.index(
-        "def three_agent_llmops_observability_readback_service_payload("
+        '@app.post("/api/three-agent-llmops-observability-readback")'
     )
     end = source.index(
-        "\n\ndef vector_evidence_readback_service_helper_payload(",
+        '\n\n@app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")',
         start,
     )
     snippet = source[start:end].lower()
+
+    assert SERVICE in snippet
     for marker in (
+        "src.storage",
+        "src.pipeline",
+        "schema.sql",
         "openai",
         "anthropic",
         "langchain",
         "create_embedding(",
         "database_url",
         "connect(",
-        "get_agent_run_postgres_payload(",
-        "list_agent_runs_postgres_payload(",
+        "insert_",
+        "upsert_",
         "score_jobs(",
         "rank_jobs(",
         "create_approval_request(",
@@ -239,10 +231,9 @@ def test_service_slice_has_no_external_storage_or_mutation_wiring():
         assert marker not in snippet
 
 
-def test_api_ui_pipeline_dependencies_and_decision_modules_are_unchanged():
+def test_no_ui_pipeline_dependency_or_decision_module_change():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
-        "src/app/api.py": "80c665bbbad6b175ce6713aa5658f5edbcd4f09970c6d725e9fd01f624f010ec",
         "src/app/static/agentic_review.js": "450b95cdb1a838854a8be1ed11f3ae9f0fa886d11cc0724eb5e63384936f75bc",
         "src/pipeline/collector.py": "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",

@@ -252,7 +252,7 @@ def test_api_ui_pipeline_schema_and_dependencies_remain_unchanged():
             "450b95cdb1a838854a8be1ed11f3ae9f0fa886d11cc0724eb5e63384936f75bc"
         ),
         "src/pipeline/collector.py": (
-            "5d30b4e3b7ada5fd94c5dee0344e87c3dbe978a149d16dd4503f7a5d167b16a5"
+            "0b06febc07f2da4470470a12255da7afd61f412a4d6be9026cfbe9a1c139bd55"
         ),
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"

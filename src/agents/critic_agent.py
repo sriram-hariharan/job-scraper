@@ -522,6 +522,20 @@ def _critic_guardrail_text_list(value: Any) -> List[str]:
     return [_clean_text(value)] if _clean_text(value) else []
 
 
+def _critic_guardrail_float(value: Any) -> float:
+    try:
+        return max(0.0, min(1.0, float(value or 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _critic_guardrail_int(value: Any) -> int:
+    try:
+        return max(0, int(float(value or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _critic_guardrail_resume_evidence_text(rows: List[Dict[str, Any]]) -> str:
     pieces: List[str] = []
     for row in rows:
@@ -823,3 +837,188 @@ def build_critic_guardrail_dry_run_payload(
         "job_id": _clean_text(job_id),
         "safety_metadata": _critic_guardrail_safety_metadata(),
     }
+
+
+def build_live_critic_guardrail_shadow_payload(
+    *,
+    tailoring_suggestion_payload: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    resume_profile: Dict[str, Any] | None = None,
+    context_id: str = "",
+    job_id: str = "",
+    adapter: Any = None,
+    feature_enabled: bool = False,
+) -> Dict[str, Any]:
+    """Validate one injected critic response without applying decisions."""
+
+    fallback = build_critic_guardrail_dry_run_payload(
+        tailoring_suggestion_payload=tailoring_suggestion_payload,
+        jd_intelligence=jd_intelligence,
+        resume_evidence_rows=[deepcopy(resume_profile or {})],
+        context_id=context_id,
+        job_id=job_id,
+    )
+    base = {
+        **deepcopy(fallback),
+        "read_only": True,
+        "advisory_only": True,
+        "guardrail_decision_only": True,
+        "validation_status": "disabled",
+        "validation_errors": ["feature_flag_disabled"],
+        "fallback_used": True,
+        "model_provider": "deterministic",
+        "model_name": "critic_guardrail_shadow_fallback",
+        "prompt_version": "critic-guardrail-shadow-v1",
+        "token_usage": {},
+        "cost": {},
+        "latency_ms": 0,
+    }
+    base["safety_metadata"] = {
+        **_critic_guardrail_safety_metadata(),
+        "feature_flag_required": True,
+        "did_call_llm": False,
+        "did_write_database": False,
+        "did_create_approval": False,
+    }
+    if feature_enabled is not True:
+        return base
+    if not callable(adapter):
+        base["validation_status"] = "fallback"
+        base["validation_errors"] = ["adapter_missing"]
+        return base
+
+    adapter_input = {
+        "tailoring_suggestion_payload": deepcopy(
+            tailoring_suggestion_payload or {}
+        ),
+        "jd_intelligence": deepcopy(jd_intelligence or {}),
+        "resume_profile": deepcopy(resume_profile or {}),
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "prompt_version": "critic-guardrail-shadow-v1",
+    }
+    try:
+        raw = adapter(deepcopy(adapter_input))
+    except Exception as exc:
+        base["validation_status"] = "fallback"
+        base["validation_errors"] = [
+            f"adapter_error:{exc.__class__.__name__}"
+        ]
+        base["safety_metadata"]["did_call_llm"] = True
+        base["safety_metadata"]["deterministic_only"] = False
+        return base
+
+    parsed = raw
+    if isinstance(raw, dict) and "raw_response" in raw:
+        raw_response = raw.get("raw_response")
+        if isinstance(raw_response, dict):
+            parsed = {
+                **deepcopy(raw_response),
+                **{
+                    key: deepcopy(value)
+                    for key, value in raw.items()
+                    if key != "raw_response"
+                },
+            }
+        else:
+            try:
+                decoded = json.loads(str(raw_response))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                decoded = None
+            if not isinstance(decoded, dict):
+                base["validation_status"] = "fallback"
+                base["validation_errors"] = ["invalid_json_response"]
+                base["safety_metadata"]["did_call_llm"] = True
+                base["safety_metadata"]["deterministic_only"] = False
+                return base
+            parsed = {
+                **decoded,
+                **{
+                    key: deepcopy(value)
+                    for key, value in raw.items()
+                    if key != "raw_response"
+                },
+            }
+    if not isinstance(parsed, dict):
+        base["validation_status"] = "fallback"
+        base["validation_errors"] = ["adapter_response_not_object"]
+        base["safety_metadata"]["did_call_llm"] = True
+        base["safety_metadata"]["deterministic_only"] = False
+        return base
+
+    errors: List[str] = []
+    decision_groups: Dict[str, List[Dict[str, Any]]] = {}
+    for field_name in (
+        "approved_suggestions",
+        "downgraded_suggestions",
+        "rejected_suggestions",
+    ):
+        value = parsed.get(field_name, [])
+        if not isinstance(value, list):
+            errors.append(f"{field_name}_not_list")
+            decision_groups[field_name] = []
+            continue
+        decision_groups[field_name] = [
+            deepcopy(item) for item in value if isinstance(item, dict)
+        ]
+        if len(decision_groups[field_name]) != len(value):
+            errors.append(f"{field_name}_items_must_be_objects")
+    if not any(decision_groups.values()):
+        errors.append("provider_critic_decisions_missing")
+
+    token_usage = parsed.get("token_usage")
+    cost = parsed.get("cost")
+    payload = {
+        **deepcopy(base),
+        **decision_groups,
+        "critic_status": _clean_text(parsed.get("critic_status"))
+        or (
+            "rejected"
+            if decision_groups["rejected_suggestions"]
+            else "needs_guidance"
+            if decision_groups["downgraded_suggestions"]
+            else "approved"
+        ),
+        "reason_codes": _critic_guardrail_text_list(
+            parsed.get("reason_codes")
+        ),
+        "unsupported_claim_risks": _critic_guardrail_text_list(
+            parsed.get("unsupported_claim_risks")
+        ),
+        "ats_risks": _critic_guardrail_text_list(parsed.get("ats_risks")),
+        "readability_risks": _critic_guardrail_text_list(
+            parsed.get("readability_risks")
+        ),
+        "evidence_gaps": _critic_guardrail_text_list(
+            parsed.get("evidence_gaps")
+        ),
+        "confidence": _critic_guardrail_float(
+            parsed.get("confidence")
+        ),
+        "rationale": _clean_text(parsed.get("rationale")),
+        "validation_status": "valid" if not errors else "invalid",
+        "validation_errors": errors,
+        "fallback_used": bool(errors),
+        "model_provider": _clean_text(
+            parsed.get("model_provider") or parsed.get("provider")
+        ),
+        "model_name": _clean_text(
+            parsed.get("model_name") or parsed.get("model")
+        ),
+        "prompt_version": _clean_text(parsed.get("prompt_version"))
+        or "critic-guardrail-shadow-v1",
+        "token_usage": deepcopy(token_usage)
+        if isinstance(token_usage, dict)
+        else {},
+        "cost": deepcopy(cost) if isinstance(cost, dict) else {},
+        "latency_ms": _critic_guardrail_int(parsed.get("latency_ms")),
+    }
+    payload["safety_metadata"] = {
+        **_critic_guardrail_safety_metadata(),
+        "feature_flag_required": True,
+        "deterministic_only": False,
+        "did_call_llm": True,
+        "did_write_database": False,
+        "did_create_approval": False,
+    }
+    return payload

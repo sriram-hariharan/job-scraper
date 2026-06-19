@@ -969,6 +969,8 @@ def run_shadow_sidecar_pipeline_hook(
     llmops_trace_contract_enabled: bool = False,
     llmops_trace_metadata_by_agent: dict[str, dict[str, Any]] | None = None,
     llmops_trace_contract_helper: Any = None,
+    llmops_aggregate_enabled: bool = False,
+    llmops_aggregate_helper: Any = None,
     jd_intelligence_provider_enabled: bool = False,
     jd_intelligence_provider: Any = None,
     jd_intelligence_provider_metadata: dict[str, Any] | None = None,
@@ -1575,6 +1577,7 @@ def run_shadow_sidecar_pipeline_hook(
         )
         if (
             llmops_trace_contract_enabled is True
+            or llmops_aggregate_enabled is True
             or jd_intelligence_provider_enabled is True
             or tailoring_provider_enabled is True
             or critic_provider_enabled is True
@@ -1592,6 +1595,18 @@ def run_shadow_sidecar_pipeline_hook(
                 metadata_by_agent=deepcopy(
                     llmops_trace_metadata_by_agent or {}
                 ),
+            )
+        if llmops_aggregate_enabled is True:
+            aggregate_helper = llmops_aggregate_helper
+            if aggregate_helper is None:
+                from src.agents.three_agent_llmops_aggregate import (
+                    attach_three_agent_llmops_aggregate,
+                )
+
+                aggregate_helper = attach_three_agent_llmops_aggregate
+            chain_payload = aggregate_helper(
+                chain_payload=chain_payload,
+                enabled=True,
             )
         observability = shadow_sidecar.build_shadow_sidecar_chain_observability_payload(
             chain_payload

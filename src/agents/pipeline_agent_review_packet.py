@@ -38,6 +38,10 @@ def evaluate_pipeline_agent_review_packet_safety(
     *,
     vector_evidence_context_available: bool = False,
     vector_evidence_context_attached: bool = False,
+    semantic_evidence_input_available: bool = False,
+    semantic_evidence_input_attached: bool = False,
+    provider_calls_made: bool = False,
+    embeddings_created: bool = False,
 ) -> dict[str, bool]:
     return {
         "read_only": True,
@@ -74,8 +78,19 @@ def evaluate_pipeline_agent_review_packet_safety(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "semantic_evidence_input_available": bool(
+            semantic_evidence_input_available
+        ),
+        "semantic_evidence_input_attached": bool(
+            semantic_evidence_input_attached
+        ),
+        "semantic_evidence_input_shadow_only": True,
+        "semantic_evidence_used_for_scoring": False,
+        "semantic_evidence_used_for_ranking": False,
+        "semantic_evidence_used_for_queue": False,
+        "semantic_evidence_used_for_application": False,
+        "provider_calls_made": bool(provider_calls_made),
+        "embeddings_created": bool(embeddings_created),
     }
 
 
@@ -168,7 +183,8 @@ def _vector_evidence_context(*values: Any) -> dict[str, Any]:
     if not context or safety.get("vector_evidence_context_attached") is not True:
         return {}
     evidence = _plain_dict(context.get("evidence_context"))
-    return {
+    semantic_context = _plain_dict(context.get("semantic_evidence_context"))
+    payload = {
         "status": _clean_text(context.get("status")),
         "hook_surface": _clean_text(context.get("hook_surface")),
         "run_id": _clean_text(context.get("run_id")),
@@ -183,9 +199,68 @@ def _vector_evidence_context(*values: Any) -> dict[str, Any]:
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "provider_calls_made": bool(context.get("provider_calls_made")),
+        "embeddings_created": bool(context.get("embeddings_created")),
     }
+    if semantic_context:
+        payload["semantic_evidence_context"] = semantic_context
+    return payload
+
+
+def _three_agent_shadow_workflow(*values: Any) -> dict[str, Any]:
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        workflow = _plain_dict(chain.get("three_agent_shadow_workflow"))
+        if workflow:
+            return workflow
+    return {}
+
+
+def _three_agent_llmops_trace_contract(*values: Any) -> dict[str, Any]:
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        trace_contract = _plain_dict(
+            chain.get("three_agent_llmops_trace_contract")
+        )
+        if trace_contract:
+            return trace_contract
+    return {}
+
+
+def _three_agent_provider_handoff(*values: Any) -> dict[str, Any]:
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        handoff = _plain_dict(chain.get("three_agent_provider_handoff"))
+        if handoff:
+            return handoff
+    return {}
+
+
+def _three_agent_llmops_aggregate(*values: Any) -> dict[str, Any]:
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        aggregate = _plain_dict(
+            chain.get("three_agent_llmops_aggregate")
+        )
+        if aggregate:
+            return aggregate
+    return {}
+
+
+def _three_agent_workflow_readiness(*values: Any) -> dict[str, Any]:
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        readiness = _plain_dict(
+            chain.get("three_agent_workflow_readiness")
+        )
+        if readiness:
+            return readiness
+    return {}
 
 
 def _review_focus(readiness_payload: dict[str, Any]) -> list[str]:
@@ -342,6 +417,58 @@ def build_pipeline_agent_review_packet_payload(
         trace_readback_payload,
         readback_source,
     )
+    semantic_evidence_context = _plain_dict(
+        vector_evidence_context.get("semantic_evidence_context")
+    )
+    three_agent_shadow_workflow = _three_agent_shadow_workflow(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
+    three_agent_llmops_trace_contract = (
+        _three_agent_llmops_trace_contract(
+            hook_payload,
+            trace_context_payload,
+            trace_capture_payload,
+            trace_persistence_payload,
+            trace_readback_payload,
+            readback_source,
+        )
+    )
+    three_agent_provider_handoff = _three_agent_provider_handoff(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
+    three_agent_llmops_aggregate = _three_agent_llmops_aggregate(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
+    three_agent_workflow_readiness = _three_agent_workflow_readiness(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
+    provider_backed_agent_count = int(
+        three_agent_llmops_trace_contract.get(
+            "provider_backed_agent_count",
+            0,
+        )
+        or 0
+    )
     return {
         "schema_version": shadow_sidecar.SCHEMA_VERSION,
         "packet_status": _packet_status(readiness_status),
@@ -374,6 +501,16 @@ def build_pipeline_agent_review_packet_payload(
             readback_source,
         ),
         "vector_evidence_context": vector_evidence_context,
+        "semantic_evidence_context": semantic_evidence_context,
+        "three_agent_shadow_workflow": three_agent_shadow_workflow,
+        "three_agent_llmops_trace_contract": (
+            three_agent_llmops_trace_contract
+        ),
+        "three_agent_provider_handoff": three_agent_provider_handoff,
+        "three_agent_llmops_aggregate": three_agent_llmops_aggregate,
+        "three_agent_workflow_readiness": (
+            three_agent_workflow_readiness
+        ),
         "overlay_readback_summary": {
             "readback_status": _clean_text(readback.get("readback_status")),
             "overlay_found": bool(
@@ -399,11 +536,24 @@ def build_pipeline_agent_review_packet_payload(
         },
         "provider_calls_disabled_in_tests": True,
         "requires_live_database": False,
-        "live_provider_backed_automated_agents": 0,
+        "provider_backed_automated_agents": provider_backed_agent_count,
+        "live_provider_backed_automated_agents": provider_backed_agent_count,
         "mutation_authorized_agents": 0,
         "safety_metadata": evaluate_pipeline_agent_review_packet_safety(
             vector_evidence_context_available=bool(vector_evidence_context),
             vector_evidence_context_attached=bool(vector_evidence_context),
+            semantic_evidence_input_available=bool(
+                semantic_evidence_context
+            ),
+            semantic_evidence_input_attached=bool(
+                semantic_evidence_context
+            ),
+            provider_calls_made=bool(
+                semantic_evidence_context.get("provider_calls_made")
+            ),
+            embeddings_created=bool(
+                semantic_evidence_context.get("embeddings_created")
+            ),
         ),
     }
 

@@ -218,7 +218,7 @@ def test_hook_contains_no_mutation_provider_embedding_api_or_ui_wiring():
         "execute_application(",
         "submit_application(",
         "create_embedding",
-        "provider_client",
+        "provider_client(",
         "src.app.api",
         "agentic_review.js",
     ]

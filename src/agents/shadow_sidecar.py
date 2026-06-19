@@ -11,6 +11,9 @@ JD_INTELLIGENCE_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_JD_INTELLIGENCE_ENABLE
 TAILORING_SUGGESTION_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_TAILORING_SUGGESTION_ENABLED"
 CRITIC_GUARDRAIL_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_CRITIC_GUARDRAIL_ENABLED"
 KILL_SWITCH_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_KILL_SWITCH"
+THREE_AGENT_SHADOW_WORKFLOW_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_THREE_AGENT_SHADOW_WORKFLOW_ENABLED"
+)
 
 STATUS_NOT_ENABLED = "not_enabled"
 STATUS_SKIPPED_BY_CONFIG = "skipped_by_config"
@@ -50,6 +53,9 @@ CHAIN_AGENT_ORDER = (
     "jd_intelligence",
     "tailoring_suggestion",
     "critic_guardrail",
+)
+PROVIDER_HANDOFF_SCHEMA_VERSION = (
+    "phase-9o-three-agent-provider-handoff-v1"
 )
 
 SUPPORTED_PIPELINE_HOOK_STAGES = (
@@ -443,6 +449,10 @@ def evaluate_shadow_sidecar_safety(
     *,
     vector_evidence_input_available: bool = False,
     vector_evidence_input_attached: bool = False,
+    semantic_evidence_input_available: bool = False,
+    semantic_evidence_input_attached: bool = False,
+    provider_calls_made: bool = False,
+    embeddings_created: bool = False,
 ) -> dict[str, bool]:
     payload = {
         "read_only": True,
@@ -471,8 +481,20 @@ def evaluate_shadow_sidecar_safety(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "semantic_evidence_input_available": bool(
+            semantic_evidence_input_available
+        ),
+        "semantic_evidence_input_attached": bool(
+            semantic_evidence_input_attached
+        ),
+        "semantic_evidence_input_shadow_only": True,
+        "semantic_evidence_used_for_scoring": False,
+        "semantic_evidence_used_for_ranking": False,
+        "semantic_evidence_used_for_queue": False,
+        "semantic_evidence_used_for_application": False,
+        "did_write_database": False,
+        "provider_calls_made": bool(provider_calls_made),
+        "embeddings_created": bool(embeddings_created),
     }
     return payload
 
@@ -501,7 +523,8 @@ def _vector_evidence_input(
     safety = _plain_dict(context.get("safety_metadata"))
     if not context or safety.get("vector_evidence_context_attached") is not True:
         return {}
-    return {
+    semantic_input = _plain_dict(context.get("semantic_evidence_context"))
+    payload = {
         "status": _clean_text(context.get("status")),
         "hook_surface": _clean_text(context.get("hook_surface")),
         "run_id": _clean_text(context.get("run_id")),
@@ -518,9 +541,12 @@ def _vector_evidence_input(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "provider_calls_made": bool(context.get("provider_calls_made")),
+        "embeddings_created": bool(context.get("embeddings_created")),
     }
+    if semantic_input:
+        payload["semantic_evidence_input"] = semantic_input
+    return payload
 
 
 def build_shadow_sidecar_input_payload(
@@ -586,6 +612,7 @@ def build_shadow_sidecar_trace_payload(
     fallback_used: bool = False,
     error_type: str = "",
     error_message: str = "",
+    agent_output_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     source = deepcopy(sidecar_input or {})
     config = _sidecar_config(source.get("sidecar_config"))
@@ -596,6 +623,13 @@ def build_shadow_sidecar_trace_payload(
     reason_codes = _text_list(agent_reason_codes)
     blocking_findings = _text_list(agent_blocking_findings)
     vector_input = _plain_dict(source.get("vector_evidence_input"))
+    semantic_input = _plain_dict(
+        vector_input.get("semantic_evidence_input")
+    )
+    structured_agent_output = _plain_dict(agent_output_payload)
+    provider_safety = _plain_dict(
+        structured_agent_output.get("safety_metadata")
+    )
     health_status = "healthy" if status == STATUS_COMPLETED_SHADOW else "warning"
     readiness_status = "ready" if status == STATUS_COMPLETED_SHADOW else "blocked"
     trace_bundle = {
@@ -674,10 +708,77 @@ def build_shadow_sidecar_trace_payload(
         "safety_metadata": evaluate_shadow_sidecar_safety(
             vector_evidence_input_available=bool(vector_input),
             vector_evidence_input_attached=bool(vector_input),
+            semantic_evidence_input_available=bool(semantic_input),
+            semantic_evidence_input_attached=bool(semantic_input),
+            provider_calls_made=bool(
+                semantic_input.get("provider_calls_made")
+            ),
+            embeddings_created=bool(
+                semantic_input.get("embeddings_created")
+            ),
         ),
     }
+    payload["safety_metadata"].update(
+        {
+            "jd_intelligence_provider_enabled": bool(
+                provider_safety.get("jd_intelligence_provider_enabled")
+            ),
+            "jd_intelligence_provider_attempted": bool(
+                provider_safety.get("jd_intelligence_provider_attempted")
+            ),
+            "jd_intelligence_provider_succeeded": bool(
+                provider_safety.get("jd_intelligence_provider_succeeded")
+            ),
+            "jd_intelligence_schema_validated": bool(
+                provider_safety.get("jd_intelligence_schema_validated")
+            ),
+            "tailoring_provider_enabled": bool(
+                provider_safety.get("tailoring_provider_enabled")
+            ),
+            "tailoring_provider_attempted": bool(
+                provider_safety.get("tailoring_provider_attempted")
+            ),
+            "tailoring_provider_succeeded": bool(
+                provider_safety.get("tailoring_provider_succeeded")
+            ),
+            "tailoring_schema_validated": bool(
+                provider_safety.get("tailoring_schema_validated")
+            ),
+            "critic_provider_enabled": bool(
+                provider_safety.get("critic_provider_enabled")
+            ),
+            "critic_provider_attempted": bool(
+                provider_safety.get("critic_provider_attempted")
+            ),
+            "critic_provider_succeeded": bool(
+                provider_safety.get("critic_provider_succeeded")
+            ),
+            "critic_schema_validated": bool(
+                provider_safety.get("critic_schema_validated")
+            ),
+            "provider_calls_made": bool(
+                provider_safety.get("provider_calls_made")
+                or payload["safety_metadata"].get("provider_calls_made")
+            ),
+        }
+    )
+    if structured_agent_output:
+        payload["agent_output_payload"] = structured_agent_output
+        provider_metadata = _plain_dict(
+            structured_agent_output.get("provider_metadata")
+        )
+        if provider_metadata:
+            payload["provider_metadata"] = provider_metadata
+        if provider_safety.get("jd_intelligence_provider_attempted") is True:
+            payload["provider_mode"] = "injected_shadow_jd_provider"
+        elif provider_safety.get("tailoring_provider_attempted") is True:
+            payload["provider_mode"] = "injected_shadow_tailoring_provider"
+        elif provider_safety.get("critic_provider_attempted") is True:
+            payload["provider_mode"] = "injected_shadow_critic_provider"
     if vector_input:
         payload["vector_evidence_input"] = vector_input
+    if semantic_input:
+        payload["semantic_evidence_input"] = semantic_input
     return payload
 
 
@@ -819,11 +920,16 @@ def run_shadow_sidecar_agent(
         )
 
     result = dict(raw_result or {}) if isinstance(raw_result, dict) else {}
+    result_status = _clean_text(result.get("agent_output_status"))
+    completed_with_fallback = result_status == STATUS_COMPLETED_WITH_FALLBACK
     return build_shadow_sidecar_trace_payload(
         sidecar_input=source,
-        sidecar_stage_status=STATUS_COMPLETED_SHADOW,
-        agent_output_status=_clean_text(result.get("agent_output_status"))
-        or STATUS_COMPLETED_SHADOW,
+        sidecar_stage_status=(
+            STATUS_COMPLETED_WITH_FALLBACK
+            if completed_with_fallback
+            else STATUS_COMPLETED_SHADOW
+        ),
+        agent_output_status=result_status or STATUS_COMPLETED_SHADOW,
         agent_recommendation=_clean_text(result.get("agent_recommendation"))
         or "preserve_source_deterministic_decision",
         agent_confidence=float(result.get("agent_confidence") or 0.0),
@@ -831,7 +937,8 @@ def run_shadow_sidecar_agent(
         agent_evidence_refs=_text_list(result.get("agent_evidence_refs")),
         agent_risk_flags=_text_list(result.get("agent_risk_flags")),
         agent_blocking_findings=_text_list(result.get("agent_blocking_findings")),
-        fallback_used=False,
+        fallback_used=completed_with_fallback,
+        agent_output_payload=_plain_dict(result.get("agent_output_payload")),
     )
 
 
@@ -951,6 +1058,38 @@ def build_shadow_sidecar_chain_payload(
         "blocking_findings": all_blocking_findings,
         "warning_findings": [] if readiness_status == "ready" else all_reason_codes,
     }
+    workflow_enabled = _config_bool(
+        config,
+        THREE_AGENT_SHADOW_WORKFLOW_FLAG,
+        "three_agent_shadow_workflow_enabled",
+        default=False,
+    )
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    vector_context = _plain_dict(trace_context.get("vector_evidence_context"))
+    quality_gate = _plain_dict(
+        vector_context.get("semantic_evidence_quality_gate")
+    )
+    workflow_safety = {
+        "three_agent_shadow_workflow_enabled": workflow_enabled,
+        "ordered_agent_count": len(results),
+        "ordered_agent_names": ordered_names,
+        "semantic_evidence_quality_gate_status": _clean_text(
+            quality_gate.get("status")
+        )
+        or "semantic_evidence_quality_gate_not_enabled",
+        "did_call_provider": False,
+        "did_create_embeddings": False,
+        "did_write_database": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_create_approval": False,
+        "did_mutate_resume": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+    }
+    safety = evaluate_shadow_sidecar_chain_safety()
+    safety.update(workflow_safety)
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": _clean_text(source.get("run_id")),
@@ -966,6 +1105,7 @@ def build_shadow_sidecar_chain_payload(
         "stage_statuses": stage_statuses,
         "ordered_agent_results": results,
         "agent_results": results,
+        "three_agent_shadow_workflow": deepcopy(workflow_safety),
         "source_deterministic_stage": _clean_text(
             source.get("source_deterministic_stage")
         ),
@@ -989,7 +1129,7 @@ def build_shadow_sidecar_chain_payload(
         "error_type": _clean_text(error_type),
         "error_message": _clean_text(error_message),
         "sidecar_config": config,
-        "safety_metadata": evaluate_shadow_sidecar_chain_safety(),
+        "safety_metadata": safety,
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }
@@ -998,8 +1138,22 @@ def build_shadow_sidecar_chain_payload(
 def run_shadow_sidecar_chain(
     *,
     sidecar_input: dict[str, Any],
+    jd_intelligence_shadow_agent: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    tailoring_shadow_agent: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    critic_shadow_agent: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    provider_handoff_enabled: bool = False,
 ) -> dict[str, Any]:
     source = deepcopy(sidecar_input or {})
+    runtime_source = deepcopy(source)
     config = _sidecar_config(source.get("sidecar_config"))
     kill_switch_enabled = _config_bool(
         config,
@@ -1040,29 +1194,112 @@ def run_shadow_sidecar_chain(
 
     agent_results: list[dict[str, Any]] = []
     for agent_name in enabled_agents:
+        runtime_trace = _plain_dict(
+            runtime_source.get("existing_trace_context")
+        )
+        jd_output = _plain_dict(
+            runtime_trace.get("jd_intelligence_provider_output")
+        )
+        tailoring_output = _plain_dict(
+            runtime_trace.get("tailoring_suggestion_provider_output")
+        )
         agent_input = _shadow_chain_agent_input(
-            source,
+            runtime_source,
             agent_name=agent_name,
             config=config,
         )
+        handoff_metadata = {
+            "upstream_jd_intelligence_available": bool(jd_output),
+            "upstream_tailoring_suggestions_available": bool(
+                tailoring_output
+            ),
+            "handoff_source_agent": (
+                "jd_intelligence"
+                if agent_name == "tailoring_suggestion" and jd_output
+                else "tailoring_suggestion"
+                if agent_name == "critic_guardrail" and tailoring_output
+                else ""
+            ),
+            "handoff_payload_schema_version": (
+                PROVIDER_HANDOFF_SCHEMA_VERSION
+            ),
+            "handoff_used_for_scoring": False,
+            "handoff_used_for_ranking": False,
+            "handoff_used_for_queue": False,
+            "handoff_used_for_application": False,
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+        }
         try:
-            agent_results.append(run_shadow_sidecar_agent(sidecar_input=agent_input))
-        except Exception as exc:
-            agent_results.append(
-                build_shadow_sidecar_fallback_payload(
-                    sidecar_input=agent_input,
-                    sidecar_stage_status=STATUS_FAILED_NON_BLOCKING,
-                    reason_codes=["shadow_chain_stage_error"],
-                    error_type=exc.__class__.__name__,
-                    error_message=str(exc),
-                )
+            shadow_agent = (
+                jd_intelligence_shadow_agent
+                if agent_name == "jd_intelligence"
+                else tailoring_shadow_agent
+                if agent_name == "tailoring_suggestion"
+                else critic_shadow_agent
+                if agent_name == "critic_guardrail"
+                else None
             )
+            result = run_shadow_sidecar_agent(
+                sidecar_input=agent_input,
+                shadow_agent=shadow_agent,
+            )
+        except Exception as exc:
+            result = build_shadow_sidecar_fallback_payload(
+                sidecar_input=agent_input,
+                sidecar_stage_status=STATUS_FAILED_NON_BLOCKING,
+                reason_codes=["shadow_chain_stage_error"],
+                error_type=exc.__class__.__name__,
+                error_message=str(exc),
+            )
+        if provider_handoff_enabled is True:
+            result["provider_handoff_metadata"] = handoff_metadata
+            output = _plain_dict(result.get("agent_output_payload"))
+            if output.get("validation_status") == "valid":
+                if agent_name == "jd_intelligence":
+                    runtime_trace["jd_intelligence_provider_output"] = output
+                elif agent_name == "tailoring_suggestion":
+                    runtime_trace["tailoring_suggestion_provider_output"] = (
+                        output
+                    )
+                runtime_source["existing_trace_context"] = runtime_trace
+        agent_results.append(result)
 
-    return build_shadow_sidecar_chain_payload(
+    chain = build_shadow_sidecar_chain_payload(
         sidecar_input=source,
         chain_status=_shadow_chain_status(agent_results),
         agent_results=agent_results,
     )
+    if provider_handoff_enabled is True:
+        chain["three_agent_provider_handoff"] = {
+            "handoff_payload_schema_version": (
+                PROVIDER_HANDOFF_SCHEMA_VERSION
+            ),
+            "provider_handoff_enabled": True,
+            "ordered_agent_names": [
+                _clean_text(result.get("agent_name"))
+                for result in agent_results
+            ],
+            "upstream_jd_intelligence_available": bool(
+                _plain_dict(
+                    runtime_source.get("existing_trace_context")
+                ).get("jd_intelligence_provider_output")
+            ),
+            "upstream_tailoring_suggestions_available": bool(
+                _plain_dict(
+                    runtime_source.get("existing_trace_context")
+                ).get("tailoring_suggestion_provider_output")
+            ),
+            "handoff_used_for_scoring": False,
+            "handoff_used_for_ranking": False,
+            "handoff_used_for_queue": False,
+            "handoff_used_for_application": False,
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+        }
+    return chain
 
 
 def build_shadow_sidecar_chain_evidence_summary(

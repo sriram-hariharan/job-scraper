@@ -55,6 +55,10 @@ def evaluate_shadow_sidecar_pipeline_hook_safety(
     called_by_pipeline: bool = False,
     vector_evidence_context_available: bool = False,
     vector_evidence_context_attached: bool = False,
+    semantic_evidence_input_available: bool = False,
+    semantic_evidence_input_attached: bool = False,
+    provider_calls_made: bool = False,
+    embeddings_created: bool = False,
 ) -> dict[str, bool]:
     return {
         "read_only": True,
@@ -85,8 +89,20 @@ def evaluate_shadow_sidecar_pipeline_hook_safety(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "semantic_evidence_input_available": bool(
+            semantic_evidence_input_available
+        ),
+        "semantic_evidence_input_attached": bool(
+            semantic_evidence_input_attached
+        ),
+        "semantic_evidence_input_shadow_only": True,
+        "semantic_evidence_used_for_scoring": False,
+        "semantic_evidence_used_for_ranking": False,
+        "semantic_evidence_used_for_queue": False,
+        "semantic_evidence_used_for_application": False,
+        "did_write_database": False,
+        "provider_calls_made": bool(provider_calls_made),
+        "embeddings_created": bool(embeddings_created),
     }
 
 
@@ -488,6 +504,12 @@ def _approval_request_context_from_hook_payload(
 
 def _advisory_vector_evidence_context(
     vector_evidence_hook_payload: Any,
+    *,
+    semantic_evidence_quality_gate_enabled: bool = False,
+    semantic_evidence_minimum_similarity_score: float = 0.75,
+    semantic_evidence_minimum_count: int = 1,
+    semantic_evidence_max_count: int = 5,
+    semantic_evidence_quality_gate_helper: Any = None,
 ) -> dict[str, Any]:
     source = _plain_dict(vector_evidence_hook_payload)
     source_safety = _plain_dict(source.get("safety_metadata"))
@@ -498,7 +520,61 @@ def _advisory_vector_evidence_context(
     )
     if not context_available:
         return {}
-    return {
+    semantic_source = _plain_dict(evidence_context.get("semantic_retrieval"))
+    semantic_attached = bool(
+        semantic_source
+        and source_safety.get("semantic_evidence_attached") is True
+    )
+    quality_gate_payload: dict[str, Any] = {}
+    if semantic_attached and semantic_evidence_quality_gate_enabled is True:
+        quality_gate = semantic_evidence_quality_gate_helper
+        if quality_gate is None:
+            from src.agents.semantic_evidence_quality_gate import (
+                run_semantic_evidence_quality_gate,
+            )
+
+            quality_gate = run_semantic_evidence_quality_gate
+        quality_result = quality_gate(
+            enabled=True,
+            evidence_items=deepcopy(
+                semantic_source.get("retrieval_candidates", []) or []
+            ),
+            minimum_similarity_score=(
+                semantic_evidence_minimum_similarity_score
+            ),
+            minimum_evidence_count=semantic_evidence_minimum_count,
+            max_evidence_count=semantic_evidence_max_count,
+        )
+        quality_gate_payload = (
+            deepcopy(quality_result)
+            if isinstance(quality_result, dict)
+            else {}
+        )
+        semantic_attached = bool(
+            quality_gate_payload.get("status") == "evidence_quality_passed"
+            and quality_gate_payload.get(
+                "semantic_evidence_quality_passed"
+            )
+        )
+        if semantic_attached:
+            semantic_source["retrieval_candidates"] = deepcopy(
+                quality_gate_payload.get("quality_evidence", []) or []
+            )
+            semantic_source["result_count"] = len(
+                semantic_source["retrieval_candidates"]
+            )
+            evidence_context["semantic_retrieval"] = deepcopy(
+                semantic_source
+            )
+        else:
+            evidence_context.pop("semantic_retrieval", None)
+    provider_calls_made = bool(
+        source_safety.get("provider_calls_made")
+    ) if semantic_attached else False
+    embeddings_created = bool(
+        source_safety.get("embeddings_created")
+    ) if semantic_attached else False
+    context = {
         "status": _clean_text(source.get("status")),
         "hook_surface": _clean_text(source.get("hook_surface")),
         "run_id": _clean_text(source.get("run_id")),
@@ -510,8 +586,16 @@ def _advisory_vector_evidence_context(
         "vector_evidence_used_for_ranking": False,
         "vector_evidence_used_for_queue": False,
         "vector_evidence_used_for_application": False,
-        "provider_calls_made": False,
-        "embeddings_created": False,
+        "semantic_evidence_input_available": semantic_attached,
+        "semantic_evidence_input_attached": semantic_attached,
+        "semantic_evidence_input_shadow_only": True,
+        "semantic_evidence_used_for_scoring": False,
+        "semantic_evidence_used_for_ranking": False,
+        "semantic_evidence_used_for_queue": False,
+        "semantic_evidence_used_for_application": False,
+        "did_write_database": False,
+        "provider_calls_made": provider_calls_made,
+        "embeddings_created": embeddings_created,
         "safety_metadata": {
             "read_only": True,
             "advisory_only": True,
@@ -523,10 +607,65 @@ def _advisory_vector_evidence_context(
             "vector_evidence_used_for_ranking": False,
             "vector_evidence_used_for_queue": False,
             "vector_evidence_used_for_application": False,
-            "provider_calls_made": False,
-            "embeddings_created": False,
+            "semantic_evidence_input_available": semantic_attached,
+            "semantic_evidence_input_attached": semantic_attached,
+            "semantic_evidence_input_shadow_only": True,
+            "semantic_evidence_used_for_scoring": False,
+            "semantic_evidence_used_for_ranking": False,
+            "semantic_evidence_used_for_queue": False,
+            "semantic_evidence_used_for_application": False,
+            "did_write_database": False,
+            "provider_calls_made": provider_calls_made,
+            "embeddings_created": embeddings_created,
         },
     }
+    if semantic_evidence_quality_gate_enabled is True:
+        context["semantic_evidence_quality_gate"] = quality_gate_payload
+        context["safety_metadata"].update(
+            {
+                "semantic_evidence_quality_gate_enabled": True,
+                "semantic_evidence_quality_passed": semantic_attached,
+            }
+        )
+    if semantic_attached:
+        context["semantic_evidence_context"] = {
+            "status": _clean_text(semantic_source.get("status")),
+            "result_count": int(semantic_source.get("result_count") or 0),
+            "retrieval_candidates": [
+                {
+                    key: deepcopy(candidate.get(key))
+                    for key in (
+                        "chunk_id",
+                        "chunk_type",
+                        "source_type",
+                        "source_id",
+                        "retrieval_score",
+                        "distance",
+                    )
+                    if candidate.get(key) is not None
+                }
+                for candidate in semantic_source.get("retrieval_candidates", [])
+                if isinstance(candidate, dict)
+            ],
+            "read_only": True,
+            "advisory_only": True,
+            "shadow_only": True,
+            "semantic_evidence_input_available": True,
+            "semantic_evidence_input_attached": True,
+            "semantic_evidence_input_shadow_only": True,
+            "semantic_evidence_used_for_scoring": False,
+            "semantic_evidence_used_for_ranking": False,
+            "semantic_evidence_used_for_queue": False,
+            "semantic_evidence_used_for_application": False,
+            "did_write_database": False,
+            "provider_calls_made": provider_calls_made,
+            "embeddings_created": embeddings_created,
+        }
+        if semantic_evidence_quality_gate_enabled is True:
+            context["semantic_evidence_context"][
+                "semantic_evidence_quality_gate"
+            ] = deepcopy(quality_gate_payload)
+    return context
 
 
 def _safe_agent_recommendation_overlay_auto_generation_payload(
@@ -672,16 +811,112 @@ def _base_hook_payload(
         "provider_calls_disabled_in_tests": True,
         "safety_metadata": {},
         "default_off_pipeline_hook_call_sites": 1 if called_by_pipeline else 0,
+        "provider_backed_automated_agents": int(
+            chain.get("provider_backed_automated_agents", 0) or 0
+        ),
+        "live_provider_backed_automated_agents": int(
+            chain.get("live_provider_backed_automated_agents", 0) or 0
+        ),
+        "mutation_authorized_agents": 0,
+        "mutation_authorized_scoring_agents": 0,
+        "mutation_authorized_ranking_agents": 0,
+        "mutation_authorized_application_agents": 0,
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }
     vector_context = _plain_dict(
         payload["existing_trace_context"].get("vector_evidence_context")
     )
+    semantic_context = _plain_dict(
+        vector_context.get("semantic_evidence_context")
+    )
     payload["safety_metadata"] = evaluate_shadow_sidecar_pipeline_hook_safety(
         called_by_pipeline=called_by_pipeline,
         vector_evidence_context_available=bool(vector_context),
         vector_evidence_context_attached=bool(vector_context),
+        semantic_evidence_input_available=bool(semantic_context),
+        semantic_evidence_input_attached=bool(semantic_context),
+        provider_calls_made=bool(
+            semantic_context.get("provider_calls_made")
+            or chain.get("provider_backed_automated_agents")
+        ),
+        embeddings_created=bool(
+            semantic_context.get("embeddings_created")
+        ),
+    )
+    jd_result = next(
+        (
+            result
+            for result in chain.get("ordered_agent_results", [])
+            if isinstance(result, dict)
+            and _clean_text(result.get("agent_name")) == "jd_intelligence"
+        ),
+        {},
+    )
+    jd_safety = _plain_dict(jd_result.get("safety_metadata"))
+    tailoring_result = next(
+        (
+            result
+            for result in chain.get("ordered_agent_results", [])
+            if isinstance(result, dict)
+            and _clean_text(result.get("agent_name"))
+            == "tailoring_suggestion"
+        ),
+        {},
+    )
+    tailoring_safety = _plain_dict(
+        tailoring_result.get("safety_metadata")
+    )
+    critic_result = next(
+        (
+            result
+            for result in chain.get("ordered_agent_results", [])
+            if isinstance(result, dict)
+            and _clean_text(result.get("agent_name"))
+            == "critic_guardrail"
+        ),
+        {},
+    )
+    critic_safety = _plain_dict(critic_result.get("safety_metadata"))
+    payload["safety_metadata"].update(
+        {
+            "jd_intelligence_provider_enabled": bool(
+                jd_safety.get("jd_intelligence_provider_enabled")
+            ),
+            "jd_intelligence_provider_attempted": bool(
+                jd_safety.get("jd_intelligence_provider_attempted")
+            ),
+            "jd_intelligence_provider_succeeded": bool(
+                jd_safety.get("jd_intelligence_provider_succeeded")
+            ),
+            "jd_intelligence_schema_validated": bool(
+                jd_safety.get("jd_intelligence_schema_validated")
+            ),
+            "tailoring_provider_enabled": bool(
+                tailoring_safety.get("tailoring_provider_enabled")
+            ),
+            "tailoring_provider_attempted": bool(
+                tailoring_safety.get("tailoring_provider_attempted")
+            ),
+            "tailoring_provider_succeeded": bool(
+                tailoring_safety.get("tailoring_provider_succeeded")
+            ),
+            "tailoring_schema_validated": bool(
+                tailoring_safety.get("tailoring_schema_validated")
+            ),
+            "critic_provider_enabled": bool(
+                critic_safety.get("critic_provider_enabled")
+            ),
+            "critic_provider_attempted": bool(
+                critic_safety.get("critic_provider_attempted")
+            ),
+            "critic_provider_succeeded": bool(
+                critic_safety.get("critic_provider_succeeded")
+            ),
+            "critic_schema_validated": bool(
+                critic_safety.get("critic_schema_validated")
+            ),
+        }
     )
     payload["agent_recommendation_overlay_auto_generation"] = (
         _safe_agent_recommendation_overlay_auto_generation_payload(payload)
@@ -725,15 +960,572 @@ def run_shadow_sidecar_pipeline_hook(
     resume_profile_payload: dict[str, Any] | None = None,
     existing_trace_context: dict[str, Any] | None = None,
     vector_evidence_hook_payload: dict[str, Any] | None = None,
+    semantic_evidence_quality_gate_enabled: bool = False,
+    semantic_evidence_minimum_similarity_score: float = 0.75,
+    semantic_evidence_minimum_count: int = 1,
+    semantic_evidence_max_count: int = 5,
+    semantic_evidence_quality_gate_helper: Any = None,
+    three_agent_shadow_workflow_enabled: bool = False,
+    llmops_trace_contract_enabled: bool = False,
+    llmops_trace_metadata_by_agent: dict[str, dict[str, Any]] | None = None,
+    llmops_trace_contract_helper: Any = None,
+    llmops_aggregate_enabled: bool = False,
+    llmops_aggregate_helper: Any = None,
+    workflow_readiness_enabled: bool = False,
+    workflow_readiness_helper: Any = None,
+    jd_intelligence_provider_enabled: bool = False,
+    jd_intelligence_provider: Any = None,
+    jd_intelligence_provider_metadata: dict[str, Any] | None = None,
+    tailoring_provider_enabled: bool = False,
+    tailoring_provider: Any = None,
+    tailoring_provider_metadata: dict[str, Any] | None = None,
+    critic_provider_enabled: bool = False,
+    critic_provider: Any = None,
+    critic_provider_metadata: dict[str, Any] | None = None,
+    provider_handoff_enabled: bool = False,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
     trace_context = _snapshot(existing_trace_context or {})
     vector_evidence_context = _advisory_vector_evidence_context(
-        vector_evidence_hook_payload
+        vector_evidence_hook_payload,
+        semantic_evidence_quality_gate_enabled=(
+            semantic_evidence_quality_gate_enabled
+        ),
+        semantic_evidence_minimum_similarity_score=(
+            semantic_evidence_minimum_similarity_score
+        ),
+        semantic_evidence_minimum_count=semantic_evidence_minimum_count,
+        semantic_evidence_max_count=semantic_evidence_max_count,
+        semantic_evidence_quality_gate_helper=(
+            semantic_evidence_quality_gate_helper
+        ),
     )
     if vector_evidence_context:
         trace_context["vector_evidence_context"] = vector_evidence_context
+
+    effective_sidecar_config = _snapshot(sidecar_config or {})
+    if three_agent_shadow_workflow_enabled is True:
+        effective_sidecar_config.update(
+            {
+                shadow_sidecar.GLOBAL_SIDECAR_FLAG: True,
+                shadow_sidecar.JD_INTELLIGENCE_FLAG: True,
+                shadow_sidecar.TAILORING_SUGGESTION_FLAG: True,
+                shadow_sidecar.CRITIC_GUARDRAIL_FLAG: True,
+                shadow_sidecar.THREE_AGENT_SHADOW_WORKFLOW_FLAG: True,
+                "provider_execution_allowed": False,
+            }
+        )
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and (
+            jd_intelligence_provider_enabled is True
+            or tailoring_provider_enabled is True
+            or critic_provider_enabled is True
+        )
+    ):
+        effective_sidecar_config["provider_execution_allowed"] = True
+
+    jd_shadow_agent = None
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and jd_intelligence_provider_enabled is True
+    ):
+        from src.agents.jd_intelligence import (
+            build_live_jd_intelligence_dry_run_payload,
+        )
+
+        def jd_shadow_agent(sidecar_input: dict[str, Any]) -> dict[str, Any]:
+            job = _plain_dict(sidecar_input.get("job_payload"))
+            provider_payload = build_live_jd_intelligence_dry_run_payload(
+                job_title=job.get("title"),
+                company=job.get("company"),
+                location=job.get("location"),
+                job_description=(
+                    job.get("job_description") or job.get("description")
+                ),
+                source_metadata=_plain_dict(job.get("source_metadata")),
+                context_id=sidecar_input.get("run_id"),
+                job_id=sidecar_input.get("job_id"),
+                adapter=jd_intelligence_provider,
+                feature_enabled=True,
+            )
+            validation_status = _clean_text(
+                provider_payload.get("validation_status")
+            )
+            provider_called = bool(
+                _plain_dict(
+                    provider_payload.get("safety_metadata")
+                ).get("did_call_llm")
+            )
+            succeeded = validation_status == "valid"
+            supplied_metadata = _plain_dict(
+                jd_intelligence_provider_metadata
+            )
+            metadata = {
+                "model_provider": _clean_text(
+                    provider_payload.get("model_provider")
+                ),
+                "model_name": _clean_text(
+                    provider_payload.get("model_name")
+                ),
+                "prompt_version": _clean_text(
+                    provider_payload.get("prompt_version")
+                ),
+                "latency_ms": int(
+                    provider_payload.get("latency_ms") or 0
+                ),
+                "fallback_used": bool(
+                    provider_payload.get("fallback_used")
+                    or not succeeded
+                ),
+                "schema_validation_status": validation_status,
+                "error_type": (
+                    _clean_text(
+                        (provider_payload.get("validation_errors") or [""])[0]
+                    )
+                    if validation_status not in {"valid", ""}
+                    else ""
+                ),
+                "provider_call_made": provider_called,
+            }
+            metadata.update(supplied_metadata)
+            token_usage = _plain_dict(
+                provider_payload.get("token_usage")
+            )
+            cost = _plain_dict(provider_payload.get("cost"))
+            metadata.update(
+                {
+                    "input_tokens": int(
+                        metadata.get("input_tokens")
+                        or token_usage.get("input_token_count")
+                        or token_usage.get("prompt_tokens")
+                        or 0
+                    ),
+                    "output_tokens": int(
+                        metadata.get("output_tokens")
+                        or token_usage.get("output_token_count")
+                        or token_usage.get("completion_tokens")
+                        or 0
+                    ),
+                    "estimated_cost": float(
+                        metadata.get("estimated_cost")
+                        or cost.get("estimated_cost")
+                        or cost.get("usd")
+                        or 0
+                    ),
+                    "retry_count": int(
+                        metadata.get("retry_count") or 0
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = metadata
+            provider_payload["fallback_used"] = bool(
+                provider_payload.get("fallback_used") or not succeeded
+            )
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(provider_payload.get("safety_metadata")),
+                "jd_intelligence_provider_enabled": True,
+                "jd_intelligence_provider_attempted": provider_called,
+                "jd_intelligence_provider_succeeded": succeeded,
+                "jd_intelligence_schema_validated": succeeded,
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": float(
+                    provider_payload.get("extraction_confidence") or 0
+                ),
+                "agent_reason_codes": list(
+                    provider_payload.get("validation_errors") or []
+                ),
+                "agent_evidence_refs": [
+                    f"jd_provider.{field}"
+                    for field in (
+                        "required_skills",
+                        "preferred_skills",
+                        "required_tools",
+                        "preferred_tools",
+                        "workflows",
+                        "methods",
+                        "business_contexts",
+                        "stakeholder_contexts",
+                        "ownership_signals",
+                        "seniority_signals",
+                    )
+                    if provider_payload.get(field)
+                ],
+                "agent_risk_flags": list(
+                    provider_payload.get("risk_flags") or []
+                ),
+                "agent_output_payload": provider_payload,
+            }
+
+    tailoring_shadow_agent = None
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and tailoring_provider_enabled is True
+    ):
+        from src.agents.tailoring_decision_agent import (
+            build_live_tailoring_suggestion_shadow_payload,
+        )
+
+        def tailoring_shadow_agent(
+            sidecar_input: dict[str, Any],
+        ) -> dict[str, Any]:
+            job = _plain_dict(sidecar_input.get("job_payload"))
+            trace = _plain_dict(
+                sidecar_input.get("existing_trace_context")
+            )
+            trusted_jd_output = _plain_dict(
+                trace.get("jd_intelligence_provider_output")
+            )
+            resume = _plain_dict(
+                sidecar_input.get("resume_profile_payload")
+            )
+            provider_payload = (
+                build_live_tailoring_suggestion_shadow_payload(
+                    jd_intelligence=trusted_jd_output
+                    if provider_handoff_enabled is True
+                    else {
+                        key: deepcopy(job.get(key))
+                        for key in (
+                            "required_skills",
+                            "preferred_skills",
+                            "required_tools",
+                            "preferred_tools",
+                            "workflows",
+                            "methods",
+                            "business_contexts",
+                            "stakeholder_contexts",
+                            "ownership_signals",
+                            "seniority_signals",
+                        )
+                    },
+                    resume_profile=resume,
+                    context_id=sidecar_input.get("run_id"),
+                    job_id=sidecar_input.get("job_id"),
+                    adapter=tailoring_provider,
+                    feature_enabled=True,
+                )
+            )
+            validation_status = _clean_text(
+                provider_payload.get("validation_status")
+            )
+            provider_called = bool(
+                _plain_dict(
+                    provider_payload.get("safety_metadata")
+                ).get("did_call_llm")
+            )
+            succeeded = validation_status == "valid"
+            supplied_metadata = _plain_dict(
+                tailoring_provider_metadata
+            )
+            token_usage = _plain_dict(
+                provider_payload.get("token_usage")
+            )
+            cost = _plain_dict(provider_payload.get("cost"))
+            metadata = {
+                "model_provider": _clean_text(
+                    provider_payload.get("model_provider")
+                ),
+                "model_name": _clean_text(
+                    provider_payload.get("model_name")
+                ),
+                "prompt_version": _clean_text(
+                    provider_payload.get("prompt_version")
+                ),
+                "latency_ms": int(
+                    provider_payload.get("latency_ms") or 0
+                ),
+                "fallback_used": bool(
+                    provider_payload.get("fallback_used")
+                    or not succeeded
+                ),
+                "schema_validation_status": validation_status,
+                "error_type": (
+                    _clean_text(
+                        (provider_payload.get("validation_errors") or [""])[0]
+                    )
+                    if validation_status not in {"valid", ""}
+                    else ""
+                ),
+                "provider_call_made": provider_called,
+            }
+            metadata.update(supplied_metadata)
+            metadata.update(
+                {
+                    "input_tokens": int(
+                        metadata.get("input_tokens")
+                        or token_usage.get("input_token_count")
+                        or token_usage.get("prompt_tokens")
+                        or 0
+                    ),
+                    "output_tokens": int(
+                        metadata.get("output_tokens")
+                        or token_usage.get("output_token_count")
+                        or token_usage.get("completion_tokens")
+                        or 0
+                    ),
+                    "estimated_cost": float(
+                        metadata.get("estimated_cost")
+                        or cost.get("estimated_cost")
+                        or cost.get("usd")
+                        or 0
+                    ),
+                    "retry_count": int(
+                        metadata.get("retry_count") or 0
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = metadata
+            provider_payload["fallback_used"] = bool(
+                provider_payload.get("fallback_used") or not succeeded
+            )
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(provider_payload.get("safety_metadata")),
+                "tailoring_provider_enabled": True,
+                "tailoring_provider_attempted": provider_called,
+                "tailoring_provider_succeeded": succeeded,
+                "tailoring_schema_validated": succeeded,
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            suggestion_count = sum(
+                len(provider_payload.get(field, []) or [])
+                for field in (
+                    "patch_ready_suggestions",
+                    "guidance_only_suggestions",
+                    "rejected_suggestions",
+                )
+            )
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": 1.0 if succeeded else 0.0,
+                "agent_reason_codes": list(
+                    provider_payload.get("validation_errors") or []
+                ),
+                "agent_evidence_refs": [
+                    f"tailoring_provider.suggestion_{index + 1}"
+                    for index in range(suggestion_count)
+                ],
+                "agent_risk_flags": [
+                    _clean_text(item)
+                    for suggestion in (
+                        provider_payload.get("rejected_suggestions") or []
+                    )
+                    if isinstance(suggestion, dict)
+                    for item in suggestion.get("risk_flags", [])
+                    if _clean_text(item)
+                ],
+                "agent_output_payload": provider_payload,
+            }
+
+    critic_shadow_agent = None
+    if (
+        three_agent_shadow_workflow_enabled is True
+        and critic_provider_enabled is True
+    ):
+        from src.agents.critic_agent import (
+            build_live_critic_guardrail_shadow_payload,
+        )
+
+        def critic_shadow_agent(
+            sidecar_input: dict[str, Any],
+        ) -> dict[str, Any]:
+            job = _plain_dict(sidecar_input.get("job_payload"))
+            resume = _plain_dict(
+                sidecar_input.get("resume_profile_payload")
+            )
+            tailoring_context = _plain_dict(
+                _plain_dict(
+                    sidecar_input.get("existing_trace_context")
+                ).get("tailoring_suggestion_payload")
+            )
+            if provider_handoff_enabled is True:
+                tailoring_context = _plain_dict(
+                    _plain_dict(
+                        sidecar_input.get("existing_trace_context")
+                    ).get("tailoring_suggestion_provider_output")
+                )
+            provider_payload = build_live_critic_guardrail_shadow_payload(
+                tailoring_suggestion_payload=tailoring_context,
+                jd_intelligence={
+                    key: deepcopy(job.get(key))
+                    for key in (
+                        "required_skills",
+                        "preferred_skills",
+                        "required_tools",
+                        "preferred_tools",
+                        "workflows",
+                        "methods",
+                        "business_contexts",
+                        "stakeholder_contexts",
+                        "ownership_signals",
+                        "seniority_signals",
+                    )
+                },
+                resume_profile=resume,
+                context_id=sidecar_input.get("run_id"),
+                job_id=sidecar_input.get("job_id"),
+                adapter=critic_provider,
+                feature_enabled=True,
+            )
+            validation_status = _clean_text(
+                provider_payload.get("validation_status")
+            )
+            provider_called = bool(
+                _plain_dict(
+                    provider_payload.get("safety_metadata")
+                ).get("did_call_llm")
+            )
+            succeeded = validation_status == "valid"
+            supplied_metadata = _plain_dict(critic_provider_metadata)
+            token_usage = _plain_dict(
+                provider_payload.get("token_usage")
+            )
+            cost = _plain_dict(provider_payload.get("cost"))
+            metadata = {
+                "model_provider": _clean_text(
+                    provider_payload.get("model_provider")
+                ),
+                "model_name": _clean_text(
+                    provider_payload.get("model_name")
+                ),
+                "prompt_version": _clean_text(
+                    provider_payload.get("prompt_version")
+                ),
+                "latency_ms": int(
+                    provider_payload.get("latency_ms") or 0
+                ),
+                "fallback_used": bool(
+                    provider_payload.get("fallback_used")
+                    or not succeeded
+                ),
+                "schema_validation_status": validation_status,
+                "error_type": (
+                    _clean_text(
+                        (provider_payload.get("validation_errors") or [""])[0]
+                    )
+                    if validation_status not in {"valid", ""}
+                    else ""
+                ),
+                "provider_call_made": provider_called,
+            }
+            metadata.update(supplied_metadata)
+            metadata.update(
+                {
+                    "input_tokens": int(
+                        metadata.get("input_tokens")
+                        or token_usage.get("input_token_count")
+                        or token_usage.get("prompt_tokens")
+                        or 0
+                    ),
+                    "output_tokens": int(
+                        metadata.get("output_tokens")
+                        or token_usage.get("output_token_count")
+                        or token_usage.get("completion_tokens")
+                        or 0
+                    ),
+                    "estimated_cost": float(
+                        metadata.get("estimated_cost")
+                        or cost.get("estimated_cost")
+                        or cost.get("usd")
+                        or 0
+                    ),
+                    "retry_count": int(
+                        metadata.get("retry_count") or 0
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = metadata
+            provider_payload["fallback_used"] = bool(
+                provider_payload.get("fallback_used") or not succeeded
+            )
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(provider_payload.get("safety_metadata")),
+                "critic_provider_enabled": True,
+                "critic_provider_attempted": provider_called,
+                "critic_provider_succeeded": succeeded,
+                "critic_schema_validated": succeeded,
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": float(
+                    provider_payload.get("confidence") or 0
+                ),
+                "agent_reason_codes": list(
+                    provider_payload.get("reason_codes") or []
+                )
+                + list(provider_payload.get("validation_errors") or []),
+                "agent_evidence_refs": [
+                    f"critic_provider.decision_{index + 1}"
+                    for index in range(
+                        sum(
+                            len(provider_payload.get(field, []) or [])
+                            for field in (
+                                "approved_suggestions",
+                                "downgraded_suggestions",
+                                "rejected_suggestions",
+                            )
+                        )
+                    )
+                ],
+                "agent_risk_flags": list(
+                    provider_payload.get("unsupported_claim_risks") or []
+                )
+                + list(provider_payload.get("ats_risks") or [])
+                + list(provider_payload.get("readability_risks") or []),
+                "agent_blocking_findings": list(
+                    provider_payload.get("evidence_gaps") or []
+                ),
+                "agent_output_payload": provider_payload,
+            }
 
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
@@ -745,7 +1537,7 @@ def run_shadow_sidecar_pipeline_hook(
         source_deterministic_score=source_deterministic_score,
         source_deterministic_decision=source_deterministic_decision,
         source_deterministic_reason_codes=source_deterministic_reason_codes,
-        sidecar_config=_snapshot(sidecar_config or {}),
+        sidecar_config=effective_sidecar_config,
         job_payload=_snapshot(job_payload or {}),
         resume_profile_payload=_snapshot(resume_profile_payload or {}),
         existing_trace_context=_snapshot(trace_context),
@@ -775,12 +1567,61 @@ def run_shadow_sidecar_pipeline_hook(
             job_payload=_snapshot(job_payload or {}),
             resume_profile_payload=_snapshot(resume_profile_payload or {}),
             existing_trace_context=_snapshot(trace_context),
-            sidecar_config=_snapshot(sidecar_config or {}),
+            sidecar_config=effective_sidecar_config,
             agent_name="shadow_sidecar_chain",
         )
         chain_payload = shadow_sidecar.run_shadow_sidecar_chain(
-            sidecar_input=sidecar_input
+            sidecar_input=sidecar_input,
+            jd_intelligence_shadow_agent=jd_shadow_agent,
+            tailoring_shadow_agent=tailoring_shadow_agent,
+            critic_shadow_agent=critic_shadow_agent,
+            provider_handoff_enabled=provider_handoff_enabled is True,
         )
+        if (
+            llmops_trace_contract_enabled is True
+            or llmops_aggregate_enabled is True
+            or jd_intelligence_provider_enabled is True
+            or tailoring_provider_enabled is True
+            or critic_provider_enabled is True
+        ):
+            trace_contract = llmops_trace_contract_helper
+            if trace_contract is None:
+                from src.agents.agent_llmops_trace_contract import (
+                    attach_three_agent_llmops_trace_contract,
+                )
+
+                trace_contract = attach_three_agent_llmops_trace_contract
+            chain_payload = trace_contract(
+                chain_payload=chain_payload,
+                enabled=True,
+                metadata_by_agent=deepcopy(
+                    llmops_trace_metadata_by_agent or {}
+                ),
+            )
+        if llmops_aggregate_enabled is True:
+            aggregate_helper = llmops_aggregate_helper
+            if aggregate_helper is None:
+                from src.agents.three_agent_llmops_aggregate import (
+                    attach_three_agent_llmops_aggregate,
+                )
+
+                aggregate_helper = attach_three_agent_llmops_aggregate
+            chain_payload = aggregate_helper(
+                chain_payload=chain_payload,
+                enabled=True,
+            )
+        if workflow_readiness_enabled is True:
+            readiness_helper = workflow_readiness_helper
+            if readiness_helper is None:
+                from src.agents.three_agent_workflow_readiness import (
+                    attach_three_agent_workflow_readiness,
+                )
+
+                readiness_helper = attach_three_agent_workflow_readiness
+            chain_payload = readiness_helper(
+                chain_payload=chain_payload,
+                enabled=True,
+            )
         observability = shadow_sidecar.build_shadow_sidecar_chain_observability_payload(
             chain_payload
         )

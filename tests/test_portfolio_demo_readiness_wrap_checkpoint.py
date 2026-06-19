@@ -289,6 +289,7 @@ ALLOWED_CHANGED = {
     "src/agents/three_agent_llmops_observability_readback.py",
     "tests/test_three_agent_llmops_observability_readback_default_off.py",
     "tests/test_three_agent_llmops_observability_service_bridge_default_off.py",
+    "tests/test_three_agent_llmops_observability_api_default_off.py",
 }
 
 def _changed_files():

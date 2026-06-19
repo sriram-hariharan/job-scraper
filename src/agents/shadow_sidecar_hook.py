@@ -881,6 +881,9 @@ def run_shadow_sidecar_pipeline_hook(
     semantic_evidence_max_count: int = 5,
     semantic_evidence_quality_gate_helper: Any = None,
     three_agent_shadow_workflow_enabled: bool = False,
+    llmops_trace_contract_enabled: bool = False,
+    llmops_trace_metadata_by_agent: dict[str, dict[str, Any]] | None = None,
+    llmops_trace_contract_helper: Any = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -961,6 +964,21 @@ def run_shadow_sidecar_pipeline_hook(
         chain_payload = shadow_sidecar.run_shadow_sidecar_chain(
             sidecar_input=sidecar_input
         )
+        if llmops_trace_contract_enabled is True:
+            trace_contract = llmops_trace_contract_helper
+            if trace_contract is None:
+                from src.agents.agent_llmops_trace_contract import (
+                    attach_three_agent_llmops_trace_contract,
+                )
+
+                trace_contract = attach_three_agent_llmops_trace_contract
+            chain_payload = trace_contract(
+                chain_payload=chain_payload,
+                enabled=True,
+                metadata_by_agent=deepcopy(
+                    llmops_trace_metadata_by_agent or {}
+                ),
+            )
         observability = shadow_sidecar.build_shadow_sidecar_chain_observability_payload(
             chain_payload
         )

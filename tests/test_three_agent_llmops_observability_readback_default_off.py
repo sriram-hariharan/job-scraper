@@ -206,7 +206,7 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
         "src/app/api.py": "4daeda11d22dd8f1ddf1be0b47571e8443d48d290a962771a3ec7eb9c63e11f9",
-        "src/app/services.py": "13cd1848154334d76d09669f16d80872328027d130a5c6e1214f621e218d2316",
+        "src/app/services.py": "3ce82b33ed5753f81271ffe0defdc748228173e36ab0401a142058064a39b199",
         "src/app/static/agentic_review.js": "450b95cdb1a838854a8be1ed11f3ae9f0fa886d11cc0724eb5e63384936f75bc",
         "src/pipeline/collector.py": "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",

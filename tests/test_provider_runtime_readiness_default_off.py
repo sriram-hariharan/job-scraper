@@ -187,11 +187,8 @@ def test_contract_has_no_provider_sdk_network_storage_or_mutation_wiring():
         assert marker not in source
 
 
-def test_no_service_api_ui_pipeline_or_dependency_wiring():
+def test_no_api_ui_pipeline_or_dependency_wiring():
     sources = {
-        "service": (ROOT / "src/app/services.py").read_text(
-            encoding="utf-8"
-        ),
         "api": (ROOT / "src/app/api.py").read_text(encoding="utf-8"),
         "ui": (ROOT / "src/app/static/agentic_review.js").read_text(
             encoding="utf-8"
@@ -206,3 +203,17 @@ def test_no_service_api_ui_pipeline_or_dependency_wiring():
     for source in sources.values():
         assert "provider_runtime_readiness" not in source
         assert "build_provider_runtime_readiness_payload" not in source
+
+
+def test_service_bridge_uses_readiness_contract_without_provider_execution():
+    source = (ROOT / "src/app/services.py").read_text(encoding="utf-8")
+    start = source.index("def provider_runtime_readiness_service_payload(")
+    end = source.index(
+        "\ndef vector_evidence_readback_service_helper_payload(",
+        start,
+    )
+    snippet = source[start:end]
+
+    assert "src.agents.provider_runtime_readiness" in snippet
+    assert "build_provider_runtime_readiness_payload" in snippet
+    assert '"provider_calls_made": False' in snippet

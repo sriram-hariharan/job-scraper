@@ -282,6 +282,8 @@ ALLOWED_CHANGED = {
     "tests/test_tailoring_provider_shadow_default_off.py",
     "tests/test_critic_provider_shadow_default_off.py",
     "tests/test_three_agent_provider_handoff_default_off.py",
+    "src/agents/three_agent_llmops_aggregate.py",
+    "tests/test_three_agent_llmops_aggregate_default_off.py",
 }
 
 def _changed_files():
@@ -342,6 +344,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/vector_evidence_pipeline_hook.py",
         "src/agents/semantic_evidence_quality_gate.py",
         "src/agents/agent_llmops_trace_contract.py",
+        "src/agents/three_agent_llmops_aggregate.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

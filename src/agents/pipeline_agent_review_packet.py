@@ -239,6 +239,18 @@ def _three_agent_provider_handoff(*values: Any) -> dict[str, Any]:
     return {}
 
 
+def _three_agent_llmops_aggregate(*values: Any) -> dict[str, Any]:
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        aggregate = _plain_dict(
+            chain.get("three_agent_llmops_aggregate")
+        )
+        if aggregate:
+            return aggregate
+    return {}
+
+
 def _review_focus(readiness_payload: dict[str, Any]) -> list[str]:
     status = _clean_text(readiness_payload.get("readiness_status"))
     focus_by_status = {
@@ -422,6 +434,14 @@ def build_pipeline_agent_review_packet_payload(
         trace_readback_payload,
         readback_source,
     )
+    three_agent_llmops_aggregate = _three_agent_llmops_aggregate(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
     provider_backed_agent_count = int(
         three_agent_llmops_trace_contract.get(
             "provider_backed_agent_count",
@@ -467,6 +487,7 @@ def build_pipeline_agent_review_packet_payload(
             three_agent_llmops_trace_contract
         ),
         "three_agent_provider_handoff": three_agent_provider_handoff,
+        "three_agent_llmops_aggregate": three_agent_llmops_aggregate,
         "overlay_readback_summary": {
             "readback_status": _clean_text(readback.get("readback_status")),
             "overlay_found": bool(

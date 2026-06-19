@@ -263,6 +263,8 @@ ALLOWED_CHANGED = {
     "tests/test_shadow_agent_vector_evidence_input_default_off.py",
     "src/storage/vector_evidence/embedding_provider.py",
     "tests/test_vector_evidence_embedding_provider_contract_default_off.py",
+    "src/storage/vector_evidence/embedding_indexing.py",
+    "tests/test_vector_evidence_embedding_indexing_helper_default_off.py",
 }
 
 def _changed_files():
@@ -327,6 +329,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/storage/vector_evidence/connection.py",
         "src/storage/vector_evidence/smoke.py",
         "src/storage/vector_evidence/embedding_provider.py",
+        "src/storage/vector_evidence/embedding_indexing.py",
         "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
         "src/pipeline/collector.py",
     }

@@ -635,7 +635,10 @@ def _execute_with_injected_db(
 
     cursor = db_executor.cursor()
     try:
-        sql = _require_text(request.get("sql"), "sql")
+        sql_value = request.get("sql")
+        if not isinstance(sql_value, str) or not sql_value.strip():
+            raise ValueError("sql must be a non-empty string.")
+        sql = sql_value
         params = request.get("params", ())
         if params:
             cursor.execute(sql, tuple(params))

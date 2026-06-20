@@ -2826,6 +2826,91 @@ def provider_runtime_readiness_service_payload(
     }
 
 
+def jd_provider_runtime_readback_service_payload(
+    *,
+    enabled: bool = False,
+    payload: Dict[str, Any] | None = None,
+    review_packet_payload: Dict[str, Any] | None = None,
+    readback_builder: Any = None,
+) -> Dict[str, Any]:
+    """Expose existing JD runtime metadata as a read-only service summary."""
+
+    source_payload: Dict[str, Any] = {}
+    for candidate in (payload, review_packet_payload):
+        if isinstance(candidate, dict) and candidate:
+            source_payload = deepcopy(candidate)
+            break
+
+    existing_summary = {}
+    if isinstance(review_packet_payload, dict):
+        existing_summary = deepcopy(
+            review_packet_payload.get("jd_provider_runtime_readback")
+            or {}
+        )
+
+    builder = readback_builder
+    if builder is None:
+        readback_module = importlib.import_module(
+            "src.agents.jd_provider_runtime_trace_readback"
+        )
+        builder = getattr(
+            readback_module,
+            "build_jd_provider_runtime_trace_readback",
+        )
+
+    if enabled is True and existing_summary:
+        result = existing_summary
+    else:
+        result = builder(
+            payload=deepcopy(source_payload),
+            enabled=enabled is True,
+        )
+    if not isinstance(result, dict):
+        result = {}
+
+    safety = dict(result.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "readback_only": True,
+            "shadow_only": True,
+            "service_helper_only": True,
+            "provider_calls_made": False,
+            "network_calls_made": False,
+            "embeddings_created": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": False,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **deepcopy(result),
+        "service_surface": "jd_provider_runtime_readback_service",
+        "service_helper_only": True,
+        "review_packet_compatible": True,
+        "default_off": enabled is not True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "mutation_authorized": False,
+        "mutation_authorized_agent_count": 0,
+        "safety_metadata": safety,
+    }
+
+
 def vector_evidence_readback_service_helper_payload(
     *,
     enabled: bool = False,

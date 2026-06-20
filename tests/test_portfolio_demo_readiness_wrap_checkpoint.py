@@ -308,6 +308,7 @@ ALLOWED_CHANGED = {
     "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",
     "src/agents/jd_provider_runtime_trace_readback.py",
     "tests/test_jd_provider_runtime_trace_readback_default_off.py",
+    "tests/test_jd_provider_runtime_review_packet_default_off.py",
 }
 
 def _changed_files():

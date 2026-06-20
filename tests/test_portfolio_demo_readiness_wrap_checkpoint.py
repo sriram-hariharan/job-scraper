@@ -313,6 +313,8 @@ ALLOWED_CHANGED = {
     "tests/test_jd_provider_runtime_api_readback_default_off.py",
     "tests/test_jd_provider_runtime_ui_readback_default_off.py",
     "tests/test_jd_provider_runtime_readiness_checkpoint_default_off.py",
+    "src/agents/provider_live_activation_safety_plan.py",
+    "tests/test_provider_live_activation_safety_plan_default_off.py",
 }
 
 def _changed_files():
@@ -381,6 +383,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/provider_runtime_activation_plan.py",
         "src/agents/jd_provider_runtime_activation.py",
         "src/agents/jd_provider_runtime_trace_readback.py",
+        "src/agents/provider_live_activation_safety_plan.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

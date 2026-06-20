@@ -300,6 +300,7 @@ ALLOWED_CHANGED = {
     "tests/test_provider_runtime_service_bridge_default_off.py",
     "tests/test_provider_runtime_api_readback_default_off.py",
     "tests/test_provider_runtime_ui_readback_default_off.py",
+    "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
 }
 
 def _changed_files():

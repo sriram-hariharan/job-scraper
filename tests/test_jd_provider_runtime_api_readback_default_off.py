@@ -1,19 +1,28 @@
+import hashlib
 from copy import deepcopy
-from hashlib import sha256
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from src.agents import pipeline_agent_review_packet, shadow_sidecar_hook
-from src.app.services import jd_provider_runtime_readback_service_payload
+from src.app import api, services
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ENDPOINT = "/api/jd-provider-runtime-readback"
+SERVICE = "jd_provider_runtime_readback_service_payload"
+
+
+def _client(monkeypatch):
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    return TestClient(api.app)
 
 
 def _hook(**updates):
     kwargs = {
-        "run_id": "run-phase-12f",
-        "batch_id": "batch-phase-12f",
-        "job_id": "job-phase-12f",
+        "run_id": "run-phase-12g",
+        "batch_id": "batch-phase-12g",
+        "job_id": "job-phase-12g",
         "stage_name": "post_final_scoring",
         "source_deterministic_stage": "application_priority",
         "source_deterministic_status": "completed",
@@ -54,20 +63,16 @@ def _response(output):
 
 def _assert_safe(payload):
     safety = payload["safety_metadata"]
-    assert payload["service_surface"] == (
-        "jd_provider_runtime_readback_service"
-    )
-    assert payload["service_helper_only"] is True
-    assert payload["review_packet_compatible"] is True
+    assert payload["api_surface"] == "jd_provider_runtime_readback"
+    assert payload["api_readback_only"] is True
+    assert payload["api_route_added"] is True
+    assert payload["read_only"] is True
+    assert payload["advisory_only"] is True
+    assert payload["shadow_only"] is True
     assert payload["mutation_authorized"] is False
     assert payload["mutation_authorized_agent_count"] == 0
-    for key in (
-        "read_only",
-        "advisory_only",
-        "readback_only",
-        "shadow_only",
-    ):
-        assert safety[key] is True
+    assert safety["jd_provider_runtime_readback_api"] is True
+    assert safety["jd_provider_runtime_service_bridge"] is True
     for key in (
         "provider_calls_made",
         "network_calls_made",
@@ -86,123 +91,157 @@ def _assert_safe(payload):
         assert safety[key] is False
 
 
-def test_service_default_off_returns_safe_skipped_summary():
-    payload = jd_provider_runtime_readback_service_payload()
+def test_api_route_exists_as_post_only():
+    routes = {getattr(route, "path", ""): route for route in api.app.routes}
 
-    assert payload["readback_status"] == (
+    assert routes[ENDPOINT].methods == {"POST"}
+
+
+def test_api_default_off_and_missing_payload_are_safe(monkeypatch):
+    skipped = _client(monkeypatch).post(ENDPOINT, json={})
+    no_data = _client(monkeypatch).post(
+        ENDPOINT,
+        json={"enabled": True},
+    )
+
+    assert skipped.status_code == 200
+    assert no_data.status_code == 200
+    assert skipped.json()["readback_status"] == (
         "jd_provider_runtime_readback_skipped_default_off"
     )
-    assert payload["readback_enabled"] is False
-    assert payload["default_off"] is True
-    assert payload["jd_provider_runtime_attempted"] is False
-    _assert_safe(payload)
-
-
-def test_service_enabled_missing_payload_returns_safe_no_data():
-    payload = jd_provider_runtime_readback_service_payload(enabled=True)
-
-    assert payload["readback_status"] == (
+    assert skipped.json()["default_off"] is True
+    assert no_data.json()["readback_status"] == (
         "jd_provider_runtime_readback_no_data"
     )
-    assert payload["default_off"] is False
-    assert payload["provider_calls_allowed"] is False
-    _assert_safe(payload)
+    assert no_data.json()["provider_calls_allowed"] is False
+    _assert_safe(skipped.json())
+    _assert_safe(no_data.json())
 
 
-def test_service_summarizes_default_off_shadow_metadata():
-    payload = jd_provider_runtime_readback_service_payload(
-        enabled=True,
-        payload=_hook(),
+def test_api_summarizes_default_off_shadow_metadata(monkeypatch):
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={"enabled": True, "payload": _hook()},
     )
 
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["readback_status"] == (
         "jd_provider_runtime_readback_not_attempted"
     )
-    assert payload["jd_provider_runtime_enabled"] is False
     assert payload["jd_provider_runtime_attempted"] is False
+    assert payload["jd_provider_runtime_enabled"] is False
     _assert_safe(payload)
 
 
-def test_service_summarizes_blocked_fallback_metadata():
-    payload = jd_provider_runtime_readback_service_payload(
-        enabled=True,
-        payload=_hook(jd_provider_runtime_activation_enabled=True),
+def test_api_summarizes_blocked_fallback_metadata(monkeypatch):
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={
+            "enabled": True,
+            "payload": _hook(
+                jd_provider_runtime_activation_enabled=True
+            ),
+        },
     )
 
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["readback_status"] == (
         "jd_provider_runtime_readback_blocked"
     )
-    assert payload["jd_provider_runtime_enabled"] is True
-    assert payload["jd_provider_runtime_attempted"] is False
     assert payload["fallback_used"] is True
     assert payload["fallback_reason"]
     _assert_safe(payload)
 
 
-def test_service_summarizes_successful_validated_metadata():
+def test_api_delegates_and_summarizes_validated_success(monkeypatch):
     calls = []
+    service_calls = []
+    real_service = getattr(services, SERVICE)
+
+    def fake_client(request):
+        calls.append(deepcopy(request))
+        return _response(_valid_output())
+
     hook = _hook(
         jd_provider_runtime_activation_enabled=True,
-        jd_provider_runtime_activation_client=lambda request: (
-            calls.append(deepcopy(request)) or _response(_valid_output())
-        ),
+        jd_provider_runtime_activation_client=fake_client,
     )
-    before = deepcopy(calls)
-    payload = jd_provider_runtime_readback_service_payload(
-        enabled=True,
-        payload=hook,
+    provider_calls_before = deepcopy(calls)
+
+    def recording_service(**kwargs):
+        service_calls.append(deepcopy(kwargs))
+        return real_service(**kwargs)
+
+    monkeypatch.setattr(services, SERVICE, recording_service)
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={"enabled": True, "payload": hook},
     )
 
-    assert calls == before
+    assert response.status_code == 200
+    assert calls == provider_calls_before
+    assert service_calls == [
+        {
+            "enabled": True,
+            "payload": hook,
+            "review_packet_payload": {},
+        }
+    ]
+    payload = response.json()
     assert payload["readback_status"] == (
         "jd_provider_runtime_readback_succeeded"
     )
     assert payload["jd_provider_runtime_attempted"] is True
     assert payload["jd_provider_runtime_succeeded"] is True
     assert payload["structured_output_validated"] is True
-    assert payload["llmops_metadata_present"] is True
     assert payload["configured_provider_name"] == "fixture-provider"
     assert payload["configured_model_name"] == "fixture-model"
     _assert_safe(payload)
 
 
-def test_service_summarizes_invalid_and_failed_fallback_metadata():
-    invalid = jd_provider_runtime_readback_service_payload(
-        enabled=True,
-        payload=_hook(
-            jd_provider_runtime_activation_enabled=True,
-            jd_provider_runtime_activation_provider=lambda _request: (
-                _response({"required_skills": {"invalid": "shape"}})
+def test_api_summarizes_invalid_and_failed_fallback(monkeypatch):
+    invalid = _client(monkeypatch).post(
+        ENDPOINT,
+        json={
+            "enabled": True,
+            "payload": _hook(
+                jd_provider_runtime_activation_enabled=True,
+                jd_provider_runtime_activation_provider=lambda _request: (
+                    _response({"required_skills": {"invalid": "shape"}})
+                ),
             ),
-        ),
+        },
     )
 
     def failing_client(_request):
         raise RuntimeError("fixture failure")
 
-    failed = jd_provider_runtime_readback_service_payload(
-        enabled=True,
-        payload=_hook(
-            jd_provider_runtime_activation_enabled=True,
-            jd_provider_runtime_activation_client=failing_client,
-        ),
+    failed = _client(monkeypatch).post(
+        ENDPOINT,
+        json={
+            "enabled": True,
+            "payload": _hook(
+                jd_provider_runtime_activation_enabled=True,
+                jd_provider_runtime_activation_client=failing_client,
+            ),
+        },
     )
 
-    assert invalid["readback_status"] == (
+    assert invalid.json()["readback_status"] == (
         "jd_provider_runtime_readback_validation_failed"
     )
-    assert invalid["fallback_reason"] == "required_skills_not_list"
-    assert invalid["fallback_used"] is True
-    assert failed["readback_status"] == (
+    assert invalid.json()["fallback_reason"] == "required_skills_not_list"
+    assert failed.json()["readback_status"] == (
         "jd_provider_runtime_readback_failed"
     )
-    assert failed["fallback_reason"] == "RuntimeError"
-    assert failed["fallback_used"] is True
-    _assert_safe(invalid)
-    _assert_safe(failed)
+    assert failed.json()["fallback_reason"] == "RuntimeError"
+    _assert_safe(invalid.json())
+    _assert_safe(failed.json())
 
 
-def test_service_preserves_review_packet_compatible_summary():
+def test_api_preserves_review_packet_compatible_summary(monkeypatch):
     hook = _hook(
         jd_provider_runtime_activation_enabled=True,
         jd_provider_runtime_activation_client=lambda _request: (
@@ -214,30 +253,34 @@ def test_service_preserves_review_packet_compatible_summary():
         .build_pipeline_agent_review_packet_payload(hook_payload=hook)
     )
     before = deepcopy(packet)
-    payload = jd_provider_runtime_readback_service_payload(
-        enabled=True,
-        review_packet_payload=packet,
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={
+            "enabled": True,
+            "review_packet_payload": packet,
+        },
     )
 
+    assert response.status_code == 200
     assert packet == before
+    payload = response.json()
     assert payload["readback_status"] == packet[
         "jd_provider_runtime_readback"
     ]["readback_status"]
-    assert payload["configured_provider_name"] == "fixture-provider"
     assert payload["review_packet_compatible"] is True
     _assert_safe(payload)
 
 
-def test_service_does_not_call_activation_adapter_client_env_or_storage():
-    source = (ROOT / "src/app/services.py").read_text(encoding="utf-8")
-    start = source.index("def jd_provider_runtime_readback_service_payload(")
+def test_route_slice_has_no_activation_client_network_storage_or_mutation():
+    source = (ROOT / "src/app/api.py").read_text(encoding="utf-8")
+    start = source.index('@app.post("/api/jd-provider-runtime-readback")')
     end = source.index(
-        "\ndef vector_evidence_readback_service_helper_payload(",
+        '\n\n@app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")',
         start,
     )
     snippet = source[start:end].lower()
 
-    assert "build_jd_provider_runtime_trace_readback" in snippet
+    assert f"services.{SERVICE}(" in snippet
     for marker in (
         "run_jd_provider_runtime_activation(",
         "run_provider_runtime_adapter(",
@@ -267,13 +310,10 @@ def test_service_does_not_call_activation_adapter_client_env_or_storage():
         assert marker not in snippet
 
 
-def test_api_ui_pipeline_and_dependencies_are_unchanged():
+def test_ui_pipeline_and_dependencies_are_unchanged():
     expected = {
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
-        ),
-        "src/app/api.py": (
-            "68b14fea674618a7cbf6a0953b9d22418faf2b700c5092872e2cf62471fa00b2"
         ),
         "src/app/static/agentic_review.js": (
             "83a95006d999df32387d3a0732ac96f8ebdc7f49a2115ba23597c03f02f82e1c"
@@ -292,6 +332,6 @@ def test_api_ui_pipeline_and_dependencies_are_unchanged():
         ),
     }
     for relative_path, expected_hash in expected.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+        assert hashlib.sha256(
+            (ROOT / relative_path).read_bytes()
+        ).hexdigest() == expected_hash

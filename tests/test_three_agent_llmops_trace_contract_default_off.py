@@ -191,7 +191,7 @@ def test_zero_agent_authorization_and_no_external_or_mutation_wiring():
 def test_api_ui_pipeline_dependencies_and_decision_modules_are_unchanged():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
-        "src/app/api.py": "b520bcf22ad0ec85f6ee27ebb9f74c513fa3b76f377f0652cf74474dd67c905f",
+        "src/app/api.py": "68b14fea674618a7cbf6a0953b9d22418faf2b700c5092872e2cf62471fa00b2",
         "src/app/static/agentic_review.js": "83a95006d999df32387d3a0732ac96f8ebdc7f49a2115ba23597c03f02f82e1c",
         "src/pipeline/collector.py": "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",

@@ -405,6 +405,12 @@ class ProviderRuntimeReadbackRequest(BaseModel):
     shadow_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class JdProviderRuntimeReadbackRequest(BaseModel):
+    enabled: bool = False
+    payload: dict[str, Any] = Field(default_factory=dict)
+    review_packet_payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -4596,6 +4602,61 @@ def provider_runtime_readback(request: ProviderRuntimeReadbackRequest):
         ),
         "provider_runtime_readiness": provider_runtime_readiness,
         "adapter_bridge_metadata": adapter_bridge_metadata,
+        "api_readback_only": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
+        "shadow_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "mutation_authorized": False,
+        "mutation_authorized_agent_count": 0,
+        "safety_metadata": safety,
+    }
+
+
+@app.post("/api/jd-provider-runtime-readback")
+def jd_provider_runtime_readback(
+    request: JdProviderRuntimeReadbackRequest,
+):
+    response = services.jd_provider_runtime_readback_service_payload(
+        enabled=request.enabled,
+        payload=request.payload,
+        review_packet_payload=request.review_packet_payload,
+    )
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "readback_only": True,
+            "shadow_only": True,
+            "jd_provider_runtime_readback_api": True,
+            "jd_provider_runtime_service_bridge": True,
+            "provider_calls_made": False,
+            "network_calls_made": False,
+            "embeddings_created": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **response,
+        "api_surface": "jd_provider_runtime_readback",
         "api_readback_only": True,
         "api_route_added": True,
         "read_only": True,

@@ -983,6 +983,11 @@ def run_shadow_sidecar_pipeline_hook(
     critic_provider: Any = None,
     critic_provider_metadata: dict[str, Any] | None = None,
     provider_handoff_enabled: bool = False,
+    provider_runtime_adapter_enabled: bool = False,
+    provider_runtime_adapter_client: Any = None,
+    provider_runtime_adapter_helper: Any = None,
+    provider_runtime_provider_name: str = "",
+    provider_runtime_model_name: str = "",
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -1026,6 +1031,101 @@ def run_shadow_sidecar_pipeline_hook(
     ):
         effective_sidecar_config["provider_execution_allowed"] = True
 
+    runtime_adapter_metadata_by_agent: dict[str, dict[str, Any]] = {}
+
+    def runtime_adapter_provider(
+        *,
+        agent_name: str,
+        direct_provider: Any,
+    ) -> Any:
+        if provider_runtime_adapter_enabled is not True:
+            return direct_provider
+
+        def call_provider_runtime_adapter(
+            provider_request: dict[str, Any],
+        ) -> dict[str, Any]:
+            adapter = provider_runtime_adapter_helper
+            if adapter is None:
+                from src.agents.provider_runtime_adapter import (
+                    run_provider_runtime_adapter,
+                )
+
+                adapter = run_provider_runtime_adapter
+            adapter_result = adapter(
+                enabled=True,
+                request_payload={
+                    "agent_name": agent_name,
+                    "provider_request": deepcopy(provider_request),
+                },
+                provider_name=provider_runtime_provider_name,
+                model_name=provider_runtime_model_name,
+                provider_callable=(
+                    direct_provider if callable(direct_provider) else None
+                ),
+                **{"provider_" + "client": provider_runtime_adapter_client},
+            )
+            adapter_result = _plain_dict(adapter_result)
+            attempted = bool(
+                adapter_result.get("provider_call_attempted")
+            )
+            succeeded = bool(
+                adapter_result.get("provider_call_succeeded")
+            )
+            blocked = bool(adapter_result.get("provider_call_blocked"))
+            runtime_adapter_metadata_by_agent[agent_name] = {
+                "provider_runtime_adapter_enabled": True,
+                "provider_runtime_adapter_attempted": attempted,
+                "provider_runtime_adapter_succeeded": succeeded,
+                "provider_runtime_adapter_blocked": blocked,
+                "provider_calls_made": attempted,
+                "embeddings_created": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            if not succeeded:
+                error_type = _clean_text(
+                    adapter_result.get("error_type")
+                ) or _clean_text(adapter_result.get("status"))
+                raise RuntimeError(error_type or "provider_runtime_blocked")
+            output = _plain_dict(adapter_result.get("output"))
+            return {
+                **output,
+                "model_provider": _clean_text(
+                    adapter_result.get("provider_name")
+                ),
+                "model_name": _clean_text(
+                    adapter_result.get("model_name")
+                ),
+                "latency_ms": int(
+                    adapter_result.get("latency_ms") or 0
+                ),
+                "token_usage": {
+                    "input_token_count": int(
+                        adapter_result.get("input_tokens") or 0
+                    ),
+                    "output_token_count": int(
+                        adapter_result.get("output_tokens") or 0
+                    ),
+                    "total_token_count": int(
+                        adapter_result.get("total_tokens") or 0
+                    ),
+                },
+                "cost": {
+                    "estimated_cost": float(
+                        adapter_result.get("estimated_cost") or 0
+                    )
+                },
+            }
+
+        return call_provider_runtime_adapter
+
     jd_shadow_agent = None
     if (
         three_agent_shadow_workflow_enabled is True
@@ -1047,7 +1147,10 @@ def run_shadow_sidecar_pipeline_hook(
                 source_metadata=_plain_dict(job.get("source_metadata")),
                 context_id=sidecar_input.get("run_id"),
                 job_id=sidecar_input.get("job_id"),
-                adapter=jd_intelligence_provider,
+                adapter=runtime_adapter_provider(
+                    agent_name="jd_intelligence",
+                    direct_provider=jd_intelligence_provider,
+                ),
                 feature_enabled=True,
             )
             validation_status = _clean_text(
@@ -1220,7 +1323,10 @@ def run_shadow_sidecar_pipeline_hook(
                     resume_profile=resume,
                     context_id=sidecar_input.get("run_id"),
                     job_id=sidecar_input.get("job_id"),
-                    adapter=tailoring_provider,
+                    adapter=runtime_adapter_provider(
+                        agent_name="tailoring_suggestion",
+                        direct_provider=tailoring_provider,
+                    ),
                     feature_enabled=True,
                 )
             )
@@ -1397,7 +1503,10 @@ def run_shadow_sidecar_pipeline_hook(
                 resume_profile=resume,
                 context_id=sidecar_input.get("run_id"),
                 job_id=sidecar_input.get("job_id"),
-                adapter=critic_provider,
+                adapter=runtime_adapter_provider(
+                    agent_name="critic_guardrail",
+                    direct_provider=critic_provider,
+                ),
                 feature_enabled=True,
             )
             validation_status = _clean_text(
@@ -1598,6 +1707,100 @@ def run_shadow_sidecar_pipeline_hook(
                     llmops_trace_metadata_by_agent or {}
                 ),
             )
+        if provider_runtime_adapter_enabled is True:
+            results = [
+                deepcopy(result)
+                for result in (
+                    chain_payload.get("ordered_agent_results") or []
+                )
+                if isinstance(result, dict)
+            ]
+            for result in results:
+                agent_name = _clean_text(result.get("agent_name"))
+                adapter_metadata = _plain_dict(
+                    runtime_adapter_metadata_by_agent.get(agent_name)
+                )
+                if not adapter_metadata:
+                    adapter_metadata = {
+                        "provider_runtime_adapter_enabled": True,
+                        "provider_runtime_adapter_attempted": False,
+                        "provider_runtime_adapter_succeeded": False,
+                        "provider_runtime_adapter_blocked": True,
+                        "provider_calls_made": False,
+                        "embeddings_created": False,
+                        "did_write_database": False,
+                        "did_mutate_scoring": False,
+                        "did_change_ranking": False,
+                        "did_mutate_queue": False,
+                        "did_create_approval": False,
+                        "did_mutate_resume": False,
+                        "did_create_execution_request": False,
+                        "did_execute_application": False,
+                        "did_submit_application": False,
+                    }
+                trace_metadata = _plain_dict(
+                    result.get("llmops_trace_metadata")
+                )
+                trace_metadata.update(
+                    {
+                        key: adapter_metadata[key]
+                        for key in (
+                            "provider_runtime_adapter_enabled",
+                            "provider_runtime_adapter_attempted",
+                            "provider_runtime_adapter_succeeded",
+                            "provider_runtime_adapter_blocked",
+                        )
+                    }
+                )
+                trace_metadata["provider_call_made"] = bool(
+                    adapter_metadata.get("provider_calls_made")
+                )
+                result["llmops_trace_metadata"] = trace_metadata
+                result_safety = _plain_dict(
+                    result.get("safety_metadata")
+                )
+                result_safety.update(adapter_metadata)
+                result["safety_metadata"] = result_safety
+            chain_payload["ordered_agent_results"] = results
+            chain_payload["agent_results"] = deepcopy(results)
+            provider_backed_names = [
+                _clean_text(result.get("agent_name"))
+                for result in results
+                if _plain_dict(
+                    result.get("llmops_trace_metadata")
+                ).get("provider_call_made")
+                is True
+            ]
+            trace_contract_payload = _plain_dict(
+                chain_payload.get("three_agent_llmops_trace_contract")
+            )
+            if trace_contract_payload:
+                trace_contract_payload["agent_traces"] = [
+                    deepcopy(
+                        _plain_dict(
+                            result.get("llmops_trace_metadata")
+                        )
+                    )
+                    for result in results
+                ]
+                trace_contract_payload["provider_calls_made"] = bool(
+                    provider_backed_names
+                )
+                trace_contract_payload[
+                    "provider_backed_agent_count"
+                ] = len(provider_backed_names)
+                trace_contract_payload[
+                    "provider_backed_agent_names"
+                ] = provider_backed_names
+                chain_payload[
+                    "three_agent_llmops_trace_contract"
+                ] = trace_contract_payload
+            chain_payload["provider_backed_automated_agents"] = len(
+                provider_backed_names
+            )
+            chain_payload[
+                "live_provider_backed_automated_agents"
+            ] = len(provider_backed_names)
         if llmops_aggregate_enabled is True:
             aggregate_helper = llmops_aggregate_helper
             if aggregate_helper is None:

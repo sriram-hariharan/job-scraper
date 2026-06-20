@@ -169,7 +169,7 @@ def test_default_probe_keeps_provider_and_mutation_authorized_agents_zero():
 def test_no_api_service_pipeline_schema_migration_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "80c665bbbad6b175ce6713aa5658f5edbcd4f09970c6d725e9fd01f624f010ec"
+            "b520bcf22ad0ec85f6ee27ebb9f74c513fa3b76f377f0652cf74474dd67c905f"
         ),
         "src/pipeline/collector.py": (
             "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7"

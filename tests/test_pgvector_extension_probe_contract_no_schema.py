@@ -258,7 +258,7 @@ def test_no_dependency_schema_migration_api_service_or_pipeline_change():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
-            "b520bcf22ad0ec85f6ee27ebb9f74c513fa3b76f377f0652cf74474dd67c905f"
+            "68b14fea674618a7cbf6a0953b9d22418faf2b700c5092872e2cf62471fa00b2"
         ),
         "src/pipeline/collector.py": (
             "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7"

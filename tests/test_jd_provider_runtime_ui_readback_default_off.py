@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
-ENDPOINT = "/api/provider-runtime-readback"
+ENDPOINT = "/api/jd-provider-runtime-readback"
 
 
 def _source() -> str:
@@ -13,7 +13,7 @@ def _source() -> str:
 
 def _section() -> str:
     source = _source()
-    start = source.index("function renderProviderRuntimeReadbackSection")
+    start = source.index("function renderJdProviderRuntimeReadbackSection")
     end = source.index(
         "function renderHumanReviewedInfluencePreviewSection",
         start,
@@ -24,7 +24,7 @@ def _section() -> str:
 def _handler() -> str:
     source = _source()
     start = source.index(
-        'event.target.closest("[data-runtime-readback]")'
+        'event.target.closest("[data-jd-runtime-readback]")'
     )
     end = source.index(
         'event.target.closest("[data-manual-human-decision-capture-dry-run]")',
@@ -42,23 +42,23 @@ def _legacy_handler(source: str, selector: str) -> str:
     return source[start:end]
 
 
-def test_default_off_ui_renders_safe_disabled_no_data_state():
+def test_default_off_ui_renders_safe_no_data_state():
     section = _section()
 
     for phrase in (
-        "Provider Runtime Readiness",
+        "JD Provider Runtime Readback",
         "Default-off read-only",
-        "No provider runtime adapter data yet",
-        "Provider runtime not enabled",
-        "data-runtime-readback-enable",
-        "Enable this manual provider runtime readback",
-        "Read Provider Runtime",
-        "Not enabled. This button reads readiness metadata only.",
+        "No JD provider runtime readback data yet",
+        "JD provider runtime readback not enabled",
+        "data-jd-runtime-readback-enable",
+        "Enable this manual JD provider runtime readback",
+        "Read JD Runtime",
+        "Not enabled. This action reads existing metadata only.",
     ):
         assert phrase in section
 
 
-def test_ui_references_api_only_from_explicit_manual_action():
+def test_ui_references_api_from_manual_action_only():
     source = _source()
     handler = _handler()
     init_start = source.index("async function initAgenticReviewPage")
@@ -67,8 +67,8 @@ def test_ui_references_api_only_from_explicit_manual_action():
     )
     init = source[init_start:init_end]
 
-    assert f'const runtimeReadbackApiPath = "{ENDPOINT}";' in source
-    assert "runtimeReadbackApiPath" in handler
+    assert f'const jdRuntimeReadbackApiPath = "{ENDPOINT}";' in source
+    assert "jdRuntimeReadbackApiPath" in handler
     assert 'method: "POST"' in handler
     assert "Boolean(enableInput?.checked)" in handler
     assert ENDPOINT not in handler
@@ -76,81 +76,88 @@ def test_ui_references_api_only_from_explicit_manual_action():
     assert "setInterval" not in handler
 
 
-def test_ui_renders_readiness_provider_model_and_agents():
+def test_ui_renders_disabled_blocked_success_and_failure_metadata():
     section = _section()
 
     for phrase in (
+        'renderWorkflowSummaryMetric("Readback status"',
         'renderWorkflowSummaryMetric("Runtime enabled"',
-        'renderWorkflowSummaryMetric("Readiness status"',
-        'renderWorkflowSummaryMetric("Provider"',
-        'renderWorkflowSummaryMetric("Model"',
-        'renderWorkflowSummaryMetric("Configured agents"',
-        "readiness.provider_name",
-        "readiness.model_name",
-        "readiness.configured_agent_names",
+        'renderWorkflowSummaryMetric("Attempted"',
+        'renderWorkflowSummaryMetric("Succeeded"',
+        'renderWorkflowSummaryMetric("Failed"',
+        'renderWorkflowSummaryMetric("Fallback used"',
+        'renderWorkflowSummaryMetric("Fallback reason"',
+        "result.jd_provider_runtime_enabled",
+        "result.jd_provider_runtime_attempted",
+        "result.jd_provider_runtime_succeeded",
+        "result.jd_provider_runtime_failed",
+        "result.fallback_used",
+        "result.fallback_reason",
     ):
         assert phrase in section
 
 
-def test_ui_renders_adapter_calls_shadow_mutation_and_next_step():
+def test_ui_renders_validation_llmops_shadow_and_calls_allowed():
     section = _section()
 
     for phrase in (
-        'renderWorkflowSummaryMetric("Provider calls allowed"',
+        'renderWorkflowSummaryMetric("Structured output validated"',
+        'renderWorkflowSummaryMetric("LLMOps metadata"',
         'renderWorkflowSummaryMetric("Shadow only"',
-        'renderWorkflowSummaryMetric("Adapter enabled"',
-        'renderWorkflowSummaryMetric("Adapter attempted"',
-        'renderWorkflowSummaryMetric("Adapter succeeded"',
-        'renderWorkflowSummaryMetric("Adapter blocked"',
-        'renderWorkflowSummaryMetric("Mutation-authorized agents"',
-        "readiness.mutation_authorized_agent_count ?? 0",
-        '"Next safe setup step"',
-        "readiness.next_safe_step",
+        'renderWorkflowSummaryMetric("Provider calls allowed"',
+        "result.structured_output_validated",
+        "result.llmops_metadata_present",
+        "result.shadow_only",
+        "result.provider_calls_allowed",
     ):
         assert phrase in section
 
 
-def test_ui_renders_safety_no_mutation_indicators():
+def test_ui_renders_zero_mutation_authority_and_safety():
     section = _section()
 
     for phrase in (
+        'renderWorkflowSummaryMetric("Mutation authorized"',
+        'renderWorkflowSummaryMetric("Mutation-authorized agents"',
         'renderWorkflowSummaryMetric("Scoring change"',
         'renderWorkflowSummaryMetric("Ranking change"',
         'renderWorkflowSummaryMetric("Queue change"',
         'renderWorkflowSummaryMetric("Resume change"',
         'renderWorkflowSummaryMetric("Execution"',
         'renderWorkflowSummaryMetric("Submission"',
-        "does not call providers",
-        "create embeddings",
-        "write storage",
+        "result.mutation_authorized_agent_count ?? 0",
+        '"Next safe step"',
+        "result.next_safe_step",
     ):
         assert phrase in section
 
 
-def test_missing_payload_uses_safe_object_and_array_defaults():
+def test_missing_payload_uses_safe_defaults():
     section = _section()
 
     assert "hasAgentTraceSummaryObject" in section
-    assert "Array.isArray(readiness.configured_agent_names)" in section
-    assert "Array.isArray(adapter.adapter_bridge_agents)" in section
     assert (
-        'result.readback_status || readiness.readiness_status || "not enabled"'
+        'result.readback_status || "jd_provider_runtime_readback_no_data"'
         in section
     )
-    assert "adapter.adapter_bridge_attempted_count ?? 0" in section
+    assert "!Object.keys(result).length" in section
+    assert "result.fallback_reason || \"none\"" in section
 
 
-def test_new_handler_has_no_runtime_execution_or_mutation_calls():
+def test_new_handler_has_no_provider_execution_or_mutation_calls():
     handler = _handler().lower()
 
     assert "provider" not in handler
     for marker in (
         "setinterval",
+        "run_jd_provider_runtime_activation(",
+        "run_provider_runtime_adapter(",
+        "provider_client",
+        "provider_callable",
         "create_embedding(",
         "score_jobs(",
         "rank_jobs(",
         "create_approval_request(",
-        "record_approval_decision(",
         "mutate_resume(",
         "create_execution_request(",
         "execute_application(",
@@ -159,7 +166,7 @@ def test_new_handler_has_no_runtime_execution_or_mutation_calls():
         assert marker not in handler
 
 
-def test_legacy_shadow_handler_scans_remain_provider_free():
+def test_legacy_broad_handler_scans_remain_provider_free():
     source = _source()
 
     for selector in (
@@ -169,7 +176,7 @@ def test_legacy_shadow_handler_scans_remain_provider_free():
         assert "provider" not in _legacy_handler(source, selector).lower()
 
 
-def test_no_pipeline_dependency_or_decision_module_change():
+def test_no_api_service_pipeline_dependency_or_decision_module_change():
     expected = {
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"

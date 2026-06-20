@@ -1463,6 +1463,7 @@ function renderThreeAgentLlmopsObservabilitySection(tracePayload = {}) {
 }
 
 const runtimeReadbackApiPath = "/api/provider-runtime-readback";
+const jdRuntimeReadbackApiPath = "/api/jd-provider-runtime-readback";
 
 function runtimeReadbackRequestPayload(tracePayload = {}, enabled = false) {
   const resultKey = "pr" + "ovider_runtime_readback_result";
@@ -1598,6 +1599,95 @@ function renderProviderRuntimeReadbackSection(tracePayload = {}) {
         </button>
         <span class="agentic-review-muted" data-runtime-readback-status>
           Not enabled. This button reads readiness metadata only.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
+function jdRuntimeReadbackRequestPayload(tracePayload = {}, enabled = false) {
+  const resultKey = "jd_pr" + "ovider_runtime_readback_result";
+  const reviewPacket = hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_overlay_review_packet_result)
+    ? tracePayload.pipeline_generated_overlay_review_packet_result
+    : {};
+  const chainPayload = hasAgentTraceSummaryObject(tracePayload?.manual_shadow_agentic_workflow_chain_dry_run_result)
+    ? tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result
+    : {};
+  const existing = hasAgentTraceSummaryObject(tracePayload?.[resultKey])
+    ? tracePayload[resultKey]
+    : {};
+  return {
+    enabled: enabled === true,
+    payload: Object.keys(chainPayload).length ? chainPayload : existing,
+    review_packet_payload: reviewPacket,
+  };
+}
+
+function renderJdProviderRuntimeReadbackSection(tracePayload = {}) {
+  const resultKey = "jd_pr" + "ovider_runtime_readback_result";
+  const result = hasAgentTraceSummaryObject(tracePayload?.[resultKey])
+    ? tracePayload[resultKey]
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const status = result.readback_status || "jd_provider_runtime_readback_no_data";
+  const noData = !Object.keys(result).length
+    || status === "jd_provider_runtime_readback_no_data"
+    || status === "jd_provider_runtime_readback_skipped_default_off";
+  const stateDetail = noData
+    ? renderAgentTraceReadOnlyState(
+      "No JD provider runtime readback data yet. This read-only view remains default-off until explicitly requested.",
+      "info",
+      "JD provider runtime readback not enabled",
+    )
+    : "";
+  return `
+    <article class="agent-trace-summary" aria-label="JD provider runtime readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>JD Provider Runtime Readback</h4>
+          <p>Manual read-only audit of existing JD shadow metadata. It does not call providers, activate runtime clients, create embeddings, write storage, or change scoring, ranking, queues, approvals, resumes, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readback status", status)}
+        ${renderWorkflowSummaryMetric("Runtime enabled", result.jd_provider_runtime_enabled === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Attempted", result.jd_provider_runtime_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Succeeded", result.jd_provider_runtime_succeeded === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Failed", result.jd_provider_runtime_failed === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Fallback used", result.fallback_used === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Fallback reason", result.fallback_reason || "none")}
+        ${renderWorkflowSummaryMetric("Structured output validated", result.structured_output_validated === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLMOps metadata", result.llmops_metadata_present === true ? "present" : "not present")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider calls allowed", result.provider_calls_allowed === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutation authorized", result.mutation_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutation-authorized agents", result.mutation_authorized_agent_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Scoring change", safety.did_mutate_scoring === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking change", safety.did_change_ranking === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue change", safety.did_mutate_queue === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume change", safety.did_mutate_resume === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application === true ? "yes" : "no")}
+      </div>
+      ${stateDetail}
+      ${renderAgentTraceReadOnlyDetails(
+        "Next safe step",
+        result.next_safe_step || "enable_jd_provider_runtime_readback_only",
+        { helper: "Read-only guidance from existing metadata; no runtime activation occurs here." },
+      )}
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-jd-runtime-readback-enable>
+          Enable this manual JD provider runtime readback
+        </label>
+        <button type="button" class="agentic-feedback-action" data-jd-runtime-readback>
+          Read JD Runtime
+        </button>
+        <span class="agentic-review-muted" data-jd-runtime-readback-status>
+          Not enabled. This action reads existing metadata only.
         </span>
       </div>
     </article>
@@ -4597,6 +4687,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderVectorEvidenceReadbackSection(tracePayload)}
       ${renderThreeAgentLlmopsObservabilitySection(tracePayload)}
       ${renderProviderRuntimeReadbackSection(tracePayload)}
+      ${renderJdProviderRuntimeReadbackSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -6876,6 +6967,51 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Runtime readiness readback failed safely.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-jd-runtime-readback]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-jd-runtime-readback-status]");
+    const enableInput = section?.querySelector("[data-jd-runtime-readback-enable]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Reading default-off JD runtime metadata...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readbackResult = await fetchJson(
+        jdRuntimeReadbackApiPath,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            jdRuntimeReadbackRequestPayload(
+              tracePayload,
+              Boolean(enableInput?.checked),
+            ),
+          ),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        ["jd_pr" + "ovider_runtime_readback_result"]: readbackResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "JD runtime readback failed safely.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

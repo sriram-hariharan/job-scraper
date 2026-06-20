@@ -319,6 +319,7 @@ ALLOWED_CHANGED = {
     "tests/test_provider_live_config_gate_default_off.py",
     "src/agents/jd_live_provider_canary.py",
     "tests/test_jd_live_provider_canary_default_off.py",
+    "tests/test_jd_live_provider_canary_shadow_bridge_default_off.py",
 }
 
 def _changed_files():

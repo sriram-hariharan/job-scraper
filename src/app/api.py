@@ -411,6 +411,12 @@ class JdProviderRuntimeReadbackRequest(BaseModel):
     review_packet_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class JdLiveProviderCanaryReadbackRequest(BaseModel):
+    enabled: bool = False
+    payload: dict[str, Any] = Field(default_factory=dict)
+    review_packet_payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -4666,6 +4672,77 @@ def jd_provider_runtime_readback(
         "pipeline_stage_added": False,
         "mutation_authorized": False,
         "mutation_authorized_agent_count": 0,
+        "safety_metadata": safety,
+    }
+
+
+@app.post("/api/jd-live-provider-canary-readback")
+def jd_live_provider_canary_readback(
+    request: JdLiveProviderCanaryReadbackRequest,
+):
+    response = services.jd_live_provider_canary_readback_service_payload(
+        enabled=request.enabled,
+        payload=request.payload,
+        review_packet_payload=request.review_packet_payload,
+    )
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "advisory_only": True,
+            "readback_only": True,
+            "shadow_only": True,
+            "jd_live_provider_canary_readback_api": True,
+            "jd_live_provider_canary_service_bridge": True,
+            "provider_calls_made": False,
+            "network_calls_made": False,
+            "environment_secrets_read": False,
+            "embeddings_created": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_write_files": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    influence_disabled = dict(
+        response.get("influence_disabled", {}) or {}
+    )
+    influence_disabled.update(
+        {
+            "scoring": True,
+            "ranking": True,
+            "queue": True,
+            "resume": True,
+            "execution": True,
+            "submission": True,
+        }
+    )
+    return {
+        **response,
+        "api_surface": "jd_live_provider_canary_readback",
+        "api_readback_only": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
+        "shadow_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "mutation_authorized": False,
+        "mutation_authorized_agent_count": 0,
+        "influence_disabled": influence_disabled,
         "safety_metadata": safety,
     }
 

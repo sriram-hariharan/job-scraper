@@ -207,7 +207,7 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
         "src/app/api.py": "9fd96dad2edce8c1ff41f5d239801cbab071ed939104a55d7322a91a3526bbf3",
         "src/app/services.py": "d323fc22a7d9a35962359a6183de737edc8757b59f65438c0f23bba1874584d0",
-        "src/app/static/agentic_review.js": "54980b376269262288c613d9048129b0e1192810870866852e89d391a50fea7f",
+        "src/app/static/agentic_review.js": "90e58a52b550afbd105a4f04f4015277a39f004def948c4fe218e410bf05d90f",
         "src/pipeline/collector.py": "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",

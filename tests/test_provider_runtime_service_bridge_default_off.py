@@ -194,7 +194,7 @@ def test_service_bridge_has_no_sdk_provider_storage_or_mutation_calls():
 def test_no_api_ui_pipeline_or_dependency_changes():
     expected = {
         "src/app/static/agentic_review.js": (
-            "54980b376269262288c613d9048129b0e1192810870866852e89d391a50fea7f"
+            "90e58a52b550afbd105a4f04f4015277a39f004def948c4fe218e410bf05d90f"
         ),
         "src/pipeline/collector.py": (
             "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7"

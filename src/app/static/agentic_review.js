@@ -1694,6 +1694,80 @@ function renderJdProviderRuntimeReadbackSection(tracePayload = {}) {
   `;
 }
 
+function renderJdLiveProviderCanaryReadbackSection(tracePayload = {}) {
+  const resultKey = "jd_live_pr" + "ovider_canary_readback_result";
+  const reviewPacket = hasAgentTraceSummaryObject(tracePayload?.pipeline_generated_overlay_review_packet_result)
+    ? tracePayload.pipeline_generated_overlay_review_packet_result
+    : {};
+  const packetReadback = hasAgentTraceSummaryObject(reviewPacket.jd_live_provider_canary_readback)
+    ? reviewPacket.jd_live_provider_canary_readback
+    : {};
+  const directReadback = hasAgentTraceSummaryObject(tracePayload?.[resultKey])
+    ? tracePayload[resultKey]
+    : {};
+  const result = Object.keys(directReadback).length ? directReadback : packetReadback;
+  const influence = hasAgentTraceSummaryObject(result.influence_disabled)
+    ? result.influence_disabled
+    : {};
+  const status = result.readback_status || "jd_live_canary_readback_no_data";
+  const noData = !Object.keys(result).length
+    || status === "jd_live_canary_readback_no_data"
+    || status === "jd_live_canary_readback_skipped_default_off";
+  const stateDetail = noData
+    ? renderAgentTraceReadOnlyState(
+      "No JD live canary metadata yet. This display remains default-off and does not start provider runtime.",
+      "info",
+      "JD live canary readback not enabled",
+    )
+    : "";
+  return `
+    <article class="agent-trace-summary" aria-label="JD live provider canary readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>JD Live Canary Readback</h4>
+          <p>Passive read-only display of existing JD shadow canary metadata. It performs no runtime call and cannot change scoring, ranking, queues, resumes, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readback status", status)}
+        ${renderWorkflowSummaryMetric("Canary configured", result.canary_configured === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Canary attempted", result.canary_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider call attempted", result.provider_call_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider call succeeded", result.provider_call_succeeded === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider call failed", result.provider_call_failed === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Fallback used", result.fallback_used === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Fallback reason", result.fallback_reason || "none")}
+        ${renderWorkflowSummaryMetric("Structured output validated", result.structured_output_validated === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutation authorized", result.mutation_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutation-authorized agents", result.mutation_authorized_agent_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Provider", result.provider_name || "not configured")}
+        ${renderWorkflowSummaryMetric("Model", result.model_name || "not configured")}
+        ${renderWorkflowSummaryMetric("Prompt version", result.prompt_version || "not available")}
+        ${renderWorkflowSummaryMetric("Runtime version", result.runtime_version || "not available")}
+        ${renderWorkflowSummaryMetric("Latency ms", result.latency_ms ?? 0)}
+        ${renderWorkflowSummaryMetric("Input tokens", result.input_tokens ?? 0)}
+        ${renderWorkflowSummaryMetric("Output tokens", result.output_tokens ?? 0)}
+        ${renderWorkflowSummaryMetric("Total tokens", result.total_tokens ?? 0)}
+        ${renderWorkflowSummaryMetric("Estimated cost", result.estimated_cost ?? 0)}
+        ${renderWorkflowSummaryMetric("Scoring influence disabled", influence.scoring === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking influence disabled", influence.ranking === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue influence disabled", influence.queue === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume influence disabled", influence.resume === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution influence disabled", influence.execution === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission influence disabled", influence.submission === true ? "yes" : "no")}
+      </div>
+      ${stateDetail}
+      ${renderAgentTraceReadOnlyDetails(
+        "Next safe step",
+        result.next_safe_step || "keep_jd_live_canary_default_off",
+        { helper: "Existing metadata only. No canary or provider runtime action is available here." },
+      )}
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4688,6 +4762,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderThreeAgentLlmopsObservabilitySection(tracePayload)}
       ${renderProviderRuntimeReadbackSection(tracePayload)}
       ${renderJdProviderRuntimeReadbackSection(tracePayload)}
+      ${renderJdLiveProviderCanaryReadbackSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}

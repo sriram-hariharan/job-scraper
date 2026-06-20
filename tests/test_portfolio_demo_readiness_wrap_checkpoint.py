@@ -322,6 +322,7 @@ ALLOWED_CHANGED = {
     "tests/test_jd_live_provider_canary_shadow_bridge_default_off.py",
     "src/agents/jd_live_provider_canary_readback.py",
     "tests/test_jd_live_provider_canary_readback_default_off.py",
+    "tests/test_jd_live_provider_canary_service_readback_default_off.py",
 }
 
 def _changed_files():

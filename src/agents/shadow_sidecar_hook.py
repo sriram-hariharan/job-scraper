@@ -988,6 +988,11 @@ def run_shadow_sidecar_pipeline_hook(
     provider_runtime_adapter_helper: Any = None,
     provider_runtime_provider_name: str = "",
     provider_runtime_model_name: str = "",
+    jd_provider_runtime_activation_enabled: bool = False,
+    jd_provider_runtime_activation_client: Any = None,
+    jd_provider_runtime_activation_provider: Any = None,
+    jd_provider_runtime_activation_helper: Any = None,
+    jd_provider_runtime_activation_adapter_runner: Any = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -1027,6 +1032,7 @@ def run_shadow_sidecar_pipeline_hook(
             jd_intelligence_provider_enabled is True
             or tailoring_provider_enabled is True
             or critic_provider_enabled is True
+            or jd_provider_runtime_activation_enabled is True
         )
     ):
         effective_sidecar_config["provider_execution_allowed"] = True
@@ -1126,8 +1132,135 @@ def run_shadow_sidecar_pipeline_hook(
 
         return call_provider_runtime_adapter
 
+    jd_activation_bridge_metadata: dict[str, Any] = {}
     jd_shadow_agent = None
     if (
+        three_agent_shadow_workflow_enabled is True
+        and jd_provider_runtime_activation_enabled is True
+    ):
+        activation_helper = jd_provider_runtime_activation_helper
+        if activation_helper is None:
+            from src.agents.jd_provider_runtime_activation import (
+                run_jd_provider_runtime_activation,
+            )
+
+            activation_helper = run_jd_provider_runtime_activation
+
+        def jd_shadow_agent(sidecar_input: dict[str, Any]) -> dict[str, Any]:
+            activation = activation_helper(
+                enabled=True,
+                job_payload=_plain_dict(
+                    sidecar_input.get("job_payload")
+                ),
+                context_id=_clean_text(sidecar_input.get("run_id")),
+                job_id=_clean_text(sidecar_input.get("job_id")),
+                provider_name=provider_runtime_provider_name,
+                model_name=provider_runtime_model_name,
+                provider_callable=jd_provider_runtime_activation_provider,
+                **{"provider_" + "client": jd_provider_runtime_activation_client},
+                adapter_runner=(
+                    jd_provider_runtime_activation_adapter_runner
+                ),
+            )
+            activation = _plain_dict(activation)
+            provider_payload = _plain_dict(
+                activation.get("jd_intelligence_output")
+            )
+            metadata = _plain_dict(
+                activation.get("llmops_trace_metadata")
+            )
+            safety = _plain_dict(activation.get("safety_metadata"))
+            validation_status = _clean_text(
+                provider_payload.get("validation_status")
+            )
+            succeeded = validation_status == "valid"
+            provider_called = bool(
+                metadata.get("provider_call_attempted")
+            )
+            jd_activation_bridge_metadata.update(
+                {
+                    "activation_status": _clean_text(
+                        activation.get("status")
+                    ),
+                    "llmops_trace_metadata": deepcopy(metadata),
+                    "safety_metadata": deepcopy(safety),
+                    "provider_called": provider_called,
+                    "succeeded": succeeded,
+                    "fallback_used": bool(
+                        activation.get("fallback_used")
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = {
+                **metadata,
+                "jd_provider_runtime_activation_enabled": True,
+                "jd_provider_runtime_activation_status": _clean_text(
+                    activation.get("status")
+                ),
+                "shadow_only": True,
+            }
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(
+                    provider_payload.get("safety_metadata")
+                ),
+                **safety,
+                "jd_intelligence_provider_enabled": True,
+                "jd_intelligence_provider_attempted": provider_called,
+                "jd_intelligence_provider_succeeded": succeeded,
+                "jd_intelligence_schema_validated": succeeded,
+                "jd_provider_runtime_activation_enabled": True,
+                "jd_provider_runtime_activation_attempted": provider_called,
+                "jd_provider_runtime_activation_succeeded": succeeded,
+                "jd_provider_runtime_activation_fallback": bool(
+                    activation.get("fallback_used")
+                ),
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": float(
+                    provider_payload.get("extraction_confidence") or 0
+                ),
+                "agent_reason_codes": list(
+                    provider_payload.get("validation_errors") or []
+                ),
+                "agent_evidence_refs": [
+                    f"jd_provider_runtime.{field}"
+                    for field in (
+                        "required_skills",
+                        "preferred_skills",
+                        "required_tools",
+                        "preferred_tools",
+                        "workflows",
+                        "methods",
+                        "business_contexts",
+                        "stakeholder_contexts",
+                        "ownership_signals",
+                        "seniority_signals",
+                    )
+                    if provider_payload.get(field)
+                ],
+                "agent_risk_flags": list(
+                    provider_payload.get("risk_flags") or []
+                ),
+                "agent_output_payload": provider_payload,
+            }
+    elif (
         three_agent_shadow_workflow_enabled is True
         and jd_intelligence_provider_enabled is True
     ):
@@ -1692,6 +1825,7 @@ def run_shadow_sidecar_pipeline_hook(
             or jd_intelligence_provider_enabled is True
             or tailoring_provider_enabled is True
             or critic_provider_enabled is True
+            or jd_provider_runtime_activation_enabled is True
         ):
             trace_contract = llmops_trace_contract_helper
             if trace_contract is None:
@@ -1707,6 +1841,72 @@ def run_shadow_sidecar_pipeline_hook(
                     llmops_trace_metadata_by_agent or {}
                 ),
             )
+        if jd_provider_runtime_activation_enabled is True:
+            results = [
+                deepcopy(result)
+                for result in (
+                    chain_payload.get("ordered_agent_results") or []
+                )
+                if isinstance(result, dict)
+            ]
+            for result in results:
+                if _clean_text(result.get("agent_name")) != (
+                    "jd_intelligence"
+                ):
+                    continue
+                activation_trace = _plain_dict(
+                    jd_activation_bridge_metadata.get(
+                        "llmops_trace_metadata"
+                    )
+                )
+                trace_metadata = _plain_dict(
+                    result.get("llmops_trace_metadata")
+                )
+                trace_metadata.update(activation_trace)
+                trace_metadata.update(
+                    {
+                        "jd_provider_runtime_activation_enabled": True,
+                        "jd_provider_runtime_activation_status": (
+                            _clean_text(
+                                jd_activation_bridge_metadata.get(
+                                    "activation_status"
+                                )
+                            )
+                        ),
+                    }
+                )
+                result["llmops_trace_metadata"] = trace_metadata
+                result_safety = _plain_dict(
+                    result.get("safety_metadata")
+                )
+                result_safety.update(
+                    _plain_dict(
+                        jd_activation_bridge_metadata.get(
+                            "safety_metadata"
+                        )
+                    )
+                )
+                result_safety.update(
+                    {
+                        "jd_provider_runtime_activation_enabled": True,
+                        "jd_provider_runtime_activation_attempted": bool(
+                            jd_activation_bridge_metadata.get(
+                                "provider_called"
+                            )
+                        ),
+                        "jd_provider_runtime_activation_succeeded": bool(
+                            jd_activation_bridge_metadata.get("succeeded")
+                        ),
+                        "jd_provider_runtime_activation_fallback": bool(
+                            jd_activation_bridge_metadata.get(
+                                "fallback_used"
+                            )
+                        ),
+                    }
+                )
+                result["safety_metadata"] = result_safety
+            chain_payload["ordered_agent_results"] = results
+            chain_payload["agent_results"] = deepcopy(results)
         if provider_runtime_adapter_enabled is True:
             results = [
                 deepcopy(result)

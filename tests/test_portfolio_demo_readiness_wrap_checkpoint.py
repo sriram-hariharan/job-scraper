@@ -305,6 +305,7 @@ ALLOWED_CHANGED = {
     "tests/test_provider_runtime_activation_plan_default_off.py",
     "src/agents/jd_provider_runtime_activation.py",
     "tests/test_jd_provider_runtime_activation_default_off.py",
+    "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",
 }
 
 def _changed_files():

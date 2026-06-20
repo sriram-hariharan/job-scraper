@@ -993,6 +993,11 @@ def run_shadow_sidecar_pipeline_hook(
     jd_provider_runtime_activation_provider: Any = None,
     jd_provider_runtime_activation_helper: Any = None,
     jd_provider_runtime_activation_adapter_runner: Any = None,
+    jd_live_provider_canary_enabled: bool = False,
+    jd_live_provider_canary_config: dict[str, Any] | None = None,
+    jd_live_provider_canary_adapter: Any = None,
+    jd_live_provider_canary_helper: Any = None,
+    jd_live_provider_canary_fallback_input: dict[str, Any] | None = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
@@ -1033,6 +1038,7 @@ def run_shadow_sidecar_pipeline_hook(
             or tailoring_provider_enabled is True
             or critic_provider_enabled is True
             or jd_provider_runtime_activation_enabled is True
+            or jd_live_provider_canary_enabled is True
         )
     ):
         effective_sidecar_config["provider_execution_allowed"] = True
@@ -1133,8 +1139,160 @@ def run_shadow_sidecar_pipeline_hook(
         return call_provider_runtime_adapter
 
     jd_activation_bridge_metadata: dict[str, Any] = {}
+    jd_canary_bridge_metadata: dict[str, Any] = {}
     jd_shadow_agent = None
     if (
+        three_agent_shadow_workflow_enabled is True
+        and jd_live_provider_canary_enabled is True
+    ):
+        canary_helper = jd_live_provider_canary_helper
+        if canary_helper is None:
+            from src.agents.jd_live_provider_canary import (
+                run_jd_live_provider_canary,
+            )
+
+            canary_helper = run_jd_live_provider_canary
+
+        def jd_shadow_agent(sidecar_input: dict[str, Any]) -> dict[str, Any]:
+            job = _plain_dict(sidecar_input.get("job_payload"))
+            job.setdefault(
+                "context_id",
+                _clean_text(sidecar_input.get("run_id")),
+            )
+            job.setdefault(
+                "job_id",
+                _clean_text(sidecar_input.get("job_id")),
+            )
+            canary = _plain_dict(
+                canary_helper(
+                    enabled=True,
+                    job_payload=job,
+                    live_config=_plain_dict(
+                        jd_live_provider_canary_config
+                    ),
+                    provider_adapter=jd_live_provider_canary_adapter,
+                    deterministic_fallback_input=_plain_dict(
+                        jd_live_provider_canary_fallback_input
+                    ),
+                )
+            )
+            provider_payload = _plain_dict(
+                canary.get("jd_intelligence_output")
+            )
+            metadata = _plain_dict(canary.get("llmops_metadata"))
+            safety = _plain_dict(canary.get("safety_metadata"))
+            succeeded = (
+                canary.get("provider_call_succeeded") is True
+                and canary.get("structured_output_validated") is True
+                and provider_payload.get("validation_status") == "valid"
+            )
+            provider_called = (
+                canary.get("provider_call_attempted") is True
+            )
+            jd_canary_bridge_metadata.update(
+                {
+                    "canary_status": _clean_text(
+                        canary.get("canary_status")
+                    ),
+                    "canary_allowed": (
+                        canary.get("canary_allowed") is True
+                    ),
+                    "canary_attempted": (
+                        canary.get("canary_attempted") is True
+                    ),
+                    "llmops_metadata": deepcopy(metadata),
+                    "safety_metadata": deepcopy(safety),
+                    "provider_called": provider_called,
+                    "succeeded": succeeded,
+                    "fallback_used": bool(
+                        canary.get("fallback_used")
+                    ),
+                    "fallback_reason": _clean_text(
+                        canary.get("fallback_reason")
+                    ),
+                }
+            )
+            provider_payload["provider_metadata"] = {
+                **metadata,
+                "jd_live_provider_canary_enabled": True,
+                "jd_live_provider_canary_status": _clean_text(
+                    canary.get("canary_status")
+                ),
+                "jd_live_provider_canary_allowed": (
+                    canary.get("canary_allowed") is True
+                ),
+                "jd_live_provider_canary_attempted": (
+                    canary.get("canary_attempted") is True
+                ),
+                "shadow_only": True,
+            }
+            provider_payload["safety_metadata"] = {
+                **_plain_dict(
+                    provider_payload.get("safety_metadata")
+                ),
+                **safety,
+                "jd_intelligence_provider_enabled": True,
+                "jd_intelligence_provider_attempted": provider_called,
+                "jd_intelligence_provider_succeeded": succeeded,
+                "jd_intelligence_schema_validated": succeeded,
+                "jd_live_provider_canary_enabled": True,
+                "jd_live_provider_canary_allowed": (
+                    canary.get("canary_allowed") is True
+                ),
+                "jd_live_provider_canary_attempted": (
+                    canary.get("canary_attempted") is True
+                ),
+                "jd_live_provider_canary_succeeded": succeeded,
+                "jd_live_provider_canary_fallback": bool(
+                    canary.get("fallback_used")
+                ),
+                "provider_calls_made": provider_called,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_resume": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+            }
+            return {
+                "agent_output_status": (
+                    "completed_shadow"
+                    if succeeded
+                    else "completed_with_fallback"
+                ),
+                "agent_recommendation": (
+                    "preserve_source_deterministic_decision"
+                ),
+                "agent_confidence": float(
+                    provider_payload.get("extraction_confidence") or 0
+                ),
+                "agent_reason_codes": list(
+                    provider_payload.get("validation_errors") or []
+                ),
+                "agent_evidence_refs": [
+                    f"jd_live_canary.{field}"
+                    for field in (
+                        "required_skills",
+                        "preferred_skills",
+                        "required_tools",
+                        "preferred_tools",
+                        "workflows",
+                        "methods",
+                        "business_contexts",
+                        "stakeholder_contexts",
+                        "ownership_signals",
+                        "seniority_signals",
+                    )
+                    if provider_payload.get(field)
+                ],
+                "agent_risk_flags": list(
+                    provider_payload.get("risk_flags") or []
+                ),
+                "agent_output_payload": provider_payload,
+            }
+    elif (
         three_agent_shadow_workflow_enabled is True
         and jd_provider_runtime_activation_enabled is True
     ):
@@ -1826,6 +1984,7 @@ def run_shadow_sidecar_pipeline_hook(
             or tailoring_provider_enabled is True
             or critic_provider_enabled is True
             or jd_provider_runtime_activation_enabled is True
+            or jd_live_provider_canary_enabled is True
         ):
             trace_contract = llmops_trace_contract_helper
             if trace_contract is None:
@@ -1841,7 +2000,89 @@ def run_shadow_sidecar_pipeline_hook(
                     llmops_trace_metadata_by_agent or {}
                 ),
             )
-        if jd_provider_runtime_activation_enabled is True:
+        if jd_live_provider_canary_enabled is True:
+            results = [
+                deepcopy(result)
+                for result in (
+                    chain_payload.get("ordered_agent_results") or []
+                )
+                if isinstance(result, dict)
+            ]
+            for result in results:
+                if _clean_text(result.get("agent_name")) != (
+                    "jd_intelligence"
+                ):
+                    continue
+                canary_trace = _plain_dict(
+                    jd_canary_bridge_metadata.get("llmops_metadata")
+                )
+                trace_metadata = _plain_dict(
+                    result.get("llmops_trace_metadata")
+                )
+                trace_metadata.update(canary_trace)
+                trace_metadata.update(
+                    {
+                        "jd_live_provider_canary_enabled": True,
+                        "jd_live_provider_canary_status": _clean_text(
+                            jd_canary_bridge_metadata.get(
+                                "canary_status"
+                            )
+                        ),
+                        "jd_live_provider_canary_allowed": bool(
+                            jd_canary_bridge_metadata.get(
+                                "canary_allowed"
+                            )
+                        ),
+                        "jd_live_provider_canary_attempted": bool(
+                            jd_canary_bridge_metadata.get(
+                                "canary_attempted"
+                            )
+                        ),
+                    }
+                )
+                result["llmops_trace_metadata"] = trace_metadata
+                result_safety = _plain_dict(
+                    result.get("safety_metadata")
+                )
+                result_safety.update(
+                    _plain_dict(
+                        jd_canary_bridge_metadata.get("safety_metadata")
+                    )
+                )
+                result_safety.update(
+                    {
+                        "jd_live_provider_canary_enabled": True,
+                        "jd_live_provider_canary_allowed": bool(
+                            jd_canary_bridge_metadata.get(
+                                "canary_allowed"
+                            )
+                        ),
+                        "jd_live_provider_canary_attempted": bool(
+                            jd_canary_bridge_metadata.get(
+                                "canary_attempted"
+                            )
+                        ),
+                        "jd_live_provider_canary_succeeded": bool(
+                            jd_canary_bridge_metadata.get("succeeded")
+                        ),
+                        "jd_live_provider_canary_fallback": bool(
+                            jd_canary_bridge_metadata.get(
+                                "fallback_used"
+                            )
+                        ),
+                        "jd_live_provider_canary_fallback_reason": (
+                            _clean_text(
+                                jd_canary_bridge_metadata.get(
+                                    "fallback_reason"
+                                )
+                            )
+                        ),
+                    }
+                )
+                result["safety_metadata"] = result_safety
+            chain_payload["ordered_agent_results"] = results
+            chain_payload["agent_results"] = deepcopy(results)
+        elif jd_provider_runtime_activation_enabled is True:
             results = [
                 deepcopy(result)
                 for result in (

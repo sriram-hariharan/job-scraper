@@ -309,6 +309,7 @@ ALLOWED_CHANGED = {
     "src/agents/jd_provider_runtime_trace_readback.py",
     "tests/test_jd_provider_runtime_trace_readback_default_off.py",
     "tests/test_jd_provider_runtime_review_packet_default_off.py",
+    "tests/test_jd_provider_runtime_service_readback_default_off.py",
 }
 
 def _changed_files():

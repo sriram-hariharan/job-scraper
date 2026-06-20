@@ -263,7 +263,7 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
             "b520bcf22ad0ec85f6ee27ebb9f74c513fa3b76f377f0652cf74474dd67c905f"
         ),
         "src/app/services.py": (
-            "abe03522e403bc8030a2d559a5b99c5cebbcd4d27df42d8aa58cd34d57fb3102"
+            "1c637ad557e667007db35bd5d978e045ace6f1d69293dd91efbce80a41f73d1c"
         ),
         "src/app/static/agentic_review.js": (
             "83a95006d999df32387d3a0732ac96f8ebdc7f49a2115ba23597c03f02f82e1c"

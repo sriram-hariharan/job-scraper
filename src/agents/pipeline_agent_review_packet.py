@@ -5,6 +5,7 @@ from typing import Any
 
 from src.agents import agent_recommendation_overlay_readback
 from src.agents import agent_recommendation_overlay_readiness
+from src.agents import jd_provider_runtime_trace_readback
 from src.agents import shadow_sidecar
 
 
@@ -263,6 +264,53 @@ def _three_agent_workflow_readiness(*values: Any) -> dict[str, Any]:
     return {}
 
 
+def _jd_provider_runtime_readback(*values: Any) -> dict[str, Any]:
+    source_payload: dict[str, Any] = {}
+    for value in values:
+        source = _plain_dict(value)
+        chain = _plain_dict(source.get("chain_payload"))
+        results = chain.get("ordered_agent_results")
+        if not isinstance(results, list):
+            results = chain.get("agent_results")
+        has_jd_runtime = bool(
+            source.get("jd_intelligence_output")
+            or source.get("provider_runtime_metadata")
+        )
+        if isinstance(results, list):
+            for result_value in results:
+                result = _plain_dict(result_value)
+                if _clean_text(result.get("agent_name")) != (
+                    "jd_intelligence"
+                ):
+                    continue
+                trace = _plain_dict(
+                    result.get("llmops_trace_metadata")
+                )
+                safety = _plain_dict(result.get("safety_metadata"))
+                if (
+                    trace.get(
+                        "jd_provider_runtime_activation_enabled"
+                    )
+                    is True
+                    or safety.get(
+                        "jd_provider_runtime_activation_enabled"
+                    )
+                    is True
+                ):
+                    has_jd_runtime = True
+                    break
+        if has_jd_runtime:
+            source_payload = source
+            break
+    return (
+        jd_provider_runtime_trace_readback
+        .build_jd_provider_runtime_trace_readback(
+            payload=source_payload,
+            enabled=True,
+        )
+    )
+
+
 def _review_focus(readiness_payload: dict[str, Any]) -> list[str]:
     status = _clean_text(readiness_payload.get("readiness_status"))
     focus_by_status = {
@@ -462,6 +510,14 @@ def build_pipeline_agent_review_packet_payload(
         trace_readback_payload,
         readback_source,
     )
+    jd_provider_runtime_readback = _jd_provider_runtime_readback(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
     provider_backed_agent_count = int(
         three_agent_llmops_trace_contract.get(
             "provider_backed_agent_count",
@@ -511,6 +567,7 @@ def build_pipeline_agent_review_packet_payload(
         "three_agent_workflow_readiness": (
             three_agent_workflow_readiness
         ),
+        "jd_provider_runtime_readback": jd_provider_runtime_readback,
         "overlay_readback_summary": {
             "readback_status": _clean_text(readback.get("readback_status")),
             "overlay_found": bool(

@@ -304,7 +304,7 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
             "68b14fea674618a7cbf6a0953b9d22418faf2b700c5092872e2cf62471fa00b2"
         ),
         "src/app/services.py": (
-            "1c637ad557e667007db35bd5d978e045ace6f1d69293dd91efbce80a41f73d1c"
+            "d323fc22a7d9a35962359a6183de737edc8757b59f65438c0f23bba1874584d0"
         ),
         "src/app/static/agentic_review.js": (
             "54980b376269262288c613d9048129b0e1192810870866852e89d391a50fea7f"

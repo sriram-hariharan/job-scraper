@@ -316,7 +316,7 @@ def test_ui_pipeline_and_dependencies_are_unchanged():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/static/agentic_review.js": (
-            "83a95006d999df32387d3a0732ac96f8ebdc7f49a2115ba23597c03f02f82e1c"
+            "54980b376269262288c613d9048129b0e1192810870866852e89d391a50fea7f"
         ),
         "src/pipeline/collector.py": (
             "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7"

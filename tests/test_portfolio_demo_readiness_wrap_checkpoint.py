@@ -330,6 +330,8 @@ ALLOWED_CHANGED = {
     "tests/test_jd_live_provider_canary_command_default_off.py",
     "src/agents/jd_live_provider_external_adapter.py",
     "tests/test_jd_live_provider_external_adapter_default_off.py",
+    "src/agents/jd_live_provider_canary_runbook.py",
+    "tests/test_jd_live_provider_canary_runbook_default_off.py",
 }
 
 def _changed_files():
@@ -404,6 +406,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/jd_live_provider_canary_readback.py",
         "src/agents/jd_live_provider_canary_command.py",
         "src/agents/jd_live_provider_external_adapter.py",
+        "src/agents/jd_live_provider_canary_runbook.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

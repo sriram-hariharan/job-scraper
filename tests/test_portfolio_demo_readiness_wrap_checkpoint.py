@@ -325,6 +325,7 @@ ALLOWED_CHANGED = {
     "tests/test_jd_live_provider_canary_service_readback_default_off.py",
     "tests/test_jd_live_provider_canary_api_readback_default_off.py",
     "tests/test_jd_live_provider_canary_ui_readback_default_off.py",
+    "tests/test_jd_live_provider_canary_readiness_checkpoint_default_off.py",
 }
 
 def _changed_files():

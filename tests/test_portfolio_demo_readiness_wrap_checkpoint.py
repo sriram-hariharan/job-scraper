@@ -332,6 +332,7 @@ ALLOWED_CHANGED = {
     "tests/test_jd_live_provider_external_adapter_default_off.py",
     "src/agents/jd_live_provider_canary_runbook.py",
     "tests/test_jd_live_provider_canary_runbook_default_off.py",
+    "tests/test_jd_manual_live_canary_readiness_checkpoint_default_off.py",
 }
 
 def _changed_files():

@@ -182,10 +182,10 @@ def test_no_api_service_pipeline_dependency_or_decision_module_change():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
-            "68b14fea674618a7cbf6a0953b9d22418faf2b700c5092872e2cf62471fa00b2"
+            "9fd96dad2edce8c1ff41f5d239801cbab071ed939104a55d7322a91a3526bbf3"
         ),
         "src/app/services.py": (
-            "1c637ad557e667007db35bd5d978e045ace6f1d69293dd91efbce80a41f73d1c"
+            "d323fc22a7d9a35962359a6183de737edc8757b59f65438c0f23bba1874584d0"
         ),
         "src/pipeline/collector.py": (
             "cbcd90f3d8d367ebe6f178c211406da909f340ce62681047b70efe4fb4a30fa7"

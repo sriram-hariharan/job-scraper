@@ -15,9 +15,9 @@ ORDERED_AGENTS = [
 
 def _run(**updates):
     kwargs = {
-        "run_id": "run-phase-12c",
-        "batch_id": "batch-phase-12c",
-        "job_id": "job-phase-12c",
+        "run_id": "run-phase-13d",
+        "batch_id": "batch-phase-13d",
+        "job_id": "job-phase-13d",
         "stage_name": "post_final_scoring",
         "source_deterministic_stage": "application_priority",
         "source_deterministic_status": "completed",
@@ -33,6 +33,36 @@ def _run(**updates):
     }
     kwargs.update(updates)
     return shadow_sidecar_hook.run_shadow_sidecar_pipeline_hook(**kwargs)
+
+
+def _config():
+    return {
+        "live_canary_enabled": True,
+        "agent_name": "jd_intelligence",
+        "shadow_only": True,
+        "provider_name": "approved-provider",
+        "model_name": "approved-model",
+        "allowed_provider_names": ["approved-provider"],
+        "allowed_model_names": ["approved-model"],
+        "timeout_seconds": 10,
+        "retry_limit": 1,
+        "max_input_tokens": 4_000,
+        "max_output_tokens": 1_000,
+        "max_estimated_cost": 0.25,
+        "structured_output_validation_required": True,
+        "deterministic_fallback_required": True,
+        "llmops_metadata_required": True,
+        "prompt_version": "jd-live-canary-prompt-v1",
+        "runtime_version": "jd-live-canary-runtime-v1",
+        "no_mutation_authority": True,
+        "mutation_authorized": False,
+        "final_scoring_influence_enabled": False,
+        "ranking_influence_enabled": False,
+        "queue_influence_enabled": False,
+        "resume_mutation_enabled": False,
+        "execution_enabled": False,
+        "submission_enabled": False,
+    }
 
 
 def _valid_output():
@@ -52,11 +82,9 @@ def _valid_output():
     }
 
 
-def _fake_response(output):
+def _response(output):
     return {
         "output": deepcopy(output),
-        "provider_name": "fixture-runtime",
-        "model_name": "fixture-jd-model",
         "latency_ms": 11,
         "token_usage": {
             "input_tokens": 8,
@@ -64,7 +92,6 @@ def _fake_response(output):
             "total_tokens": 11,
         },
         "cost": {"estimated_cost": 0.001},
-        "schema_validation_status": "valid",
     }
 
 
@@ -76,55 +103,87 @@ def _jd(payload):
     return _results(payload)[0]
 
 
-def test_shadow_workflow_default_off_does_not_call_activation_client():
-    calls = []
+def test_default_off_does_not_call_canary_runner_or_adapter():
+    runner_calls = []
+    adapter_calls = []
+
+    def helper(**kwargs):
+        runner_calls.append(deepcopy(kwargs))
+        return {}
+
     payload = _run(
-        jd_provider_runtime_activation_client=lambda request: calls.append(
-            deepcopy(request)
-        )
+        jd_live_provider_canary_helper=helper,
+        jd_live_provider_canary_adapter=lambda request: (
+            adapter_calls.append(deepcopy(request))
+        ),
     )
 
-    assert calls == []
+    assert runner_calls == []
+    assert adapter_calls == []
     assert _jd(payload)["sidecar_stage_status"] == (
         "completed_with_fallback"
     )
-    assert payload["provider_backed_automated_agents"] == 0
-    assert "jd_provider_runtime_activation_enabled" not in _jd(payload)[
+    assert "jd_live_provider_canary_enabled" not in _jd(payload)[
         "safety_metadata"
     ]
 
 
-def test_enabled_without_injected_client_blocks_safely():
-    payload = _run(jd_provider_runtime_activation_enabled=True)
+def test_enabled_blocked_config_does_not_call_adapter():
+    calls = []
+    blocked = _config()
+    blocked["agent_name"] = "tailoring_suggestion"
+
+    payload = _run(
+        jd_live_provider_canary_enabled=True,
+        jd_live_provider_canary_config=blocked,
+        jd_live_provider_canary_adapter=lambda request: calls.append(
+            deepcopy(request)
+        ),
+    )
+    jd = _jd(payload)
+
+    assert calls == []
+    assert jd["sidecar_stage_status"] == "completed_with_fallback"
+    assert jd["safety_metadata"][
+        "jd_live_provider_canary_allowed"
+    ] is False
+    assert jd["safety_metadata"][
+        "jd_live_provider_canary_attempted"
+    ] is False
+    assert jd["llmops_trace_metadata"]["provider_call_made"] is False
+
+
+def test_enabled_missing_adapter_blocks_and_falls_back():
+    payload = _run(
+        jd_live_provider_canary_enabled=True,
+        jd_live_provider_canary_config=_config(),
+    )
     jd = _jd(payload)
 
     assert jd["sidecar_stage_status"] == "completed_with_fallback"
-    assert jd["agent_output_payload"]["validation_status"] == "fallback"
     assert jd["safety_metadata"][
-        "jd_provider_runtime_activation_enabled"
+        "jd_live_provider_canary_allowed"
     ] is True
     assert jd["safety_metadata"][
-        "jd_provider_runtime_activation_attempted"
+        "jd_live_provider_canary_attempted"
     ] is False
     assert jd["safety_metadata"][
-        "jd_provider_runtime_activation_succeeded"
-    ] is False
+        "jd_live_provider_canary_fallback"
+    ] is True
     assert jd["llmops_trace_metadata"]["provider_call_made"] is False
-    assert payload["provider_backed_automated_agents"] == 0
 
 
-def test_valid_fake_client_produces_jd_shadow_runtime_metadata():
+def test_valid_config_calls_adapter_once_and_surfaces_canary_metadata():
     calls = []
 
-    def client(request):
+    def adapter(request):
         calls.append(deepcopy(request))
-        return _fake_response(_valid_output())
+        return _response(_valid_output())
 
     payload = _run(
-        jd_provider_runtime_activation_enabled=True,
-        jd_provider_runtime_activation_client=client,
-        provider_runtime_provider_name="fixture-runtime",
-        provider_runtime_model_name="fixture-jd-model",
+        jd_live_provider_canary_enabled=True,
+        jd_live_provider_canary_config=_config(),
+        jd_live_provider_canary_adapter=adapter,
     )
     jd = _jd(payload)
     trace = jd["llmops_trace_metadata"]
@@ -135,63 +194,70 @@ def test_valid_fake_client_produces_jd_shadow_runtime_metadata():
     assert jd["sidecar_stage_status"] == "completed_shadow"
     assert jd["agent_output_payload"]["validation_status"] == "valid"
     assert trace["provider_call_made"] is True
-    assert trace["model_provider"] == "fixture-runtime"
-    assert trace["model_name"] == "fixture-jd-model"
+    assert trace["provider_call_succeeded"] is True
     assert trace["schema_validation_status"] == "valid"
-    assert trace["fallback_used"] is False
+    assert trace["jd_live_provider_canary_enabled"] is True
+    assert trace["jd_live_provider_canary_allowed"] is True
+    assert trace["jd_live_provider_canary_attempted"] is True
     assert jd["safety_metadata"][
-        "jd_provider_runtime_activation_succeeded"
+        "jd_live_provider_canary_succeeded"
     ] is True
     assert payload["provider_backed_automated_agents"] == 1
 
 
-def test_invalid_fake_output_falls_back_deterministically():
+def test_invalid_output_falls_back_deterministically():
     payload = _run(
-        jd_provider_runtime_activation_enabled=True,
-        jd_provider_runtime_activation_provider=lambda _request: (
-            _fake_response({"required_skills": {"invalid": "shape"}})
+        jd_live_provider_canary_enabled=True,
+        jd_live_provider_canary_config=_config(),
+        jd_live_provider_canary_adapter=lambda _request: _response(
+            {"required_skills": {"invalid": "shape"}}
         ),
+        jd_live_provider_canary_fallback_input={
+            "required_skills": ["fallback-python"]
+        },
     )
     jd = _jd(payload)
     trace = jd["llmops_trace_metadata"]
 
     assert jd["sidecar_stage_status"] == "completed_with_fallback"
-    assert jd["agent_output_payload"]["validation_status"] == "invalid"
-    assert "required_skills_not_list" in jd["agent_output_payload"][
-        "validation_errors"
+    assert jd["agent_output_payload"]["required_skills"] == [
+        "fallback-python"
     ]
     assert trace["provider_call_made"] is True
     assert trace["provider_call_succeeded"] is False
     assert trace["fallback_used"] is True
-    assert payload["provider_backed_automated_agents"] == 1
+    assert jd["safety_metadata"][
+        "jd_live_provider_canary_fallback_reason"
+    ] == "required_skills_not_list"
 
 
-def test_provider_exception_falls_back_deterministically():
-    def failing_client(_request):
+def test_adapter_exception_falls_back_deterministically():
+    def failing_adapter(_request):
         raise RuntimeError("fixture failure")
 
     payload = _run(
-        jd_provider_runtime_activation_enabled=True,
-        jd_provider_runtime_activation_client=failing_client,
+        jd_live_provider_canary_enabled=True,
+        jd_live_provider_canary_config=_config(),
+        jd_live_provider_canary_adapter=failing_adapter,
     )
     jd = _jd(payload)
     trace = jd["llmops_trace_metadata"]
 
     assert jd["sidecar_stage_status"] == "completed_with_fallback"
-    assert jd["agent_output_payload"]["validation_status"] == "fallback"
     assert trace["provider_call_made"] is True
     assert trace["provider_call_succeeded"] is False
     assert trace["fallback_used"] is True
     assert trace["error_type"] == "RuntimeError"
 
 
-def test_only_jd_activation_runs_and_mutation_authority_stays_zero():
+def test_only_jd_canary_runs_and_mutation_authority_stays_zero():
     calls = []
     payload = _run(
-        jd_provider_runtime_activation_enabled=True,
-        jd_provider_runtime_activation_client=lambda request: (
+        jd_live_provider_canary_enabled=True,
+        jd_live_provider_canary_config=_config(),
+        jd_live_provider_canary_adapter=lambda request: (
             calls.append(deepcopy(request))
-            or _fake_response(_valid_output())
+            or _response(_valid_output())
         ),
     )
     results = _results(payload)
@@ -222,12 +288,16 @@ def test_only_jd_activation_runs_and_mutation_authority_stays_zero():
         assert safety[key] is False
 
 
-def test_bridge_has_no_sdk_network_storage_or_mutation_wiring():
+def test_bridge_has_no_sdk_env_direct_network_storage_or_mutation_wiring():
     source = (ROOT / "src/agents/shadow_sidecar_hook.py").read_text(
         encoding="utf-8"
     )
-    start = source.index("def run_shadow_sidecar_pipeline_hook(")
-    snippet = source[start:].lower()
+    start = source.index("jd_live_provider_canary_enabled: bool = False")
+    end = source.index(
+        "elif jd_provider_runtime_activation_enabled is True:",
+        source.index("if jd_live_provider_canary_enabled is True:", start),
+    )
+    snippet = source[start:end].lower()
     for marker in (
         "from openai",
         "import openai",
@@ -236,6 +306,11 @@ def test_bridge_has_no_sdk_network_storage_or_mutation_wiring():
         "sentence_transformers",
         "requests.",
         "httpx",
+        "urllib",
+        "socket",
+        "os.getenv",
+        "os.environ",
+        "provider_client",
         "create_embedding(",
         "database_url",
         "connect(",
@@ -281,6 +356,7 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
             "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
         ),
     }
+
     for relative_path, expected_hash in expected.items():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
             expected_hash

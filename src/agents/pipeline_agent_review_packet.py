@@ -5,6 +5,7 @@ from typing import Any
 
 from src.agents import agent_recommendation_overlay_readback
 from src.agents import agent_recommendation_overlay_readiness
+from src.agents import jd_live_provider_canary_readback
 from src.agents import jd_provider_runtime_trace_readback
 from src.agents import shadow_sidecar
 
@@ -311,6 +312,35 @@ def _jd_provider_runtime_readback(*values: Any) -> dict[str, Any]:
     )
 
 
+def _jd_live_provider_canary_readback(*values: Any) -> dict[str, Any]:
+    source_payload: dict[str, Any] = {}
+    for value in values:
+        source = _plain_dict(value)
+        direct_canary = bool(
+            source.get("canary_status")
+            or source.get("canary_enabled")
+            or source.get("config_gate")
+        )
+        result = jd_live_provider_canary_readback._jd_result(source)
+        trace = _plain_dict(result.get("llmops_trace_metadata"))
+        safety = _plain_dict(result.get("safety_metadata"))
+        has_canary = (
+            direct_canary
+            or trace.get("jd_live_provider_canary_enabled") is True
+            or safety.get("jd_live_provider_canary_enabled") is True
+        )
+        if has_canary:
+            source_payload = source
+            break
+    return (
+        jd_live_provider_canary_readback
+        .build_jd_live_provider_canary_readback(
+            payload=source_payload,
+            enabled=True,
+        )
+    )
+
+
 def _review_focus(readiness_payload: dict[str, Any]) -> list[str]:
     status = _clean_text(readiness_payload.get("readiness_status"))
     focus_by_status = {
@@ -518,6 +548,14 @@ def build_pipeline_agent_review_packet_payload(
         trace_readback_payload,
         readback_source,
     )
+    jd_live_canary_readback = _jd_live_provider_canary_readback(
+        hook_payload,
+        trace_context_payload,
+        trace_capture_payload,
+        trace_persistence_payload,
+        trace_readback_payload,
+        readback_source,
+    )
     provider_backed_agent_count = int(
         three_agent_llmops_trace_contract.get(
             "provider_backed_agent_count",
@@ -568,6 +606,7 @@ def build_pipeline_agent_review_packet_payload(
             three_agent_workflow_readiness
         ),
         "jd_provider_runtime_readback": jd_provider_runtime_readback,
+        "jd_live_provider_canary_readback": jd_live_canary_readback,
         "overlay_readback_summary": {
             "readback_status": _clean_text(readback.get("readback_status")),
             "overlay_found": bool(

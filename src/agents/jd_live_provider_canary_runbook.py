@@ -1,0 +1,278 @@
+"""Static operator contract for one manual JD live canary."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+
+RUNBOOK_VERSION = "phase-14c-jd-live-provider-canary-runbook-v1"
+STATUS_SKIPPED = "jd_live_canary_runbook_skipped_default_off"
+STATUS_READY = "jd_live_canary_runbook_ready_for_operator_review"
+ALLOWED_AGENT_NAME = "jd_intelligence"
+BLOCKED_AGENT_NAMES = ("tailoring_suggestion", "critic_guardrail")
+
+
+def jd_live_provider_canary_runbook_safety_metadata() -> dict[str, bool]:
+    return {
+        "runbook_only": True,
+        "read_only": True,
+        "advisory_only": True,
+        "manual_only": True,
+        "default_off": True,
+        "shadow_only": True,
+        "one_job_only": True,
+        "jd_intelligence_only": True,
+        "external_adapter_required": True,
+        "config_gate_required": True,
+        "provider_calls_made": False,
+        "provider_sdk_imported": False,
+        "provider_client_constructed": False,
+        "environment_secrets_read": False,
+        "direct_provider_network_implemented": False,
+        "embeddings_created": False,
+        "did_read_database": False,
+        "did_write_database": False,
+        "did_write_files": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_resume": False,
+        "did_create_execution_request": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "service_behavior_added": False,
+        "pipeline_stage_added": False,
+        "mutation_authorized": False,
+    }
+
+
+def build_jd_live_provider_canary_runbook(
+    *,
+    enabled: bool = False,
+    operator_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return instructions and contracts without running a canary."""
+
+    context = (
+        deepcopy(operator_context)
+        if isinstance(operator_context, dict)
+        else {}
+    )
+    return {
+        "runbook_version": RUNBOOK_VERSION,
+        "runbook_enabled": enabled is True,
+        "runbook_status": (
+            STATUS_READY if enabled is True else STATUS_SKIPPED
+        ),
+        "default_off": True,
+        "execution_authorized": False,
+        "manual_execution_only": True,
+        "allowed_agent_name": ALLOWED_AGENT_NAME,
+        "blocked_agent_names": list(BLOCKED_AGENT_NAMES),
+        "one_job_only": True,
+        "shadow_only_required": True,
+        "external_adapter_required": True,
+        "config_gate_allow_required": True,
+        "manual_sequence": [
+            "prepare_exactly_one_jd_payload",
+            "prepare_explicit_live_config",
+            "provide_external_adapter_outside_repository",
+            "confirm_phase_13b_config_gate_allows_request",
+            "invoke_phase_14a_manual_command_in_shadow_only_mode",
+            "inspect_canary_readback_and_llmops_metadata",
+            "confirm_zero_mutation_and_zero_decision_influence",
+            "stop_and_disable_on_any_failure",
+        ],
+        "required_config_fields": [
+            "live_canary_enabled",
+            "agent_name",
+            "shadow_only",
+            "provider_name",
+            "model_name",
+            "allowed_provider_names",
+            "allowed_model_names",
+            "timeout_seconds",
+            "retry_limit",
+            "max_input_tokens",
+            "max_output_tokens",
+            "max_estimated_cost",
+            "structured_output_validation_required",
+            "deterministic_fallback_required",
+            "llmops_metadata_required",
+            "prompt_version",
+            "runtime_version",
+            "no_mutation_authority",
+            "mutation_authorized",
+            "final_scoring_influence_enabled",
+            "ranking_influence_enabled",
+            "queue_influence_enabled",
+            "resume_mutation_enabled",
+            "execution_enabled",
+            "submission_enabled",
+        ],
+        "required_config_values": {
+            "agent_name": ALLOWED_AGENT_NAME,
+            "live_canary_enabled": True,
+            "shadow_only": True,
+            "structured_output_validation_required": True,
+            "deterministic_fallback_required": True,
+            "llmops_metadata_required": True,
+            "no_mutation_authority": True,
+            "mutation_authorized": False,
+            "final_scoring_influence_enabled": False,
+            "ranking_influence_enabled": False,
+            "queue_influence_enabled": False,
+            "resume_mutation_enabled": False,
+            "execution_enabled": False,
+            "submission_enabled": False,
+        },
+        "allowed_execution_shape": {
+            "manual_command_enabled": True,
+            "job_payload_count": 1,
+            "agent_name": ALLOWED_AGENT_NAME,
+            "shadow_only": True,
+            "config_gate_allowed": True,
+            "external_adapter_injected": True,
+            "batch_allowed": False,
+            "automatic_execution_allowed": False,
+        },
+        "external_adapter_input_contract": {
+            "required_fields": [
+                "agent_name",
+                "shadow_only",
+                "job_payload",
+                "provider_name",
+                "model_name",
+                "prompt_version",
+                "runtime_version",
+                "runtime_limits",
+                "budget_limits",
+            ],
+            "agent_name": ALLOWED_AGENT_NAME,
+            "shadow_only": True,
+            "job_payload_count": 1,
+        },
+        "external_adapter_output_contract": {
+            "required_fields": ["output"],
+            "optional_metadata_fields": [
+                "latency_ms",
+                "token_usage",
+                "cost",
+            ],
+            "token_usage_fields": [
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+            ],
+            "cost_fields": ["estimated_cost"],
+            "structured_output_validation_required": True,
+        },
+        "blocked_conditions": [
+            "manual_command_not_enabled",
+            "live_config_gate_blocked",
+            "agent_is_not_jd_intelligence",
+            "tailoring_or_critic_selected",
+            "shadow_only_is_false",
+            "job_payload_missing",
+            "multiple_jobs_supplied",
+            "external_adapter_missing",
+            "multiple_adapter_inputs_supplied",
+            "provider_or_model_not_allowlisted",
+            "runtime_or_budget_limit_invalid",
+            "mutation_authority_requested",
+            "decision_or_application_influence_requested",
+            "adapter_exception",
+            "adapter_output_invalid",
+            "structured_output_validation_failed",
+        ],
+        "expected_command_fields": [
+            "manual_command_enabled",
+            "one_job_only",
+            "jd_only",
+            "shadow_only",
+            "config_gate_allowed",
+            "canary_attempted",
+            "provider_call_attempted",
+            "provider_call_succeeded",
+            "fallback_used",
+            "fallback_reason",
+            "structured_output_validated",
+            "llmops_metadata",
+            "external_adapter_bridge",
+            "readback",
+            "mutation_authorized",
+            "mutation_authorized_agent_count",
+            "next_safe_step",
+        ],
+        "required_readback_and_llmops_fields": [
+            "provider_name",
+            "model_name",
+            "prompt_version",
+            "runtime_version",
+            "provider_call_attempted",
+            "provider_call_succeeded",
+            "fallback_used",
+            "schema_validation_status",
+            "latency_ms",
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "estimated_cost",
+        ],
+        "rollback_and_off_switch": {
+            "stop_on_any_adapter_error": True,
+            "stop_on_schema_validation_failure": True,
+            "stop_on_timeout_or_budget_limit": True,
+            "stop_on_unexpected_provider_or_model": True,
+            "stop_on_any_mutation_signal": True,
+            "disable_manual_command": True,
+            "disable_live_canary_config": True,
+            "remove_external_adapter_injection": True,
+            "deterministic_fallback_required": True,
+            "broader_rollout_authorized": False,
+        },
+        "proof_required_before_broader_rollout": [
+            "one_job_boundary_verified",
+            "jd_only_boundary_verified",
+            "shadow_only_boundary_verified",
+            "phase_13b_gate_verified",
+            "external_adapter_contract_verified",
+            "structured_output_validation_verified",
+            "deterministic_fallback_verified",
+            "runtime_and_budget_limits_verified",
+            "llmops_and_readback_verified",
+            "zero_database_writes_verified",
+            "zero_mutation_authority_verified",
+            "zero_scoring_ranking_queue_influence_verified",
+            "zero_resume_execution_submission_influence_verified",
+        ],
+        "repository_boundary": {
+            "owns_provider_sdk_implementation": False,
+            "owns_provider_credentials": False,
+            "owns_direct_provider_network_implementation": False,
+            "constructs_provider_clients": False,
+            "external_callable_is_operator_supplied": True,
+            "validates_request_and_response_contracts_only": True,
+        },
+        "mutation_authorized": False,
+        "mutation_authorized_agent_count": 0,
+        "scoring_influence_disabled": True,
+        "ranking_influence_disabled": True,
+        "queue_influence_disabled": True,
+        "resume_mutation_disabled": True,
+        "execution_submission_disabled": True,
+        "operator_context": context,
+        "next_safe_step": (
+            "review_runbook_contract_without_executing_canary"
+            if enabled is True
+            else "enable_runbook_review_only"
+        ),
+        "safety_metadata": (
+            jd_live_provider_canary_runbook_safety_metadata()
+        ),
+    }

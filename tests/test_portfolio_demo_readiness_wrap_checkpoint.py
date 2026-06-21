@@ -343,6 +343,8 @@ ALLOWED_CHANGED = {
     "tests/test_live_jd_intelligence_operator_decision_default_off.py",
     "src/agents/jd_live_intelligence_approval_gate.py",
     "tests/test_live_jd_intelligence_approval_gate_default_off.py",
+    "src/agents/jd_live_intelligence_rollout_handoff.py",
+    "tests/test_live_jd_intelligence_rollout_handoff_default_off.py",
 }
 
 def _changed_files():
@@ -423,6 +425,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/jd_live_intelligence_evidence_review.py",
         "src/agents/jd_live_intelligence_operator_decision.py",
         "src/agents/jd_live_intelligence_approval_gate.py",
+        "src/agents/jd_live_intelligence_rollout_handoff.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

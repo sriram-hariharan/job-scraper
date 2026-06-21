@@ -337,6 +337,8 @@ ALLOWED_CHANGED = {
     "tests/test_live_jd_intelligence_expansion_plan_default_off.py",
     "src/agents/jd_live_intelligence_review_readiness.py",
     "tests/test_live_jd_intelligence_review_readiness_default_off.py",
+    "src/agents/jd_live_intelligence_evidence_review.py",
+    "tests/test_live_jd_intelligence_evidence_review_default_off.py",
 }
 
 def _changed_files():
@@ -414,6 +416,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/jd_live_provider_canary_runbook.py",
         "src/agents/jd_live_intelligence_expansion_plan.py",
         "src/agents/jd_live_intelligence_review_readiness.py",
+        "src/agents/jd_live_intelligence_evidence_review.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

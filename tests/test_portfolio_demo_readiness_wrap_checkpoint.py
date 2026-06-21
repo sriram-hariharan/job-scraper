@@ -326,6 +326,8 @@ ALLOWED_CHANGED = {
     "tests/test_jd_live_provider_canary_api_readback_default_off.py",
     "tests/test_jd_live_provider_canary_ui_readback_default_off.py",
     "tests/test_jd_live_provider_canary_readiness_checkpoint_default_off.py",
+    "src/agents/jd_live_provider_canary_command.py",
+    "tests/test_jd_live_provider_canary_command_default_off.py",
 }
 
 def _changed_files():
@@ -398,6 +400,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/provider_live_config_gate.py",
         "src/agents/jd_live_provider_canary.py",
         "src/agents/jd_live_provider_canary_readback.py",
+        "src/agents/jd_live_provider_canary_command.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

@@ -11,6 +11,9 @@ from src.agents.jd_live_provider_canary import (
 from src.agents.jd_live_provider_canary_readback import (
     build_jd_live_provider_canary_readback,
 )
+from src.agents.jd_live_provider_external_adapter import (
+    build_jd_live_provider_external_adapter,
+)
 from src.agents.provider_live_config_gate import (
     evaluate_provider_live_config_gate,
 )
@@ -92,6 +95,7 @@ def run_manual_jd_live_provider_canary_command(
     job_payloads: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
     live_config: dict[str, Any] | None = None,
     provider_adapter: Callable[[dict[str, Any]], Any] | None = None,
+    external_adapter: Callable[[dict[str, Any]], Any] | None = None,
     deterministic_fallback_input: dict[str, Any] | None = None,
     canary_runner: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -127,6 +131,7 @@ def run_manual_jd_live_provider_canary_command(
         "fallback_reason": "",
         "structured_output_validated": False,
         "llmops_metadata": {},
+        "external_adapter_bridge": {},
         "readback": {},
         "canary_result": {},
         "mutation_authorized": False,
@@ -142,9 +147,13 @@ def run_manual_jd_live_provider_canary_command(
         ),
     }
 
+    adapter = provider_adapter
+    external_bridge = None
     block_reason = ""
     if enabled is not True:
         block_reason = "manual_command_not_enabled"
+    elif callable(provider_adapter) and callable(external_adapter):
+        block_reason = "multiple_adapter_inputs_not_allowed"
     elif not one_job_only:
         block_reason = job_block_reason
     elif not gate_allowed:
@@ -154,7 +163,14 @@ def run_manual_jd_live_provider_canary_command(
             if isinstance(reasons, list) and reasons
             else "live_config_gate_blocked"
         )
-    elif not callable(provider_adapter):
+    elif callable(external_adapter):
+        external_bridge = build_jd_live_provider_external_adapter(
+            enabled=True,
+            live_config=deepcopy(config),
+            external_adapter=external_adapter,
+        )
+        adapter = external_bridge
+    elif not callable(adapter):
         block_reason = "missing_injected_provider_adapter"
 
     if block_reason:
@@ -176,7 +192,7 @@ def run_manual_jd_live_provider_canary_command(
         enabled=True,
         job_payload=deepcopy(job),
         live_config=deepcopy(config),
-        provider_adapter=provider_adapter,
+        provider_adapter=adapter,
         deterministic_fallback_input=deepcopy(
             deterministic_fallback_input
         ),
@@ -205,6 +221,11 @@ def run_manual_jd_live_provider_canary_command(
         "structured_output_validated": validated,
         "llmops_metadata": _plain_dict(
             canary.get("llmops_metadata")
+        ),
+        "external_adapter_bridge": (
+            _plain_dict(external_bridge.last_result)
+            if external_bridge is not None
+            else {}
         ),
         "readback": readback,
         "canary_result": canary,

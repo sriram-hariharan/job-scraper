@@ -359,6 +359,8 @@ ALLOWED_CHANGED = {
     "tests/test_three_core_agent_shadow_dry_run_packet_default_off.py",
     "src/agents/three_core_agent_shadow_dry_run_readback.py",
     "tests/test_three_core_agent_shadow_dry_run_readback_default_off.py",
+    "src/agents/three_core_agent_shadow_pipeline_connection_plan.py",
+    "tests/test_three_core_agent_shadow_pipeline_connection_plan_default_off.py",
 }
 
 def _changed_files():
@@ -447,6 +449,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/three_core_agent_shadow_workflow_contract.py",
         "src/agents/three_core_agent_shadow_dry_run_packet.py",
         "src/agents/three_core_agent_shadow_dry_run_readback.py",
+        "src/agents/three_core_agent_shadow_pipeline_connection_plan.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

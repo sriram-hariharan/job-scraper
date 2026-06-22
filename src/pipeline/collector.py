@@ -1,4 +1,5 @@
 from collections import Counter
+from copy import deepcopy
 from typing import Any, Dict, List
 import asyncio
 import json
@@ -12,6 +13,10 @@ from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
 logger = get_logger("collector")
+
+THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
+)
 
 
 def _is_user_pipeline_mode() -> bool:
@@ -107,6 +112,7 @@ def _shadow_sidecar_pipeline_config_from_env() -> Dict[str, Any]:
         "APPLYLENS_AGENTIC_PIPELINE_SHADOW_CRITIC_GUARDRAIL_ENABLED",
         "APPLYLENS_AGENTIC_PIPELINE_SHADOW_KILL_SWITCH",
         "APPLYLENS_AGENTIC_PIPELINE_AGENT_RECOMMENDATION_OVERLAY_AUTO_GENERATE_ENABLED",
+        THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG,
     )
     return {flag_name: os.environ.get(flag_name, "") for flag_name in flag_names}
 
@@ -125,14 +131,35 @@ def _maybe_run_shadow_sidecar_after_application_priority(
     try:
         from src.agents.shadow_sidecar_hook import run_shadow_sidecar_pipeline_hook
 
+        run_id = str(
+            os.environ.get("JOB_STACK_PIPELINE_RUN_ID", "") or "collector"
+        )
+        batch_id = str(
+            os.environ.get("JOB_STACK_PIPELINE_BATCH_ID", "")
+            or "application_priority"
+        )
+        job_id = "application_priority_scored_jobs"
+        stage_name = "post_final_scoring"
+        job_payload = deepcopy(scored_jobs[0]) if scored_jobs else {}
+        three_core_hook_enabled = _truthy_env_value(
+            sidecar_config[THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG]
+        )
+        three_core_job_context = (
+            {
+                "run_id": run_id,
+                "batch_id": batch_id,
+                "job_id": job_id,
+                "stage_name": stage_name,
+                "job_payload": deepcopy(job_payload),
+            }
+            if three_core_hook_enabled
+            else None
+        )
         payload = run_shadow_sidecar_pipeline_hook(
-            run_id=str(os.environ.get("JOB_STACK_PIPELINE_RUN_ID", "") or "collector"),
-            batch_id=str(
-                os.environ.get("JOB_STACK_PIPELINE_BATCH_ID", "")
-                or "application_priority"
-            ),
-            job_id="application_priority_scored_jobs",
-            stage_name="post_final_scoring",
+            run_id=run_id,
+            batch_id=batch_id,
+            job_id=job_id,
+            stage_name=stage_name,
             source_deterministic_stage="application_priority",
             source_deterministic_status="completed",
             source_deterministic_score=len(scored_jobs),
@@ -141,13 +168,17 @@ def _maybe_run_shadow_sidecar_after_application_priority(
             ),
             source_deterministic_reason_codes=["application_priority_completed"],
             sidecar_config=sidecar_config,
-            job_payload=dict(scored_jobs[0]) if scored_jobs else {},
+            job_payload=job_payload,
             resume_profile_payload={},
             existing_trace_context={
                 "shadow_sidecar_call_site": "collector.application_priority",
                 "scored_job_count": len(scored_jobs),
             },
             vector_evidence_hook_payload=vector_evidence_hook_payload,
+            three_core_shadow_pipeline_hook_enabled=(
+                three_core_hook_enabled
+            ),
+            three_core_job_context=three_core_job_context,
             called_by_pipeline=True,
         )
         logger.info(

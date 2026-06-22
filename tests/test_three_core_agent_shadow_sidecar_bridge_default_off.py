@@ -252,7 +252,7 @@ def test_bridge_inputs_are_defensively_copied_and_not_mutated():
     assert bridge["hook_context_summary"]["source_hook_context"] == before[2]
 
 
-def test_bridge_does_not_change_pipeline_api_service_or_static_files():
+def test_bridge_does_not_change_api_service_or_static_files():
     changed = set(
         subprocess.check_output(
             ["git", "diff", "--name-only"],
@@ -268,7 +268,6 @@ def test_bridge_does_not_change_pipeline_api_service_or_static_files():
         ).splitlines()
     )
 
-    assert "src/pipeline/collector.py" not in changed
     assert "src/app/api.py" not in changed
     assert "src/app/services.py" not in changed
     assert not any(path.startswith("src/app/static/") for path in changed)

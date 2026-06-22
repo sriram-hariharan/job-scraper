@@ -349,6 +349,8 @@ ALLOWED_CHANGED = {
     "tests/test_live_jd_intelligence_phase_wrap_default_off.py",
     "src/agents/jd_live_intelligence_runtime_readiness_plan.py",
     "tests/test_live_jd_intelligence_runtime_readiness_plan_default_off.py",
+    "src/agents/jd_live_intelligence_runtime_preflight.py",
+    "tests/test_live_jd_intelligence_runtime_preflight_default_off.py",
 }
 
 def _changed_files():
@@ -432,6 +434,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/jd_live_intelligence_rollout_handoff.py",
         "src/agents/jd_live_intelligence_phase_wrap.py",
         "src/agents/jd_live_intelligence_runtime_readiness_plan.py",
+        "src/agents/jd_live_intelligence_runtime_preflight.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

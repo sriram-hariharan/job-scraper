@@ -88,7 +88,7 @@ def test_enabled_collector_path_attaches_blocked_three_core_payload(
     assert jobs == before
 
 
-def test_enabled_collector_propagates_only_flag_and_copied_context(
+def test_enabled_collector_propagates_plan_flag_and_copied_context(
     monkeypatch,
 ):
     _clear_flags(monkeypatch)
@@ -121,7 +121,12 @@ def test_enabled_collector_propagates_only_flag_and_copied_context(
     assert captured["three_core_job_context"]["batch_id"] == (
         "application_priority"
     )
-    assert "three_core_connection_plan" not in captured
+    assert captured["three_core_connection_plan"][
+        "connection_plan_status"
+    ] == (
+        "three_core_shadow_pipeline_connection_plan_"
+        "ready_no_pipeline_change"
+    )
     assert "three_core_relevance_prefilter_callable" not in captured
     assert "three_core_jd_intelligence_callable" not in captured
     assert "three_core_final_application_scoring_callable" not in captured

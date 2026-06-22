@@ -365,6 +365,7 @@ ALLOWED_CHANGED = {
     "tests/test_three_core_agent_shadow_pipeline_hook_default_off.py",
     "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
     "tests/test_three_core_agent_collector_shadow_wiring_default_off.py",
+    "tests/test_three_core_agent_collector_connection_plan_default_off.py",
 }
 
 def _changed_files():

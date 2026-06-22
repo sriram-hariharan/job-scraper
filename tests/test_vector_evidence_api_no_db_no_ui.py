@@ -383,7 +383,7 @@ def test_no_schema_dependency_ui_or_pipeline_change():
             "90e58a52b550afbd105a4f04f4015277a39f004def948c4fe218e410bf05d90f"
         ),
         "src/pipeline/collector.py": (
-            "300ac8393e0b72d8ee7d6d23f0193d44f70ea2d6e53be1b4ad91a027199dbfda"
+            "0c4ffca98a1d438f6b2db7457dddc606d90c099eacc7d468bb0a7bec02efebe2"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

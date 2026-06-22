@@ -155,6 +155,72 @@ def _maybe_run_shadow_sidecar_after_application_priority(
             if three_core_hook_enabled
             else None
         )
+        three_core_connection_plan = None
+        if three_core_hook_enabled:
+            from src.agents.three_core_agent_shadow_pipeline_connection_plan import (
+                build_three_core_agent_shadow_pipeline_connection_plan,
+            )
+
+            ordered_core_agent_names = [
+                "relevance_prefilter",
+                "jd_intelligence",
+                "final_application_scoring",
+            ]
+            three_core_connection_plan = (
+                build_three_core_agent_shadow_pipeline_connection_plan(
+                    enabled=True,
+                    dry_run_readback={
+                        "readback_status": (
+                            "three_core_shadow_dry_run_readback_ready"
+                        ),
+                        "dry_run_readback_only": True,
+                        "workflow_connection_authorized": False,
+                        "dry_run_execution_authorized": False,
+                        "ordered_core_agent_names": deepcopy(
+                            ordered_core_agent_names
+                        ),
+                        "mutation_authorized": False,
+                    },
+                    pipeline_entrypoint_descriptor={
+                        "entrypoint_name": (
+                            "collector_application_priority_shadow_hook"
+                        ),
+                        "stage_name": stage_name,
+                        "shadow_only": True,
+                    },
+                    prefilter_connection_descriptor={
+                        "agent_name": "relevance_prefilter",
+                        "source_stage": (
+                            "application_priority_scored_jobs"
+                        ),
+                        "target_stage": "relevance_prefilter_shadow",
+                        "shadow_only": True,
+                    },
+                    jd_intelligence_connection_descriptor={
+                        "agent_name": "jd_intelligence",
+                        "source_stage": "relevance_prefilter_shadow",
+                        "target_stage": "jd_intelligence_shadow",
+                        "shadow_only": True,
+                    },
+                    final_scoring_connection_descriptor={
+                        "agent_name": "final_application_scoring",
+                        "source_stage": "jd_intelligence_shadow",
+                        "target_stage": (
+                            "final_application_scoring_shadow"
+                        ),
+                        "shadow_only": True,
+                    },
+                    connection_plan_context={
+                        "run_id": run_id,
+                        "batch_id": batch_id,
+                        "job_id": job_id,
+                        "stage_name": stage_name,
+                        "collector_hook_point": (
+                            "application_priority_scored_jobs"
+                        ),
+                    },
+                )
+            )
         payload = run_shadow_sidecar_pipeline_hook(
             run_id=run_id,
             batch_id=batch_id,
@@ -178,6 +244,7 @@ def _maybe_run_shadow_sidecar_after_application_priority(
             three_core_shadow_pipeline_hook_enabled=(
                 three_core_hook_enabled
             ),
+            three_core_connection_plan=three_core_connection_plan,
             three_core_job_context=three_core_job_context,
             called_by_pipeline=True,
         )

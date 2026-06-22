@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, Callable
 
 from src.agents import agent_recommendation_overlay
 from src.agents import shadow_sidecar
@@ -944,6 +944,50 @@ def _base_hook_payload(
     return payload
 
 
+def _attach_three_core_shadow_pipeline_hook_payload(
+    hook_payload: dict[str, Any],
+    *,
+    enabled: bool = False,
+    connection_plan: dict[str, Any] | None = None,
+    job_context: dict[str, Any] | None = None,
+    relevance_prefilter_callable: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    jd_intelligence_callable: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    final_application_scoring_callable: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    hook_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if enabled is not True:
+        return hook_payload
+
+    from src.agents.three_core_agent_shadow_pipeline_hook import (
+        run_three_core_agent_shadow_pipeline_hook,
+    )
+
+    payload = deepcopy(hook_payload)
+    payload["three_core_shadow_pipeline_hook_payload"] = (
+        run_three_core_agent_shadow_pipeline_hook(
+            enabled=True,
+            connection_plan=_plain_dict(connection_plan),
+            job_context=_plain_dict(job_context),
+            relevance_prefilter_callable=relevance_prefilter_callable,
+            jd_intelligence_callable=jd_intelligence_callable,
+            final_application_scoring_callable=(
+                final_application_scoring_callable
+            ),
+            hook_context=_plain_dict(hook_context),
+        )
+    )
+    return payload
+
+
 def run_shadow_sidecar_pipeline_hook(
     *,
     run_id: str = "",
@@ -998,9 +1042,45 @@ def run_shadow_sidecar_pipeline_hook(
     jd_live_provider_canary_adapter: Any = None,
     jd_live_provider_canary_helper: Any = None,
     jd_live_provider_canary_fallback_input: dict[str, Any] | None = None,
+    three_core_shadow_pipeline_hook_enabled: bool = False,
+    three_core_connection_plan: dict[str, Any] | None = None,
+    three_core_job_context: dict[str, Any] | None = None,
+    three_core_relevance_prefilter_callable: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    three_core_jd_intelligence_callable: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    three_core_final_application_scoring_callable: Callable[
+        [dict[str, Any]], dict[str, Any]
+    ]
+    | None = None,
+    three_core_hook_context: dict[str, Any] | None = None,
     called_by_pipeline: bool = False,
     trace_persistence_writer: Any = None,
 ) -> dict[str, Any]:
+    def finalize_hook_payload(
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return _attach_three_core_shadow_pipeline_hook_payload(
+            payload,
+            enabled=three_core_shadow_pipeline_hook_enabled,
+            connection_plan=three_core_connection_plan,
+            job_context=three_core_job_context,
+            relevance_prefilter_callable=(
+                three_core_relevance_prefilter_callable
+            ),
+            jd_intelligence_callable=(
+                three_core_jd_intelligence_callable
+            ),
+            final_application_scoring_callable=(
+                three_core_final_application_scoring_callable
+            ),
+            hook_context=three_core_hook_context,
+        )
+
     trace_context = _snapshot(existing_trace_context or {})
     vector_evidence_context = _advisory_vector_evidence_context(
         vector_evidence_hook_payload,
@@ -1943,14 +2023,20 @@ def run_shadow_sidecar_pipeline_hook(
         existing_trace_context=_snapshot(trace_context),
     )
     if preview.get("hook_preview_status") != "hook_ready_for_shadow_sidecar":
-        return _base_hook_payload(
-            preview_payload=preview,
-            hook_status=_clean_text(preview.get("hook_preview_status")),
-            chain_attempted=False,
-            called_by_pipeline=called_by_pipeline,
-            trace_persistence_writer=trace_persistence_writer,
-            next_safe_step=_clean_text(preview.get("next_safe_step")),
-            existing_trace_context=trace_context,
+        return finalize_hook_payload(
+            _base_hook_payload(
+                preview_payload=preview,
+                hook_status=_clean_text(
+                    preview.get("hook_preview_status")
+                ),
+                chain_attempted=False,
+                called_by_pipeline=called_by_pipeline,
+                trace_persistence_writer=trace_persistence_writer,
+                next_safe_step=_clean_text(
+                    preview.get("next_safe_step")
+                ),
+                existing_trace_context=trace_context,
+            )
         )
 
     try:
@@ -2269,35 +2355,43 @@ def run_shadow_sidecar_pipeline_hook(
         observability = shadow_sidecar.build_shadow_sidecar_chain_observability_payload(
             chain_payload
         )
-        return _base_hook_payload(
-            preview_payload=preview,
-            hook_status=_hook_status_from_chain(chain_payload),
-            chain_attempted=True,
-            called_by_pipeline=called_by_pipeline,
-            trace_persistence_writer=trace_persistence_writer,
-            chain_payload=chain_payload,
-            observability_payload=observability,
-            next_safe_step="inspect_shadow_sidecar_observability",
-            existing_trace_context=trace_context,
+        return finalize_hook_payload(
+            _base_hook_payload(
+                preview_payload=preview,
+                hook_status=_hook_status_from_chain(chain_payload),
+                chain_attempted=True,
+                called_by_pipeline=called_by_pipeline,
+                trace_persistence_writer=trace_persistence_writer,
+                chain_payload=chain_payload,
+                observability_payload=observability,
+                next_safe_step="inspect_shadow_sidecar_observability",
+                existing_trace_context=trace_context,
+            )
         )
     except Exception as exc:
-        return _base_hook_payload(
-            preview_payload=preview,
-            hook_status="hook_failed_non_blocking",
-            chain_attempted=True,
-            called_by_pipeline=called_by_pipeline,
-            trace_persistence_writer=trace_persistence_writer,
-            observability_payload={
-                "observability_status": "observed_failed_non_blocking",
-                "readiness_decision": {
-                    "readiness_status": "blocked",
-                    "decision_reason_codes": ["shadow_sidecar_hook_error"],
-                    "blocking_findings": [exc.__class__.__name__],
-                    "warning_findings": ["shadow_sidecar_hook_error"],
+        return finalize_hook_payload(
+            _base_hook_payload(
+                preview_payload=preview,
+                hook_status="hook_failed_non_blocking",
+                chain_attempted=True,
+                called_by_pipeline=called_by_pipeline,
+                trace_persistence_writer=trace_persistence_writer,
+                observability_payload={
+                    "observability_status": "observed_failed_non_blocking",
+                    "readiness_decision": {
+                        "readiness_status": "blocked",
+                        "decision_reason_codes": [
+                            "shadow_sidecar_hook_error"
+                        ],
+                        "blocking_findings": [exc.__class__.__name__],
+                        "warning_findings": [
+                            "shadow_sidecar_hook_error"
+                        ],
+                    },
                 },
-            },
-            next_safe_step="preserve_deterministic_pipeline_result",
-            existing_trace_context=trace_context,
+                next_safe_step="preserve_deterministic_pipeline_result",
+                existing_trace_context=trace_context,
+            )
         )
 
 

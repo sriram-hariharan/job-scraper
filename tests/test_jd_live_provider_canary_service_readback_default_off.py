@@ -323,10 +323,10 @@ def test_api_ui_pipeline_and_dependencies_are_unchanged():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
-            "9fd96dad2edce8c1ff41f5d239801cbab071ed939104a55d7322a91a3526bbf3"
+            "23e335987f08ddc484c8b0617608b6a742e58b780f7a932c14401e1ce5045766"
         ),
         "src/app/static/agentic_review.js": (
-            "90e58a52b550afbd105a4f04f4015277a39f004def948c4fe218e410bf05d90f"
+            "d43ba4e0ede6d871665e322f23a4e07e1f3b7aedbf496a4be8e8e71ca05bd43c"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

@@ -1768,6 +1768,62 @@ function renderJdLiveProviderCanaryReadbackSection(tracePayload = {}) {
   `;
 }
 
+function renderThreeCoreShadowOperatorCanaryReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.three_core_shadow_operator_canary_readback_result)
+    ? tracePayload.three_core_shadow_operator_canary_readback_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const summary = hasAgentTraceSummaryObject(result.operator_canary_summary)
+    ? result.operator_canary_summary
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const orderedNames = Array.isArray(summary.ordered_agent_names_found)
+    ? summary.ordered_agent_names_found
+    : [];
+  const safeFlags = [
+    ["Read only", safety.read_only],
+    ["Shadow only", safety.shadow_only],
+    ["Pipeline disconnected", safety.pipeline_not_connected],
+    ["No scoring mutation", safety.did_mutate_scoring === false],
+    ["No ranking mutation", safety.did_change_ranking === false],
+    ["No queue mutation", safety.did_mutate_queue === false],
+    ["No execution", safety.did_execute_application === false],
+    ["No submission", safety.did_submit_application === false],
+  ];
+  const safetySummary = safeFlags
+    .map(([label, value]) => `${label}: ${value === true ? "yes" : "unknown"}`)
+    .join(" · ");
+  return `
+    <article class="agent-trace-summary" aria-label="Three-core shadow operator canary readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Three-Core Shadow Operator Canary</h4>
+          <p>Passive read-only display of a supplied canary payload. It does not start the collector, pipeline, provider runtime, execution, or submission paths.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Canary status", result.canary_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Readback status", summary.readback_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Readback complete", summary.readback_completion === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ordered agents", orderedNames.length ? orderedNames.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Shadow result count", summary.shadow_result_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agentic-review-muted" data-three-core-shadow-operator-canary-safety-summary>
+        ${escapeHtml(safetySummary)}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Operator canary summary", summary, { helper: "Read-only canary and runtime readback summary." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety flags for this supplied payload." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4763,6 +4819,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderProviderRuntimeReadbackSection(tracePayload)}
       ${renderJdProviderRuntimeReadbackSection(tracePayload)}
       ${renderJdLiveProviderCanaryReadbackSection(tracePayload)}
+      ${renderThreeCoreShadowOperatorCanaryReadbackSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}

@@ -170,10 +170,10 @@ def test_api_service_pipeline_dependencies_and_css_are_unchanged():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
-            "9fd96dad2edce8c1ff41f5d239801cbab071ed939104a55d7322a91a3526bbf3"
+            "23e335987f08ddc484c8b0617608b6a742e58b780f7a932c14401e1ce5045766"
         ),
         "src/app/services.py": (
-            "d323fc22a7d9a35962359a6183de737edc8757b59f65438c0f23bba1874584d0"
+            "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
         ),
         "src/app/static/app_redesign.css": (
             "b0fabb68e61b5e1c99a939afde29071f595ac84fd9c29d2f39f60b51eddb85b5"

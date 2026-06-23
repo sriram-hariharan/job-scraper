@@ -4,7 +4,7 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC = ROOT / "docs/phase18_approval_preview_readonly.md"
+DOC = ROOT / "docs/phase18_operator_decision_capture_contract.md"
 
 ORDERED_AGENTS = [
     "relevance_prefilter",
@@ -12,46 +12,60 @@ ORDERED_AGENTS = [
     "final_application_scoring",
 ]
 
-PREVIEW_STATUSES = [
-    "not_available",
-    "preview_ready",
-    "preview_incomplete",
-    "preview_blocked",
+DECISION_STATUSES = [
+    "not_requested",
+    "decision_pending",
+    "decision_captured",
+    "decision_rejected",
+    "decision_expired",
+    "decision_revoked",
+    "decision_blocked",
     "failed_closed",
 ]
 
-PREVIEW_FIELDS = [
+DECISION_FIELDS = [
+    "decision_id",
     "preview_id",
-    "preview_status",
     "requested_capability",
     "target_context_summary",
-    "requester_source",
+    "operator_or_reviewer_id",
+    "decision_status",
+    "decision_value",
+    "decision_reason",
     "evidence_summary",
-    "proposed_action_summary",
     "risk_summary",
     "safety_flag_summary",
-    "required_feature_flags",
-    "missing_requirements",
-    "fail_closed_reasons",
-    "expiry_recommendation",
-    "rollback_or_disable_reference",
     "linked_trace_or_readback_id",
+    "expiry_timestamp",
     "created_timestamp",
+    "decision_timestamp",
+    "rollback_or_disable_reference",
+    "fail_closed_reason",
 ]
 
-PREVIEW_CAPABILITIES = [
-    "Live provider execution preview",
-    "Provider SDK/network call preview",
-    "Final scoring mutation preview",
-    "Ranking mutation preview",
-    "Queue mutation preview",
-    "Resume mutation preview",
-    "Approval creation preview",
-    "Execution request creation preview",
-    "Application execution preview",
-    "Application submission preview",
-    "DB write preview",
-    "Secrets access preview",
+DECISION_VALUES = [
+    "approve",
+    "reject",
+    "revoke",
+    "expire",
+    "request_changes",
+    "no_decision",
+    "failed_closed",
+]
+
+SEPARATE_CAPABILITIES = [
+    "Live provider execution",
+    "Provider SDK/network calls",
+    "Final scoring mutation",
+    "Ranking mutation",
+    "Queue mutation",
+    "Resume mutation",
+    "Approval creation",
+    "Execution request creation",
+    "Application execution",
+    "Application submission",
+    "DB writes",
+    "Secrets access",
 ]
 
 RUNTIME_HASHES = {
@@ -86,15 +100,16 @@ def _text() -> str:
     return DOC.read_text(encoding="utf-8")
 
 
-def test_preview_doc_exists_and_names_preceding_tags():
+def test_decision_capture_doc_exists_and_names_preceding_tags():
     assert DOC.exists()
     text = _text()
 
-    assert "# Phase 18 Read-Only Approval Preview" in text
+    assert "# Phase 18 Operator Decision Capture Contract" in text
     for tag in (
         "phase17-three-core-shadow-readiness-release-v1",
         "phase18a-live-readiness-approval-boundary-v1",
         "phase18b-human-approval-gate-contract-v1",
+        "phase18c-approval-preview-readonly-v1",
     ):
         assert f"`{tag}`" in text
 
@@ -106,113 +121,140 @@ def test_three_core_agents_are_named_in_correct_order():
     assert positions == sorted(positions)
 
 
-def test_phase18c_is_docs_tests_only_and_authorizes_no_runtime():
+def test_phase18d_is_docs_tests_only_and_authorizes_no_runtime():
     text = _text()
 
-    assert "Phase 18C is docs/tests-only" in text
+    assert "Phase 18D is docs/tests-only" in text
     assert "authorizes no runtime behavior" in text
     assert "adds no API" in text
-    assert "approval creation" in text
+    assert "decision persistence" in text
     for term in ("default-off", "read-only", "shadow-only", "advisory-only"):
         assert term in text
 
 
-def test_allowed_preview_statuses_are_exact_and_ordered():
+def test_allowed_decision_capture_statuses_are_exact_and_ordered():
     text = _text()
     section = text[
-        text.index("## Allowed preview statuses"):
-        text.index("## Required future preview fields")
+        text.index("## Allowed future decision capture statuses"):
+        text.index("## Required future decision capture fields")
     ]
-    positions = [section.index(f"`{status}`") for status in PREVIEW_STATUSES]
+    positions = [section.index(f"`{status}`") for status in DECISION_STATUSES]
 
     assert positions == sorted(positions)
-    for status in PREVIEW_STATUSES:
+    for status in DECISION_STATUSES:
         assert f"`{status}`" in section
 
 
-def test_required_future_preview_fields_are_listed():
+def test_required_future_decision_capture_fields_are_listed():
     text = _text()
 
-    for field in PREVIEW_FIELDS:
+    for field in DECISION_FIELDS:
         assert f"`{field}`" in text
 
 
-def test_preview_only_capability_categories_are_listed():
+def test_allowed_decision_values_are_exact_and_ordered():
     text = _text()
     section = text[
-        text.index("## Preview-only capability categories"):
+        text.index("## Allowed decision values"):
+        text.index("## Capabilities requiring separate decision capture")
+    ]
+    positions = [section.index(f"`{value}`") for value in DECISION_VALUES]
+
+    assert positions == sorted(positions)
+    for value in DECISION_VALUES:
+        assert f"`{value}`" in section
+
+
+def test_separate_decision_capture_capabilities_are_listed():
+    text = _text()
+    section = text[
+        text.index("## Capabilities requiring separate decision capture"):
         text.index("## Hard rules")
     ]
 
-    for capability in PREVIEW_CAPABILITIES:
+    for capability in SEPARATE_CAPABILITIES:
         assert capability in section
 
 
-def test_preview_non_authority_statements_are_explicit():
+def test_decision_scope_characteristics_and_non_implication_are_explicit():
+    text = _text()
+
+    assert (
+        "A decision for one capability does not authorize another capability."
+        in text
+    )
+    assert (
+        "single-capability scoped, time-bound, auditable, reversible,\n"
+        "fail-closed, and tied to a read-only preview"
+        in text
+    )
+
+
+def test_decision_capture_is_not_an_executor_provider_call_or_submission():
     text = _text()
 
     for statement in (
-        "Previewing a capability does not authorize the capability.",
-        "Previewing a capability does not create approval records.",
-        "Previewing a capability does not imply human approval.",
-        (
-            "Previewing one capability does not imply approval or preview "
-            "readiness for another."
-        ),
+        "A captured decision is not an executor.",
+        "A captured decision is not a provider call.",
+        "A captured decision is not a submission command.",
     ):
         assert statement in text
 
 
-def test_preview_hard_rules_are_complete():
+def test_decision_capture_hard_rules_are_complete():
     text = _text()
 
     for term in (
-        "No preview may directly submit an application.",
-        "No preview may create an approval record.",
-        "No preview may create an execution request.",
-        "No preview may call a provider.",
-        "No preview may read secrets.",
-        "No preview may write to the database.",
-        "No preview may mutate final scoring, ranking, queue, resume, or application",
-        "No preview may combine provider execution with",
+        "No decision capture may directly submit an application.",
+        "No decision capture may call a provider.",
+        "No decision capture may create an execution request.",
+        "No decision capture may mutate scoring, ranking, queue, resume, or",
+        "No decision capture may write secrets or log secrets.",
+        "No decision capture may bypass default-off feature flags.",
+        "No decision capture may bypass dry-run/readback evidence.",
+        "No decision capture may combine provider execution with",
         "scoring/ranking/queue/resume/application submission.",
-        "No preview may bypass default-off feature flags.",
-        "No preview may bypass dry-run/readback evidence.",
+        "No decision capture may transform a preview into execution without a",
+        "separate later approved executor phase.",
     ):
         assert term in text
 
 
-def test_failed_closed_preview_conditions_are_complete():
+def test_failed_closed_decision_conditions_are_complete():
     text = _text()
 
     for condition in (
-        "Missing target context",
+        "Missing preview id",
+        "Missing operator/reviewer id",
         "Missing requested capability",
         "Unknown requested capability",
+        "Mismatched capability",
         "Missing evidence summary",
-        "Missing feature flag",
+        "Missing safety flag summary",
         "Unsafe safety flags",
-        "Expired preview window",
-        "Mismatched trace/readback id",
+        "Expired decision window",
+        "Revoked decision",
+        "Rejected decision",
         "Missing rollback/disable reference",
         "Attempted execution or mutation",
     ):
         assert condition in text
 
 
-def test_minimum_future_preview_observability_is_complete():
+def test_minimum_future_decision_observability_is_complete():
     text = _text()
 
     for field in (
-        "Preview status",
+        "Decision status",
+        "Decision value",
         "Requested capability",
+        "Operator/reviewer id",
+        "Decision reason",
         "Target context summary",
         "Evidence summary",
-        "Proposed action summary",
         "Risk summary",
         "Safety flag summary",
-        "Missing requirements",
-        "Fail-closed reasons",
+        "Fail-closed reason",
         "Linked trace/readback id",
     ):
         assert field in text
@@ -225,6 +267,7 @@ def test_not_authorized_section_lists_every_forbidden_path():
         "No live provider execution.",
         "No provider SDK/network call.",
         "No approval creation runtime.",
+        "No decision persistence runtime.",
         "No DB writes.",
         "No secrets access.",
         "No final scoring mutation.",
@@ -238,14 +281,15 @@ def test_not_authorized_section_lists_every_forbidden_path():
         assert term in text
 
 
-def test_recommended_next_phase_is_decision_capture_without_execution():
+def test_recommended_next_phase_is_provider_plan_without_mutation():
     assert (
-        "Phase 18D should be operator decision capture contract, still no execution."
+        "Phase 18E should be a protected live-provider activation plan, still no\n"
+        "mutation."
         in _text()
     )
 
 
-def test_phase18c_changes_only_approved_docs_and_tests():
+def test_phase18d_changes_only_approved_docs_and_tests():
     tracked = subprocess.check_output(
         ["git", "diff", "--name-only"], cwd=ROOT, text=True
     ).splitlines()
@@ -256,22 +300,22 @@ def test_phase18c_changes_only_approved_docs_and_tests():
     ).splitlines()
     changed = set(tracked + untracked)
     allowed = {
-        "docs/phase18_approval_preview_readonly.md",
-        "tests/test_phase18_approval_preview_readonly_default_off.py",
+        "docs/phase18_operator_decision_capture_contract.md",
+        "tests/test_phase18_operator_decision_capture_contract_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
         "tests/test_three_core_shadow_readiness_wrap_default_off.py",
         "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
         "tests/test_phase18_human_approval_gate_contract_default_off.py",
-        "docs/phase18_operator_decision_capture_contract.md",
-        "tests/test_phase18_operator_decision_capture_contract_default_off.py",
+        "tests/test_phase18_approval_preview_readonly_default_off.py",
     }
 
     assert changed <= allowed
 
 
-def test_phase18c_key_runtime_files_are_unchanged():
+def test_phase18d_key_runtime_files_are_unchanged():
     for relative_path, expected_hash in RUNTIME_HASHES.items():
         path = ROOT / relative_path
 
         assert path.exists()
         assert sha256(path.read_bytes()).hexdigest() == expected_hash
+

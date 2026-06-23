@@ -196,6 +196,8 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "tests/test_three_core_shadow_readiness_wrap_default_off.py",
         "docs/phase18_human_approval_gate_contract.md",
         "tests/test_phase18_human_approval_gate_contract_default_off.py",
+        "docs/phase18_approval_preview_readonly.md",
+        "tests/test_phase18_approval_preview_readonly_default_off.py",
     }
 
     assert changed <= allowed

@@ -385,6 +385,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase18_human_approval_gate_contract_default_off.py",
     "docs/phase18_approval_preview_readonly.md",
     "tests/test_phase18_approval_preview_readonly_default_off.py",
+    "docs/phase18_operator_decision_capture_contract.md",
+    "tests/test_phase18_operator_decision_capture_contract_default_off.py",
 }
 
 def _changed_files():

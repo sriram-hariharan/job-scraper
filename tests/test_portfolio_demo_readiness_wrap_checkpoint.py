@@ -371,6 +371,8 @@ ALLOWED_CHANGED = {
     "tests/test_three_core_agent_collector_callable_wiring_default_off.py",
     "src/agents/three_core_agent_shadow_runtime_readback.py",
     "tests/test_three_core_agent_shadow_runtime_readback_default_off.py",
+    "src/agents/three_core_agent_shadow_operator_canary.py",
+    "tests/test_three_core_agent_shadow_operator_canary_default_off.py",
 }
 
 def _changed_files():
@@ -463,6 +465,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/three_core_agent_shadow_pipeline_hook.py",
         "src/agents/three_core_agent_shadow_callable_adapters.py",
         "src/agents/three_core_agent_shadow_runtime_readback.py",
+        "src/agents/three_core_agent_shadow_operator_canary.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

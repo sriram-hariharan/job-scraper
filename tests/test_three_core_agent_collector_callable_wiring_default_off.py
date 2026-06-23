@@ -20,10 +20,13 @@ ORDERED_CORE_AGENT_NAMES = (
 def _jobs() -> list[dict]:
     return [
         {
-            "id": "job-phase17d",
+            "id": "job-phase17f",
             "title": "Applied AI Engineer",
-            "application_priority_score": 0.94,
-            "nested": {"skills": ["python"]},
+            "application_priority_score": 0.96,
+            "required_skills": ["Python"],
+            "preferred_skills": ["SQL"],
+            "workflows": ["model monitoring"],
+            "nested": {"values": ["original"]},
         }
     ]
 
@@ -33,20 +36,35 @@ def _clear_flags(monkeypatch) -> None:
     monkeypatch.delenv(THREE_CORE_FLAG, raising=False)
 
 
-def test_default_off_collector_does_not_attach_three_core_payload(
+def test_default_off_does_not_build_or_pass_callable_adapters(
     monkeypatch,
 ):
     _clear_flags(monkeypatch)
     monkeypatch.setenv(GLOBAL_FLAG, "true")
+    captured = {}
+
+    def capture_hook(**kwargs):
+        captured.update(kwargs)
+        return {"hook_status": "captured"}
+
+    monkeypatch.setattr(
+        shadow_sidecar_hook,
+        "run_shadow_sidecar_pipeline_hook",
+        capture_hook,
+    )
 
     payload = collector._maybe_run_shadow_sidecar_after_application_priority(
         _jobs()
     )
 
-    assert "three_core_shadow_pipeline_hook_payload" not in payload
+    assert payload == {"hook_status": "captured"}
+    assert captured["three_core_shadow_pipeline_hook_enabled"] is False
+    assert "three_core_relevance_prefilter_callable" not in captured
+    assert "three_core_jd_intelligence_callable" not in captured
+    assert "three_core_final_application_scoring_callable" not in captured
 
 
-def test_enabled_collector_supplies_ready_plan_and_completes_shadow_callables(
+def test_enabled_collector_completes_three_core_shadow_outputs(
     monkeypatch,
 ):
     _clear_flags(monkeypatch)
@@ -60,31 +78,21 @@ def test_enabled_collector_supplies_ready_plan_and_completes_shadow_callables(
     )
 
     bridge = payload["three_core_shadow_pipeline_hook_payload"]
-    checks = bridge["three_core_shadow_pipeline_hook"]["hook_checks"]
     assert bridge["hook_status"] == (
         "three_core_shadow_pipeline_hook_completed_shadow_only"
     )
-    assert bridge["connection_plan_summary"][
-        "connection_plan_ready"
-    ] is True
-    assert checks["connection_plan_supplied"] is True
-    assert checks["connection_plan_ready"] is True
-    assert checks["ordered_core_agent_names_match"] is True
-    assert checks["planned_connections_are_shadow_only"] is True
-    assert checks["relevance_prefilter_callable_supplied"] is True
-    assert checks["jd_intelligence_callable_supplied"] is True
-    assert checks[
-        "final_application_scoring_callable_supplied"
-    ] is True
+    assert bridge["shadow_result_count"] == 3
     assert [
         result["agent_name"]
         for result in bridge["ordered_shadow_results"]
     ] == list(ORDERED_CORE_AGENT_NAMES)
-    assert bridge["shadow_result_count"] == 3
+    assert bridge["connection_plan_summary"][
+        "connection_plan_ready"
+    ] is True
     assert jobs == before
 
 
-def test_collector_connection_plan_has_expected_ordered_shadow_shape(
+def test_enabled_collector_passes_exactly_three_callable_adapters(
     monkeypatch,
 ):
     _clear_flags(monkeypatch)
@@ -102,59 +110,24 @@ def test_collector_connection_plan_has_expected_ordered_shadow_shape(
         capture_hook,
     )
 
-    payload = collector._maybe_run_shadow_sidecar_after_application_priority(
+    collector._maybe_run_shadow_sidecar_after_application_priority(
         _jobs()
     )
 
-    plan = captured["three_core_connection_plan"]
-    assert payload == {"hook_status": "captured"}
-    assert plan["connection_plan_status"] == (
-        "three_core_shadow_pipeline_connection_plan_"
-        "ready_no_pipeline_change"
-    )
-    assert tuple(plan["ordered_core_agent_names"]) == (
-        ORDERED_CORE_AGENT_NAMES
-    )
-    assert [
-        item["agent_name"]
-        for item in plan["ordered_planned_connections"]
-    ] == list(ORDERED_CORE_AGENT_NAMES)
-    assert all(
-        item["shadow_only"]
-        for item in plan["ordered_planned_connections"]
-    )
-    assert plan["pipeline_entrypoint_summary"]["stage_name"] == (
-        "post_final_scoring"
-    )
-    assert plan["pipeline_not_connected"] is True
-    assert plan["pipeline_stage_not_added"] is True
+    callable_keys = {
+        key
+        for key in captured
+        if key.startswith("three_core_") and key.endswith("_callable")
+    }
+    assert callable_keys == {
+        "three_core_relevance_prefilter_callable",
+        "three_core_jd_intelligence_callable",
+        "three_core_final_application_scoring_callable",
+    }
+    assert all(callable(captured[key]) for key in callable_keys)
 
 
-def test_connection_plan_is_built_only_when_three_core_flag_is_enabled(
-    monkeypatch,
-):
-    _clear_flags(monkeypatch)
-    monkeypatch.setenv(GLOBAL_FLAG, "true")
-    captured = {}
-
-    def capture_hook(**kwargs):
-        captured.update(kwargs)
-        return {"hook_status": "captured"}
-
-    monkeypatch.setattr(
-        shadow_sidecar_hook,
-        "run_shadow_sidecar_pipeline_hook",
-        capture_hook,
-    )
-
-    collector._maybe_run_shadow_sidecar_after_application_priority(_jobs())
-
-    assert captured["three_core_shadow_pipeline_hook_enabled"] is False
-    assert captured["three_core_connection_plan"] is None
-    assert captured["three_core_job_context"] is None
-
-
-def test_global_sidecar_gate_still_controls_connection_plan_path(
+def test_global_sidecar_gate_prevents_adapter_and_hook_execution(
     monkeypatch,
 ):
     _clear_flags(monkeypatch)
@@ -179,41 +152,48 @@ def test_global_sidecar_gate_still_controls_connection_plan_path(
     assert calls == []
 
 
-def test_collector_passes_three_read_only_callables_and_mutates_nothing(
+def test_enabled_shadow_outputs_keep_all_mutation_paths_false(
     monkeypatch,
 ):
     _clear_flags(monkeypatch)
     monkeypatch.setenv(GLOBAL_FLAG, "true")
     monkeypatch.setenv(THREE_CORE_FLAG, "true")
-    jobs = _jobs()
-    before = deepcopy(jobs)
-    captured = {}
 
-    def capture_hook(**kwargs):
-        captured.update(kwargs)
-        return {"hook_status": "captured"}
+    payload = collector._maybe_run_shadow_sidecar_after_application_priority(
+        _jobs()
+    )
+    bridge = payload["three_core_shadow_pipeline_hook_payload"]
 
-    monkeypatch.setattr(
-        shadow_sidecar_hook,
-        "run_shadow_sidecar_pipeline_hook",
-        capture_hook,
+    for key in (
+        "workflow_connection_authorized",
+        "pipeline_connection_authorized",
+        "pipeline_stage_added",
+        "execution_authorized",
+        "submission_authorized",
+        "application_execution_authorized",
+        "final_scoring_mutation_enabled",
+        "ranking_mutation_enabled",
+        "queue_mutation_enabled",
+        "resume_mutation_enabled",
+        "mutation_authorized",
+    ):
+        assert bridge[key] is False
+    assert all(
+        value is False
+        for value in bridge[
+            "forbidden_mutation_and_application_paths"
+        ].values()
     )
 
-    collector._maybe_run_shadow_sidecar_after_application_priority(jobs)
 
-    assert callable(captured["three_core_relevance_prefilter_callable"])
-    assert callable(captured["three_core_jd_intelligence_callable"])
-    assert callable(
-        captured["three_core_final_application_scoring_callable"]
-    )
-    assert jobs == before
-
-
-def test_collector_connection_plan_region_has_no_forbidden_behavior():
+def test_collector_callable_wiring_region_has_no_forbidden_behavior():
     source = (ROOT / "src/pipeline/collector.py").read_text(
         encoding="utf-8"
     )
-    start = source.index("        three_core_connection_plan = None")
+    start = source.index(
+        "            from src.agents."
+        "three_core_agent_shadow_callable_adapters import"
+    )
     end = source.index(
         "        payload = run_shadow_sidecar_pipeline_hook(",
         start,

@@ -56,7 +56,7 @@ def test_default_off_collector_path_preserves_existing_hook_payload(
     assert jobs == before
 
 
-def test_enabled_collector_path_attaches_blocked_three_core_payload(
+def test_enabled_collector_path_attaches_completed_three_core_payload(
     monkeypatch,
 ):
     _clear_flags(monkeypatch)
@@ -74,10 +74,17 @@ def test_enabled_collector_path_attaches_blocked_three_core_payload(
 
     bridge = payload["three_core_shadow_pipeline_hook_payload"]
     assert bridge["hook_status"] == (
-        "three_core_shadow_pipeline_hook_blocked"
+        "three_core_shadow_pipeline_hook_completed_shadow_only"
     )
-    assert bridge["shadow_result_count"] == 0
-    assert bridge["ordered_shadow_results"] == []
+    assert bridge["shadow_result_count"] == 3
+    assert [
+        result["agent_name"]
+        for result in bridge["ordered_shadow_results"]
+    ] == [
+        "relevance_prefilter",
+        "jd_intelligence",
+        "final_application_scoring",
+    ]
     assert bridge["job_context_summary"]["source_job_context"] == {
         "run_id": "phase17c-run",
         "batch_id": "phase17c-batch",
@@ -127,9 +134,11 @@ def test_enabled_collector_propagates_plan_flag_and_copied_context(
         "three_core_shadow_pipeline_connection_plan_"
         "ready_no_pipeline_change"
     )
-    assert "three_core_relevance_prefilter_callable" not in captured
-    assert "three_core_jd_intelligence_callable" not in captured
-    assert "three_core_final_application_scoring_callable" not in captured
+    assert callable(captured["three_core_relevance_prefilter_callable"])
+    assert callable(captured["three_core_jd_intelligence_callable"])
+    assert callable(
+        captured["three_core_final_application_scoring_callable"]
+    )
     assert jobs == before
 
 

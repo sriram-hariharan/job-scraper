@@ -156,6 +156,7 @@ def _maybe_run_shadow_sidecar_after_application_priority(
             else None
         )
         three_core_connection_plan = None
+        three_core_callable_kwargs: Dict[str, Any] = {}
         if three_core_hook_enabled:
             from src.agents.three_core_agent_shadow_pipeline_connection_plan import (
                 build_three_core_agent_shadow_pipeline_connection_plan,
@@ -221,6 +222,45 @@ def _maybe_run_shadow_sidecar_after_application_priority(
                     },
                 )
             )
+            from src.agents.three_core_agent_shadow_callable_adapters import (
+                build_three_core_agent_shadow_callable_adapters,
+            )
+
+            callable_adapters = (
+                build_three_core_agent_shadow_callable_adapters(
+                    enabled=True,
+                    adapter_context={
+                        "run_id": run_id,
+                        "batch_id": batch_id,
+                        "job_id": job_id,
+                        "stage_name": stage_name,
+                        "collector_hook_point": (
+                            "application_priority_scored_jobs"
+                        ),
+                    },
+                )
+            )
+            callable_map = callable_adapters.get("callable_map")
+            if (
+                callable_adapters.get("adapter_status")
+                == "three_core_shadow_callable_adapters_ready_shadow_only"
+                and isinstance(callable_map, dict)
+                and all(
+                    callable(callable_map.get(agent_name))
+                    for agent_name in ordered_core_agent_names
+                )
+            ):
+                three_core_callable_kwargs = {
+                    "three_core_relevance_prefilter_callable": (
+                        callable_map["relevance_prefilter"]
+                    ),
+                    "three_core_jd_intelligence_callable": (
+                        callable_map["jd_intelligence"]
+                    ),
+                    "three_core_final_application_scoring_callable": (
+                        callable_map["final_application_scoring"]
+                    ),
+                }
         payload = run_shadow_sidecar_pipeline_hook(
             run_id=run_id,
             batch_id=batch_id,
@@ -247,6 +287,7 @@ def _maybe_run_shadow_sidecar_after_application_priority(
             three_core_connection_plan=three_core_connection_plan,
             three_core_job_context=three_core_job_context,
             called_by_pipeline=True,
+            **three_core_callable_kwargs,
         )
         logger.info(
             "Shadow sidecar hook evaluated after application_priority: %s",

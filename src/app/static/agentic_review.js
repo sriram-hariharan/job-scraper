@@ -1768,6 +1768,139 @@ function renderJdLiveProviderCanaryReadbackSection(tracePayload = {}) {
   `;
 }
 
+function shouldRenderThreeCoreShadowOperatorCanaryFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get("three_core_canary_fixture") === "1";
+}
+
+function buildThreeCoreShadowOperatorCanaryFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    canary_status: "three_core_shadow_operator_canary_completed",
+    operator_canary_summary: {
+      readback_status: "three_core_shadow_runtime_readback_completed",
+      readback_completion: true,
+      ordered_agent_names_found: [
+        "relevance_prefilter",
+        "jd_intelligence",
+        "final_application_scoring",
+      ],
+      shadow_result_count: 3,
+    },
+    next_safe_step: (
+      "review_three_core_shadow_operator_canary_before_api_or_ui_readback"
+    ),
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      local_fixture_only: true,
+      pipeline_not_connected: true,
+      provider_calls_made: false,
+      network_calls_made: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_read_files: false,
+      did_write_files: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_create_approval: false,
+      did_mutate_approval: false,
+      did_mutate_resume: false,
+      did_create_execution_request: false,
+      did_create_execution_launch_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+function withThreeCoreShadowOperatorCanaryFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.three_core_shadow_operator_canary_readback_result,
+    )
+    || !shouldRenderThreeCoreShadowOperatorCanaryFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    three_core_shadow_operator_canary_readback_result: (
+      buildThreeCoreShadowOperatorCanaryFixtureResult()
+    ),
+  };
+}
+
+function renderThreeCoreShadowOperatorCanaryReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.three_core_shadow_operator_canary_readback_result)
+    ? tracePayload.three_core_shadow_operator_canary_readback_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const summary = hasAgentTraceSummaryObject(result.operator_canary_summary)
+    ? result.operator_canary_summary
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const orderedNames = Array.isArray(summary.ordered_agent_names_found)
+    ? summary.ordered_agent_names_found
+    : [];
+  const safeFlags = [
+    ["Read only", safety.read_only],
+    ["Shadow only", safety.shadow_only],
+    ["Pipeline disconnected", safety.pipeline_not_connected],
+    ["No scoring mutation", safety.did_mutate_scoring === false],
+    ["No ranking mutation", safety.did_change_ranking === false],
+    ["No queue mutation", safety.did_mutate_queue === false],
+    ["No execution", safety.did_execute_application === false],
+    ["No submission", safety.did_submit_application === false],
+  ];
+  const safetySummary = safeFlags
+    .map(([label, value]) => `${label}: ${value === true ? "yes" : "unknown"}`)
+    .join(" · ");
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : "Default-off read-only";
+  return `
+    <article class="agent-trace-summary" aria-label="Three-core shadow operator canary readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Three-Core Shadow Operator Canary</h4>
+          <p>Passive read-only display of a supplied canary payload. It does not start the collector, pipeline, provider runtime, execution, or submission paths.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Canary status", result.canary_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Readback status", summary.readback_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Readback complete", summary.readback_completion === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ordered agents", orderedNames.length ? orderedNames.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Shadow result count", summary.shadow_result_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agentic-review-muted" data-three-core-shadow-operator-canary-safety-summary>
+        ${escapeHtml(safetySummary)}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Operator canary summary", summary, { helper: "Read-only canary and runtime readback summary." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety flags for this supplied payload." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4704,6 +4837,9 @@ function renderManualGuardedExecutionLaunchRequestStatusTransitionObservabilityS
 }
 
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
+  const fixtureVisibleTracePayload = (
+    withThreeCoreShadowOperatorCanaryFixture(tracePayload)
+  );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
@@ -4763,6 +4899,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderProviderRuntimeReadbackSection(tracePayload)}
       ${renderJdProviderRuntimeReadbackSection(tracePayload)}
       ${renderJdLiveProviderCanaryReadbackSection(tracePayload)}
+      ${renderThreeCoreShadowOperatorCanaryReadbackSection(fixtureVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}

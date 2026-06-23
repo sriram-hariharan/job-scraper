@@ -1,4 +1,5 @@
 from collections import Counter
+from copy import deepcopy
 from typing import Any, Dict, List
 import asyncio
 import json
@@ -12,6 +13,10 @@ from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
 logger = get_logger("collector")
+
+THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
+)
 
 
 def _is_user_pipeline_mode() -> bool:
@@ -107,6 +112,7 @@ def _shadow_sidecar_pipeline_config_from_env() -> Dict[str, Any]:
         "APPLYLENS_AGENTIC_PIPELINE_SHADOW_CRITIC_GUARDRAIL_ENABLED",
         "APPLYLENS_AGENTIC_PIPELINE_SHADOW_KILL_SWITCH",
         "APPLYLENS_AGENTIC_PIPELINE_AGENT_RECOMMENDATION_OVERLAY_AUTO_GENERATE_ENABLED",
+        THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG,
     )
     return {flag_name: os.environ.get(flag_name, "") for flag_name in flag_names}
 
@@ -125,14 +131,141 @@ def _maybe_run_shadow_sidecar_after_application_priority(
     try:
         from src.agents.shadow_sidecar_hook import run_shadow_sidecar_pipeline_hook
 
+        run_id = str(
+            os.environ.get("JOB_STACK_PIPELINE_RUN_ID", "") or "collector"
+        )
+        batch_id = str(
+            os.environ.get("JOB_STACK_PIPELINE_BATCH_ID", "")
+            or "application_priority"
+        )
+        job_id = "application_priority_scored_jobs"
+        stage_name = "post_final_scoring"
+        job_payload = deepcopy(scored_jobs[0]) if scored_jobs else {}
+        three_core_hook_enabled = _truthy_env_value(
+            sidecar_config[THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG]
+        )
+        three_core_job_context = (
+            {
+                "run_id": run_id,
+                "batch_id": batch_id,
+                "job_id": job_id,
+                "stage_name": stage_name,
+                "job_payload": deepcopy(job_payload),
+            }
+            if three_core_hook_enabled
+            else None
+        )
+        three_core_connection_plan = None
+        three_core_callable_kwargs: Dict[str, Any] = {}
+        if three_core_hook_enabled:
+            from src.agents.three_core_agent_shadow_pipeline_connection_plan import (
+                build_three_core_agent_shadow_pipeline_connection_plan,
+            )
+
+            ordered_core_agent_names = [
+                "relevance_prefilter",
+                "jd_intelligence",
+                "final_application_scoring",
+            ]
+            three_core_connection_plan = (
+                build_three_core_agent_shadow_pipeline_connection_plan(
+                    enabled=True,
+                    dry_run_readback={
+                        "readback_status": (
+                            "three_core_shadow_dry_run_readback_ready"
+                        ),
+                        "dry_run_readback_only": True,
+                        "workflow_connection_authorized": False,
+                        "dry_run_execution_authorized": False,
+                        "ordered_core_agent_names": deepcopy(
+                            ordered_core_agent_names
+                        ),
+                        "mutation_authorized": False,
+                    },
+                    pipeline_entrypoint_descriptor={
+                        "entrypoint_name": (
+                            "collector_application_priority_shadow_hook"
+                        ),
+                        "stage_name": stage_name,
+                        "shadow_only": True,
+                    },
+                    prefilter_connection_descriptor={
+                        "agent_name": "relevance_prefilter",
+                        "source_stage": (
+                            "application_priority_scored_jobs"
+                        ),
+                        "target_stage": "relevance_prefilter_shadow",
+                        "shadow_only": True,
+                    },
+                    jd_intelligence_connection_descriptor={
+                        "agent_name": "jd_intelligence",
+                        "source_stage": "relevance_prefilter_shadow",
+                        "target_stage": "jd_intelligence_shadow",
+                        "shadow_only": True,
+                    },
+                    final_scoring_connection_descriptor={
+                        "agent_name": "final_application_scoring",
+                        "source_stage": "jd_intelligence_shadow",
+                        "target_stage": (
+                            "final_application_scoring_shadow"
+                        ),
+                        "shadow_only": True,
+                    },
+                    connection_plan_context={
+                        "run_id": run_id,
+                        "batch_id": batch_id,
+                        "job_id": job_id,
+                        "stage_name": stage_name,
+                        "collector_hook_point": (
+                            "application_priority_scored_jobs"
+                        ),
+                    },
+                )
+            )
+            from src.agents.three_core_agent_shadow_callable_adapters import (
+                build_three_core_agent_shadow_callable_adapters,
+            )
+
+            callable_adapters = (
+                build_three_core_agent_shadow_callable_adapters(
+                    enabled=True,
+                    adapter_context={
+                        "run_id": run_id,
+                        "batch_id": batch_id,
+                        "job_id": job_id,
+                        "stage_name": stage_name,
+                        "collector_hook_point": (
+                            "application_priority_scored_jobs"
+                        ),
+                    },
+                )
+            )
+            callable_map = callable_adapters.get("callable_map")
+            if (
+                callable_adapters.get("adapter_status")
+                == "three_core_shadow_callable_adapters_ready_shadow_only"
+                and isinstance(callable_map, dict)
+                and all(
+                    callable(callable_map.get(agent_name))
+                    for agent_name in ordered_core_agent_names
+                )
+            ):
+                three_core_callable_kwargs = {
+                    "three_core_relevance_prefilter_callable": (
+                        callable_map["relevance_prefilter"]
+                    ),
+                    "three_core_jd_intelligence_callable": (
+                        callable_map["jd_intelligence"]
+                    ),
+                    "three_core_final_application_scoring_callable": (
+                        callable_map["final_application_scoring"]
+                    ),
+                }
         payload = run_shadow_sidecar_pipeline_hook(
-            run_id=str(os.environ.get("JOB_STACK_PIPELINE_RUN_ID", "") or "collector"),
-            batch_id=str(
-                os.environ.get("JOB_STACK_PIPELINE_BATCH_ID", "")
-                or "application_priority"
-            ),
-            job_id="application_priority_scored_jobs",
-            stage_name="post_final_scoring",
+            run_id=run_id,
+            batch_id=batch_id,
+            job_id=job_id,
+            stage_name=stage_name,
             source_deterministic_stage="application_priority",
             source_deterministic_status="completed",
             source_deterministic_score=len(scored_jobs),
@@ -141,14 +274,20 @@ def _maybe_run_shadow_sidecar_after_application_priority(
             ),
             source_deterministic_reason_codes=["application_priority_completed"],
             sidecar_config=sidecar_config,
-            job_payload=dict(scored_jobs[0]) if scored_jobs else {},
+            job_payload=job_payload,
             resume_profile_payload={},
             existing_trace_context={
                 "shadow_sidecar_call_site": "collector.application_priority",
                 "scored_job_count": len(scored_jobs),
             },
             vector_evidence_hook_payload=vector_evidence_hook_payload,
+            three_core_shadow_pipeline_hook_enabled=(
+                three_core_hook_enabled
+            ),
+            three_core_connection_plan=three_core_connection_plan,
+            three_core_job_context=three_core_job_context,
             called_by_pipeline=True,
+            **three_core_callable_kwargs,
         )
         logger.info(
             "Shadow sidecar hook evaluated after application_priority: %s",

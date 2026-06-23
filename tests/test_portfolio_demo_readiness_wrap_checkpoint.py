@@ -366,6 +366,8 @@ ALLOWED_CHANGED = {
     "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
     "tests/test_three_core_agent_collector_shadow_wiring_default_off.py",
     "tests/test_three_core_agent_collector_connection_plan_default_off.py",
+    "src/agents/three_core_agent_shadow_callable_adapters.py",
+    "tests/test_three_core_agent_shadow_callable_adapters_default_off.py",
 }
 
 def _changed_files():
@@ -456,6 +458,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/three_core_agent_shadow_dry_run_readback.py",
         "src/agents/three_core_agent_shadow_pipeline_connection_plan.py",
         "src/agents/three_core_agent_shadow_pipeline_hook.py",
+        "src/agents/three_core_agent_shadow_callable_adapters.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

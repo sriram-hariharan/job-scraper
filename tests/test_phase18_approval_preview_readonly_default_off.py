@@ -264,6 +264,8 @@ def test_phase18c_changes_only_approved_docs_and_tests():
         "tests/test_phase18_human_approval_gate_contract_default_off.py",
         "docs/phase18_operator_decision_capture_contract.md",
         "tests/test_phase18_operator_decision_capture_contract_default_off.py",
+        "docs/phase18_live_provider_activation_plan.md",
+        "tests/test_phase18_live_provider_activation_plan_default_off.py",
     }
 
     assert changed <= allowed

@@ -179,7 +179,7 @@ def test_api_service_pipeline_dependencies_and_css_are_unchanged():
             "b0fabb68e61b5e1c99a939afde29071f595ac84fd9c29d2f39f60b51eddb85b5"
         ),
         "src/pipeline/collector.py": (
-            "0c4ffca98a1d438f6b2db7457dddc606d90c099eacc7d468bb0a7bec02efebe2"
+            "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

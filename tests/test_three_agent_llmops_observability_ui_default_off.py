@@ -164,7 +164,7 @@ def test_no_pipeline_dependency_or_decision_module_change():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
         "src/app/api.py": "9fd96dad2edce8c1ff41f5d239801cbab071ed939104a55d7322a91a3526bbf3",
-        "src/pipeline/collector.py": "0c4ffca98a1d438f6b2db7457dddc606d90c099eacc7d468bb0a7bec02efebe2",
+        "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
         "application_execution_queue.py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",

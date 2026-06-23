@@ -175,6 +175,8 @@ def test_phase_17k_changes_only_approved_docs_and_tests():
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
         "docs/phase18_live_readiness_approval_boundary.md",
         "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
+        "docs/phase18_human_approval_gate_contract.md",
+        "tests/test_phase18_human_approval_gate_contract_default_off.py",
     }
 
     assert changed <= allowed

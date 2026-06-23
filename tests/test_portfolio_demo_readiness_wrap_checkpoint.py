@@ -381,6 +381,8 @@ ALLOWED_CHANGED = {
     "tests/test_three_core_shadow_readiness_wrap_default_off.py",
     "docs/phase18_live_readiness_approval_boundary.md",
     "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
+    "docs/phase18_human_approval_gate_contract.md",
+    "tests/test_phase18_human_approval_gate_contract_default_off.py",
 }
 
 def _changed_files():

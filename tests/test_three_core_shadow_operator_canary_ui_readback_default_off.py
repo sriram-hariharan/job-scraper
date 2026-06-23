@@ -29,7 +29,8 @@ def test_ui_has_passive_three_core_canary_readback_renderer():
     assert 'renderWorkflowSummaryMetric("Next safe step"' in snippet
     assert "data-three-core-shadow-operator-canary-safety-summary" in snippet
     assert (
-        "renderThreeCoreShadowOperatorCanaryReadbackSection(tracePayload)"
+        "renderThreeCoreShadowOperatorCanaryReadbackSection("
+        "fixtureVisibleTracePayload)"
         in source
     )
 

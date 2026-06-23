@@ -376,6 +376,7 @@ ALLOWED_CHANGED = {
     "tests/test_three_core_shadow_operator_canary_service_readback_default_off.py",
     "tests/test_three_core_shadow_operator_canary_api_readback_default_off.py",
     "tests/test_three_core_shadow_operator_canary_ui_readback_default_off.py",
+    "tests/test_three_core_shadow_operator_canary_ui_fixture_visibility_default_off.py",
 }
 
 def _changed_files():

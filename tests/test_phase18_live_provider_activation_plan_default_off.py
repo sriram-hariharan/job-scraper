@@ -1,0 +1,284 @@
+from hashlib import sha256
+from pathlib import Path
+import subprocess
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DOC = ROOT / "docs/phase18_live_provider_activation_plan.md"
+
+ORDERED_AGENTS = [
+    "relevance_prefilter",
+    "jd_intelligence",
+    "final_application_scoring",
+]
+
+ACTIVATION_STATUSES = [
+    "not_configured",
+    "disabled",
+    "approval_required",
+    "ready_for_dry_run",
+    "ready_for_live_provider_call",
+    "provider_call_completed",
+    "provider_call_blocked",
+    "provider_call_failed_closed",
+]
+
+ACTIVATION_FIELDS = [
+    "activation_id",
+    "requested_capability",
+    "provider_name",
+    "provider_operation",
+    "model_or_endpoint_identifier",
+    "target_context_summary",
+    "linked_preview_id",
+    "linked_decision_id",
+    "linked_trace_or_readback_id",
+    "required_feature_flags",
+    "approval_status",
+    "decision_status",
+    "dry_run_evidence_summary",
+    "safety_flag_summary",
+    "secrets_reference_name_only",
+    "network_policy_summary",
+    "timeout_policy",
+    "retry_policy",
+    "rate_limit_policy",
+    "cost_limit_policy",
+    "redaction_policy",
+    "output_schema_summary",
+    "fail_closed_reason",
+    "rollback_or_disable_reference",
+    "created_timestamp",
+    "completed_timestamp",
+]
+
+RUNTIME_HASHES = {
+    "src/agents/relevance_prefilter.py": (
+        "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b"
+    ),
+    "src/agents/jd_intelligence.py": (
+        "1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e"
+    ),
+    "src/agents/final_application_scoring.py": (
+        "eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"
+    ),
+    "src/agents/three_core_agent_shadow_operator_canary.py": (
+        "b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"
+    ),
+    "src/pipeline/collector.py": (
+        "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"
+    ),
+    "src/app/api.py": (
+        "23e335987f08ddc484c8b0617608b6a742e58b780f7a932c14401e1ce5045766"
+    ),
+    "src/app/services.py": (
+        "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
+    ),
+    "src/app/static/agentic_review.js": (
+        "3520143a71e59a3e4f225db746657c248f10d5317480b602de3881d8811abb97"
+    ),
+}
+
+
+def _text() -> str:
+    return DOC.read_text(encoding="utf-8")
+
+
+def test_activation_plan_exists_and_names_preceding_tags():
+    assert DOC.exists()
+    text = _text()
+
+    assert "# Phase 18 Protected Live-Provider Activation Plan" in text
+    for tag in (
+        "phase17-three-core-shadow-readiness-release-v1",
+        "phase18a-live-readiness-approval-boundary-v1",
+        "phase18b-human-approval-gate-contract-v1",
+        "phase18c-approval-preview-readonly-v1",
+        "phase18d-operator-decision-capture-contract-v1",
+    ):
+        assert f"`{tag}`" in text
+
+
+def test_three_core_agents_are_named_in_correct_order():
+    text = _text()
+    positions = [text.index(f"`{agent}`") for agent in ORDERED_AGENTS]
+
+    assert positions == sorted(positions)
+
+
+def test_phase18e_is_docs_tests_only_and_does_not_activate_provider():
+    text = _text()
+
+    assert "Phase 18E is docs/tests-only" in text
+    assert "authorizes no runtime behavior" in text
+    assert "Phase 18E does\nnot activate a provider." in text
+    assert "adds no API" in text
+    for term in ("default-off", "read-only", "shadow-only", "advisory-only"):
+        assert term in text
+
+
+def test_allowed_activation_statuses_are_exact_and_ordered():
+    text = _text()
+    section = text[
+        text.index("## Allowed future provider activation statuses"):
+        text.index("## Required future provider activation fields")
+    ]
+    positions = [section.index(f"`{status}`") for status in ACTIVATION_STATUSES]
+
+    assert positions == sorted(positions)
+    for status in ACTIVATION_STATUSES:
+        assert f"`{status}`" in section
+
+
+def test_required_future_activation_fields_are_listed():
+    text = _text()
+
+    for field in ACTIVATION_FIELDS:
+        assert f"`{field}`" in text
+
+
+def test_required_default_off_feature_flags_are_listed():
+    text = _text()
+
+    for flag in (
+        "Global provider runtime flag",
+        "Provider-specific flag",
+        "Capability-specific flag",
+        "Operator decision required flag",
+        "Dry-run evidence required flag",
+    ):
+        assert flag in text
+
+
+def test_provider_safety_requirements_are_complete():
+    text = _text()
+
+    for requirement in (
+        "No secret values may be logged.",
+        "Network/provider SDK calls must be behind explicit default-off flags.",
+        "Provider failures must fail closed.",
+        "Provider responses must be schema-validated before use.",
+        "Provider outputs must be treated as advisory evidence only.",
+        "Provider timeout, retry, rate limit, and cost controls must be explicit.",
+        "Provider output must be traceable through readback.",
+        "Provider output must not mutate final score, rank, queue, resume, or",
+    ):
+        assert requirement in text
+
+
+def test_provider_activation_remains_isolated_from_mutation_and_execution():
+    text = _text()
+
+    assert "one isolated provider call only after\nseparate approval" in text
+    assert "Provider output must remain advisory" in text
+    assert "Provider execution must not imply scoring/ranking/queue/resume/" in text
+
+
+def test_failed_closed_provider_conditions_are_complete():
+    text = _text()
+
+    for condition in (
+        "Missing provider flag",
+        "Missing provider-specific flag",
+        "Missing capability-specific flag",
+        "Missing operator decision",
+        "Missing dry-run evidence",
+        "Missing linked preview id",
+        "Missing linked decision id",
+        "Missing target context",
+        "Missing safe secrets reference",
+        "Unsafe safety flags",
+        "Network policy missing",
+        "Timeout policy missing",
+        "Retry policy missing",
+        "Rate limit policy missing",
+        "Cost limit policy missing",
+        "Output schema validation missing",
+        "Provider error",
+        "Provider timeout",
+        "Attempted mutation or submission",
+    ):
+        assert condition in text
+
+
+def test_minimum_future_activation_observability_is_complete():
+    text = _text()
+
+    for field in (
+        "Activation status",
+        "Requested capability",
+        "Provider name",
+        "Provider operation",
+        "Linked preview id",
+        "Linked decision id",
+        "Linked trace/readback id",
+        "Dry-run evidence summary",
+        "Safety flag summary",
+        "Network policy summary",
+        "Timeout/retry/rate-limit/cost policy summary",
+        "Output schema validation status",
+        "Fail-closed reason",
+    ):
+        assert field in text
+
+
+def test_not_authorized_section_lists_every_forbidden_path():
+    text = _text()
+
+    for term in (
+        "No live provider execution.",
+        "No provider SDK/network call.",
+        "No secrets access.",
+        "No approval creation runtime.",
+        "No decision persistence runtime.",
+        "No DB writes.",
+        "No final scoring mutation.",
+        "No ranking mutation.",
+        "No queue mutation.",
+        "No resume mutation.",
+        "No execution request creation.",
+        "No application execution.",
+        "No application submission.",
+    ):
+        assert term in text
+
+
+def test_recommended_next_phase_is_adapter_contract_without_provider_call():
+    assert (
+        "Phase 18F should be a docs/tests-only provider runtime adapter contract, "
+        "still\nno provider call and still no mutation."
+        in _text()
+    )
+
+
+def test_phase18e_changes_only_approved_docs_and_tests():
+    tracked = subprocess.check_output(
+        ["git", "diff", "--name-only"], cwd=ROOT, text=True
+    ).splitlines()
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    changed = set(tracked + untracked)
+    allowed = {
+        "docs/phase18_live_provider_activation_plan.md",
+        "tests/test_phase18_live_provider_activation_plan_default_off.py",
+        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+        "tests/test_three_core_shadow_readiness_wrap_default_off.py",
+        "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
+        "tests/test_phase18_human_approval_gate_contract_default_off.py",
+        "tests/test_phase18_approval_preview_readonly_default_off.py",
+        "tests/test_phase18_operator_decision_capture_contract_default_off.py",
+    }
+
+    assert changed <= allowed
+
+
+def test_phase18e_key_runtime_files_are_unchanged():
+    for relative_path, expected_hash in RUNTIME_HASHES.items():
+        path = ROOT / relative_path
+
+        assert path.exists()
+        assert sha256(path.read_bytes()).hexdigest() == expected_hash
+

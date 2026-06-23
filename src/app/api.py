@@ -398,6 +398,12 @@ class ThreeAgentLlmopsObservabilityReadbackRequest(BaseModel):
     review_packet_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ThreeCoreShadowOperatorCanaryReadbackRequest(BaseModel):
+    enabled: bool = False
+    shadow_sidecar_hook_payload: dict[str, Any] | None = None
+    canary_context: dict[str, Any] | None = None
+
+
 class ProviderRuntimeReadbackRequest(BaseModel):
     enabled: bool = False
     config: dict[str, Any] = Field(default_factory=dict)
@@ -4536,6 +4542,66 @@ def three_agent_llmops_observability_readback(
         "advisory_only": True,
         "ui_action_added": False,
         "pipeline_stage_added": False,
+        "safety_metadata": safety,
+    }
+
+
+@app.post("/api/three-core-shadow-operator-canary-readback")
+def three_core_shadow_operator_canary_readback(
+    request: ThreeCoreShadowOperatorCanaryReadbackRequest,
+):
+    response = (
+        services.build_three_core_shadow_operator_canary_readback_service_payload(
+            enabled=request.enabled,
+            shadow_sidecar_hook_payload=request.shadow_sidecar_hook_payload,
+            canary_context=request.canary_context,
+        )
+    )
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "shadow_only": True,
+            "advisory_only": True,
+            "readback_only": True,
+            "three_core_shadow_operator_canary_readback_api": True,
+            "provider_calls_made": False,
+            "provider_sdk_imported": False,
+            "environment_secrets_read": False,
+            "network_calls_made": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_read_files": False,
+            "did_write_files": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **response,
+        "api_surface": "three_core_shadow_operator_canary_readback",
+        "api_readonly": True,
+        "api_readback_only": True,
+        "api_route_added": True,
+        "read_only": True,
+        "advisory_only": True,
+        "shadow_only": True,
+        "ui_action_added": False,
+        "pipeline_stage_added": False,
+        "mutation_authorized": False,
+        "mutation_authorized_agent_count": 0,
         "safety_metadata": safety,
     }
 

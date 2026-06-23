@@ -252,7 +252,7 @@ def test_bridge_inputs_are_defensively_copied_and_not_mutated():
     assert bridge["hook_context_summary"]["source_hook_context"] == before[2]
 
 
-def test_bridge_does_not_change_api_service_or_static_files():
+def test_bridge_does_not_change_unapproved_api_service_or_static_files():
     changed = set(
         subprocess.check_output(
             ["git", "diff", "--name-only"],
@@ -268,9 +268,21 @@ def test_bridge_does_not_change_api_service_or_static_files():
         ).splitlines()
     )
 
-    assert "src/app/api.py" not in changed
-    assert "src/app/services.py" not in changed
-    assert not any(path.startswith("src/app/static/") for path in changed)
+    approved_phase17i_paths = {
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/app/static/agentic_review.js",
+    }
+    unexpected_app_changes = [
+        path
+        for path in changed
+        if (
+            path in {"src/app/api.py", "src/app/services.py"}
+            or path.startswith("src/app/static/")
+        )
+        and path not in approved_phase17i_paths
+    ]
+    assert unexpected_app_changes == []
 
 
 def test_new_bridge_region_has_no_forbidden_runtime_or_mutation_wiring():

@@ -373,6 +373,9 @@ ALLOWED_CHANGED = {
     "tests/test_three_core_agent_shadow_runtime_readback_default_off.py",
     "src/agents/three_core_agent_shadow_operator_canary.py",
     "tests/test_three_core_agent_shadow_operator_canary_default_off.py",
+    "tests/test_three_core_shadow_operator_canary_service_readback_default_off.py",
+    "tests/test_three_core_shadow_operator_canary_api_readback_default_off.py",
+    "tests/test_three_core_shadow_operator_canary_ui_readback_default_off.py",
 }
 
 def _changed_files():

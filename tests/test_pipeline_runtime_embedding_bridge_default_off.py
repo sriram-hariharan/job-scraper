@@ -232,8 +232,8 @@ def test_zero_agent_counts_and_no_mutation_or_application_wiring():
 def test_api_ui_dependencies_and_protected_decision_modules_are_unchanged():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
-        "src/app/api.py": "9fd96dad2edce8c1ff41f5d239801cbab071ed939104a55d7322a91a3526bbf3",
-        "src/app/static/agentic_review.js": "90e58a52b550afbd105a4f04f4015277a39f004def948c4fe218e410bf05d90f",
+        "src/app/api.py": "23e335987f08ddc484c8b0617608b6a742e58b780f7a932c14401e1ce5045766",
+        "src/app/static/agentic_review.js": "d43ba4e0ede6d871665e322f23a4e07e1f3b7aedbf496a4be8e8e71ca05bd43c",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
     }

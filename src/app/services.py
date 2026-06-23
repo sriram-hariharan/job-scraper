@@ -2669,6 +2669,87 @@ def three_agent_llmops_observability_readback_service_payload(
     }
 
 
+def build_three_core_shadow_operator_canary_readback_service_payload(
+    *,
+    enabled: bool = False,
+    shadow_sidecar_hook_payload: Dict[str, Any] | None = None,
+    canary_context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Summarize a caller-supplied three-core shadow payload safely."""
+
+    from src.agents.three_core_agent_shadow_operator_canary import (
+        run_three_core_agent_shadow_operator_canary,
+    )
+
+    source_payload = (
+        deepcopy(shadow_sidecar_hook_payload)
+        if isinstance(shadow_sidecar_hook_payload, dict)
+        else {}
+    )
+    context = (
+        deepcopy(canary_context)
+        if isinstance(canary_context, dict)
+        else {}
+    )
+    provider = (
+        (lambda payload=deepcopy(source_payload): deepcopy(payload))
+        if source_payload
+        else None
+    )
+    result = run_three_core_agent_shadow_operator_canary(
+        enabled=enabled is True,
+        shadow_payload_provider=provider,
+        canary_context=deepcopy(context),
+    )
+    if not isinstance(result, dict):
+        result = {}
+
+    safety = dict(result.get("safety_metadata", {}) or {})
+    safety.update(
+        {
+            "read_only": True,
+            "shadow_only": True,
+            "advisory_only": True,
+            "readback_only": True,
+            "service_helper_only": True,
+            "operator_canary_only": True,
+            "provider_calls_made": False,
+            "provider_sdk_imported": False,
+            "environment_secrets_read": False,
+            "network_calls_made": False,
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_read_files": False,
+            "did_write_files": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_resume": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "api_route_added": False,
+            "ui_action_added": False,
+            "pipeline_stage_added": False,
+            "mutation_authorized": False,
+        }
+    )
+    return {
+        **deepcopy(result),
+        "service_surface": (
+            "three_core_shadow_operator_canary_readback_service"
+        ),
+        "service_helper_only": True,
+        "service_default_off": enabled is not True,
+        "api_route_added": False,
+        "ui_action_added": False,
+        "safety_metadata": safety,
+    }
+
+
 def provider_runtime_readiness_service_payload(
     *,
     enabled: bool = False,

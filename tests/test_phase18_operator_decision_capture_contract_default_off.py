@@ -309,6 +309,8 @@ def test_phase18d_changes_only_approved_docs_and_tests():
         "tests/test_phase18_approval_preview_readonly_default_off.py",
         "docs/phase18_live_provider_activation_plan.md",
         "tests/test_phase18_live_provider_activation_plan_default_off.py",
+        "docs/phase18_provider_runtime_adapter_contract.md",
+        "tests/test_phase18_provider_runtime_adapter_contract_default_off.py",
     }
 
     assert changed <= allowed

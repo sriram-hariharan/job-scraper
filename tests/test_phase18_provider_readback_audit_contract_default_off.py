@@ -395,6 +395,8 @@ def test_phase18i_changes_only_approved_docs_and_tests():
         "tests/test_phase18_provider_runtime_adapter_contract_default_off.py",
         "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
         "tests/test_phase18_provider_response_validation_contract_default_off.py",
+        "docs/phase18_provider_call_boundary_readiness_contract.md",
+        "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
     }
 
     assert changed <= allowed

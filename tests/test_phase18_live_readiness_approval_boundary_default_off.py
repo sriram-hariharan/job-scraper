@@ -4,25 +4,12 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC = ROOT / "docs/three_core_shadow_readiness_wrap.md"
+DOC = ROOT / "docs/phase18_live_readiness_approval_boundary.md"
 
 ORDERED_AGENTS = [
     "relevance_prefilter",
     "jd_intelligence",
     "final_application_scoring",
-]
-
-PHASE_TAGS = [
-    "phase17a-three-core-agent-shadow-pipeline-hook-v1",
-    "phase17b-three-core-agent-shadow-sidecar-bridge-v1",
-    "phase17c-three-core-agent-collector-shadow-wiring-v1",
-    "phase17d-three-core-agent-collector-connection-plan-v1",
-    "phase17e-three-core-agent-shadow-callable-adapters-v1",
-    "phase17f-three-core-agent-collector-callable-wiring-v1",
-    "phase17g-three-core-agent-shadow-runtime-readback-v1",
-    "phase17h-three-core-agent-shadow-operator-canary-v1",
-    "phase17i-three-core-agent-shadow-api-ui-readback-v1",
-    "phase17j-three-core-shadow-local-fixture-ui-visibility-v1",
 ]
 
 RUNTIME_HASHES = {
@@ -34,21 +21,6 @@ RUNTIME_HASHES = {
     ),
     "src/agents/final_application_scoring.py": (
         "eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"
-    ),
-    "src/agents/three_core_agent_shadow_pipeline_hook.py": (
-        "bdabd60eda23c115dfba27a3221a97d5b6782e61e13a62fd3c431b230c7428d8"
-    ),
-    "src/agents/shadow_sidecar_hook.py": (
-        "0bbc15e9a2bae8e5154ff62b5fda7b6e4989ecc70f1104719197a2cf337ac3df"
-    ),
-    "src/agents/three_core_agent_shadow_pipeline_connection_plan.py": (
-        "b6c244dac9a9f3f3180b928cf1375de77cd41a69c0f8688a8dead6708e188c0b"
-    ),
-    "src/agents/three_core_agent_shadow_callable_adapters.py": (
-        "e7bfcf282a40d254ffbef99d2a8c92abdd2d43ac931741e7a39da1724dd8e37f"
-    ),
-    "src/agents/three_core_agent_shadow_runtime_readback.py": (
-        "7a11a895ebb409b035cdd2851947f310df4b4fc7a58529794a3046fbbb6ac6b4"
     ),
     "src/agents/three_core_agent_shadow_operator_canary.py": (
         "b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"
@@ -72,10 +44,12 @@ def _text() -> str:
     return DOC.read_text(encoding="utf-8")
 
 
-def test_readiness_wrap_doc_exists_and_names_checkpoint():
+def test_phase18_boundary_doc_exists_and_names_release():
     assert DOC.exists()
-    assert "# Three-Core Shadow Readiness Wrap" in _text()
-    assert "docs/tests only" in _text()
+    text = _text()
+
+    assert "# Phase 18 Live-Readiness Approval Boundary" in text
+    assert "`phase17-three-core-shadow-readiness-release-v1`" in text
 
 
 def test_three_core_agents_are_named_in_correct_order():
@@ -85,81 +59,127 @@ def test_three_core_agents_are_named_in_correct_order():
     assert positions == sorted(positions)
 
 
-def test_all_phase_17a_through_17j_tags_are_documented():
+def test_phase18a_is_docs_tests_only_and_authorizes_no_runtime():
     text = _text()
 
-    for tag in PHASE_TAGS:
-        assert f"`{tag}`" in text
-
-
-def test_known_endpoint_fixture_and_flags_are_exact():
-    text = _text()
-
-    for term in (
-        "/api/three-core-shadow-operator-canary-readback",
-        "?three_core_canary_fixture=1",
-        "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED",
-        "APPLYLENS_AGENTIC_PIPELINE_SHADOW_SIDECAR_ENABLED",
-    ):
-        assert f"`{term}`" in text
-
-
-def test_default_off_read_only_shadow_only_advisory_only_are_explicit():
-    text = _text()
-
+    assert "Phase 18A is docs/tests-only" in text
+    assert "authorizes no runtime behavior" in text
     for term in ("default-off", "read-only", "shadow-only", "advisory-only"):
         assert term in text
 
 
-def test_mutation_and_application_paths_are_not_authorized():
-    text = _text().lower()
-
-    for term in (
-        "mutation authorization | not authorized",
-        "final scoring mutation | not authorized",
-        "ranking mutation | not authorized",
-        "queue mutation | not authorized",
-        "resume mutation | not authorized",
-        "application execution | not authorized",
-        "application submission | not authorized",
-    ):
-        assert term in text
-
-
-def test_provider_network_database_and_file_io_are_not_used():
+def test_all_safety_matrix_capabilities_are_not_authorized():
     text = _text()
-
-    for term in (
-        "Provider SDK call | Not used",
-        "Network call | Not used",
-        "Database read/write | Not used",
-        "File IO | Not used",
-    ):
-        assert term in text
-
-
-def test_fixture_verification_forbids_action_controls():
-    text = _text().lower()
-
-    assert "?three_core_canary_fixture=1" in text
-    assert "no apply, submit, execute, or approval control appears" in text
-    assert "only when" in text
-    assert "real" in text
-
-
-def test_next_safe_decision_options_are_documented_in_order():
-    text = _text()
-    options = [
-        "Keep the completed Phase 17 surface shadow-only.",
-        "Promote these readiness docs to the main release.",
-        "Design a separate protected approval plan before any live provider or",
+    capabilities = [
+        "Live provider execution",
+        "Provider SDK/network calls",
+        "Final scoring mutation",
+        "Ranking mutation",
+        "Queue mutation",
+        "Resume mutation",
+        "Approval creation",
+        "Execution request creation",
+        "Application execution",
+        "Application submission",
+        "DB writes",
+        "Secrets access",
     ]
-    positions = [text.index(option) for option in options]
+
+    for capability in capabilities:
+        assert f"| {capability} | Not authorized |" in text
+
+
+def test_future_live_behavior_requires_all_approval_gates():
+    text = _text().lower()
+
+    for term in (
+        "named feature flag",
+        "operator/human approval",
+        "dry-run/readback evidence",
+        "fail-closed behavior",
+        "audit log or trace summary",
+        "rollback/disable plan",
+        "tests proving no submit/apply path is reachable",
+    ):
+        assert term in text
+
+
+def test_provider_plan_is_isolated_advisory_traceable_and_fail_closed():
+    text = _text()
+
+    for term in (
+        "Provider execution must be isolated from scoring/ranking mutation.",
+        "Provider outputs must remain advisory until separately approved.",
+        "Provider failures must fail closed.",
+        "Provider calls must be traceable.",
+        "Secrets must not be logged.",
+        "Network/provider SDK calls must be behind explicit default-off flags.",
+    ):
+        assert term in text
+
+
+def test_future_mutations_each_require_separate_approval():
+    text = _text()
+
+    for capability in (
+        "scoring mutation",
+        "ranking mutation",
+        "queue mutation",
+        "resume mutation",
+        "execution request creation",
+        "application execution",
+        "application submission",
+    ):
+        assert f"Separate approval is required for {capability}." in text
+
+
+def test_not_authorized_section_lists_every_forbidden_path():
+    text = _text()
+
+    for term in (
+        "No live provider execution.",
+        "No provider SDK/network call.",
+        "No DB writes.",
+        "No secrets access.",
+        "No final scoring mutation.",
+        "No ranking mutation.",
+        "No queue mutation.",
+        "No resume mutation.",
+        "No approval creation.",
+        "No execution request creation.",
+        "No application execution.",
+        "No application submission.",
+    ):
+        assert term in text
+
+
+def test_recommended_phase18_sequence_is_ordered():
+    text = _text()
+    steps = [
+        "18A:** approval boundary docs/tests.",
+        "18B:** human approval gate contract, default-off.",
+        "18C:** read-only approval preview.",
+        "18D:** operator decision capture, no execution.",
+        "18E:** protected live-provider activation plan, still no mutation.",
+        "Later phase only after approval:** controlled live provider or mutation",
+    ]
+    positions = [text.index(step) for step in steps]
 
     assert positions == sorted(positions)
 
 
-def test_phase_17k_changes_only_approved_docs_and_tests():
+def test_no_future_phase_may_combine_provider_and_mutation_authority():
+    text = _text()
+
+    assert (
+        "No future phase may combine provider execution, scoring mutation, "
+        "ranking\nmutation, queue mutation, resume mutation, and application "
+        "submission in one\nstep."
+        in text
+    )
+
+
+def test_phase18a_changes_only_approved_docs_and_tests():
     tracked = subprocess.check_output(
         ["git", "diff", "--name-only"], cwd=ROOT, text=True
     ).splitlines()
@@ -170,11 +190,10 @@ def test_phase_17k_changes_only_approved_docs_and_tests():
     ).splitlines()
     changed = set(tracked + untracked)
     allowed = {
-        "docs/three_core_shadow_readiness_wrap.md",
-        "tests/test_three_core_shadow_readiness_wrap_default_off.py",
-        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
         "docs/phase18_live_readiness_approval_boundary.md",
         "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
+        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+        "tests/test_three_core_shadow_readiness_wrap_default_off.py",
         "docs/phase18_human_approval_gate_contract.md",
         "tests/test_phase18_human_approval_gate_contract_default_off.py",
         "docs/phase18_approval_preview_readonly.md",
@@ -202,7 +221,7 @@ def test_phase_17k_changes_only_approved_docs_and_tests():
     assert changed <= allowed
 
 
-def test_phase_17_runtime_files_match_readiness_checkpoint_hashes():
+def test_phase18a_key_runtime_files_are_unchanged():
     for relative_path, expected_hash in RUNTIME_HASHES.items():
         path = ROOT / relative_path
 

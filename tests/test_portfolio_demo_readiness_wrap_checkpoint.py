@@ -426,6 +426,9 @@ ALLOWED_CHANGED = {
     "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
     "docs/phase19_readonly_approval_workflow_release_checkpoint.md",
     "tests/test_phase19j_readonly_approval_workflow_release_checkpoint_default_off.py",
+    "src/agents/provider_call_readiness_experiment.py",
+    "docs/phase20_provider_call_readiness_experiment.md",
+    "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
 }
 
 def _changed_files():
@@ -537,10 +540,11 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/three_core_agent_shadow_callable_adapters.py",
         "src/agents/three_core_agent_shadow_runtime_readback.py",
         "src/agents/three_core_agent_shadow_operator_canary.py",
-        "src/agents/three_core_approval_preview_runtime.py",
-        "src/agents/three_core_approval_preview_service_readback.py",
-        "src/agents/operator_decision_capture_readback_contract.py",
-        "src/storage/vector_evidence/__init__.py",
+            "src/agents/three_core_approval_preview_runtime.py",
+            "src/agents/three_core_approval_preview_service_readback.py",
+            "src/agents/operator_decision_capture_readback_contract.py",
+            "src/agents/provider_call_readiness_experiment.py",
+            "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",
         "src/storage/vector_evidence/connection.py",

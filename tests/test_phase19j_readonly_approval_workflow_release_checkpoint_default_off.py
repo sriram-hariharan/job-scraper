@@ -108,6 +108,9 @@ def test_phase19j_changes_only_docs_tests_and_legacy_guards():
     allowed = {
         "docs/phase19_readonly_approval_workflow_release_checkpoint.md",
         "tests/test_phase19j_readonly_approval_workflow_release_checkpoint_default_off.py",
+        "src/agents/provider_call_readiness_experiment.py",
+        "docs/phase20_provider_call_readiness_experiment.md",
+        "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

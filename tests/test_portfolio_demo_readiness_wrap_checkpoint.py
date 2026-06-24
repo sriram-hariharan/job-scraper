@@ -401,6 +401,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
     "docs/phase18_mutation_boundary_readiness_contract.md",
     "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
+    "docs/phase18_safety_wrap_release_checkpoint.md",
+    "tests/test_phase18_safety_wrap_release_checkpoint_default_off.py",
 }
 
 def _changed_files():

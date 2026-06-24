@@ -332,6 +332,9 @@ def test_phase18j_changes_only_approved_docs_and_tests():
         "src/agents/three_core_approval_preview_runtime.py",
         "docs/phase19_approval_preview_runtime_readonly.md",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
+        "src/agents/three_core_approval_preview_service_readback.py",
+        "docs/phase19_approval_preview_service_readback.md",
+        "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
     }
 
     assert changed <= allowed

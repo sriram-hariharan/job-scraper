@@ -5126,6 +5126,114 @@ function renderAgentTracePanel(tracePayload = {}) {
   return renderAgentTraceReadOnlyPanel(tracePayload);
 }
 
+function shouldFetchThreeCoreApprovalPreviewServiceReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "three_core_approval_preview_api_fetch",
+  ) === "1";
+}
+
+function buildThreeCoreApprovalPreviewServiceReadbackRequest(
+  tracePayload = {},
+) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.three_core_approval_preview_service_readback_request_payload,
+  )
+    ? tracePayload.three_core_approval_preview_service_readback_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    approval_preview_runtime_payload: null,
+    shadow_runtime_readback_payload: null,
+    shadow_sidecar_hook_payload: null,
+    readback_context: null,
+    readback_config: null,
+  };
+}
+
+function buildThreeCoreApprovalPreviewServiceReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    service_readback_status: "approval_preview_service_readback_failed_closed",
+    service_readback_enabled: false,
+    default_off: true,
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    service_readback_only: true,
+    ordered_core_agent_names: [],
+    requested_capability: "three_core_approval_preview_service_readback",
+    linked_trace_or_readback_id: "",
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    missing_requirements: ["available_read_only_api_response"],
+    fail_closed_reason: String(
+      error?.message || "approval_preview_service_readback_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      provider_call: false,
+      network_call: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+    },
+  };
+}
+
+async function withThreeCoreApprovalPreviewServiceReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.three_core_approval_preview_service_readback_result,
+    )
+    || !shouldFetchThreeCoreApprovalPreviewServiceReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/three-core-approval-preview-service-readback",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildThreeCoreApprovalPreviewServiceReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      three_core_approval_preview_service_readback_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      three_core_approval_preview_service_readback_result: (
+        buildThreeCoreApprovalPreviewServiceReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
 function getAgenticReviewApprovalRequestId(payload = {}) {
   return getAgenticApprovalRequestId(payload?.operator_approval_mock || {});
 }
@@ -9122,8 +9230,11 @@ async function initAgenticReviewPage() {
       empty_trace: true,
       safety_metadata: { read_only: true },
     }));
+    const approvalPreviewTracePayload = await (
+      withThreeCoreApprovalPreviewServiceReadbackApiFetch(tracePayload)
+    );
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
-    renderAgenticReviewData(payload, tracePayload);
+    renderAgenticReviewData(payload, approvalPreviewTracePayload);
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");
     if (panel) {

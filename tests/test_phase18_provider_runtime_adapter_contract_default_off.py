@@ -324,6 +324,8 @@ def test_phase18f_changes_only_approved_docs_and_tests():
         "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
         "docs/phase18_mutation_boundary_readiness_contract.md",
         "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
+        "docs/phase18_safety_wrap_release_checkpoint.md",
+        "tests/test_phase18_safety_wrap_release_checkpoint_default_off.py",
     }
 
     assert changed <= allowed

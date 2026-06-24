@@ -204,6 +204,8 @@ def test_phase19d_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase19_operator_decision_capture_api_readback.md",
         "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
+        "docs/phase19_operator_decision_capture_ui_readback.md",
+        "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
         "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
         "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
@@ -232,6 +234,7 @@ def test_phase19d_changes_only_approved_files():
                 for marker in (
                     "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
                     "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+                    "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
                     "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
                 )
             )

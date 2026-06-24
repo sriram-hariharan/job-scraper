@@ -246,7 +246,7 @@ def test_dependency_pipeline_and_application_authority_files_are_unchanged():
             "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
         ),
         "src/app/static/agentic_review.js": (
-            "17af3ca604e4a88a5f51bab37617888b1b4f66dc2f446b976cf211484f69cbe0"
+            "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

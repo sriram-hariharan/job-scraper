@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTECTED_HASHES = {
     "src/app/api.py": "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "241609825c31c047255ba6e439cf728e1758966f506bae014240ac55fd701e16",
+    "src/app/static/agentic_review.js": "94e9f1c484f6459833141a37cddd7a0bb092fb185c7119b4909a5ed9d925ed6a",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/jd_intelligence.py": "1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e",
@@ -349,6 +349,8 @@ def test_phase19b_changes_only_approved_files():
         "src/app/static/app_redesign.css",
         "docs/phase19_approval_preview_ui_readback.md",
         "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
+        "docs/phase19_approval_preview_ui_api_fetch.md",
+        "tests/test_phase19e_three_core_approval_preview_ui_api_fetch_default_off.py",
         "docs/phase19_approval_preview_service_readback.md",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
@@ -434,7 +436,7 @@ def test_phase19b_changes_only_approved_files():
         or any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "241609825c31c047255ba6e439cf728e1758966f506bae014240ac55fd701e16",
+                "94e9f1c484f6459833141a37cddd7a0bb092fb185c7119b4909a5ed9d925ed6a",
                 "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
             )
         )

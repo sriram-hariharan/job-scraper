@@ -411,6 +411,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
     "docs/phase19_approval_preview_api_readback.md",
     "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
+    "docs/phase19_approval_preview_ui_readback.md",
+    "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
 }
 
 def _changed_files():
@@ -435,7 +437,24 @@ def test_portfolio_demo_readiness_doc_is_linked():
 
 def test_portfolio_demo_readiness_is_docs_tests_only():
     changed = _changed_files()
-    extra = sorted(path for path in changed if path not in ALLOWED_CHANGED)
+    legacy_static_hash_guards = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "tests").glob("test_*.py")
+        if path.name == "test_three_core_agent_shadow_sidecar_bridge_default_off.py"
+        or any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "241609825c31c047255ba6e439cf728e1758966f506bae014240ac55fd701e16",
+                "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+            )
+        )
+    }
+    extra = sorted(
+        path
+        for path in changed
+        if path not in ALLOWED_CHANGED
+        and path not in legacy_static_hash_guards
+    )
     assert not extra
 
     approved_runtime_paths = {

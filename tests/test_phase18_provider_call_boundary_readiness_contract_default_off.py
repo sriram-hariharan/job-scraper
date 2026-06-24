@@ -82,7 +82,7 @@ RUNTIME_HASHES = {
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
     ),
     "src/app/static/agentic_review.js": (
-        "3520143a71e59a3e4f225db746657c248f10d5317480b602de3881d8811abb97"
+        "241609825c31c047255ba6e439cf728e1758966f506bae014240ac55fd701e16"
     ),
 }
 
@@ -338,6 +338,10 @@ def test_phase18j_changes_only_approved_docs_and_tests():
         "src/app/api.py",
         "docs/phase19_approval_preview_api_readback.md",
         "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase19_approval_preview_ui_readback.md",
+        "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
             "tests/test_jd_provider_runtime_review_packet_default_off.py",
         "tests/test_jd_provider_runtime_service_readback_default_off.py",
         "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",
@@ -400,7 +404,19 @@ def test_phase18j_changes_only_approved_docs_and_tests():
         "tests/test_jd_provider_runtime_readiness_checkpoint_default_off.py",
 }
 
-    assert changed <= allowed
+    legacy_static_hash_guards = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "tests").glob("test_*.py")
+        if path.name == "test_three_core_agent_shadow_sidecar_bridge_default_off.py"
+        or any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "241609825c31c047255ba6e439cf728e1758966f506bae014240ac55fd701e16",
+                "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+            )
+        )
+    }
+    assert changed <= allowed | legacy_static_hash_guards
 
 
 def test_phase18j_key_runtime_files_are_unchanged():

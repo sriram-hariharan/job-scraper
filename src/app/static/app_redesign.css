@@ -6226,6 +6226,14 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
   overflow-wrap: anywhere;
 }
 
+.three-core-approval-preview-readback {
+  border-color: color-mix(in srgb, var(--app-primary) 34%, var(--app-border));
+}
+
+.three-core-approval-preview-readback__metrics {
+  margin-top: 12px;
+}
+
 @media (max-width: 720px) {
   [data-agentic-review-run-id] {
     padding-right: 18px;

@@ -175,7 +175,7 @@ def test_no_pipeline_dependency_or_decision_module_change():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
-            "23e335987f08ddc484c8b0617608b6a742e58b780f7a932c14401e1ce5045766"
+            "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf"
         ),
         "src/app/services.py": (
             "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"

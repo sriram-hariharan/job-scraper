@@ -409,6 +409,8 @@ ALLOWED_CHANGED = {
     "src/agents/three_core_approval_preview_service_readback.py",
     "docs/phase19_approval_preview_service_readback.md",
     "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
+    "docs/phase19_approval_preview_api_readback.md",
+    "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
 }
 
 def _changed_files():

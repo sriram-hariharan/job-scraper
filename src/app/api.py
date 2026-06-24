@@ -10,6 +10,7 @@ from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.agents.critic_evaluator import evaluate_agent_trace
+from src.agents import three_core_approval_preview_service_readback
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
 from src.app.decisions_ui import router as decisions_ui_router
@@ -4604,6 +4605,30 @@ def three_core_shadow_operator_canary_readback(
         "mutation_authorized_agent_count": 0,
         "safety_metadata": safety,
     }
+
+
+@app.post("/api/three-core-approval-preview-service-readback")
+def three_core_approval_preview_service_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return (
+        three_core_approval_preview_service_readback
+        .build_three_core_approval_preview_service_readback_payload(
+            enabled=request_payload.get("enabled", False),
+            approval_preview_runtime_payload=request_payload.get(
+                "approval_preview_runtime_payload"
+            ),
+            shadow_runtime_readback_payload=request_payload.get(
+                "shadow_runtime_readback_payload"
+            ),
+            shadow_sidecar_hook_payload=request_payload.get(
+                "shadow_sidecar_hook_payload"
+            ),
+            readback_context=request_payload.get("readback_context"),
+            readback_config=request_payload.get("readback_config"),
+        )
+    )
 
 
 @app.post("/api/provider-runtime-readback")

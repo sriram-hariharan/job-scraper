@@ -71,7 +71,7 @@ RUNTIME_HASHES = {
         "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"
     ),
     "src/app/api.py": (
-        "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf"
+        "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5"
     ),
     "src/app/services.py": (
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
@@ -286,6 +286,9 @@ def test_phase18b_changes_only_approved_docs_and_tests():
         "src/agents/operator_decision_capture_readback_contract.py",
         "docs/phase19_operator_decision_capture_readback_contract.md",
         "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase19_operator_decision_capture_api_readback.md",
+        "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
             "tests/test_jd_provider_runtime_review_packet_default_off.py",
         "tests/test_jd_provider_runtime_service_readback_default_off.py",
         "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",

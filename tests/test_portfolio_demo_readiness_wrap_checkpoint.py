@@ -420,6 +420,8 @@ ALLOWED_CHANGED = {
     "src/agents/operator_decision_capture_readback_contract.py",
     "docs/phase19_operator_decision_capture_readback_contract.md",
     "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
+    "docs/phase19_operator_decision_capture_api_readback.md",
+    "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
 }
 
 def _changed_files():

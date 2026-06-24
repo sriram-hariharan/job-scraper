@@ -1901,6 +1901,137 @@ function renderThreeCoreShadowOperatorCanaryReadbackSection(tracePayload = {}) {
   `;
 }
 
+function shouldRenderThreeCoreApprovalPreviewFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "three_core_approval_preview_fixture",
+  ) === "1";
+}
+
+function buildThreeCoreApprovalPreviewServiceReadbackFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    service_readback_status: "approval_preview_service_readback_ready",
+    service_readback_enabled: true,
+    default_off: true,
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    service_readback_only: true,
+    ordered_core_agent_names: [
+      "relevance_prefilter",
+      "jd_intelligence",
+      "final_application_scoring",
+    ],
+    requested_capability: "review_three_core_approval_preview_readback",
+    linked_trace_or_readback_id: "phase19d-local-fixture",
+    next_safe_step: "review_service_readback_metadata_only",
+    missing_requirements: [],
+    fail_closed_reason: "",
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      service_readback_only: true,
+      local_fixture_only: true,
+      provider_call: false,
+      network_call: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_write_file: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_mutate_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+      mutation_authorized: false,
+      application_execution_authorized: false,
+      submission_authorized: false,
+    },
+  };
+}
+
+function withThreeCoreApprovalPreviewServiceReadbackFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.three_core_approval_preview_service_readback_result,
+    )
+    || !shouldRenderThreeCoreApprovalPreviewFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    three_core_approval_preview_service_readback_result: (
+      buildThreeCoreApprovalPreviewServiceReadbackFixtureResult()
+    ),
+  };
+}
+
+function renderThreeCoreApprovalPreviewServiceReadbackSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.three_core_approval_preview_service_readback_result,
+  )
+    ? tracePayload.three_core_approval_preview_service_readback_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const orderedNames = Array.isArray(result.ordered_core_agent_names)
+    ? result.ordered_core_agent_names
+    : [];
+  const missingRequirements = Array.isArray(result.missing_requirements)
+    ? result.missing_requirements
+    : [];
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : "Default-off read-only";
+  return `
+    <article class="agent-trace-summary three-core-approval-preview-readback" aria-label="Three-core approval preview service readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Three-Core Approval Preview Readback</h4>
+          <p>Passive display of supplied approval preview metadata. It is read-only, shadow-only, advisory-only, with approval creation and application-state changes disabled.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts three-core-approval-preview-readback__metrics">
+        ${renderWorkflowSummaryMetric("Service readback status", result.service_readback_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Read only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ordered agents", orderedNames.length ? orderedNames.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Requested capability", result.requested_capability || "none")}
+        ${renderWorkflowSummaryMetric("Linked trace / readback id", result.linked_trace_or_readback_id || "none")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+        ${renderWorkflowSummaryMetric("Missing requirements", missingRequirements.length ? missingRequirements.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Fail-closed reason", result.fail_closed_reason || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-provider, no-database, and no-mutation safety flags from the supplied readback." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4837,8 +4968,13 @@ function renderManualGuardedExecutionLaunchRequestStatusTransitionObservabilityS
 }
 
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
-  const fixtureVisibleTracePayload = (
+  const canaryFixtureVisibleTracePayload = (
     withThreeCoreShadowOperatorCanaryFixture(tracePayload)
+  );
+  const fixtureVisibleTracePayload = (
+    withThreeCoreApprovalPreviewServiceReadbackFixture(
+      canaryFixtureVisibleTracePayload,
+    )
   );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -4900,6 +5036,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderJdProviderRuntimeReadbackSection(tracePayload)}
       ${renderJdLiveProviderCanaryReadbackSection(tracePayload)}
       ${renderThreeCoreShadowOperatorCanaryReadbackSection(fixtureVisibleTracePayload)}
+      ${renderThreeCoreApprovalPreviewServiceReadbackSection(fixtureVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}

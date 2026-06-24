@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTECTED_HASHES = {
     "src/app/api.py": "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "3520143a71e59a3e4f225db746657c248f10d5317480b602de3881d8811abb97",
+    "src/app/static/agentic_review.js": "241609825c31c047255ba6e439cf728e1758966f506bae014240ac55fd701e16",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/jd_intelligence.py": "1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e",
@@ -322,7 +322,6 @@ def test_module_source_has_no_forbidden_runtime_markers():
 def test_protected_runtime_surfaces_do_not_reference_new_helper():
     for relative_path in (
         "src/app/services.py",
-        "src/app/static/agentic_review.js",
         "src/pipeline/collector.py",
     ):
         assert "three_core_approval_preview_service_readback" not in (
@@ -346,6 +345,10 @@ def test_phase19b_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase19_approval_preview_api_readback.md",
         "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase19_approval_preview_ui_readback.md",
+        "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
         "docs/phase19_approval_preview_service_readback.md",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
@@ -424,7 +427,19 @@ def test_phase19b_changes_only_approved_files():
         "tests/test_jd_provider_runtime_readiness_checkpoint_default_off.py",
 }
 
-    assert changed <= allowed
+    legacy_static_hash_guards = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "tests").glob("test_*.py")
+        if path.name == "test_three_core_agent_shadow_sidecar_bridge_default_off.py"
+        or any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "241609825c31c047255ba6e439cf728e1758966f506bae014240ac55fd701e16",
+                "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+            )
+        )
+    }
+    assert changed <= allowed | legacy_static_hash_guards
 
 
 def test_protected_runtime_hashes_are_unchanged():

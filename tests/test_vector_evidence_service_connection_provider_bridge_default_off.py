@@ -246,7 +246,7 @@ def test_service_provider_bridge_does_not_mutate_inputs_or_connect_on_import():
 def test_api_ui_pipeline_schema_and_dependencies_remain_unchanged():
     protected_hashes = {
         "src/app/api.py": (
-            "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf"
+            "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5"
         ),
         "src/app/static/agentic_review.js": (
             "17af3ca604e4a88a5f51bab37617888b1b4f66dc2f446b976cf211484f69cbe0"

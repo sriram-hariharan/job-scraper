@@ -8,7 +8,7 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 CSS_PATH = ROOT / "src/app/static/app_redesign.css"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf",
+    "src/app/api.py": "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
@@ -201,6 +201,9 @@ def test_phase19d_changes_only_approved_files():
         "src/agents/operator_decision_capture_readback_contract.py",
         "docs/phase19_operator_decision_capture_readback_contract.md",
         "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase19_operator_decision_capture_api_readback.md",
+        "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
         "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
         "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
@@ -225,11 +228,12 @@ def test_phase19d_changes_only_approved_files():
         for path in (ROOT / "tests").glob("test_*.py")
         if path.name == "test_three_core_agent_shadow_sidecar_bridge_default_off.py"
         or any(
-            marker in path.read_text(encoding="utf-8")
-            for marker in (
-                "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+                marker in path.read_text(encoding="utf-8")
+                for marker in (
+                    "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
+                    "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+                    "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
+                )
             )
-        )
     }
     assert changed <= allowed | legacy_static_hash_guards

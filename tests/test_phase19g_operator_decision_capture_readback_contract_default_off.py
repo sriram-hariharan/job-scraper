@@ -9,7 +9,7 @@ from src.agents import operator_decision_capture_readback_contract as contract
 ROOT = Path(__file__).resolve().parents[1]
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf",
+    "src/app/api.py": "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "17af3ca604e4a88a5f51bab37617888b1b4f66dc2f446b976cf211484f69cbe0",
     "src/app/static/app_redesign.css": "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
@@ -230,12 +230,20 @@ def test_phase19g_changes_only_approved_files():
         "src/agents/operator_decision_capture_readback_contract.py",
         "docs/phase19_operator_decision_capture_readback_contract.md",
         "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase19_operator_decision_capture_api_readback.md",
+        "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if "test_phase19f_approval_preview_operator_decision_preview_default_off.py"
-        in path.read_text(encoding="utf-8")
+        if any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "test_phase19f_approval_preview_operator_decision_preview_default_off.py",
+                "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
+            )
+        )
     }
 
     assert changed <= allowed | legacy_guards

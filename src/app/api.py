@@ -10,6 +10,7 @@ from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.agents.critic_evaluator import evaluate_agent_trace
+from src.agents import operator_decision_capture_readback_contract
 from src.agents import three_core_approval_preview_service_readback
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
@@ -4627,6 +4628,24 @@ def three_core_approval_preview_service_readback_api(
             ),
             readback_context=request_payload.get("readback_context"),
             readback_config=request_payload.get("readback_config"),
+        )
+    )
+
+
+@app.post("/api/operator-decision-capture-readback")
+def operator_decision_capture_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return (
+        operator_decision_capture_readback_contract
+        .build_operator_decision_capture_readback_payload(
+            enabled=request_payload.get("enabled", False),
+            selected_action=request_payload.get("selected_action", ""),
+            selected_resume=request_payload.get("selected_resume", ""),
+            selected_variant=request_payload.get("selected_variant", ""),
+            operator_note=request_payload.get("operator_note", ""),
+            config=request_payload.get("config"),
         )
     )
 

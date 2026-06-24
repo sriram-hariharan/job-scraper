@@ -82,7 +82,7 @@ RUNTIME_HASHES = {
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
     ),
     "src/app/static/agentic_review.js": (
-        "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7"
+        "17af3ca604e4a88a5f51bab37617888b1b4f66dc2f446b976cf211484f69cbe0"
     ),
 }
 

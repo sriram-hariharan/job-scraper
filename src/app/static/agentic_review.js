@@ -2032,6 +2032,109 @@ function renderThreeCoreApprovalPreviewServiceReadbackSection(
   `;
 }
 
+function shouldRenderThreeCoreApprovalPreviewOperatorDecisionPreview(
+  search = null,
+) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "three_core_approval_preview_operator_decision_preview_not_persisted",
+  ) === "1";
+}
+
+function buildThreeCoreApprovalPreviewOperatorDecisionPreviewFixture() {
+  return {
+    local_fixture_preview: true,
+    preview_status: "operator_decision_preview_ready",
+    selected_operator_action: "continue_human_review",
+    selected_resume: "primary_resume",
+    selected_variant: "baseline",
+    reason: "Review the supplied approval preview evidence.",
+    note: "Preview only; no operator decision is captured.",
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    decision_persisted: false,
+    approval_record_created: false,
+    audit_record_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "review_operator_decision_preview_only",
+  };
+}
+
+function withThreeCoreApprovalPreviewOperatorDecisionPreview(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.three_core_approval_preview_operator_decision_preview_result,
+    )
+    || !shouldRenderThreeCoreApprovalPreviewOperatorDecisionPreview(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    three_core_approval_preview_operator_decision_preview_result: (
+      buildThreeCoreApprovalPreviewOperatorDecisionPreviewFixture()
+    ),
+  };
+}
+
+function renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.three_core_approval_preview_operator_decision_preview_result,
+  )
+    ? tracePayload.three_core_approval_preview_operator_decision_preview_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const selectedResumeVariant = [
+    result.selected_resume,
+    result.selected_variant,
+  ].filter(Boolean).join(" / ");
+  const reasonNote = [result.reason, result.note].filter(Boolean).join(" — ");
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local decision preview"
+    : "Supplied decision preview";
+  return `
+    <article class="agent-trace-summary three-core-approval-preview-decision" aria-label="Three-core approval preview operator decision preview">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Approval Preview Operator Decision</h4>
+          <p>Passive operator-choice preview only. No decision, audit, approval, execution, submission, or application-state record is written.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Preview status", result.preview_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Selected operator action", result.selected_operator_action || "none")}
+        ${renderWorkflowSummaryMetric("Selected resume / variant", selectedResumeVariant || "none")}
+        ${renderWorkflowSummaryMetric("Reason / note", reasonNote || "none")}
+        ${renderWorkflowSummaryMetric("Read only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Decision persisted", result.decision_persisted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution authorized", result.execution_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission authorized", result.submission_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Operator decision preview", result, { helper: "Display-only preview. Nothing is persisted or authorized." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4976,6 +5079,11 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       canaryFixtureVisibleTracePayload,
     )
   );
+  const decisionPreviewVisibleTracePayload = (
+    withThreeCoreApprovalPreviewOperatorDecisionPreview(
+      fixtureVisibleTracePayload,
+    )
+  );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
@@ -5037,6 +5145,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderJdLiveProviderCanaryReadbackSection(tracePayload)}
       ${renderThreeCoreShadowOperatorCanaryReadbackSection(fixtureVisibleTracePayload)}
       ${renderThreeCoreApprovalPreviewServiceReadbackSection(fixtureVisibleTracePayload)}
+      ${renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(decisionPreviewVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}

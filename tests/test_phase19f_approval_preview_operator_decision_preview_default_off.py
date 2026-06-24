@@ -1,0 +1,187 @@
+from hashlib import sha256
+from pathlib import Path
+import subprocess
+
+
+ROOT = Path(__file__).resolve().parents[1]
+JS_PATH = ROOT / "src/app/static/agentic_review.js"
+
+PROTECTED_HASHES = {
+    "src/app/api.py": "8ab44f7e97113f6d28e9a8f7d032affef2e1f8f891286986d9e95d581ff97fbf",
+    "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
+    "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
+    "src/agents/three_core_approval_preview_service_readback.py": "aed9fc35ee7f0c72ddb46e5db87efde799e5bb5218be252db113e7ac7ab5c71c",
+}
+
+
+def _source() -> str:
+    return JS_PATH.read_text(encoding="utf-8")
+
+
+def _helpers() -> str:
+    source = _source()
+    start = source.index(
+        "function shouldRenderThreeCoreApprovalPreviewOperatorDecisionPreview"
+    )
+    end = source.index(
+        "\nfunction renderHumanReviewedInfluencePreviewSection",
+        start,
+    )
+    return source[start:end]
+
+
+def _renderer() -> str:
+    snippet = _helpers()
+    start = snippet.index(
+        "function renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection"
+    )
+    return snippet[start:]
+
+
+def test_renderer_and_query_gate_exist():
+    snippet = _helpers()
+
+    assert (
+        "renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection"
+        in snippet
+    )
+    assert (
+        "three_core_approval_preview_operator_decision_preview"
+        in snippet
+    )
+    assert "window.location.search" in snippet
+    assert "new URLSearchParams(query)" in snippet
+    assert '=== "1"' in snippet
+
+
+def test_default_off_requires_supplied_preview_or_query_gate():
+    snippet = _helpers()
+    renderer = _renderer()
+
+    assert (
+        "source.three_core_approval_preview_operator_decision_preview_result"
+        in snippet
+    )
+    assert (
+        "|| !shouldRenderThreeCoreApprovalPreviewOperatorDecisionPreview(search)"
+        in snippet
+    )
+    assert 'if (!Object.keys(result).length) return "";' in renderer
+
+
+def test_fixture_is_deterministic_and_read_only():
+    snippet = _helpers()
+
+    for marker in (
+        "buildThreeCoreApprovalPreviewOperatorDecisionPreviewFixture",
+        '"operator_decision_preview_ready"',
+        '"continue_human_review"',
+        '"primary_resume"',
+        '"baseline"',
+        "read_only: true",
+        "shadow_only: true",
+        "advisory_only: true",
+        "decision_persisted: false",
+        "execution_authorized: false",
+        "submission_authorized: false",
+    ):
+        assert marker in snippet
+
+
+def test_preview_does_not_overwrite_supplied_object():
+    snippet = _helpers()
+
+    assert (
+        "source.three_core_approval_preview_operator_decision_preview_result"
+        in snippet
+    )
+    assert "return source;" in snippet
+
+
+def test_renderer_shows_required_operator_preview_fields():
+    snippet = _renderer()
+
+    for marker in (
+        "Preview status",
+        "Selected operator action",
+        "Selected resume / variant",
+        "Reason / note",
+        "Read only",
+        "Shadow only",
+        "Advisory only",
+        "Decision persisted",
+        "Execution authorized",
+        "Submission authorized",
+        "Next safe step",
+    ):
+        assert marker in snippet
+
+
+def test_helpers_are_passive_with_no_controls_calls_or_persistence():
+    snippet = _helpers().lower()
+
+    for marker in (
+        "<button",
+        "<input",
+        "<form",
+        "fetch(",
+        "fetchjson(",
+        "/api/",
+        "createapproval",
+        "recordapproval",
+        "persistdecision",
+        "persistaudit",
+        "executeapplication",
+        "submitapplication",
+        "localstorage.setitem",
+        "sessionstorage.setitem",
+    ):
+        assert marker not in snippet
+
+
+def test_helpers_contain_no_mutation_controls_or_authority():
+    snippet = _helpers().lower()
+
+    for marker in (
+        "data-apply",
+        "data-submit",
+        "data-execute",
+        "data-approval",
+        "mutatequeue",
+        "updateranking",
+        "mutatescoring",
+        "mutateresume",
+    ):
+        assert marker not in snippet
+    assert "mutation_authorized: false" in snippet
+
+
+def test_backend_files_are_unchanged():
+    for relative_path, expected_hash in PROTECTED_HASHES.items():
+        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
+
+
+def test_phase19f_changes_only_approved_files():
+    tracked = subprocess.check_output(
+        ["git", "diff", "--name-only"], cwd=ROOT, text=True
+    ).splitlines()
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    changed = set(tracked + untracked)
+    allowed = {
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase19_approval_preview_operator_decision_preview.md",
+        "tests/test_phase19f_approval_preview_operator_decision_preview_default_off.py",
+    }
+    legacy_guards = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "tests").glob("test_*.py")
+        if "agentic_review.js" in path.read_text(encoding="utf-8")
+    }
+
+    assert changed <= allowed | legacy_guards

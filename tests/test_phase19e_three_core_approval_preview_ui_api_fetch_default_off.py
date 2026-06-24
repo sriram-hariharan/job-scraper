@@ -174,6 +174,8 @@ def test_phase19e_changes_only_approved_files():
         "src/app/static/app_redesign.css",
         "docs/phase19_approval_preview_ui_api_fetch.md",
         "tests/test_phase19e_three_core_approval_preview_ui_api_fetch_default_off.py",
+        "docs/phase19_approval_preview_operator_decision_preview.md",
+        "tests/test_phase19f_approval_preview_operator_decision_preview_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

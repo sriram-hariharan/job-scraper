@@ -76,7 +76,7 @@ RUNTIME_HASHES = {
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
     ),
     "src/app/static/agentic_review.js": (
-        "94e9f1c484f6459833141a37cddd7a0bb092fb185c7119b4909a5ed9d925ed6a"
+        "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7"
     ),
 }
 
@@ -342,6 +342,8 @@ def test_phase18g_changes_only_approved_docs_and_tests():
         "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
         "docs/phase19_approval_preview_ui_api_fetch.md",
         "tests/test_phase19e_three_core_approval_preview_ui_api_fetch_default_off.py",
+        "docs/phase19_approval_preview_operator_decision_preview.md",
+        "tests/test_phase19f_approval_preview_operator_decision_preview_default_off.py",
             "tests/test_jd_provider_runtime_review_packet_default_off.py",
         "tests/test_jd_provider_runtime_service_readback_default_off.py",
         "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",
@@ -411,7 +413,7 @@ def test_phase18g_changes_only_approved_docs_and_tests():
         or any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "94e9f1c484f6459833141a37cddd7a0bb092fb185c7119b4909a5ed9d925ed6a",
+                "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
                 "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
             )
         )

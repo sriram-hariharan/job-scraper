@@ -415,6 +415,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
     "docs/phase19_approval_preview_ui_api_fetch.md",
     "tests/test_phase19e_three_core_approval_preview_ui_api_fetch_default_off.py",
+    "docs/phase19_approval_preview_operator_decision_preview.md",
+    "tests/test_phase19f_approval_preview_operator_decision_preview_default_off.py",
 }
 
 def _changed_files():
@@ -446,7 +448,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         or any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "94e9f1c484f6459833141a37cddd7a0bb092fb185c7119b4909a5ed9d925ed6a",
+                "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
                 "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
             )
         )

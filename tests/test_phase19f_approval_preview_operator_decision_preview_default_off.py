@@ -177,6 +177,9 @@ def test_phase19f_changes_only_approved_files():
         "src/app/static/app_redesign.css",
         "docs/phase19_approval_preview_operator_decision_preview.md",
         "tests/test_phase19f_approval_preview_operator_decision_preview_default_off.py",
+        "src/agents/operator_decision_capture_readback_contract.py",
+        "docs/phase19_operator_decision_capture_readback_contract.md",
+        "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

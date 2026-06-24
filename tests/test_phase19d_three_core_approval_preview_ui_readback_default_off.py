@@ -206,6 +206,8 @@ def test_phase19d_changes_only_approved_files():
         "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
         "docs/phase19_operator_decision_capture_ui_readback.md",
         "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
+        "docs/phase19_readonly_approval_workflow_release_checkpoint.md",
+        "tests/test_phase19j_readonly_approval_workflow_release_checkpoint_default_off.py",
         "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
         "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",

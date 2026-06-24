@@ -399,6 +399,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase18_provider_readback_audit_contract_default_off.py",
     "docs/phase18_provider_call_boundary_readiness_contract.md",
     "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
+    "docs/phase18_mutation_boundary_readiness_contract.md",
+    "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
 }
 
 def _changed_files():

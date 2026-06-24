@@ -5,7 +5,7 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC = ROOT / "docs/phase18_provider_call_boundary_readiness_contract.md"
+DOC = ROOT / "docs/phase18_mutation_boundary_readiness_contract.md"
 
 ORDERED_AGENTS = [
     "relevance_prefilter",
@@ -13,23 +13,33 @@ ORDERED_AGENTS = [
     "final_application_scoring",
 ]
 
+MUTATION_CATEGORIES = [
+    "Final scoring mutation",
+    "Ranking mutation",
+    "Queue mutation",
+    "Resume mutation",
+    "Execution request creation",
+    "Application execution",
+    "Application submission",
+    "DB write/persistence",
+]
+
 BOUNDARY_STATUSES = [
     "not_available",
-    "boundary_not_configured",
-    "boundary_disabled",
-    "boundary_readiness_incomplete",
-    "boundary_ready_for_separate_call_phase",
-    "boundary_blocked",
-    "boundary_failed_closed",
+    "mutation_boundary_not_configured",
+    "mutation_boundary_disabled",
+    "mutation_readiness_incomplete",
+    "mutation_ready_for_separate_mutation_phase",
+    "mutation_blocked",
+    "mutation_failed_closed",
 ]
 
 BOUNDARY_FIELDS = [
-    "boundary_id",
-    "boundary_status",
-    "provider_name",
-    "provider_operation",
-    "model_or_endpoint_identifier",
+    "mutation_boundary_id",
+    "mutation_boundary_status",
+    "requested_mutation_category",
     "requested_capability",
+    "target_context_summary",
     "linked_preview_id",
     "linked_decision_id",
     "linked_activation_id",
@@ -38,24 +48,20 @@ BOUNDARY_FIELDS = [
     "linked_response_validation_id",
     "linked_readback_id",
     "linked_audit_id",
+    "linked_provider_call_boundary_id",
     "linked_trace_or_readback_id",
+    "advisory_score_summary",
+    "advisory_ranking_summary",
+    "advisory_queue_recommendation_summary",
+    "evidence_summary",
+    "safety_flag_summary",
     "required_feature_flags",
     "operator_or_reviewer_id",
-    "dry_run_packet_status",
-    "response_validation_status",
-    "readback_status",
-    "audit_status",
-    "secrets_reference_name_only",
-    "network_policy_summary",
-    "timeout_policy",
-    "retry_policy",
-    "rate_limit_policy",
-    "cost_limit_policy",
-    "output_schema_summary",
-    "safety_flag_summary",
+    "mutation_disabled_gate_status",
+    "submission_disabled_gate_status",
+    "rollback_or_disable_reference",
     "missing_requirements",
     "fail_closed_reason",
-    "rollback_or_disable_reference",
     "created_timestamp",
 ]
 
@@ -91,11 +97,11 @@ def _text() -> str:
     return DOC.read_text(encoding="utf-8")
 
 
-def test_call_boundary_contract_exists_and_names_preceding_tags():
+def test_mutation_boundary_contract_exists_and_names_preceding_tags():
     assert DOC.exists()
     text = _text()
 
-    assert "# Phase 18 Provider-Call Boundary Readiness Contract" in text
+    assert "# Phase 18 Mutation Boundary Readiness Contract" in text
     for tag in (
         "phase17-three-core-shadow-readiness-release-v1",
         "phase18a-live-readiness-approval-boundary-v1",
@@ -107,6 +113,7 @@ def test_call_boundary_contract_exists_and_names_preceding_tags():
         "phase18g-live-provider-dry-run-packet-contract-v1",
         "phase18h-provider-response-validation-contract-v1",
         "phase18i-provider-readback-audit-contract-v1",
+        "phase18j-provider-call-boundary-readiness-contract-v1",
     ):
         assert f"`{tag}`" in text
 
@@ -118,25 +125,41 @@ def test_three_core_agents_are_named_in_correct_order():
     assert positions == sorted(positions)
 
 
-def test_phase18j_is_docs_tests_only_and_implements_no_runtime_surface():
+def test_phase18k_is_docs_tests_only_and_implements_no_runtime_surface():
     text = _text()
 
-    assert "Phase 18J is docs/tests-only" in text
+    assert "Phase 18K is docs/tests-only" in text
     assert "authorizes no runtime behavior" in text
-    assert "does\nnot implement a provider-call boundary" in text
-    assert "does not call or activate a\nprovider" in text
-    assert "Phase 18J does not access secrets." in text
-    assert "Phase 18J does not create network\ntraffic." in text
+    assert "does\nnot implement a mutation boundary" in text
+    assert (
+        "does not mutate scoring, ranking,\nqueue, resume, application state, "
+        "execution requests, application executions,\nor submissions."
+        in text
+    )
+    assert "does not call or activate a provider" in text
+    assert "does\nnot access secrets" in text
+    assert "does not create network traffic" in text
     assert "adds no API" in text
     for term in ("default-off", "read-only", "shadow-only", "advisory-only"):
         assert term in text
 
 
+def test_separately_scoped_future_mutation_categories_are_complete():
+    text = _text()
+    section = text[
+        text.index("## Separately scoped future mutation categories"):
+        text.index("## Allowed future mutation boundary statuses")
+    ]
+
+    for category in MUTATION_CATEGORIES:
+        assert category in section
+
+
 def test_allowed_future_boundary_statuses_are_exact_and_ordered():
     text = _text()
     section = text[
-        text.index("## Allowed future provider-call boundary statuses"):
-        text.index("## Required future provider-call boundary fields")
+        text.index("## Allowed future mutation boundary statuses"):
+        text.index("## Required future mutation boundary fields")
     ]
     listed = re.findall(r"^\d+\. `([^`]+)`$", section, flags=re.MULTILINE)
 
@@ -150,30 +173,26 @@ def test_required_future_boundary_fields_are_listed():
         assert f"`{field}`" in text
 
 
-def test_readiness_prerequisites_are_complete():
+def test_mutation_readiness_prerequisites_are_complete():
     text = _text()
     section = text[
-        text.index("## Readiness prerequisites"):
+        text.index("## Mutation readiness prerequisites"):
         text.index("## Required future default-off gates")
     ]
 
     for prerequisite in (
         "Linked approval preview exists",
         "Linked operator decision exists",
-        "Linked activation plan exists",
-        "Linked adapter contract exists",
-        "Linked dry-run packet exists",
-        "Linked response validation contract exists",
         "Linked readback/audit contract exists",
+        "Linked provider-call boundary exists when provider evidence is used",
+        "Advisory evidence exists",
+        "Requested mutation category is single-scope",
+        "Operator/reviewer id exists",
         "Required feature flags are default-off and explicitly named",
-        "Secrets reference name only is available",
-        "Network policy is defined",
-        "Timeout policy is defined",
-        "Retry policy is defined",
-        "Rate limit policy is defined",
-        "Cost limit policy is defined",
-        "Rollback/disable reference is defined",
         "Mutation-disabled gate is present",
+        "Submission-disabled gate is present",
+        "Rollback/disable reference is defined",
+        "Tests prove no submit/apply path is reachable",
     ):
         assert prerequisite in section
 
@@ -182,65 +201,66 @@ def test_required_future_default_off_gates_are_listed():
     text = _text()
 
     for gate in (
-        "Global provider runtime flag",
-        "Provider-specific flag",
-        "Provider-call-boundary flag",
-        "Operation-specific flag",
+        "Global mutation runtime flag",
+        "Mutation-boundary flag",
+        "Requested-mutation-category flag",
         "Human decision required flag",
-        "Dry-run packet required flag",
-        "Response-validation required flag",
-        "Readback/audit required flag",
+        "Advisory-evidence required flag",
+        "Provider-evidence isolated flag",
         "Mutation-disabled flag",
         "Submission-disabled flag",
+        "Rollback-required flag",
     ):
         assert gate in text
 
 
-def test_boundary_safety_requirements_are_complete():
+def test_mutation_boundary_safety_requirements_are_complete():
     text = _text()
 
     for requirement in (
-        "Boundary readiness evaluation must be deterministic.",
-        "Boundary readiness evaluation must not call providers.",
-        "Boundary readiness evaluation must not read secret values.",
-        "Boundary readiness evaluation must not create network traffic.",
-        "Boundary readiness evaluation must not persist approvals, decisions, or",
-        "Boundary readiness evaluation must not mutate final score, rank, queue,",
-        "Boundary readiness evaluation must fail closed when any prerequisite is",
-        "Boundary readiness output must remain advisory and review-only.",
-        "Provider-call readiness must require a separate later provider-call phase.",
+        "Mutation readiness evaluation must be deterministic.",
+        "Mutation readiness evaluation must not call providers.",
+        "Mutation readiness evaluation must not read secret values.",
+        "Mutation readiness evaluation must not create network traffic.",
+        "Mutation readiness evaluation must not mutate final score, rank, queue,",
+        "Mutation readiness evaluation must fail closed when any prerequisite is",
+        "Mutation readiness output must remain advisory and review-only.",
+        "Provider-call readiness and mutation readiness must remain separate.",
+        "Each mutation category must require a separate later implementation phase.",
+        "Application submission must remain separately blocked.",
     ):
         assert requirement in text
 
 
-def test_failed_closed_boundary_conditions_are_complete():
+def test_failed_closed_mutation_boundary_conditions_are_complete():
     text = _text()
 
     for condition in (
-        "Missing provider name",
-        "Missing provider operation",
-        "Missing requested capability",
+        "Missing requested mutation category",
+        "Unknown requested mutation category",
+        "Mixed mutation categories",
+        "Missing target context summary",
         "Missing linked preview id",
         "Missing linked decision id",
-        "Missing linked activation id",
-        "Missing linked adapter id",
-        "Missing linked dry-run packet id",
-        "Missing linked response validation id",
         "Missing linked readback id",
         "Missing linked audit id",
+        "Missing provider-call boundary id when provider evidence is used",
         "Missing linked trace/readback id",
-        "Missing required feature flag",
+        "Missing advisory evidence",
         "Missing operator/reviewer id",
-        "Missing secrets reference name only",
-        "Missing network policy",
-        "Missing timeout policy",
-        "Missing retry policy",
-        "Missing rate limit policy",
-        "Missing cost limit policy",
+        "Missing required feature flag",
+        "Missing mutation-disabled gate",
+        "Missing submission-disabled gate",
+        "Missing rollback/disable reference",
         "Unsafe safety flags",
-        "Secret value detected",
         "Attempted provider call",
-        "Attempted mutation or submission",
+        "Attempted scoring mutation",
+        "Attempted ranking mutation",
+        "Attempted queue mutation",
+        "Attempted resume mutation",
+        "Attempted execution request creation",
+        "Attempted application execution",
+        "Attempted application submission",
     ):
         assert condition in text
 
@@ -249,20 +269,17 @@ def test_minimum_future_observability_is_complete():
     text = _text()
 
     for field in (
-        "Boundary status",
-        "Provider name",
-        "Provider operation",
+        "Mutation boundary status",
+        "Requested mutation category",
         "Requested capability",
+        "Target context summary",
         "Linked preview id",
         "Linked decision id",
-        "Linked activation id",
-        "Linked adapter id",
-        "Linked dry-run packet id",
-        "Linked response validation id",
         "Linked readback id",
         "Linked audit id",
+        "Linked provider-call boundary id",
         "Linked trace/readback id",
-        "Readiness prerequisite summary",
+        "Advisory evidence summary",
         "Safety flag summary",
         "Missing requirements",
         "Fail-closed reason",
@@ -274,7 +291,7 @@ def test_not_authorized_section_lists_every_forbidden_path():
     text = _text()
 
     for term in (
-        "No provider-call boundary implementation.",
+        "No mutation boundary implementation.",
         "No live provider execution.",
         "No provider SDK/network call.",
         "No secrets access.",
@@ -293,15 +310,15 @@ def test_not_authorized_section_lists_every_forbidden_path():
         assert term in text
 
 
-def test_recommended_next_phase_is_mutation_boundary_without_call_or_mutation():
+def test_recommended_next_phase_is_phase18_safety_wrap_before_phase19():
     assert (
-        "Phase 18K should be a docs/tests-only mutation boundary readiness "
-        "contract,\nstill no provider call and still no mutation."
+        "Phase 18L should be a Phase 18 safety wrap and release checkpoint "
+        "before Phase\n19 read-only runtime implementation."
         in _text()
     )
 
 
-def test_phase18j_changes_only_approved_docs_and_tests():
+def test_phase18k_changes_only_approved_docs_and_tests():
     tracked = subprocess.check_output(
         ["git", "diff", "--name-only"], cwd=ROOT, text=True
     ).splitlines()
@@ -312,8 +329,8 @@ def test_phase18j_changes_only_approved_docs_and_tests():
     ).splitlines()
     changed = set(tracked + untracked)
     allowed = {
-        "docs/phase18_provider_call_boundary_readiness_contract.md",
-        "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
+        "docs/phase18_mutation_boundary_readiness_contract.md",
+        "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
         "tests/test_three_core_shadow_readiness_wrap_default_off.py",
         "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
@@ -325,14 +342,13 @@ def test_phase18j_changes_only_approved_docs_and_tests():
         "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
         "tests/test_phase18_provider_response_validation_contract_default_off.py",
         "tests/test_phase18_provider_readback_audit_contract_default_off.py",
-        "docs/phase18_mutation_boundary_readiness_contract.md",
-        "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
+        "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
     }
 
     assert changed <= allowed
 
 
-def test_phase18j_key_runtime_files_are_unchanged():
+def test_phase18k_key_runtime_files_are_unchanged():
     for relative_path, expected_hash in RUNTIME_HASHES.items():
         path = ROOT / relative_path
 

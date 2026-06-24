@@ -403,6 +403,9 @@ ALLOWED_CHANGED = {
     "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
     "docs/phase18_safety_wrap_release_checkpoint.md",
     "tests/test_phase18_safety_wrap_release_checkpoint_default_off.py",
+    "src/agents/three_core_approval_preview_runtime.py",
+    "docs/phase19_approval_preview_runtime_readonly.md",
+    "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
 }
 
 def _changed_files():
@@ -496,6 +499,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/three_core_agent_shadow_callable_adapters.py",
         "src/agents/three_core_agent_shadow_runtime_readback.py",
         "src/agents/three_core_agent_shadow_operator_canary.py",
+        "src/agents/three_core_approval_preview_runtime.py",
         "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

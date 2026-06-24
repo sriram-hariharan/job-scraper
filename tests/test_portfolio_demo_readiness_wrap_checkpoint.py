@@ -391,6 +391,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase18_live_provider_activation_plan_default_off.py",
     "docs/phase18_provider_runtime_adapter_contract.md",
     "tests/test_phase18_provider_runtime_adapter_contract_default_off.py",
+    "docs/phase18_live_provider_dry_run_packet_contract.md",
+    "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
 }
 
 def _changed_files():

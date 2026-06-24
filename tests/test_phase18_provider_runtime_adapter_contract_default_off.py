@@ -318,6 +318,8 @@ def test_phase18f_changes_only_approved_docs_and_tests():
         "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
         "docs/phase18_provider_response_validation_contract.md",
         "tests/test_phase18_provider_response_validation_contract_default_off.py",
+        "docs/phase18_provider_readback_audit_contract.md",
+        "tests/test_phase18_provider_readback_audit_contract_default_off.py",
     }
 
     assert changed <= allowed

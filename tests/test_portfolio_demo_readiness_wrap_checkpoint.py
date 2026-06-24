@@ -422,6 +422,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
     "docs/phase19_operator_decision_capture_api_readback.md",
     "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
+    "docs/phase19_operator_decision_capture_ui_readback.md",
+    "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
 }
 
 def _changed_files():
@@ -455,6 +457,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
                 "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+                "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
             )
         )
     }

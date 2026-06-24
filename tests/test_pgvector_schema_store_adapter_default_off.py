@@ -318,7 +318,7 @@ def test_no_api_ui_pipeline_scoring_ranking_queue_or_dependency_change():
             "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5"
         ),
         "src/app/static/agentic_review.js": (
-            "17af3ca604e4a88a5f51bab37617888b1b4f66dc2f446b976cf211484f69cbe0"
+            "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

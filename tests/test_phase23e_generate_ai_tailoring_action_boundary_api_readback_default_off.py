@@ -5,10 +5,11 @@ import subprocess
 
 from fastapi.testclient import TestClient
 
-from src.agents.tailoring_agent_opportunity_contract import (
+from src.agents.generate_ai_tailoring_action_boundary_contract import (
+    STATUS_BLOCKED,
     STATUS_READY,
     STATUS_SKIPPED,
-    build_tailoring_agent_opportunity_contract,
+    build_generate_ai_tailoring_action_boundary_contract,
 )
 from src.app import api
 
@@ -16,18 +17,18 @@ from src.app import api
 ROOT = Path(__file__).resolve().parents[1]
 API_PATH = ROOT / "src/app/api.py"
 DOC_PATH = (
-    ROOT / "docs/phase23_tailoring_agent_opportunity_api_readback.md"
+    ROOT
+    / "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md"
 )
-ENDPOINT = "/api/tailoring-agent-opportunity-contract"
+ENDPOINT = "/api/generate-ai-tailoring-action-boundary"
 
 CALLER_FIELDS = (
     "enabled",
-    "core_agent_evidence_packet",
-    "job_evidence",
-    "resume_evidence",
-    "missing_requirements",
-    "matched_terms",
-    "tailoring_context",
+    "user_triggered",
+    "tailoring_agent_opportunity_payload",
+    "selected_opportunity_ids",
+    "generation_context",
+    "operator_context",
 )
 
 SAFETY_KEYS = (
@@ -36,8 +37,9 @@ SAFETY_KEYS = (
     "advisory_only",
     "manual_review_only",
     "manual_user_control_required",
-    "tailoring_agent_separate_from_final_scoring",
-    "generate_ai_tailoring_user_trigger_required",
+    "user_trigger_required",
+    "preview_only",
+    "manual_acceptance_required",
     "no_auto_apply",
     "no_auto_submit",
     "no_autonomous_application_execution",
@@ -51,6 +53,15 @@ SAFETY_KEYS = (
     "no_application_mutation",
     "no_execution",
     "no_submission",
+)
+
+PERMANENT_FALSE_KEYS = (
+    "ai_tailoring_generation_performed",
+    "tailoring_provider_call_performed",
+    "tailoring_runtime_call_performed",
+    "resume_rewrite_performed",
+    "resume_overwrite_performed",
+    "application_submission_performed",
 )
 
 FORBIDDEN_ROUTE_MARKERS = (
@@ -77,11 +88,11 @@ FORBIDDEN_ROUTE_MARKERS = (
 )
 
 REQUIRED_TAGS = (
+    "phase23d-generate-ai-tailoring-action-boundary-contract-v1",
+    "phase23c-tailoring-agent-opportunity-ui-readback-v1",
+    "phase23b-tailoring-agent-opportunity-api-readback-v1",
     "phase23a-tailoring-agent-opportunity-contract-v1",
     "phase22-core-agent-evidence-materialization-release-v1",
-    "phase22f-core-agent-evidence-materialization-release-checkpoint-v1",
-    "phase22e-core-agent-evidence-materialization-ui-readback-v1",
-    "phase22d-core-agent-evidence-materialization-api-readback-v1",
     "phase20d-no-auto-apply-safety-checkpoint-v1",
 )
 
@@ -89,6 +100,7 @@ PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
     "src/app/static/app_redesign.css": "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef",
+    "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
     "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
@@ -104,26 +116,25 @@ def _client(monkeypatch):
     return TestClient(api.app)
 
 
-def _enabled_payload():
+def _ready_payload():
     return {
         "enabled": True,
-        "core_agent_evidence_packet": {
-            "manual_review_evidence_packet": {
-                "missing_evidence_fields": ["project_evidence"],
-            },
+        "user_triggered": True,
+        "tailoring_agent_opportunity_payload": {
+            "contract_status": "ready_for_manual_review",
+            "tailoring_opportunities": [
+                {
+                    "opportunity_type": "missing_requirement",
+                    "signal": "kubernetes",
+                },
+            ],
         },
-        "job_evidence": {
-            "title": "Machine Learning Engineer",
-            "required_skills": ["python", "kubernetes"],
+        "selected_opportunity_ids": ["opportunity-1"],
+        "generation_context": {
+            "job_title": "Machine Learning Engineer",
         },
-        "resume_evidence": {
-            "resume_name": "ML Resume",
-            "skills": ["python"],
-        },
-        "missing_requirements": ["kubernetes", "model monitoring"],
-        "matched_terms": ["python", "machine learning"],
-        "tailoring_context": {
-            "focus_areas": ["production ML impact"],
+        "operator_context": {
+            "operator_note": "Preview supported evidence only.",
         },
     }
 
@@ -131,7 +142,7 @@ def _enabled_payload():
 def _route_snippet() -> str:
     source = API_PATH.read_text(encoding="utf-8")
     start = source.index(
-        '@app.post("/api/tailoring-agent-opportunity-contract")'
+        '@app.post("/api/generate-ai-tailoring-action-boundary")'
     )
     end = source.index(
         '\n\n@app.post("/api/provider-runtime-readback")',
@@ -174,47 +185,43 @@ def test_default_off_when_enabled_is_absent_false_or_not_exact_true(
         response = client.post(ENDPOINT, json=request_payload)
         assert response.status_code == 200
         payload = response.json()
-        assert payload["contract_status"] == STATUS_SKIPPED
-        assert payload[
-            "tailoring_agent_opportunity_contract_enabled"
-        ] is False
-        assert payload["ai_tailoring_generation_performed"] is False
+        assert payload["action_boundary_status"] == STATUS_SKIPPED
+        assert payload["action_allowed"] is False
         for key in SAFETY_KEYS:
             assert payload[key] is True
 
 
-def test_enabled_caller_json_returns_helper_payload_directly(monkeypatch):
-    request_payload = _enabled_payload()
-    expected = build_tailoring_agent_opportunity_contract(**request_payload)
+def test_enabled_without_exact_user_trigger_returns_blocked(monkeypatch):
+    client = _client(monkeypatch)
+
+    for user_triggered in (False, 1, "true"):
+        payload = client.post(
+            ENDPOINT,
+            json={"enabled": True, "user_triggered": user_triggered},
+        ).json()
+
+        assert payload["action_boundary_status"] == STATUS_BLOCKED
+        assert payload["action_allowed"] is False
+        assert "user trigger required" in payload["action_blocked_reason"]
+
+
+def test_enabled_and_user_triggered_returns_helper_payload_directly(
+    monkeypatch,
+):
+    request_payload = _ready_payload()
+    expected = build_generate_ai_tailoring_action_boundary_contract(
+        **request_payload
+    )
     response = _client(monkeypatch).post(ENDPOINT, json=request_payload)
 
     assert response.status_code == 200
     assert response.json() == expected
-    assert response.json()["contract_status"] == STATUS_READY
-
-
-def test_enabled_response_preserves_evidence_and_opportunity_records(
-    monkeypatch,
-):
-    request_payload = _enabled_payload()
-    payload = _client(monkeypatch).post(
-        ENDPOINT,
-        json=request_payload,
-    ).json()
-
-    assert payload["opportunity_inputs"] == {
-        key: request_payload[key] for key in CALLER_FIELDS if key != "enabled"
-    }
-    assert [item["signal"] for item in payload["tailoring_opportunities"]] == [
-        "kubernetes",
-        "model monitoring",
-        "project_evidence",
-        "production ML impact",
-    ]
+    assert response.json()["action_boundary_status"] == STATUS_READY
+    assert response.json()["action_allowed"] is True
 
 
 def test_api_does_not_mutate_caller_payload(monkeypatch):
-    request_payload = _enabled_payload()
+    request_payload = _ready_payload()
     before = deepcopy(request_payload)
 
     _client(monkeypatch).post(ENDPOINT, json=request_payload)
@@ -227,13 +234,14 @@ def test_route_imports_helper_and_passes_only_expected_fields():
     snippet = _route_snippet()
 
     assert (
-        "from src.agents.tailoring_agent_opportunity_contract import ("
-        in source
+        "from src.agents.generate_ai_tailoring_action_boundary_contract "
+        "import (" in source
     )
-    assert "build_tailoring_agent_opportunity_contract(" in snippet
+    assert "build_generate_ai_tailoring_action_boundary_contract(" in snippet
     for field_name in CALLER_FIELDS:
         assert f'"{field_name}"' in snippet
     assert 'request_payload.get("enabled", False)' in snippet
+    assert 'request_payload.get("user_triggered", False)' in snippet
     assert "os.getenv" not in snippet
     assert "os.environ" not in snippet
     assert "config" not in snippet
@@ -259,18 +267,16 @@ def test_route_contains_no_provider_network_db_io_or_runtime_calls():
         assert marker not in snippet.lower()
 
 
-def test_api_never_generates_ai_tailoring(monkeypatch):
-    payload = _client(monkeypatch).post(
-        ENDPOINT,
-        json=_enabled_payload(),
-    ).json()
+def test_api_never_generates_rewrites_overwrites_or_submits(monkeypatch):
+    for request_payload in ({}, {"enabled": True}, _ready_payload()):
+        payload = _client(monkeypatch).post(
+            ENDPOINT,
+            json=request_payload,
+        ).json()
 
-    assert payload["ai_tailoring_generation_performed"] is False
-    assert payload["future_user_triggered_action"] == "Generate AI Tailoring"
-    assert all(
-        item["generate_ai_tailoring_allowed_now"] is False
-        for item in payload["tailoring_opportunities"]
-    )
+        for key in PERMANENT_FALSE_KEYS:
+            assert payload[key] is False
+        assert payload["future_action_name"] == "Generate AI Tailoring"
 
 
 def test_docs_contain_required_boundaries_and_references():
@@ -279,15 +285,15 @@ def test_docs_contain_required_boundaries_and_references():
     lowered = " ".join(text.lower().split())
 
     assert text.startswith(
-        "# Phase 23B Tailoring-Agent Opportunity API Readback"
+        "# Phase 23E Generate AI Tailoring Action-Boundary API Readback"
     )
     for marker in (
-        "builds on phase 23a",
+        "builds on phase 23d",
         "default-off api readback only",
-        "/api/tailoring-agent-opportunity-contract",
+        "/api/generate-ai-tailoring-action-boundary",
         "post",
         "accepts caller json",
-        "returns the phase 23a helper payload directly",
+        "returns the phase 23d helper payload directly",
         "no ui changes",
         "no services changes",
         "no agent helper changes",
@@ -301,18 +307,22 @@ def test_docs_contain_required_boundaries_and_references():
         "no mutation",
         "no execution",
         "no submission",
+        "does not generate ai tailoring",
+        "does not call tailoring runtime",
+        "does not call providers",
+        "does not create resume rewrites",
+        "overwrite resumes",
+        "does not submit applications",
+        "user trigger is required",
+        "manual acceptance is required",
+        "preview/manual-review only unless the user accepts edits",
+        "no silent resume rewrite",
+        "no automatic resume overwrite",
         "no auto-apply",
         "no auto-submit",
         "no autonomous application execution",
         "no automatic job application submission",
         "manual user control remains required",
-        "separate from final scoring",
-        "only identifies tailoring opportunities",
-        "does not generate ai tailoring",
-        "generate ai tailoring",
-        "later user-triggered action",
-        "no silent resume rewrite",
-        "automatic resume overwrite",
     ):
         assert marker in lowered
     for tag in REQUIRED_TAGS:
@@ -326,19 +336,10 @@ def test_protected_runtime_files_are_unchanged():
         )
 
 
-def test_phase23b_changes_only_api_doc_test_and_legacy_guards():
+def test_phase23e_changes_only_api_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
         "src/app/api.py",
-        "docs/phase23_tailoring_agent_opportunity_api_readback.md",
-        "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
-        "src/app/static/agentic_review.js",
-        "src/app/static/app_redesign.css",
-        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
-        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
-        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
-        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
-        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
@@ -349,10 +350,6 @@ def test_phase23b_changes_only_api_doc_test_and_legacy_guards():
         if (
             "changes_only" in path.read_text(encoding="utf-8")
             or "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"
-            in path.read_text(encoding="utf-8")
-            or "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454"
-            in path.read_text(encoding="utf-8")
-            or "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef"
             in path.read_text(encoding="utf-8")
         )
     }

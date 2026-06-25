@@ -360,7 +360,7 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
-            "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede"
+            "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"
         ),
         "src/app/services.py": (
             "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"

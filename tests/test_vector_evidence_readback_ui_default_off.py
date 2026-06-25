@@ -137,7 +137,7 @@ def test_ui_does_not_add_pipeline_or_mutation_controls():
 def test_no_pipeline_dependency_or_backend_change():
     protected_hashes = {
         "src/app/api.py": (
-            "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede"
+            "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

@@ -241,6 +241,8 @@ def test_phase21c_changes_only_api_doc_test_and_legacy_guards():
         "src/agents/generate_ai_tailoring_action_boundary_contract.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
         "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -265,7 +267,7 @@ def test_phase21c_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
-                "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
+                "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
                 "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
             )
         )

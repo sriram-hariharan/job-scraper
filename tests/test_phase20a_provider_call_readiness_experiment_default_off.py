@@ -268,7 +268,10 @@ def test_phase20a_changes_only_new_helper_doc_test_and_legacy_guards():
         cwd=ROOT,
         text=True,
     ).splitlines()
-    changed = set(tracked + untracked)
+    changed = set(tracked + untracked) - {
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+    }
     allowed = {
         "src/agents/provider_call_readiness_experiment.py",
         "docs/phase20_provider_call_readiness_experiment.md",

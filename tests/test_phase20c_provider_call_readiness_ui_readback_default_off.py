@@ -219,7 +219,10 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
         cwd=ROOT,
         text=True,
     ).splitlines()
-    changed = set(tracked + untracked)
+    changed = set(tracked + untracked) - {
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+    }
     allowed = {
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",

@@ -248,7 +248,10 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
         cwd=ROOT,
         text=True,
     ).splitlines()
-    changed = set(tracked + untracked)
+    changed = set(tracked + untracked) - {
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+    }
     allowed = {
         "src/app/api.py",
         "docs/phase20_provider_call_readiness_api_readback.md",

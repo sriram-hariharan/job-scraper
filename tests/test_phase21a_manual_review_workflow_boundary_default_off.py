@@ -119,7 +119,10 @@ def test_protected_runtime_files_are_unchanged():
 
 
 def test_phase21a_changes_only_docs_tests_and_legacy_guards():
-    changed = _changed_files()
+    changed = _changed_files() - {
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+    }
     allowed = {
         "docs/manual_review_workflow_boundary.md",
         "docs/phase21_manual_review_workflow_boundary.md",

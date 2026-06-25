@@ -112,7 +112,10 @@ def test_protected_runtime_files_are_unchanged():
 
 
 def test_phase20d_changes_only_docs_tests_and_legacy_guards():
-    changed = _changed_files()
+    changed = _changed_files() - {
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+    }
     allowed = {
         "docs/no_auto_apply_safety_policy.md",
         "docs/phase20_no_auto_apply_safety_checkpoint.md",

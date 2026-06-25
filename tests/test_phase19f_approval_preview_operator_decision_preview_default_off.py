@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
+    "src/app/api.py": "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
@@ -196,6 +196,8 @@ def test_phase19f_changes_only_approved_files():
         "src/agents/generate_ai_tailoring_action_boundary_contract.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
         "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -253,7 +255,7 @@ def test_phase19f_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "agentic_review.js",
-                "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
+                "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
             )
         )
     }

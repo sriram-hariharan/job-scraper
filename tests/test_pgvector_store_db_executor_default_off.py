@@ -325,7 +325,7 @@ def test_store_executor_source_has_no_driver_provider_or_automatic_connection():
 def test_no_api_ui_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede"
+            "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"
         ),
         "src/app/static/agentic_review.js": (
             "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454"

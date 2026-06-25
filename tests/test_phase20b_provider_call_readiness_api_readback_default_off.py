@@ -273,6 +273,8 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
         "src/agents/generate_ai_tailoring_action_boundary_contract.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
         "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

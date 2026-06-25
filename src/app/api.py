@@ -13,6 +13,9 @@ from src.agents.critic_evaluator import evaluate_agent_trace
 from src.agents.core_agent_evidence_materialization_preview import (
     build_core_agent_evidence_materialization_preview,
 )
+from src.agents.generate_ai_tailoring_action_boundary_contract import (
+    build_generate_ai_tailoring_action_boundary_contract,
+)
 from src.agents.tailoring_agent_opportunity_contract import (
     build_tailoring_agent_opportunity_contract,
 )
@@ -4732,6 +4735,25 @@ def tailoring_agent_opportunity_contract_api(
         missing_requirements=request_payload.get("missing_requirements"),
         matched_terms=request_payload.get("matched_terms"),
         tailoring_context=request_payload.get("tailoring_context"),
+    )
+
+
+@app.post("/api/generate-ai-tailoring-action-boundary")
+def generate_ai_tailoring_action_boundary_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return build_generate_ai_tailoring_action_boundary_contract(
+        enabled=request_payload.get("enabled", False),
+        user_triggered=request_payload.get("user_triggered", False),
+        tailoring_agent_opportunity_payload=request_payload.get(
+            "tailoring_agent_opportunity_payload"
+        ),
+        selected_opportunity_ids=request_payload.get(
+            "selected_opportunity_ids"
+        ),
+        generation_context=request_payload.get("generation_context"),
+        operator_context=request_payload.get("operator_context"),
     )
 
 

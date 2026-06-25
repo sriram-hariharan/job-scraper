@@ -341,6 +341,8 @@ def test_phase19a_changes_only_approved_files():
         "src/app/static/agentic_review.js",
         "docs/phase21_manual_review_readiness_ui_readback.md",
         "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
+        "docs/phase21_manual_review_workflow_release_checkpoint.md",
+        "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
         "tests/test_three_core_shadow_readiness_wrap_default_off.py",
         "tests/test_phase18_live_readiness_approval_boundary_default_off.py",

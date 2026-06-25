@@ -254,6 +254,8 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "docs/no_auto_apply_safety_policy.md",
         "docs/phase20_no_auto_apply_safety_checkpoint.md",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "docs/phase20_provider_readiness_release_checkpoint.md",
+        "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
             "tests/test_jd_provider_runtime_review_packet_default_off.py",
         "tests/test_jd_provider_runtime_service_readback_default_off.py",
         "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",

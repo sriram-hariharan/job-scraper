@@ -258,6 +258,8 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
         "docs/no_auto_apply_safety_policy.md",
         "docs/phase20_no_auto_apply_safety_checkpoint.md",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "docs/phase20_provider_readiness_release_checkpoint.md",
+        "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
     }

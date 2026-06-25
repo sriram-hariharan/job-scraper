@@ -374,6 +374,8 @@ def test_phase19b_changes_only_approved_files():
         "docs/no_auto_apply_safety_policy.md",
         "docs/phase20_no_auto_apply_safety_checkpoint.md",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "docs/phase20_provider_readiness_release_checkpoint.md",
+        "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
         "docs/phase19_approval_preview_service_readback.md",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",

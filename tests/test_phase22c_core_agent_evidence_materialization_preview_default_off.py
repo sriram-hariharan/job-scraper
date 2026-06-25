@@ -1,0 +1,307 @@
+from copy import deepcopy
+from hashlib import sha256
+from pathlib import Path
+import subprocess
+
+from src.agents import core_agent_evidence_materialization_preview as preview
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HELPER_PATH = (
+    ROOT / "src/agents/core_agent_evidence_materialization_preview.py"
+)
+DOC_PATH = (
+    ROOT / "docs/phase22_core_agent_evidence_materialization_preview.md"
+)
+
+CORE_AGENT_SEQUENCE = [
+    "relevance_prefilter",
+    "jd_intelligence",
+    "final_application_scoring",
+]
+
+SAFETY_KEYS = (
+    "no_auto_apply",
+    "no_auto_submit",
+    "no_autonomous_application_execution",
+    "no_automatic_job_application_submission",
+    "manual_user_control_required",
+    "no_provider_calls",
+    "no_network_calls",
+    "no_database_writes",
+    "no_persistence",
+    "no_mutation",
+    "no_execution",
+    "no_submission",
+)
+
+FORBIDDEN_SOURCE_MARKERS = (
+    "run_chat_completion",
+    "run_chat_completion_with_metadata",
+    "requests.",
+    "httpx",
+    "urllib",
+    "subprocess",
+    "open(",
+    "read_text",
+    "write_text",
+    "DATABASE_URL",
+    "cache_get_json",
+    "cache_set_json",
+    "score_resume_job_match(",
+    "run_prefilter(",
+    "_run_live_llm_tailoring",
+)
+
+DOC_MARKERS = (
+    "default-off",
+    "read-only",
+    "advisory-only",
+    "manual-review only",
+    "read-only/advisory/manual-review evidence",
+    "no provider calls",
+    "no network calls",
+    "no database writes",
+    "no persistence",
+    "no mutation",
+    "no scoring mutation",
+    "no ranking mutation",
+    "no queue mutation",
+    "no resume mutation",
+    "no application mutation",
+    "no approval mutation",
+    "no decision mutation",
+    "no audit mutation",
+    "no execution",
+    "no submission",
+    "no auto-apply",
+    "no auto-submit",
+    "no autonomous application execution",
+    "no automatic job application submission",
+    "manual user control",
+)
+
+REQUIRED_TAGS = (
+    "phase22b-core-agent-automation-mutation-inventory-v1",
+    "phase22a-manual-review-ux-hardening-v1",
+    "phase21-manual-review-workflow-release-v1",
+    "phase20-provider-readiness-release-v1",
+    "phase20d-no-auto-apply-safety-checkpoint-v1",
+    "phase19-readonly-approval-workflow-release-v1",
+    "phase18-safety-wrap-release-v1",
+    "phase17-three-core-shadow-readiness-release-v1",
+)
+
+PROTECTED_HASHES = {
+    "src/app/api.py": "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
+    "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/app/static/agentic_review.js": "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
+    "src/app/static/app_redesign.css": "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
+    "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
+    "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
+    "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
+    "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
+    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
+}
+
+
+def _inputs():
+    return {
+        "relevance_prefilter_result": {
+            "passed": True,
+            "matched_terms": ["python", "machine learning"],
+        },
+        "jd_intelligence_signals": {
+            "required_skills": ["python", "sql"],
+            "missing_requirements": ["kubernetes"],
+        },
+        "final_application_scoring_result": {
+            "final_score": 0.82,
+            "match_bucket": "strong",
+            "review_rationale": "Strong fit with one reviewable gap.",
+        },
+        "tailoring_opportunity_signals": {
+            "tailoring_opportunity_summary": [
+                "Emphasize production ML evidence."
+            ],
+        },
+        "manual_review_context": {
+            "action": "MAYBE_TAILOR",
+            "company": "Example Corp",
+        },
+    }
+
+
+def _changed_files() -> set[str]:
+    tracked = subprocess.check_output(
+        ["git", "diff", "--name-only"], cwd=ROOT, text=True
+    ).splitlines()
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    return set(tracked + untracked)
+
+
+def test_helper_module_and_public_function_exist():
+    assert HELPER_PATH.exists()
+    assert callable(
+        preview.build_core_agent_evidence_materialization_preview
+    )
+
+
+def test_default_off_returns_skipped_read_only_payload():
+    payload = preview.build_core_agent_evidence_materialization_preview()
+
+    assert payload["preview_status"] == preview.STATUS_SKIPPED
+    assert payload["core_agent_evidence_materialization_enabled"] is False
+    assert payload["default_off"] is True
+    assert payload["read_only"] is True
+    assert payload["advisory_only"] is True
+    assert payload["manual_review_only"] is True
+    for key in SAFETY_KEYS:
+        assert payload[key] is True
+
+
+def test_enabled_materializes_all_caller_supplied_evidence():
+    inputs = _inputs()
+    payload = preview.build_core_agent_evidence_materialization_preview(
+        enabled=True,
+        **inputs,
+    )
+
+    assert payload["preview_status"] == preview.STATUS_READY
+    assert payload["relevance_prefilter_evidence"] == (
+        inputs["relevance_prefilter_result"]
+    )
+    assert payload["jd_intelligence_evidence"] == (
+        inputs["jd_intelligence_signals"]
+    )
+    assert payload["final_application_scoring_evidence"] == (
+        inputs["final_application_scoring_result"]
+    )
+    assert payload["tailoring_opportunity_evidence"] == (
+        inputs["tailoring_opportunity_signals"]
+    )
+    packet = payload["manual_review_evidence_packet"]
+    assert packet["suggested_manual_review_status"] == (
+        "ready_for_manual_review"
+    )
+    assert packet["why_job_is_worth_reviewing"] == (
+        "Strong fit with one reviewable gap."
+    )
+    assert packet["missing_evidence_fields"] == []
+
+
+def test_inputs_are_deep_copied_and_never_mutated():
+    inputs = _inputs()
+    before = deepcopy(inputs)
+    payload = preview.build_core_agent_evidence_materialization_preview(
+        enabled=True,
+        **inputs,
+    )
+
+    assert inputs == before
+    assert payload["relevance_prefilter_evidence"] is not (
+        inputs["relevance_prefilter_result"]
+    )
+    assert payload["manual_review_evidence_packet"][
+        "manual_review_context"
+    ] is not inputs["manual_review_context"]
+
+    inputs["relevance_prefilter_result"]["matched_terms"].append("changed")
+    assert "changed" not in payload["relevance_prefilter_evidence"][
+        "matched_terms"
+    ]
+
+
+def test_agent_sequence_and_tailoring_boundary_are_exact():
+    payload = preview.build_core_agent_evidence_materialization_preview(
+        enabled=True,
+        **_inputs(),
+    )
+
+    assert payload["core_agent_sequence"] == CORE_AGENT_SEQUENCE
+    assert payload["agent_boundaries"]["tailoring_agent"] == (
+        "tailoring agent remains separate from final scoring"
+    )
+    packet = payload["manual_review_evidence_packet"]
+    assert packet["future_user_triggered_action"] == (
+        "Generate AI Tailoring"
+    )
+    assert packet["ai_tailoring_generation_performed"] is False
+    assert "preview/manual-review only" in packet[
+        "tailoring_suggestions_boundary"
+    ]
+    assert "unless the user accepts edits" in packet[
+        "tailoring_suggestions_boundary"
+    ]
+
+
+def test_partial_payload_reports_missing_evidence_deterministically():
+    payload = preview.build_core_agent_evidence_materialization_preview(
+        enabled=True,
+        relevance_prefilter_result={"passed": True},
+    )
+
+    packet = payload["manual_review_evidence_packet"]
+    assert payload["preview_status"] == preview.STATUS_PARTIAL
+    assert packet["relevance_evidence_supplied"] is True
+    assert packet["missing_evidence_fields"] == [
+        "jd_intelligence_signals",
+        "final_application_scoring_result",
+        "tailoring_opportunity_signals",
+        "manual_review_context",
+    ]
+
+
+def test_source_has_no_provider_network_io_or_runtime_calls():
+    source = HELPER_PATH.read_text(encoding="utf-8")
+
+    for marker in FORBIDDEN_SOURCE_MARKERS:
+        assert marker not in source
+
+
+def test_doc_contains_required_title_markers_boundaries_and_references():
+    assert DOC_PATH.exists()
+    text = DOC_PATH.read_text(encoding="utf-8")
+    assert text.startswith(
+        "# Phase 22C Core-Agent Evidence Materialization Preview"
+    )
+    assert "Phase 22B" in text
+    assert "caller-supplied dictionaries" in text
+    assert "does not call scoring, prefilter, or tailoring runtime" in text
+    for agent_name in CORE_AGENT_SEQUENCE:
+        assert agent_name in text
+    assert "tailoring agent remains separate from final scoring" in text
+    assert "Generate AI Tailoring" in text
+    lowered = text.lower()
+    for marker in DOC_MARKERS:
+        assert marker in lowered
+    for tag in REQUIRED_TAGS:
+        assert tag in text
+
+
+def test_protected_runtime_files_are_unchanged():
+    for relative_path, expected_hash in PROTECTED_HASHES.items():
+        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
+            expected_hash
+        )
+
+
+def test_phase22c_changes_only_helper_doc_test_and_legacy_guards():
+    changed = _changed_files()
+    allowed = {
+        "src/agents/core_agent_evidence_materialization_preview.py",
+        "docs/phase22_core_agent_evidence_materialization_preview.md",
+        "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+    }
+    legacy_guards = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "tests").glob("test_*.py")
+        if "changes_only" in path.read_text(encoding="utf-8")
+    }
+
+    assert changed <= allowed | legacy_guards

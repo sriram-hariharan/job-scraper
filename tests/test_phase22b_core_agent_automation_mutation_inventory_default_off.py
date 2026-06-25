@@ -190,6 +190,8 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "docs/phase22_core_agent_automation_mutation_inventory.md",
         "tests/test_phase22b_core_agent_automation_mutation_inventory_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+        "src/agents/core_agent_evidence_materialization_preview.py",
+        "docs/phase22_core_agent_evidence_materialization_preview.md",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

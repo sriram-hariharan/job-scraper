@@ -445,6 +445,8 @@ ALLOWED_CHANGED = {
     "src/agents/manual_review_readiness_contract.py",
     "docs/phase21_manual_review_readiness_contract.md",
     "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
+    "docs/phase21_manual_review_readiness_api_readback.md",
+    "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
 }
 
 def _changed_files():

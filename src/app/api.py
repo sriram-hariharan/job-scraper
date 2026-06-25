@@ -10,6 +10,7 @@ from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.agents.critic_evaluator import evaluate_agent_trace
+from src.agents import manual_review_readiness_contract
 from src.agents import operator_decision_capture_readback_contract
 from src.agents import provider_call_readiness_experiment
 from src.agents import three_core_approval_preview_service_readback
@@ -4671,6 +4672,17 @@ def provider_call_readiness_readback_api(
             ),
             config=request_payload.get("config"),
         )
+    )
+
+
+@app.post("/api/manual-review-readiness-readback")
+def manual_review_readiness_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return manual_review_readiness_contract.build_manual_review_readiness_payload(
+        enabled=request_payload.get("enabled", False),
+        review_inputs_summary=request_payload.get("review_inputs_summary"),
     )
 
 

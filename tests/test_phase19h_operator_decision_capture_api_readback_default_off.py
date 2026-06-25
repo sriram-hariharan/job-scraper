@@ -221,6 +221,9 @@ def test_phase19h_changes_only_approved_files():
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "docs/phase20_provider_readiness_release_checkpoint.md",
         "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
+        "docs/manual_review_workflow_boundary.md",
+        "docs/phase21_manual_review_workflow_boundary.md",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
     }

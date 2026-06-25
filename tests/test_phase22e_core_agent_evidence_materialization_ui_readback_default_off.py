@@ -282,6 +282,9 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
         "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
+        "src/agents/tailoring_agent_opportunity_contract.py",
+        "docs/phase23_tailoring_agent_opportunity_contract.md",
+        "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

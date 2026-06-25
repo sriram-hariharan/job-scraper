@@ -186,6 +186,9 @@ def test_phase19f_changes_only_approved_files():
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
         "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
+        "src/agents/tailoring_agent_opportunity_contract.py",
+        "docs/phase23_tailoring_agent_opportunity_contract.md",
+        "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

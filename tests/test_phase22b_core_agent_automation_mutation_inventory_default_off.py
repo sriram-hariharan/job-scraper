@@ -199,6 +199,9 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
+        "src/agents/tailoring_agent_opportunity_contract.py",
+        "docs/phase23_tailoring_agent_opportunity_contract.md",
+        "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

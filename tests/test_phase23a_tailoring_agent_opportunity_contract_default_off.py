@@ -1,0 +1,315 @@
+from copy import deepcopy
+from hashlib import sha256
+from pathlib import Path
+import subprocess
+
+from src.agents import tailoring_agent_opportunity_contract as contract
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HELPER_PATH = ROOT / "src/agents/tailoring_agent_opportunity_contract.py"
+DOC_PATH = ROOT / "docs/phase23_tailoring_agent_opportunity_contract.md"
+
+SAFETY_KEYS = (
+    "no_auto_apply",
+    "no_auto_submit",
+    "no_autonomous_application_execution",
+    "no_automatic_job_application_submission",
+    "manual_user_control_required",
+    "no_provider_calls",
+    "no_network_calls",
+    "no_database_writes",
+    "no_persistence",
+    "no_mutation",
+    "no_resume_mutation",
+    "no_application_mutation",
+    "no_execution",
+    "no_submission",
+)
+
+FORBIDDEN_SOURCE_MARKERS = (
+    "run_chat_completion",
+    "run_chat_completion_with_metadata",
+    "requests.",
+    "httpx",
+    "urllib",
+    "subprocess",
+    "open(",
+    "read_text",
+    "write_text",
+    "DATABASE_URL",
+    "cache_get_json",
+    "cache_set_json",
+    "score_resume_job_match(",
+    "run_prefilter(",
+    "_run_live_llm_tailoring",
+    "generate_tailoring_suggestions",
+)
+
+REQUIRED_TAGS = (
+    "phase22-core-agent-evidence-materialization-release-v1",
+    "phase22f-core-agent-evidence-materialization-release-checkpoint-v1",
+    "phase22e-core-agent-evidence-materialization-ui-readback-v1",
+    "phase22d-core-agent-evidence-materialization-api-readback-v1",
+    "phase22c-core-agent-evidence-materialization-preview-v1",
+    "phase22b-core-agent-automation-mutation-inventory-v1",
+    "phase20d-no-auto-apply-safety-checkpoint-v1",
+)
+
+PROTECTED_HASHES = {
+    "src/app/api.py": "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
+    "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/app/static/agentic_review.js": "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+    "src/app/static/app_redesign.css": "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+    "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
+    "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
+    "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
+    "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
+    "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
+    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
+}
+
+
+def _inputs():
+    return {
+        "core_agent_evidence_packet": {
+            "manual_review_evidence_packet": {
+                "missing_evidence_fields": ["project_evidence"],
+            },
+        },
+        "job_evidence": {
+            "title": "Machine Learning Engineer",
+            "required_skills": ["python", "kubernetes"],
+        },
+        "resume_evidence": {
+            "resume_name": "ML Resume",
+            "skills": ["python"],
+        },
+        "missing_requirements": ["kubernetes", "model monitoring"],
+        "matched_terms": ["python", "machine learning"],
+        "tailoring_context": {
+            "focus_areas": ["production ML impact"],
+        },
+    }
+
+
+def _changed_files() -> set[str]:
+    tracked = subprocess.check_output(
+        ["git", "diff", "--name-only"], cwd=ROOT, text=True
+    ).splitlines()
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    return set(tracked + untracked)
+
+
+def test_helper_module_and_public_function_exist():
+    assert HELPER_PATH.exists()
+    assert callable(contract.build_tailoring_agent_opportunity_contract)
+
+
+def test_default_off_returns_skipped_read_only_payload():
+    payload = contract.build_tailoring_agent_opportunity_contract()
+
+    assert payload["contract_status"] == contract.STATUS_SKIPPED
+    assert payload["tailoring_agent_opportunity_contract_enabled"] is False
+    assert payload["default_off"] is True
+    assert payload["read_only"] is True
+    assert payload["advisory_only"] is True
+    assert payload["manual_review_only"] is True
+    for key in SAFETY_KEYS:
+        assert payload[key] is True
+
+
+def test_enabled_mode_accepts_and_materializes_all_caller_inputs():
+    inputs = _inputs()
+    payload = contract.build_tailoring_agent_opportunity_contract(
+        enabled=True,
+        **inputs,
+    )
+
+    assert payload["contract_status"] == contract.STATUS_READY
+    assert payload["opportunity_inputs"] == inputs
+    assert payload["supplied_input_fields"] == list(inputs)
+
+
+def test_enabled_mode_returns_deterministic_opportunity_records():
+    first = contract.build_tailoring_agent_opportunity_contract(
+        enabled=True,
+        **_inputs(),
+    )
+    second = contract.build_tailoring_agent_opportunity_contract(
+        enabled=True,
+        **_inputs(),
+    )
+
+    assert first == second
+    assert first["tailoring_opportunities"] == [
+        {
+            "opportunity_type": "missing_requirement",
+            "source": "missing_requirements",
+            "signal": "kubernetes",
+            "manual_review_required": True,
+            "generate_ai_tailoring_allowed_now": False,
+            "suggested_next_step": (
+                "review_existing_resume_evidence_for_supported_alignment"
+            ),
+        },
+        {
+            "opportunity_type": "missing_requirement",
+            "source": "missing_requirements",
+            "signal": "model monitoring",
+            "manual_review_required": True,
+            "generate_ai_tailoring_allowed_now": False,
+            "suggested_next_step": (
+                "review_existing_resume_evidence_for_supported_alignment"
+            ),
+        },
+        {
+            "opportunity_type": "evidence_packet_gap",
+            "source": "core_agent_evidence_packet",
+            "signal": "project_evidence",
+            "manual_review_required": True,
+            "generate_ai_tailoring_allowed_now": False,
+            "suggested_next_step": (
+                "review_missing_evidence_before_tailoring"
+            ),
+        },
+        {
+            "opportunity_type": "caller_supplied_tailoring_context",
+            "source": "tailoring_context",
+            "signal": "production ML impact",
+            "manual_review_required": True,
+            "generate_ai_tailoring_allowed_now": False,
+            "suggested_next_step": (
+                "review_tailoring_opportunity_under_manual_control"
+            ),
+        },
+    ]
+
+
+def test_inputs_are_deep_copied_and_not_mutated():
+    inputs = _inputs()
+    before = deepcopy(inputs)
+    payload = contract.build_tailoring_agent_opportunity_contract(
+        enabled=True,
+        **inputs,
+    )
+
+    assert inputs == before
+    for field_name, value in inputs.items():
+        assert payload["opportunity_inputs"][field_name] is not value
+
+    inputs["missing_requirements"].append("changed")
+    assert "changed" not in payload["opportunity_inputs"][
+        "missing_requirements"
+    ]
+
+
+def test_no_inputs_returns_enabled_missing_evidence_payload():
+    payload = contract.build_tailoring_agent_opportunity_contract(
+        enabled=True
+    )
+
+    assert payload["contract_status"] == contract.STATUS_MISSING_EVIDENCE
+    assert payload["tailoring_opportunities"] == []
+    assert "No caller-supplied evidence" in payload[
+        "tailoring_opportunity_summary"
+    ]
+
+
+def test_ai_tailoring_is_future_user_triggered_only():
+    payload = contract.build_tailoring_agent_opportunity_contract(
+        enabled=True,
+        **_inputs(),
+    )
+
+    assert payload["future_user_triggered_action"] == (
+        "Generate AI Tailoring"
+    )
+    assert payload["generate_ai_tailoring_user_trigger_required"] is True
+    assert payload["ai_tailoring_generation_performed"] is False
+    assert all(
+        item["generate_ai_tailoring_allowed_now"] is False
+        for item in payload["tailoring_opportunities"]
+    )
+
+
+def test_payload_contains_all_required_safety_markers():
+    payload = contract.build_tailoring_agent_opportunity_contract(
+        enabled=True,
+        **_inputs(),
+    )
+
+    assert payload["tailoring_agent_separate_from_final_scoring"] is True
+    for key in SAFETY_KEYS:
+        assert payload[key] is True
+
+
+def test_source_has_no_provider_network_io_or_runtime_calls():
+    source = HELPER_PATH.read_text(encoding="utf-8")
+
+    for marker in FORBIDDEN_SOURCE_MARKERS:
+        assert marker not in source
+
+
+def test_docs_contain_required_boundaries_and_references():
+    assert DOC_PATH.exists()
+    text = " ".join(DOC_PATH.read_text(encoding="utf-8").lower().split())
+
+    for marker in (
+        "phase 23a tailoring-agent opportunity contract",
+        "phase 22 core-agent evidence materialization release",
+        "tailoring agent is separate from final scoring",
+        "only identifies tailoring opportunities",
+        "does not generate ai tailoring",
+        "generate ai tailoring",
+        "must be user-triggered",
+        "preview/manual-review only unless the user accepts edits",
+        "no silent resume rewrite",
+        "no automatic resume overwrite",
+        "no resume mutation",
+        "no application submission",
+        "no provider calls",
+        "no network calls",
+        "no database writes",
+        "no persistence",
+        "no mutation",
+        "no execution",
+        "no submission",
+        "no auto-apply",
+        "no auto-submit",
+        "no autonomous application execution",
+        "no automatic job application submission",
+        "manual user control remains required",
+    ):
+        assert marker in text
+    raw_text = DOC_PATH.read_text(encoding="utf-8")
+    for tag in REQUIRED_TAGS:
+        assert tag in raw_text
+
+
+def test_protected_runtime_files_are_unchanged():
+    for relative_path, expected_hash in PROTECTED_HASHES.items():
+        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
+            expected_hash
+        )
+
+
+def test_phase23a_changes_only_helper_doc_test_and_legacy_guards():
+    changed = _changed_files()
+    allowed = {
+        "src/agents/tailoring_agent_opportunity_contract.py",
+        "docs/phase23_tailoring_agent_opportunity_contract.md",
+        "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+    }
+    legacy_guards = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "tests").glob("test_*.py")
+        if "changes_only" in path.read_text(encoding="utf-8")
+    }
+
+    assert changed <= allowed | legacy_guards

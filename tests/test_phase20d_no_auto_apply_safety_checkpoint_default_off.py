@@ -122,6 +122,9 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "docs/manual_review_workflow_boundary.md",
         "docs/phase21_manual_review_workflow_boundary.md",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "src/agents/manual_review_readiness_contract.py",
+        "docs/phase21_manual_review_readiness_contract.md",
+        "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -144,7 +147,9 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         and Path(relative_path).suffix in runtime_suffixes
     ]
 
-    assert changed_runtime_files == []
+    assert changed_runtime_files == [
+        ROOT / "src/agents/manual_review_readiness_contract.py"
+    ]
     for path in changed_runtime_files:
         source = path.read_text(encoding="utf-8")
         for marker in FORBIDDEN_RUNTIME_MARKERS:

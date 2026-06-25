@@ -442,6 +442,9 @@ ALLOWED_CHANGED = {
     "docs/manual_review_workflow_boundary.md",
     "docs/phase21_manual_review_workflow_boundary.md",
     "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "src/agents/manual_review_readiness_contract.py",
+    "docs/phase21_manual_review_readiness_contract.md",
+    "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
 }
 
 def _changed_files():
@@ -557,6 +560,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             "src/agents/three_core_approval_preview_service_readback.py",
             "src/agents/operator_decision_capture_readback_contract.py",
             "src/agents/provider_call_readiness_experiment.py",
+            "src/agents/manual_review_readiness_contract.py",
             "src/storage/vector_evidence/__init__.py",
         "src/storage/vector_evidence/schema.sql",
         "src/storage/vector_evidence/store.py",

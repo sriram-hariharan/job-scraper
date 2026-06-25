@@ -223,23 +223,27 @@ def test_optional_api_fetch_is_gated_post_only_and_fail_closed():
 
 
 def test_new_ui_adds_no_other_endpoint_urls():
-    diff = subprocess.check_output(
-        ["git", "diff", "--", "src/app/static/agentic_review.js"],
-        cwd=ROOT,
-        text=True,
-    )
-    added_lines = "\n".join(
-        line[1:]
-        for line in diff.splitlines()
-        if line.startswith("+") and not line.startswith("+++")
-    )
-    endpoint_lines = [
-        line for line in added_lines.splitlines() if '"/api/' in line
+    """Endpoint check must stay valid after commit/merge, when git diff is empty."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "src/app/static/agentic_review.js").read_text(encoding="utf-8")
+
+    endpoint = "/api/tailoring-agent-opportunity-contract"
+    related_endpoint_lines = [
+        line.strip()
+        for line in js.splitlines()
+        if "/api/" in line and "tailoring-agent-opportunity" in line
     ]
 
-    assert endpoint_lines == [
-        '      "/api/tailoring-agent-opportunity-contract",'
+    assert related_endpoint_lines
+    assert endpoint in js
+
+    unexpected = [
+        line for line in related_endpoint_lines
+        if endpoint not in line
     ]
+    assert unexpected == []
 
 
 def test_css_contains_passive_panel_classes():

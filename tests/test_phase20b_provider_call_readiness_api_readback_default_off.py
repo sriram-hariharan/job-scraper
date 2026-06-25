@@ -266,6 +266,9 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
         "src/agents/manual_review_readiness_contract.py",
         "docs/phase21_manual_review_readiness_contract.md",
         "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase21_manual_review_readiness_api_readback.md",
+        "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
     }

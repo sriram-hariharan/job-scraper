@@ -19,7 +19,7 @@ PHASE19_TAGS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
+    "src/app/api.py": "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35",
     "src/app/static/app_redesign.css": "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
@@ -127,6 +127,9 @@ def test_phase19j_changes_only_docs_tests_and_legacy_guards():
             "src/agents/manual_review_readiness_contract.py",
             "docs/phase21_manual_review_readiness_contract.md",
             "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase21_manual_review_readiness_api_readback.md",
+        "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
         }
@@ -137,7 +140,7 @@ def test_phase19j_changes_only_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "docs/phase19_operator_decision_capture_ui_readback.md",
-                "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
+                "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
                 "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35",
             )
         )

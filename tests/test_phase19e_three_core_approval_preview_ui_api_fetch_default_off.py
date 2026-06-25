@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
+    "src/app/api.py": "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
@@ -205,6 +205,9 @@ def test_phase19e_changes_only_approved_files():
         "src/agents/manual_review_readiness_contract.py",
         "docs/phase21_manual_review_readiness_contract.md",
         "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase21_manual_review_readiness_api_readback.md",
+        "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -213,7 +216,7 @@ def test_phase19e_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "agentic_review.js",
-                "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
+                "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
             )
         )
     }

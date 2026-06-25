@@ -197,7 +197,7 @@ def test_import_has_no_connection_or_readback_side_effect():
 def test_no_api_ui_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5"
+            "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34"
         ),
         "src/app/static/agentic_review.js": (
             "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03"

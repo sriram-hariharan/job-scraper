@@ -11,7 +11,7 @@ from src.agents import three_core_agent_shadow_runtime_readback
 ROOT = Path(__file__).resolve().parents[1]
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
+    "src/app/api.py": "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
@@ -366,6 +366,9 @@ def test_phase19b_changes_only_approved_files():
         "src/agents/provider_call_readiness_experiment.py",
         "docs/phase20_provider_call_readiness_experiment.md",
         "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
+        "src/app/api.py",
+        "docs/phase20_provider_call_readiness_api_readback.md",
+        "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
         "docs/phase19_approval_preview_service_readback.md",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",

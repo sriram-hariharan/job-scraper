@@ -4,36 +4,41 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC_PATH = ROOT / "docs/phase20_provider_readiness_release_checkpoint.md"
+DOC_PATH = ROOT / "docs/phase21_manual_review_workflow_release_checkpoint.md"
 
 REQUIRED_TAGS = (
-    "phase20a-provider-call-readiness-experiment-v1",
-    "phase20b-provider-call-readiness-api-readback-v1",
-    "phase20c-provider-call-readiness-ui-readback-v1",
+    "phase21a-manual-review-workflow-boundary-v1",
+    "phase21b-manual-review-readiness-contract-v1",
+    "phase21c-manual-review-readiness-api-readback-v1",
+    "phase21d-manual-review-readiness-ui-readback-v1",
+    "phase20-provider-readiness-release-v1",
     "phase20d-no-auto-apply-safety-checkpoint-v1",
     "phase19-readonly-approval-workflow-release-v1",
     "phase18-safety-wrap-release-v1",
 )
 
 REQUIRED_SAFETY_MARKERS = (
-    "provider-readiness/preflight/readback only",
-    "no live provider calls",
-    "no network calls",
-    "no database writes",
-    "no approval creation",
-    "no decision persistence",
-    "no scoring mutation",
-    "no ranking mutation",
-    "no queue mutation",
-    "no resume mutation",
-    "no application mutation",
-    "no execution",
-    "no submission",
+    "manual-review/readback/readiness only",
     "no auto-apply",
     "no auto-submit",
     "no autonomous application execution",
     "no automatic job application submission",
     "manual user control",
+    "no provider calls",
+    "no network calls",
+    "no database writes",
+    "no persistence",
+    "no mutation",
+    "no execution",
+    "no submission",
+    "no scoring mutation",
+    "no ranking mutation",
+    "no queue mutation",
+    "no resume mutation",
+    "no application mutation",
+    "no approval mutation",
+    "no decision mutation",
+    "no audit mutation",
 )
 
 PROTECTED_HASHES = {
@@ -41,8 +46,8 @@ PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e",
     "src/app/static/app_redesign.css": "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+    "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
-    "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
 }
 
@@ -54,7 +59,7 @@ def _text() -> str:
 def test_release_checkpoint_doc_exists():
     assert DOC_PATH.exists()
     assert _text().startswith(
-        "# Phase 20E Provider Readiness Release Checkpoint"
+        "# Phase 21E Manual-Review Workflow Release Checkpoint"
     )
 
 
@@ -72,18 +77,18 @@ def test_checkpoint_contains_exact_safety_markers():
         assert marker in text
 
 
-def test_checkpoint_summarizes_phase20a_through_phase20d():
+def test_checkpoint_summarizes_phase21a_through_phase21d():
     text = _text()
 
-    for phase in ("Phase 20A", "Phase 20B", "Phase 20C", "Phase 20D"):
+    for phase in ("Phase 21A", "Phase 21B", "Phase 21C", "Phase 21D"):
         assert phase in text
 
 
-def test_checkpoint_recommends_manual_review_phase21():
+def test_checkpoint_recommends_safe_phase22_scope():
     text = _text()
 
-    assert "Phase 21" in text
-    assert "manual-review workflow hardening" in text
+    assert "Phase 22" in text
+    assert "manual-review UX hardening or release" in text
     assert "still with no auto-apply and no auto-submit" in text
 
 
@@ -92,7 +97,7 @@ def test_protected_runtime_files_are_unchanged():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
 
 
-def test_phase20e_changes_only_docs_tests_and_legacy_guards():
+def test_phase21e_changes_only_docs_tests_and_legacy_guards():
     tracked = subprocess.check_output(
         ["git", "diff", "--name-only"], cwd=ROOT, text=True
     ).splitlines()
@@ -103,33 +108,15 @@ def test_phase20e_changes_only_docs_tests_and_legacy_guards():
     ).splitlines()
     changed = set(tracked + untracked)
     allowed = {
-        "docs/phase20_provider_readiness_release_checkpoint.md",
-        "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
-        "docs/manual_review_workflow_boundary.md",
-        "docs/phase21_manual_review_workflow_boundary.md",
-        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
-        "src/agents/manual_review_readiness_contract.py",
-        "docs/phase21_manual_review_readiness_contract.md",
-        "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
-        "src/app/api.py",
-        "docs/phase21_manual_review_readiness_api_readback.md",
-        "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
-        "src/app/static/agentic_review.js",
-        "docs/phase21_manual_review_readiness_ui_readback.md",
-        "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
         "docs/phase21_manual_review_workflow_release_checkpoint.md",
         "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if any(
-            marker in path.read_text(encoding="utf-8")
-            for marker in (
-                "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
-                "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
-                "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e",
-            )
+        if (
+            "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py"
+            in path.read_text(encoding="utf-8")
         )
     }
 

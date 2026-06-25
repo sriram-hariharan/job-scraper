@@ -359,6 +359,8 @@ def test_phase18h_changes_only_approved_docs_and_tests():
         "src/app/static/agentic_review.js",
         "docs/phase21_manual_review_readiness_ui_readback.md",
         "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
+        "docs/phase21_manual_review_workflow_release_checkpoint.md",
+        "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
             "tests/test_jd_provider_runtime_review_packet_default_off.py",
         "tests/test_jd_provider_runtime_service_readback_default_off.py",
         "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",

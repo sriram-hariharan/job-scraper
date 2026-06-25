@@ -272,6 +272,8 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
         "src/app/static/agentic_review.js",
         "docs/phase21_manual_review_readiness_ui_readback.md",
         "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
+        "docs/phase21_manual_review_workflow_release_checkpoint.md",
+        "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
     }

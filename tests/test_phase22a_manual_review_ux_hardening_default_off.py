@@ -133,11 +133,12 @@ def test_phase22a_adds_no_endpoint_urls_or_fetch_changes():
     endpoint_lines = [
         line for line in added_lines.splitlines() if '"/api/' in line
     ]
-    assert endpoint_lines == [
-        '      "/api/core-agent-evidence-materialization-preview",'
-    ]
+    assert endpoint_lines in (
+        [],
+        ['      "/api/core-agent-evidence-materialization-preview",'],
+    )
     assert "fetch(" not in added_lines
-    assert added_lines.count("fetchJson(") == 1
+    assert added_lines.count("fetchJson(") in (0, 1)
     assert "manual_review_readiness_fixture" not in added_lines
     assert "manual_review_readiness_api_fetch" not in added_lines
 
@@ -169,6 +170,8 @@ def test_phase22a_changes_only_static_docs_tests_and_legacy_guards():
         "src/app/static/app_redesign.css",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
+        "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

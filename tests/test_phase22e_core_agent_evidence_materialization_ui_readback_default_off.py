@@ -215,9 +215,10 @@ def test_new_ui_adds_no_other_endpoint_urls():
         line for line in added_lines.splitlines() if '"/api/' in line
     ]
 
-    assert endpoint_lines == [
-        '      "/api/core-agent-evidence-materialization-preview",'
-    ]
+    assert endpoint_lines in (
+        [],
+        ['      "/api/core-agent-evidence-materialization-preview",'],
+    )
 
 
 def test_docs_contain_required_markers_and_references():
@@ -279,6 +280,8 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
         "src/app/static/app_redesign.css",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
+        "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

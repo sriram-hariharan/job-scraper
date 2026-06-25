@@ -134,6 +134,9 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
         "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
         "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
+        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -192,6 +195,7 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         [ROOT / "src/agents/manual_review_readiness_contract.py"],
         [ROOT / "src/agents/core_agent_evidence_materialization_preview.py"],
         [ROOT / "src/agents/tailoring_agent_opportunity_contract.py"],
+        [ROOT / "src/agents/generate_ai_tailoring_action_boundary_contract.py"],
         [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],
         [

@@ -214,6 +214,10 @@ def test_phase19f_changes_only_approved_files():
         "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
         "docs/phase21_manual_review_workflow_release_checkpoint.md",
         "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_manual_review_ux_hardening.md",
+        "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

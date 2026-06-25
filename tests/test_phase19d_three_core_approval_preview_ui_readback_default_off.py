@@ -235,6 +235,10 @@ def test_phase19d_changes_only_approved_files():
         "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
         "docs/phase21_manual_review_workflow_release_checkpoint.md",
         "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_manual_review_ux_hardening.md",
+        "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
         "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
         "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
@@ -262,8 +266,8 @@ def test_phase19d_changes_only_approved_files():
                 marker in path.read_text(encoding="utf-8")
                 for marker in (
                     "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                    "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
-                    "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e",
+                    "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
+                    "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
                     "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
                 )
             )

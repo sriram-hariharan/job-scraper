@@ -44,8 +44,8 @@ REQUIRED_SAFETY_MARKERS = (
 PROTECTED_HASHES = {
     "src/app/api.py": "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
-    "src/app/static/app_redesign.css": "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
+    "src/app/static/agentic_review.js": "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+    "src/app/static/app_redesign.css": "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
@@ -115,6 +115,12 @@ def test_phase21e_changes_only_docs_tests_and_legacy_guards():
         "src/app/api.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
+        "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
     allowed = {
         "docs/phase21_manual_review_workflow_release_checkpoint.md",
@@ -132,8 +138,8 @@ def test_phase21e_changes_only_docs_tests_and_legacy_guards():
             for marker in (
                     "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
                     "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
-                    "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
-                "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
+                    "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
             )
         )
     }

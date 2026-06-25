@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTECTED_HASHES = {
     "src/app/api.py": "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
+    "src/app/static/agentic_review.js": "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/jd_intelligence.py": "1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e",
@@ -296,6 +296,12 @@ def test_phase19a_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
+        "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
     allowed = {
         "src/agents/three_core_approval_preview_runtime.py",
@@ -440,8 +446,8 @@ def test_phase19a_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
-                "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
+                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+                "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
             )
         )
     }

@@ -130,9 +130,14 @@ def test_phase22a_adds_no_endpoint_urls_or_fetch_changes():
         if line.startswith("+") and not line.startswith("+++")
     )
 
-    assert "/api/" not in added_lines
+    endpoint_lines = [
+        line for line in added_lines.splitlines() if '"/api/' in line
+    ]
+    assert endpoint_lines == [
+        '      "/api/core-agent-evidence-materialization-preview",'
+    ]
     assert "fetch(" not in added_lines
-    assert "fetchJson(" not in added_lines
+    assert added_lines.count("fetchJson(") == 1
     assert "manual_review_readiness_fixture" not in added_lines
     assert "manual_review_readiness_api_fetch" not in added_lines
 
@@ -160,6 +165,12 @@ def test_phase22a_changes_only_static_docs_tests_and_legacy_guards():
         "src/app/api.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
+        "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
     allowed = {
         "src/app/static/agentic_review.js",
@@ -175,8 +186,8 @@ def test_phase22a_changes_only_static_docs_tests_and_legacy_guards():
             for marker in (
                     "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
                     "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
-                    "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
-                "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
+                    "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
             )
         )
     }

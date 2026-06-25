@@ -8,7 +8,7 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 CSS_PATH = ROOT / "src/app/static/app_redesign.css"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
+    "src/app/api.py": "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
@@ -194,6 +194,9 @@ def test_phase19d_changes_only_approved_files():
         "src/agents/core_agent_evidence_materialization_preview.py",
         "docs/phase22_core_agent_evidence_materialization_preview.md",
         "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+        "src/app/api.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
     }
     allowed = {
         "src/app/static/agentic_review.js",
@@ -274,7 +277,7 @@ def test_phase19d_changes_only_approved_files():
                     "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
                     "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
                     "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
-                    "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
+                    "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
                 )
             )
     }

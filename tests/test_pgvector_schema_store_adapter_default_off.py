@@ -315,7 +315,7 @@ def test_store_source_has_no_driver_provider_pipeline_or_mutation_runtime():
 def test_no_api_ui_pipeline_scoring_ranking_queue_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f"
+            "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a"
         ),
         "src/app/static/agentic_review.js": (
             "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867"

@@ -67,7 +67,7 @@ RUNTIME_HASHES = {
         "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"
     ),
     "src/app/api.py": (
-        "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f"
+        "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a"
     ),
     "src/app/services.py": (
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
@@ -292,6 +292,9 @@ def test_phase18h_changes_only_approved_docs_and_tests():
         "src/agents/core_agent_evidence_materialization_preview.py",
         "docs/phase22_core_agent_evidence_materialization_preview.md",
         "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+        "src/app/api.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
     }
     allowed = {
         "docs/phase18_provider_response_validation_contract.md",

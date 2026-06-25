@@ -224,6 +224,10 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
         "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
         "docs/phase21_manual_review_workflow_release_checkpoint.md",
         "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_manual_review_ux_hardening.md",
+        "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -232,7 +236,8 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
-                "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e",
+                "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
+                "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
             )
         )
     }

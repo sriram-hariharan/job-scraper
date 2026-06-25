@@ -2561,10 +2561,15 @@ function renderManualReviewReadinessReadbackSection(tracePayload = {}) {
       <div class="agentic-workflow-header">
         <div>
           <h4>Manual-Review Readiness Readback</h4>
-          <p>Passive readiness display only. Manual review and manual user control remain required.</p>
+          <p>Manual review support only. This passive panel does not take action or replace human review. Manual user control required.</p>
           <p class="agentic-review-muted">Permanent product rule: no auto-apply, no auto-submit, no autonomous application execution, and no automatic job application submission.</p>
         </div>
         <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="manual-review-readiness-readback__safety-labels" aria-label="Manual-review readiness safety labels">
+        <span>Read-only</span>
+        <span>Advisory-only</span>
+        <span>Manual-review only</span>
       </div>
       <div class="agent-trace-counts manual-review-readiness-readback__metrics">
         ${renderWorkflowSummaryMetric("Readiness status", result.readiness_status || "unknown")}

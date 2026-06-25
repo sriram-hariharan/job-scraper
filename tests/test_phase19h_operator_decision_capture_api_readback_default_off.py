@@ -13,8 +13,8 @@ ENDPOINT = "/api/operator-decision-capture-readback"
 
 PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e",
-    "src/app/static/app_redesign.css": "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
+    "src/app/static/agentic_review.js": "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
+    "src/app/static/app_redesign.css": "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
 }
@@ -237,6 +237,10 @@ def test_phase19h_changes_only_approved_files():
         "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "docs/phase22_manual_review_ux_hardening.md",
+        "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -245,7 +249,7 @@ def test_phase19h_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "src/app/api.py",
-                "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e",
+                "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
             )
         )
     }

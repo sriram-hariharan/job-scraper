@@ -6234,6 +6234,32 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
   margin-top: 12px;
 }
 
+.manual-review-readiness-readback {
+  border-color: color-mix(in srgb, var(--app-primary) 38%, var(--app-border));
+}
+
+.manual-review-readiness-readback__safety-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.manual-review-readiness-readback__safety-labels span {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 30%, var(--app-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-primary) 10%, transparent);
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.manual-review-readiness-readback__metrics {
+  margin-top: 12px;
+}
+
 @media (max-width: 720px) {
   [data-agentic-review-run-id] {
     padding-right: 18px;

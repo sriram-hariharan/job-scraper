@@ -176,7 +176,7 @@ def test_api_service_pipeline_dependencies_and_css_are_unchanged():
             "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
         ),
         "src/app/static/app_redesign.css": (
-            "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014"
+            "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

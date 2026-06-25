@@ -105,6 +105,9 @@ def test_phase20e_changes_only_docs_tests_and_legacy_guards():
     allowed = {
         "docs/phase20_provider_readiness_release_checkpoint.md",
         "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
+        "docs/manual_review_workflow_boundary.md",
+        "docs/phase21_manual_review_workflow_boundary.md",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

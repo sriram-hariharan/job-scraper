@@ -4,8 +4,8 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY_PATH = ROOT / "docs/no_auto_apply_safety_policy.md"
-CHECKPOINT_PATH = ROOT / "docs/phase20_no_auto_apply_safety_checkpoint.md"
+BOUNDARY_PATH = ROOT / "docs/manual_review_workflow_boundary.md"
+CHECKPOINT_PATH = ROOT / "docs/phase21_manual_review_workflow_boundary.md"
 
 REQUIRED_MARKERS = (
     "no auto-apply",
@@ -13,14 +13,26 @@ REQUIRED_MARKERS = (
     "no autonomous application execution",
     "no automatic job application submission",
     "manual user control",
-    "provider-call readiness is preflight/readback only",
+    "manual-review workflow",
+    "no bypass of manual review",
 )
 
 REQUIRED_TAGS = (
-    "phase20a-provider-call-readiness-experiment-v1",
-    "phase20b-provider-call-readiness-api-readback-v1",
-    "phase20c-provider-call-readiness-ui-readback-v1",
+    "phase20-provider-readiness-release-v1",
+    "phase20e-provider-readiness-release-checkpoint-v1",
+    "phase20d-no-auto-apply-safety-checkpoint-v1",
     "phase19-readonly-approval-workflow-release-v1",
+    "phase18-safety-wrap-release-v1",
+)
+
+ASSISTIVE_CAPABILITIES = (
+    "discovery",
+    "filtering",
+    "ranking",
+    "read-only previews",
+    "readiness checks",
+    "resume/content guidance",
+    "manual review support",
 )
 
 PROTECTED_HASHES = {
@@ -61,49 +73,44 @@ def _changed_files() -> set[str]:
     return set(tracked + untracked)
 
 
-def test_policy_and_checkpoint_docs_exist():
-    assert POLICY_PATH.exists()
+def test_boundary_and_checkpoint_docs_exist():
+    assert BOUNDARY_PATH.exists()
     assert CHECKPOINT_PATH.exists()
-    assert _text(POLICY_PATH).startswith("# No Auto-Apply Safety Policy")
+    assert _text(BOUNDARY_PATH).startswith(
+        "# Manual-Review Workflow Boundary"
+    )
     assert _text(CHECKPOINT_PATH).startswith(
-        "# Phase 20D No Auto-Apply Safety Checkpoint"
+        "# Phase 21A Manual-Review Workflow Boundary Checkpoint"
     )
 
 
-def test_both_docs_contain_exact_safety_markers():
-    for path in (POLICY_PATH, CHECKPOINT_PATH):
+def test_both_docs_contain_exact_boundary_markers():
+    for path in (BOUNDARY_PATH, CHECKPOINT_PATH):
         text = _text(path).lower()
         for marker in REQUIRED_MARKERS:
             assert marker in text
 
 
-def test_docs_define_a_permanent_not_temporary_boundary():
-    for path in (POLICY_PATH, CHECKPOINT_PATH):
-        text = _text(path).lower()
-        assert "not a temporary default-off feature" in text
-        assert "permanent product boundary" in text
-
-
-def test_docs_reference_phase20_lineage_and_phase19_release():
-    for path in (POLICY_PATH, CHECKPOINT_PATH):
+def test_both_docs_reference_required_release_tags():
+    for path in (BOUNDARY_PATH, CHECKPOINT_PATH):
         text = _text(path)
         for tag in REQUIRED_TAGS:
             assert tag in text
 
 
-def test_docs_confirm_phase20a_through_c_performed_no_live_actions():
-    for path in (POLICY_PATH, CHECKPOINT_PATH):
+def test_docs_list_assistive_manual_review_capabilities():
+    for path in (BOUNDARY_PATH, CHECKPOINT_PATH):
         text = _text(path).lower()
-        for marker in (
-            "no provider calls",
-            "network calls",
-            "database writes",
-            "persistence",
-            "mutation",
-            "execution",
-            "submission",
-        ):
-            assert marker in text
+        for capability in ASSISTIVE_CAPABILITIES:
+            assert capability in text
+
+
+def test_phase21_focuses_on_manual_review_not_autonomous_execution():
+    for path in (BOUNDARY_PATH, CHECKPOINT_PATH):
+        text = _text(path)
+        assert "Phase 21" in text
+        assert "hardening the manual-review workflow" in text
+        assert "not enabling autonomous application execution" in text
 
 
 def test_protected_runtime_files_are_unchanged():
@@ -111,14 +118,9 @@ def test_protected_runtime_files_are_unchanged():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
 
 
-def test_phase20d_changes_only_docs_tests_and_legacy_guards():
+def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files()
     allowed = {
-        "docs/no_auto_apply_safety_policy.md",
-        "docs/phase20_no_auto_apply_safety_checkpoint.md",
-        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
-        "docs/phase20_provider_readiness_release_checkpoint.md",
-        "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
         "docs/manual_review_workflow_boundary.md",
         "docs/phase21_manual_review_workflow_boundary.md",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
@@ -127,7 +129,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
         if (
-            "docs/phase20_provider_call_readiness_ui_readback.md"
+            "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py"
             in path.read_text(encoding="utf-8")
         )
     }
@@ -135,7 +137,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
     assert changed <= allowed | legacy_guards
 
 
-def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
+def test_changed_runtime_files_add_no_autonomous_application_markers():
     runtime_suffixes = {".py", ".js", ".html", ".css"}
     changed_runtime_files = [
         ROOT / relative_path

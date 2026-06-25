@@ -221,7 +221,7 @@ def test_route_slice_has_no_provider_storage_or_mutation_wiring():
 def test_no_ui_pipeline_dependency_or_decision_module_change():
     expected = {
         "src/app/static/agentic_review.js": (
-            "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35"
+            "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

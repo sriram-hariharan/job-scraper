@@ -2419,6 +2419,175 @@ function renderProviderCallReadinessReadbackSection(tracePayload = {}) {
   `;
 }
 
+function shouldRenderManualReviewReadinessFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "manual_review_readiness_fixture",
+  ) === "1";
+}
+
+function buildManualReviewReadinessFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    readiness_status: "manual_review_readiness_ready",
+    enabled: true,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_required: true,
+    manual_user_control_required: true,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    allowed_assistance_modes: [
+      "discovery",
+      "filtering",
+      "ranking",
+      "read-only previews",
+      "readiness checks",
+      "resume/content guidance",
+      "manual review support",
+    ],
+    forbidden_actions: [
+      "auto-apply",
+      "auto-submit",
+      "autonomous application execution",
+      "automatic job application submission",
+      "bypass of manual review",
+    ],
+    review_inputs_summary: {
+      job: {
+        title: "Machine Learning Engineer",
+        company: "Example Corp",
+      },
+      ranking_summary: {
+        rank: 1,
+        score: 0.92,
+      },
+      resume_guidance_available: true,
+    },
+    missing_review_inputs: [],
+    checklist_items: [
+      "review_job_details",
+      "review_role_fit_and_ranking_evidence",
+      "review_resume_and_content_guidance",
+      "review_application_materials",
+      "confirm_manual_user_control",
+      "complete_submission_outside_autonomous_execution",
+    ],
+    next_safe_step: "complete_manual_review_under_user_control",
+    safety_metadata: {
+      read_only: true,
+      advisory_only: true,
+      manual_review_required: true,
+      manual_user_control_required: true,
+      provider_call_attempted: false,
+      network_call_attempted: false,
+      database_write_attempted: false,
+      approval_created: false,
+      decision_persisted: false,
+      audit_persisted: false,
+      scoring_mutated: false,
+      ranking_mutated: false,
+      queue_mutated: false,
+      resume_mutated: false,
+      application_mutated: false,
+      execution_authorized: false,
+      submission_authorized: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+function withManualReviewReadinessFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(source.manual_review_readiness_result)
+    || !shouldRenderManualReviewReadinessFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    manual_review_readiness_result: (
+      buildManualReviewReadinessFixtureResult()
+    ),
+  };
+}
+
+function renderManualReviewReadinessReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.manual_review_readiness_result,
+  )
+    ? tracePayload.manual_review_readiness_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const allowedModes = Array.isArray(result.allowed_assistance_modes)
+    ? result.allowed_assistance_modes
+    : [];
+  const forbiddenActions = Array.isArray(result.forbidden_actions)
+    ? result.forbidden_actions
+    : [];
+  const missingInputs = Array.isArray(result.missing_review_inputs)
+    ? result.missing_review_inputs
+    : [];
+  const checklistItems = Array.isArray(result.checklist_items)
+    ? result.checklist_items
+    : [];
+  const reviewInputs = hasAgentTraceSummaryObject(
+    result.review_inputs_summary,
+  )
+    ? result.review_inputs_summary
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  return `
+    <article class="agent-trace-summary manual-review-readiness-readback" aria-label="Manual-review readiness readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual-Review Readiness Readback</h4>
+          <p>Passive readiness display only. Manual review and manual user control remain required.</p>
+          <p class="agentic-review-muted">Permanent product rule: no auto-apply, no auto-submit, no autonomous application execution, and no automatic job application submission.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts manual-review-readiness-readback__metrics">
+        ${renderWorkflowSummaryMetric("Readiness status", result.readiness_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Manual review required", result.manual_review_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Manual user control required", result.manual_user_control_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No auto apply", result.no_auto_apply === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No auto submit", result.no_auto_submit === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No autonomous application execution", result.no_autonomous_application_execution === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No automatic job application submission", result.no_automatic_job_application_submission === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Allowed assistance modes", allowedModes.length ? allowedModes.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Forbidden actions", forbiddenActions.length ? forbiddenActions.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Missing review inputs", missingInputs.length ? missingInputs.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Checklist items", checklistItems.length ? checklistItems.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Review inputs summary", reviewInputs, { helper: "Caller-supplied manual-review context only." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata summary", safety, { helper: "No-provider, no-storage, no-persistence, no-mutation, no-execution, and no-submission safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -5378,6 +5547,11 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       operatorDecisionCaptureVisibleTracePayload,
     )
   );
+  const manualReviewReadinessVisibleTracePayload = (
+    withManualReviewReadinessFixture(
+      providerCallReadinessVisibleTracePayload,
+    )
+  );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
@@ -5442,6 +5616,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(decisionPreviewVisibleTracePayload)}
       ${renderOperatorDecisionCaptureReadbackSection(operatorDecisionCaptureVisibleTracePayload)}
       ${renderProviderCallReadinessReadbackSection(providerCallReadinessVisibleTracePayload)}
+      ${renderManualReviewReadinessReadbackSection(manualReviewReadinessVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5868,6 +6043,120 @@ async function withProviderCallReadinessReadbackApiFetch(
       ...source,
       provider_call_readiness_result: (
         buildProviderCallReadinessReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchManualReviewReadinessReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "manual_review_readiness_api_fetch",
+  ) === "1";
+}
+
+function buildManualReviewReadinessReadbackRequest(tracePayload = {}) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.manual_review_readiness_request_payload,
+  )
+    ? tracePayload.manual_review_readiness_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    review_inputs_summary: null,
+  };
+}
+
+function buildManualReviewReadinessReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    readiness_status: "manual_review_readiness_failed_closed",
+    enabled: false,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_required: true,
+    manual_user_control_required: true,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    allowed_assistance_modes: [],
+    forbidden_actions: [
+      "auto-apply",
+      "auto-submit",
+      "autonomous application execution",
+      "automatic job application submission",
+      "bypass of manual review",
+    ],
+    review_inputs_summary: {},
+    missing_review_inputs: ["available_read_only_api_response"],
+    checklist_items: [],
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    fail_closed_reason: String(
+      error?.message || "manual_review_readiness_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      advisory_only: true,
+      manual_review_required: true,
+      manual_user_control_required: true,
+      provider_call_attempted: false,
+      network_call_attempted: false,
+      database_write_attempted: false,
+      approval_created: false,
+      decision_persisted: false,
+      audit_persisted: false,
+      scoring_mutated: false,
+      ranking_mutated: false,
+      queue_mutated: false,
+      resume_mutated: false,
+      application_mutated: false,
+      execution_authorized: false,
+      submission_authorized: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+async function withManualReviewReadinessReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(source.manual_review_readiness_result)
+    || !shouldFetchManualReviewReadinessReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/manual-review-readiness-readback",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildManualReviewReadinessReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      manual_review_readiness_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      manual_review_readiness_result: (
+        buildManualReviewReadinessReadbackFetchFailure(error)
       ),
     };
   }
@@ -9882,8 +10171,13 @@ async function initAgenticReviewPage() {
         operatorDecisionCaptureTracePayload,
       )
     );
+    const manualReviewReadinessTracePayload = await (
+      withManualReviewReadinessReadbackApiFetch(
+        providerCallReadinessTracePayload,
+      )
+    );
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
-    renderAgenticReviewData(payload, providerCallReadinessTracePayload);
+    renderAgenticReviewData(payload, manualReviewReadinessTracePayload);
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");
     if (panel) {

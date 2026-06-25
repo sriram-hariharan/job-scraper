@@ -447,6 +447,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
     "docs/phase21_manual_review_readiness_api_readback.md",
     "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
+    "docs/phase21_manual_review_readiness_ui_readback.md",
+    "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
 }
 
 def _changed_files():
@@ -480,7 +482,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
                 "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
-                "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35",
+                "98ab760d0cd9e0d6aef757d604a84709b28b3c21ddcfe1d8e18a1c9f8685881e",
             )
         )
     }

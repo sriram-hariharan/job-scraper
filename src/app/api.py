@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.agents.critic_evaluator import evaluate_agent_trace
 from src.agents import operator_decision_capture_readback_contract
+from src.agents import provider_call_readiness_experiment
 from src.agents import three_core_approval_preview_service_readback
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
@@ -4645,6 +4646,29 @@ def operator_decision_capture_readback_api(
             selected_resume=request_payload.get("selected_resume", ""),
             selected_variant=request_payload.get("selected_variant", ""),
             operator_note=request_payload.get("operator_note", ""),
+            config=request_payload.get("config"),
+        )
+    )
+
+
+@app.post("/api/provider-call-readiness-readback")
+def provider_call_readiness_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return (
+        provider_call_readiness_experiment
+        .build_provider_call_readiness_experiment_payload(
+            enabled=request_payload.get("enabled", False),
+            requested_provider_capability=request_payload.get(
+                "requested_provider_capability",
+                "",
+            ),
+            provider_name=request_payload.get("provider_name", ""),
+            requested_model=request_payload.get("requested_model", ""),
+            request_packet_summary=request_payload.get(
+                "request_packet_summary"
+            ),
             config=request_payload.get("config"),
         )
     )

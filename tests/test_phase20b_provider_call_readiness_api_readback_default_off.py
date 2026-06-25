@@ -4,19 +4,19 @@ import subprocess
 
 from fastapi.testclient import TestClient
 
-from src.agents import operator_decision_capture_readback_contract as contract
+from src.agents import provider_call_readiness_experiment as experiment
 from src.app import api
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ENDPOINT = "/api/operator-decision-capture-readback"
+ENDPOINT = "/api/provider-call-readiness-readback"
 
 PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
     "src/app/static/app_redesign.css": "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
-    "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
+    "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
 }
 
 
@@ -27,8 +27,22 @@ def _client(monkeypatch):
 
 def _enabled_config(**extra):
     return {
-        contract.OPERATOR_DECISION_CAPTURE_READBACK_FLAG: True,
+        experiment.PROVIDER_CALL_READINESS_EXPERIMENT_FLAG: True,
         **extra,
+    }
+
+
+def _ready_request():
+    return {
+        "enabled": True,
+        "requested_provider_capability": "review_jd_intelligence_packet",
+        "provider_name": "caller-supplied-provider",
+        "requested_model": "caller-supplied-model",
+        "request_packet_summary": {
+            "packet_type": "provider_call_preflight",
+            "input_fields": ["job_description"],
+        },
+        "config": _enabled_config(),
     }
 
 
@@ -49,7 +63,9 @@ def test_authenticated_default_off_returns_not_enabled(monkeypatch):
     response = _client(monkeypatch).post(ENDPOINT, json={})
 
     assert response.status_code == 200
-    assert response.json()["capture_status"] == contract.STATUS_NOT_ENABLED
+    assert response.json()["readiness_status"] == (
+        experiment.STATUS_NOT_ENABLED
+    )
 
 
 def test_enabled_without_config_flag_returns_not_enabled(monkeypatch):
@@ -57,12 +73,15 @@ def test_enabled_without_config_flag_returns_not_enabled(monkeypatch):
         ENDPOINT,
         json={
             "enabled": True,
-            "selected_action": "HOLD",
+            "requested_provider_capability": "review_packet",
+            "request_packet_summary": {"packet_type": "preflight"},
             "config": {},
         },
     )
 
-    assert response.json()["capture_status"] == contract.STATUS_NOT_ENABLED
+    assert response.json()["readiness_status"] == (
+        experiment.STATUS_NOT_ENABLED
+    )
 
 
 def test_kill_switch_blocks_api_readback(monkeypatch):
@@ -70,79 +89,89 @@ def test_kill_switch_blocks_api_readback(monkeypatch):
         ENDPOINT,
         json={
             "enabled": True,
-            "selected_action": "HOLD",
+            "requested_provider_capability": "review_packet",
+            "request_packet_summary": {"packet_type": "preflight"},
             "config": _enabled_config(kill_switch_enabled=True),
         },
     )
 
-    assert response.json()["capture_status"] == (
-        contract.STATUS_BLOCKED_BY_KILL_SWITCH
+    assert response.json()["readiness_status"] == (
+        experiment.STATUS_BLOCKED_BY_KILL_SWITCH
     )
 
 
-def test_missing_action_returns_validation_error(monkeypatch):
-    response = _client(monkeypatch).post(
-        ENDPOINT,
-        json={"enabled": True, "config": _enabled_config()},
-    )
-    payload = response.json()
-
-    assert payload["capture_status"] == contract.STATUS_MISSING_ACTION
-    assert payload["validation_errors"] == ["selected_action_is_required"]
-
-
-def test_invalid_action_returns_validation_error(monkeypatch):
-    response = _client(monkeypatch).post(
-        ENDPOINT,
-        json={
-            "enabled": True,
-            "selected_action": "SEND_NOW",
-            "config": _enabled_config(),
-        },
-    )
-    payload = response.json()
-
-    assert payload["capture_status"] == contract.STATUS_INVALID_ACTION
-    assert payload["validation_errors"] == [
-        "selected_action_is_not_allowed"
-    ]
-
-
-def test_valid_action_returns_direct_ready_payload(monkeypatch):
-    request_payload = {
-        "enabled": True,
-        "selected_action": "MAYBE_TAILOR",
-        "selected_resume": "resume-main",
-        "selected_variant": "variant-a",
-        "operator_note": "Read-only review",
-        "config": _enabled_config(),
-    }
-    expected = contract.build_operator_decision_capture_readback_payload(
-        **request_payload
-    )
-    response = _client(monkeypatch).post(ENDPOINT, json=request_payload)
-
-    assert response.status_code == 200
-    assert response.json() == expected
-    assert response.json()["capture_status"] == contract.STATUS_READY
-
-
-def test_response_proves_read_only_no_persistence_or_authority(monkeypatch):
+def test_missing_provider_capability_returns_validation_error(monkeypatch):
     payload = _client(monkeypatch).post(
         ENDPOINT,
         json={
             "enabled": True,
-            "selected_action": "APPLY",
+            "request_packet_summary": {"packet_type": "preflight"},
             "config": _enabled_config(),
         },
+    ).json()
+
+    assert payload["readiness_status"] == (
+        experiment.STATUS_MISSING_PROVIDER_CAPABILITY
+    )
+    assert payload["validation_errors"] == [
+        "requested_provider_capability_is_required"
+    ]
+
+
+def test_missing_request_packet_returns_validation_error(monkeypatch):
+    payload = _client(monkeypatch).post(
+        ENDPOINT,
+        json={
+            "enabled": True,
+            "requested_provider_capability": "review_packet",
+            "config": _enabled_config(),
+        },
+    ).json()
+
+    assert payload["readiness_status"] == (
+        experiment.STATUS_MISSING_REQUEST_PACKET
+    )
+    assert payload["validation_errors"] == [
+        "request_packet_summary_is_required"
+    ]
+
+
+def test_valid_caller_supplied_payload_returns_direct_ready_result(
+    monkeypatch,
+):
+    request_payload = _ready_request()
+    expected = (
+        experiment.build_provider_call_readiness_experiment_payload(
+            **request_payload
+        )
+    )
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json=request_payload,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected
+    assert response.json()["readiness_status"] == experiment.STATUS_READY
+
+
+def test_response_is_read_only_and_never_authorizes_calls_or_actions(
+    monkeypatch,
+):
+    payload = _client(monkeypatch).post(
+        ENDPOINT,
+        json=_ready_request(),
     ).json()
 
     assert payload["read_only"] is True
     assert payload["shadow_only"] is True
     assert payload["advisory_only"] is True
     for key in (
-        "decision_persisted",
+        "provider_call_attempted",
+        "provider_call_authorized",
+        "network_call_attempted",
         "approval_created",
+        "decision_persisted",
         "execution_authorized",
         "submission_authorized",
         "mutation_authorized",
@@ -150,24 +179,30 @@ def test_response_proves_read_only_no_persistence_or_authority(monkeypatch):
         assert payload[key] is False
 
 
-def test_route_calls_only_phase19g_helper_without_forbidden_wiring():
+def test_route_calls_only_phase20a_helper_without_forbidden_wiring():
     source = (ROOT / "src/app/api.py").read_text(encoding="utf-8")
     start = source.index(
-        '@app.post("/api/operator-decision-capture-readback")'
+        '@app.post("/api/provider-call-readiness-readback")'
     )
     end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
     snippet = source[start:end]
+    compact = snippet.replace("\n", "").replace(" ", "")
 
     assert (
-        "operator_decision_capture_readback_contract."
-        "build_operator_decision_capture_readback_payload"
-    ) in snippet.replace("\n", "").replace(" ", "")
+        "provider_call_readiness_experiment."
+        "build_provider_call_readiness_experiment_payload"
+    ) in compact
     for marker in (
         "services.",
         "src.storage",
         "src.pipeline",
         "collector.",
-        "provider_runtime",
+        "provider_client",
+        "provider_callable",
+        "openai",
+        "anthropic",
+        "requests.",
+        "httpx",
         "open(",
         "connect(",
         ".commit(",
@@ -178,11 +213,25 @@ def test_route_calls_only_phase19g_helper_without_forbidden_wiring():
         "update_ranking",
         "mutate_queue",
         "mutate_resume",
-        "create_execution",
         "execute_application",
         "submit_application",
     ):
         assert marker not in snippet.lower()
+
+
+def test_permanent_no_automatic_application_behavior_is_documented():
+    text = (
+        ROOT / "docs/phase20_provider_call_readiness_api_readback.md"
+    ).read_text(encoding="utf-8").lower()
+
+    for marker in (
+        "no auto-apply feature",
+        "no auto-submit feature",
+        "no autonomous application execution",
+        "no automatic job application submission",
+        "permanent product boundary",
+    ):
+        assert marker in text
 
 
 def test_protected_files_are_unchanged():
@@ -190,7 +239,7 @@ def test_protected_files_are_unchanged():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
 
 
-def test_phase19h_changes_only_approved_files():
+def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
     tracked = subprocess.check_output(
         ["git", "diff", "--name-only"], cwd=ROOT, text=True
     ).splitlines()
@@ -202,31 +251,13 @@ def test_phase19h_changes_only_approved_files():
     changed = set(tracked + untracked)
     allowed = {
         "src/app/api.py",
-        "docs/phase19_operator_decision_capture_api_readback.md",
-        "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
-        "docs/phase19_operator_decision_capture_ui_readback.md",
-        "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
-        "docs/phase19_readonly_approval_workflow_release_checkpoint.md",
-        "tests/test_phase19j_readonly_approval_workflow_release_checkpoint_default_off.py",
-        "src/agents/provider_call_readiness_experiment.py",
-        "docs/phase20_provider_call_readiness_experiment.md",
-        "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
-        "src/app/api.py",
         "docs/phase20_provider_call_readiness_api_readback.md",
         "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
-        "src/app/static/agentic_review.js",
-        "src/app/static/app_redesign.css",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if any(
-            marker in path.read_text(encoding="utf-8")
-            for marker in (
-                "src/app/api.py",
-                "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
-            )
-        )
+        if "src/app/api.py" in path.read_text(encoding="utf-8")
     }
 
     assert changed <= allowed | legacy_guards

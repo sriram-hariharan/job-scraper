@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
+    "src/app/api.py": "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
@@ -217,11 +217,20 @@ def test_phase19i_changes_only_approved_files():
         "src/agents/provider_call_readiness_experiment.py",
         "docs/phase20_provider_call_readiness_experiment.md",
         "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
+        "src/app/api.py",
+        "docs/phase20_provider_call_readiness_api_readback.md",
+        "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if "agentic_review.js" in path.read_text(encoding="utf-8")
+        if any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "agentic_review.js",
+                "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
+            )
+        )
     }
 
     assert changed <= allowed | legacy_guards

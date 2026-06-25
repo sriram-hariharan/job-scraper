@@ -9,7 +9,7 @@ from src.agents import operator_decision_capture_readback_contract as contract
 ROOT = Path(__file__).resolve().parents[1]
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
+    "src/app/api.py": "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
     "src/app/static/app_redesign.css": "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
@@ -240,6 +240,9 @@ def test_phase19g_changes_only_approved_files():
         "src/agents/provider_call_readiness_experiment.py",
         "docs/phase20_provider_call_readiness_experiment.md",
         "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
+        "src/app/api.py",
+        "docs/phase20_provider_call_readiness_api_readback.md",
+        "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
     }
@@ -250,7 +253,7 @@ def test_phase19g_changes_only_approved_files():
                 marker in path.read_text(encoding="utf-8")
                 for marker in (
                     "test_phase19f_approval_preview_operator_decision_preview_default_off.py",
-                    "7cd4cc3e4bb921542e6f6e4870fb4999e7546fb5db90ed3bc1aa07d17930c1b5",
+                    "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
                     "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
                 )
             )

@@ -429,6 +429,9 @@ ALLOWED_CHANGED = {
     "src/agents/provider_call_readiness_experiment.py",
     "docs/phase20_provider_call_readiness_experiment.md",
     "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
+    "src/app/api.py",
+    "docs/phase20_provider_call_readiness_api_readback.md",
+    "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
 }
 
 def _changed_files():

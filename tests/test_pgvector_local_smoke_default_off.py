@@ -147,7 +147,7 @@ def test_no_api_ui_pipeline_schema_or_dependency_change():
             "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede"
         ),
         "src/app/static/agentic_review.js": (
-            "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff"
+            "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

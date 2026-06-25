@@ -74,8 +74,8 @@ SAFETY_MARKERS = (
 PROTECTED_HASHES = {
     "src/app/api.py": "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
-    "src/app/static/app_redesign.css": "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+    "src/app/static/agentic_review.js": "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
+    "src/app/static/app_redesign.css": "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef",
     "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
@@ -204,6 +204,10 @@ def test_phase22f_changes_only_docs_tests_and_legacy_guards():
         "src/app/api.py",
         "docs/phase23_tailoring_agent_opportunity_api_readback.md",
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
     }
     legacy_guards = {
@@ -212,6 +216,10 @@ def test_phase22f_changes_only_docs_tests_and_legacy_guards():
         if (
             "changes_only" in path.read_text(encoding="utf-8")
             or "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede"
+            in path.read_text(encoding="utf-8")
+            or "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454"
+            in path.read_text(encoding="utf-8")
+            or "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef"
             in path.read_text(encoding="utf-8")
         )
     }

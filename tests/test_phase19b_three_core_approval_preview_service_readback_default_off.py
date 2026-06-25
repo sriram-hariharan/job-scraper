@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTECTED_HASHES = {
     "src/app/api.py": "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+    "src/app/static/agentic_review.js": "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/jd_intelligence.py": "1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e",
@@ -358,6 +358,8 @@ def test_phase19b_changes_only_approved_files():
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
         "docs/phase23_tailoring_agent_opportunity_api_readback.md",
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -502,8 +504,8 @@ def test_phase19b_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
-                "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+                "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef",
+                "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
             )
         )
     }

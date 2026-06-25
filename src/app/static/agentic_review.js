@@ -2809,6 +2809,208 @@ function renderCoreAgentEvidenceMaterializationReadbackSection(
   `;
 }
 
+function shouldRenderTailoringAgentOpportunityFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "tailoring_agent_opportunity_fixture",
+  ) === "1";
+}
+
+function buildTailoringAgentOpportunityFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    contract_version: "phase-23a-tailoring-agent-opportunity-contract-v1",
+    contract_status: "tailoring_agent_opportunity_contract_ready_for_manual_review",
+    tailoring_agent_opportunity_contract_enabled: true,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_only: true,
+    manual_user_control_required: true,
+    tailoring_agent_separate_from_final_scoring: true,
+    generate_ai_tailoring_user_trigger_required: true,
+    ai_tailoring_generation_performed: false,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    no_provider_calls: true,
+    no_network_calls: true,
+    no_database_writes: true,
+    no_persistence: true,
+    no_mutation: true,
+    no_resume_mutation: true,
+    no_application_mutation: true,
+    no_execution: true,
+    no_submission: true,
+    opportunity_inputs: {
+      core_agent_evidence_packet: {
+        manual_review_evidence_packet: {
+          missing_evidence_fields: ["project_evidence"],
+        },
+      },
+      job_evidence: {
+        title: "Machine Learning Engineer",
+      },
+      resume_evidence: {
+        resume_name: "ML Resume",
+      },
+      missing_requirements: ["kubernetes"],
+      matched_terms: ["python"],
+      tailoring_context: {
+        focus_areas: ["production ML impact"],
+      },
+    },
+    tailoring_opportunity_summary: "Identified 3 caller-supplied tailoring opportunities for manual review.",
+    tailoring_opportunities: [
+      {
+        opportunity_type: "missing_requirement",
+        source: "missing_requirements",
+        signal: "kubernetes",
+        manual_review_required: true,
+        generate_ai_tailoring_allowed_now: false,
+        suggested_next_step: "review_existing_resume_evidence_for_supported_alignment",
+      },
+      {
+        opportunity_type: "evidence_packet_gap",
+        source: "core_agent_evidence_packet",
+        signal: "project_evidence",
+        manual_review_required: true,
+        generate_ai_tailoring_allowed_now: false,
+        suggested_next_step: "review_missing_evidence_before_tailoring",
+      },
+      {
+        opportunity_type: "caller_supplied_tailoring_context",
+        source: "tailoring_context",
+        signal: "production ML impact",
+        manual_review_required: true,
+        generate_ai_tailoring_allowed_now: false,
+        suggested_next_step: "review_tailoring_opportunity_under_manual_control",
+      },
+    ],
+    future_user_triggered_action: "Generate AI Tailoring",
+    next_safe_step: "review_tailoring_opportunities_without_generating_ai_tailoring",
+  };
+}
+
+function withTailoringAgentOpportunityFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(source.tailoring_agent_opportunity_result)
+    || !shouldRenderTailoringAgentOpportunityFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    tailoring_agent_opportunity_result: (
+      buildTailoringAgentOpportunityFixtureResult()
+    ),
+  };
+}
+
+function renderTailoringAgentOpportunityReadbackSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.tailoring_agent_opportunity_result,
+  )
+    ? tracePayload.tailoring_agent_opportunity_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const opportunities = Array.isArray(result.tailoring_opportunities)
+    ? result.tailoring_opportunities
+    : [];
+  const inputs = hasAgentTraceSummaryObject(result.opportunity_inputs)
+    ? result.opportunity_inputs
+    : {};
+  const packet = hasAgentTraceSummaryObject(
+    inputs.core_agent_evidence_packet,
+  )
+    ? inputs.core_agent_evidence_packet
+    : {};
+  const manualReviewPacket = hasAgentTraceSummaryObject(
+    packet.manual_review_evidence_packet,
+  )
+    ? packet.manual_review_evidence_packet
+    : {};
+  const missingEvidence = Array.isArray(
+    manualReviewPacket.missing_evidence_fields,
+  )
+    ? manualReviewPacket.missing_evidence_fields
+    : [];
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  const opportunityRows = opportunities.length
+    ? opportunities.map((opportunity) => `
+        <article class="tailoring-agent-opportunity-readback__item">
+          <div class="agent-trace-counts">
+            ${renderWorkflowSummaryMetric("Opportunity type", opportunity?.opportunity_type || "unknown")}
+            ${renderWorkflowSummaryMetric("Source", opportunity?.source || "unknown")}
+            ${renderWorkflowSummaryMetric("Signal", Array.isArray(opportunity?.signal) ? opportunity.signal.map(String).join(", ") : String(opportunity?.signal || "not supplied"))}
+            ${renderWorkflowSummaryMetric("Manual review required", opportunity?.manual_review_required === true ? "yes" : "no")}
+            ${renderWorkflowSummaryMetric("Generate AI tailoring allowed now", opportunity?.generate_ai_tailoring_allowed_now === true ? "yes" : "no")}
+            ${renderWorkflowSummaryMetric("Suggested next step", opportunity?.suggested_next_step || "none")}
+          </div>
+        </article>
+      `).join("")
+    : `<p class="agentic-review-muted">No supplied tailoring opportunities are available for passive review.</p>`;
+  return `
+    <article class="agent-trace-summary tailoring-agent-opportunity-readback" aria-label="Tailoring-agent opportunity readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Tailoring-Agent Opportunity Readback</h4>
+          <p>Read-only, advisory-only, manual-review only. This UI only identifies tailoring opportunities and does not generate AI tailoring.</p>
+          <p class="agentic-review-muted">The tailoring agent remains separate from final scoring. Manual user control required.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="tailoring-agent-opportunity-readback__safety-labels" aria-label="Tailoring-agent opportunity safety labels">
+        <span>Read-only</span>
+        <span>Advisory-only</span>
+        <span>Manual-review only</span>
+      </div>
+      <div class="agent-trace-counts tailoring-agent-opportunity-readback__metrics">
+        ${renderWorkflowSummaryMetric("Contract status", result.contract_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Opportunity count", opportunities.length)}
+        ${renderWorkflowSummaryMetric("Missing evidence summary", missingEvidence.length ? missingEvidence.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Future user-triggered action", result.future_user_triggered_action || "Generate AI Tailoring")}
+        ${renderWorkflowSummaryMetric("No provider calls", result.no_provider_calls === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No database writes", result.no_database_writes === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No persistence", result.no_persistence === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No mutation", result.no_mutation === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No execution", result.no_execution === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No submission", result.no_submission === true ? "yes" : "no")}
+      </div>
+      <div class="tailoring-agent-opportunity-readback__boundary">
+        <strong>Tailoring safety boundary</strong>
+        <span>Generate AI Tailoring is later user-triggered only; there is no control for it in this phase.</span>
+        <span>Generated tailoring suggestions remain preview/manual-review only unless the user accepts edits.</span>
+        <span>No silent resume rewrite. No automatic resume overwrite. No resume mutation. No application submission.</span>
+        <span>No auto-apply. No auto-submit. No autonomous application execution. No automatic job application submission.</span>
+      </div>
+      <div class="tailoring-agent-opportunity-readback__items">
+        ${opportunityRows}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Opportunity inputs", inputs, { helper: "Caller-supplied evidence only." })}
+        ${renderAgentTraceReadOnlyDetails("Tailoring opportunity summary", result.tailoring_opportunity_summary || "", { helper: "Read-only missing-evidence and opportunity summary." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -5778,6 +5980,11 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       manualReviewReadinessVisibleTracePayload,
     )
   );
+  const tailoringAgentOpportunityVisibleTracePayload = (
+    withTailoringAgentOpportunityFixture(
+      coreAgentEvidenceMaterializationVisibleTracePayload,
+    )
+  );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
@@ -5844,6 +6051,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderProviderCallReadinessReadbackSection(providerCallReadinessVisibleTracePayload)}
       ${renderManualReviewReadinessReadbackSection(manualReviewReadinessVisibleTracePayload)}
       ${renderCoreAgentEvidenceMaterializationReadbackSection(coreAgentEvidenceMaterializationVisibleTracePayload)}
+      ${renderTailoringAgentOpportunityReadbackSection(tailoringAgentOpportunityVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -6532,6 +6740,132 @@ async function withCoreAgentEvidenceMaterializationReadbackApiFetch(
       ...source,
       core_agent_evidence_materialization_result: (
         buildCoreAgentEvidenceMaterializationReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchTailoringAgentOpportunityReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "tailoring_agent_opportunity_api_fetch",
+  ) === "1";
+}
+
+function buildTailoringAgentOpportunityReadbackRequest(
+  tracePayload = {},
+) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.tailoring_agent_opportunity_request_payload,
+  )
+    ? tracePayload.tailoring_agent_opportunity_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    core_agent_evidence_packet: null,
+    job_evidence: null,
+    resume_evidence: null,
+    missing_requirements: null,
+    matched_terms: null,
+    tailoring_context: null,
+  };
+}
+
+function buildTailoringAgentOpportunityReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    contract_status: "tailoring_agent_opportunity_readback_failed_closed",
+    tailoring_agent_opportunity_contract_enabled: false,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_only: true,
+    manual_user_control_required: true,
+    tailoring_agent_separate_from_final_scoring: true,
+    generate_ai_tailoring_user_trigger_required: true,
+    ai_tailoring_generation_performed: false,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    no_provider_calls: true,
+    no_network_calls: true,
+    no_database_writes: true,
+    no_persistence: true,
+    no_mutation: true,
+    no_resume_mutation: true,
+    no_application_mutation: true,
+    no_execution: true,
+    no_submission: true,
+    opportunity_inputs: {},
+    tailoring_opportunity_summary: "Read-only API fetch failed closed.",
+    tailoring_opportunities: [],
+    future_user_triggered_action: "Generate AI Tailoring",
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    fail_closed_reason: String(
+      error?.message || "tailoring_agent_opportunity_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      advisory_only: true,
+      manual_review_only: true,
+      manual_user_control_required: true,
+      provider_call_attempted: false,
+      network_call_attempted: false,
+      database_write_attempted: false,
+      persistence_attempted: false,
+      ranking_mutated: false,
+      queue_mutated: false,
+      resume_mutated: false,
+      application_mutated: false,
+      approval_mutated: false,
+      decision_mutated: false,
+      audit_mutated: false,
+      execution_authorized: false,
+      submission_authorized: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+async function withTailoringAgentOpportunityReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(source.tailoring_agent_opportunity_result)
+    || !shouldFetchTailoringAgentOpportunityReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/tailoring-agent-opportunity-contract",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildTailoringAgentOpportunityReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      tailoring_agent_opportunity_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      tailoring_agent_opportunity_result: (
+        buildTailoringAgentOpportunityReadbackFetchFailure(error)
       ),
     };
   }
@@ -10556,10 +10890,15 @@ async function initAgenticReviewPage() {
         manualReviewReadinessTracePayload,
       )
     );
+    const tailoringAgentOpportunityTracePayload = await (
+      withTailoringAgentOpportunityReadbackApiFetch(
+        coreAgentEvidenceMaterializationTracePayload,
+      )
+    );
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
     renderAgenticReviewData(
       payload,
-      coreAgentEvidenceMaterializationTracePayload,
+      tailoringAgentOpportunityTracePayload,
     );
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");

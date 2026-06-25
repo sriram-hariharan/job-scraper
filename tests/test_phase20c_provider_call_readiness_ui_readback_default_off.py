@@ -233,6 +233,9 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
         "docs/manual_review_workflow_boundary.md",
         "docs/phase21_manual_review_workflow_boundary.md",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "src/agents/manual_review_readiness_contract.py",
+        "docs/phase21_manual_review_readiness_contract.md",
+        "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

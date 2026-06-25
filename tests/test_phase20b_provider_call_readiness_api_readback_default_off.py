@@ -263,6 +263,9 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
         "docs/manual_review_workflow_boundary.md",
         "docs/phase21_manual_review_workflow_boundary.md",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "src/agents/manual_review_readiness_contract.py",
+        "docs/phase21_manual_review_readiness_contract.md",
+        "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
     }

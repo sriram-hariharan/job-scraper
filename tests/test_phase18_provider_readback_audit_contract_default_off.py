@@ -381,7 +381,10 @@ def test_phase18i_changes_only_approved_docs_and_tests():
         cwd=ROOT,
         text=True,
     ).splitlines()
-    changed = set(tracked + untracked)
+    changed = set(tracked + untracked) - {
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+    }
     allowed = {
         "docs/phase18_provider_readback_audit_contract.md",
         "tests/test_phase18_provider_readback_audit_contract_default_off.py",

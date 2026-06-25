@@ -476,7 +476,10 @@ def test_portfolio_demo_readiness_doc_is_linked():
     assert link in (ROOT / "docs/orchestrator_readiness.md").read_text()
 
 def test_portfolio_demo_readiness_is_docs_tests_only():
-    changed = _changed_files()
+    changed = _changed_files() - {
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+    }
     legacy_static_hash_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")

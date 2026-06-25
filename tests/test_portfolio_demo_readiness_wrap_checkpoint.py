@@ -494,6 +494,8 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/tailoring_agent_opportunity_contract.py",
         "docs/phase23_tailoring_agent_opportunity_contract.md",
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_api_readback.md",
+        "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

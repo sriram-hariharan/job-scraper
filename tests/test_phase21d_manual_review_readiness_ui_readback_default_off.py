@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
+    "src/app/api.py": "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
@@ -234,6 +234,8 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
         "src/agents/tailoring_agent_opportunity_contract.py",
         "docs/phase23_tailoring_agent_opportunity_contract.md",
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_api_readback.md",
+        "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -256,7 +258,7 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                     "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
-                    "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
+                    "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
                     "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
                 "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
             )

@@ -360,6 +360,9 @@ def test_phase19b_changes_only_approved_files():
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
         "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
         "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
+        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

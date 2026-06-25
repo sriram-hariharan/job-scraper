@@ -206,6 +206,9 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
         "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
         "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
+        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

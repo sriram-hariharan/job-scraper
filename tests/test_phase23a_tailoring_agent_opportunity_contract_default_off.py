@@ -311,6 +311,9 @@ def test_phase23a_changes_only_helper_doc_test_and_legacy_guards():
         "src/app/static/app_redesign.css",
         "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
         "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
+        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
     }
     legacy_guards = {

@@ -225,6 +225,9 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
         "src/app/static/app_redesign.css",
         "docs/phase20_provider_call_readiness_ui_readback.md",
         "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
+        "docs/no_auto_apply_safety_policy.md",
+        "docs/phase20_no_auto_apply_safety_checkpoint.md",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

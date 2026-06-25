@@ -9,7 +9,7 @@ from src.agents import provider_call_readiness_experiment as experiment
 ROOT = Path(__file__).resolve().parents[1]
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
+    "src/app/api.py": "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
     "src/app/static/app_redesign.css": "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
@@ -274,6 +274,9 @@ def test_phase20a_changes_only_new_helper_doc_test_and_legacy_guards():
         "src/agents/core_agent_evidence_materialization_preview.py",
         "docs/phase22_core_agent_evidence_materialization_preview.md",
         "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+        "src/app/api.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
     }
     allowed = {
         "src/agents/provider_call_readiness_experiment.py",
@@ -317,7 +320,7 @@ def test_phase20a_changes_only_new_helper_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "docs/phase19_readonly_approval_workflow_release_checkpoint.md",
-                "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
+                "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
                 "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
             )
         )

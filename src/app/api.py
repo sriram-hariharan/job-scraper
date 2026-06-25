@@ -10,6 +10,9 @@ from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.agents.critic_evaluator import evaluate_agent_trace
+from src.agents.core_agent_evidence_materialization_preview import (
+    build_core_agent_evidence_materialization_preview,
+)
 from src.agents import manual_review_readiness_contract
 from src.agents import operator_decision_capture_readback_contract
 from src.agents import provider_call_readiness_experiment
@@ -4683,6 +4686,31 @@ def manual_review_readiness_readback_api(
     return manual_review_readiness_contract.build_manual_review_readiness_payload(
         enabled=request_payload.get("enabled", False),
         review_inputs_summary=request_payload.get("review_inputs_summary"),
+    )
+
+
+@app.post("/api/core-agent-evidence-materialization-preview")
+def core_agent_evidence_materialization_preview_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return build_core_agent_evidence_materialization_preview(
+        enabled=request_payload.get("enabled", False),
+        relevance_prefilter_result=request_payload.get(
+            "relevance_prefilter_result"
+        ),
+        jd_intelligence_signals=request_payload.get(
+            "jd_intelligence_signals"
+        ),
+        final_application_scoring_result=request_payload.get(
+            "final_application_scoring_result"
+        ),
+        tailoring_opportunity_signals=request_payload.get(
+            "tailoring_opportunity_signals"
+        ),
+        manual_review_context=request_payload.get(
+            "manual_review_context"
+        ),
     )
 
 

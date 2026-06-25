@@ -239,6 +239,9 @@ def test_phase19c_changes_only_approved_files():
         "src/agents/core_agent_evidence_materialization_preview.py",
         "docs/phase22_core_agent_evidence_materialization_preview.md",
         "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+        "src/app/api.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
     }
     allowed = {
         "src/app/api.py",

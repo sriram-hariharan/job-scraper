@@ -222,6 +222,9 @@ def test_phase21c_changes_only_api_doc_test_and_legacy_guards():
         "src/agents/core_agent_evidence_materialization_preview.py",
         "docs/phase22_core_agent_evidence_materialization_preview.md",
         "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+        "src/app/api.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
     }
     allowed = {
         "src/app/api.py",
@@ -244,7 +247,7 @@ def test_phase21c_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
-                "ba752c3a7eaef620476abffb0ecb7ebf8ce023346917ff8fedb5579c9504d41f",
+                "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
                 "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
             )
         )

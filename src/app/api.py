@@ -10,6 +10,13 @@ from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.agents.critic_evaluator import evaluate_agent_trace
+from src.agents.core_agent_evidence_materialization_preview import (
+    build_core_agent_evidence_materialization_preview,
+)
+from src.agents import manual_review_readiness_contract
+from src.agents import operator_decision_capture_readback_contract
+from src.agents import provider_call_readiness_experiment
+from src.agents import three_core_approval_preview_service_readback
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
 from src.app.decisions_ui import router as decisions_ui_router
@@ -4604,6 +4611,107 @@ def three_core_shadow_operator_canary_readback(
         "mutation_authorized_agent_count": 0,
         "safety_metadata": safety,
     }
+
+
+@app.post("/api/three-core-approval-preview-service-readback")
+def three_core_approval_preview_service_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return (
+        three_core_approval_preview_service_readback
+        .build_three_core_approval_preview_service_readback_payload(
+            enabled=request_payload.get("enabled", False),
+            approval_preview_runtime_payload=request_payload.get(
+                "approval_preview_runtime_payload"
+            ),
+            shadow_runtime_readback_payload=request_payload.get(
+                "shadow_runtime_readback_payload"
+            ),
+            shadow_sidecar_hook_payload=request_payload.get(
+                "shadow_sidecar_hook_payload"
+            ),
+            readback_context=request_payload.get("readback_context"),
+            readback_config=request_payload.get("readback_config"),
+        )
+    )
+
+
+@app.post("/api/operator-decision-capture-readback")
+def operator_decision_capture_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return (
+        operator_decision_capture_readback_contract
+        .build_operator_decision_capture_readback_payload(
+            enabled=request_payload.get("enabled", False),
+            selected_action=request_payload.get("selected_action", ""),
+            selected_resume=request_payload.get("selected_resume", ""),
+            selected_variant=request_payload.get("selected_variant", ""),
+            operator_note=request_payload.get("operator_note", ""),
+            config=request_payload.get("config"),
+        )
+    )
+
+
+@app.post("/api/provider-call-readiness-readback")
+def provider_call_readiness_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return (
+        provider_call_readiness_experiment
+        .build_provider_call_readiness_experiment_payload(
+            enabled=request_payload.get("enabled", False),
+            requested_provider_capability=request_payload.get(
+                "requested_provider_capability",
+                "",
+            ),
+            provider_name=request_payload.get("provider_name", ""),
+            requested_model=request_payload.get("requested_model", ""),
+            request_packet_summary=request_payload.get(
+                "request_packet_summary"
+            ),
+            config=request_payload.get("config"),
+        )
+    )
+
+
+@app.post("/api/manual-review-readiness-readback")
+def manual_review_readiness_readback_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return manual_review_readiness_contract.build_manual_review_readiness_payload(
+        enabled=request_payload.get("enabled", False),
+        review_inputs_summary=request_payload.get("review_inputs_summary"),
+    )
+
+
+@app.post("/api/core-agent-evidence-materialization-preview")
+def core_agent_evidence_materialization_preview_api(
+    payload: dict | None = Body(default=None),
+):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    return build_core_agent_evidence_materialization_preview(
+        enabled=request_payload.get("enabled", False),
+        relevance_prefilter_result=request_payload.get(
+            "relevance_prefilter_result"
+        ),
+        jd_intelligence_signals=request_payload.get(
+            "jd_intelligence_signals"
+        ),
+        final_application_scoring_result=request_payload.get(
+            "final_application_scoring_result"
+        ),
+        tailoring_opportunity_signals=request_payload.get(
+            "tailoring_opportunity_signals"
+        ),
+        manual_review_context=request_payload.get(
+            "manual_review_context"
+        ),
+    )
 
 
 @app.post("/api/provider-runtime-readback")

@@ -1901,6 +1901,914 @@ function renderThreeCoreShadowOperatorCanaryReadbackSection(tracePayload = {}) {
   `;
 }
 
+function shouldRenderThreeCoreApprovalPreviewFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "three_core_approval_preview_fixture",
+  ) === "1";
+}
+
+function buildThreeCoreApprovalPreviewServiceReadbackFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    service_readback_status: "approval_preview_service_readback_ready",
+    service_readback_enabled: true,
+    default_off: true,
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    service_readback_only: true,
+    ordered_core_agent_names: [
+      "relevance_prefilter",
+      "jd_intelligence",
+      "final_application_scoring",
+    ],
+    requested_capability: "review_three_core_approval_preview_readback",
+    linked_trace_or_readback_id: "phase19d-local-fixture",
+    next_safe_step: "review_service_readback_metadata_only",
+    missing_requirements: [],
+    fail_closed_reason: "",
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      service_readback_only: true,
+      local_fixture_only: true,
+      provider_call: false,
+      network_call: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_write_file: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_mutate_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+      mutation_authorized: false,
+      application_execution_authorized: false,
+      submission_authorized: false,
+    },
+  };
+}
+
+function withThreeCoreApprovalPreviewServiceReadbackFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.three_core_approval_preview_service_readback_result,
+    )
+    || !shouldRenderThreeCoreApprovalPreviewFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    three_core_approval_preview_service_readback_result: (
+      buildThreeCoreApprovalPreviewServiceReadbackFixtureResult()
+    ),
+  };
+}
+
+function renderThreeCoreApprovalPreviewServiceReadbackSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.three_core_approval_preview_service_readback_result,
+  )
+    ? tracePayload.three_core_approval_preview_service_readback_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const orderedNames = Array.isArray(result.ordered_core_agent_names)
+    ? result.ordered_core_agent_names
+    : [];
+  const missingRequirements = Array.isArray(result.missing_requirements)
+    ? result.missing_requirements
+    : [];
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : "Default-off read-only";
+  return `
+    <article class="agent-trace-summary three-core-approval-preview-readback" aria-label="Three-core approval preview service readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Three-Core Approval Preview Readback</h4>
+          <p>Passive display of supplied approval preview metadata. It is read-only, shadow-only, advisory-only, with approval creation and application-state changes disabled.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts three-core-approval-preview-readback__metrics">
+        ${renderWorkflowSummaryMetric("Service readback status", result.service_readback_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Read only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ordered agents", orderedNames.length ? orderedNames.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Requested capability", result.requested_capability || "none")}
+        ${renderWorkflowSummaryMetric("Linked trace / readback id", result.linked_trace_or_readback_id || "none")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+        ${renderWorkflowSummaryMetric("Missing requirements", missingRequirements.length ? missingRequirements.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Fail-closed reason", result.fail_closed_reason || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-provider, no-database, and no-mutation safety flags from the supplied readback." })}
+      </div>
+    </article>
+  `;
+}
+
+function shouldRenderThreeCoreApprovalPreviewOperatorDecisionPreview(
+  search = null,
+) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "three_core_approval_preview_operator_decision_preview_not_persisted",
+  ) === "1";
+}
+
+function buildThreeCoreApprovalPreviewOperatorDecisionPreviewFixture() {
+  return {
+    local_fixture_preview: true,
+    preview_status: "operator_decision_preview_ready",
+    selected_operator_action: "continue_human_review",
+    selected_resume: "primary_resume",
+    selected_variant: "baseline",
+    reason: "Review the supplied approval preview evidence.",
+    note: "Preview only; no operator decision is captured.",
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    decision_persisted: false,
+    approval_record_created: false,
+    audit_record_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "review_operator_decision_preview_only",
+  };
+}
+
+function withThreeCoreApprovalPreviewOperatorDecisionPreview(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.three_core_approval_preview_operator_decision_preview_result,
+    )
+    || !shouldRenderThreeCoreApprovalPreviewOperatorDecisionPreview(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    three_core_approval_preview_operator_decision_preview_result: (
+      buildThreeCoreApprovalPreviewOperatorDecisionPreviewFixture()
+    ),
+  };
+}
+
+function renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.three_core_approval_preview_operator_decision_preview_result,
+  )
+    ? tracePayload.three_core_approval_preview_operator_decision_preview_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const selectedResumeVariant = [
+    result.selected_resume,
+    result.selected_variant,
+  ].filter(Boolean).join(" / ");
+  const reasonNote = [result.reason, result.note].filter(Boolean).join(" — ");
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local decision preview"
+    : "Supplied decision preview";
+  return `
+    <article class="agent-trace-summary three-core-approval-preview-decision" aria-label="Three-core approval preview operator decision preview">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Approval Preview Operator Decision</h4>
+          <p>Passive operator-choice preview only. No decision, audit, approval, execution, submission, or application-state record is written.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Preview status", result.preview_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Selected operator action", result.selected_operator_action || "none")}
+        ${renderWorkflowSummaryMetric("Selected resume / variant", selectedResumeVariant || "none")}
+        ${renderWorkflowSummaryMetric("Reason / note", reasonNote || "none")}
+        ${renderWorkflowSummaryMetric("Read only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Decision persisted", result.decision_persisted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution authorized", result.execution_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission authorized", result.submission_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Operator decision preview", result, { helper: "Display-only preview. Nothing is persisted or authorized." })}
+      </div>
+    </article>
+  `;
+}
+
+function shouldRenderOperatorDecisionCaptureReadbackFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "operator_decision_capture_readback_fixture",
+  ) === "1";
+}
+
+function buildOperatorDecisionCaptureReadbackFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    capture_status: "operator_decision_capture_readback_ready",
+    enabled: true,
+    default_off: true,
+    selected_action: "HOLD",
+    selected_resume: "primary_resume",
+    selected_variant: "baseline",
+    operator_note: "Deterministic read-only operator decision capture fixture.",
+    validation_errors: [],
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    contract_only: true,
+    decision_persisted: false,
+    approval_created: false,
+    audit_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "review_contract_payload_without_persisting",
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      contract_only: true,
+      provider_call: false,
+      network_call: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+      mutation_authorized: false,
+      execution_authorized: false,
+      submission_authorized: false,
+    },
+  };
+}
+
+function withOperatorDecisionCaptureReadbackFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.operator_decision_capture_readback_result,
+    )
+    || !shouldRenderOperatorDecisionCaptureReadbackFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    operator_decision_capture_readback_result: (
+      buildOperatorDecisionCaptureReadbackFixtureResult()
+    ),
+  };
+}
+
+function renderOperatorDecisionCaptureReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.operator_decision_capture_readback_result,
+  )
+    ? tracePayload.operator_decision_capture_readback_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const validationErrors = Array.isArray(result.validation_errors)
+    ? result.validation_errors
+    : [];
+  const selectedResumeVariant = [
+    result.selected_resume,
+    result.selected_variant,
+  ].filter(Boolean).join(" / ");
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  return `
+    <article class="agent-trace-summary operator-decision-capture-readback" aria-label="Operator decision capture readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Operator Decision Capture Readback</h4>
+          <p>Passive contract readback only. No decision, approval, audit, execution, submission, or application-state mutation is persisted or authorized.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts operator-decision-capture-readback__metrics">
+        ${renderWorkflowSummaryMetric("Capture status", result.capture_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Selected action", result.selected_action || "none")}
+        ${renderWorkflowSummaryMetric("Selected resume / variant", selectedResumeVariant || "none")}
+        ${renderWorkflowSummaryMetric("Operator note", result.operator_note || "none")}
+        ${renderWorkflowSummaryMetric("Validation errors", validationErrors.length ? validationErrors.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Read only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Decision persisted", result.decision_persisted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval created", result.approval_created === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution authorized", result.execution_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission authorized", result.submission_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutation authorized", result.mutation_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Safety metadata summary", safety, { helper: "No-provider, no-database, no-persistence, and no-mutation safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
+function shouldRenderProviderCallReadinessFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "provider_call_readiness_fixture",
+  ) === "1";
+}
+
+function buildProviderCallReadinessFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    readiness_status: "provider_call_readiness_experiment_ready",
+    enabled: true,
+    default_off: true,
+    requested_provider_capability: "review_jd_intelligence_packet",
+    provider_name: "caller-supplied-provider",
+    requested_model: "caller-supplied-model",
+    request_packet_summary: {
+      packet_type: "provider_call_preflight",
+      input_fields: ["job_description"],
+    },
+    validation_errors: [],
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    provider_call_attempted: false,
+    provider_call_authorized: false,
+    network_call_attempted: false,
+    decision_persisted: false,
+    approval_created: false,
+    audit_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "review_readiness_without_calling_provider",
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      readiness_only: true,
+      provider_call_attempted: false,
+      provider_call_authorized: false,
+      network_call_attempted: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_read_file: false,
+      did_write_file: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+      mutation_authorized: false,
+      execution_authorized: false,
+      submission_authorized: false,
+    },
+  };
+}
+
+function withProviderCallReadinessFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.provider_call_readiness_result,
+    )
+    || !shouldRenderProviderCallReadinessFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    provider_call_readiness_result: (
+      buildProviderCallReadinessFixtureResult()
+    ),
+  };
+}
+
+function renderProviderCallReadinessReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.provider_call_readiness_result,
+  )
+    ? tracePayload.provider_call_readiness_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const validationErrors = Array.isArray(result.validation_errors)
+    ? result.validation_errors
+    : [];
+  const requestPacket = hasAgentTraceSummaryObject(
+    result.request_packet_summary,
+  )
+    ? result.request_packet_summary
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  return `
+    <article class="agent-trace-summary provider-call-readiness-readback" aria-label="Provider-call readiness readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Provider-Call Readiness Readback</h4>
+          <p>Passive preflight display only. No provider or network call is attempted or authorized.</p>
+          <p class="agentic-review-muted">Permanent product rule: no auto-apply, no auto-submit, no autonomous application execution, and no automatic job application submission.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts provider-call-readiness-readback__metrics">
+        ${renderWorkflowSummaryMetric("Readiness status", result.readiness_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Requested provider capability", result.requested_provider_capability || "none")}
+        ${renderWorkflowSummaryMetric("Provider name", result.provider_name || "none")}
+        ${renderWorkflowSummaryMetric("Requested model", result.requested_model || "none")}
+        ${renderWorkflowSummaryMetric("Validation errors", validationErrors.length ? validationErrors.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Read only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider call attempted", result.provider_call_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider call authorized", result.provider_call_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Network call attempted", result.network_call_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Decision persisted", result.decision_persisted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval created", result.approval_created === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution authorized", result.execution_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission authorized", result.submission_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutation authorized", result.mutation_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Request packet summary", requestPacket, { helper: "Caller-supplied preflight summary only." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata summary", safety, { helper: "No-provider, no-network, no-storage, no-mutation safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
+function shouldRenderManualReviewReadinessFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "manual_review_readiness_fixture",
+  ) === "1";
+}
+
+function buildManualReviewReadinessFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    readiness_status: "manual_review_readiness_ready",
+    enabled: true,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_required: true,
+    manual_user_control_required: true,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    allowed_assistance_modes: [
+      "discovery",
+      "filtering",
+      "ranking",
+      "read-only previews",
+      "readiness checks",
+      "resume/content guidance",
+      "manual review support",
+    ],
+    forbidden_actions: [
+      "auto-apply",
+      "auto-submit",
+      "autonomous application execution",
+      "automatic job application submission",
+      "bypass of manual review",
+    ],
+    review_inputs_summary: {
+      job: {
+        title: "Machine Learning Engineer",
+        company: "Example Corp",
+      },
+      ranking_summary: {
+        rank: 1,
+        score: 0.92,
+      },
+      resume_guidance_available: true,
+    },
+    missing_review_inputs: [],
+    checklist_items: [
+      "review_job_details",
+      "review_role_fit_and_ranking_evidence",
+      "review_resume_and_content_guidance",
+      "review_application_materials",
+      "confirm_manual_user_control",
+      "complete_submission_outside_autonomous_execution",
+    ],
+    next_safe_step: "complete_manual_review_under_user_control",
+    safety_metadata: {
+      read_only: true,
+      advisory_only: true,
+      manual_review_required: true,
+      manual_user_control_required: true,
+      provider_call_attempted: false,
+      network_call_attempted: false,
+      database_write_attempted: false,
+      approval_created: false,
+      decision_persisted: false,
+      audit_persisted: false,
+      scoring_mutated: false,
+      ranking_mutated: false,
+      queue_mutated: false,
+      resume_mutated: false,
+      application_mutated: false,
+      execution_authorized: false,
+      submission_authorized: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+function withManualReviewReadinessFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(source.manual_review_readiness_result)
+    || !shouldRenderManualReviewReadinessFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    manual_review_readiness_result: (
+      buildManualReviewReadinessFixtureResult()
+    ),
+  };
+}
+
+function renderManualReviewReadinessReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.manual_review_readiness_result,
+  )
+    ? tracePayload.manual_review_readiness_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const allowedModes = Array.isArray(result.allowed_assistance_modes)
+    ? result.allowed_assistance_modes
+    : [];
+  const forbiddenActions = Array.isArray(result.forbidden_actions)
+    ? result.forbidden_actions
+    : [];
+  const missingInputs = Array.isArray(result.missing_review_inputs)
+    ? result.missing_review_inputs
+    : [];
+  const checklistItems = Array.isArray(result.checklist_items)
+    ? result.checklist_items
+    : [];
+  const reviewInputs = hasAgentTraceSummaryObject(
+    result.review_inputs_summary,
+  )
+    ? result.review_inputs_summary
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  return `
+    <article class="agent-trace-summary manual-review-readiness-readback" aria-label="Manual-review readiness readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual-Review Readiness Readback</h4>
+          <p>Manual review support only. This passive panel does not take action or replace human review. Manual user control required.</p>
+          <p class="agentic-review-muted">Permanent product rule: no auto-apply, no auto-submit, no autonomous application execution, and no automatic job application submission.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="manual-review-readiness-readback__safety-labels" aria-label="Manual-review readiness safety labels">
+        <span>Read-only</span>
+        <span>Advisory-only</span>
+        <span>Manual-review only</span>
+      </div>
+      <div class="agent-trace-counts manual-review-readiness-readback__metrics">
+        ${renderWorkflowSummaryMetric("Readiness status", result.readiness_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Manual review required", result.manual_review_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Manual user control required", result.manual_user_control_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No auto apply", result.no_auto_apply === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No auto submit", result.no_auto_submit === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No autonomous application execution", result.no_autonomous_application_execution === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No automatic job application submission", result.no_automatic_job_application_submission === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Allowed assistance modes", allowedModes.length ? allowedModes.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Forbidden actions", forbiddenActions.length ? forbiddenActions.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Missing review inputs", missingInputs.length ? missingInputs.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Checklist items", checklistItems.length ? checklistItems.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Review inputs summary", reviewInputs, { helper: "Caller-supplied manual-review context only." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata summary", safety, { helper: "No-provider, no-storage, no-persistence, no-mutation, no-execution, and no-submission safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
+function shouldRenderCoreAgentEvidenceMaterializationFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "core_agent_evidence_materialization_fixture",
+  ) === "1";
+}
+
+function buildCoreAgentEvidenceMaterializationFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    preview_status: "core_agent_evidence_preview_ready_for_manual_review",
+    core_agent_evidence_materialization_enabled: true,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_only: true,
+    manual_user_control_required: true,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    no_provider_calls: true,
+    no_network_calls: true,
+    no_database_writes: true,
+    no_persistence: true,
+    no_mutation: true,
+    no_execution: true,
+    no_submission: true,
+    core_agent_sequence: [
+      "relevance_prefilter",
+      "jd_intelligence",
+      "final_application_scoring",
+    ],
+    agent_boundaries: {
+      relevance_prefilter: "relevance prefilter owns early relevance gating",
+      jd_intelligence: "JD intelligence owns JD signal extraction and interpretation",
+      final_application_scoring: "final application scoring owns final advisory score synthesis",
+      tailoring_agent: "tailoring agent remains separate from final scoring",
+    },
+    relevance_prefilter_evidence: {
+      passed: true,
+      matched_terms: ["python", "machine learning"],
+    },
+    jd_intelligence_evidence: {
+      required_skills: ["python", "sql"],
+      missing_requirements: ["kubernetes"],
+    },
+    final_application_scoring_evidence: {
+      final_score: 0.82,
+      review_rationale: "Strong fit with one reviewable gap.",
+    },
+    tailoring_opportunity_evidence: {
+      tailoring_opportunity_summary: [
+        "Emphasize production ML evidence.",
+      ],
+    },
+    manual_review_evidence_packet: {
+      relevance_evidence_supplied: true,
+      jd_intelligence_evidence_supplied: true,
+      final_scoring_evidence_supplied: true,
+      tailoring_opportunity_evidence_supplied: true,
+      manual_review_context_supplied: true,
+      suggested_manual_review_status: "ready_for_manual_review",
+      why_job_is_worth_reviewing: "Strong fit with one reviewable gap.",
+      missing_evidence_fields: [],
+      tailoring_opportunity_summary: [
+        "Emphasize production ML evidence.",
+      ],
+      future_user_triggered_action: "Generate AI Tailoring",
+      ai_tailoring_generation_performed: false,
+      tailoring_suggestions_boundary: "Generated tailoring suggestions are preview/manual-review only unless the user accepts edits.",
+      manual_review_context: {
+        action: "MAYBE_TAILOR",
+        company: "Example Corp",
+      },
+    },
+    next_safe_step: "complete_manual_review_under_user_control",
+    safety_metadata: {
+      read_only: true,
+      advisory_only: true,
+      manual_review_only: true,
+      manual_user_control_required: true,
+      provider_call_attempted: false,
+      network_call_attempted: false,
+      database_write_attempted: false,
+      persistence_attempted: false,
+      scoring_mutated: false,
+      ranking_mutated: false,
+      queue_mutated: false,
+      resume_mutated: false,
+      application_mutated: false,
+      approval_mutated: false,
+      decision_mutated: false,
+      audit_mutated: false,
+      execution_authorized: false,
+      submission_authorized: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+function withCoreAgentEvidenceMaterializationFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.core_agent_evidence_materialization_result,
+    )
+    || !shouldRenderCoreAgentEvidenceMaterializationFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    core_agent_evidence_materialization_result: (
+      buildCoreAgentEvidenceMaterializationFixtureResult()
+    ),
+  };
+}
+
+function renderCoreAgentEvidenceMaterializationReadbackSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.core_agent_evidence_materialization_result,
+  )
+    ? tracePayload.core_agent_evidence_materialization_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const packet = hasAgentTraceSummaryObject(
+    result.manual_review_evidence_packet,
+  )
+    ? result.manual_review_evidence_packet
+    : {};
+  const boundaries = hasAgentTraceSummaryObject(result.agent_boundaries)
+    ? result.agent_boundaries
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const coreAgentSequence = Array.isArray(result.core_agent_sequence)
+    ? result.core_agent_sequence
+    : [];
+  const missingEvidenceFields = Array.isArray(packet.missing_evidence_fields)
+    ? packet.missing_evidence_fields
+    : [];
+  const tailoringSummary = Array.isArray(packet.tailoring_opportunity_summary)
+    ? packet.tailoring_opportunity_summary
+    : packet.tailoring_opportunity_summary
+      ? [packet.tailoring_opportunity_summary]
+      : [];
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  return `
+    <article class="agent-trace-summary core-agent-evidence-materialization-readback" aria-label="Core-agent evidence materialization readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Core-Agent Evidence Materialization Readback</h4>
+          <p>Read-only, advisory-only, manual-review only. This passive panel materializes supplied evidence without taking action. Manual user control required.</p>
+          <p class="agentic-review-muted">Permanent product rule: no auto-apply, no auto-submit, no autonomous application execution, and no automatic job application submission.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="core-agent-evidence-materialization-readback__safety-labels" aria-label="Core-agent evidence materialization safety labels">
+        <span>Read-only</span>
+        <span>Advisory-only</span>
+        <span>Manual-review only</span>
+      </div>
+      <div class="agent-trace-counts core-agent-evidence-materialization-readback__metrics">
+        ${renderWorkflowSummaryMetric("Preview status", result.preview_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Core-agent sequence", coreAgentSequence.length ? coreAgentSequence.join(" → ") : "none")}
+        ${renderWorkflowSummaryMetric("Relevance evidence supplied", packet.relevance_evidence_supplied === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("JD intelligence evidence supplied", packet.jd_intelligence_evidence_supplied === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Final scoring evidence supplied", packet.final_scoring_evidence_supplied === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Tailoring opportunity evidence supplied", packet.tailoring_opportunity_evidence_supplied === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Manual review context supplied", packet.manual_review_context_supplied === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Suggested manual review status", packet.suggested_manual_review_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Why the job is worth reviewing", packet.why_job_is_worth_reviewing || "not supplied")}
+        ${renderWorkflowSummaryMetric("Missing evidence fields", missingEvidenceFields.length ? missingEvidenceFields.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Tailoring opportunity summary", tailoringSummary.length ? tailoringSummary.map(String).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Future user-triggered action", packet.future_user_triggered_action || "Generate AI Tailoring")}
+        ${renderWorkflowSummaryMetric("Manual user control required", result.manual_user_control_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No auto apply", result.no_auto_apply === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No auto submit", result.no_auto_submit === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No autonomous application execution", result.no_autonomous_application_execution === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No automatic job application submission", result.no_automatic_job_application_submission === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="core-agent-evidence-materialization-readback__boundary">
+        <strong>Tailoring boundary</strong>
+        <span>${escapeHtml(boundaries.tailoring_agent || "tailoring agent remains separate from final scoring")}</span>
+        <span>Generate AI Tailoring is a later user-triggered action.</span>
+        <span>${escapeHtml(packet.tailoring_suggestions_boundary || "Generated tailoring suggestions are preview/manual-review only unless the user accepts edits.")}</span>
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Relevance prefilter evidence", result.relevance_prefilter_evidence || {}, { helper: "Caller-supplied early relevance evidence only." })}
+        ${renderAgentTraceReadOnlyDetails("JD intelligence evidence", result.jd_intelligence_evidence || {}, { helper: "Caller-supplied JD signal evidence only." })}
+        ${renderAgentTraceReadOnlyDetails("Final application scoring evidence", result.final_application_scoring_evidence || {}, { helper: "Caller-supplied advisory scoring evidence only." })}
+        ${renderAgentTraceReadOnlyDetails("Tailoring opportunity evidence", result.tailoring_opportunity_evidence || {}, { helper: "Opportunity detection only; no AI tailoring is generated." })}
+        ${renderAgentTraceReadOnlyDetails("Manual-review evidence packet", packet, { helper: "Passive manual-review summary only." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-provider, no-persistence, no-mutation, no-execution, and no-submission safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -4837,8 +5745,38 @@ function renderManualGuardedExecutionLaunchRequestStatusTransitionObservabilityS
 }
 
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
-  const fixtureVisibleTracePayload = (
+  const canaryFixtureVisibleTracePayload = (
     withThreeCoreShadowOperatorCanaryFixture(tracePayload)
+  );
+  const fixtureVisibleTracePayload = (
+    withThreeCoreApprovalPreviewServiceReadbackFixture(
+      canaryFixtureVisibleTracePayload,
+    )
+  );
+  const decisionPreviewVisibleTracePayload = (
+    withThreeCoreApprovalPreviewOperatorDecisionPreview(
+      fixtureVisibleTracePayload,
+    )
+  );
+  const operatorDecisionCaptureVisibleTracePayload = (
+    withOperatorDecisionCaptureReadbackFixture(
+      decisionPreviewVisibleTracePayload,
+    )
+  );
+  const providerCallReadinessVisibleTracePayload = (
+    withProviderCallReadinessFixture(
+      operatorDecisionCaptureVisibleTracePayload,
+    )
+  );
+  const manualReviewReadinessVisibleTracePayload = (
+    withManualReviewReadinessFixture(
+      providerCallReadinessVisibleTracePayload,
+    )
+  );
+  const coreAgentEvidenceMaterializationVisibleTracePayload = (
+    withCoreAgentEvidenceMaterializationFixture(
+      manualReviewReadinessVisibleTracePayload,
+    )
   );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -4900,6 +5838,12 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderJdProviderRuntimeReadbackSection(tracePayload)}
       ${renderJdLiveProviderCanaryReadbackSection(tracePayload)}
       ${renderThreeCoreShadowOperatorCanaryReadbackSection(fixtureVisibleTracePayload)}
+      ${renderThreeCoreApprovalPreviewServiceReadbackSection(fixtureVisibleTracePayload)}
+      ${renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(decisionPreviewVisibleTracePayload)}
+      ${renderOperatorDecisionCaptureReadbackSection(operatorDecisionCaptureVisibleTracePayload)}
+      ${renderProviderCallReadinessReadbackSection(providerCallReadinessVisibleTracePayload)}
+      ${renderManualReviewReadinessReadbackSection(manualReviewReadinessVisibleTracePayload)}
+      ${renderCoreAgentEvidenceMaterializationReadbackSection(coreAgentEvidenceMaterializationVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -4987,6 +5931,610 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
 
 function renderAgentTracePanel(tracePayload = {}) {
   return renderAgentTraceReadOnlyPanel(tracePayload);
+}
+
+function shouldFetchThreeCoreApprovalPreviewServiceReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "three_core_approval_preview_api_fetch",
+  ) === "1";
+}
+
+function buildThreeCoreApprovalPreviewServiceReadbackRequest(
+  tracePayload = {},
+) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.three_core_approval_preview_service_readback_request_payload,
+  )
+    ? tracePayload.three_core_approval_preview_service_readback_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    approval_preview_runtime_payload: null,
+    shadow_runtime_readback_payload: null,
+    shadow_sidecar_hook_payload: null,
+    readback_context: null,
+    readback_config: null,
+  };
+}
+
+function buildThreeCoreApprovalPreviewServiceReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    service_readback_status: "approval_preview_service_readback_failed_closed",
+    service_readback_enabled: false,
+    default_off: true,
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    service_readback_only: true,
+    ordered_core_agent_names: [],
+    requested_capability: "three_core_approval_preview_service_readback",
+    linked_trace_or_readback_id: "",
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    missing_requirements: ["available_read_only_api_response"],
+    fail_closed_reason: String(
+      error?.message || "approval_preview_service_readback_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      provider_call: false,
+      network_call: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+    },
+  };
+}
+
+async function withThreeCoreApprovalPreviewServiceReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.three_core_approval_preview_service_readback_result,
+    )
+    || !shouldFetchThreeCoreApprovalPreviewServiceReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/three-core-approval-preview-service-readback",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildThreeCoreApprovalPreviewServiceReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      three_core_approval_preview_service_readback_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      three_core_approval_preview_service_readback_result: (
+        buildThreeCoreApprovalPreviewServiceReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchOperatorDecisionCaptureReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "operator_decision_capture_api_fetch",
+  ) === "1";
+}
+
+function buildOperatorDecisionCaptureReadbackRequest(tracePayload = {}) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.operator_decision_capture_readback_request_payload,
+  )
+    ? tracePayload.operator_decision_capture_readback_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    selected_action: "",
+    selected_resume: "",
+    selected_variant: "",
+    operator_note: "",
+    config: null,
+  };
+}
+
+function buildOperatorDecisionCaptureReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    capture_status: "operator_decision_capture_readback_failed_closed",
+    enabled: false,
+    default_off: true,
+    selected_action: "",
+    selected_resume: "",
+    selected_variant: "",
+    operator_note: "",
+    validation_errors: ["read_only_api_fetch_failed"],
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    contract_only: true,
+    decision_persisted: false,
+    approval_created: false,
+    audit_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    fail_closed_reason: String(
+      error?.message || "operator_decision_capture_readback_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      provider_call: false,
+      network_call: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+    },
+  };
+}
+
+async function withOperatorDecisionCaptureReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.operator_decision_capture_readback_result,
+    )
+    || !shouldFetchOperatorDecisionCaptureReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/operator-decision-capture-readback",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildOperatorDecisionCaptureReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      operator_decision_capture_readback_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      operator_decision_capture_readback_result: (
+        buildOperatorDecisionCaptureReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchProviderCallReadinessReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "provider_call_readiness_api_fetch",
+  ) === "1";
+}
+
+function buildProviderCallReadinessReadbackRequest(tracePayload = {}) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.provider_call_readiness_request_payload,
+  )
+    ? tracePayload.provider_call_readiness_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    requested_provider_capability: "",
+    provider_name: "",
+    requested_model: "",
+    request_packet_summary: null,
+    config: null,
+  };
+}
+
+function buildProviderCallReadinessReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    readiness_status: "provider_call_readiness_experiment_failed_closed",
+    enabled: false,
+    default_off: true,
+    requested_provider_capability: "",
+    provider_name: "",
+    requested_model: "",
+    request_packet_summary: {},
+    validation_errors: ["read_only_api_fetch_failed"],
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    provider_call_attempted: false,
+    provider_call_authorized: false,
+    network_call_attempted: false,
+    decision_persisted: false,
+    approval_created: false,
+    audit_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    fail_closed_reason: String(
+      error?.message || "provider_call_readiness_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      provider_call_attempted: false,
+      provider_call_authorized: false,
+      network_call_attempted: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_write_file: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+    },
+  };
+}
+
+async function withProviderCallReadinessReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.provider_call_readiness_result,
+    )
+    || !shouldFetchProviderCallReadinessReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/provider-call-readiness-readback",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildProviderCallReadinessReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      provider_call_readiness_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      provider_call_readiness_result: (
+        buildProviderCallReadinessReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchManualReviewReadinessReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "manual_review_readiness_api_fetch",
+  ) === "1";
+}
+
+function buildManualReviewReadinessReadbackRequest(tracePayload = {}) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.manual_review_readiness_request_payload,
+  )
+    ? tracePayload.manual_review_readiness_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    review_inputs_summary: null,
+  };
+}
+
+function buildManualReviewReadinessReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    readiness_status: "manual_review_readiness_failed_closed",
+    enabled: false,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_required: true,
+    manual_user_control_required: true,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    allowed_assistance_modes: [],
+    forbidden_actions: [
+      "auto-apply",
+      "auto-submit",
+      "autonomous application execution",
+      "automatic job application submission",
+      "bypass of manual review",
+    ],
+    review_inputs_summary: {},
+    missing_review_inputs: ["available_read_only_api_response"],
+    checklist_items: [],
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    fail_closed_reason: String(
+      error?.message || "manual_review_readiness_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      advisory_only: true,
+      manual_review_required: true,
+      manual_user_control_required: true,
+      provider_call_attempted: false,
+      network_call_attempted: false,
+      database_write_attempted: false,
+      approval_created: false,
+      decision_persisted: false,
+      audit_persisted: false,
+      scoring_mutated: false,
+      ranking_mutated: false,
+      queue_mutated: false,
+      resume_mutated: false,
+      application_mutated: false,
+      execution_authorized: false,
+      submission_authorized: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+async function withManualReviewReadinessReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(source.manual_review_readiness_result)
+    || !shouldFetchManualReviewReadinessReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/manual-review-readiness-readback",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildManualReviewReadinessReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      manual_review_readiness_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      manual_review_readiness_result: (
+        buildManualReviewReadinessReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchCoreAgentEvidenceMaterializationReadback(
+  search = null,
+) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "core_agent_evidence_materialization_api_fetch",
+  ) === "1";
+}
+
+function buildCoreAgentEvidenceMaterializationReadbackRequest(
+  tracePayload = {},
+) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.core_agent_evidence_materialization_request_payload,
+  )
+    ? tracePayload.core_agent_evidence_materialization_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    relevance_prefilter_result: null,
+    jd_intelligence_signals: null,
+    final_application_scoring_result: null,
+    tailoring_opportunity_signals: null,
+    manual_review_context: null,
+  };
+}
+
+function buildCoreAgentEvidenceMaterializationReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    preview_status: "core_agent_evidence_preview_failed_closed",
+    core_agent_evidence_materialization_enabled: false,
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_only: true,
+    manual_user_control_required: true,
+    no_auto_apply: true,
+    no_auto_submit: true,
+    no_autonomous_application_execution: true,
+    no_automatic_job_application_submission: true,
+    no_provider_calls: true,
+    no_network_calls: true,
+    no_database_writes: true,
+    no_persistence: true,
+    no_mutation: true,
+    no_execution: true,
+    no_submission: true,
+    core_agent_sequence: [
+      "relevance_prefilter",
+      "jd_intelligence",
+      "final_application_scoring",
+    ],
+    agent_boundaries: {
+      tailoring_agent: "tailoring agent remains separate from final scoring",
+    },
+    relevance_prefilter_evidence: {},
+    jd_intelligence_evidence: {},
+    final_application_scoring_evidence: {},
+    tailoring_opportunity_evidence: {},
+    manual_review_evidence_packet: {
+      relevance_evidence_supplied: false,
+      jd_intelligence_evidence_supplied: false,
+      final_scoring_evidence_supplied: false,
+      tailoring_opportunity_evidence_supplied: false,
+      manual_review_context_supplied: false,
+      suggested_manual_review_status: "read_only_fetch_failed_closed",
+      why_job_is_worth_reviewing: "",
+      missing_evidence_fields: ["available_read_only_api_response"],
+      tailoring_opportunity_summary: [],
+      future_user_triggered_action: "Generate AI Tailoring",
+      ai_tailoring_generation_performed: false,
+      tailoring_suggestions_boundary: "Generated tailoring suggestions are preview/manual-review only unless the user accepts edits.",
+      manual_review_context: {},
+    },
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    fail_closed_reason: String(
+      error?.message || "core_agent_evidence_materialization_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      advisory_only: true,
+      manual_review_only: true,
+      manual_user_control_required: true,
+      provider_call_attempted: false,
+      network_call_attempted: false,
+      database_write_attempted: false,
+      persistence_attempted: false,
+      scoring_mutated: false,
+      ranking_mutated: false,
+      queue_mutated: false,
+      resume_mutated: false,
+      application_mutated: false,
+      approval_mutated: false,
+      decision_mutated: false,
+      audit_mutated: false,
+      execution_authorized: false,
+      submission_authorized: false,
+      mutation_authorized: false,
+    },
+  };
+}
+
+async function withCoreAgentEvidenceMaterializationReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.core_agent_evidence_materialization_result,
+    )
+    || !shouldFetchCoreAgentEvidenceMaterializationReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/core-agent-evidence-materialization-preview",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildCoreAgentEvidenceMaterializationReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      core_agent_evidence_materialization_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      core_agent_evidence_materialization_result: (
+        buildCoreAgentEvidenceMaterializationReadbackFetchFailure(error)
+      ),
+    };
+  }
 }
 
 function getAgenticReviewApprovalRequestId(payload = {}) {
@@ -8985,8 +10533,34 @@ async function initAgenticReviewPage() {
       empty_trace: true,
       safety_metadata: { read_only: true },
     }));
+    const approvalPreviewTracePayload = await (
+      withThreeCoreApprovalPreviewServiceReadbackApiFetch(tracePayload)
+    );
+    const operatorDecisionCaptureTracePayload = await (
+      withOperatorDecisionCaptureReadbackApiFetch(
+        approvalPreviewTracePayload,
+      )
+    );
+    const providerCallReadinessTracePayload = await (
+      withProviderCallReadinessReadbackApiFetch(
+        operatorDecisionCaptureTracePayload,
+      )
+    );
+    const manualReviewReadinessTracePayload = await (
+      withManualReviewReadinessReadbackApiFetch(
+        providerCallReadinessTracePayload,
+      )
+    );
+    const coreAgentEvidenceMaterializationTracePayload = await (
+      withCoreAgentEvidenceMaterializationReadbackApiFetch(
+        manualReviewReadinessTracePayload,
+      )
+    );
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
-    renderAgenticReviewData(payload, tracePayload);
+    renderAgenticReviewData(
+      payload,
+      coreAgentEvidenceMaterializationTracePayload,
+    );
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");
     if (panel) {

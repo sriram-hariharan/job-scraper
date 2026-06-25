@@ -209,6 +209,9 @@ def test_phase19f_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase21_manual_review_readiness_api_readback.md",
         "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "docs/phase21_manual_review_readiness_ui_readback.md",
+        "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

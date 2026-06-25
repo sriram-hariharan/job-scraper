@@ -198,6 +198,7 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "src/app/static/app_redesign.css",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
+        "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

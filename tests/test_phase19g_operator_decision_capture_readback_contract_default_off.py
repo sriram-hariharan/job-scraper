@@ -238,6 +238,8 @@ def test_phase19g_changes_only_approved_files():
         "src/app/static/app_redesign.css",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
+        "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

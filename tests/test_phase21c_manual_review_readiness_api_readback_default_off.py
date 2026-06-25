@@ -234,6 +234,8 @@ def test_phase21c_changes_only_api_doc_test_and_legacy_guards():
         "src/agents/tailoring_agent_opportunity_contract.py",
         "docs/phase23_tailoring_agent_opportunity_contract.md",
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_api_readback.md",
+        "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -258,7 +260,7 @@ def test_phase21c_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
-                "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
+                "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
                 "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
             )
         )

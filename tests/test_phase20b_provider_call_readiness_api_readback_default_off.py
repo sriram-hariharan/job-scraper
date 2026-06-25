@@ -266,6 +266,8 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
         "src/agents/tailoring_agent_opportunity_contract.py",
         "docs/phase23_tailoring_agent_opportunity_contract.md",
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_api_readback.md",
+        "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

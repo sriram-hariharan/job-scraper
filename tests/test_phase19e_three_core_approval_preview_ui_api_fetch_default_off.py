@@ -192,6 +192,8 @@ def test_phase19e_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase20_provider_call_readiness_api_readback.md",
         "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
+        "docs/phase20_provider_call_readiness_ui_readback.md",
+        "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

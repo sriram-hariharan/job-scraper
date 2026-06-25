@@ -171,7 +171,7 @@ def test_route_slice_has_no_storage_pipeline_provider_or_mutation_calls():
 def test_no_ui_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/static/agentic_review.js": (
-            "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03"
+            "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

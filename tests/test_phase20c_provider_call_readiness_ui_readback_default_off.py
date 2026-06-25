@@ -10,7 +10,7 @@ PROTECTED_HASHES = {
     "src/app/api.py": "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
-    "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
+    "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
 }
 
 
@@ -21,7 +21,7 @@ def _source() -> str:
 def _readback_helpers() -> str:
     source = _source()
     start = source.index(
-        "function shouldRenderOperatorDecisionCaptureReadbackFixture"
+        "function shouldRenderProviderCallReadinessFixture"
     )
     end = source.index(
         "\nfunction renderHumanReviewedInfluencePreviewSection",
@@ -33,7 +33,7 @@ def _readback_helpers() -> str:
 def _fetch_helpers() -> str:
     source = _source()
     start = source.index(
-        "function shouldFetchOperatorDecisionCaptureReadback"
+        "function shouldFetchProviderCallReadinessReadback"
     )
     end = source.index(
         "\nfunction getAgenticReviewApprovalRequestId",
@@ -45,8 +45,8 @@ def _fetch_helpers() -> str:
 def test_renderer_and_fixture_gate_exist():
     snippet = _readback_helpers()
 
-    assert "renderOperatorDecisionCaptureReadbackSection" in snippet
-    assert "operator_decision_capture_readback_fixture" in snippet
+    assert "renderProviderCallReadinessReadbackSection" in snippet
+    assert "provider_call_readiness_fixture" in snippet
     assert "window.location.search" in snippet
     assert "new URLSearchParams(query)" in snippet
     assert '=== "1"' in snippet
@@ -55,45 +55,45 @@ def test_renderer_and_fixture_gate_exist():
 def test_optional_api_fetch_gate_exists_and_is_default_off():
     snippet = _fetch_helpers()
 
-    assert "operator_decision_capture_api_fetch" in snippet
+    assert "provider_call_readiness_api_fetch" in snippet
     assert "window.location.search" in snippet
     assert "new URLSearchParams(query)" in snippet
     assert '=== "1"' in snippet
-    assert "|| !shouldFetchOperatorDecisionCaptureReadback(search)" in snippet
+    assert "|| !shouldFetchProviderCallReadinessReadback(search)" in snippet
 
 
-def test_default_off_requires_supplied_payload_fixture_or_fetch_gate():
+def test_default_off_requires_payload_fixture_or_fetch_gate():
     helpers = _readback_helpers()
-    renderer_start = helpers.index(
-        "function renderOperatorDecisionCaptureReadbackSection"
-    )
-    renderer = helpers[renderer_start:]
+    renderer = helpers[
+        helpers.index("function renderProviderCallReadinessReadbackSection"):
+    ]
 
-    assert "source.operator_decision_capture_readback_result" in helpers
+    assert "source.provider_call_readiness_result" in helpers
     assert (
-        "|| !shouldRenderOperatorDecisionCaptureReadbackFixture(search)"
+        "|| !shouldRenderProviderCallReadinessFixture(search)"
         in helpers
     )
     assert 'if (!Object.keys(result).length) return "";' in renderer
-    assert (
-        "withOperatorDecisionCaptureReadbackApiFetch("
-        in _source()
-    )
+    assert "withProviderCallReadinessReadbackApiFetch(" in _source()
 
 
-def test_panel_title_and_required_readback_fields_exist():
+def test_panel_title_fields_and_permanent_rule_exist():
     snippet = _readback_helpers()
 
     for marker in (
-        "Operator Decision Capture Readback",
-        "Capture status",
-        "Selected action",
-        "Selected resume / variant",
-        "Operator note",
+        "Provider-Call Readiness Readback",
+        "Readiness status",
+        "Requested provider capability",
+        "Provider name",
+        "Requested model",
+        "Request packet summary",
         "Validation errors",
         "Read only",
         "Shadow only",
         "Advisory only",
+        "Provider call attempted",
+        "Provider call authorized",
+        "Network call attempted",
         "Decision persisted",
         "Approval created",
         "Execution authorized",
@@ -101,22 +101,29 @@ def test_panel_title_and_required_readback_fields_exist():
         "Mutation authorized",
         "Next safe step",
         "Safety metadata summary",
+        "no auto-apply",
+        "no auto-submit",
+        "no autonomous application execution",
+        "no automatic job application submission",
     ):
         assert marker in snippet
 
 
-def test_fixture_payload_is_deterministic_read_only_and_non_authorizing():
+def test_fixture_is_deterministic_read_only_and_non_authorizing():
     snippet = _readback_helpers()
 
     for marker in (
-        "buildOperatorDecisionCaptureReadbackFixtureResult",
-        '"operator_decision_capture_readback_ready"',
-        'selected_action: "HOLD"',
-        'selected_resume: "primary_resume"',
-        'selected_variant: "baseline"',
+        "buildProviderCallReadinessFixtureResult",
+        '"provider_call_readiness_experiment_ready"',
+        '"review_jd_intelligence_packet"',
+        '"caller-supplied-provider"',
+        '"caller-supplied-model"',
         "read_only: true",
         "shadow_only: true",
         "advisory_only: true",
+        "provider_call_attempted: false",
+        "provider_call_authorized: false",
+        "network_call_attempted: false",
         "decision_persisted: false",
         "approval_created: false",
         "execution_authorized: false",
@@ -126,46 +133,47 @@ def test_fixture_payload_is_deterministic_read_only_and_non_authorizing():
         assert marker in snippet
 
 
-def test_fixture_never_overwrites_supplied_or_fetched_payload():
+def test_fixture_does_not_overwrite_supplied_or_fetched_payload():
     snippet = _readback_helpers()
 
-    assert "source.operator_decision_capture_readback_result" in snippet
+    assert "source.provider_call_readiness_result" in snippet
     assert "return source;" in snippet
 
 
-def test_api_fetch_is_gated_post_only_and_targets_phase19h_endpoint():
+def test_api_fetch_is_gated_post_only_and_targets_phase20b_endpoint():
     snippet = _fetch_helpers()
     gate_position = snippet.index(
-        "!shouldFetchOperatorDecisionCaptureReadback(search)"
+        "!shouldFetchProviderCallReadinessReadback(search)"
     )
     fetch_position = snippet.index("await fetchJson(")
 
     assert gate_position < fetch_position
     assert snippet.count(
-        '"/api/operator-decision-capture-readback"'
+        '"/api/provider-call-readiness-readback"'
     ) == 1
     assert 'method: "POST"' in snippet
-    assert 'enabled: false' in snippet
+    assert "enabled: false" in snippet
 
 
 def test_api_response_reuses_renderer_and_failure_is_fail_closed():
     source = _source()
     snippet = _fetch_helpers()
 
-    assert "operator_decision_capture_readback_result: result" in snippet
+    assert "provider_call_readiness_result: result" in snippet
     assert (
-        "renderOperatorDecisionCaptureReadbackSection("
-        "operatorDecisionCaptureVisibleTracePayload)"
+        "renderProviderCallReadinessReadbackSection("
+        "providerCallReadinessVisibleTracePayload)"
         in source
     )
     assert "catch (error)" in snippet
-    assert '"operator_decision_capture_readback_failed_closed"' in snippet
+    assert '"provider_call_readiness_experiment_failed_closed"' in snippet
     assert "ui_api_fetch_failed: true" in snippet
     assert "read_only: true" in snippet
+    assert "provider_call_attempted: false" in snippet
     assert "mutation_authorized: false" in snippet
 
 
-def test_helpers_add_no_controls_storage_or_mutation_paths():
+def test_helpers_add_no_controls_storage_mutation_or_provider_execution():
     snippet = (_readback_helpers() + _fetch_helpers()).lower()
 
     for marker in (
@@ -176,18 +184,23 @@ def test_helpers_add_no_controls_storage_or_mutation_paths():
         "data-submit",
         "data-execute",
         "data-approval",
+        "data-autonomous",
         "localstorage.setitem",
         "sessionstorage.setitem",
-        "createapproval",
-        "recordapproval",
-        "persistdecision",
-        "persistaudit",
-        "executeapplication",
-        "submitapplication",
-        "mutatequeue",
-        "updateranking",
-        "mutatescoring",
-        "mutateresume",
+        "createapproval(",
+        "recordapproval(",
+        "persistdecision(",
+        "persistaudit(",
+        "executeapplication(",
+        "submitapplication(",
+        "mutatequeue(",
+        "updateranking(",
+        "mutatescoring(",
+        "mutateresume(",
+        "providercall(",
+        "autoapply(",
+        "autosubmit(",
+        "autonomousapplicationexecution(",
     ):
         assert marker not in snippet
 
@@ -197,7 +210,7 @@ def test_protected_backend_files_are_unchanged():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
 
 
-def test_phase19i_changes_only_approved_files():
+def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
     tracked = subprocess.check_output(
         ["git", "diff", "--name-only"], cwd=ROOT, text=True
     ).splitlines()
@@ -210,29 +223,13 @@ def test_phase19i_changes_only_approved_files():
     allowed = {
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
-        "docs/phase19_operator_decision_capture_ui_readback.md",
-        "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
-        "docs/phase19_readonly_approval_workflow_release_checkpoint.md",
-        "tests/test_phase19j_readonly_approval_workflow_release_checkpoint_default_off.py",
-        "src/agents/provider_call_readiness_experiment.py",
-        "docs/phase20_provider_call_readiness_experiment.md",
-        "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
-        "src/app/api.py",
-        "docs/phase20_provider_call_readiness_api_readback.md",
-        "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
         "docs/phase20_provider_call_readiness_ui_readback.md",
         "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if any(
-            marker in path.read_text(encoding="utf-8")
-            for marker in (
-                "agentic_review.js",
-                "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
-            )
-        )
+        if "agentic_review.js" in path.read_text(encoding="utf-8")
     }
 
     assert changed <= allowed | legacy_guards

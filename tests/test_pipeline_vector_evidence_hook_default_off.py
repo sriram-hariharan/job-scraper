@@ -230,7 +230,7 @@ def test_dependency_api_ui_and_protected_runtime_hashes_are_unchanged():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
         "src/app/api.py": "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
-        "src/app/static/agentic_review.js": "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
+        "src/app/static/agentic_review.js": "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
     }

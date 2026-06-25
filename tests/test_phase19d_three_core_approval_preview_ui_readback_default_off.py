@@ -197,6 +197,12 @@ def test_phase19d_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
+        "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
     allowed = {
         "src/app/static/agentic_review.js",
@@ -275,8 +281,8 @@ def test_phase19d_changes_only_approved_files():
                 marker in path.read_text(encoding="utf-8")
                 for marker in (
                     "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                    "d65949a4b35d2ee9786e84ae1a4a7b2414894ec5927102d0dea316fc3a2020ac",
-                    "6b275f7e838969320c41d9f97a19913218b0d4d2fd24eb7b73cb325f036b9867",
+                    "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+                    "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
                     "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
                 )
             )

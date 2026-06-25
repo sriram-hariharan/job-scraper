@@ -228,6 +228,12 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
         "src/app/api.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
+        "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+        "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
+        "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
     allowed = {
         "src/app/static/agentic_review.js",

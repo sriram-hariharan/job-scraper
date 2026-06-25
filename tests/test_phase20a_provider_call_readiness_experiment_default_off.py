@@ -278,6 +278,9 @@ def test_phase20a_changes_only_new_helper_doc_test_and_legacy_guards():
         "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
             "docs/phase20_provider_call_readiness_ui_readback.md",
             "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
+            "docs/no_auto_apply_safety_policy.md",
+            "docs/phase20_no_auto_apply_safety_checkpoint.md",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
         }

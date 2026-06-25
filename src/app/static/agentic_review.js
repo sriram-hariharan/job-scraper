@@ -2270,6 +2270,155 @@ function renderOperatorDecisionCaptureReadbackSection(tracePayload = {}) {
   `;
 }
 
+function shouldRenderProviderCallReadinessFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "provider_call_readiness_fixture",
+  ) === "1";
+}
+
+function buildProviderCallReadinessFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    readiness_status: "provider_call_readiness_experiment_ready",
+    enabled: true,
+    default_off: true,
+    requested_provider_capability: "review_jd_intelligence_packet",
+    provider_name: "caller-supplied-provider",
+    requested_model: "caller-supplied-model",
+    request_packet_summary: {
+      packet_type: "provider_call_preflight",
+      input_fields: ["job_description"],
+    },
+    validation_errors: [],
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    provider_call_attempted: false,
+    provider_call_authorized: false,
+    network_call_attempted: false,
+    decision_persisted: false,
+    approval_created: false,
+    audit_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "review_readiness_without_calling_provider",
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      readiness_only: true,
+      provider_call_attempted: false,
+      provider_call_authorized: false,
+      network_call_attempted: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_read_file: false,
+      did_write_file: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+      mutation_authorized: false,
+      execution_authorized: false,
+      submission_authorized: false,
+    },
+  };
+}
+
+function withProviderCallReadinessFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.provider_call_readiness_result,
+    )
+    || !shouldRenderProviderCallReadinessFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    provider_call_readiness_result: (
+      buildProviderCallReadinessFixtureResult()
+    ),
+  };
+}
+
+function renderProviderCallReadinessReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.provider_call_readiness_result,
+  )
+    ? tracePayload.provider_call_readiness_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const validationErrors = Array.isArray(result.validation_errors)
+    ? result.validation_errors
+    : [];
+  const requestPacket = hasAgentTraceSummaryObject(
+    result.request_packet_summary,
+  )
+    ? result.request_packet_summary
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  return `
+    <article class="agent-trace-summary provider-call-readiness-readback" aria-label="Provider-call readiness readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Provider-Call Readiness Readback</h4>
+          <p>Passive preflight display only. No provider or network call is attempted or authorized.</p>
+          <p class="agentic-review-muted">Permanent product rule: no auto-apply, no auto-submit, no autonomous application execution, and no automatic job application submission.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="agent-trace-counts provider-call-readiness-readback__metrics">
+        ${renderWorkflowSummaryMetric("Readiness status", result.readiness_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Requested provider capability", result.requested_provider_capability || "none")}
+        ${renderWorkflowSummaryMetric("Provider name", result.provider_name || "none")}
+        ${renderWorkflowSummaryMetric("Requested model", result.requested_model || "none")}
+        ${renderWorkflowSummaryMetric("Validation errors", validationErrors.length ? validationErrors.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Read only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Shadow only", result.shadow_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider call attempted", result.provider_call_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider call authorized", result.provider_call_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Network call attempted", result.network_call_attempted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Decision persisted", result.decision_persisted === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval created", result.approval_created === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution authorized", result.execution_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission authorized", result.submission_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutation authorized", result.mutation_authorized === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Request packet summary", requestPacket, { helper: "Caller-supplied preflight summary only." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata summary", safety, { helper: "No-provider, no-network, no-storage, no-mutation safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -5224,6 +5373,11 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       decisionPreviewVisibleTracePayload,
     )
   );
+  const providerCallReadinessVisibleTracePayload = (
+    withProviderCallReadinessFixture(
+      operatorDecisionCaptureVisibleTracePayload,
+    )
+  );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
@@ -5287,6 +5441,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderThreeCoreApprovalPreviewServiceReadbackSection(fixtureVisibleTracePayload)}
       ${renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(decisionPreviewVisibleTracePayload)}
       ${renderOperatorDecisionCaptureReadbackSection(operatorDecisionCaptureVisibleTracePayload)}
+      ${renderProviderCallReadinessReadbackSection(providerCallReadinessVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5594,6 +5749,125 @@ async function withOperatorDecisionCaptureReadbackApiFetch(
       ...source,
       operator_decision_capture_readback_result: (
         buildOperatorDecisionCaptureReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchProviderCallReadinessReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "provider_call_readiness_api_fetch",
+  ) === "1";
+}
+
+function buildProviderCallReadinessReadbackRequest(tracePayload = {}) {
+  const supplied = hasAgentTraceSummaryObject(
+    tracePayload?.provider_call_readiness_request_payload,
+  )
+    ? tracePayload.provider_call_readiness_request_payload
+    : {};
+  if (Object.keys(supplied).length) return supplied;
+  return {
+    enabled: false,
+    requested_provider_capability: "",
+    provider_name: "",
+    requested_model: "",
+    request_packet_summary: null,
+    config: null,
+  };
+}
+
+function buildProviderCallReadinessReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    readiness_status: "provider_call_readiness_experiment_failed_closed",
+    enabled: false,
+    default_off: true,
+    requested_provider_capability: "",
+    provider_name: "",
+    requested_model: "",
+    request_packet_summary: {},
+    validation_errors: ["read_only_api_fetch_failed"],
+    read_only: true,
+    shadow_only: true,
+    advisory_only: true,
+    provider_call_attempted: false,
+    provider_call_authorized: false,
+    network_call_attempted: false,
+    decision_persisted: false,
+    approval_created: false,
+    audit_persisted: false,
+    execution_authorized: false,
+    submission_authorized: false,
+    mutation_authorized: false,
+    next_safe_step: "inspect_read_only_api_fetch_failure",
+    fail_closed_reason: String(
+      error?.message || "provider_call_readiness_fetch_failed",
+    ),
+    safety_metadata: {
+      read_only: true,
+      shadow_only: true,
+      advisory_only: true,
+      provider_call_attempted: false,
+      provider_call_authorized: false,
+      network_call_attempted: false,
+      did_read_database: false,
+      did_write_database: false,
+      did_write_file: false,
+      did_mutate_scoring: false,
+      did_change_ranking: false,
+      did_mutate_queue: false,
+      did_mutate_resume: false,
+      did_create_approval: false,
+      did_persist_decision: false,
+      did_persist_audit: false,
+      did_create_execution_request: false,
+      did_execute_application: false,
+      did_submit_application: false,
+    },
+  };
+}
+
+async function withProviderCallReadinessReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.provider_call_readiness_result,
+    )
+    || !shouldFetchProviderCallReadinessReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/provider-call-readiness-readback",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildProviderCallReadinessReadbackRequest(source),
+        ),
+      },
+    );
+    return {
+      ...source,
+      provider_call_readiness_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      provider_call_readiness_result: (
+        buildProviderCallReadinessReadbackFetchFailure(error)
       ),
     };
   }
@@ -9603,8 +9877,13 @@ async function initAgenticReviewPage() {
         approvalPreviewTracePayload,
       )
     );
+    const providerCallReadinessTracePayload = await (
+      withProviderCallReadinessReadbackApiFetch(
+        operatorDecisionCaptureTracePayload,
+      )
+    );
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
-    renderAgenticReviewData(payload, operatorDecisionCaptureTracePayload);
+    renderAgenticReviewData(payload, providerCallReadinessTracePayload);
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");
     if (panel) {

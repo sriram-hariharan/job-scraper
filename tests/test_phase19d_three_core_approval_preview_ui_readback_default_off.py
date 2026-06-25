@@ -214,6 +214,8 @@ def test_phase19d_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase20_provider_call_readiness_api_readback.md",
         "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
+        "docs/phase20_provider_call_readiness_ui_readback.md",
+        "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
         "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
         "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
         "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
@@ -242,7 +244,7 @@ def test_phase19d_changes_only_approved_files():
                 for marker in (
                     "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
                     "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
-                    "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
+                    "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35",
                     "4953e19b5b9914310d10ff758fd72eb4abed0ffb568a59fa43284ac17a4dce34",
                 )
             )

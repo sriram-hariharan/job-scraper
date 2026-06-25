@@ -13,7 +13,7 @@ ENDPOINT = "/api/operator-decision-capture-readback"
 
 PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
+    "src/app/static/agentic_review.js": "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35",
     "src/app/static/app_redesign.css": "cbf6e94095f4ffcd932d31f163adde1c27f115dcbaa5ae4d0939398348f1e014",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
@@ -214,6 +214,8 @@ def test_phase19h_changes_only_approved_files():
         "src/app/api.py",
         "docs/phase20_provider_call_readiness_api_readback.md",
         "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
+        "docs/phase20_provider_call_readiness_ui_readback.md",
+        "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
     }
@@ -224,7 +226,7 @@ def test_phase19h_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "src/app/api.py",
-                "b3f311bc5390eacc4d698d71141ebd3a960a491765c074ebd37c33718f887a03",
+                "029c1105e4d3ae9f023ad40418e83cc13e4dffc937406b5e7219e8934d067e35",
             )
         )
     }

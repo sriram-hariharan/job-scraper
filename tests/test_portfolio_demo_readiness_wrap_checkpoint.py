@@ -479,6 +479,9 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
     changed = _changed_files() - {
         "docs/core_agent_automation_mutation_inventory.md",
         "docs/phase22_core_agent_automation_mutation_inventory.md",
+        "src/agents/core_agent_evidence_materialization_preview.py",
+        "docs/phase22_core_agent_evidence_materialization_preview.md",
+        "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
     }
     legacy_static_hash_guards = {
         str(path.relative_to(ROOT))

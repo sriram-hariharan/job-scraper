@@ -222,6 +222,9 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
     changed = set(tracked + untracked) - {
         "docs/core_agent_automation_mutation_inventory.md",
         "docs/phase22_core_agent_automation_mutation_inventory.md",
+        "src/agents/core_agent_evidence_materialization_preview.py",
+        "docs/phase22_core_agent_evidence_materialization_preview.md",
+        "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
     }
     allowed = {
         "src/app/static/agentic_review.js",

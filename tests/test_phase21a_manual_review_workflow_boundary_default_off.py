@@ -122,6 +122,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
         "docs/core_agent_automation_mutation_inventory.md",
         "docs/phase22_core_agent_automation_mutation_inventory.md",
+        "src/agents/core_agent_evidence_materialization_preview.py",
+        "docs/phase22_core_agent_evidence_materialization_preview.md",
+        "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
     }
     allowed = {
         "docs/manual_review_workflow_boundary.md",
@@ -171,6 +174,7 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],
+        [ROOT / "src/agents/core_agent_evidence_materialization_preview.py"],
         [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],
         [

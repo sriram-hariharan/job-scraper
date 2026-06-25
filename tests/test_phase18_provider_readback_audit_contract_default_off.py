@@ -384,6 +384,9 @@ def test_phase18i_changes_only_approved_docs_and_tests():
     changed = set(tracked + untracked) - {
         "docs/core_agent_automation_mutation_inventory.md",
         "docs/phase22_core_agent_automation_mutation_inventory.md",
+        "src/agents/core_agent_evidence_materialization_preview.py",
+        "docs/phase22_core_agent_evidence_materialization_preview.md",
+        "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
     }
     allowed = {
         "docs/phase18_provider_readback_audit_contract.md",

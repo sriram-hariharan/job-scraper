@@ -218,6 +218,7 @@ def test_new_ui_adds_no_other_endpoint_urls():
     assert endpoint_lines in (
         [],
         ['      "/api/core-agent-evidence-materialization-preview",'],
+        ['      "/api/tailoring-agent-opportunity-contract",'],
     )
 
 
@@ -288,6 +289,8 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
         "src/app/api.py",
         "docs/phase23_tailoring_agent_opportunity_api_readback.md",
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -297,8 +300,8 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
             for marker in (
                 "changes_only",
                 "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
-                "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
-                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+                "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
+                "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef",
             )
         )
     }

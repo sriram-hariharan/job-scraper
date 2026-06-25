@@ -188,6 +188,8 @@ def test_phase19e_changes_only_approved_files():
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
         "docs/phase23_tailoring_agent_opportunity_api_readback.md",
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

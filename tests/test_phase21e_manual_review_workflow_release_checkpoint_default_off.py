@@ -44,8 +44,8 @@ REQUIRED_SAFETY_MARKERS = (
 PROTECTED_HASHES = {
     "src/app/api.py": "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
-    "src/app/static/app_redesign.css": "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+    "src/app/static/agentic_review.js": "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
+    "src/app/static/app_redesign.css": "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
@@ -126,6 +126,8 @@ def test_phase21e_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
         "docs/phase23_tailoring_agent_opportunity_api_readback.md",
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -145,8 +147,8 @@ def test_phase21e_changes_only_docs_tests_and_legacy_guards():
             for marker in (
                     "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
                     "7a65b60c74394096c1134e0f0bf1106e72540a8e1348903e6765052fff3c6ede",
-                    "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
-                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+                    "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
+                "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef",
             )
         )
     }

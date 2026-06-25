@@ -88,7 +88,7 @@ RUNTIME_HASHES = {
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
     ),
     "src/app/static/agentic_review.js": (
-        "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff"
+        "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454"
     ),
 }
 
@@ -347,6 +347,8 @@ def test_phase18k_changes_only_approved_docs_and_tests():
         "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
         "docs/phase23_tailoring_agent_opportunity_api_readback.md",
         "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -495,8 +497,8 @@ def test_phase18k_changes_only_approved_docs_and_tests():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
-                "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+                "8fae431da8b4d0a8fcbd9dbe9778d334e84905ef0e2915fcbb67dcf20eb4cdef",
+                "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454",
             )
         )
     }

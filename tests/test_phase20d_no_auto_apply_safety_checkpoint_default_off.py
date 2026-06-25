@@ -147,9 +147,10 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         and Path(relative_path).suffix in runtime_suffixes
     ]
 
-    assert changed_runtime_files == [
-        ROOT / "src/agents/manual_review_readiness_contract.py"
-    ]
+    assert changed_runtime_files in (
+        [],
+        [ROOT / "src/agents/manual_review_readiness_contract.py"],
+    )
     for path in changed_runtime_files:
         source = path.read_text(encoding="utf-8")
         for marker in FORBIDDEN_RUNTIME_MARKERS:

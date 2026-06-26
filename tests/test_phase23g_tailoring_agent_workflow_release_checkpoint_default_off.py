@@ -69,10 +69,10 @@ SAFETY_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
+    "src/app/api.py": "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
-    "src/app/static/app_redesign.css": "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
+    "src/app/static/agentic_review.js": "a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74",
+    "src/app/static/app_redesign.css": "369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
     "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
@@ -172,6 +172,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
         "src/agents/manual_generate_ai_tailoring_preview_contract.py",
+        "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
     }
 
     assert changed_runtime == set()
@@ -187,6 +188,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
         and path != "src/app/static/agentic_review.js"
         and path != "src/app/static/app_redesign.css"
         and path != "src/agents/manual_generate_ai_tailoring_preview_contract.py"
+        and path != "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py"
     ]
     forbidden = (
         "provider_call(",
@@ -224,6 +226,17 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_release_checkpoint.md",
         "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_contract.md",
+            "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
+            "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
+            "src/app/static/agentic_review.js",
+            "src/app/static/app_redesign.css",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_ui_readback.md",
+            "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint.md",
+            "tests/test_phase25d_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -232,9 +245,9 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "changes_only",
-                "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
-                "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
-                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
+                "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
+                "a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74",
+                "369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6",
             )
         )
     }

@@ -19,6 +19,9 @@ from src.agents.generate_ai_tailoring_action_boundary_contract import (
 from src.agents.manual_generate_ai_tailoring_preview_contract import (
     build_manual_generate_ai_tailoring_preview_contract,
 )
+from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract import (
+    build_manual_generate_ai_tailoring_preview_request_packet_contract,
+)
 from src.agents.tailoring_agent_opportunity_contract import (
     build_tailoring_agent_opportunity_contract,
 )
@@ -4775,6 +4778,26 @@ def manual_generate_ai_tailoring_preview_contract_api():
         },
         job_metadata={
             "readback_source": "phase24b_api_placeholder",
+        },
+        user_trigger_metadata={},
+    )
+
+
+@app.get("/api/manual-generate-ai-tailoring-preview-request-packet-contract")
+def manual_generate_ai_tailoring_preview_request_packet_contract_api():
+    return build_manual_generate_ai_tailoring_preview_request_packet_contract(
+        phase24_preview_contract_payload={
+            "readback_source": "phase25b_api_placeholder",
+            "can_prepare_preview": False,
+        },
+        job_metadata={
+            "readback_source": "phase25b_api_placeholder",
+        },
+        selected_resume_metadata={
+            "readback_source": "phase25b_api_placeholder",
+        },
+        tailoring_opportunity_payload={
+            "readback_source": "phase25b_api_placeholder",
         },
         user_trigger_metadata={},
     )

@@ -13,7 +13,7 @@ DOC_PATH = (
 ENDPOINT = "/api/manual-generate-ai-tailoring-preview-contract"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
+    "src/app/api.py": "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
@@ -309,6 +309,7 @@ def test_protected_backend_runtime_files_are_unchanged():
 def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+        "src/app/api.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
         "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
@@ -318,6 +319,8 @@ def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
             "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
             "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_contract.md",
             "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
+            "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -326,7 +329,7 @@ def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "changes_only",
-                "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
+                "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
                 "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
                 "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
             )

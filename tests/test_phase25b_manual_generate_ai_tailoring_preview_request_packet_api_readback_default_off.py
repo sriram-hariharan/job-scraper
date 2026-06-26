@@ -4,8 +4,8 @@ import subprocess
 
 from fastapi.testclient import TestClient
 
-from src.agents.manual_generate_ai_tailoring_preview_contract import (
-    build_manual_generate_ai_tailoring_preview_contract,
+from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract import (
+    build_manual_generate_ai_tailoring_preview_request_packet_contract,
 )
 from src.app import api
 
@@ -14,16 +14,18 @@ ROOT = Path(__file__).resolve().parents[1]
 API_PATH = ROOT / "src/app/api.py"
 DOC_PATH = (
     ROOT
-    / "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md"
+    / "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md"
 )
-ENDPOINT = "/api/manual-generate-ai-tailoring-preview-contract"
+ENDPOINT = (
+    "/api/manual-generate-ai-tailoring-preview-request-packet-contract"
+)
 
 TRUE_SAFETY_KEYS = (
     "default_off",
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "preview_contract_only",
+    "request_packet_contract_only",
     "requires_user_trigger",
     "manual_acceptance_required",
     "no_provider_calls",
@@ -31,6 +33,35 @@ TRUE_SAFETY_KEYS = (
 )
 
 FALSE_ACTION_KEYS = (
+    "provider_call_performed",
+    "tailoring_runtime_call_performed",
+    "ai_tailoring_generation_performed",
+    "resume_rewrite_performed",
+    "resume_overwrite_performed",
+    "resume_mutation_performed",
+    "application_submission_performed",
+    "database_write_performed",
+    "persistence_performed",
+    "execution_performed",
+    "submission_performed",
+    "auto_apply_performed",
+    "auto_submit_performed",
+)
+
+REQUIRED_PAYLOAD_KEYS = (
+    "default_off",
+    "read_only",
+    "advisory_only",
+    "manual_review_only",
+    "request_packet_contract_only",
+    "requires_user_trigger",
+    "manual_acceptance_required",
+    "can_prepare_request_packet",
+    "preview_request_allowed",
+    "blocked_reasons",
+    "missing_inputs",
+    "request_packet",
+    "deterministic_request_key",
     "provider_call_performed",
     "tailoring_runtime_call_performed",
     "ai_tailoring_generation_performed",
@@ -65,6 +96,7 @@ FORBIDDEN_ROUTE_MARKERS = (
     "generate_tailoring_suggestions",
     "application_execution_queue",
     "create_approval",
+    "create_execution",
     "persist_decision",
     "persist_audit",
     "mutate_scoring",
@@ -80,18 +112,19 @@ FORBIDDEN_ROUTE_MARKERS = (
 )
 
 DOC_MARKERS = (
-    "phase 24b manual generate ai tailoring preview api readback",
+    "phase 25b manual generate ai tailoring preview request-packet api readback",
     "api readback only",
+    "request-packet contract only",
     "default-off",
     "read-only",
     "advisory-only",
     "manual-review only",
-    "preview contract only",
     "user trigger required",
     "manual acceptance required",
     "does not generate ai tailoring",
     "does not call tailoring runtime",
     "does not call providers",
+    "does not create real tailoring output",
     "does not create resume rewrites",
     "does not overwrite resumes",
     "does not mutate resumes",
@@ -99,6 +132,15 @@ DOC_MARKERS = (
     "does not write to database",
     "does not execute applications",
     "does not submit applications",
+    "no provider calls",
+    "no network calls",
+    "no database writes",
+    "no persistence",
+    "no mutation",
+    "no resume mutation",
+    "no application mutation",
+    "no execution",
+    "no submission",
     "no auto-apply",
     "no auto-submit",
     "no autonomous application execution",
@@ -107,17 +149,22 @@ DOC_MARKERS = (
     "no services changes",
     "no pipeline changes",
     "no matching changes",
+    "no tailoring runtime changes",
     "tailoring agent remains separate from final scoring",
     "generated tailoring suggestions must remain preview/manual-review only unless user accepts edits in a later phase",
-    "/api/manual-generate-ai-tailoring-preview-contract",
-    "phase24a-manual-generate-ai-tailoring-preview-contract-v1",
+    "/api/manual-generate-ai-tailoring-preview-request-packet-contract",
+    "build_manual_generate_ai_tailoring_preview_request_packet_contract",
+    "phase25a-manual-generate-ai-tailoring-preview-request-packet-contract-v1",
+    "phase24-manual-generate-ai-tailoring-preview-release-v1",
     "phase23-tailoring-agent-workflow-release-v1",
+    "phase20d-no-auto-apply-safety-checkpoint-v1",
 )
 
 PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
     "src/app/static/app_redesign.css": "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
+    "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
@@ -139,26 +186,26 @@ def _client(monkeypatch):
 def _route_snippet() -> str:
     source = API_PATH.read_text(encoding="utf-8")
     start = source.index(
-        '@app.get("/api/manual-generate-ai-tailoring-preview-contract")'
+        '@app.get("/api/manual-generate-ai-tailoring-preview-request-packet-contract")'
     )
     end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
     return source[start:end]
 
 
 def _expected_readback_payload() -> dict:
-    return build_manual_generate_ai_tailoring_preview_contract(
-        tailoring_opportunity_payload={
-            "readback_source": "phase24b_api_placeholder",
-        },
-        generate_ai_tailoring_action_boundary_payload={
-            "readback_source": "phase24b_api_placeholder",
-            "action_allowed": False,
-        },
-        selected_resume_metadata={
-            "readback_source": "phase24b_api_placeholder",
+    return build_manual_generate_ai_tailoring_preview_request_packet_contract(
+        phase24_preview_contract_payload={
+            "readback_source": "phase25b_api_placeholder",
+            "can_prepare_preview": False,
         },
         job_metadata={
-            "readback_source": "phase24b_api_placeholder",
+            "readback_source": "phase25b_api_placeholder",
+        },
+        selected_resume_metadata={
+            "readback_source": "phase25b_api_placeholder",
+        },
+        tailoring_opportunity_payload={
+            "readback_source": "phase25b_api_placeholder",
         },
         user_trigger_metadata={},
     )
@@ -189,7 +236,7 @@ def test_unauthenticated_request_uses_existing_auth_behavior():
     assert response.json() == {"detail": "Not authenticated."}
 
 
-def test_route_returns_phase24a_contract_payload_with_required_safety_flags(
+def test_route_returns_phase25a_request_packet_payload_with_safety_flags(
     monkeypatch,
 ):
     response = _client(monkeypatch).get(ENDPOINT)
@@ -197,14 +244,16 @@ def test_route_returns_phase24a_contract_payload_with_required_safety_flags(
     assert response.status_code == 200
     payload = response.json()
     assert payload == _expected_readback_payload()
+    assert set(REQUIRED_PAYLOAD_KEYS).issubset(payload.keys())
     assert payload["contract_version"] == (
-        "phase-24a-manual-generate-ai-tailoring-preview-contract-v1"
+        "phase-25a-manual-generate-ai-tailoring-preview-request-packet-v1"
     )
     assert payload["contract_status"] == (
-        "manual_generate_ai_tailoring_preview_blocked"
+        "manual_generate_ai_tailoring_preview_request_packet_blocked"
     )
     assert payload["user_trigger_present"] is False
-    assert payload["can_prepare_preview"] is False
+    assert payload["can_prepare_request_packet"] is False
+    assert payload["preview_request_allowed"] is False
     assert "explicit user trigger required" in payload["blocked_reasons"]
     for key in TRUE_SAFETY_KEYS:
         assert payload[key] is True
@@ -217,11 +266,14 @@ def test_route_uses_helper_with_deterministic_readback_metadata_only():
     snippet = _route_snippet()
 
     assert (
-        "from src.agents.manual_generate_ai_tailoring_preview_contract "
+        "from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract "
         "import (" in source
     )
-    assert "build_manual_generate_ai_tailoring_preview_contract(" in snippet
-    assert "phase24b_api_placeholder" in snippet
+    assert (
+        "build_manual_generate_ai_tailoring_preview_request_packet_contract("
+        in snippet
+    )
+    assert "phase25b_api_placeholder" in snippet
     assert "Body(" not in snippet
     assert "request_payload" not in snippet
     assert "payload: dict" not in snippet
@@ -242,6 +294,9 @@ def test_api_readback_never_generates_rewrites_overwrites_or_submits(
 
     for key in FALSE_ACTION_KEYS:
         assert payload[key] is False
+    assert payload["request_packet"]["contains_generated_tailoring_output"] is (
+        False
+    )
     assert payload["next_safe_step"] == "require_explicit_user_trigger"
 
 
@@ -260,36 +315,23 @@ def test_protected_runtime_files_are_unchanged():
         )
 
 
-def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
+def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
         "src/app/api.py",
-        "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",
-        "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
-        "src/app/static/agentic_review.js",
-        "src/app/static/app_redesign.css",
-        "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
-        "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
-        "docs/phase24_manual_generate_ai_tailoring_preview_release_checkpoint.md",
-        "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
-            "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_contract.md",
-            "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
-            "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
+        "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
+        "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if any(
+        if path != Path(__file__).resolve()
+        and any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "changes_only",
+                "manual_generate_ai_tailoring_preview_request_packet_api_readback",
                 "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
-                "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-                "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
-                "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
-                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
+                "changes_only",
             )
         )
     }

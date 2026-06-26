@@ -248,6 +248,8 @@ def test_phase19i_changes_only_approved_files():
         "src/app/static/app_redesign.css",
         "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
         "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
+        "docs/phase24_manual_generate_ai_tailoring_preview_release_checkpoint.md",
+        "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",

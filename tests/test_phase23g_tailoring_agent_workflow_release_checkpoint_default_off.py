@@ -69,7 +69,7 @@ SAFETY_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
+    "src/app/api.py": "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
     "src/app/static/app_redesign.css": "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
@@ -167,7 +167,10 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
                 "run_pipeline.py",
             )
         )
-    } - {"src/agents/manual_generate_ai_tailoring_preview_contract.py"}
+    } - {
+        "src/app/api.py",
+        "src/agents/manual_generate_ai_tailoring_preview_contract.py",
+    }
 
     assert changed_runtime == set()
 
@@ -178,6 +181,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
         path
         for path in changed
         if path.startswith("src/")
+        and path != "src/app/api.py"
         and path != "src/agents/manual_generate_ai_tailoring_preview_contract.py"
     ]
     forbidden = (
@@ -202,11 +206,14 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
 def test_phase23g_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+        "src/app/api.py",
         "docs/phase23_tailoring_agent_workflow_release_checkpoint.md",
         "tests/test_phase23g_tailoring_agent_workflow_release_checkpoint_default_off.py",
         "src/agents/manual_generate_ai_tailoring_preview_contract.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_contract.md",
         "tests/test_phase24a_manual_generate_ai_tailoring_preview_contract_default_off.py",
+        "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",
+        "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -215,7 +222,7 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "changes_only",
-                "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
+                "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
                 "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
                 "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
             )

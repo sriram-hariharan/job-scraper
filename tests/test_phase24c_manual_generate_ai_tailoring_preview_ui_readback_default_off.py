@@ -1,0 +1,333 @@
+from hashlib import sha256
+from pathlib import Path
+import subprocess
+
+
+ROOT = Path(__file__).resolve().parents[1]
+JS_PATH = ROOT / "src/app/static/agentic_review.js"
+CSS_PATH = ROOT / "src/app/static/app_redesign.css"
+DOC_PATH = (
+    ROOT
+    / "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md"
+)
+ENDPOINT = "/api/manual-generate-ai-tailoring-preview-contract"
+
+PROTECTED_HASHES = {
+    "src/app/api.py": "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
+    "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
+    "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
+    "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
+    "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
+    "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
+    "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
+    "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
+    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
+    "generate_tailoring_suggestions.py": "a5e3dda138232fadc6d69bd9f2468459ce2759d961687bf1fa9ee9970c5490c2",
+    "application_execution_queue.py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+}
+
+DOC_MARKERS = (
+    "phase 24c manual generate ai tailoring preview ui readback",
+    "ui readback only",
+    "default-off",
+    "read-only",
+    "advisory-only",
+    "manual-review only",
+    "preview contract only",
+    "user trigger required",
+    "manual acceptance required",
+    "does not generate ai tailoring",
+    "does not call tailoring runtime",
+    "does not call providers",
+    "does not create resume rewrites",
+    "does not overwrite resumes",
+    "does not mutate resumes",
+    "does not persist data",
+    "does not write to database",
+    "does not execute applications",
+    "does not submit applications",
+    "no auto-apply",
+    "no auto-submit",
+    "no autonomous application execution",
+    "no automatic job application submission",
+    "no backend behavior changes",
+    "no api changes",
+    "no services changes",
+    "no pipeline changes",
+    "no matching changes",
+    "no tailoring runtime changes",
+    "tailoring agent remains separate from final scoring",
+    "generated tailoring suggestions must remain preview/manual-review only unless user accepts edits in a later phase",
+    "no real generate ai tailoring button or control",
+    ENDPOINT,
+    "rendermanualgenerateaitailoringpreviewreadbacksection",
+    "phase24b-manual-generate-ai-tailoring-preview-api-readback-v1",
+    "phase24a-manual-generate-ai-tailoring-preview-contract-v1",
+    "phase23-tailoring-agent-workflow-release-v1",
+)
+
+
+def _source() -> str:
+    return JS_PATH.read_text(encoding="utf-8")
+
+
+def _renderer() -> str:
+    source = _source()
+    start = source.index(
+        "function renderManualGenerateAiTailoringPreviewReadbackSection"
+    )
+    end = source.index(
+        "\nfunction renderHumanReviewedInfluencePreviewSection",
+        start,
+    )
+    return source[start:end]
+
+
+def _fixture_helpers() -> str:
+    source = _source()
+    start = source.index(
+        "function shouldRenderManualGenerateAiTailoringPreviewFixture"
+    )
+    end = source.index(
+        "\nfunction renderManualGenerateAiTailoringPreviewReadbackSection",
+        start,
+    )
+    return source[start:end]
+
+
+def _fetch_helpers() -> str:
+    source = _source()
+    start = source.index(
+        "function shouldFetchManualGenerateAiTailoringPreviewReadback"
+    )
+    end = source.index("\nfunction getAgenticReviewApprovalRequestId", start)
+    return source[start:end]
+
+
+def _changed_files() -> set[str]:
+    tracked = subprocess.check_output(
+        ["git", "diff", "--name-only"], cwd=ROOT, text=True
+    ).splitlines()
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    return set(tracked + untracked)
+
+
+def test_renderer_exists_and_is_integrated():
+    source = _source()
+
+    assert "renderManualGenerateAiTailoringPreviewReadbackSection" in source
+    assert (
+        "renderManualGenerateAiTailoringPreviewReadbackSection("
+        "manualGenerateAiTailoringPreviewVisibleTracePayload)"
+    ) in source
+    assert "withManualGenerateAiTailoringPreviewReadbackApiFetch(" in source
+
+
+def test_default_off_requires_supplied_payload_fixture_or_fetch_gate():
+    fixture = _fixture_helpers()
+    renderer = _renderer()
+    fetch = _fetch_helpers()
+
+    assert "source.manual_generate_ai_tailoring_preview_result" in fixture
+    assert (
+        "|| !shouldRenderManualGenerateAiTailoringPreviewFixture(search)"
+        in fixture
+    )
+    assert 'if (!Object.keys(result).length) return "";' in renderer
+    assert (
+        "|| !shouldFetchManualGenerateAiTailoringPreviewReadback(search)"
+        in fetch
+    )
+
+
+def test_renderer_contains_visible_safety_and_readiness_markers():
+    renderer = _renderer().lower()
+
+    for marker in (
+        "default-off",
+        "read-only",
+        "advisory-only",
+        "manual-review only",
+        "preview contract only",
+        "user trigger required",
+        "manual acceptance required",
+        "can prepare preview",
+        "blocked reasons",
+        "missing inputs",
+        "does not generate ai tailoring",
+        "does not call tailoring runtime",
+        "does not call providers",
+        "does not create resume rewrites",
+        "does not overwrite resumes",
+        "does not mutate resumes",
+        "does not submit applications",
+        "no provider calls",
+        "no network calls",
+        "no database writes",
+        "no persistence",
+        "no mutation",
+        "no execution",
+        "no submission",
+        "no auto-apply",
+        "no auto-submit",
+        "manual user control required",
+        "preview/manual-review only",
+        "next safe step",
+    ):
+        assert marker in renderer
+
+
+def test_renderer_displays_contract_fields_without_actions():
+    renderer = _renderer()
+
+    for marker in (
+        "Contract status",
+        "Default-off",
+        "Read-only",
+        "Advisory-only",
+        "Manual-review only",
+        "Preview contract only",
+        "User trigger required",
+        "Manual acceptance required",
+        "Can prepare preview",
+        "Blocked reasons",
+        "Missing inputs",
+        "No provider calls",
+        "No network calls",
+        "No database writes",
+        "No persistence",
+        "No mutation",
+        "No execution",
+        "No submission",
+        "No auto-apply",
+        "No auto-submit",
+        "Next safe step",
+    ):
+        assert marker in renderer
+
+
+def test_renderer_contains_no_controls_or_storage_writes():
+    renderer = _renderer().lower()
+
+    for marker in (
+        "<button",
+        "<input",
+        "<form",
+        "<select",
+        "<textarea",
+        "data-apply",
+        "data-submit",
+        "data-approval",
+        "data-provider",
+        "data-execute",
+        "data-autonomous",
+        "data-resume-rewrite",
+        "data-resume-overwrite",
+        "localstorage.setitem",
+        "sessionstorage.setitem",
+        "generateaitailoring(",
+        "createapproval(",
+        "persistdecision(",
+        "persistaudit(",
+        "mutateresume(",
+        "overwriteresume(",
+        "submitapplication(",
+        "providercall(",
+        "tailoringruntime(",
+        "scorejobs(",
+        "rankjobs(",
+        "mutatequeue(",
+    ):
+        assert marker not in renderer
+
+
+def test_fetch_is_gated_get_only_and_fail_closed():
+    fetch = _fetch_helpers()
+
+    assert "manual_generate_ai_tailoring_preview_api_fetch" in fetch
+    assert '=== "1"' in fetch
+    assert fetch.count(f'"{ENDPOINT}"') == 1
+    assert 'method: "GET"' in fetch
+    assert "JSON.stringify" not in fetch
+    assert "body:" not in fetch
+    assert "catch (error)" in fetch
+    assert "manual_generate_ai_tailoring_preview_failed_closed" in fetch
+    assert "read_only: true" in fetch
+    assert "advisory_only: true" in fetch
+    assert "manual_review_only: true" in fetch
+    assert "provider_call_performed: false" in fetch
+    assert "tailoring_runtime_call_performed: false" in fetch
+    assert "resume_mutation_performed: false" in fetch
+    assert "application_submission_performed: false" in fetch
+
+
+def test_ui_adds_only_the_phase24b_manual_preview_endpoint_url():
+    js = _source()
+    related_endpoint_lines = [
+        line.strip()
+        for line in js.splitlines()
+        if "/api/" in line and "manual-generate-ai-tailoring" in line
+    ]
+
+    assert related_endpoint_lines
+    assert ENDPOINT in js
+    assert all(ENDPOINT in line for line in related_endpoint_lines)
+
+
+def test_css_contains_passive_panel_classes():
+    css = CSS_PATH.read_text(encoding="utf-8")
+
+    for marker in (
+        ".manual-generate-ai-tailoring-preview-readback",
+        ".manual-generate-ai-tailoring-preview-readback__safety-labels",
+        ".manual-generate-ai-tailoring-preview-readback__metrics",
+        ".manual-generate-ai-tailoring-preview-readback__boundary",
+    ):
+        assert marker in css
+
+
+def test_docs_contain_required_boundaries_and_references():
+    assert DOC_PATH.exists()
+    text = " ".join(DOC_PATH.read_text(encoding="utf-8").lower().split())
+
+    for marker in DOC_MARKERS:
+        assert marker in text
+
+
+def test_protected_backend_runtime_files_are_unchanged():
+    for relative_path, expected_hash in PROTECTED_HASHES.items():
+        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
+            expected_hash
+        )
+
+
+def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
+    changed = _changed_files()
+    allowed = {
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
+        "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
+        "docs/phase24_manual_generate_ai_tailoring_preview_release_checkpoint.md",
+        "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
+    }
+    legacy_guards = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "tests").glob("test_*.py")
+        if any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "changes_only",
+                "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
+                "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
+                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
+            )
+        )
+    }
+
+    assert changed <= allowed | legacy_guards

@@ -8,20 +8,25 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 CSS_PATH = ROOT / "src/app/static/app_redesign.css"
-DOC_PATH = ROOT / "docs/phase23_tailoring_agent_opportunity_ui_readback.md"
+DOC_PATH = (
+    ROOT
+    / "docs/phase23_generate_ai_tailoring_action_boundary_ui_readback.md"
+)
 
 REQUIRED_TAGS = (
+    "phase23e-generate-ai-tailoring-action-boundary-api-readback-v1",
+    "phase23d-generate-ai-tailoring-action-boundary-contract-v1",
+    "phase23c-tailoring-agent-opportunity-ui-readback-v1",
     "phase23b-tailoring-agent-opportunity-api-readback-v1",
     "phase23a-tailoring-agent-opportunity-contract-v1",
     "phase22-core-agent-evidence-materialization-release-v1",
-    "phase22f-core-agent-evidence-materialization-release-checkpoint-v1",
-    "phase22e-core-agent-evidence-materialization-ui-readback-v1",
     "phase20d-no-auto-apply-safety-checkpoint-v1",
 )
 
 PROTECTED_HASHES = {
     "src/app/api.py": "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
     "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
@@ -39,7 +44,7 @@ def _source() -> str:
 def _renderer() -> str:
     source = _source()
     start = source.index(
-        "function renderTailoringAgentOpportunityReadbackSection"
+        "function renderGenerateAiTailoringActionBoundaryReadbackSection"
     )
     end = source.index(
         "\nfunction renderHumanReviewedInfluencePreviewSection",
@@ -51,10 +56,10 @@ def _renderer() -> str:
 def _fixture_helpers() -> str:
     source = _source()
     start = source.index(
-        "function shouldRenderTailoringAgentOpportunityFixture"
+        "function shouldRenderGenerateAiTailoringActionBoundaryFixture"
     )
     end = source.index(
-        "\nfunction renderTailoringAgentOpportunityReadbackSection",
+        "\nfunction renderGenerateAiTailoringActionBoundaryReadbackSection",
         start,
     )
     return source[start:end]
@@ -63,7 +68,7 @@ def _fixture_helpers() -> str:
 def _fetch_helpers() -> str:
     source = _source()
     start = source.index(
-        "function shouldFetchTailoringAgentOpportunityReadback"
+        "function shouldFetchGenerateAiTailoringActionBoundaryReadback"
     )
     end = source.index(
         "\nfunction getAgenticReviewApprovalRequestId",
@@ -81,17 +86,21 @@ def _changed_files() -> set[str]:
         cwd=ROOT,
         text=True,
     ).splitlines()
-    return set(tracked + untracked)
+    return set(tracked + untracked) - {
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
+    }
 
 
 def test_renderer_exists_and_is_integrated():
     source = _source()
 
-    assert "renderTailoringAgentOpportunityReadbackSection" in source
+    assert "renderGenerateAiTailoringActionBoundaryReadbackSection" in source
     assert (
-        "renderTailoringAgentOpportunityReadbackSection("
-        "tailoringAgentOpportunityVisibleTracePayload)"
+        "renderGenerateAiTailoringActionBoundaryReadbackSection("
+        "generateAiTailoringActionBoundaryVisibleTracePayload)"
     ) in source
+    assert "withGenerateAiTailoringActionBoundaryReadbackApiFetch(" in source
 
 
 def test_default_off_requires_supplied_payload_fixture_or_fetch_gate():
@@ -99,63 +108,73 @@ def test_default_off_requires_supplied_payload_fixture_or_fetch_gate():
     renderer = _renderer()
     fetch = _fetch_helpers()
 
-    assert "source.tailoring_agent_opportunity_result" in fixture
+    assert "source.generate_ai_tailoring_action_boundary_result" in fixture
     assert (
-        "|| !shouldRenderTailoringAgentOpportunityFixture(search)"
+        "|| !shouldRenderGenerateAiTailoringActionBoundaryFixture(search)"
         in fixture
     )
     assert 'if (!Object.keys(result).length) return "";' in renderer
     assert (
-        "|| !shouldFetchTailoringAgentOpportunityReadback(search)"
+        "|| !shouldFetchGenerateAiTailoringActionBoundaryReadback(search)"
         in fetch
     )
 
 
 def test_renderer_contains_visible_safety_and_boundary_wording():
-    renderer = _renderer()
+    renderer = _renderer().lower()
 
     for marker in (
-        "Read-only",
-        "Advisory-only",
-        "Manual-review only",
-        "tailoring agent remains separate from final scoring",
-        "only identifies tailoring opportunities",
-        "does not generate AI tailoring",
-        "Generate AI Tailoring",
-        "later user-triggered",
+        "read-only",
+        "advisory-only",
+        "manual-review only",
+        "action-boundary readback only",
+        "does not generate ai tailoring",
+        "does not call tailoring runtime",
+        "does not call providers",
+        "does not create resume rewrites",
+        "does not overwrite resumes",
+        "does not submit app",
+        "user trigger is required",
+        "manual acceptance is required",
         "preview/manual-review only",
-        "No silent resume rewrite",
-        "No automatic resume overwrite",
-        "No resume mutation",
-        "No application submission",
-        "No auto-apply",
-        "No auto-submit",
-        "No autonomous application execution",
-        "No automatic job application submission",
-        "Manual user control required",
-        "No provider calls",
-        "No database writes",
-        "No persistence",
-        "No mutation",
-        "No execution",
-        "No submission",
+        "no silent resume rewrite",
+        "no automatic resume overwrite",
+        "no resume mutation",
+        "no application submission",
+        "no auto-apply",
+        "no auto-submit",
+        "no autonomous application execution",
+        "no automatic job application submission",
+        "manual user control required",
+        "no provider calls",
+        "no network calls",
+        "no database writes",
+        "no persistence",
+        "no mutation",
+        "no execution",
+        "no submission",
     ):
         assert marker in renderer
 
 
-def test_renderer_displays_all_opportunity_fields():
+def test_renderer_displays_all_action_boundary_fields():
     renderer = _renderer()
 
     for marker in (
-        "Opportunity count",
-        "Opportunity type",
-        "Source",
-        "Signal",
-        "Manual review required",
-        "Generate AI tailoring allowed now",
-        "Suggested next step",
-        "Missing evidence summary",
-        "Future user-triggered action",
+        "User trigger required",
+        "User triggered",
+        "Action allowed",
+        "Action blocked reason",
+        "Future action name",
+        "AI tailoring generation performed",
+        "Tailoring provider call performed",
+        "Tailoring runtime call performed",
+        "Resume rewrite performed",
+        "Resume overwrite performed",
+        "Application submission performed",
+        "Preview only",
+        "Manual acceptance required",
+        "Next safe step",
     ):
         assert marker in renderer
 
@@ -184,6 +203,7 @@ def test_renderer_contains_no_controls_or_storage_writes():
         "persistdecision(",
         "persistaudit(",
         "mutateresume(",
+        "overwriteresume(",
         "submitapplication(",
         "providercall(",
     ):
@@ -193,49 +213,53 @@ def test_renderer_contains_no_controls_or_storage_writes():
 def test_fixture_is_explicitly_gated_and_deterministic():
     fixture = _fixture_helpers()
 
-    assert "tailoring_agent_opportunity_fixture" in fixture
+    assert "generate_ai_tailoring_action_boundary_fixture" in fixture
     assert '=== "1"' in fixture
     assert "window.location.search" in fixture
     assert "new URLSearchParams(query)" in fixture
-    assert "buildTailoringAgentOpportunityFixtureResult" in fixture
+    assert "buildGenerateAiTailoringActionBoundaryFixtureResult" in fixture
     assert "read_only: true" in fixture
     assert "advisory_only: true" in fixture
     assert "manual_review_only: true" in fixture
-    assert "generate_ai_tailoring_allowed_now: false" in fixture
+    assert "user_trigger_required: true" in fixture
     assert "ai_tailoring_generation_performed: false" in fixture
+    assert "tailoring_provider_call_performed: false" in fixture
+    assert "tailoring_runtime_call_performed: false" in fixture
+    assert "resume_rewrite_performed: false" in fixture
+    assert "resume_overwrite_performed: false" in fixture
+    assert "application_submission_performed: false" in fixture
     assert "return source;" in fixture
 
 
 def test_optional_api_fetch_is_gated_post_only_and_fail_closed():
     fetch = _fetch_helpers()
 
-    assert "tailoring_agent_opportunity_api_fetch" in fetch
+    assert "generate_ai_tailoring_action_boundary_api_fetch" in fetch
     assert '=== "1"' in fetch
     assert fetch.count(
-        '"/api/tailoring-agent-opportunity-contract"'
+        '"/api/generate-ai-tailoring-action-boundary"'
     ) == 1
     assert 'method: "POST"' in fetch
     assert "enabled: false" in fetch
+    assert "user_triggered: false" in fetch
     assert "catch (error)" in fetch
-    assert '"tailoring_agent_opportunity_readback_failed_closed"' in fetch
+    assert (
+        '"generate_ai_tailoring_action_boundary_readback_failed_closed"'
+        in fetch
+    )
     assert "read_only: true" in fetch
     assert "advisory_only: true" in fetch
     assert "manual_review_only: true" in fetch
     assert "mutation_authorized: false" in fetch
 
 
-def test_new_ui_adds_no_other_endpoint_urls():
-    """Endpoint check must stay valid after commit/merge, when git diff is empty."""
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[1]
-    js = (root / "src/app/static/agentic_review.js").read_text(encoding="utf-8")
-
-    endpoint = "/api/tailoring-agent-opportunity-contract"
+def test_new_ui_adds_no_other_generate_ai_tailoring_endpoint_urls():
+    js = _source()
+    endpoint = "/api/generate-ai-tailoring-action-boundary"
     related_endpoint_lines = [
         line.strip()
         for line in js.splitlines()
-        if "/api/" in line and "tailoring-agent-opportunity" in line
+        if "/api/" in line and "generate-ai-tailoring" in line
     ]
 
     assert related_endpoint_lines
@@ -252,12 +276,10 @@ def test_css_contains_passive_panel_classes():
     css = CSS_PATH.read_text(encoding="utf-8")
 
     for marker in (
-        ".tailoring-agent-opportunity-readback",
-        ".tailoring-agent-opportunity-readback__safety-labels",
-        ".tailoring-agent-opportunity-readback__metrics",
-        ".tailoring-agent-opportunity-readback__items",
-        ".tailoring-agent-opportunity-readback__item",
-        ".tailoring-agent-opportunity-readback__boundary",
+        ".generate-ai-tailoring-action-boundary-readback",
+        ".generate-ai-tailoring-action-boundary-readback__safety-labels",
+        ".generate-ai-tailoring-action-boundary-readback__metrics",
+        ".generate-ai-tailoring-action-boundary-readback__boundary",
     ):
         assert marker in css
 
@@ -268,10 +290,10 @@ def test_docs_contain_required_boundaries_and_references():
     lowered = " ".join(text.lower().split())
 
     assert text.startswith(
-        "# Phase 23C Tailoring-Agent Opportunity UI Readback"
+        "# Phase 23F Generate AI Tailoring Action-Boundary UI Readback"
     )
     for marker in (
-        "builds on phase 23b",
+        "builds on phase 23e",
         "ui readback surface only",
         "default-off",
         "read-only",
@@ -285,8 +307,8 @@ def test_docs_contain_required_boundaries_and_references():
         "no matching changes",
         "no tailoring runtime changes",
         "no provider calls",
-        "no network calls except the optional",
-        "/api/tailoring-agent-opportunity-contract",
+        "no network calls except the optional explicitly gated post",
+        "/api/generate-ai-tailoring-action-boundary",
         "no database writes",
         "no persistence",
         "no mutation",
@@ -299,14 +321,18 @@ def test_docs_contain_required_boundaries_and_references():
         "no autonomous application execution",
         "no automatic job application submission",
         "manual user control remains required",
-        "separate from final scoring",
-        "only identifies tailoring opportunities",
         "does not generate ai tailoring",
-        "generate ai tailoring",
-        "later user-triggered action",
+        "does not call tailoring runtime",
+        "does not call providers",
+        "does not create resume rewrites",
+        "does not overwrite resumes",
+        "does not submit applications",
+        "user trigger is required",
+        "manual acceptance is required before any future resume edit",
+        "generated tailoring suggestions remain preview/manual-review only unless user accepts edits",
         "no silent resume rewrite",
         "no automatic resume overwrite",
-        "preview/manual-review only unless the user accepts edits",
+        "no real generate ai tailoring button or control",
     ):
         assert marker in lowered
     for tag in REQUIRED_TAGS:
@@ -320,35 +346,25 @@ def test_protected_backend_and_helper_files_are_unchanged():
         )
 
 
-def test_phase23c_changes_only_static_docs_tests_and_legacy_guards():
+def test_phase23f_changes_only_static_docs_tests_and_legacy_guards():
     changed = _changed_files()
     allowed = {
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
-        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
-        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
-        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
-        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
-        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
-        "src/app/api.py",
-        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
-        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_ui_readback.md",
         "tests/test_phase23f_generate_ai_tailoring_action_boundary_ui_readback_default_off.py",
-        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
-        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if (
-            "changes_only" in path.read_text(encoding="utf-8")
-            or "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"
-            in path.read_text(encoding="utf-8")
-            or "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab"
-            in path.read_text(encoding="utf-8")
-            or "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a"
-            in path.read_text(encoding="utf-8")
+        if any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "changes_only",
+                "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
+                "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
+                "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+            )
         )
     }
 

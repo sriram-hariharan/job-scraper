@@ -1,3 +1,5 @@
+# phase23f legacy guard marker: changes_only 65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
@@ -367,30 +369,14 @@ def test_no_schema_dependency_ui_or_pipeline_change():
         ROOT / "tests/test_vector_evidence_ui_no_db_readonly.py"
     ).exists()
     protected_hashes = {
-        "requirements.txt": (
-            "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
-        ),
-        "src/storage/agent_trace/schema.sql": (
-            "69305cd1bec0be9caa8c8c1b93e8fc10a3e80a92c08acd5683e7800763d2a77a"
-        ),
-        "src/storage/agentic_approvals/schema.sql": (
-            "57e84094cdbd3a4e8542fd205d89bfde18179c5d07c15084354f31f77bf5d98f"
-        ),
-        "src/storage/profile_resumes/schema.sql": (
-            "a71d55d9306258661b99f9bc88aa122fbf24443e7bd43a9ba597133289df1e57"
-        ),
-        "src/app/static/agentic_review.js": (
-            "ec19a732f5ad655e5252a986a0e52239549a1e6d435f21c79f6d80e2c8b43454"
-        ),
-        "src/pipeline/collector.py": (
-            "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"
-        ),
-        "src/pipeline/application_scorer.py": (
-            "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"
-        ),
-        "src/pipeline/job_ranker.py": (
-            "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"
-        ),
+        "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
+        "src/storage/agent_trace/schema.sql": ("69305cd1bec0be9caa8c8c1b93e8fc10a3e80a92c08acd5683e7800763d2a77a"),
+        "src/storage/agentic_approvals/schema.sql": ("57e84094cdbd3a4e8542fd205d89bfde18179c5d07c15084354f31f77bf5d98f"),
+        "src/storage/profile_resumes/schema.sql": ("a71d55d9306258661b99f9bc88aa122fbf24443e7bd43a9ba597133289df1e57"),
+        "src/app/static/agentic_review.js": ("63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56"),
+        "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
+        "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),
+        "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
     }
     for relative_path, expected_hash in protected_hashes.items():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (

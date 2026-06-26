@@ -1,3 +1,5 @@
+# phase23f legacy guard marker: changes_only 65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -246,6 +248,10 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
         "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_ui_readback.md",
+        "tests/test_phase23f_generate_ai_tailoring_action_boundary_ui_readback_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

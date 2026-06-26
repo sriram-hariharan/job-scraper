@@ -116,8 +116,8 @@ DOC_MARKERS = (
 
 PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
-    "src/app/static/app_redesign.css": "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+    "src/app/static/agentic_review.js": "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
+    "src/app/static/app_redesign.css": "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
@@ -266,6 +266,10 @@ def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
         "src/app/api.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",
         "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
+        "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -277,8 +281,8 @@ def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
                 "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
                 "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
                 "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
-                "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
-                "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+                "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
+                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
             )
         )
     }

@@ -3205,6 +3205,174 @@ function renderGenerateAiTailoringActionBoundaryReadbackSection(
   `;
 }
 
+function shouldRenderManualGenerateAiTailoringPreviewFixture(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "manual_generate_ai_tailoring_preview_fixture",
+  ) === "1";
+}
+
+function buildManualGenerateAiTailoringPreviewFixtureResult() {
+  return {
+    local_fixture_preview: true,
+    phase: "24A",
+    contract_version: (
+      "phase-24a-manual-generate-ai-tailoring-preview-contract-v1"
+    ),
+    contract_status: "manual_generate_ai_tailoring_preview_blocked",
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_only: true,
+    preview_contract_only: true,
+    requires_user_trigger: true,
+    user_trigger_present: false,
+    manual_acceptance_required: true,
+    can_prepare_preview: false,
+    blocked_reasons: ["explicit user trigger required"],
+    missing_inputs: ["user_trigger_metadata"],
+    no_provider_calls: true,
+    provider_call_performed: false,
+    no_network_calls: true,
+    tailoring_runtime_call_performed: false,
+    ai_tailoring_generation_performed: false,
+    resume_rewrite_performed: false,
+    resume_overwrite_performed: false,
+    resume_mutation_performed: false,
+    application_submission_performed: false,
+    database_write_performed: false,
+    persistence_performed: false,
+    execution_performed: false,
+    submission_performed: false,
+    auto_apply_performed: false,
+    auto_submit_performed: false,
+    next_safe_step: "require_explicit_user_trigger",
+    preview_inputs: {
+      tailoring_opportunity_payload: {
+        readback_source: "phase24c_ui_fixture",
+      },
+      generate_ai_tailoring_action_boundary_payload: {
+        readback_source: "phase24c_ui_fixture",
+        action_allowed: false,
+      },
+      selected_resume_metadata: {
+        readback_source: "phase24c_ui_fixture",
+      },
+      job_metadata: {
+        readback_source: "phase24c_ui_fixture",
+      },
+      user_trigger_metadata: {},
+    },
+  };
+}
+
+function withManualGenerateAiTailoringPreviewFixture(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.manual_generate_ai_tailoring_preview_result,
+    )
+    || !shouldRenderManualGenerateAiTailoringPreviewFixture(search)
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    manual_generate_ai_tailoring_preview_result: (
+      buildManualGenerateAiTailoringPreviewFixtureResult()
+    ),
+  };
+}
+
+function renderManualGenerateAiTailoringPreviewReadbackSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.manual_generate_ai_tailoring_preview_result,
+  )
+    ? tracePayload.manual_generate_ai_tailoring_preview_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const blockedReasons = Array.isArray(result.blocked_reasons)
+    ? result.blocked_reasons
+    : [];
+  const missingInputs = Array.isArray(result.missing_inputs)
+    ? result.missing_inputs
+    : [];
+  const previewInputs = hasAgentTraceSummaryObject(result.preview_inputs)
+    ? result.preview_inputs
+    : {};
+  const previewBadge = result.local_fixture_preview === true
+    ? "Local fixture preview"
+    : result.ui_api_fetch_failed === true
+      ? "Read-only fetch failure"
+      : "Default-off readback";
+  return `
+    <article class="agent-trace-summary manual-generate-ai-tailoring-preview-readback" aria-label="Manual Generate AI Tailoring preview readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Generate AI Tailoring Preview Readback</h4>
+          <p>UI readback only. Default-off, read-only, advisory-only, manual-review only, and preview contract only.</p>
+          <p class="agentic-review-muted">User trigger required. Manual acceptance required. Manual user control required. Preview/manual-review only.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(previewBadge)}</span>
+      </div>
+      <div class="manual-generate-ai-tailoring-preview-readback__safety-labels" aria-label="Manual Generate AI Tailoring preview safety labels">
+        <span>Default-off</span>
+        <span>Read-only</span>
+        <span>Advisory-only</span>
+        <span>Manual-review only</span>
+        <span>Preview contract only</span>
+      </div>
+      <div class="agent-trace-counts manual-generate-ai-tailoring-preview-readback__metrics">
+        ${renderWorkflowSummaryMetric("Contract status", result.contract_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Default-off", result.default_off === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Read-only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory-only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Manual-review only", result.manual_review_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Preview contract only", result.preview_contract_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("User trigger required", result.requires_user_trigger === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Manual acceptance required", result.manual_acceptance_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Can prepare preview", result.can_prepare_preview === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Blocked reasons", blockedReasons.length ? blockedReasons.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Missing inputs", missingInputs.length ? missingInputs.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("No provider calls", result.no_provider_calls === true && result.provider_call_performed !== true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No network calls", result.no_network_calls === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No database writes", result.database_write_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No persistence", result.persistence_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No mutation", result.resume_mutation_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No execution", result.execution_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No submission", result.submission_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No auto-apply", result.auto_apply_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No auto-submit", result.auto_submit_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="manual-generate-ai-tailoring-preview-readback__boundary">
+        <strong>Manual preview safety boundary</strong>
+        <span>Does not generate AI tailoring. Does not call tailoring runtime. Does not call providers.</span>
+        <span>Does not create resume rewrites. Does not overwrite resumes. Does not mutate resumes.</span>
+        <span>No execution. Does not submit applications. Does not persist data. Does not write to database.</span>
+        <span>No provider calls. No network calls. No database writes. No persistence.</span>
+        <span>No mutation. No execution. No submission. No auto-apply. No auto-submit.</span>
+        <span>Generated tailoring suggestions remain preview/manual-review only unless user accepts edits in a later phase.</span>
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Preview inputs", previewInputs, { helper: "Read-only contract inputs returned by the API readback." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked reasons", blockedReasons, { helper: "Manual preview blockers only; no action is taken." })}
+        ${renderAgentTraceReadOnlyDetails("Missing inputs", missingInputs, { helper: "Required preview inputs not available to prepare a manual preview." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -6184,6 +6352,11 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       tailoringAgentOpportunityVisibleTracePayload,
     )
   );
+  const manualGenerateAiTailoringPreviewVisibleTracePayload = (
+    withManualGenerateAiTailoringPreviewFixture(
+      generateAiTailoringActionBoundaryVisibleTracePayload,
+    )
+  );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
@@ -6252,6 +6425,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderCoreAgentEvidenceMaterializationReadbackSection(coreAgentEvidenceMaterializationVisibleTracePayload)}
       ${renderTailoringAgentOpportunityReadbackSection(tailoringAgentOpportunityVisibleTracePayload)}
       ${renderGenerateAiTailoringActionBoundaryReadbackSection(generateAiTailoringActionBoundaryVisibleTracePayload)}
+      ${renderManualGenerateAiTailoringPreviewReadbackSection(manualGenerateAiTailoringPreviewVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -7211,6 +7385,97 @@ async function withGenerateAiTailoringActionBoundaryReadbackApiFetch(
       ...source,
       generate_ai_tailoring_action_boundary_result: (
         buildGenerateAiTailoringActionBoundaryReadbackFetchFailure(error)
+      ),
+    };
+  }
+}
+
+function shouldFetchManualGenerateAiTailoringPreviewReadback(search = null) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "manual_generate_ai_tailoring_preview_api_fetch",
+  ) === "1";
+}
+
+function buildManualGenerateAiTailoringPreviewReadbackFetchFailure(error) {
+  return {
+    ui_api_fetch_failed: true,
+    phase: "24C",
+    contract_version: (
+      "phase-24a-manual-generate-ai-tailoring-preview-contract-v1"
+    ),
+    contract_status: "manual_generate_ai_tailoring_preview_failed_closed",
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_only: true,
+    preview_contract_only: true,
+    requires_user_trigger: true,
+    user_trigger_present: false,
+    manual_acceptance_required: true,
+    can_prepare_preview: false,
+    blocked_reasons: ["read-only API fetch failed closed"],
+    missing_inputs: ["manual_generate_ai_tailoring_preview_contract"],
+    no_provider_calls: true,
+    provider_call_performed: false,
+    no_network_calls: true,
+    tailoring_runtime_call_performed: false,
+    ai_tailoring_generation_performed: false,
+    resume_rewrite_performed: false,
+    resume_overwrite_performed: false,
+    resume_mutation_performed: false,
+    application_submission_performed: false,
+    database_write_performed: false,
+    persistence_performed: false,
+    execution_performed: false,
+    submission_performed: false,
+    auto_apply_performed: false,
+    auto_submit_performed: false,
+    next_safe_step: "inspect_read_only_manual_preview_fetch_failure",
+    fail_closed_reason: String(
+      error?.message
+      || "manual_generate_ai_tailoring_preview_fetch_failed",
+    ),
+    preview_inputs: {},
+  };
+}
+
+async function withManualGenerateAiTailoringPreviewReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.manual_generate_ai_tailoring_preview_result,
+    )
+    || !shouldFetchManualGenerateAiTailoringPreviewReadback(search)
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/manual-generate-ai-tailoring-preview-contract",
+      {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+      },
+    );
+    return {
+      ...source,
+      manual_generate_ai_tailoring_preview_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      manual_generate_ai_tailoring_preview_result: (
+        buildManualGenerateAiTailoringPreviewReadbackFetchFailure(error)
       ),
     };
   }
@@ -11245,10 +11510,15 @@ async function initAgenticReviewPage() {
         tailoringAgentOpportunityTracePayload,
       )
     );
+    const manualGenerateAiTailoringPreviewTracePayload = await (
+      withManualGenerateAiTailoringPreviewReadbackApiFetch(
+        generateAiTailoringActionBoundaryTracePayload,
+      )
+    );
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
     renderAgenticReviewData(
       payload,
-      generateAiTailoringActionBoundaryTracePayload,
+      manualGenerateAiTailoringPreviewTracePayload,
     );
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");

@@ -1,49 +1,22 @@
-from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 import subprocess
 
-from src.agents import manual_generate_ai_tailoring_preview_contract as contract
+from fastapi.testclient import TestClient
+
+from src.agents.manual_generate_ai_tailoring_preview_contract import (
+    build_manual_generate_ai_tailoring_preview_contract,
+)
+from src.app import api
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER_PATH = (
-    ROOT / "src/agents/manual_generate_ai_tailoring_preview_contract.py"
-)
+API_PATH = ROOT / "src/app/api.py"
 DOC_PATH = (
-    ROOT / "docs/phase24_manual_generate_ai_tailoring_preview_contract.md"
+    ROOT
+    / "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md"
 )
-
-REQUIRED_KEYS = (
-    "phase",
-    "default_off",
-    "read_only",
-    "advisory_only",
-    "manual_review_only",
-    "preview_contract_only",
-    "requires_user_trigger",
-    "user_trigger_present",
-    "manual_acceptance_required",
-    "can_prepare_preview",
-    "blocked_reasons",
-    "missing_inputs",
-    "no_provider_calls",
-    "provider_call_performed",
-    "no_network_calls",
-    "tailoring_runtime_call_performed",
-    "ai_tailoring_generation_performed",
-    "resume_rewrite_performed",
-    "resume_overwrite_performed",
-    "resume_mutation_performed",
-    "application_submission_performed",
-    "database_write_performed",
-    "persistence_performed",
-    "execution_performed",
-    "submission_performed",
-    "auto_apply_performed",
-    "auto_submit_performed",
-    "next_safe_step",
-)
+ENDPOINT = "/api/manual-generate-ai-tailoring-preview-contract"
 
 TRUE_SAFETY_KEYS = (
     "default_off",
@@ -73,31 +46,42 @@ FALSE_ACTION_KEYS = (
     "auto_submit_performed",
 )
 
-FORBIDDEN_SOURCE_MARKERS = (
-    "from src.tailoring",
-    "import src.tailoring",
-    "generate_tailoring_suggestions",
-    "application_execution_queue",
-    "from src.app",
-    "import src.app",
-    "services.",
-    "api.",
-    "storage",
-    "database_url",
-    "psycopg",
-    "sqlite",
-    "subprocess",
+FORBIDDEN_ROUTE_MARKERS = (
+    "run_chat_completion",
+    "run_chat_completion_with_metadata",
     "requests.",
     "httpx",
-    "run_chat_completion",
+    "urllib",
+    "subprocess",
+    "open(",
+    "read_text",
+    "write_text",
+    "database_url",
+    "cache_get_json",
+    "cache_set_json",
+    "score_resume_job_match(",
+    "run_prefilter(",
     "_run_live_llm_tailoring",
+    "generate_tailoring_suggestions",
+    "application_execution_queue",
+    "create_approval",
+    "persist_decision",
+    "persist_audit",
+    "mutate_scoring",
+    "update_ranking",
+    "mutate_queue",
+    "mutate_resume",
+    "overwrite_resume",
     "execute_application",
     "submit_application",
+    "auto_apply",
+    "auto_submit",
+    "services.",
 )
 
 DOC_MARKERS = (
-    "phase 24a manual generate ai tailoring preview contract",
-    "contract-only",
+    "phase 24b manual generate ai tailoring preview api readback",
+    "api readback only",
     "default-off",
     "read-only",
     "advisory-only",
@@ -119,16 +103,22 @@ DOC_MARKERS = (
     "no auto-submit",
     "no autonomous application execution",
     "no automatic job application submission",
+    "no ui changes",
+    "no services changes",
+    "no pipeline changes",
+    "no matching changes",
     "tailoring agent remains separate from final scoring",
     "generated tailoring suggestions must remain preview/manual-review only unless user accepts edits in a later phase",
+    "/api/manual-generate-ai-tailoring-preview-contract",
+    "phase24a-manual-generate-ai-tailoring-preview-contract-v1",
     "phase23-tailoring-agent-workflow-release-v1",
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
     "src/app/static/app_redesign.css": "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+    "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
@@ -141,20 +131,37 @@ PROTECTED_HASHES = {
 }
 
 
-def _ready_inputs() -> dict:
-    return {
-        "tailoring_opportunity_payload": {
-            "tailoring_opportunities": [
-                {"opportunity_type": "missing_requirement"}
-            ],
+def _client(monkeypatch):
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    return TestClient(api.app)
+
+
+def _route_snippet() -> str:
+    source = API_PATH.read_text(encoding="utf-8")
+    start = source.index(
+        '@app.get("/api/manual-generate-ai-tailoring-preview-contract")'
+    )
+    end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
+    return source[start:end]
+
+
+def _expected_readback_payload() -> dict:
+    return build_manual_generate_ai_tailoring_preview_contract(
+        tailoring_opportunity_payload={
+            "readback_source": "phase24b_api_placeholder",
         },
-        "generate_ai_tailoring_action_boundary_payload": {
-            "action_allowed": True,
+        generate_ai_tailoring_action_boundary_payload={
+            "readback_source": "phase24b_api_placeholder",
+            "action_allowed": False,
         },
-        "selected_resume_metadata": {"resume_id": "resume-1"},
-        "job_metadata": {"job_id": "job-1"},
-        "user_trigger_metadata": {"user_triggered": True},
-    }
+        selected_resume_metadata={
+            "readback_source": "phase24b_api_placeholder",
+        },
+        job_metadata={
+            "readback_source": "phase24b_api_placeholder",
+        },
+        user_trigger_metadata={},
+    )
 
 
 def _changed_files() -> set[str]:
@@ -169,81 +176,76 @@ def _changed_files() -> set[str]:
     return set(tracked + untracked)
 
 
-def test_helper_exists_and_exposes_public_function():
-    assert HELPER_PATH.exists()
-    assert callable(
-        contract.build_manual_generate_ai_tailoring_preview_contract
+def test_endpoint_exists_as_get_only():
+    routes = {getattr(route, "path", ""): route for route in api.app.routes}
+
+    assert routes[ENDPOINT].methods == {"GET"}
+
+
+def test_unauthenticated_request_uses_existing_auth_behavior():
+    response = TestClient(api.app).get(ENDPOINT)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated."}
+
+
+def test_route_returns_phase24a_contract_payload_with_required_safety_flags(
+    monkeypatch,
+):
+    response = _client(monkeypatch).get(ENDPOINT)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == _expected_readback_payload()
+    assert payload["contract_version"] == (
+        "phase-24a-manual-generate-ai-tailoring-preview-contract-v1"
     )
-
-
-def test_default_contract_contains_required_read_only_manual_control_keys():
-    payload = contract.build_manual_generate_ai_tailoring_preview_contract()
-
-    assert payload["phase"] == "24A"
-    for key in REQUIRED_KEYS:
-        assert key in payload
+    assert payload["contract_status"] == (
+        "manual_generate_ai_tailoring_preview_blocked"
+    )
+    assert payload["user_trigger_present"] is False
+    assert payload["can_prepare_preview"] is False
+    assert "explicit user trigger required" in payload["blocked_reasons"]
     for key in TRUE_SAFETY_KEYS:
         assert payload[key] is True
     for key in FALSE_ACTION_KEYS:
         assert payload[key] is False
 
 
-def test_no_user_trigger_is_blocked_with_clear_reason():
-    payload = contract.build_manual_generate_ai_tailoring_preview_contract(
-        tailoring_opportunity_payload={"tailoring_opportunities": [{}]},
-        generate_ai_tailoring_action_boundary_payload={"action_allowed": True},
-        selected_resume_metadata={"resume_id": "resume-1"},
-        job_metadata={"job_id": "job-1"},
-    )
+def test_route_uses_helper_with_deterministic_readback_metadata_only():
+    source = API_PATH.read_text(encoding="utf-8")
+    snippet = _route_snippet()
 
-    assert payload["user_trigger_present"] is False
-    assert payload["can_prepare_preview"] is False
-    assert "explicit user trigger required" in payload["blocked_reasons"]
-    assert "user_trigger_metadata" in payload["missing_inputs"]
+    assert (
+        "from src.agents.manual_generate_ai_tailoring_preview_contract "
+        "import (" in source
+    )
+    assert "build_manual_generate_ai_tailoring_preview_contract(" in snippet
+    assert "phase24b_api_placeholder" in snippet
+    assert "Body(" not in snippet
+    assert "request_payload" not in snippet
+    assert "payload: dict" not in snippet
+    assert "user_trigger_metadata={}" in snippet
+
+
+def test_route_contains_no_provider_network_db_io_runtime_or_mutation_calls():
+    snippet = _route_snippet().lower()
+
+    for marker in FORBIDDEN_ROUTE_MARKERS:
+        assert marker not in snippet
+
+
+def test_api_readback_never_generates_rewrites_overwrites_or_submits(
+    monkeypatch,
+):
+    payload = _client(monkeypatch).get(ENDPOINT).json()
+
+    for key in FALSE_ACTION_KEYS:
+        assert payload[key] is False
     assert payload["next_safe_step"] == "require_explicit_user_trigger"
 
 
-def test_user_trigger_with_required_inputs_can_prepare_preview_only():
-    inputs = _ready_inputs()
-    before = deepcopy(inputs)
-    payload = contract.build_manual_generate_ai_tailoring_preview_contract(
-        **inputs
-    )
-
-    assert inputs == before
-    assert payload["user_trigger_present"] is True
-    assert payload["can_prepare_preview"] is True
-    assert payload["blocked_reasons"] == []
-    assert payload["missing_inputs"] == []
-    assert payload["next_safe_step"] == (
-        "review_preview_readiness_without_generating_ai_tailoring"
-    )
-    for key in FALSE_ACTION_KEYS:
-        assert payload[key] is False
-
-
-def test_inputs_are_deep_copied_and_not_mutated():
-    inputs = _ready_inputs()
-    payload = contract.build_manual_generate_ai_tailoring_preview_contract(
-        **inputs
-    )
-
-    assert payload["preview_inputs"]["job_metadata"] == inputs["job_metadata"]
-    assert payload["preview_inputs"]["job_metadata"] is not inputs[
-        "job_metadata"
-    ]
-    inputs["job_metadata"]["job_id"] = "changed"
-    assert payload["preview_inputs"]["job_metadata"]["job_id"] == "job-1"
-
-
-def test_helper_source_has_no_forbidden_imports_or_calls():
-    source = HELPER_PATH.read_text(encoding="utf-8").lower()
-
-    for marker in FORBIDDEN_SOURCE_MARKERS:
-        assert marker not in source
-
-
-def test_docs_contain_required_safety_markers_and_phase23_reference():
+def test_docs_contain_required_safety_markers_and_references():
     assert DOC_PATH.exists()
     text = " ".join(DOC_PATH.read_text(encoding="utf-8").lower().split())
 
@@ -258,13 +260,10 @@ def test_protected_runtime_files_are_unchanged():
         )
 
 
-def test_phase24a_changes_only_helper_doc_test_and_legacy_guards():
+def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
         "src/app/api.py",
-        "src/agents/manual_generate_ai_tailoring_preview_contract.py",
-        "docs/phase24_manual_generate_ai_tailoring_preview_contract.md",
-        "tests/test_phase24a_manual_generate_ai_tailoring_preview_contract_default_off.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",
         "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
     }
@@ -276,6 +275,8 @@ def test_phase24a_changes_only_helper_doc_test_and_legacy_guards():
             for marker in (
                 "changes_only",
                 "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
+                "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+                "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
                 "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
                 "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
             )

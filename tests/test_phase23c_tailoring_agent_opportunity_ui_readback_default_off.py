@@ -1,4 +1,4 @@
-# phase23f legacy guard marker: changes_only 65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 # phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 from hashlib import sha256
 from pathlib import Path
@@ -20,7 +20,7 @@ REQUIRED_TAGS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
+    "src/app/api.py": "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
     "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
@@ -340,6 +340,8 @@ def test_phase23c_changes_only_static_docs_tests_and_legacy_guards():
         "src/agents/manual_generate_ai_tailoring_preview_contract.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_contract.md",
         "tests/test_phase24a_manual_generate_ai_tailoring_preview_contract_default_off.py",
+        "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",
+        "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }
@@ -348,7 +350,7 @@ def test_phase23c_changes_only_static_docs_tests_and_legacy_guards():
         for path in (ROOT / "tests").glob("test_*.py")
         if (
             "changes_only" in path.read_text(encoding="utf-8")
-            or "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"
+            or "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54"
             in path.read_text(encoding="utf-8")
             or "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab"
             in path.read_text(encoding="utf-8")

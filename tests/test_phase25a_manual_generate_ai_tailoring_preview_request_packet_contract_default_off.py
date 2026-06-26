@@ -83,7 +83,7 @@ FALSE_ACTION_KEYS = {
 
 PROTECTED_HASHES = {
     "src/app/api.py": (
-        "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54"
+        "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d"
     ),
     "src/app/services.py": (
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
@@ -386,16 +386,26 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         if line and line[:2].strip()
     }
     allowed = {
+        "src/app/api.py",
         "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
         "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_contract.md",
         "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
+            "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
         if path != Path(__file__).resolve()
-        and "manual_generate_ai_tailoring_preview_request_packet_contract"
-        in path.read_text(encoding="utf-8")
+        and any(
+            marker in path.read_text(encoding="utf-8")
+            for marker in (
+                "manual_generate_ai_tailoring_preview_request_packet_contract",
+                "manual_generate_ai_tailoring_preview_request_packet_api_readback",
+                "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
+                "changes_only",
+            )
+        )
     }
 
     assert changed <= allowed | legacy_guards

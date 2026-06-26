@@ -215,6 +215,8 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_ui_readback.md",
         "tests/test_phase23f_generate_ai_tailoring_action_boundary_ui_readback_default_off.py",
+        "docs/phase23_tailoring_agent_workflow_release_checkpoint.md",
+        "tests/test_phase23g_tailoring_agent_workflow_release_checkpoint_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }

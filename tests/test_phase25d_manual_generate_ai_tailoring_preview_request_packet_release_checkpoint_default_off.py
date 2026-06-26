@@ -170,6 +170,9 @@ def test_phase25d_changes_only_doc_test_and_legacy_guards():
     allowed = {
         "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint.md",
         "tests/test_phase25d_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_contract.md",
+            "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

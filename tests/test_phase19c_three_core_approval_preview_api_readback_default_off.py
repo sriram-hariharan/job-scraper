@@ -1,5 +1,5 @@
-# phase23f legacy guard marker: changes_only c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
-# phase23f legacy guard marker: changes_only 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
+# phase23f legacy guard marker: changes_only c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6 a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74
+# phase23f legacy guard marker: changes_only a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -17,7 +17,7 @@ ENDPOINT = "/api/three-core-approval-preview-service-readback"
 
 PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
+    "src/app/static/agentic_review.js": "a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/jd_intelligence.py": "1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e",
@@ -282,6 +282,10 @@ def test_phase19c_changes_only_approved_files():
             "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
             "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
             "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
+            "src/app/static/agentic_review.js",
+            "src/app/static/app_redesign.css",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_ui_readback.md",
+            "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -426,7 +430,7 @@ def test_phase19c_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
+                "369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
             )
         )

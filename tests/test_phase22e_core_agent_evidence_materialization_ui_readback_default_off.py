@@ -1,5 +1,5 @@
-# phase23f legacy guard marker: changes_only c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
-# phase23f legacy guard marker: changes_only 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
+# phase23f legacy guard marker: changes_only c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6 a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74
+# phase23f legacy guard marker: changes_only a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -223,6 +223,7 @@ def test_new_ui_adds_no_other_endpoint_urls():
         ['      "/api/tailoring-agent-opportunity-contract",'],
         ['      "/api/generate-ai-tailoring-action-boundary",'],
         ['      "/api/manual-generate-ai-tailoring-preview-contract",'],
+        ['      "/api/manual-generate-ai-tailoring-preview-request-packet-contract",'],
     )
 
 
@@ -320,6 +321,10 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
             "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
             "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
             "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
+            "src/app/static/agentic_review.js",
+            "src/app/static/app_redesign.css",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_ui_readback.md",
+            "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }
@@ -332,7 +337,7 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
                 "changes_only",
                 "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
-                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
+                "369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6",
             )
         )
     }

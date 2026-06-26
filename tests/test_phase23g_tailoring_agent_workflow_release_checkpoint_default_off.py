@@ -172,6 +172,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
         "src/agents/manual_generate_ai_tailoring_preview_contract.py",
+        "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
     }
 
     assert changed_runtime == set()
@@ -187,6 +188,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
         and path != "src/app/static/agentic_review.js"
         and path != "src/app/static/app_redesign.css"
         and path != "src/agents/manual_generate_ai_tailoring_preview_contract.py"
+        and path != "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py"
     ]
     forbidden = (
         "provider_call(",
@@ -224,6 +226,9 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_release_checkpoint.md",
         "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
+            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_contract.md",
+            "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

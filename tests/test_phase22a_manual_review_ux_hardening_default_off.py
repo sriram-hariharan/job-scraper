@@ -1,5 +1,5 @@
-# phase23f legacy guard marker: changes_only f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
-# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
+# phase23f legacy guard marker: changes_only 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -140,6 +140,7 @@ def test_phase22a_adds_no_endpoint_urls_or_fetch_changes():
         ['      "/api/core-agent-evidence-materialization-preview",'],
         ['      "/api/tailoring-agent-opportunity-contract",'],
         ['      "/api/generate-ai-tailoring-action-boundary",'],
+        ['      "/api/manual-generate-ai-tailoring-preview-contract",'],
     )
     assert "fetch(" not in added_lines
     assert added_lines.count("fetchJson(") in (0, 1, 2, 3)
@@ -197,6 +198,10 @@ def test_phase22a_changes_only_static_docs_tests_and_legacy_guards():
         "tests/test_phase24a_manual_generate_ai_tailoring_preview_contract_default_off.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",
         "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
+        "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -217,7 +222,7 @@ def test_phase22a_changes_only_static_docs_tests_and_legacy_guards():
                     "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
                     "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
                     "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
-                "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
             )
         )
     }

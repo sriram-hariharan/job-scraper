@@ -71,8 +71,8 @@ SAFETY_MARKERS = (
 PROTECTED_HASHES = {
     "src/app/api.py": "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
-    "src/app/static/app_redesign.css": "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+    "src/app/static/agentic_review.js": "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
+    "src/app/static/app_redesign.css": "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
     "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
@@ -169,6 +169,8 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         )
     } - {
         "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
         "src/agents/manual_generate_ai_tailoring_preview_contract.py",
     }
 
@@ -182,6 +184,8 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
         for path in changed
         if path.startswith("src/")
         and path != "src/app/api.py"
+        and path != "src/app/static/agentic_review.js"
+        and path != "src/app/static/app_redesign.css"
         and path != "src/agents/manual_generate_ai_tailoring_preview_contract.py"
     ]
     forbidden = (
@@ -214,6 +218,10 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase24a_manual_generate_ai_tailoring_preview_contract_default_off.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",
         "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
+        "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -223,8 +231,8 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
             for marker in (
                 "changes_only",
                 "f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54",
-                "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
-                "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+                "898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2",
+                "83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167",
             )
         )
     }

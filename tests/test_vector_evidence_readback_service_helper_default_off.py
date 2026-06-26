@@ -1,5 +1,5 @@
-# phase23f legacy guard marker: changes_only f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
-# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 83bcc1e4f1c276e42e7306e30a2beb2a60a4f92bc0efe41f2525d4540d866167 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
+# phase23f legacy guard marker: changes_only 898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
@@ -237,7 +237,7 @@ def test_service_import_path_has_no_automatic_connection():
 def test_no_api_ui_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": ("f68ffa1e18343ffe85cbe4493064fb7e6af10edbc27efe3aa6459cd48088bc54"),
-        "src/app/static/agentic_review.js": ("63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56"),
+        "src/app/static/agentic_review.js": ("898a88b49c765d59c099132a049aad79ea3c42774ad58912c0aac9b0d859d9a2"),
         "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
         "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
         "src/storage/vector_evidence/schema.sql": ("4b34a928393fcce6696a2f35d7ee62339b0483cc248daee3f0e57bdb50c11dff"),

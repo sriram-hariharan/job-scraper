@@ -6297,6 +6297,90 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
   color: var(--app-text-2);
 }
 
+.tailoring-agent-opportunity-readback {
+  border-color: color-mix(in srgb, var(--app-primary) 46%, var(--app-border));
+}
+
+.tailoring-agent-opportunity-readback__safety-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tailoring-agent-opportunity-readback__safety-labels span {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 34%, var(--app-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-primary) 14%, transparent);
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.tailoring-agent-opportunity-readback__metrics,
+.tailoring-agent-opportunity-readback__items {
+  margin-top: 12px;
+}
+
+.tailoring-agent-opportunity-readback__items {
+  display: grid;
+  gap: 10px;
+}
+
+.tailoring-agent-opportunity-readback__item,
+.tailoring-agent-opportunity-readback__boundary {
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-primary) 8%);
+}
+
+.tailoring-agent-opportunity-readback__boundary {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--app-text-2);
+}
+
+.generate-ai-tailoring-action-boundary-readback {
+  border-color: color-mix(in srgb, var(--app-primary) 50%, var(--app-border));
+}
+
+.generate-ai-tailoring-action-boundary-readback__safety-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.generate-ai-tailoring-action-boundary-readback__safety-labels span {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 36%, var(--app-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-primary) 16%, transparent);
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.generate-ai-tailoring-action-boundary-readback__metrics {
+  margin-top: 12px;
+}
+
+.generate-ai-tailoring-action-boundary-readback__boundary {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-primary) 8%);
+  color: var(--app-text-2);
+}
+
 @media (max-width: 720px) {
   [data-agentic-review-run-id] {
     padding-right: 18px;

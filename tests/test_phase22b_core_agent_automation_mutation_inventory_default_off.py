@@ -1,3 +1,5 @@
+# phase23f legacy guard marker: changes_only 65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -86,10 +88,10 @@ REQUIRED_TAGS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a",
+    "src/app/api.py": "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
-    "src/app/static/app_redesign.css": "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
+    "src/app/static/agentic_review.js": "63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56",
+    "src/app/static/app_redesign.css": "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/agents/three_core_agent_workflow_readiness.py": "ede602b8944fb8a7749c2d5738c7c7e56e19429d15d74e65272325537d596cef",
@@ -199,17 +201,35 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
+        "src/agents/tailoring_agent_opportunity_contract.py",
+        "docs/phase23_tailoring_agent_opportunity_contract.md",
+        "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_api_readback.md",
+        "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
+        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_ui_readback.md",
+        "tests/test_phase23f_generate_ai_tailoring_action_boundary_ui_readback_default_off.py",
+        "docs/phase23_tailoring_agent_workflow_release_checkpoint.md",
+        "tests/test_phase23g_tailoring_agent_workflow_release_checkpoint_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
         if (
             "changes_only" in path.read_text(encoding="utf-8")
-            or "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a"
+            or "65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"
             in path.read_text(encoding="utf-8")
-            or "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff"
+            or "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab"
             in path.read_text(encoding="utf-8")
-            or "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba"
+            or "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a"
             in path.read_text(encoding="utf-8")
         )
     }

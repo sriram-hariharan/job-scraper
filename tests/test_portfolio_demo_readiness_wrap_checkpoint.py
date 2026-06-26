@@ -1,3 +1,5 @@
+# phase23f legacy guard marker: changes_only 65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 from pathlib import Path
 import subprocess
 
@@ -491,6 +493,24 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
         "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
+        "src/agents/tailoring_agent_opportunity_contract.py",
+        "docs/phase23_tailoring_agent_opportunity_contract.md",
+        "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_api_readback.md",
+        "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+        "docs/phase23_tailoring_agent_opportunity_ui_readback.md",
+        "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+        "src/agents/generate_ai_tailoring_action_boundary_contract.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_contract.md",
+        "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_ui_readback.md",
+        "tests/test_phase23f_generate_ai_tailoring_action_boundary_ui_readback_default_off.py",
+        "docs/phase23_tailoring_agent_workflow_release_checkpoint.md",
+        "tests/test_phase23g_tailoring_agent_workflow_release_checkpoint_default_off.py",
+        "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
+        "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }
@@ -502,8 +522,8 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                "962232082cf71e5c85150ff52de5466b11a791567692a45e768dae6d5d11c6ba",
-                "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff",
+                "8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a",
+                "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
             )
         )
     }

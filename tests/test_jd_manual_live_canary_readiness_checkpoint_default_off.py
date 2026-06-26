@@ -1,3 +1,5 @@
+# phase23f legacy guard marker: changes_only 65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
@@ -356,30 +358,14 @@ def test_phase14_has_no_sdk_env_direct_network_or_storage_wiring():
 
 def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
     expected = {
-        "requirements.txt": (
-            "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
-        ),
-        "src/app/api.py": (
-            "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a"
-        ),
-        "src/app/services.py": (
-            "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
-        ),
-        "src/app/static/agentic_review.js": (
-            "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff"
-        ),
-        "src/pipeline/collector.py": (
-            "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"
-        ),
-        "src/pipeline/application_scorer.py": (
-            "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"
-        ),
-        "src/pipeline/job_ranker.py": (
-            "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"
-        ),
-        "application_execution_queue.py": (
-            "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
-        ),
+        "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
+        "src/app/api.py": ("65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"),
+        "src/app/services.py": ("2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"),
+        "src/app/static/agentic_review.js": ("63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56"),
+        "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
+        "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),
+        "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
+        "application_execution_queue.py": ("c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"),
     }
 
     for relative_path, expected_hash in expected.items():

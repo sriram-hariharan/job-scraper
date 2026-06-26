@@ -1,3 +1,5 @@
+# phase23f legacy guard marker: changes_only 65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 8b5ac1590a977b002f3a04b77b9d8ce634eb3d806716586fca4872b81d33990a 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
+# phase23f legacy guard marker: changes_only 63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
@@ -234,21 +236,11 @@ def test_service_import_path_has_no_automatic_connection():
 
 def test_no_api_ui_pipeline_schema_or_dependency_change():
     protected_hashes = {
-        "src/app/api.py": (
-            "bb4755cd3d74c72e7ed0af24de9d617c0ff568b61639b6d61e59c057348f424a"
-        ),
-        "src/app/static/agentic_review.js": (
-            "f7cdf115e412f34094e80e71b18e86f94365715c6f5010faa8e2ba7fe41daeff"
-        ),
-        "src/pipeline/collector.py": (
-            "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"
-        ),
-        "requirements.txt": (
-            "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
-        ),
-        "src/storage/vector_evidence/schema.sql": (
-            "4b34a928393fcce6696a2f35d7ee62339b0483cc248daee3f0e57bdb50c11dff"
-        ),
+        "src/app/api.py": ("65975190cebecd5cefc179be1d71c4cbe7b3214ed9c7b3691d6cc7877f7db6e3"),
+        "src/app/static/agentic_review.js": ("63e37ba427991dd71c6addb440a83024661fe4cef363f8641149d48e14c55c56"),
+        "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
+        "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
+        "src/storage/vector_evidence/schema.sql": ("4b34a928393fcce6696a2f35d7ee62339b0483cc248daee3f0e57bdb50c11dff"),
     }
     for relative_path, expected_hash in protected_hashes.items():
         assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (

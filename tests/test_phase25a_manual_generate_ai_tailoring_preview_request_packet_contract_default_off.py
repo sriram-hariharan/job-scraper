@@ -410,6 +410,8 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             "src/app/static/app_redesign.css",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md",
             "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint.md",
+            "tests/test_phase26d_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

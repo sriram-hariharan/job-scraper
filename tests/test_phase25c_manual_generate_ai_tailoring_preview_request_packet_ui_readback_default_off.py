@@ -330,6 +330,9 @@ def test_phase25c_changes_only_static_doc_test_and_legacy_guards():
             "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
             "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint.md",
             "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract.md",
+            "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

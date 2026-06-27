@@ -200,6 +200,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
             "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint.md",
             "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract.md",
+            "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -268,11 +271,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             ROOT
             / "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py"
         ],
-        [
-            ROOT
-            / "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py"
-        ],
-        [ROOT / "src/app/api.py"],
+            [
+                ROOT
+                / "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py"
+            ],
+            [
+                ROOT
+                / "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py"
+            ],
+            [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],
         [
             ROOT / "src/app/static/agentic_review.js",

@@ -1,6 +1,7 @@
+# phase26c legacy guard marker: changes_only 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251
 # phase26b legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8
-# phase23f legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6 a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74
-# phase23f legacy guard marker: changes_only a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74
+# phase23f legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff
+# phase23f legacy guard marker: changes_only 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -271,6 +272,7 @@ def test_new_ui_adds_no_other_generate_ai_tailoring_endpoint_urls():
             if endpoint not in line
             and "/api/manual-generate-ai-tailoring-preview-contract" not in line
             and "/api/manual-generate-ai-tailoring-preview-request-packet-contract" not in line
+            and "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract" not in line
         ]
     assert unexpected == []
 
@@ -387,6 +389,10 @@ def test_phase23f_changes_only_static_docs_tests_and_legacy_guards():
             "src/app/api.py",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback.md",
             "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
+            "src/app/static/agentic_review.js",
+            "src/app/static/app_redesign.css",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md",
+            "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -397,7 +403,7 @@ def test_phase23f_changes_only_static_docs_tests_and_legacy_guards():
                 "changes_only",
                 "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
-                "369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6",
+                "54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251",
             )
         )
     }

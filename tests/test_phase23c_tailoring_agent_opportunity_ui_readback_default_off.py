@@ -373,6 +373,9 @@ def test_phase23c_changes_only_static_docs_tests_and_legacy_guards():
             "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint.md",
             "tests/test_phase26d_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py",
+            "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_contract.md",
+            "tests/test_phase27a_manual_generate_ai_tailoring_preview_provider_request_envelope_contract_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }

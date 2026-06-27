@@ -6455,6 +6455,43 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
   color: var(--app-text-2);
 }
 
+.manual-generate-ai-tailoring-preview-dispatch-boundary-readback {
+  border-color: color-mix(in srgb, var(--app-warning) 54%, var(--app-border));
+}
+
+.manual-generate-ai-tailoring-preview-dispatch-boundary-readback__safety-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.manual-generate-ai-tailoring-preview-dispatch-boundary-readback__safety-labels span {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-warning) 38%, var(--app-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-warning) 18%, transparent);
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.manual-generate-ai-tailoring-preview-dispatch-boundary-readback__metrics {
+  margin-top: 12px;
+}
+
+.manual-generate-ai-tailoring-preview-dispatch-boundary-readback__boundary {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-warning) 8%);
+  color: var(--app-text-2);
+}
+
 @media (max-width: 720px) {
   [data-agentic-review-run-id] {
     padding-right: 18px;

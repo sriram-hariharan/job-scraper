@@ -1,5 +1,4 @@
 # phase26c legacy guard marker: changes_only 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251
-# phase26b legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -10,13 +9,17 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 CSS_PATH = ROOT / "src/app/static/app_redesign.css"
 DOC_PATH = (
     ROOT
-    / "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md"
+    / "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md"
 )
-ENDPOINT = "/api/manual-generate-ai-tailoring-preview-contract"
+ENDPOINT = (
+    "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract"
+)
 
 PROTECTED_HASHES = {
     "src/app/api.py": "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
+    "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
@@ -30,18 +33,22 @@ PROTECTED_HASHES = {
 }
 
 DOC_MARKERS = (
-    "phase 24c manual generate ai tailoring preview ui readback",
+    "phase 26c manual generate ai tailoring preview dispatch-boundary ui readback",
     "ui readback only",
+    "dispatch-boundary contract only",
     "default-off",
     "read-only",
     "advisory-only",
     "manual-review only",
-    "preview contract only",
     "user trigger required",
+    "operator confirmation required",
     "manual acceptance required",
+    "does not dispatch",
+    "does not call network",
     "does not generate ai tailoring",
     "does not call tailoring runtime",
     "does not call providers",
+    "does not create real tailoring output",
     "does not create resume rewrites",
     "does not overwrite resumes",
     "does not mutate resumes",
@@ -49,6 +56,15 @@ DOC_MARKERS = (
     "does not write to database",
     "does not execute applications",
     "does not submit applications",
+    "no provider calls",
+    "no network calls",
+    "no database writes",
+    "no persistence",
+    "no mutation",
+    "no resume mutation",
+    "no application mutation",
+    "no execution",
+    "no submission",
     "no auto-apply",
     "no auto-submit",
     "no autonomous application execution",
@@ -62,11 +78,16 @@ DOC_MARKERS = (
     "tailoring agent remains separate from final scoring",
     "generated tailoring suggestions must remain preview/manual-review only unless user accepts edits in a later phase",
     "no real generate ai tailoring button or control",
+    "no dispatch control",
     ENDPOINT,
-    "rendermanualgenerateaitailoringpreviewreadbacksection",
-    "phase24b-manual-generate-ai-tailoring-preview-api-readback-v1",
-    "phase24a-manual-generate-ai-tailoring-preview-contract-v1",
+    "rendermanualgenerateaitailoringpreviewdispatchboundaryreadbacksection",
+    "build_manual_generate_ai_tailoring_preview_dispatch_boundary_contract",
+    "phase26b-manual-generate-ai-tailoring-preview-dispatch-boundary-api-readback-v1",
+    "phase26a-manual-generate-ai-tailoring-preview-dispatch-boundary-contract-v1",
+    "phase25-manual-generate-ai-tailoring-preview-request-packet-release-v1",
+    "phase24-manual-generate-ai-tailoring-preview-release-v1",
     "phase23-tailoring-agent-workflow-release-v1",
+    "phase20d-no-auto-apply-safety-checkpoint-v1",
 )
 
 
@@ -77,7 +98,7 @@ def _source() -> str:
 def _renderer() -> str:
     source = _source()
     start = source.index(
-        "function renderManualGenerateAiTailoringPreviewReadbackSection"
+        "function renderManualGenerateAiTailoringPreviewDispatchBoundaryReadbackSection"
     )
     end = source.index(
         "\nfunction renderHumanReviewedInfluencePreviewSection",
@@ -86,22 +107,10 @@ def _renderer() -> str:
     return source[start:end]
 
 
-def _fixture_helpers() -> str:
-    source = _source()
-    start = source.index(
-        "function shouldRenderManualGenerateAiTailoringPreviewFixture"
-    )
-    end = source.index(
-        "\nfunction renderManualGenerateAiTailoringPreviewReadbackSection",
-        start,
-    )
-    return source[start:end]
-
-
 def _fetch_helpers() -> str:
     source = _source()
     start = source.index(
-        "function shouldFetchManualGenerateAiTailoringPreviewReadback"
+        "function shouldFetchManualGenerateAiTailoringPreviewDispatchBoundaryReadback"
     )
     end = source.index("\nfunction getAgenticReviewApprovalRequestId", start)
     return source[start:end]
@@ -122,28 +131,17 @@ def _changed_files() -> set[str]:
 def test_renderer_exists_and_is_integrated():
     source = _source()
 
-    assert "renderManualGenerateAiTailoringPreviewReadbackSection" in source
     assert (
-        "renderManualGenerateAiTailoringPreviewReadbackSection("
-        "manualGenerateAiTailoringPreviewVisibleTracePayload)"
-    ) in source
-    assert "withManualGenerateAiTailoringPreviewReadbackApiFetch(" in source
-
-
-def test_default_off_requires_supplied_payload_fixture_or_fetch_gate():
-    fixture = _fixture_helpers()
-    renderer = _renderer()
-    fetch = _fetch_helpers()
-
-    assert "source.manual_generate_ai_tailoring_preview_result" in fixture
-    assert (
-        "|| !shouldRenderManualGenerateAiTailoringPreviewFixture(search)"
-        in fixture
+        "renderManualGenerateAiTailoringPreviewDispatchBoundaryReadbackSection"
+        in source
     )
-    assert 'if (!Object.keys(result).length) return "";' in renderer
     assert (
-        "|| !shouldFetchManualGenerateAiTailoringPreviewReadback(search)"
-        in fetch
+        "renderManualGenerateAiTailoringPreviewDispatchBoundaryReadbackSection("
+        "manualGenerateAiTailoringPreviewDispatchBoundaryVisibleTracePayload)"
+    ) in source
+    assert (
+        "withManualGenerateAiTailoringPreviewDispatchBoundaryReadbackApiFetch("
+        in source
     )
 
 
@@ -155,15 +153,22 @@ def test_renderer_contains_visible_safety_and_readiness_markers():
         "read-only",
         "advisory-only",
         "manual-review only",
-        "preview contract only",
+        "dispatch-boundary contract only",
         "user trigger required",
+        "operator confirmation required",
         "manual acceptance required",
-        "can prepare preview",
+        "dispatch ready",
+        "dispatch allowed",
         "blocked reasons",
         "missing inputs",
+        "request packet accepted",
+        "deterministic dispatch key",
+        "does not dispatch",
+        "does not call network",
         "does not generate ai tailoring",
         "does not call tailoring runtime",
         "does not call providers",
+        "does not create real tailoring output",
         "does not create resume rewrites",
         "does not overwrite resumes",
         "does not mutate resumes",
@@ -173,6 +178,8 @@ def test_renderer_contains_visible_safety_and_readiness_markers():
         "no database writes",
         "no persistence",
         "no mutation",
+        "no resume mutation",
+        "no application mutation",
         "no execution",
         "no submission",
         "no auto-apply",
@@ -184,7 +191,7 @@ def test_renderer_contains_visible_safety_and_readiness_markers():
         assert marker in renderer
 
 
-def test_renderer_displays_contract_fields_without_actions():
+def test_renderer_displays_dispatch_boundary_fields_without_actions():
     renderer = _renderer()
 
     for marker in (
@@ -193,17 +200,21 @@ def test_renderer_displays_contract_fields_without_actions():
         "Read-only",
         "Advisory-only",
         "Manual-review only",
-        "Preview contract only",
+        "Dispatch-boundary contract only",
         "User trigger required",
+        "Operator confirmation required",
         "Manual acceptance required",
-        "Can prepare preview",
-        "Blocked reasons",
-        "Missing inputs",
+        "Dispatch ready",
+        "Dispatch allowed",
+        "Request packet accepted",
+        "Deterministic dispatch key",
         "No provider calls",
         "No network calls",
         "No database writes",
         "No persistence",
         "No mutation",
+        "No resume mutation",
+        "No application mutation",
         "No execution",
         "No submission",
         "No auto-apply",
@@ -230,6 +241,10 @@ def test_renderer_contains_no_controls_or_storage_writes():
         "data-autonomous",
         "data-resume-rewrite",
         "data-resume-overwrite",
+        "dispatch control",
+        "approval control",
+        "execution control",
+        "submit control",
         "localstorage.setitem",
         "sessionstorage.setitem",
         "generateaitailoring(",
@@ -251,51 +266,80 @@ def test_renderer_contains_no_controls_or_storage_writes():
 def test_fetch_is_gated_get_only_and_fail_closed():
     fetch = _fetch_helpers()
 
-    assert "manual_generate_ai_tailoring_preview_api_fetch" in fetch
+    assert "manual_generate_ai_tailoring_preview_dispatch_boundary_api_fetch" in fetch
     assert '=== "1"' in fetch
     assert fetch.count(f'"{ENDPOINT}"') == 1
     assert 'method: "GET"' in fetch
     assert "JSON.stringify" not in fetch
     assert "body:" not in fetch
     assert "catch (error)" in fetch
-    assert "manual_generate_ai_tailoring_preview_failed_closed" in fetch
+    assert (
+        "manual_generate_ai_tailoring_preview_dispatch_boundary_failed_closed"
+        in fetch
+    )
     assert "read_only: true" in fetch
     assert "advisory_only: true" in fetch
     assert "manual_review_only: true" in fetch
+    assert "dispatch_boundary_contract_only: true" in fetch
     assert "provider_call_performed: false" in fetch
+    assert "network_call_performed: false" in fetch
     assert "tailoring_runtime_call_performed: false" in fetch
+    assert "ai_tailoring_generation_performed: false" in fetch
+    assert "real_tailoring_output_created: false" in fetch
     assert "resume_mutation_performed: false" in fetch
     assert "application_submission_performed: false" in fetch
+    assert "database_write_performed: false" in fetch
+    assert "persistence_performed: false" in fetch
+    assert "execution_performed: false" in fetch
+    assert "submission_performed: false" in fetch
+    assert "auto_apply_performed: false" in fetch
+    assert "auto_submit_performed: false" in fetch
 
 
-def test_ui_adds_only_the_phase24b_manual_preview_endpoint_url():
+def test_ui_adds_only_the_dispatch_boundary_endpoint_url_for_phase26c():
     js = _source()
     related_endpoint_lines = [
         line.strip()
         for line in js.splitlines()
-        if "/api/" in line and "manual-generate-ai-tailoring" in line
+        if "/api/" in line
+        and "manual-generate-ai-tailoring-preview-dispatch-boundary" in line
     ]
 
     assert related_endpoint_lines
     assert ENDPOINT in js
-    assert all(
-        ENDPOINT in line
-        or "/api/manual-generate-ai-tailoring-preview-request-packet-contract"
-        in line
-            or "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract"
-            in line
-        for line in related_endpoint_lines
-    )
+    assert all(ENDPOINT in line for line in related_endpoint_lines)
+
+
+def test_ui_helpers_add_no_storage_pipeline_matching_or_runtime_mutations():
+    helpers = (_renderer() + _fetch_helpers()).lower()
+
+    for marker in (
+        "localstorage.setitem",
+        "sessionstorage.setitem",
+        "pipeline",
+        "mutatescoring(",
+        "updateranking(",
+        "runprefilter(",
+        "scorejobs(",
+        "rankjobs(",
+        "matchingmutation(",
+        "applicationexecution(",
+        "executeapplication(",
+        "submitapplication(",
+        "generatetailoringsuggestions",
+        "_run_live_llm_tailoring",
+    ):
+        assert marker not in helpers
 
 
 def test_css_contains_passive_panel_classes():
     css = CSS_PATH.read_text(encoding="utf-8")
 
     for marker in (
-        ".manual-generate-ai-tailoring-preview-readback",
-        ".manual-generate-ai-tailoring-preview-readback__safety-labels",
-        ".manual-generate-ai-tailoring-preview-readback__metrics",
-        ".manual-generate-ai-tailoring-preview-readback__boundary",
+        ".manual-generate-ai-tailoring-preview-dispatch-boundary-readback",
+        ".manual-generate-ai-tailoring-preview-dispatch-boundary-readback__safety-labels",
+        ".manual-generate-ai-tailoring-preview-dispatch-boundary-readback__metrics",
+        ".manual-generate-ai-tailoring-preview-dispatch-boundary-readback__boundary",
     ):
         assert marker in css
 
@@ -315,48 +359,25 @@ def test_protected_backend_runtime_files_are_unchanged():
         )
 
 
-def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
+def test_phase26c_changes_only_static_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
-        "src/app/api.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
-        "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
-        "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
-        "docs/phase24_manual_generate_ai_tailoring_preview_release_checkpoint.md",
-        "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
-            "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_contract.md",
-            "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
-            "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
-            "src/app/static/agentic_review.js",
-            "src/app/static/app_redesign.css",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_ui_readback.md",
-            "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint.md",
-            "tests/test_phase25d_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint_default_off.py",
-            "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py",
-            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_contract.md",
-            "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
-            "src/app/api.py",
-            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback.md",
-            "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
-            "src/app/static/agentic_review.js",
-            "src/app/static/app_redesign.css",
-            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md",
-            "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
+        "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md",
+        "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
-        if any(
+        if path != Path(__file__).resolve()
+        and any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "changes_only",
-                "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
+                "manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback",
                 "2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff",
                 "54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251",
+                "changes_only",
             )
         )
     }

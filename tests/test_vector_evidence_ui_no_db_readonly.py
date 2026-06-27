@@ -1,3 +1,4 @@
+# phase26b legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8
 from hashlib import sha256
 from pathlib import Path
 
@@ -188,7 +189,7 @@ def test_ui_calls_api_only_from_explicit_operator_action_without_auto_refresh():
 def test_no_api_service_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d"
+            "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

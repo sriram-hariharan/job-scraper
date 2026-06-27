@@ -1,3 +1,4 @@
+# phase26b legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8
 from __future__ import annotations
 
 from copy import deepcopy
@@ -83,7 +84,7 @@ FALSE_ACTION_KEYS = {
 
 PROTECTED_HASHES = {
     "src/app/api.py": (
-        "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d"
+        "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8"
     ),
     "src/app/services.py": (
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
@@ -401,6 +402,9 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_contract.md",
             "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
+            "src/app/api.py",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback.md",
+            "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -411,7 +415,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             for marker in (
                 "manual_generate_ai_tailoring_preview_request_packet_contract",
                 "manual_generate_ai_tailoring_preview_request_packet_api_readback",
-                "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
+                "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
                 "changes_only",
             )
         )

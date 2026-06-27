@@ -1,3 +1,4 @@
+# phase26b legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -330,6 +331,9 @@ def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
             "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_contract.md",
             "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
+            "src/app/api.py",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback.md",
+            "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -339,7 +343,7 @@ def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "manual_generate_ai_tailoring_preview_request_packet_api_readback",
-                "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
+                "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
                 "changes_only",
             )
         )

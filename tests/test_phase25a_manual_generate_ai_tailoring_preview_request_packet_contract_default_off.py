@@ -412,6 +412,9 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint.md",
             "tests/test_phase26d_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py",
+            "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_contract.md",
+            "tests/test_phase27a_manual_generate_ai_tailoring_preview_provider_request_envelope_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

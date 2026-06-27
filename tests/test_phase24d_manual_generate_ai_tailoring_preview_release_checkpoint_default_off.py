@@ -1,3 +1,5 @@
+# phase26c legacy guard marker: changes_only 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251
+# phase26b legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -74,10 +76,10 @@ SAFETY_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
+    "src/app/api.py": "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74",
-    "src/app/static/app_redesign.css": "369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6",
+    "src/app/static/agentic_review.js": "2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff",
+    "src/app/static/app_redesign.css": "54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
@@ -174,6 +176,18 @@ def test_phase24d_changes_only_doc_test_and_legacy_guards():
             "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
             "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint.md",
             "tests/test_phase25d_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_contract.md",
+            "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
+            "src/app/api.py",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback.md",
+            "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
+            "src/app/static/agentic_review.js",
+            "src/app/static/app_redesign.css",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md",
+            "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
+            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint.md",
+            "tests/test_phase26d_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -182,9 +196,9 @@ def test_phase24d_changes_only_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "changes_only",
-                "c9e50dddb147be99f42ca3fee4d0589711cf3a38e67bb9f7abb32ff85e45579d",
-                "a726f850c746ea182b61299f5c8466f578331d5ce96025391e8fe6f901cfbd74",
-                "369a8cc49447f47247d4c42d8d2f7474af24fa56611fe41a8cf1dd62cdb045a6",
+                "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
+                "2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff",
+                "54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251",
             )
         )
     }

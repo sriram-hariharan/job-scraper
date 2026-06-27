@@ -89,8 +89,8 @@ SAFETY_MARKERS = (
 PROTECTED_HASHES = {
     "src/app/api.py": "96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
-    "src/app/static/agentic_review.js": "96d22785ac4e2d31f5de24e2438a85b80ca2e1a112b06adc22c35a3ab2e9d1c5",
-    "src/app/static/app_redesign.css": "54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251",
+    "src/app/static/agentic_review.js": "bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821",
+    "src/app/static/app_redesign.css": "c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
     "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",
@@ -189,6 +189,10 @@ def test_phase27d_changes_only_doc_test_and_legacy_guards():
         "src/app/api.py",
         "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback.md",
         "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+        "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
+        "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

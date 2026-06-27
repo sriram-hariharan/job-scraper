@@ -1,7 +1,7 @@
-# phase26c legacy guard marker: changes_only 96d22785ac4e2d31f5de24e2438a85b80ca2e1a112b06adc22c35a3ab2e9d1c5 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251
+# phase26c legacy guard marker: changes_only bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821 c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9
 # phase26b legacy guard marker: changes_only 96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff
-# phase23f legacy guard marker: changes_only 96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251 96d22785ac4e2d31f5de24e2438a85b80ca2e1a112b06adc22c35a3ab2e9d1c5
-# phase23f legacy guard marker: changes_only 96d22785ac4e2d31f5de24e2438a85b80ca2e1a112b06adc22c35a3ab2e9d1c5
+# phase23f legacy guard marker: changes_only 96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9 bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821
+# phase23f legacy guard marker: changes_only bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -226,9 +226,10 @@ def test_new_ui_adds_no_other_endpoint_urls():
         ['      "/api/generate-ai-tailoring-action-boundary",'],
             ['      "/api/manual-generate-ai-tailoring-preview-contract",'],
             ['      "/api/manual-generate-ai-tailoring-preview-request-packet-contract",'],
-                ['      "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract",'],
-                ['      "/api/manual-generate-ai-tailoring-preview-provider-request-envelope-contract",'],
-        )
+                    ['      "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract",'],
+                    ['      "/api/manual-generate-ai-tailoring-preview-provider-request-envelope-contract",'],
+                    ['      "/api/manual-generate-ai-tailoring-preview-provider-call-boundary-contract",'],
+            )
 
 
 def test_docs_contain_required_markers_and_references():
@@ -361,6 +362,10 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
             "src/app/api.py",
             "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback.md",
             "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
+            "src/app/static/agentic_review.js",
+            "src/app/static/app_redesign.css",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
+            "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }
@@ -373,7 +378,7 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
                 "changes_only",
                 "96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
-                "54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251",
+                "c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9",
             )
         )
     }

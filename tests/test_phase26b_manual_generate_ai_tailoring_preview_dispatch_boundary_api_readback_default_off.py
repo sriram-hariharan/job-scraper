@@ -1,5 +1,5 @@
 # phase26c legacy guard marker: changes_only bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821 c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9
-# phase26b legacy guard marker: changes_only 96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff
+# phase26b legacy guard marker: changes_only 0b95ae42f2dcec29e129a86682ce9b41a171e6d7e66a01da635dc433ca88cbf8
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -373,6 +373,9 @@ def test_phase26b_changes_only_api_doc_test_and_legacy_guards():
             "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py",
             "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md",
             "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
+            "src/app/api.py",
+            "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback.md",
+            "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -382,7 +385,7 @@ def test_phase26b_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback",
-                "96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff",
+                "0b95ae42f2dcec29e129a86682ce9b41a171e6d7e66a01da635dc433ca88cbf8",
                 "changes_only",
             )
         )

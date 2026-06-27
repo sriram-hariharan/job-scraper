@@ -1,13 +1,11 @@
-# phase26c legacy guard marker: changes_only bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821 c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9
-# phase26b legacy guard marker: changes_only 0b95ae42f2dcec29e129a86682ce9b41a171e6d7e66a01da635dc433ca88cbf8
 from hashlib import sha256
 from pathlib import Path
 import subprocess
 
 from fastapi.testclient import TestClient
 
-from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract import (
-    build_manual_generate_ai_tailoring_preview_request_packet_contract,
+from src.agents.manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract import (
+    build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract,
 )
 from src.app import api
 
@@ -16,10 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 API_PATH = ROOT / "src/app/api.py"
 DOC_PATH = (
     ROOT
-    / "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md"
+    / "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback.md"
 )
 ENDPOINT = (
-    "/api/manual-generate-ai-tailoring-preview-request-packet-contract"
+    "/api/manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-contract"
 )
 
 TRUE_SAFETY_KEYS = (
@@ -27,17 +25,26 @@ TRUE_SAFETY_KEYS = (
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "request_packet_contract_only",
+    "provider_call_dry_run_packet_contract_only",
+    "dry_run_only",
     "requires_user_trigger",
+    "operator_confirmation_required",
     "manual_acceptance_required",
+    "provider_call_boundary_required",
+    "provider_request_envelope_required",
+    "provider_configuration_required",
+    "provider_call_policy_required",
     "no_provider_calls",
     "no_network_calls",
 )
 
 FALSE_ACTION_KEYS = (
     "provider_call_performed",
+    "network_call_performed",
+    "dispatch_performed",
     "tailoring_runtime_call_performed",
     "ai_tailoring_generation_performed",
+    "real_tailoring_output_created",
     "resume_rewrite_performed",
     "resume_overwrite_performed",
     "resume_mutation_performed",
@@ -55,18 +62,31 @@ REQUIRED_PAYLOAD_KEYS = (
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "request_packet_contract_only",
+    "provider_call_dry_run_packet_contract_only",
+    "dry_run_only",
     "requires_user_trigger",
+    "operator_confirmation_required",
     "manual_acceptance_required",
-    "can_prepare_request_packet",
-    "preview_request_allowed",
+    "provider_call_boundary_required",
+    "provider_call_boundary_accepted",
+    "provider_request_envelope_required",
+    "provider_request_envelope_accepted",
+    "provider_configuration_required",
+    "provider_configuration_present",
+    "provider_call_policy_required",
+    "provider_call_policy_present",
+    "dry_run_packet_ready",
+    "provider_call_allowed_for_future_manual_preview",
     "blocked_reasons",
     "missing_inputs",
-    "request_packet",
-    "deterministic_request_key",
+    "dry_run_packet",
+    "deterministic_dry_run_packet_key",
     "provider_call_performed",
+    "network_call_performed",
+    "dispatch_performed",
     "tailoring_runtime_call_performed",
     "ai_tailoring_generation_performed",
+    "real_tailoring_output_created",
     "resume_rewrite_performed",
     "resume_overwrite_performed",
     "resume_mutation_performed",
@@ -114,18 +134,26 @@ FORBIDDEN_ROUTE_MARKERS = (
 )
 
 DOC_MARKERS = (
-    "phase 25b manual generate ai tailoring preview request-packet api readback",
+    "phase 29b manual generate ai tailoring preview provider-call dry-run packet api readback",
     "api readback only",
-    "request-packet contract only",
+    "provider-call dry-run packet contract only",
+    "dry-run only",
     "default-off",
     "read-only",
     "advisory-only",
     "manual-review only",
     "user trigger required",
+    "operator confirmation required",
     "manual acceptance required",
+    "provider-call boundary required",
+    "provider request-envelope required",
+    "provider configuration required",
+    "provider call policy required",
+    "does not call providers",
+    "does not call network",
+    "does not dispatch",
     "does not generate ai tailoring",
     "does not call tailoring runtime",
-    "does not call providers",
     "does not create real tailoring output",
     "does not create resume rewrites",
     "does not overwrite resumes",
@@ -154,9 +182,13 @@ DOC_MARKERS = (
     "no tailoring runtime changes",
     "tailoring agent remains separate from final scoring",
     "generated tailoring suggestions must remain preview/manual-review only unless user accepts edits in a later phase",
-    "/api/manual-generate-ai-tailoring-preview-request-packet-contract",
-    "build_manual_generate_ai_tailoring_preview_request_packet_contract",
-    "phase25a-manual-generate-ai-tailoring-preview-request-packet-contract-v1",
+    ENDPOINT,
+    "build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract",
+    "phase29a-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-contract-v1",
+    "phase28-manual-generate-ai-tailoring-preview-provider-call-boundary-release-v1",
+    "phase27-manual-generate-ai-tailoring-preview-provider-request-envelope-release-v1",
+    "phase26-manual-generate-ai-tailoring-preview-dispatch-boundary-release-v1",
+    "phase25-manual-generate-ai-tailoring-preview-request-packet-release-v1",
     "phase24-manual-generate-ai-tailoring-preview-release-v1",
     "phase23-tailoring-agent-workflow-release-v1",
     "phase20d-no-auto-apply-safety-checkpoint-v1",
@@ -166,6 +198,10 @@ PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821",
     "src/app/static/app_redesign.css": "c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
+    "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
     "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
@@ -188,28 +224,53 @@ def _client(monkeypatch):
 def _route_snippet() -> str:
     source = API_PATH.read_text(encoding="utf-8")
     start = source.index(
-        '@app.get("/api/manual-generate-ai-tailoring-preview-request-packet-contract")'
+        '@app.get(\n'
+        '    "/api/manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-contract"'
     )
     end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
     return source[start:end]
 
 
 def _expected_readback_payload() -> dict:
-    return build_manual_generate_ai_tailoring_preview_request_packet_contract(
-        phase24_preview_contract_payload={
-            "readback_source": "phase25b_api_placeholder",
-            "can_prepare_preview": False,
+    return build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        phase28_provider_call_boundary_payload={
+            "readback_source": "phase29b_api_placeholder",
+            "provider_call_boundary_ready": False,
+            "provider_call_allowed": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "dispatch_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
         },
-        job_metadata={
-            "readback_source": "phase25b_api_placeholder",
+        phase27_provider_request_envelope_payload={
+            "readback_source": "phase29b_api_placeholder",
+            "provider_request_envelope_ready": False,
+            "provider_request_allowed": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
         },
-        selected_resume_metadata={
-            "readback_source": "phase25b_api_placeholder",
+        phase26_dispatch_boundary_payload={
+            "readback_source": "phase29b_api_placeholder",
+            "dispatch_ready": False,
+            "dispatch_allowed": False,
         },
-        tailoring_opportunity_payload={
-            "readback_source": "phase25b_api_placeholder",
+        phase25_request_packet_payload={
+            "readback_source": "phase29b_api_placeholder",
+            "preview_request_allowed": False,
         },
         user_trigger_metadata={},
+        operator_confirmation_metadata={},
+        provider_configuration_metadata={},
+        provider_call_policy_metadata={},
     )
 
 
@@ -238,7 +299,7 @@ def test_unauthenticated_request_uses_existing_auth_behavior():
     assert response.json() == {"detail": "Not authenticated."}
 
 
-def test_route_returns_phase25a_request_packet_payload_with_safety_flags(
+def test_route_returns_phase29a_dry_run_packet_payload_with_safety_flags(
     monkeypatch,
 ):
     response = _client(monkeypatch).get(ENDPOINT)
@@ -248,15 +309,34 @@ def test_route_returns_phase25a_request_packet_payload_with_safety_flags(
     assert payload == _expected_readback_payload()
     assert set(REQUIRED_PAYLOAD_KEYS).issubset(payload.keys())
     assert payload["contract_version"] == (
-        "phase-25a-manual-generate-ai-tailoring-preview-request-packet-v1"
+        "phase-29a-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-v1"
     )
     assert payload["contract_status"] == (
-        "manual_generate_ai_tailoring_preview_request_packet_blocked"
+        "manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_blocked"
     )
     assert payload["user_trigger_present"] is False
-    assert payload["can_prepare_request_packet"] is False
-    assert payload["preview_request_allowed"] is False
+    assert payload["operator_confirmation_present"] is False
+    assert payload["provider_call_boundary_accepted"] is False
+    assert payload["provider_request_envelope_accepted"] is False
+    assert payload["provider_configuration_present"] is False
+    assert payload["provider_call_policy_present"] is False
+    assert payload["dry_run_packet_ready"] is False
+    assert payload["provider_call_allowed_for_future_manual_preview"] is False
     assert "explicit user trigger required" in payload["blocked_reasons"]
+    assert "operator confirmation required" in payload["blocked_reasons"]
+    assert (
+        "provider-call boundary must be accepted before dry-run packet"
+        in payload["blocked_reasons"]
+    )
+    assert (
+        "provider request-envelope must be accepted before dry-run packet"
+        in payload["blocked_reasons"]
+    )
+    assert (
+        "provider configuration metadata required"
+        in payload["blocked_reasons"]
+    )
+    assert "provider call policy metadata required" in payload["blocked_reasons"]
     for key in TRUE_SAFETY_KEYS:
         assert payload[key] is True
     for key in FALSE_ACTION_KEYS:
@@ -268,18 +348,21 @@ def test_route_uses_helper_with_deterministic_readback_metadata_only():
     snippet = _route_snippet()
 
     assert (
-        "from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract "
+        "from src.agents.manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract "
         "import (" in source
     )
     assert (
-        "build_manual_generate_ai_tailoring_preview_request_packet_contract("
+        "build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract("
         in snippet
     )
-    assert "phase25b_api_placeholder" in snippet
+    assert "phase29b_api_placeholder" in snippet
     assert "Body(" not in snippet
     assert "request_payload" not in snippet
     assert "payload: dict" not in snippet
     assert "user_trigger_metadata={}" in snippet
+    assert "operator_confirmation_metadata={}" in snippet
+    assert "provider_configuration_metadata={}" in snippet
+    assert "provider_call_policy_metadata={}" in snippet
 
 
 def test_route_contains_no_provider_network_db_io_runtime_or_mutation_calls():
@@ -289,16 +372,17 @@ def test_route_contains_no_provider_network_db_io_runtime_or_mutation_calls():
         assert marker not in snippet
 
 
-def test_api_readback_never_generates_rewrites_overwrites_or_submits(
+def test_api_readback_never_calls_providers_generates_mutates_or_submits(
     monkeypatch,
 ):
     payload = _client(monkeypatch).get(ENDPOINT).json()
 
     for key in FALSE_ACTION_KEYS:
         assert payload[key] is False
-    assert payload["request_packet"]["contains_generated_tailoring_output"] is (
-        False
-    )
+    assert payload["provider_call_boundary_accepted"] is False
+    assert payload["provider_request_envelope_accepted"] is False
+    assert payload["dry_run_packet_ready"] is False
+    assert payload["provider_call_allowed_for_future_manual_preview"] is False
     assert payload["next_safe_step"] == "require_explicit_user_trigger"
 
 
@@ -317,62 +401,12 @@ def test_protected_runtime_files_are_unchanged():
         )
 
 
-def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
+def test_phase29b_changes_only_api_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
         "src/app/api.py",
-        "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_api_readback.md",
-        "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
-            "src/app/static/agentic_review.js",
-            "src/app/static/app_redesign.css",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_ui_readback.md",
-            "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
-            "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint.md",
-            "tests/test_phase25d_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint_default_off.py",
-            "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py",
-            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_contract.md",
-            "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
-            "src/app/api.py",
-            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback.md",
-            "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
-            "src/app/static/agentic_review.js",
-            "src/app/static/app_redesign.css",
-            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md",
-            "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
-            "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint.md",
-            "tests/test_phase26d_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint_default_off.py",
-            "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py",
-            "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_contract.md",
-            "tests/test_phase27a_manual_generate_ai_tailoring_preview_provider_request_envelope_contract_default_off.py",
-            "src/app/api.py",
-            "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_api_readback.md",
-            "tests/test_phase27b_manual_generate_ai_tailoring_preview_provider_request_envelope_api_readback_default_off.py",
-            "src/app/static/agentic_review.js",
-            "src/app/static/app_redesign.css",
-            "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback.md",
-            "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
-            "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint.md",
-            "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
-            "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py",
-            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract.md",
-            "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
-            "src/app/api.py",
-            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback.md",
-            "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
-            "src/app/static/agentic_review.js",
-            "src/app/static/app_redesign.css",
-            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
-            "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
-            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback 2.md",
-            "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off 2.py",
-            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint.md",
-            "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
-            "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py",
-            "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md",
-            "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
-            "src/app/api.py",
-            "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback.md",
-            "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
+        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback.md",
+        "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -381,8 +415,8 @@ def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
         and any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "manual_generate_ai_tailoring_preview_request_packet_api_readback",
-                "0b95ae42f2dcec29e129a86682ce9b41a171e6d7e66a01da635dc433ca88cbf8",
+                "manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback",
+                "phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback",
                 "changes_only",
             )
         )

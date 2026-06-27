@@ -192,6 +192,9 @@ def test_phase28d_changes_only_doc_test_and_legacy_guards():
     allowed = {
         "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint.md",
         "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
+        "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py",
+        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md",
+        "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

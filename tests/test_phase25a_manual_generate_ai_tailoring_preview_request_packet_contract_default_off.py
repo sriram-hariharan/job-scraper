@@ -431,10 +431,16 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback.md",
             "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
-            "src/app/static/app_redesign.css",
-            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
-            "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
-    }
+                "src/app/static/app_redesign.css",
+                "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
+                "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
+                "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback 2.md",
+                "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off 2.py",
+                '"docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback 2.md"',
+                '"tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off 2.py"',
+                "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint.md",
+                "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
+        }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")

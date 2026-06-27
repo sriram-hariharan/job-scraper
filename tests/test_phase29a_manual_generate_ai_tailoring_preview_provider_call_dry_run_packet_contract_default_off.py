@@ -4,19 +4,19 @@ from hashlib import sha256
 from pathlib import Path
 import subprocess
 
-from src.agents.manual_generate_ai_tailoring_preview_provider_call_boundary_contract import (
-    build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract,
+from src.agents.manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract import (
+    build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = (
     ROOT
-    / "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py"
+    / "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py"
 )
 DOC_PATH = (
     ROOT
-    / "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract.md"
+    / "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md"
 )
 
 REQUIRED_KEYS = {
@@ -25,24 +25,27 @@ REQUIRED_KEYS = {
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "provider_call_boundary_contract_only",
+    "provider_call_dry_run_packet_contract_only",
+    "dry_run_only",
     "requires_user_trigger",
     "user_trigger_present",
     "operator_confirmation_required",
     "operator_confirmation_present",
     "manual_acceptance_required",
+    "provider_call_boundary_required",
+    "provider_call_boundary_accepted",
     "provider_request_envelope_required",
     "provider_request_envelope_accepted",
     "provider_configuration_required",
     "provider_configuration_present",
     "provider_call_policy_required",
     "provider_call_policy_present",
-    "provider_call_boundary_ready",
-    "provider_call_allowed",
+    "dry_run_packet_ready",
+    "provider_call_allowed_for_future_manual_preview",
     "blocked_reasons",
     "missing_inputs",
-    "provider_call_plan",
-    "deterministic_provider_call_key",
+    "dry_run_packet",
+    "deterministic_dry_run_packet_key",
     "no_provider_calls",
     "provider_call_performed",
     "no_network_calls",
@@ -69,10 +72,12 @@ TRUE_SAFETY_KEYS = {
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "provider_call_boundary_contract_only",
+    "provider_call_dry_run_packet_contract_only",
+    "dry_run_only",
     "requires_user_trigger",
     "operator_confirmation_required",
     "manual_acceptance_required",
+    "provider_call_boundary_required",
     "provider_request_envelope_required",
     "provider_configuration_required",
     "provider_call_policy_required",
@@ -104,6 +109,7 @@ PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821",
     "src/app/static/app_redesign.css": "c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
     "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",
@@ -145,8 +151,9 @@ FORBIDDEN_SOURCE_MARKERS = (
 )
 
 REQUIRED_DOC_MARKERS = (
-    "# Phase 28A Manual Generate AI Tailoring Preview Provider-Call Boundary Contract",
-    "Provider-call boundary contract only",
+    "# Phase 29A Manual Generate AI Tailoring Preview Provider-Call Dry-Run Packet Contract",
+    "Provider-call dry-run packet contract only",
+    "Dry-run only",
     "Default-off",
     "Read-only",
     "Advisory-only",
@@ -154,6 +161,7 @@ REQUIRED_DOC_MARKERS = (
     "User trigger required",
     "Operator confirmation required",
     "Manual acceptance required",
+    "Provider-call boundary required",
     "Provider request-envelope required",
     "Provider configuration required",
     "Provider call policy required",
@@ -190,23 +198,24 @@ REQUIRED_DOC_MARKERS = (
     ),
     "This phase does not create real tailoring output",
     "This phase does not add a UI action control",
-    "phase27-manual-generate-ai-tailoring-preview-provider-request-envelope-release-v1",
+    "phase28-manual-generate-ai-tailoring-preview-provider-call-boundary-release-v1",
     (
-        "phase27d-manual-generate-ai-tailoring-preview-provider-request-envelope-"
+        "phase28d-manual-generate-ai-tailoring-preview-provider-call-boundary-"
         "release-checkpoint-v1"
     ),
     (
-        "phase27c-manual-generate-ai-tailoring-preview-provider-request-envelope-"
+        "phase28c-manual-generate-ai-tailoring-preview-provider-call-boundary-"
         "ui-readback-v1"
     ),
     (
-        "phase27b-manual-generate-ai-tailoring-preview-provider-request-envelope-"
+        "phase28b-manual-generate-ai-tailoring-preview-provider-call-boundary-"
         "api-readback-v1"
     ),
     (
-        "phase27a-manual-generate-ai-tailoring-preview-provider-request-envelope-"
+        "phase28a-manual-generate-ai-tailoring-preview-provider-call-boundary-"
         "contract-v1"
     ),
+    "phase27-manual-generate-ai-tailoring-preview-provider-request-envelope-release-v1",
     "phase26-manual-generate-ai-tailoring-preview-dispatch-boundary-release-v1",
     "phase25-manual-generate-ai-tailoring-preview-request-packet-release-v1",
     "phase24-manual-generate-ai-tailoring-preview-release-v1",
@@ -221,6 +230,24 @@ def _sha256(path: Path) -> str:
 
 def _ready_inputs() -> dict[str, dict]:
     return {
+        "phase28_provider_call_boundary_payload": {
+            "contract_status": (
+                "manual_generate_ai_tailoring_preview_provider_call_boundary_ready"
+            ),
+            "provider_call_boundary_ready": True,
+            "provider_call_allowed": True,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "dispatch_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+            "deterministic_provider_call_key": (
+                "manual-generate-ai-tailoring-preview-provider-call-example"
+            ),
+        },
         "phase27_provider_request_envelope_payload": {
             "contract_status": (
                 "manual_generate_ai_tailoring_preview_provider_request_envelope_ready"
@@ -259,9 +286,13 @@ def _ready_inputs() -> dict[str, dict]:
                 ),
             },
         },
-        "user_trigger_metadata": {"explicit_user_trigger": True},
+        "user_trigger_metadata": {
+            "user_triggered": True,
+            "generate_ai_tailoring_requested": True,
+        },
         "operator_confirmation_metadata": {
-            "explicit_operator_confirmation": True
+            "operator_confirmed": True,
+            "provider_call_dry_run_packet_confirmed": True,
         },
         "provider_configuration_metadata": {
             "provider_configuration_present": True,
@@ -270,199 +301,196 @@ def _ready_inputs() -> dict[str, dict]:
         },
         "provider_call_policy_metadata": {
             "provider_call_policy_present": True,
-            "policy_name": "manual-review-provider-call-policy-stub",
+            "provider_call_policy_id": "manual-review-policy-stub",
         },
     }
 
 
-def _walk(value):
-    if isinstance(value, dict):
-        for key, nested in value.items():
-            yield str(key), nested
-            yield from _walk(nested)
-    elif isinstance(value, list):
-        for nested in value:
-            yield from _walk(nested)
-
-
-def _changed_files() -> set[str]:
-    tracked = subprocess.check_output(
-        ["git", "diff", "--name-only"], cwd=ROOT, text=True
-    ).splitlines()
-    untracked = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=ROOT,
-        text=True,
-    ).splitlines()
-    return set(tracked + untracked)
-
-
-def test_helper_exists_and_returns_required_contract_keys():
-    payload = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract()
+def test_helper_exists_and_returns_required_keys():
+    result = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract()
     )
 
-    assert callable(
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract
-    )
-    assert payload["phase"] == "28A"
-    assert REQUIRED_KEYS <= set(payload)
+    assert result["phase"] == "29A"
+    assert REQUIRED_KEYS <= result.keys()
     for key in TRUE_SAFETY_KEYS:
-        assert payload[key] is True
+        assert result[key] is True
     for key in FALSE_ACTION_KEYS:
-        assert payload[key] is False
+        assert result[key] is False
+    assert result["dry_run_packet_ready"] is False
+    assert result["provider_call_allowed_for_future_manual_preview"] is False
 
 
-def test_missing_user_trigger_blocks_provider_call_boundary():
+def test_no_user_trigger_blocks_readiness():
     inputs = _ready_inputs()
     inputs["user_trigger_metadata"] = {}
 
-    payload = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
+    result = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
             **inputs
         )
     )
 
-    assert payload["provider_call_boundary_ready"] is False
-    assert payload["provider_call_allowed"] is False
-    assert "user_trigger_metadata" in payload["missing_inputs"]
-    assert "explicit user trigger required" in payload["blocked_reasons"]
-    assert payload["next_safe_step"] == "require_explicit_user_trigger"
+    assert result["dry_run_packet_ready"] is False
+    assert "user_trigger_metadata" in result["missing_inputs"]
+    assert "explicit user trigger required" in result["blocked_reasons"]
+    assert result["next_safe_step"] == "require_explicit_user_trigger"
 
 
-def test_missing_operator_confirmation_blocks_provider_call_boundary():
+def test_missing_operator_confirmation_blocks_readiness():
     inputs = _ready_inputs()
     inputs["operator_confirmation_metadata"] = {}
 
-    payload = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
+    result = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
             **inputs
         )
     )
 
-    assert payload["provider_call_boundary_ready"] is False
-    assert payload["provider_call_allowed"] is False
-    assert "operator_confirmation_metadata" in payload["missing_inputs"]
-    assert "operator confirmation required" in payload["blocked_reasons"]
-    assert payload["next_safe_step"] == "require_operator_confirmation"
+    assert result["dry_run_packet_ready"] is False
+    assert "operator_confirmation_metadata" in result["missing_inputs"]
+    assert "operator confirmation required" in result["blocked_reasons"]
+    assert result["next_safe_step"] == "require_operator_confirmation"
 
 
-def test_missing_or_blocked_provider_request_envelope_is_blocked():
-    missing_payload = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
+def test_missing_or_blocked_provider_call_boundary_blocks_readiness():
+    missing = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
             **{
-                key: value
-                for key, value in _ready_inputs().items()
-                if key != "phase27_provider_request_envelope_payload"
+                **_ready_inputs(),
+                "phase28_provider_call_boundary_payload": {},
+            }
+        )
+    )
+    blocked = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+            **{
+                **_ready_inputs(),
+                "phase28_provider_call_boundary_payload": {
+                    "provider_call_boundary_ready": False,
+                    "provider_call_allowed": False,
+                },
             }
         )
     )
 
-    assert missing_payload["provider_call_boundary_ready"] is False
-    assert "phase27_provider_request_envelope_payload" in missing_payload[
+    assert missing["dry_run_packet_ready"] is False
+    assert "phase28_provider_call_boundary_payload" in missing["missing_inputs"]
+    assert "phase28 provider-call boundary payload required" in (
+        missing["blocked_reasons"]
+    )
+    assert blocked["dry_run_packet_ready"] is False
+    assert (
+        "provider-call boundary must be accepted before dry-run packet"
+        in blocked["blocked_reasons"]
+    )
+
+
+def test_missing_or_unaccepted_provider_request_envelope_blocks_readiness():
+    missing = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+            **{
+                **_ready_inputs(),
+                "phase27_provider_request_envelope_payload": {},
+            }
+        )
+    )
+    blocked = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+            **{
+                **_ready_inputs(),
+                "phase27_provider_request_envelope_payload": {
+                    "provider_request_envelope_ready": False,
+                    "provider_request_allowed": False,
+                },
+            }
+        )
+    )
+
+    assert missing["dry_run_packet_ready"] is False
+    assert "phase27_provider_request_envelope_payload" in missing["missing_inputs"]
+    assert "phase27 provider request-envelope payload required" in (
+        missing["blocked_reasons"]
+    )
+    assert blocked["dry_run_packet_ready"] is False
+    assert (
+        "provider request-envelope must be accepted before dry-run packet"
+        in blocked["blocked_reasons"]
+    )
+
+
+def test_missing_provider_configuration_and_policy_are_blocked():
+    missing_configuration = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+            **{
+                **_ready_inputs(),
+                "provider_configuration_metadata": {},
+            }
+        )
+    )
+    missing_policy = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+            **{
+                **_ready_inputs(),
+                "provider_call_policy_metadata": {},
+            }
+        )
+    )
+
+    assert missing_configuration["dry_run_packet_ready"] is False
+    assert "provider_configuration_metadata" in missing_configuration[
         "missing_inputs"
     ]
-    assert "phase27 provider request-envelope payload required" in missing_payload[
+    assert "provider configuration metadata required" in missing_configuration[
+        "blocked_reasons"
+    ]
+    assert missing_policy["dry_run_packet_ready"] is False
+    assert "provider_call_policy_metadata" in missing_policy["missing_inputs"]
+    assert "provider call policy metadata required" in missing_policy[
         "blocked_reasons"
     ]
 
-    inputs = _ready_inputs()
-    inputs["phase27_provider_request_envelope_payload"] = {
-        "provider_request_envelope_ready": False,
-        "provider_request_allowed": False,
-    }
 
-    blocked_payload = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
-            **inputs
+def test_ready_stubs_mark_packet_ready_without_side_effects():
+    first = (
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+            **_ready_inputs()
         )
-    )
-
-    assert blocked_payload["provider_call_boundary_ready"] is False
-    assert (
-        "provider request-envelope must be accepted before provider-call readiness"
-        in blocked_payload["blocked_reasons"]
-    )
-
-
-def test_missing_provider_configuration_metadata_is_blocked():
-    inputs = _ready_inputs()
-    inputs["provider_configuration_metadata"] = {}
-
-    payload = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
-            **inputs
-        )
-    )
-
-    assert payload["provider_call_boundary_ready"] is False
-    assert "provider_configuration_metadata" in payload["missing_inputs"]
-    assert "provider configuration metadata required" in payload["blocked_reasons"]
-
-
-def test_missing_provider_call_policy_metadata_is_blocked():
-    inputs = _ready_inputs()
-    inputs["provider_call_policy_metadata"] = {}
-
-    payload = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
-            **inputs
-        )
-    )
-
-    assert payload["provider_call_boundary_ready"] is False
-    assert "provider_call_policy_metadata" in payload["missing_inputs"]
-    assert "provider call policy metadata required" in payload["blocked_reasons"]
-
-
-def test_ready_inputs_mark_boundary_ready_without_any_side_effects():
-    first = build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
-        **_ready_inputs()
     )
     second = (
-        build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
+        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
             **_ready_inputs()
         )
     )
 
-    assert first["provider_call_boundary_ready"] is True
-    assert first["provider_call_allowed"] is True
+    assert first == second
+    assert first["dry_run_packet_ready"] is True
+    assert first["provider_call_allowed_for_future_manual_preview"] is True
     assert first["blocked_reasons"] == []
     assert first["missing_inputs"] == []
-    assert (
-        first["next_safe_step"]
-        == "manual_review_provider_call_boundary_without_calling_provider"
-    )
-    assert (
-        first["deterministic_provider_call_key"]
-        == second["deterministic_provider_call_key"]
-    )
+    assert first["dry_run_packet"]["dry_run_packet_ready"] is True
+    assert first["dry_run_packet"]["contains_generated_tailoring_text"] is False
+    assert first["dry_run_packet"]["contains_real_tailoring_output"] is False
+    assert "generated_tailoring_text" not in first["dry_run_packet"]
+    assert "real_tailoring_output" not in first["dry_run_packet"]
     for key in FALSE_ACTION_KEYS:
         assert first[key] is False
-    assert first["no_provider_calls"] is True
-    assert first["no_network_calls"] is True
-
-
-def test_helper_does_not_include_generated_tailoring_text_or_real_output():
-    payload = build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
-        **_ready_inputs()
-    )
-
-    flattened = {
-        key.lower(): value for key, value in _walk(payload) if isinstance(key, str)
-    }
-
-    assert payload["provider_call_plan"]["contains_generated_tailoring_text"] is False
-    assert payload["provider_call_plan"]["contains_real_tailoring_output"] is False
-    assert "generated_tailoring_text" not in flattened
-    assert "real_tailoring_output" not in flattened
+    for marker in (
+        "provider_call_performed",
+        "network_call_performed",
+        "dispatch_performed",
+        "tailoring_runtime_call_performed",
+        "ai_tailoring_generation_performed",
+        "real_tailoring_output_created",
+    ):
+        assert first["dry_run_packet"][marker] is False
 
 
 def test_helper_source_has_no_forbidden_imports_or_calls():
     source = HELPER_PATH.read_text(encoding="utf-8").lower()
 
     for marker in FORBIDDEN_SOURCE_MARKERS:
-        assert marker.lower() not in source
+        assert marker not in source
 
 
 def test_doc_contains_required_safety_markers_and_references():
@@ -477,23 +505,17 @@ def test_protected_runtime_files_are_unchanged():
         assert _sha256(ROOT / relative_path) == expected_hash
 
 
-def test_phase28a_changes_only_helper_doc_test_and_legacy_guards():
-    changed = _changed_files()
+def test_phase29a_changes_only_helper_doc_test_and_legacy_guards():
+    tracked = subprocess.check_output(
+        ["git", "diff", "--name-only"], cwd=ROOT, text=True
+    ).splitlines()
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    changed = set(tracked + untracked)
     allowed = {
-        "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py",
-        "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract.md",
-        "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
-        "src/app/api.py",
-        "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback.md",
-        "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
-        "src/app/static/agentic_review.js",
-        "src/app/static/app_redesign.css",
-        "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
-        "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
-        "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback 2.md",
-        "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off 2.py",
-        "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint.md",
-        "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
         "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py",
         "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md",
         "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
@@ -505,8 +527,8 @@ def test_phase28a_changes_only_helper_doc_test_and_legacy_guards():
         and any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract",
-                "phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract",
+                "phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract",
+                "phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract",
                 "changes_only",
             )
         )

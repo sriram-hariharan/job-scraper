@@ -1,5 +1,5 @@
 # phase26c legacy guard marker: changes_only 96d22785ac4e2d31f5de24e2438a85b80ca2e1a112b06adc22c35a3ab2e9d1c5 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251
-# phase26b legacy guard marker: changes_only 9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803
+# phase26b legacy guard marker: changes_only 96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff
 from __future__ import annotations
 
 from copy import deepcopy
@@ -85,7 +85,7 @@ FALSE_ACTION_KEYS = {
 
 PROTECTED_HASHES = {
     "src/app/api.py": (
-        "9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803"
+        "96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff"
     ),
     "src/app/services.py": (
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
@@ -427,6 +427,9 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py",
             "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract.md",
             "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
+            "src/app/api.py",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback.md",
+            "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -437,7 +440,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             for marker in (
                 "manual_generate_ai_tailoring_preview_request_packet_contract",
                 "manual_generate_ai_tailoring_preview_request_packet_api_readback",
-                "9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803",
+                "96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff",
                 "changes_only",
             )
         )

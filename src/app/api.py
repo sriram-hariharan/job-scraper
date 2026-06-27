@@ -22,6 +22,9 @@ from src.agents.manual_generate_ai_tailoring_preview_contract import (
 from src.agents.manual_generate_ai_tailoring_preview_dispatch_boundary_contract import (
     build_manual_generate_ai_tailoring_preview_dispatch_boundary_contract,
 )
+from src.agents.manual_generate_ai_tailoring_preview_provider_request_envelope_contract import (
+    build_manual_generate_ai_tailoring_preview_provider_request_envelope_contract,
+)
 from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract import (
     build_manual_generate_ai_tailoring_preview_request_packet_contract,
 )
@@ -4825,6 +4828,36 @@ def manual_generate_ai_tailoring_preview_dispatch_boundary_contract_api():
         },
         user_trigger_metadata={},
         operator_confirmation_metadata={},
+    )
+
+
+@app.get(
+    "/api/manual-generate-ai-tailoring-preview-provider-request-envelope-contract"
+)
+def manual_generate_ai_tailoring_preview_provider_request_envelope_contract_api():
+    return build_manual_generate_ai_tailoring_preview_provider_request_envelope_contract(
+        phase26_dispatch_boundary_payload={
+            "readback_source": "phase27b_api_placeholder",
+            "dispatch_ready": False,
+            "dispatch_allowed": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        phase25_request_packet_payload={
+            "readback_source": "phase27b_api_placeholder",
+            "preview_request_allowed": False,
+        },
+        phase24_preview_contract_payload={
+            "readback_source": "phase27b_api_placeholder",
+            "can_prepare_preview": False,
+        },
+        user_trigger_metadata={},
+        operator_confirmation_metadata={},
+        provider_configuration_metadata={},
     )
 
 

@@ -1,6 +1,6 @@
 # phase26c legacy guard marker: changes_only 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251
-# phase26b legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8
-# phase23f legacy guard marker: changes_only b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff
+# phase26b legacy guard marker: changes_only 9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803
+# phase23f legacy guard marker: changes_only 9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff
 # phase23f legacy guard marker: changes_only 2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff
 from hashlib import sha256
 from pathlib import Path
@@ -9,7 +9,7 @@ from pathlib import Path
 DOC_PATH = Path("docs/agent_trace_ui_readiness_checkpoint.md")
 
 PROTECTED_FILE_HASHES = {
-    "src/app/api.py": "b11904be37cdfdf8beb2ea93a0498bf6fb26ca9881f99c0e1579a6988071f0e8",
+    "src/app/api.py": "9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803",
     "src/app/static/agentic_review.js": "2f42b7874d33652145345b6a427a9a5d674b517692150e39c3908f45702de8ff",
     "src/agents/trace.py": "f4527c224ea0d3fc05d14883bb036311e7120a6a9abc9a54a58396e76ddada41",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",

@@ -22,6 +22,9 @@ from src.agents.manual_generate_ai_tailoring_preview_contract import (
 from src.agents.manual_generate_ai_tailoring_preview_dispatch_boundary_contract import (
     build_manual_generate_ai_tailoring_preview_dispatch_boundary_contract,
 )
+from src.agents.manual_generate_ai_tailoring_preview_provider_call_boundary_contract import (
+    build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract,
+)
 from src.agents.manual_generate_ai_tailoring_preview_provider_request_envelope_contract import (
     build_manual_generate_ai_tailoring_preview_provider_request_envelope_contract,
 )
@@ -4858,6 +4861,39 @@ def manual_generate_ai_tailoring_preview_provider_request_envelope_contract_api(
         user_trigger_metadata={},
         operator_confirmation_metadata={},
         provider_configuration_metadata={},
+    )
+
+
+@app.get(
+    "/api/manual-generate-ai-tailoring-preview-provider-call-boundary-contract"
+)
+def manual_generate_ai_tailoring_preview_provider_call_boundary_contract_api():
+    return build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract(
+        phase27_provider_request_envelope_payload={
+            "readback_source": "phase28b_api_placeholder",
+            "provider_request_envelope_ready": False,
+            "provider_request_allowed": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        phase26_dispatch_boundary_payload={
+            "readback_source": "phase28b_api_placeholder",
+            "dispatch_ready": False,
+            "dispatch_allowed": False,
+        },
+        phase25_request_packet_payload={
+            "readback_source": "phase28b_api_placeholder",
+            "preview_request_allowed": False,
+        },
+        user_trigger_metadata={},
+        operator_confirmation_metadata={},
+        provider_configuration_metadata={},
+        provider_call_policy_metadata={},
     )
 
 

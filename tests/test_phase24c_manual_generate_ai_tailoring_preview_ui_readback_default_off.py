@@ -1,5 +1,5 @@
-# phase26c legacy guard marker: changes_only 96d22785ac4e2d31f5de24e2438a85b80ca2e1a112b06adc22c35a3ab2e9d1c5 54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251
-# phase26b legacy guard marker: changes_only 9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803
+# phase26c legacy guard marker: changes_only bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821 c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9
+# phase26b legacy guard marker: changes_only 96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -15,7 +15,7 @@ DOC_PATH = (
 ENDPOINT = "/api/manual-generate-ai-tailoring-preview-contract"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803",
+    "src/app/api.py": "96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
@@ -284,10 +284,12 @@ def test_ui_adds_only_the_phase24b_manual_preview_endpoint_url():
             in line
                 or "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract"
                 in line
-                or "/api/manual-generate-ai-tailoring-preview-provider-request-envelope-contract"
-                in line
-            for line in related_endpoint_lines
-        )
+                    or "/api/manual-generate-ai-tailoring-preview-provider-request-envelope-contract"
+                    in line
+                    or "/api/manual-generate-ai-tailoring-preview-provider-call-boundary-contract"
+                    in line
+                for line in related_endpoint_lines
+            )
 
 
 def test_css_contains_passive_panel_classes():
@@ -362,6 +364,20 @@ def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
             "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
             "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint.md",
             "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
+            "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_contract.md",
+            "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
+            "src/app/api.py",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback.md",
+            "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
+            "src/app/static/agentic_review.js",
+            "src/app/static/app_redesign.css",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
+            "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback 2.md",
+            "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off 2.py",
+            "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint.md",
+            "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -370,9 +386,9 @@ def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "changes_only",
-                "9bd26d43cd63bd52a62f16c8428d0c451f3a83b9298c4f66d882873bfa6ab803",
-                "96d22785ac4e2d31f5de24e2438a85b80ca2e1a112b06adc22c35a3ab2e9d1c5",
-                "54ed37ddc8f9c34c2b87fd8fe437573c6f270922b9f14ada26547fd5889a5251",
+                "96f9cd7e7f3f877a147d612ad1394b8fcdd4671244de25c9f99c34795304a8ff",
+                "bb3b1f351b9f3aeac197a3077ce4403f649a17ff81247fb1d0e41eeacc3a9821",
+                "c71e2057276080e36fce4bec48a881753d8e09d7d1b49e7d0676d4a0665f32c9",
             )
         )
     }

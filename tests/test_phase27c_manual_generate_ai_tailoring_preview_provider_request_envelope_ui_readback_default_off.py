@@ -384,6 +384,8 @@ def test_phase27c_changes_only_static_doc_test_and_legacy_guards():
         "src/app/static/app_redesign.css",
         "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback.md",
         "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
+        "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint.md",
+        "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

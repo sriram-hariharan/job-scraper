@@ -265,6 +265,8 @@ def test_phase22f_changes_only_docs_tests_and_legacy_guards():
             "src/app/static/app_redesign.css",
             "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback.md",
             "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
+            "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint.md",
+            "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",

@@ -182,6 +182,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py",
         "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py",
         "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py",
+        "src/agents/controlled_agent_router_readonly.py",
     }
 
     assert changed_runtime == set()
@@ -205,6 +206,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py"
     and path != "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py"
     and path != "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py"
+    and path != "src/agents/controlled_agent_router_readonly.py"
     ]
     forbidden = (
         "provider_call(",
@@ -331,6 +333,11 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
                                 "src/app/api.py",
                                 "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback.md",
                                 "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off.py",
+                                "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback 2.md",
+                                "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py",
+                                "src/agents/controlled_agent_router_readonly.py",
+                                "docs/phase33_controlled_agent_router_readonly.md",
+                                "tests/test_phase33a_controlled_agent_router_readonly.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

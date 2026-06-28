@@ -4,19 +4,19 @@ from hashlib import sha256
 from pathlib import Path
 import subprocess
 
-from src.agents.manual_generate_ai_tailoring_preview_provider_response_normalization_contract import (
-    build_manual_generate_ai_tailoring_preview_provider_response_normalization_contract,
+from src.agents.manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract import (
+    build_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = (
     ROOT
-    / "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py"
+    / "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py"
 )
 DOC_PATH = (
     ROOT
-    / "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_contract.md"
+    / "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.md"
 )
 
 REQUIRED_KEYS = {
@@ -25,28 +25,30 @@ REQUIRED_KEYS = {
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "provider_response_normalization_contract_only",
-    "response_normalization_only",
+    "normalized_response_preview_packet_contract_only",
+    "preview_packet_only",
     "requires_user_trigger",
     "user_trigger_present",
     "operator_confirmation_required",
     "operator_confirmation_present",
     "manual_acceptance_required",
+    "provider_response_normalization_required",
+    "provider_response_normalization_accepted",
+    "normalized_provider_response_required",
+    "normalized_provider_response_present",
     "provider_response_validation_required",
     "provider_response_validation_accepted",
-    "provider_response_candidate_required",
-    "provider_response_candidate_present",
-    "response_normalization_policy_required",
-    "response_normalization_policy_present",
+    "preview_packet_policy_required",
+    "preview_packet_policy_present",
     "provider_configuration_required",
     "provider_configuration_present",
-    "response_normalization_ready",
-    "normalized_provider_response_accepted_for_future_manual_preview",
+    "preview_packet_ready",
+    "preview_packet_accepted_for_future_manual_preview",
     "blocked_reasons",
     "missing_inputs",
-    "normalization_findings",
-    "normalized_provider_response_contract",
-    "deterministic_response_normalization_key",
+    "preview_packet_findings",
+    "normalized_response_preview_packet_contract",
+    "deterministic_preview_packet_key",
     "no_provider_calls",
     "provider_call_performed",
     "no_network_calls",
@@ -73,14 +75,15 @@ TRUE_SAFETY_KEYS = {
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "provider_response_normalization_contract_only",
-    "response_normalization_only",
+    "normalized_response_preview_packet_contract_only",
+    "preview_packet_only",
     "requires_user_trigger",
     "operator_confirmation_required",
     "manual_acceptance_required",
+    "provider_response_normalization_required",
+    "normalized_provider_response_required",
     "provider_response_validation_required",
-    "provider_response_candidate_required",
-    "response_normalization_policy_required",
+    "preview_packet_policy_required",
     "provider_configuration_required",
     "no_provider_calls",
     "no_network_calls",
@@ -110,6 +113,7 @@ PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py": "2b31a53bd2cb8f8c4aa8359d5fcbcd246cd9618e65228b38675d7bd2af9470a4",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
@@ -154,9 +158,9 @@ FORBIDDEN_SOURCE_MARKERS = (
 )
 
 DOC_MARKERS = (
-    "phase 31a manual generate ai tailoring preview provider response normalization contract",
-    "provider response normalization contract only",
-    "response normalization only",
+    "phase 32a manual generate ai tailoring preview normalized response preview packet contract",
+    "normalized response preview packet contract only",
+    "preview packet only",
     "default-off",
     "read-only",
     "advisory-only",
@@ -164,9 +168,10 @@ DOC_MARKERS = (
     "user trigger required",
     "operator confirmation required",
     "manual acceptance required",
+    "provider response normalization required",
+    "normalized provider response required",
     "provider response validation required",
-    "provider response candidate required",
-    "response normalization policy required",
+    "preview packet policy required",
     "provider configuration required",
     "does not call providers",
     "does not call network",
@@ -198,11 +203,12 @@ DOC_MARKERS = (
     "generated tailoring suggestions must remain preview/manual-review only unless user accepts edits in a later phase",
     "this phase does not create real tailoring output",
     "this phase does not add a ui action control",
+    "phase31-manual-generate-ai-tailoring-preview-provider-response-normalization-release-v1",
+    "phase31d-manual-generate-ai-tailoring-preview-provider-response-normalization-release-checkpoint-v1",
+    "phase31c-manual-generate-ai-tailoring-preview-provider-response-normalization-ui-readback-v1",
+    "phase31b-manual-generate-ai-tailoring-preview-provider-response-normalization-api-readback-v1",
+    "phase31a-manual-generate-ai-tailoring-preview-provider-response-normalization-contract-v1",
     "phase30-manual-generate-ai-tailoring-preview-provider-response-validation-release-v1",
-    "phase30d-manual-generate-ai-tailoring-preview-provider-response-validation-release-checkpoint-v1",
-    "phase30c-manual-generate-ai-tailoring-preview-provider-response-validation-ui-readback-v1",
-    "phase30b-manual-generate-ai-tailoring-preview-provider-response-validation-api-readback-v1",
-    "phase30a-manual-generate-ai-tailoring-preview-provider-response-validation-contract-v1",
     "phase29-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-release-v1",
     "phase28-manual-generate-ai-tailoring-preview-provider-call-boundary-release-v1",
     "phase27-manual-generate-ai-tailoring-preview-provider-request-envelope-release-v1",
@@ -220,6 +226,26 @@ def _sha256(path: Path) -> str:
 
 def _ready_inputs() -> dict[str, dict]:
     return {
+        "provider_response_normalization_payload": {
+            "contract_status": (
+                "manual_generate_ai_tailoring_preview_provider_response_normalization_ready"
+            ),
+            "response_normalization_ready": True,
+            "normalized_provider_response_accepted_for_future_manual_preview": True,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "dispatch_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        "normalized_provider_response_contract_payload": {
+            "normalized_response_id": "manual-review-normalized-stub",
+            "normalization_status": "normalized_response_shape",
+            "safe_summary_present": True,
+        },
         "provider_response_validation_payload": {
             "contract_status": (
                 "manual_generate_ai_tailoring_preview_provider_response_validation_ready"
@@ -238,7 +264,6 @@ def _ready_inputs() -> dict[str, dict]:
         "provider_response_candidate_payload": {
             "response_id": "manual-review-response-stub",
             "status": "validated_response_shape",
-            "choices_present": True,
         },
         "phase29_provider_call_dry_run_packet_payload": {
             "dry_run_packet_ready": True,
@@ -253,10 +278,10 @@ def _ready_inputs() -> dict[str, dict]:
             "explicit_user_trigger": True,
         },
         "operator_confirmation_metadata": {
-            "provider_response_normalization_confirmed": True,
+            "normalized_response_preview_packet_confirmed": True,
         },
-        "response_normalization_policy_metadata": {
-            "response_normalization_policy_present": True,
+        "preview_packet_policy_metadata": {
+            "preview_packet_policy_present": True,
         },
         "provider_configuration_metadata": {
             "provider_configuration_present": True,
@@ -267,7 +292,7 @@ def _ready_inputs() -> dict[str, dict]:
 def _build(**overrides):
     payload = _ready_inputs()
     payload.update(overrides)
-    return build_manual_generate_ai_tailoring_preview_provider_response_normalization_contract(
+    return build_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract(
         **payload
     )
 
@@ -285,43 +310,83 @@ def _changed_files() -> set[str]:
 
 
 def test_helper_exists_and_returns_required_contract_keys():
-    result = build_manual_generate_ai_tailoring_preview_provider_response_normalization_contract()
+    result = build_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract()
 
     assert callable(
-        build_manual_generate_ai_tailoring_preview_provider_response_normalization_contract
+        build_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract
     )
     assert REQUIRED_KEYS <= set(result)
-    assert result["phase"] == "31A"
+    assert result["phase"] == "32A"
     for key in TRUE_SAFETY_KEYS:
         assert result[key] is True
     for key in FALSE_ACTION_KEYS:
         assert result[key] is False
 
 
-def test_missing_user_trigger_blocks_response_normalization():
+def test_missing_user_trigger_blocks_preview_packet_readiness():
     result = _build(user_trigger_metadata={})
 
-    assert result["response_normalization_ready"] is False
+    assert result["preview_packet_ready"] is False
     assert result["user_trigger_present"] is False
     assert "user_trigger_metadata" in result["missing_inputs"]
     assert "explicit user trigger required" in result["blocked_reasons"]
     assert result["next_safe_step"] == "require_explicit_user_trigger"
 
 
-def test_missing_operator_confirmation_blocks_response_normalization():
+def test_missing_operator_confirmation_blocks_preview_packet_readiness():
     result = _build(operator_confirmation_metadata={})
 
-    assert result["response_normalization_ready"] is False
+    assert result["preview_packet_ready"] is False
     assert result["operator_confirmation_present"] is False
     assert "operator_confirmation_metadata" in result["missing_inputs"]
     assert "operator confirmation required" in result["blocked_reasons"]
     assert result["next_safe_step"] == "require_operator_confirmation"
 
 
+def test_missing_or_unaccepted_provider_response_normalization_blocks_readiness():
+    missing = _build(provider_response_normalization_payload={})
+
+    assert missing["preview_packet_ready"] is False
+    assert "provider_response_normalization_payload" in missing["missing_inputs"]
+    assert (
+        "provider response normalization payload required"
+        in missing["blocked_reasons"]
+    )
+
+    unaccepted = _build(
+        provider_response_normalization_payload={
+            "response_normalization_ready": False,
+            "normalized_provider_response_accepted_for_future_manual_preview": False,
+        }
+    )
+
+    assert unaccepted["preview_packet_ready"] is False
+    assert unaccepted["provider_response_normalization_accepted"] is False
+    assert (
+        "provider response normalization must be accepted before preview packet"
+        in unaccepted["blocked_reasons"]
+    )
+
+
+def test_missing_normalized_provider_response_contract_blocks_readiness():
+    result = _build(normalized_provider_response_contract_payload={})
+
+    assert result["preview_packet_ready"] is False
+    assert result["normalized_provider_response_present"] is False
+    assert (
+        "normalized_provider_response_contract_payload"
+        in result["missing_inputs"]
+    )
+    assert (
+        "normalized provider response contract payload required"
+        in result["blocked_reasons"]
+    )
+
+
 def test_missing_or_unaccepted_provider_response_validation_blocks_readiness():
     missing = _build(provider_response_validation_payload={})
 
-    assert missing["response_normalization_ready"] is False
+    assert missing["preview_packet_ready"] is False
     assert "provider_response_validation_payload" in missing["missing_inputs"]
     assert (
         "provider response validation payload required"
@@ -335,42 +400,27 @@ def test_missing_or_unaccepted_provider_response_validation_blocks_readiness():
         }
     )
 
-    assert unaccepted["response_normalization_ready"] is False
+    assert unaccepted["preview_packet_ready"] is False
     assert unaccepted["provider_response_validation_accepted"] is False
     assert (
-        "provider response validation must be accepted before normalization"
+        "provider response validation must be accepted before preview packet"
         in unaccepted["blocked_reasons"]
     )
 
 
-def test_missing_provider_response_candidate_blocks_readiness():
-    result = _build(provider_response_candidate_payload={})
+def test_missing_preview_packet_policy_blocks_readiness():
+    result = _build(preview_packet_policy_metadata={})
 
-    assert result["response_normalization_ready"] is False
-    assert result["provider_response_candidate_present"] is False
-    assert "provider_response_candidate_payload" in result["missing_inputs"]
-    assert (
-        "provider response candidate payload required"
-        in result["blocked_reasons"]
-    )
-
-
-def test_missing_response_normalization_policy_blocks_readiness():
-    result = _build(response_normalization_policy_metadata={})
-
-    assert result["response_normalization_ready"] is False
-    assert result["response_normalization_policy_present"] is False
-    assert "response_normalization_policy_metadata" in result["missing_inputs"]
-    assert (
-        "response normalization policy metadata required"
-        in result["blocked_reasons"]
-    )
+    assert result["preview_packet_ready"] is False
+    assert result["preview_packet_policy_present"] is False
+    assert "preview_packet_policy_metadata" in result["missing_inputs"]
+    assert "preview packet policy metadata required" in result["blocked_reasons"]
 
 
 def test_missing_provider_configuration_blocks_readiness():
     result = _build(provider_configuration_metadata={})
 
-    assert result["response_normalization_ready"] is False
+    assert result["preview_packet_ready"] is False
     assert result["provider_configuration_present"] is False
     assert "provider_configuration_metadata" in result["missing_inputs"]
     assert "provider configuration metadata required" in result["blocked_reasons"]
@@ -381,16 +431,13 @@ def test_ready_contract_remains_manual_review_only_and_side_effect_free():
     second = _build()
 
     assert first == second
-    assert first["response_normalization_ready"] is True
-    assert (
-        first["normalized_provider_response_accepted_for_future_manual_preview"]
-        is True
-    )
+    assert first["preview_packet_ready"] is True
+    assert first["preview_packet_accepted_for_future_manual_preview"] is True
     assert first["blocked_reasons"] == []
     assert first["missing_inputs"] == []
-    assert first["normalization_findings"]
-    assert first["normalized_provider_response_contract"][
-        "response_normalization_ready"
+    assert first["preview_packet_findings"]
+    assert first["normalized_response_preview_packet_contract"][
+        "preview_packet_ready"
     ] is True
     for key in FALSE_ACTION_KEYS:
         assert first[key] is False
@@ -398,23 +445,23 @@ def test_ready_contract_remains_manual_review_only_and_side_effect_free():
 
 def test_helper_does_not_copy_generated_tailoring_or_real_output_payloads():
     result = _build(
-        provider_response_candidate_payload={
-            "response_id": "unsafe-output-shape",
+        normalized_provider_response_contract_payload={
+            "normalized_response_id": "unsafe-normalized-response",
             "generated_tailoring_text": "do not copy this generated text",
             "real_tailoring_output": "do not copy this output",
         }
     )
-    normalized_contract = result["normalized_provider_response_contract"]
+    preview_contract = result["normalized_response_preview_packet_contract"]
 
-    assert result["response_normalization_ready"] is False
+    assert result["preview_packet_ready"] is False
     assert (
-        "provider response candidate must not include generated tailoring output"
+        "normalized provider response contract must not include generated tailoring output"
         in result["blocked_reasons"]
     )
-    assert "generated_tailoring_text" not in normalized_contract
-    assert "real_tailoring_output" not in normalized_contract
-    assert "do not copy this generated text" not in str(normalized_contract)
-    assert "do not copy this output" not in str(normalized_contract)
+    assert "generated_tailoring_text" not in preview_contract
+    assert "real_tailoring_output" not in preview_contract
+    assert "do not copy this generated text" not in str(preview_contract)
+    assert "do not copy this output" not in str(preview_contract)
 
 
 def test_helper_source_has_no_forbidden_imports_or_runtime_calls():
@@ -437,25 +484,13 @@ def test_protected_runtime_files_are_unchanged():
         assert _sha256(ROOT / relative_path) == expected_hash
 
 
-def test_phase31a_changes_only_helper_doc_test_and_legacy_guards():
+def test_phase32a_changes_only_helper_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
-        "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py",
-        "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_contract.md",
-        "tests/test_phase31a_manual_generate_ai_tailoring_preview_provider_response_normalization_contract_default_off.py",
-                        "src/app/api.py",
-                            "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback.md",
-                            "tests/test_phase31b_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback_default_off.py",
-                                "src/app/static/agentic_review.js",
-                                "src/app/static/app_redesign.css",
-                                "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback.md",
-                                "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
-                                "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint.md",
-                                "tests/test_phase31d_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint_default_off.py",
-                                "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py",
-                                "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.md",
-                                "tests/test_phase32a_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract_default_off.py",
-        }
+        "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py",
+        "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.md",
+        "tests/test_phase32a_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract_default_off.py",
+    }
     legacy_guards = {
         str(path.relative_to(ROOT))
         for path in (ROOT / "tests").glob("test_*.py")
@@ -463,8 +498,8 @@ def test_phase31a_changes_only_helper_doc_test_and_legacy_guards():
         and any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "phase31a_manual_generate_ai_tailoring_preview_provider_response_normalization_contract",
-                "phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_contract",
+                "phase32a_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract",
+                "phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract",
                 "changes_only",
             )
         )

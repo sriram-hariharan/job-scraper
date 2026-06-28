@@ -448,6 +448,9 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py",
         "docs/phase33_controlled_agent_router_workflow_state_adapter_readonly.md",
         "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+        "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
+        "docs/phase33_controlled_agent_router_batch_handoff_plan_readonly.md",
+        "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
         # Pre-existing duplicate Phase 33A files in this workspace.
         "docs/phase33_controlled_agent_router_readonly 2.md",
         "tests/test_phase33a_controlled_agent_router_readonly 2.py",

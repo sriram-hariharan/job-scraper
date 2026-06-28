@@ -248,6 +248,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
                             "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
                                 "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint.md",
                                 "tests/test_phase31d_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint_default_off.py",
+                                "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py",
+                                "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.md",
+                                "tests/test_phase32a_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -332,11 +335,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
                     ROOT
                     / "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py"
                 ],
-                [
-                    ROOT
-                    / "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py"
-                ],
-                [ROOT / "src/app/api.py"],
+                    [
+                        ROOT
+                        / "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py"
+                    ],
+                    [
+                        ROOT
+                        / "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py"
+                    ],
+                    [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],
         [
             ROOT / "src/app/static/agentic_review.js",

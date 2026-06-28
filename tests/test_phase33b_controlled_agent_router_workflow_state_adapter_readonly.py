@@ -463,6 +463,9 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
         "docs/phase34_jd_intelligence_planning_artifact_enricher_default_off.md",
         "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
+        "run_jd_intelligence_planning_artifact_enrichment_dry_run.py",
+        "docs/phase34_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.md",
+        "tests/test_phase34c_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.py",
         # Pre-existing duplicate Phase 33A files in this workspace.
         "docs/phase33_controlled_agent_router_readonly 2.md",
         "tests/test_phase33a_controlled_agent_router_readonly 2.py",

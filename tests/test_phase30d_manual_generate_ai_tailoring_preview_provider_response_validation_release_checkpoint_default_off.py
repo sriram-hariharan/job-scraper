@@ -6,19 +6,21 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 DOC_PATH = (
     ROOT
-    / "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint.md"
+    / "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint.md"
 )
 HELPER_PATH = (
     ROOT
-    / "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py"
+    / "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py"
 )
 API_PATH = ROOT / "src/app/api.py"
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 REQUIRED_TAGS = (
-    "phase28c-manual-generate-ai-tailoring-preview-provider-call-boundary-ui-readback-v1",
-    "phase28b-manual-generate-ai-tailoring-preview-provider-call-boundary-api-readback-v1",
-    "phase28a-manual-generate-ai-tailoring-preview-provider-call-boundary-contract-v1",
+    "phase30c-manual-generate-ai-tailoring-preview-provider-response-validation-ui-readback-v1",
+    "phase30b-manual-generate-ai-tailoring-preview-provider-response-validation-api-readback-v1",
+    "phase30a-manual-generate-ai-tailoring-preview-provider-response-validation-contract-v1",
+    "phase29-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-release-v1",
+    "phase28-manual-generate-ai-tailoring-preview-provider-call-boundary-release-v1",
     "phase27-manual-generate-ai-tailoring-preview-provider-request-envelope-release-v1",
     "phase26-manual-generate-ai-tailoring-preview-dispatch-boundary-release-v1",
     "phase25-manual-generate-ai-tailoring-preview-request-packet-release-v1",
@@ -43,13 +45,16 @@ SAFETY_MARKERS = (
     "read-only",
     "advisory-only",
     "manual-review only",
-    "provider-call boundary contract only",
+    "response validation only",
+    "provider response validation contract only",
     "user trigger required",
     "operator confirmation required",
     "manual acceptance required",
+    "provider-call dry-run packet required",
     "provider request-envelope required",
+    "provider response candidate required",
+    "response validation policy required",
     "provider configuration required",
-    "provider call policy required",
     "does not call providers",
     "does not call network",
     "does not dispatch",
@@ -84,9 +89,9 @@ SAFETY_MARKERS = (
     "no provider-call control was added",
     "no network-call control was added",
     "no dispatch control was added",
-    "phase 28a provided a deterministic provider-call boundary contract helper only",
-    "phase 28b provided a read-only provider-call boundary api readback only",
-    "phase 28c provided a passive provider-call boundary ui readback only",
+    "phase 30a provided a deterministic provider response validation contract helper only",
+    "phase 30b provided a read-only provider response validation api readback only",
+    "phase 30c provided a passive provider response validation ui readback only",
 )
 
 PROTECTED_HASHES = {
@@ -94,6 +99,8 @@ PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "ca378dc0aee655d83a7af0d15e885313af5b719c2512eff10f3efc69cd43348a",
     "src/app/static/app_redesign.css": "3c55b13f7762c2118eabad4a32ca6c6a47b9674be44ac33058d3b55f97c4e5c5",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
@@ -110,11 +117,6 @@ PROTECTED_HASHES = {
     "application_execution_queue.py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
 }
 
-IGNORED_EXISTING_UNTRACKED = {
-    "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback 2.md",
-    "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off 2.py",
-}
-
 
 def _doc_text() -> str:
     return DOC_PATH.read_text(encoding="utf-8")
@@ -129,27 +131,27 @@ def _changed_files() -> set[str]:
         cwd=ROOT,
         text=True,
     ).splitlines()
-    return set(tracked + untracked) - IGNORED_EXISTING_UNTRACKED
+    return set(tracked + untracked)
 
 
 def test_release_checkpoint_doc_exists_with_exact_title():
     assert DOC_PATH.exists()
     assert _doc_text().startswith(
-        "# Phase 28D Manual Generate AI Tailoring Preview Provider-Call Boundary Release Checkpoint"
+        "# Phase 30D Manual Generate AI Tailoring Preview Provider Response Validation Release Checkpoint"
     )
 
 
-def test_checkpoint_references_phase28a_through_phase28c():
+def test_checkpoint_references_phase30a_through_phase30c():
     text = _doc_text()
 
-    for phase in ("Phase 28A", "Phase 28B", "Phase 28C"):
+    for phase in ("Phase 30A", "Phase 30B", "Phase 30C"):
         assert phase in text
     for tag in REQUIRED_TAGS:
         assert tag in text
     for marker in (
-        "/api/manual-generate-ai-tailoring-preview-provider-call-boundary-contract",
-        "renderManualGenerateAiTailoringPreviewProviderCallBoundaryReadbackSection",
-        "build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract",
+        "/api/manual-generate-ai-tailoring-preview-provider-response-validation-contract",
+        "renderManualGenerateAiTailoringPreviewProviderResponseValidationReadbackSection",
+        "build_manual_generate_ai_tailoring_preview_provider_response_validation_contract",
     ):
         assert marker in text
 
@@ -161,21 +163,21 @@ def test_checkpoint_contains_required_safety_markers():
         assert marker in text
 
 
-def test_phase28_surfaces_still_exist_in_source_code():
+def test_phase30_surfaces_still_exist_in_source_code():
     helper_source = HELPER_PATH.read_text(encoding="utf-8")
     api_source = API_PATH.read_text(encoding="utf-8")
     js_source = JS_PATH.read_text(encoding="utf-8")
 
     assert (
-        "build_manual_generate_ai_tailoring_preview_provider_call_boundary_contract"
+        "build_manual_generate_ai_tailoring_preview_provider_response_validation_contract"
         in helper_source
     )
     assert (
-        "/api/manual-generate-ai-tailoring-preview-provider-call-boundary-contract"
+        "/api/manual-generate-ai-tailoring-preview-provider-response-validation-contract"
         in api_source
     )
     assert (
-        "renderManualGenerateAiTailoringPreviewProviderCallBoundaryReadbackSection"
+        "renderManualGenerateAiTailoringPreviewProviderResponseValidationReadbackSection"
         in js_source
     )
 
@@ -187,35 +189,11 @@ def test_protected_runtime_files_are_unchanged():
         )
 
 
-def test_phase28d_changes_only_doc_test_and_legacy_guards():
+def test_phase30d_changes_only_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
-        "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint.md",
-        "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
-        "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md",
-        "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
-        "src/app/api.py",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback.md",
-        "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
-        "src/app/static/agentic_review.js",
-        "src/app/static/app_redesign.css",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback.md",
-        "tests/test_phase29c_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback_default_off.py",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint.md",
-        "tests/test_phase29d_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint_default_off.py",
-        "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py",
-        "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_contract.md",
-        "tests/test_phase30a_manual_generate_ai_tailoring_preview_provider_response_validation_contract_default_off.py",
-        "src/app/api.py",
-        "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback.md",
-        "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
-                "src/app/static/agentic_review.js",
-                "src/app/static/app_redesign.css",
-                "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback.md",
-                "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
-                    "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint.md",
-                    "tests/test_phase30d_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint_default_off.py",
+        "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint.md",
+        "tests/test_phase30d_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -224,8 +202,8 @@ def test_phase28d_changes_only_doc_test_and_legacy_guards():
         and any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint",
-                "phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint",
+                "phase30d_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint",
+                "phase30_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint",
                 "changes_only",
             )
         )

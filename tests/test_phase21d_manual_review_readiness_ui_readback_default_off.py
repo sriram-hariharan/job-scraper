@@ -333,6 +333,8 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
                 "src/app/static/app_redesign.css",
                 "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback.md",
                 "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
+                    "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint.md",
+                    "tests/test_phase30d_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",

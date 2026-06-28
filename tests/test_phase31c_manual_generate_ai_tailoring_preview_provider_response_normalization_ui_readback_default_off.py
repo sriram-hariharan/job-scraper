@@ -444,6 +444,9 @@ def test_phase31c_changes_only_static_doc_test_and_legacy_guards():
                                 "run_jd_intelligence_planning_artifact_enrichment_dry_run.py",
                                 "docs/phase34_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.md",
                                 "tests/test_phase34c_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.py",
+                                "src/agents/jd_signal_resume_evidence_matrix_default_off.py",
+                                "docs/phase35_jd_signal_resume_evidence_matrix_default_off.md",
+                                "tests/test_phase35a_jd_signal_resume_evidence_matrix_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

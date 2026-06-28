@@ -450,6 +450,8 @@ def test_phase31a_changes_only_helper_doc_test_and_legacy_guards():
                                 "src/app/static/app_redesign.css",
                                 "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback.md",
                                 "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
+                                "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint.md",
+                                "tests/test_phase31d_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint_default_off.py",
         }
     legacy_guards = {
         str(path.relative_to(ROOT))

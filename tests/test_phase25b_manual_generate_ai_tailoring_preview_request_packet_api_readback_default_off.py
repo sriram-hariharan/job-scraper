@@ -412,6 +412,11 @@ def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
                                 "src/agents/controlled_agent_router_readonly.py",
                                 "docs/phase33_controlled_agent_router_readonly.md",
                                 "tests/test_phase33a_controlled_agent_router_readonly.py",
+                                "docs/phase33_controlled_agent_router_readonly 2.md",
+                                "tests/test_phase33a_controlled_agent_router_readonly 2.py",
+                                "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py",
+                                "docs/phase33_controlled_agent_router_workflow_state_adapter_readonly.md",
+                                "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

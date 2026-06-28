@@ -380,6 +380,8 @@ def test_phase26b_changes_only_api_doc_test_and_legacy_guards():
             "src/app/static/app_redesign.css",
             "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback.md",
             "tests/test_phase29c_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback_default_off.py",
+            "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint.md",
+            "tests/test_phase29d_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

@@ -273,6 +273,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
                                 "run_controlled_agent_router_planning_artifact_dry_run.py",
                                 "docs/phase33_controlled_agent_router_planning_artifact_dry_run_command_readonly.md",
                                 "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
+                                "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
+                                "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
+                                "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -377,6 +380,10 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
                         [
                             ROOT
                             / "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py"
+                        ],
+                        [
+                            ROOT
+                            / "src/agents/jd_intelligence_llm_signal_extractor_default_off.py"
                         ],
                         [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],

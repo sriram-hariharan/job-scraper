@@ -442,6 +442,9 @@ def test_phase28b_changes_only_api_doc_test_and_legacy_guards():
                                 "run_controlled_agent_router_planning_artifact_dry_run.py",
                                 "docs/phase33_controlled_agent_router_planning_artifact_dry_run_command_readonly.md",
                                 "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
+                                "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
+                                "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
+                                "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

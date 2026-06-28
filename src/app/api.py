@@ -34,6 +34,9 @@ from src.agents.manual_generate_ai_tailoring_preview_provider_response_validatio
 from src.agents.manual_generate_ai_tailoring_preview_provider_response_normalization_contract import (
     build_manual_generate_ai_tailoring_preview_provider_response_normalization_contract,
 )
+from src.agents.manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract import (
+    build_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract,
+)
 from src.agents.manual_generate_ai_tailoring_preview_provider_request_envelope_contract import (
     build_manual_generate_ai_tailoring_preview_provider_request_envelope_contract,
 )
@@ -5052,6 +5055,83 @@ def manual_generate_ai_tailoring_preview_provider_response_normalization_contrac
         user_trigger_metadata={},
         operator_confirmation_metadata={},
         response_normalization_policy_metadata={},
+        provider_configuration_metadata={},
+    )
+
+
+@app.get(
+    "/api/manual-generate-ai-tailoring-preview-normalized-response-preview-packet-contract"
+)
+def manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract_api():
+    return build_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract(
+        provider_response_normalization_payload={
+            "readback_source": "phase32b_api_placeholder",
+            "contract_status": (
+                "manual_generate_ai_tailoring_preview_provider_response_normalization_blocked"
+            ),
+            "response_normalization_ready": False,
+            "normalized_provider_response_accepted_for_future_manual_preview": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "dispatch_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        normalized_provider_response_contract_payload={
+            "readback_source": "phase32b_api_placeholder",
+            "normalized_response_id": "phase32b_normalized_response_shape_placeholder",
+            "normalization_status": "normalized_response_shape_placeholder",
+            "safe_summary_present": False,
+        },
+        provider_response_validation_payload={
+            "readback_source": "phase32b_api_placeholder",
+            "contract_status": (
+                "manual_generate_ai_tailoring_preview_provider_response_validation_blocked"
+            ),
+            "response_validation_ready": False,
+            "provider_response_accepted_for_future_manual_preview": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "dispatch_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        provider_response_candidate_payload={
+            "readback_source": "phase32b_api_placeholder",
+            "response_id": "phase32b_response_shape_placeholder",
+            "status": "validated_response_shape_placeholder",
+        },
+        phase29_provider_call_dry_run_packet_payload={
+            "readback_source": "phase32b_api_placeholder",
+            "dry_run_packet_ready": False,
+            "provider_call_allowed_for_future_manual_preview": False,
+        },
+        phase28_provider_call_boundary_payload={
+            "readback_source": "phase32b_api_placeholder",
+            "provider_call_boundary_ready": False,
+            "provider_call_allowed": False,
+        },
+        phase27_provider_request_envelope_payload={
+            "readback_source": "phase32b_api_placeholder",
+            "provider_request_envelope_ready": False,
+            "provider_request_allowed": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        user_trigger_metadata={},
+        operator_confirmation_metadata={},
+        preview_packet_policy_metadata={},
         provider_configuration_metadata={},
     )
 

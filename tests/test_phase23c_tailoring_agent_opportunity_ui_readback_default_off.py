@@ -458,6 +458,9 @@ def test_phase23c_changes_only_static_docs_tests_and_legacy_guards():
                                 "run_controlled_agent_router_planning_artifact_dry_run.py",
                                 "docs/phase33_controlled_agent_router_planning_artifact_dry_run_command_readonly.md",
                                 "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
+                                "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
+                                "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
+                                "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }

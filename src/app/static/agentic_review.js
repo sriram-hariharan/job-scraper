@@ -3859,6 +3859,114 @@ function renderManualGenerateAiTailoringPreviewProviderCallDryRunPacketReadbackS
   `;
 }
 
+function renderManualGenerateAiTailoringPreviewProviderResponseValidationReadbackSection(
+  tracePayload = {},
+) {
+  const result = hasAgentTraceSummaryObject(
+    tracePayload?.manual_generate_ai_tailoring_preview_provider_response_validation_result,
+  )
+    ? tracePayload.manual_generate_ai_tailoring_preview_provider_response_validation_result
+    : {};
+  if (!Object.keys(result).length) return "";
+
+  const blocked_reasons = Array.isArray(result.blocked_reasons)
+    ? result.blocked_reasons
+    : [];
+  const missing_inputs = Array.isArray(result.missing_inputs)
+    ? result.missing_inputs
+    : [];
+  const validation_findings = Array.isArray(result.validation_findings)
+    ? result.validation_findings
+    : [];
+  const provider_response_contract = hasAgentTraceSummaryObject(result.provider_response_contract)
+    ? result.provider_response_contract
+    : {};
+  const readback_badge = result.ui_api_fetch_failed === true
+    ? "Read-only fetch failure"
+    : "Default-off readback";
+  return `
+    <article class="agent-trace-summary manual-generate-ai-tailoring-preview-provider-response-validation-readback" aria-label="Manual Generate AI Tailoring preview provider response validation readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Generate AI Tailoring Preview Provider Response Validation Readback</h4>
+          <p>UI readback only. Default-off, read-only, advisory-only, manual-review only, response validation only, and provider response validation contract only.</p>
+          <p class="agentic-review-muted">User trigger required. Operator confirmation required. Manual acceptance required. Provider-call dry-run packet required. Provider request-envelope required. Provider response candidate required. Response validation policy required. Provider configuration required. Manual user control required. Preview/manual-review only.</p>
+        </div>
+        <span class="agentic-workflow-badge">${escapeHtml(readback_badge)}</span>
+      </div>
+      <div class="manual-generate-ai-tailoring-preview-provider-response-validation-readback__safety-labels" aria-label="Manual Generate AI Tailoring preview provider response validation safety labels">
+        <span>Default-off</span>
+        <span>Read-only</span>
+        <span>Advisory-only</span>
+        <span>Manual-review only</span>
+        <span>Provider response validation contract only</span>
+        <span>Response validation only</span>
+      </div>
+      <div class="agent-trace-counts manual-generate-ai-tailoring-preview-provider-response-validation-readback__metrics">
+        ${renderWorkflowSummaryMetric("Contract status", result.contract_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Default-off", result.default_off === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Read-only", result.read_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Advisory-only", result.advisory_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Manual-review only", result.manual_review_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider response validation contract only", result.provider_response_validation_contract_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Response validation only", result.response_validation_only === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("User trigger required", result.requires_user_trigger === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Operator confirmation required", result.operator_confirmation_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Manual acceptance required", result.manual_acceptance_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider-call dry-run packet required", result.provider_call_dry_run_packet_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider request-envelope required", result.provider_request_envelope_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider response candidate required", result.provider_response_candidate_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Response validation policy required", result.response_validation_policy_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider configuration required", result.provider_configuration_required === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Response validation ready", result.response_validation_ready === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Provider response accepted for future manual preview", result.provider_response_accepted_for_future_manual_preview === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Blocked reasons", blocked_reasons.length ? blocked_reasons.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Missing inputs", missing_inputs.length ? missing_inputs.map(formatReviewLabel).join(", ") : "none")}
+        ${renderWorkflowSummaryMetric("Validation findings", validation_findings.length ? validation_findings.length : "none")}
+        ${renderWorkflowSummaryMetric("Provider response contract", Object.keys(provider_response_contract).length ? "available" : "none")}
+        ${renderWorkflowSummaryMetric("Deterministic response validation key", result.deterministic_response_validation_key || provider_response_contract.deterministic_response_validation_key || "none")}
+        ${renderWorkflowSummaryMetric("Does not call providers", result.provider_call_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not call network", result.network_call_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not dispatch", result.dispatch_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not generate AI tailoring", result.ai_tailoring_generation_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not call tailoring runtime", result.tailoring_runtime_call_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not create real tailoring output", result.real_tailoring_output_created === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not create resume rewrites", result.resume_rewrite_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not overwrite resumes", result.resume_overwrite_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not mutate resumes", result.resume_mutation_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Does not submit applications", result.application_submission_performed === true || result.submission_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No provider calls", result.no_provider_calls === true && result.provider_call_performed !== true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No network calls", result.no_network_calls === true && result.network_call_performed !== true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("No database writes", result.database_write_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No persistence", result.persistence_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No mutation", result.resume_mutation_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No resume mutation", result.resume_mutation_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No application mutation", result.application_submission_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No execution", result.execution_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No submission", result.submission_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No auto-apply", result.auto_apply_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("No auto-submit", result.auto_submit_performed === true ? "no" : "yes")}
+        ${renderWorkflowSummaryMetric("Next safe step", result.next_safe_step || "none")}
+      </div>
+      <div class="manual-generate-ai-tailoring-preview-provider-response-validation-readback__boundary">
+        <strong>Manual provider response validation safety boundary</strong>
+        <span>Does not call providers. Does not call network. Does not dispatch. Does not generate AI tailoring.</span>
+        <span>Does not call tailoring runtime. Does not create real tailoring output. Does not create resume rewrites.</span>
+        <span>Does not overwrite resumes. Does not mutate resumes. Does not submit applications.</span>
+        <span>No provider calls. No network calls. No database writes. No persistence.</span>
+        <span>No mutation. No resume mutation. No application mutation. No execution. No submission.</span>
+        <span>No auto-apply. No auto-submit. Manual user control required. Preview/manual-review only.</span>
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Provider response contract", provider_response_contract, { helper: "Read-only provider response validation contract returned by the API readback." })}
+        ${renderAgentTraceReadOnlyDetails("Validation findings", validation_findings, { helper: "Provider response validation findings only; no action is taken." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked reasons", blocked_reasons, { helper: "Provider response validation blockers only; no action is taken." })}
+        ${renderAgentTraceReadOnlyDetails("Missing inputs", missing_inputs, { helper: "Required provider response validation inputs not available for readiness." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderHumanReviewedInfluencePreviewSection(tracePayload = {}) {
   const result = hasAgentTraceSummaryObject(tracePayload?.human_reviewed_influence_preview_result)
     ? tracePayload.human_reviewed_influence_preview_result
@@ -6855,6 +6963,9 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const manualGenerateAiTailoringPreviewProviderCallDryRunPacketVisibleTracePayload = (
     manualGenerateAiTailoringPreviewProviderCallBoundaryVisibleTracePayload
   );
+  const manualGenerateAiTailoringPreviewProviderResponseValidationVisibleTracePayload = (
+    manualGenerateAiTailoringPreviewProviderCallDryRunPacketVisibleTracePayload
+  );
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
@@ -6929,6 +7040,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualGenerateAiTailoringPreviewProviderRequestEnvelopeReadbackSection(manualGenerateAiTailoringPreviewProviderRequestEnvelopeVisibleTracePayload)}
       ${renderManualGenerateAiTailoringPreviewProviderCallBoundaryReadbackSection(manualGenerateAiTailoringPreviewProviderCallBoundaryVisibleTracePayload)}
       ${renderManualGenerateAiTailoringPreviewProviderCallDryRunPacketReadbackSection(manualGenerateAiTailoringPreviewProviderCallDryRunPacketVisibleTracePayload)}
+      ${renderManualGenerateAiTailoringPreviewProviderResponseValidationReadbackSection(manualGenerateAiTailoringPreviewProviderResponseValidationVisibleTracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -8549,6 +8661,130 @@ async function withManualGenerateAiTailoringPreviewProviderCallDryRunPacketReadb
       ...source,
       manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_result: (
         buildManualGenerateAiTailoringPreviewProviderCallDryRunPacketReadbackFetchFailure(
+          error,
+        )
+      ),
+    };
+  }
+}
+
+function shouldFetchManualGenerateAiTailoringPreviewProviderResponseValidationReadback(
+  search = null,
+) {
+  const query = search === null
+    ? (typeof window !== "undefined" ? window.location.search : "")
+    : String(search || "");
+  return new URLSearchParams(query).get(
+    "manual_generate_ai_tailoring_preview_provider_response_validation_api_fetch",
+  ) === "1";
+}
+
+function buildManualGenerateAiTailoringPreviewProviderResponseValidationReadbackFetchFailure(
+  error,
+) {
+  return {
+    ui_api_fetch_failed: true,
+    phase: "30C",
+    contract_version: (
+      "phase-30a-manual-generate-ai-tailoring-preview-provider-response-validation-v1"
+    ),
+    contract_status: (
+      "manual_generate_ai_tailoring_preview_provider_response_validation_failed_closed"
+    ),
+    default_off: true,
+    read_only: true,
+    advisory_only: true,
+    manual_review_only: true,
+    provider_response_validation_contract_only: true,
+    response_validation_only: true,
+    requires_user_trigger: true,
+    user_trigger_present: false,
+    operator_confirmation_required: true,
+    operator_confirmation_present: false,
+    manual_acceptance_required: true,
+    provider_call_dry_run_packet_required: true,
+    provider_call_dry_run_packet_accepted: false,
+    provider_request_envelope_required: true,
+    provider_request_envelope_accepted: false,
+    provider_response_candidate_required: true,
+    provider_response_candidate_present: false,
+    response_validation_policy_required: true,
+    response_validation_policy_present: false,
+    provider_configuration_required: true,
+    provider_configuration_present: false,
+    response_validation_ready: false,
+    provider_response_accepted_for_future_manual_preview: false,
+    blocked_reasons: ["read-only API fetch failed closed"],
+    missing_inputs: [
+      "manual_generate_ai_tailoring_preview_provider_response_validation_contract",
+    ],
+    validation_findings: [],
+    provider_response_contract: {},
+    deterministic_response_validation_key: "",
+    no_provider_calls: true,
+    provider_call_performed: false,
+    no_network_calls: true,
+    network_call_performed: false,
+    dispatch_performed: false,
+    tailoring_runtime_call_performed: false,
+    ai_tailoring_generation_performed: false,
+    real_tailoring_output_created: false,
+    resume_rewrite_performed: false,
+    resume_overwrite_performed: false,
+    resume_mutation_performed: false,
+    application_submission_performed: false,
+    database_write_performed: false,
+    persistence_performed: false,
+    execution_performed: false,
+    submission_performed: false,
+    auto_apply_performed: false,
+    auto_submit_performed: false,
+    next_safe_step: (
+      "inspect_read_only_manual_preview_provider_response_validation_fetch_failure"
+    ),
+    fail_closed_reason: String(
+      error?.message
+      || "manual_generate_ai_tailoring_preview_provider_response_validation_fetch_failed",
+    ),
+  };
+}
+
+async function withManualGenerateAiTailoringPreviewProviderResponseValidationReadbackApiFetch(
+  tracePayload = {},
+  search = null,
+) {
+  const source = hasAgentTraceSummaryObject(tracePayload)
+    ? tracePayload
+    : {};
+  if (
+    hasAgentTraceSummaryObject(
+      source.manual_generate_ai_tailoring_preview_provider_response_validation_result,
+    )
+    || !shouldFetchManualGenerateAiTailoringPreviewProviderResponseValidationReadback(
+      search,
+    )
+  ) {
+    return source;
+  }
+  try {
+    const result = await fetchJson(
+      "/api/manual-generate-ai-tailoring-preview-provider-response-validation-contract",
+      {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+      },
+    );
+    return {
+      ...source,
+      manual_generate_ai_tailoring_preview_provider_response_validation_result: result,
+    };
+  } catch (error) {
+    return {
+      ...source,
+      manual_generate_ai_tailoring_preview_provider_response_validation_result: (
+        buildManualGenerateAiTailoringPreviewProviderResponseValidationReadbackFetchFailure(
           error,
         )
       ),
@@ -12615,10 +12851,15 @@ async function initAgenticReviewPage() {
         manualGenerateAiTailoringPreviewProviderCallBoundaryTracePayload,
       )
     );
+    const manualGenerateAiTailoringPreviewProviderResponseValidationTracePayload = await (
+      withManualGenerateAiTailoringPreviewProviderResponseValidationReadbackApiFetch(
+        manualGenerateAiTailoringPreviewProviderCallDryRunPacketTracePayload,
+      )
+    );
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
     renderAgenticReviewData(
       payload,
-      manualGenerateAiTailoringPreviewProviderCallDryRunPacketTracePayload,
+      manualGenerateAiTailoringPreviewProviderResponseValidationTracePayload,
     );
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");

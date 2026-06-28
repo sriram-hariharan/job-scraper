@@ -1,4 +1,4 @@
-# phase26c legacy guard marker: changes_only 5c0c363698c745556cfa03b38e7e2bd0425d23f2fc3eb03f646a20c8fc6c1b32 c023ce4aff15c3eccfc90598d493460e9afb6d187aa064f6f81940bff037128f
+# phase26c legacy guard marker: changes_only ca378dc0aee655d83a7af0d15e885313af5b719c2512eff10f3efc69cd43348a 3c55b13f7762c2118eabad4a32ca6c6a47b9674be44ac33058d3b55f97c4e5c5
 # phase26b legacy guard marker: changes_only 1c805ef6fdbe1042e3549e8a93671c53aec8a2836766bc5c95d6b5ce1f184ce6
 from __future__ import annotations
 
@@ -91,10 +91,10 @@ PROTECTED_HASHES = {
         "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee"
     ),
     "src/app/static/agentic_review.js": (
-        "5c0c363698c745556cfa03b38e7e2bd0425d23f2fc3eb03f646a20c8fc6c1b32"
+        "ca378dc0aee655d83a7af0d15e885313af5b719c2512eff10f3efc69cd43348a"
     ),
     "src/app/static/app_redesign.css": (
-        "c023ce4aff15c3eccfc90598d493460e9afb6d187aa064f6f81940bff037128f"
+        "3c55b13f7762c2118eabad4a32ca6c6a47b9674be44ac33058d3b55f97c4e5c5"
     ),
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": (
         "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45"
@@ -458,6 +458,10 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
                 "src/app/api.py",
                 "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback.md",
                 "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
+                "src/app/static/agentic_review.js",
+                "src/app/static/app_redesign.css",
+                "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback.md",
+                "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
         }
     legacy_guards = {
         str(path.relative_to(ROOT))

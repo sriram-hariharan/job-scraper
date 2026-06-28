@@ -506,6 +506,9 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
                                 "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
                                 "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
                                 "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+                                "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
+                                "docs/phase34_jd_intelligence_planning_artifact_enricher_default_off.md",
+                                "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
         }
     legacy_guards = {
         str(path.relative_to(ROOT))

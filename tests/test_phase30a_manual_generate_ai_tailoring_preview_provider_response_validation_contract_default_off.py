@@ -4,19 +4,19 @@ from hashlib import sha256
 from pathlib import Path
 import subprocess
 
-from src.agents.manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract import (
-    build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract,
+from src.agents.manual_generate_ai_tailoring_preview_provider_response_validation_contract import (
+    build_manual_generate_ai_tailoring_preview_provider_response_validation_contract,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = (
     ROOT
-    / "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py"
+    / "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py"
 )
 DOC_PATH = (
     ROOT
-    / "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md"
+    / "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_contract.md"
 )
 
 REQUIRED_KEYS = {
@@ -25,27 +25,30 @@ REQUIRED_KEYS = {
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "provider_call_dry_run_packet_contract_only",
-    "dry_run_only",
+    "provider_response_validation_contract_only",
+    "response_validation_only",
     "requires_user_trigger",
     "user_trigger_present",
     "operator_confirmation_required",
     "operator_confirmation_present",
     "manual_acceptance_required",
-    "provider_call_boundary_required",
-    "provider_call_boundary_accepted",
+    "provider_call_dry_run_packet_required",
+    "provider_call_dry_run_packet_accepted",
     "provider_request_envelope_required",
     "provider_request_envelope_accepted",
+    "provider_response_candidate_required",
+    "provider_response_candidate_present",
+    "response_validation_policy_required",
+    "response_validation_policy_present",
     "provider_configuration_required",
     "provider_configuration_present",
-    "provider_call_policy_required",
-    "provider_call_policy_present",
-    "dry_run_packet_ready",
-    "provider_call_allowed_for_future_manual_preview",
+    "response_validation_ready",
+    "provider_response_accepted_for_future_manual_preview",
     "blocked_reasons",
     "missing_inputs",
-    "dry_run_packet",
-    "deterministic_dry_run_packet_key",
+    "validation_findings",
+    "provider_response_contract",
+    "deterministic_response_validation_key",
     "no_provider_calls",
     "provider_call_performed",
     "no_network_calls",
@@ -72,15 +75,16 @@ TRUE_SAFETY_KEYS = {
     "read_only",
     "advisory_only",
     "manual_review_only",
-    "provider_call_dry_run_packet_contract_only",
-    "dry_run_only",
+    "provider_response_validation_contract_only",
+    "response_validation_only",
     "requires_user_trigger",
     "operator_confirmation_required",
     "manual_acceptance_required",
-    "provider_call_boundary_required",
+    "provider_call_dry_run_packet_required",
     "provider_request_envelope_required",
+    "provider_response_candidate_required",
+    "response_validation_policy_required",
     "provider_configuration_required",
-    "provider_call_policy_required",
     "no_provider_calls",
     "no_network_calls",
 }
@@ -109,6 +113,7 @@ PROTECTED_HASHES = {
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "5c0c363698c745556cfa03b38e7e2bd0425d23f2fc3eb03f646a20c8fc6c1b32",
     "src/app/static/app_redesign.css": "c023ce4aff15c3eccfc90598d493460e9afb6d187aa064f6f81940bff037128f",
+    "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
@@ -150,71 +155,58 @@ FORBIDDEN_SOURCE_MARKERS = (
     "network_call(",
 )
 
-REQUIRED_DOC_MARKERS = (
-    "# Phase 29A Manual Generate AI Tailoring Preview Provider-Call Dry-Run Packet Contract",
-    "Provider-call dry-run packet contract only",
-    "Dry-run only",
-    "Default-off",
-    "Read-only",
-    "Advisory-only",
-    "Manual-review only",
-    "User trigger required",
-    "Operator confirmation required",
-    "Manual acceptance required",
-    "Provider-call boundary required",
-    "Provider request-envelope required",
-    "Provider configuration required",
-    "Provider call policy required",
-    "Does not call providers",
-    "Does not call network",
-    "Does not dispatch",
-    "Does not generate AI tailoring",
-    "Does not call tailoring runtime",
-    "Does not create real tailoring output",
-    "Does not create resume rewrites",
-    "Does not overwrite resumes",
-    "Does not mutate resumes",
-    "Does not persist data",
-    "Does not write to database",
-    "Does not execute applications",
-    "Does not submit applications",
-    "No provider calls",
-    "No network calls",
-    "No database writes",
-    "No persistence",
-    "No mutation",
-    "No resume mutation",
-    "No application mutation",
-    "No execution",
-    "No submission",
-    "No auto-apply",
-    "No auto-submit",
-    "No autonomous application execution",
-    "No automatic job application submission",
-    "Tailoring agent remains separate from final scoring",
-    (
-        "Generated tailoring suggestions must remain preview/manual-review "
-        "only unless user accepts edits in a later phase"
-    ),
-    "This phase does not create real tailoring output",
-    "This phase does not add a UI action control",
+DOC_MARKERS = (
+    "phase 30a manual generate ai tailoring preview provider response validation contract",
+    "provider response validation contract only",
+    "response validation only",
+    "default-off",
+    "read-only",
+    "advisory-only",
+    "manual-review only",
+    "user trigger required",
+    "operator confirmation required",
+    "manual acceptance required",
+    "provider-call dry-run packet required",
+    "provider request-envelope required",
+    "provider response candidate required",
+    "response validation policy required",
+    "provider configuration required",
+    "does not call providers",
+    "does not call network",
+    "does not dispatch",
+    "does not generate ai tailoring",
+    "does not call tailoring runtime",
+    "does not create real tailoring output",
+    "does not create resume rewrites",
+    "does not overwrite resumes",
+    "does not mutate resumes",
+    "does not persist data",
+    "does not write to database",
+    "does not execute applications",
+    "does not submit applications",
+    "no provider calls",
+    "no network calls",
+    "no database writes",
+    "no persistence",
+    "no mutation",
+    "no resume mutation",
+    "no application mutation",
+    "no execution",
+    "no submission",
+    "no auto-apply",
+    "no auto-submit",
+    "no autonomous application execution",
+    "no automatic job application submission",
+    "tailoring agent remains separate from final scoring",
+    "generated tailoring suggestions must remain preview/manual-review only unless user accepts edits in a later phase",
+    "this phase does not create real tailoring output",
+    "this phase does not add a ui action control",
+    "phase29-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-release-v1",
+    "phase29d-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-release-checkpoint-v1",
+    "phase29c-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-ui-readback-v1",
+    "phase29b-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-api-readback-v1",
+    "phase29a-manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-contract-v1",
     "phase28-manual-generate-ai-tailoring-preview-provider-call-boundary-release-v1",
-    (
-        "phase28d-manual-generate-ai-tailoring-preview-provider-call-boundary-"
-        "release-checkpoint-v1"
-    ),
-    (
-        "phase28c-manual-generate-ai-tailoring-preview-provider-call-boundary-"
-        "ui-readback-v1"
-    ),
-    (
-        "phase28b-manual-generate-ai-tailoring-preview-provider-call-boundary-"
-        "api-readback-v1"
-    ),
-    (
-        "phase28a-manual-generate-ai-tailoring-preview-provider-call-boundary-"
-        "contract-v1"
-    ),
     "phase27-manual-generate-ai-tailoring-preview-provider-request-envelope-release-v1",
     "phase26-manual-generate-ai-tailoring-preview-dispatch-boundary-release-v1",
     "phase25-manual-generate-ai-tailoring-preview-request-packet-release-v1",
@@ -230,12 +222,14 @@ def _sha256(path: Path) -> str:
 
 def _ready_inputs() -> dict[str, dict]:
     return {
-        "phase28_provider_call_boundary_payload": {
-            "contract_status": (
-                "manual_generate_ai_tailoring_preview_provider_call_boundary_ready"
-            ),
-            "provider_call_boundary_ready": True,
-            "provider_call_allowed": True,
+        "provider_response_candidate_payload": {
+            "response_id": "manual-review-response-stub",
+            "status": "sample_response_shape",
+            "choices_present": True,
+        },
+        "phase29_provider_call_dry_run_packet_payload": {
+            "dry_run_packet_ready": True,
+            "provider_call_allowed_for_future_manual_preview": True,
             "provider_call_performed": False,
             "network_call_performed": False,
             "dispatch_performed": False,
@@ -244,14 +238,18 @@ def _ready_inputs() -> dict[str, dict]:
             "real_tailoring_output_created": False,
             "execution_performed": False,
             "submission_performed": False,
-            "deterministic_provider_call_key": (
-                "manual-generate-ai-tailoring-preview-provider-call-example"
-            ),
+            "dry_run_packet": {
+                "dry_run_packet_ready": True,
+                "deterministic_dry_run_packet_key": (
+                    "manual-generate-ai-tailoring-preview-provider-dry-run-example"
+                ),
+            },
+        },
+        "phase28_provider_call_boundary_payload": {
+            "provider_call_boundary_ready": True,
+            "provider_call_allowed": True,
         },
         "phase27_provider_request_envelope_payload": {
-            "contract_status": (
-                "manual_generate_ai_tailoring_preview_provider_request_envelope_ready"
-            ),
             "provider_request_envelope_ready": True,
             "provider_request_allowed": True,
             "provider_call_performed": False,
@@ -261,30 +259,6 @@ def _ready_inputs() -> dict[str, dict]:
             "real_tailoring_output_created": False,
             "execution_performed": False,
             "submission_performed": False,
-            "deterministic_envelope_key": (
-                "manual-generate-ai-tailoring-preview-provider-envelope-example"
-            ),
-        },
-        "phase26_dispatch_boundary_payload": {
-            "contract_status": (
-                "manual_generate_ai_tailoring_preview_dispatch_boundary_ready"
-            ),
-            "dispatch_ready": True,
-            "dispatch_allowed": True,
-            "deterministic_dispatch_key": (
-                "manual-generate-ai-tailoring-preview-dispatch-example"
-            ),
-        },
-        "phase25_request_packet_payload": {
-            "contract_status": (
-                "manual_generate_ai_tailoring_preview_request_packet_ready"
-            ),
-            "preview_request_allowed": True,
-            "request_packet": {
-                "deterministic_request_key": (
-                    "manual-generate-ai-tailoring-preview-request-example"
-                ),
-            },
         },
         "user_trigger_metadata": {
             "user_triggered": True,
@@ -292,103 +266,105 @@ def _ready_inputs() -> dict[str, dict]:
         },
         "operator_confirmation_metadata": {
             "operator_confirmed": True,
-            "provider_call_dry_run_packet_confirmed": True,
+            "provider_response_validation_confirmed": True,
+        },
+        "response_validation_policy_metadata": {
+            "response_validation_policy_present": True,
+            "response_validation_policy_id": "manual-review-response-policy",
         },
         "provider_configuration_metadata": {
             "provider_configuration_present": True,
             "provider_name": "manual-review-provider-stub",
             "model": "manual-review-model-stub",
         },
-        "provider_call_policy_metadata": {
-            "provider_call_policy_present": True,
-            "provider_call_policy_id": "manual-review-policy-stub",
-        },
     }
 
 
 def test_helper_exists_and_returns_required_keys():
     result = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract()
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract()
     )
 
-    assert result["phase"] == "29A"
+    assert result["phase"] == "30A"
     assert REQUIRED_KEYS <= result.keys()
     for key in TRUE_SAFETY_KEYS:
         assert result[key] is True
     for key in FALSE_ACTION_KEYS:
         assert result[key] is False
-    assert result["dry_run_packet_ready"] is False
-    assert result["provider_call_allowed_for_future_manual_preview"] is False
+    assert result["response_validation_ready"] is False
+    assert result["provider_response_accepted_for_future_manual_preview"] is False
 
 
-def test_no_user_trigger_blocks_readiness():
+def test_no_user_trigger_blocks_response_validation():
     inputs = _ready_inputs()
     inputs["user_trigger_metadata"] = {}
 
     result = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **inputs
         )
     )
 
-    assert result["dry_run_packet_ready"] is False
+    assert result["response_validation_ready"] is False
     assert "user_trigger_metadata" in result["missing_inputs"]
     assert "explicit user trigger required" in result["blocked_reasons"]
     assert result["next_safe_step"] == "require_explicit_user_trigger"
 
 
-def test_missing_operator_confirmation_blocks_readiness():
+def test_missing_operator_confirmation_blocks_response_validation():
     inputs = _ready_inputs()
     inputs["operator_confirmation_metadata"] = {}
 
     result = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **inputs
         )
     )
 
-    assert result["dry_run_packet_ready"] is False
+    assert result["response_validation_ready"] is False
     assert "operator_confirmation_metadata" in result["missing_inputs"]
     assert "operator confirmation required" in result["blocked_reasons"]
     assert result["next_safe_step"] == "require_operator_confirmation"
 
 
-def test_missing_or_blocked_provider_call_boundary_blocks_readiness():
+def test_missing_or_blocked_dry_run_packet_blocks_response_validation():
     missing = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **{
                 **_ready_inputs(),
-                "phase28_provider_call_boundary_payload": {},
+                "phase29_provider_call_dry_run_packet_payload": {},
             }
         )
     )
     blocked = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **{
                 **_ready_inputs(),
-                "phase28_provider_call_boundary_payload": {
-                    "provider_call_boundary_ready": False,
-                    "provider_call_allowed": False,
+                "phase29_provider_call_dry_run_packet_payload": {
+                    "dry_run_packet_ready": False,
+                    "provider_call_allowed_for_future_manual_preview": False,
                 },
             }
         )
     )
 
-    assert missing["dry_run_packet_ready"] is False
-    assert "phase28_provider_call_boundary_payload" in missing["missing_inputs"]
-    assert "phase28 provider-call boundary payload required" in (
-        missing["blocked_reasons"]
-    )
-    assert blocked["dry_run_packet_ready"] is False
+    assert missing["response_validation_ready"] is False
+    assert "phase29_provider_call_dry_run_packet_payload" in missing[
+        "missing_inputs"
+    ]
+    assert "phase29 provider-call dry-run packet required" in missing[
+        "blocked_reasons"
+    ]
+    assert blocked["response_validation_ready"] is False
     assert (
-        "provider-call boundary must be accepted before dry-run packet"
+        "provider-call dry-run packet must be accepted before response validation"
         in blocked["blocked_reasons"]
     )
 
 
-def test_missing_or_unaccepted_provider_request_envelope_blocks_readiness():
+def test_missing_or_unaccepted_provider_request_envelope_blocks_validation():
     missing = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **{
                 **_ready_inputs(),
                 "phase27_provider_request_envelope_payload": {},
@@ -396,7 +372,7 @@ def test_missing_or_unaccepted_provider_request_envelope_blocks_readiness():
         )
     )
     blocked = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **{
                 **_ready_inputs(),
                 "phase27_provider_request_envelope_payload": {
@@ -407,72 +383,95 @@ def test_missing_or_unaccepted_provider_request_envelope_blocks_readiness():
         )
     )
 
-    assert missing["dry_run_packet_ready"] is False
-    assert "phase27_provider_request_envelope_payload" in missing["missing_inputs"]
-    assert "phase27 provider request-envelope payload required" in (
-        missing["blocked_reasons"]
-    )
-    assert blocked["dry_run_packet_ready"] is False
+    assert missing["response_validation_ready"] is False
+    assert "phase27_provider_request_envelope_payload" in missing[
+        "missing_inputs"
+    ]
+    assert "phase27 provider request-envelope payload required" in missing[
+        "blocked_reasons"
+    ]
+    assert blocked["response_validation_ready"] is False
     assert (
-        "provider request-envelope must be accepted before dry-run packet"
+        "provider request-envelope must be accepted before response validation"
         in blocked["blocked_reasons"]
     )
 
 
-def test_missing_provider_configuration_and_policy_are_blocked():
+def test_missing_candidate_policy_and_configuration_are_blocked():
+    missing_candidate = (
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
+            **{
+                **_ready_inputs(),
+                "provider_response_candidate_payload": {},
+            }
+        )
+    )
+    missing_policy = (
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
+            **{
+                **_ready_inputs(),
+                "response_validation_policy_metadata": {},
+            }
+        )
+    )
     missing_configuration = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **{
                 **_ready_inputs(),
                 "provider_configuration_metadata": {},
             }
         )
     )
-    missing_policy = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
-            **{
-                **_ready_inputs(),
-                "provider_call_policy_metadata": {},
-            }
-        )
-    )
 
-    assert missing_configuration["dry_run_packet_ready"] is False
+    assert missing_candidate["response_validation_ready"] is False
+    assert "provider_response_candidate_payload" in missing_candidate[
+        "missing_inputs"
+    ]
+    assert "provider response candidate payload required" in missing_candidate[
+        "blocked_reasons"
+    ]
+    assert missing_policy["response_validation_ready"] is False
+    assert "response_validation_policy_metadata" in missing_policy[
+        "missing_inputs"
+    ]
+    assert "response validation policy metadata required" in missing_policy[
+        "blocked_reasons"
+    ]
+    assert missing_configuration["response_validation_ready"] is False
     assert "provider_configuration_metadata" in missing_configuration[
         "missing_inputs"
     ]
     assert "provider configuration metadata required" in missing_configuration[
         "blocked_reasons"
     ]
-    assert missing_policy["dry_run_packet_ready"] is False
-    assert "provider_call_policy_metadata" in missing_policy["missing_inputs"]
-    assert "provider call policy metadata required" in missing_policy[
-        "blocked_reasons"
-    ]
 
 
-def test_ready_stubs_mark_packet_ready_without_side_effects():
+def test_ready_stubs_mark_validation_ready_without_side_effects():
     first = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **_ready_inputs()
         )
     )
     second = (
-        build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract(
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
             **_ready_inputs()
         )
     )
 
     assert first == second
-    assert first["dry_run_packet_ready"] is True
-    assert first["provider_call_allowed_for_future_manual_preview"] is True
+    assert first["response_validation_ready"] is True
+    assert first["provider_response_accepted_for_future_manual_preview"] is True
     assert first["blocked_reasons"] == []
     assert first["missing_inputs"] == []
-    assert first["dry_run_packet"]["dry_run_packet_ready"] is True
-    assert first["dry_run_packet"]["contains_generated_tailoring_text"] is False
-    assert first["dry_run_packet"]["contains_real_tailoring_output"] is False
-    assert "generated_tailoring_text" not in first["dry_run_packet"]
-    assert "real_tailoring_output" not in first["dry_run_packet"]
+    assert first["provider_response_contract"]["response_validation_ready"] is True
+    assert first["provider_response_contract"][
+        "contains_generated_tailoring_text"
+    ] is False
+    assert first["provider_response_contract"][
+        "contains_real_tailoring_output"
+    ] is False
+    assert "generated_tailoring_text" not in first["provider_response_contract"]
+    assert "real_tailoring_output" not in first["provider_response_contract"]
     for key in FALSE_ACTION_KEYS:
         assert first[key] is False
     for marker in (
@@ -483,7 +482,28 @@ def test_ready_stubs_mark_packet_ready_without_side_effects():
         "ai_tailoring_generation_performed",
         "real_tailoring_output_created",
     ):
-        assert first["dry_run_packet"][marker] is False
+        assert first["provider_response_contract"][marker] is False
+
+
+def test_candidate_with_tailoring_output_is_blocked_and_not_copied():
+    result = (
+        build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
+            **{
+                **_ready_inputs(),
+                "provider_response_candidate_payload": {
+                    "response_id": "unsafe-sample",
+                    "generated_tailoring_text": "do not copy this",
+                },
+            }
+        )
+    )
+
+    assert result["response_validation_ready"] is False
+    assert (
+        "provider response candidate must not include generated tailoring output"
+        in result["blocked_reasons"]
+    )
+    assert "do not copy this" not in str(result["provider_response_contract"])
 
 
 def test_helper_source_has_no_forbidden_imports_or_calls():
@@ -494,9 +514,9 @@ def test_helper_source_has_no_forbidden_imports_or_calls():
 
 
 def test_doc_contains_required_safety_markers_and_references():
-    text = DOC_PATH.read_text(encoding="utf-8")
+    text = DOC_PATH.read_text(encoding="utf-8").lower()
 
-    for marker in REQUIRED_DOC_MARKERS:
+    for marker in DOC_MARKERS:
         assert marker in text
 
 
@@ -505,7 +525,7 @@ def test_protected_runtime_files_are_unchanged():
         assert _sha256(ROOT / relative_path) == expected_hash
 
 
-def test_phase29a_changes_only_helper_doc_test_and_legacy_guards():
+def test_phase30a_changes_only_helper_doc_test_and_legacy_guards():
     tracked = subprocess.check_output(
         ["git", "diff", "--name-only"], cwd=ROOT, text=True
     ).splitlines()
@@ -516,18 +536,6 @@ def test_phase29a_changes_only_helper_doc_test_and_legacy_guards():
     ).splitlines()
     changed = set(tracked + untracked)
     allowed = {
-        "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.md",
-        "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
-        "src/app/api.py",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback.md",
-        "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
-        "src/app/static/agentic_review.js",
-        "src/app/static/app_redesign.css",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback.md",
-        "tests/test_phase29c_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback_default_off.py",
-        "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint.md",
-        "tests/test_phase29d_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint_default_off.py",
         "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py",
         "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_contract.md",
         "tests/test_phase30a_manual_generate_ai_tailoring_preview_provider_response_validation_contract_default_off.py",
@@ -539,8 +547,8 @@ def test_phase29a_changes_only_helper_doc_test_and_legacy_guards():
         and any(
             marker in path.read_text(encoding="utf-8")
             for marker in (
-                "phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract",
-                "phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract",
+                "phase30a_manual_generate_ai_tailoring_preview_provider_response_validation_contract",
+                "phase30_manual_generate_ai_tailoring_preview_provider_response_validation_contract",
                 "changes_only",
             )
         )

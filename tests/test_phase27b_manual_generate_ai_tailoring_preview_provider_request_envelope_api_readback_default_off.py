@@ -396,6 +396,9 @@ def test_phase27b_changes_only_api_doc_test_and_legacy_guards():
         "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py",
         "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_contract.md",
         "tests/test_phase30a_manual_generate_ai_tailoring_preview_provider_response_validation_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback.md",
+        "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

@@ -384,6 +384,11 @@ def test_phase25c_changes_only_static_doc_test_and_legacy_guards():
                                 "src/app/api.py",
                                 "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback.md",
                                 "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off.py",
+                                "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback 2.md",
+                                "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py",
+                                "src/agents/controlled_agent_router_readonly.py",
+                                "docs/phase33_controlled_agent_router_readonly.md",
+                                "tests/test_phase33a_controlled_agent_router_readonly.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

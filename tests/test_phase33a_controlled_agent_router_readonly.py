@@ -359,6 +359,9 @@ def test_changed_files_are_limited_to_phase33a_surface_and_legacy_guards():
         "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
         "docs/phase33_controlled_agent_router_batch_handoff_plan_readonly.md",
         "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+        "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
+        "docs/phase33_controlled_agent_router_planning_artifact_mapper_readonly.md",
+        "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
         # Pre-existing untracked files from an earlier phase in this workspace.
         "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback 2.md",
         "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py",

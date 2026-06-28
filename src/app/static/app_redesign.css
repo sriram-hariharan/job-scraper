@@ -6597,6 +6597,41 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
   color: var(--app-text-2);
 }
 
+.manual-generate-ai-tailoring-preview-provider-response-normalization-readback {
+  border-left: 4px solid var(--app-warning);
+}
+
+.manual-generate-ai-tailoring-preview-provider-response-normalization-readback__safety-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.manual-generate-ai-tailoring-preview-provider-response-normalization-readback__safety-labels span {
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-warning) 12%);
+  color: var(--app-text-2);
+  font-size: 0.82rem;
+}
+
+.manual-generate-ai-tailoring-preview-provider-response-normalization-readback__metrics {
+  margin-top: 12px;
+}
+
+.manual-generate-ai-tailoring-preview-provider-response-normalization-readback__boundary {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-warning) 8%);
+  color: var(--app-text-2);
+}
+
 @media (max-width: 720px) {
   [data-agentic-review-run-id] {
     padding-right: 18px;

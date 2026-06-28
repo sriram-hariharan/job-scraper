@@ -486,7 +486,14 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
                                     '"tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py"',
                                     "src/agents/controlled_agent_router_readonly.py",
                                 "docs/phase33_controlled_agent_router_readonly.md",
-                                "tests/test_phase33a_controlled_agent_router_readonly.py",
+                                    "tests/test_phase33a_controlled_agent_router_readonly.py",
+                                    "docs/phase33_controlled_agent_router_readonly 2.md",
+                                    "tests/test_phase33a_controlled_agent_router_readonly 2.py",
+                                    '"docs/phase33_controlled_agent_router_readonly 2.md"',
+                                    '"tests/test_phase33a_controlled_agent_router_readonly 2.py"',
+                                    "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py",
+                                "docs/phase33_controlled_agent_router_workflow_state_adapter_readonly.md",
+                                "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
         }
     legacy_guards = {
         str(path.relative_to(ROOT))

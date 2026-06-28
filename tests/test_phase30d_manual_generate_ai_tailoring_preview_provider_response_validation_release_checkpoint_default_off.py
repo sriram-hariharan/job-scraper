@@ -95,7 +95,7 @@ SAFETY_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "1c805ef6fdbe1042e3549e8a93671c53aec8a2836766bc5c95d6b5ce1f184ce6",
+    "src/app/api.py": "c783bf766e09f43b3650ddcc79bc7043aaa5bcaaf37ed4deb365a894c951a9d6",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/app/static/agentic_review.js": "ca378dc0aee655d83a7af0d15e885313af5b719c2512eff10f3efc69cd43348a",
     "src/app/static/app_redesign.css": "3c55b13f7762c2118eabad4a32ca6c6a47b9674be44ac33058d3b55f97c4e5c5",
@@ -197,6 +197,9 @@ def test_phase30d_changes_only_doc_test_and_legacy_guards():
                         "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py",
                         "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_contract.md",
                         "tests/test_phase31a_manual_generate_ai_tailoring_preview_provider_response_normalization_contract_default_off.py",
+                        "src/app/api.py",
+                        "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback.md",
+                        "tests/test_phase31b_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

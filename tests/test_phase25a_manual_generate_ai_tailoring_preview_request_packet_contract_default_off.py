@@ -494,6 +494,9 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
                                     "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py",
                                 "docs/phase33_controlled_agent_router_workflow_state_adapter_readonly.md",
                                 "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+                                "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
+                                "docs/phase33_controlled_agent_router_batch_handoff_plan_readonly.md",
+                                "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
         }
     legacy_guards = {
         str(path.relative_to(ROOT))

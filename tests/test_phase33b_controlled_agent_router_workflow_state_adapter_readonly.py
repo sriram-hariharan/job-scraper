@@ -454,6 +454,9 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
         "docs/phase33_controlled_agent_router_planning_artifact_mapper_readonly.md",
         "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+        "run_controlled_agent_router_planning_artifact_dry_run.py",
+        "docs/phase33_controlled_agent_router_planning_artifact_dry_run_command_readonly.md",
+        "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
         # Pre-existing duplicate Phase 33A files in this workspace.
         "docs/phase33_controlled_agent_router_readonly 2.md",
         "tests/test_phase33a_controlled_agent_router_readonly 2.py",

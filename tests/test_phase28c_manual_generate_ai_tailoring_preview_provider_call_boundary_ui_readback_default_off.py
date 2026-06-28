@@ -460,6 +460,9 @@ def test_phase28c_changes_only_static_doc_test_and_legacy_guards():
                                 "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
                                 "docs/phase33_controlled_agent_router_planning_artifact_mapper_readonly.md",
                                 "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+                                "run_controlled_agent_router_planning_artifact_dry_run.py",
+                                "docs/phase33_controlled_agent_router_planning_artifact_dry_run_command_readonly.md",
+                                "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

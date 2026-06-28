@@ -418,6 +418,10 @@ def test_phase27c_changes_only_static_doc_test_and_legacy_guards():
         "src/app/api.py",
         "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback.md",
         "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
+                "src/app/static/agentic_review.js",
+                "src/app/static/app_redesign.css",
+                "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback.md",
+                "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

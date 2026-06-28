@@ -466,6 +466,9 @@ def test_phase31b_changes_only_api_doc_test_and_legacy_guards():
                                 "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
                                 "docs/phase33_controlled_agent_router_batch_handoff_plan_readonly.md",
                                 "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+                                "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
+                                "docs/phase33_controlled_agent_router_planning_artifact_mapper_readonly.md",
+                                "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
         }
     legacy_guards = {
         str(path.relative_to(ROOT))

@@ -260,6 +260,9 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
                                 "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
                                 "docs/phase33_controlled_agent_router_batch_handoff_plan_readonly.md",
                                 "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+                                "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
+                                "docs/phase33_controlled_agent_router_planning_artifact_mapper_readonly.md",
+                                "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -365,6 +368,10 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             [
                 ROOT
                 / "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py"
+            ],
+            [
+                ROOT
+                / "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py"
             ],
             [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],

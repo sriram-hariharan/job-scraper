@@ -1,4 +1,4 @@
-# phase26c legacy guard marker: changes_only ca378dc0aee655d83a7af0d15e885313af5b719c2512eff10f3efc69cd43348a 3c55b13f7762c2118eabad4a32ca6c6a47b9674be44ac33058d3b55f97c4e5c5
+# phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -424,6 +424,8 @@ def test_phase26c_changes_only_static_doc_test_and_legacy_guards():
                         "src/app/api.py",
                         "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback.md",
                         "tests/test_phase31b_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback_default_off.py",
+                            "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback.md",
+                            "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -433,8 +435,8 @@ def test_phase26c_changes_only_static_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback",
-                "ca378dc0aee655d83a7af0d15e885313af5b719c2512eff10f3efc69cd43348a",
-                "3c55b13f7762c2118eabad4a32ca6c6a47b9674be44ac33058d3b55f97c4e5c5",
+                "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
+                "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
                 "changes_only",
             )
         )

@@ -399,6 +399,8 @@ def test_phase29c_changes_only_static_doc_test_and_legacy_guards():
                         "src/app/api.py",
                         "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback.md",
                         "tests/test_phase31b_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback_default_off.py",
+                            "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback.md",
+                            "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

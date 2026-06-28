@@ -368,6 +368,9 @@ def test_changed_files_are_limited_to_phase33a_surface_and_legacy_guards():
         "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
         "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
         "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+        "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
+        "docs/phase34_jd_intelligence_planning_artifact_enricher_default_off.md",
+        "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
         # Pre-existing untracked files from an earlier phase in this workspace.
         "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback 2.md",
         "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py",

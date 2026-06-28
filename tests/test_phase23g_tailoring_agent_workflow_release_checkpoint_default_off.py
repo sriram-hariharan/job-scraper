@@ -187,6 +187,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
         "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
         "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
+        "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
     }
 
     assert changed_runtime == set()
@@ -215,6 +216,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py"
     and path != "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py"
     and path != "src/agents/jd_intelligence_llm_signal_extractor_default_off.py"
+    and path != "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py"
     ]
     forbidden = (
         "provider_call(",
@@ -363,6 +365,9 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
                                 "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
                                 "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
                                 "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+                                "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
+                                "docs/phase34_jd_intelligence_planning_artifact_enricher_default_off.md",
+                                "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

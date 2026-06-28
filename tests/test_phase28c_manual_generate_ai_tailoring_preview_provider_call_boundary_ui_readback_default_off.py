@@ -15,7 +15,7 @@ ENDPOINT = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "0b95ae42f2dcec29e129a86682ce9b41a171e6d7e66a01da635dc433ca88cbf8",
+    "src/app/api.py": "1c805ef6fdbe1042e3549e8a93671c53aec8a2836766bc5c95d6b5ce1f184ce6",
     "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
@@ -419,6 +419,9 @@ def test_phase28c_changes_only_static_doc_test_and_legacy_guards():
         "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py",
         "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_contract.md",
         "tests/test_phase30a_manual_generate_ai_tailoring_preview_provider_response_validation_contract_default_off.py",
+        "src/app/api.py",
+        "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback.md",
+        "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

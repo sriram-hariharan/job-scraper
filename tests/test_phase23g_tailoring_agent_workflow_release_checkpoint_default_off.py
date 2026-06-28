@@ -180,6 +180,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py",
         "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py",
         "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py",
+        "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py",
     }
 
     assert changed_runtime == set()
@@ -201,6 +202,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py"
     and path != "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py"
     and path != "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py"
+    and path != "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py"
     ]
     forbidden = (
         "provider_call(",
@@ -311,6 +313,9 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
                 "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
                     "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint.md",
                     "tests/test_phase30d_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint_default_off.py",
+                        "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py",
+                        "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_contract.md",
+                        "tests/test_phase31a_manual_generate_ai_tailoring_preview_provider_response_normalization_contract_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

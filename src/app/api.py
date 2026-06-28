@@ -28,6 +28,9 @@ from src.agents.manual_generate_ai_tailoring_preview_provider_call_boundary_cont
 from src.agents.manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract import (
     build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract,
 )
+from src.agents.manual_generate_ai_tailoring_preview_provider_response_validation_contract import (
+    build_manual_generate_ai_tailoring_preview_provider_response_validation_contract,
+)
 from src.agents.manual_generate_ai_tailoring_preview_provider_request_envelope_contract import (
     build_manual_generate_ai_tailoring_preview_provider_request_envelope_contract,
 )
@@ -4943,6 +4946,54 @@ def manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_a
         operator_confirmation_metadata={},
         provider_configuration_metadata={},
         provider_call_policy_metadata={},
+    )
+
+
+@app.get(
+    "/api/manual-generate-ai-tailoring-preview-provider-response-validation-contract"
+)
+def manual_generate_ai_tailoring_preview_provider_response_validation_contract_api():
+    return build_manual_generate_ai_tailoring_preview_provider_response_validation_contract(
+        provider_response_candidate_payload={
+            "readback_source": "phase30b_api_placeholder",
+            "response_id": "phase30b_response_shape_placeholder",
+            "status": "sample_response_shape_only",
+            "choices_present": False,
+        },
+        phase29_provider_call_dry_run_packet_payload={
+            "readback_source": "phase30b_api_placeholder",
+            "dry_run_packet_ready": False,
+            "provider_call_allowed_for_future_manual_preview": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "dispatch_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        phase28_provider_call_boundary_payload={
+            "readback_source": "phase30b_api_placeholder",
+            "provider_call_boundary_ready": False,
+            "provider_call_allowed": False,
+        },
+        phase27_provider_request_envelope_payload={
+            "readback_source": "phase30b_api_placeholder",
+            "provider_request_envelope_ready": False,
+            "provider_request_allowed": False,
+            "provider_call_performed": False,
+            "network_call_performed": False,
+            "tailoring_runtime_call_performed": False,
+            "ai_tailoring_generation_performed": False,
+            "real_tailoring_output_created": False,
+            "execution_performed": False,
+            "submission_performed": False,
+        },
+        user_trigger_metadata={},
+        operator_confirmation_metadata={},
+        response_validation_policy_metadata={},
+        provider_configuration_metadata={},
     )
 
 

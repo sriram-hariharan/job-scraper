@@ -1,36 +1,41 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from hashlib import sha256
 import importlib
 import json
 from pathlib import Path
 import subprocess
 
-from src.agents import jd_evidence_final_scoring_feature_adapter_default_off as adapter
-from src.agents.jd_evidence_final_scoring_feature_adapter_default_off import (
-    build_jd_evidence_final_scoring_feature_adapter_default_off,
+import run_jd_evidence_final_scoring_feature_adapter_dry_run as command
+from run_jd_evidence_final_scoring_feature_adapter_dry_run import (
+    DryRunLoadError,
+    build_dry_run_payload,
+    load_evidence_results_from_path,
+    load_planning_rows_from_path,
+    main,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER_PATH = ROOT / "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py"
-DOC_PATH = ROOT / "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md"
+COMMAND_PATH = ROOT / "run_jd_evidence_final_scoring_feature_adapter_dry_run.py"
+DOC_PATH = (
+    ROOT
+    / "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md"
+)
 
 REQUIRED_KEYS = {
     "phase",
     "default_off",
-    "jd_evidence_final_scoring_feature_adapter",
+    "jd_evidence_final_scoring_feature_adapter_dry_run",
+    "dry_run_command_only",
     "read_only",
     "advisory_only",
     "deterministic_scoring_feature_preparation",
     "requires_manual_user_control",
     "planning_row_count",
-    "valid_planning_row_count",
-    "invalid_planning_row_count",
-    "feature_rows",
-    "unmapped_rows",
+    "evidence_results_present",
     "feature_policy",
+    "adapter_result",
     "feature_packet",
     "scoring_feature_rows",
     "scoring_feature_summary",
@@ -41,12 +46,8 @@ REQUIRED_KEYS = {
     "high_coverage_count",
     "low_coverage_count",
     "red_flag_review_count",
-    "missing_required_skills_by_row",
-    "missing_tools_by_row",
-    "red_flag_findings_by_row",
-    "adapter_findings",
-    "missing_inputs",
-    "adapter_key",
+    "dry_run_summary",
+    "dry_run_key",
     "final_score_produced",
     "existing_score_changed",
     "llm_call_performed",
@@ -122,7 +123,6 @@ FORBIDDEN_SOURCE_MARKERS = (
     "database_url",
     "psycopg",
     "sqlite",
-    "subprocess",
     "requests",
     "httpx",
     "urllib",
@@ -150,12 +150,17 @@ FORBIDDEN_WRITE_MARKERS = (
 )
 
 DOC_MARKERS = (
-    "phase 36a jd evidence final-scoring feature adapter default-off",
-    "jd evidence final-scoring feature adapter",
+    "phase 36b jd evidence final-scoring feature adapter dry-run command default-off",
+    "jd evidence final-scoring feature adapter dry-run command",
     "capability step on the revised path",
     "not another safety-wrapper chain",
     "deterministic scoring feature preparation",
-    "converts jd evidence matrix results into final-scoring-ready feature packets",
+    "reads supplied planning artifact file input",
+    "supports json, jsonl, and csv planning-like row inputs",
+    "supports supplied evidence results",
+    "calls the phase 36a jd evidence final-scoring feature adapter",
+    "prints final-scoring-ready feature packets to stdout",
+    "does not write output files",
     "preserves existing score fields",
     "does not produce final application score",
     "does not change existing scoring logic",
@@ -183,6 +188,8 @@ DOC_MARKERS = (
     "evidence matching remains separate from final scoring",
     "scoring feature preparation remains separate from final scoring",
     "final scoring remains deterministic and controlled by scoring logic",
+    "python run_jd_evidence_final_scoring_feature_adapter_dry_run.py --input path/to/planning_rows.json --evidence-results path/to/evidence_results.json",
+    "phase36a-jd-evidence-final-scoring-feature-adapter-default-off-v1",
     "phase35c-jd-signal-planning-artifact-evidence-enrichment-dry-run-command-default-off-v1",
     "phase35b-jd-signal-planning-artifact-evidence-enricher-default-off-v1",
     "phase35a-jd-signal-resume-evidence-matrix-default-off-v1",
@@ -194,6 +201,7 @@ DOC_MARKERS = (
 )
 
 PROTECTED_HASHES = {
+    "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py": "f7ec839c8810439f9ceb2fccd9938d34cbb2f623590f0c2c2bf80afeba6cc105",
     "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py": "0404ff9c89895b13cf5ccc55029820d2ff5b82fb2dbd3c0c1e426bd0e83335c8",
     "src/agents/jd_signal_resume_evidence_matrix_default_off.py": "1d0275337f4785730b27515f0e9830601fd9e3cc941fe21d2f7bb8257d64e9be",
     "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py": "9db84fca7407329f0b0f84f46fb030f4c975fef9db0197188f0429b435f3c7c3",
@@ -220,6 +228,11 @@ PROTECTED_HASHES = {
 
 def _sha256(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
+
+
+def _write(path: Path, text: str) -> Path:
+    path.write_text(text, encoding="utf-8")
+    return path
 
 
 def _evidence(
@@ -259,9 +272,10 @@ def _row(**extra) -> dict:
 
 def _assert_safe(payload: dict) -> None:
     assert REQUIRED_KEYS <= payload.keys()
-    assert payload["phase"] == "36A"
+    assert payload["phase"] == "36B"
     assert payload["default_off"] is True
-    assert payload["jd_evidence_final_scoring_feature_adapter"] is True
+    assert payload["jd_evidence_final_scoring_feature_adapter_dry_run"] is True
+    assert payload["dry_run_command_only"] is True
     assert payload["read_only"] is True
     assert payload["advisory_only"] is True
     assert payload["deterministic_scoring_feature_preparation"] is True
@@ -270,228 +284,223 @@ def _assert_safe(payload: dict) -> None:
         assert payload[key] is False
 
 
-def test_helper_exists_and_is_import_safe(capsys):
-    importlib.reload(adapter)
+def test_command_module_is_import_safe(capsys):
+    importlib.reload(command)
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
-    assert callable(build_jd_evidence_final_scoring_feature_adapter_default_off)
+    assert callable(load_planning_rows_from_path)
+    assert callable(load_evidence_results_from_path)
+    assert callable(build_dry_run_payload)
+    assert callable(main)
 
 
-def test_missing_and_non_list_planning_rows_return_empty_blocked_result():
-    for rows in (None, {"job_id": "j1"}):
-        payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-            planning_rows=rows
-        )
-        _assert_safe(payload)
-        assert payload["planning_row_count"] == 0
-        assert payload["feature_rows"] == []
-        assert payload["feature_packet"]["scoring_feature_rows"] == []
-        assert payload["missing_inputs"] == ["planning_rows"]
-        assert payload["unmapped_rows"][0]["reason"] == (
-            "planning_rows must be supplied as a list"
-        )
+def test_planning_loader_loads_json_list_and_wrapped_rows(tmp_path):
+    plain = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    for key in ("planning_rows", "rows", "items", "jobs", "feature_rows"):
+        wrapped = _write(tmp_path / f"{key}.json", json.dumps({key: [_row()]}))
+        assert load_planning_rows_from_path(wrapped) == [_row()]
+    assert load_planning_rows_from_path(plain) == [_row()]
 
 
-def test_empty_planning_rows_returns_empty_feature_rows_and_packet():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[]
-    )
-    _assert_safe(payload)
-    assert payload["planning_row_count"] == 0
-    assert payload["feature_rows"] == []
-    assert payload["feature_packet"]["feature_row_count"] == 0
-    assert payload["scoring_feature_rows"] == []
-
-
-def test_invalid_non_dict_rows_go_to_unmapped_rows_without_crashing():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[_row(evidence_matrix_result=_evidence()), "bad"]
-    )
-    _assert_safe(payload)
-    assert payload["valid_planning_row_count"] == 1
-    assert payload["invalid_planning_row_count"] == 1
-    assert payload["unmapped_rows"] == [
-        {"input_index": 1, "reason": "planning row must be a dictionary"}
+def test_planning_loader_loads_jsonl_and_csv_rows(tmp_path):
+    jsonl = _write(tmp_path / "rows.jsonl", json.dumps(_row()) + "\n")
+    csv_path = _write(tmp_path / "rows.csv", "job_id,title\nj1,Engineer\n")
+    assert load_planning_rows_from_path(jsonl) == [_row()]
+    assert load_planning_rows_from_path(csv_path) == [
+        {"job_id": "j1", "title": "Engineer"}
     ]
 
 
-def test_row_level_evidence_matrix_result_produces_scoring_feature_row():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[
-            _row(
-                evidence_matrix_result=_evidence(
-                    required=1.0,
-                    tools=1.0,
-                    red_flags=[{"signal": "on-call ambiguity", "status": "matched"}],
-                )
-            )
-        ]
+def test_evidence_results_loader_loads_json_shapes(tmp_path):
+    raw_list = _write(tmp_path / "list.json", json.dumps([_evidence()]))
+    keyed = _write(tmp_path / "keyed.json", json.dumps({"job-1": _evidence()}))
+    assert load_evidence_results_from_path(raw_list) == [_evidence()]
+    assert load_evidence_results_from_path(keyed) == {"job-1": _evidence()}
+    for key in (
+        "evidence_results",
+        "results",
+        "items",
+        "rows",
+        "feature_rows",
+        "scoring_feature_rows",
+    ):
+        wrapped = _write(tmp_path / f"{key}.json", json.dumps({key: [_evidence()]}))
+        assert load_evidence_results_from_path(wrapped) == [_evidence()]
+
+
+def test_evidence_results_loader_loads_jsonl_and_csv_rows(tmp_path):
+    jsonl = _write(tmp_path / "evidence.jsonl", json.dumps(_evidence()) + "\n")
+    csv_path = _write(
+        tmp_path / "evidence.csv",
+        "job_id,evidence_ready,required_skill_coverage_ratio\nj1,true,0.9\n",
     )
-    _assert_safe(payload)
-    feature = payload["feature_rows"][0]
-    assert feature["item_id"] == "item-1"
-    assert feature["job_id"] == "job-1"
-    assert feature["evidence_ready"] is True
-    assert feature["coverage_band"] == "high"
-    assert feature["requires_red_flag_review"] is True
-    assert feature["scoring_inputs_ready"] is True
-
-
-def test_row_level_evidence_coverage_summary_produces_feature_row():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[
-            _row(
-                evidence_matrix={
-                    "required_skills": [
-                        {"signal": "Python", "status": "missing"}
-                    ],
-                    "tools": [{"signal": "dbt", "status": "missing"}],
-                },
-                evidence_coverage_summary={"required_skill_total": 1},
-            )
-        ]
-    )
-    _assert_safe(payload)
-    feature = payload["feature_rows"][0]
-    assert feature["evidence_ready"] is True
-    assert feature["coverage_band"] == "low"
-    assert feature["missing_required_skill_count"] == 1
-    assert feature["missing_tool_count"] == 1
-
-
-def test_evidence_results_keyed_by_item_job_id_id_and_index_are_resolved():
-    rows = [
-        {"item_id": "item-1", "title": "One"},
-        {"job_id": "job-2", "title": "Two"},
-        {"id": "id-3", "title": "Three"},
-        {"title": "Four"},
+    assert load_evidence_results_from_path(jsonl) == [_evidence()]
+    assert load_evidence_results_from_path(csv_path) == [
+        {
+            "job_id": "j1",
+            "evidence_ready": "true",
+            "required_skill_coverage_ratio": "0.9",
+        }
     ]
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=rows,
-        evidence_results={
-            "item-1": _evidence(required=1.0),
-            "job-2": _evidence(required=0.6),
-            "id-3": _evidence(required=0.4),
-            "3": _evidence(required=0.9),
+
+
+def test_loader_error_paths_are_deterministic(tmp_path):
+    unsupported = _write(tmp_path / "rows.yaml", "[]")
+    invalid_json = _write(tmp_path / "bad.json", "{")
+    invalid_jsonl = _write(tmp_path / "bad.jsonl", "[]\n")
+    invalid_shape = _write(tmp_path / "badshape.json", json.dumps({"foo": []}))
+    bad_evidence_shape = _write(tmp_path / "evidence.json", "1")
+    for path in (unsupported, invalid_json, invalid_jsonl, invalid_shape):
+        try:
+            load_planning_rows_from_path(path)
+        except ValueError as exc:
+            assert str(exc)
+        else:
+            raise AssertionError(f"expected planning loader failure for {path}")
+    try:
+        load_evidence_results_from_path(bad_evidence_shape)
+    except ValueError as exc:
+        assert "evidence results json" in str(exc)
+    else:
+        raise AssertionError("expected evidence results loader failure")
+
+
+def test_build_dry_run_payload_returns_required_keys_and_counts():
+    payload = build_dry_run_payload(
+        planning_rows=[_row()],
+        evidence_results={"job-1": _evidence(required=0.9, tools=0.9)},
+        feature_policy={
+            "high_required_skill_coverage_threshold": 0.8,
+            "low_required_skill_coverage_threshold": 0.5,
+            "high_tool_coverage_threshold": 0.8,
+            "red_flag_review_threshold": 1,
         },
     )
     _assert_safe(payload)
-    assert [row["coverage_band"] for row in payload["feature_rows"]] == [
-        "high",
-        "medium",
-        "low",
-        "high",
+    assert payload["planning_row_count"] == 1
+    assert payload["evidence_results_present"] is True
+    assert payload["evidence_ready_count"] == 1
+    assert payload["evidence_missing_count"] == 0
+    assert payload["high_coverage_count"] == 1
+    assert payload["low_coverage_count"] == 0
+    assert payload["red_flag_review_count"] == 0
+    assert payload["feature_packet"] == payload["adapter_result"]["feature_packet"]
+    assert payload["scoring_feature_rows"] == payload["adapter_result"][
+        "scoring_feature_rows"
     ]
+    assert payload["dry_run_summary"]["stdout_only"] is True
+    assert payload["dry_run_summary"]["output_file_written"] is False
 
 
-def test_list_aligned_evidence_results_are_resolved_deterministically():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[{"job_id": "j1"}, {"job_id": "j2"}],
-        evidence_results=[_evidence(required=0.7), _evidence(required=0.2)],
+def test_payload_exposes_missing_evidence_and_red_flag_review_rows():
+    payload = build_dry_run_payload(
+        planning_rows=[_row(), _row(item_id="item-2", job_id="job-2")],
+        evidence_results={
+            "job-1": _evidence(
+                required=0.4,
+                tools=0.4,
+                missing_required=["Spark"],
+                missing_tools=["Airflow"],
+                red_flags=[{"signal": "travel", "status": "matched"}],
+            )
+        },
+        feature_policy={
+            "high_required_skill_coverage_threshold": 0.8,
+            "low_required_skill_coverage_threshold": 0.5,
+            "high_tool_coverage_threshold": 0.8,
+            "red_flag_review_threshold": 1,
+        },
     )
     _assert_safe(payload)
-    assert payload["feature_rows"][0]["coverage_band"] == "medium"
-    assert payload["feature_rows"][1]["coverage_band"] == "low"
+    assert payload["evidence_ready_count"] == 1
+    assert payload["evidence_missing_count"] == 1
+    assert payload["low_coverage_count"] == 1
+    assert payload["red_flag_review_count"] == 1
 
 
-def test_existing_score_fields_are_detected_preserved_and_not_changed():
-    row = _row(final_score=91, score=12, evidence_matrix_result=_evidence())
-    original = deepcopy(row)
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[row]
-    )
+def test_main_prints_json_to_stdout_for_valid_input(tmp_path, capsys):
+    rows = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    evidence = _write(tmp_path / "evidence.json", json.dumps({"job-1": _evidence()}))
+    code = main(["--input", str(rows), "--evidence-results", str(evidence)])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
     _assert_safe(payload)
-    assert row == original
-    assert payload["feature_rows"][0]["existing_score_present"] is True
-    assert payload["feature_rows"][0]["existing_score_field"] == "final_score"
-    assert payload["feature_rows"][0]["existing_score_value"] == 91
-    assert payload["existing_score_fields_detected"] == [
-        {"row_key": "item-1", "field": "final_score", "value": 91}
-    ]
-    assert payload["existing_scores_preserved"] is True
-    assert payload["existing_score_changed"] is False
+    assert payload["feature_policy"] == {
+        "high_required_skill_coverage_threshold": 0.8,
+        "low_required_skill_coverage_threshold": 0.5,
+        "high_tool_coverage_threshold": 0.8,
+        "red_flag_review_threshold": 1,
+    }
 
 
-def test_no_final_score_is_produced():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[_row(evidence_matrix_result=_evidence())]
+def test_main_passes_threshold_options(tmp_path, capsys):
+    rows = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    code = main(
+        [
+            "--input",
+            str(rows),
+            "--high-required-skill-coverage-threshold",
+            "0.9",
+            "--low-required-skill-coverage-threshold",
+            "0.4",
+            "--high-tool-coverage-threshold",
+            "0.7",
+            "--red-flag-review-threshold",
+            "2",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["feature_policy"] == {
+        "high_required_skill_coverage_threshold": 0.9,
+        "low_required_skill_coverage_threshold": 0.4,
+        "high_tool_coverage_threshold": 0.7,
+        "red_flag_review_threshold": 2,
+    }
+
+
+def test_main_returns_nonzero_for_missing_or_invalid_input(tmp_path, capsys):
+    assert main([]) == 2
+    missing = capsys.readouterr()
+    assert "error: --input is required" in missing.err
+    invalid = _write(tmp_path / "bad.json", "{")
+    assert main(["--input", str(invalid)]) == 1
+    bad = capsys.readouterr()
+    assert "error: invalid JSON" in bad.err
+
+
+def test_payload_contains_no_scores_tailoring_output_or_commands():
+    payload = build_dry_run_payload(
+        planning_rows=[_row(final_score=72)],
+        evidence_results={"job-1": _evidence()},
     )
     rendered = json.dumps(payload).lower()
     _assert_safe(payload)
-    assert payload["final_score_produced"] is False
-    assert payload["scoring_feature_summary"]["final_score_produced"] is False
-    assert payload["feature_packet"]["final_score_included"] is False
-    assert "application_score" not in payload
+    assert "generated_tailoring_text" not in rendered
     assert "provider_request" not in rendered
+    assert "network_request" not in rendered
     assert "mutation_command" not in rendered
+    assert "db_write_command" not in rendered
     assert "application_submission_command" not in rendered
-
-
-def test_policy_controls_coverage_band_and_red_flag_review():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[
-            _row(
-                evidence_matrix_result=_evidence(
-                    required=0.75,
-                    red_flags=[
-                        {"signal": "one", "status": "matched"},
-                        {"signal": "two", "status": "matched"},
-                    ],
-                )
-            )
-        ],
-        feature_policy={
-            "high_required_skill_coverage_threshold": 0.7,
-            "low_required_skill_coverage_threshold": 0.4,
-            "red_flag_review_threshold": 3,
-        },
-    )
-    _assert_safe(payload)
-    assert payload["feature_rows"][0]["coverage_band"] == "high"
-    assert payload["feature_rows"][0]["requires_red_flag_review"] is False
-    assert payload["feature_policy"]["red_flag_review_threshold"] == 3
-
-
-def test_missing_required_tools_packet_and_summary_are_deterministic():
-    payload = build_jd_evidence_final_scoring_feature_adapter_default_off(
-        planning_rows=[
-            _row(
-                evidence_matrix_result=_evidence(
-                    ready=True,
-                    required=0.4,
-                    tools=0.0,
-                    missing_required=["Python", "SQL"],
-                    missing_tools=["dbt"],
-                )
-            ),
-            {"job_id": "j2"},
-        ]
-    )
-    _assert_safe(payload)
-    assert payload["missing_required_skills_by_row"] == {
-        "item-1": ["Python", "SQL"],
-        "j2": [],
-    }
-    assert payload["missing_tools_by_row"] == {"item-1": ["dbt"], "j2": []}
-    assert payload["scoring_feature_summary"] == {
-        "feature_row_count": 2,
-        "evidence_ready_count": 1,
-        "evidence_missing_count": 1,
-        "high_coverage_count": 0,
-        "low_coverage_count": 1,
-        "red_flag_review_count": 0,
-        "final_score_produced": False,
-        "existing_score_changed": False,
-    }
-    assert payload["feature_packet"]["scoring_feature_rows"] == payload[
-        "scoring_feature_rows"
+    assert "application_score" not in payload
+    assert payload["dry_run_summary"]["final_score_produced"] is False
+    assert payload["dry_run_summary"]["existing_score_changed"] is False
+    assert payload["existing_scores_preserved"] is True
+    assert payload["existing_score_fields_detected"] == [
+        {"row_key": "item-1", "field": "final_score", "value": 72}
     ]
 
 
 def test_source_has_no_forbidden_imports_calls_or_writes():
-    source = HELPER_PATH.read_text(encoding="utf-8")
-    assert "from src." not in source
+    source = COMMAND_PATH.read_text(encoding="utf-8")
+    assert "build_jd_evidence_final_scoring_feature_adapter_default_off" in source
+    assert (
+        "from src.agents.jd_evidence_final_scoring_feature_adapter_default_off import"
+        in source
+    )
     for marker in FORBIDDEN_SOURCE_MARKERS:
         assert marker not in source
     for marker in FORBIDDEN_WRITE_MARKERS:
@@ -509,7 +518,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
         assert _sha256(ROOT / relative) == expected
 
 
-def test_changed_files_are_limited_to_phase36a_surface_and_legacy_guards():
+def test_changed_files_are_limited_to_phase36b_surface_and_legacy_guards():
     result = subprocess.run(
         ["git", "diff", "--name-only", "HEAD"],
         cwd=ROOT,
@@ -519,9 +528,6 @@ def test_changed_files_are_limited_to_phase36a_surface_and_legacy_guards():
     )
     changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
     allowed = {
-        "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py",
-        "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md",
-        "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
         "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
         "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
         "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",

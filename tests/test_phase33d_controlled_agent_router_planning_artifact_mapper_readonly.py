@@ -406,6 +406,9 @@ def test_changed_files_are_limited_to_phase33d_surface_and_legacy_guards():
         "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py",
         "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md",
         "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
+        "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
+        "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
+        "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
     }
     for line in result.stdout.splitlines():
         path = line[3:].strip().strip('"')

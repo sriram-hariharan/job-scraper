@@ -478,6 +478,9 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py",
         "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md",
         "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
+        "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
+        "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
+        "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
         # Pre-existing duplicate Phase 33A files in this workspace.
         "docs/phase33_controlled_agent_router_readonly 2.md",
         "tests/test_phase33a_controlled_agent_router_readonly 2.py",

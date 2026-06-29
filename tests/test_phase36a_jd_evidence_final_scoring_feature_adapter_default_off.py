@@ -545,6 +545,9 @@ def test_changed_files_are_limited_to_phase36a_surface_and_legacy_guards():
         "run_jd_evidence_score_impact_planning_artifact_annotator_dry_run.py",
         "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.md",
         "tests/test_phase39b_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.py",
+        "src/agents/jd_evidence_score_impact_review_packet_builder_default_off.py",
+        "docs/phase40_jd_evidence_score_impact_review_packet_builder_default_off.md",
+        "tests/test_phase40a_jd_evidence_score_impact_review_packet_builder_default_off.py",
     } | {
         path
         for path in changed

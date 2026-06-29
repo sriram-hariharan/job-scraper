@@ -548,6 +548,9 @@ def test_changed_files_are_limited_to_phase45a_and_legacy_guard_tests():
                 "run_controlled_exact_resume_change_set_provider_response_validation_dry_run.py",
                 "docs/phase45_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.md",
                 "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+                "src/agents/controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
+                "docs/phase46_controlled_exact_resume_change_set_provider_response_normalization_default_off.md",
+                "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
     }
     disallowed = [
         path

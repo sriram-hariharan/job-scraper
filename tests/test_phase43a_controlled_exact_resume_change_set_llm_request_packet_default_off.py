@@ -440,6 +440,9 @@ def test_changed_files_are_limited_to_phase43a_and_legacy_guards():
     allowed = {
         "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
         "docs/phase43_controlled_exact_resume_change_set_llm_request_packet_default_off.md",
+        "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",
+        "docs/phase43_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.md",
+        "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
         "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
     }
     legacy_guards = {

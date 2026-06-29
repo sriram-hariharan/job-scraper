@@ -290,6 +290,12 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
                                 "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
                                 "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
                                 "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
+                                "src/agents/jd_evidence_scoring_contribution_preview_default_off.py",
+                                "docs/phase37_jd_evidence_scoring_contribution_preview_default_off.md",
+                                "tests/test_phase37a_jd_evidence_scoring_contribution_preview_default_off.py",
+                                "run_jd_evidence_scoring_contribution_preview_dry_run.py",
+                                "docs/phase37_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.md",
+                                "tests/test_phase37b_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -416,11 +422,15 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
                 ROOT
                 / "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py"
             ],
-            [
-                ROOT
-                / "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py"
-            ],
-            [ROOT / "src/app/api.py"],
+                            [
+                                ROOT
+                                / "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py"
+                            ],
+                            [
+                                ROOT
+                                / "src/agents/jd_evidence_scoring_contribution_preview_default_off.py"
+                            ],
+                [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],
         [
             ROOT / "src/app/static/agentic_review.js",

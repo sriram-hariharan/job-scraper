@@ -6,50 +6,54 @@ import json
 from pathlib import Path
 import subprocess
 
-import run_jd_evidence_final_scoring_feature_adapter_dry_run as command
-from run_jd_evidence_final_scoring_feature_adapter_dry_run import (
+import run_jd_evidence_scoring_contribution_preview_dry_run as command
+from run_jd_evidence_scoring_contribution_preview_dry_run import (
     DryRunLoadError,
     build_dry_run_payload,
-    load_evidence_results_from_path,
-    load_planning_rows_from_path,
+    load_feature_packet_from_path,
+    load_scoring_feature_rows_from_path,
     main,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMAND_PATH = ROOT / "run_jd_evidence_final_scoring_feature_adapter_dry_run.py"
+COMMAND_PATH = ROOT / "run_jd_evidence_scoring_contribution_preview_dry_run.py"
 DOC_PATH = (
     ROOT
-    / "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md"
+    / "docs/phase37_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.md"
 )
 
 REQUIRED_KEYS = {
     "phase",
     "default_off",
-    "jd_evidence_final_scoring_feature_adapter_dry_run",
+    "jd_evidence_scoring_contribution_preview_dry_run",
     "dry_run_command_only",
     "read_only",
     "advisory_only",
-    "deterministic_scoring_feature_preparation",
+    "deterministic_contribution_preview",
     "requires_manual_user_control",
-    "planning_row_count",
-    "evidence_results_present",
-    "feature_policy",
-    "adapter_result",
-    "feature_packet",
-    "scoring_feature_rows",
-    "scoring_feature_summary",
+    "feature_packet_present",
+    "scoring_feature_rows_present",
+    "contribution_policy",
+    "preview_result",
+    "contribution_packet",
+    "contribution_rows",
+    "contribution_summary",
+    "positive_contribution_points_total",
+    "negative_contribution_points_total",
+    "bounded_contribution_points_total",
+    "high_positive_contribution_count",
+    "negative_contribution_count",
+    "red_flag_review_count",
     "existing_score_fields_detected",
     "existing_scores_preserved",
-    "evidence_ready_count",
-    "evidence_missing_count",
-    "high_coverage_count",
-    "low_coverage_count",
-    "red_flag_review_count",
+    "preview_ready_count",
+    "preview_blocked_count",
     "dry_run_summary",
     "dry_run_key",
     "final_score_produced",
     "existing_score_changed",
+    "matching_scoring_module_called",
     "llm_call_performed",
     "provider_call_performed",
     "network_call_performed",
@@ -57,8 +61,8 @@ REQUIRED_KEYS = {
     "relevance_prefilter_performed",
     "jd_intelligence_extraction_performed",
     "evidence_matching_performed",
+    "scoring_feature_preparation_performed",
     "final_scoring_performed",
-    "matching_scoring_module_called",
     "tailoring_opportunity_check_performed",
     "tailoring_runtime_call_performed",
     "ai_tailoring_generation_performed",
@@ -78,6 +82,7 @@ REQUIRED_KEYS = {
 FALSE_ACTION_KEYS = {
     "final_score_produced",
     "existing_score_changed",
+    "matching_scoring_module_called",
     "llm_call_performed",
     "provider_call_performed",
     "network_call_performed",
@@ -85,8 +90,8 @@ FALSE_ACTION_KEYS = {
     "relevance_prefilter_performed",
     "jd_intelligence_extraction_performed",
     "evidence_matching_performed",
+    "scoring_feature_preparation_performed",
     "final_scoring_performed",
-    "matching_scoring_module_called",
     "tailoring_opportunity_check_performed",
     "tailoring_runtime_call_performed",
     "ai_tailoring_generation_performed",
@@ -123,6 +128,7 @@ FORBIDDEN_SOURCE_MARKERS = (
     "database_url",
     "psycopg",
     "sqlite",
+    "subprocess",
     "requests",
     "httpx",
     "urllib",
@@ -132,8 +138,7 @@ FORBIDDEN_SOURCE_MARKERS = (
     "_run_live_llm_tailoring",
     "run_prefilter(",
     "score_resume_job_match(",
-    "build_jd_signal_resume_evidence_matrix_default_off(",
-    "build_jd_signal_planning_artifact_evidence_enricher_default_off(",
+    "build_jd_evidence_final_scoring_feature_adapter_default_off(",
     "execute_application(",
     "submit_application(",
     "provider_call(",
@@ -142,6 +147,7 @@ FORBIDDEN_SOURCE_MARKERS = (
 
 FORBIDDEN_WRITE_MARKERS = (
     ".update(",
+    "update(",
     ".write_text(",
     ".write_bytes(",
     ".mkdir(",
@@ -150,17 +156,18 @@ FORBIDDEN_WRITE_MARKERS = (
 )
 
 DOC_MARKERS = (
-    "phase 36b jd evidence final-scoring feature adapter dry-run command default-off",
-    "jd evidence final-scoring feature adapter dry-run command",
+    "phase 37b jd evidence scoring contribution preview dry-run command default-off",
+    "jd evidence scoring contribution preview dry-run command",
     "capability step on the revised path",
     "not another safety-wrapper chain",
-    "deterministic scoring feature preparation",
-    "reads supplied planning artifact file input",
-    "supports json, jsonl, and csv planning-like row inputs",
-    "supports supplied evidence results",
-    "calls the phase 36a jd evidence final-scoring feature adapter",
-    "prints final-scoring-ready feature packets to stdout",
+    "deterministic contribution preview",
+    "reads supplied feature packet file",
+    "supports json, jsonl, and csv scoring feature row inputs",
+    "supports supplied scoring feature rows",
+    "calls the phase 37a jd evidence scoring contribution preview helper",
+    "prints advisory contribution preview json to stdout",
     "does not write output files",
+    "produces bounded advisory contribution points",
     "preserves existing score fields",
     "does not produce final application score",
     "does not change existing scoring logic",
@@ -168,6 +175,7 @@ DOC_MARKERS = (
     "does not run relevance prefilter",
     "does not run jd intelligence extraction",
     "does not run evidence matching",
+    "does not run scoring feature preparation",
     "does not run tailoring opportunity check",
     "does not generate ai tailoring",
     "does not call tailoring runtime",
@@ -187,21 +195,25 @@ DOC_MARKERS = (
     "jd intelligence remains separate from final scoring",
     "evidence matching remains separate from final scoring",
     "scoring feature preparation remains separate from final scoring",
+    "contribution preview remains separate from final scoring",
     "final scoring remains deterministic and controlled by scoring logic",
-    "python run_jd_evidence_final_scoring_feature_adapter_dry_run.py --input path/to/planning_rows.json --evidence-results path/to/evidence_results.json",
+    'python run_jd_evidence_scoring_contribution_preview_dry_run.py --input path/to/feature_packet.json',
+    "phase37a-jd-evidence-scoring-contribution-preview-default-off-v1",
+    "phase36-jd-evidence-final-scoring-feature-adapter-release-v1",
+    "phase36b-jd-evidence-final-scoring-feature-adapter-dry-run-command-default-off-v1",
     "phase36a-jd-evidence-final-scoring-feature-adapter-default-off-v1",
     "phase35c-jd-signal-planning-artifact-evidence-enrichment-dry-run-command-default-off-v1",
     "phase35b-jd-signal-planning-artifact-evidence-enricher-default-off-v1",
     "phase35a-jd-signal-resume-evidence-matrix-default-off-v1",
     "phase34c-jd-intelligence-planning-artifact-enrichment-dry-run-command-default-off-v1",
-    "phase34b-jd-intelligence-planning-artifact-enricher-default-off-v1",
-    "phase34a-jd-intelligence-llm-signal-extractor-default-off-v1",
     "phase23-tailoring-agent-workflow-release-v1",
     "phase20d-no-auto-apply-safety-checkpoint-v1",
 )
 
 PROTECTED_HASHES = {
+    "src/agents/jd_evidence_scoring_contribution_preview_default_off.py": "6bfd39eb1bc51e01b990ca0a44e13645187eb0a07cb6ac1e91f6c9456cd41fd8",
     "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py": "f7ec839c8810439f9ceb2fccd9938d34cbb2f623590f0c2c2bf80afeba6cc105",
+    "run_jd_evidence_final_scoring_feature_adapter_dry_run.py": "1cae3e0cbefef29dcb176ce16df85d241d247411ab781eb5d838a21f9c425fad",
     "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py": "0404ff9c89895b13cf5ccc55029820d2ff5b82fb2dbd3c0c1e426bd0e83335c8",
     "src/agents/jd_signal_resume_evidence_matrix_default_off.py": "1d0275337f4785730b27515f0e9830601fd9e3cc941fe21d2f7bb8257d64e9be",
     "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py": "9db84fca7407329f0b0f84f46fb030f4c975fef9db0197188f0429b435f3c7c3",
@@ -235,50 +247,57 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
-def _evidence(
-    *,
-    ready: bool = True,
-    required: float = 0.8,
-    preferred: float = 0.5,
-    tools: float = 0.5,
-    responsibilities: float = 0.5,
-    missing_required: list[str] | None = None,
-    missing_tools: list[str] | None = None,
-    red_flags: list[dict] | None = None,
-) -> dict:
-    return {
-        "evidence_ready": ready,
-        "required_skill_coverage_ratio": required,
-        "preferred_skill_coverage_ratio": preferred,
-        "tool_coverage_ratio": tools,
-        "responsibility_coverage_ratio": responsibilities,
-        "missing_required_skills": missing_required or [],
-        "missing_tools": missing_tools or [],
-        "red_flag_findings": red_flags or [],
-    }
-
-
 def _row(**extra) -> dict:
     row = {
+        "row_key": "item-1",
         "item_id": "item-1",
         "job_id": "job-1",
         "title": "Data Engineer",
         "company": "Acme",
+        "existing_score_present": False,
+        "existing_score_field": "",
+        "existing_score_value": None,
+        "evidence_ready": True,
+        "scoring_inputs_ready": True,
+        "required_skill_coverage_ratio": 1.0,
+        "preferred_skill_coverage_ratio": 1.0,
+        "tool_coverage_ratio": 1.0,
+        "responsibility_coverage_ratio": 1.0,
+        "missing_required_skill_count": 0,
+        "missing_tool_count": 0,
+        "red_flag_count": 0,
+        "missing_required_skills": [],
+        "missing_tools": [],
+        "red_flag_findings": [],
+        "requires_red_flag_review": False,
     }
     for key, value in extra.items():
         row[key] = value
     return row
 
 
+def _packet(**extra) -> dict:
+    packet = {
+        "phase": "36A",
+        "packet_type": "jd_evidence_final_scoring_features",
+        "feature_row_count": 1,
+        "scoring_feature_rows": [_row()],
+        "final_score_included": False,
+    }
+    for key, value in extra.items():
+        packet[key] = value
+    return packet
+
+
 def _assert_safe(payload: dict) -> None:
     assert REQUIRED_KEYS <= payload.keys()
-    assert payload["phase"] == "36B"
+    assert payload["phase"] == "37B"
     assert payload["default_off"] is True
-    assert payload["jd_evidence_final_scoring_feature_adapter_dry_run"] is True
+    assert payload["jd_evidence_scoring_contribution_preview_dry_run"] is True
     assert payload["dry_run_command_only"] is True
     assert payload["read_only"] is True
     assert payload["advisory_only"] is True
-    assert payload["deterministic_scoring_feature_preparation"] is True
+    assert payload["deterministic_contribution_preview"] is True
     assert payload["requires_manual_user_control"] is True
     for key in FALSE_ACTION_KEYS:
         assert payload[key] is False
@@ -289,59 +308,64 @@ def test_command_module_is_import_safe(capsys):
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
-    assert callable(load_planning_rows_from_path)
-    assert callable(load_evidence_results_from_path)
+    assert callable(load_feature_packet_from_path)
+    assert callable(load_scoring_feature_rows_from_path)
     assert callable(build_dry_run_payload)
     assert callable(main)
 
 
-def test_planning_loader_loads_json_list_and_wrapped_rows(tmp_path):
-    plain = _write(tmp_path / "rows.json", json.dumps([_row()]))
-    for key in ("planning_rows", "rows", "items", "jobs", "feature_rows"):
-        wrapped = _write(tmp_path / f"{key}.json", json.dumps({key: [_row()]}))
-        assert load_planning_rows_from_path(wrapped) == [_row()]
-    assert load_planning_rows_from_path(plain) == [_row()]
-
-
-def test_planning_loader_loads_jsonl_and_csv_rows(tmp_path):
-    jsonl = _write(tmp_path / "rows.jsonl", json.dumps(_row()) + "\n")
-    csv_path = _write(tmp_path / "rows.csv", "job_id,title\nj1,Engineer\n")
-    assert load_planning_rows_from_path(jsonl) == [_row()]
-    assert load_planning_rows_from_path(csv_path) == [
-        {"job_id": "j1", "title": "Engineer"}
-    ]
-
-
-def test_evidence_results_loader_loads_json_shapes(tmp_path):
-    raw_list = _write(tmp_path / "list.json", json.dumps([_evidence()]))
-    keyed = _write(tmp_path / "keyed.json", json.dumps({"job-1": _evidence()}))
-    assert load_evidence_results_from_path(raw_list) == [_evidence()]
-    assert load_evidence_results_from_path(keyed) == {"job-1": _evidence()}
-    for key in (
-        "evidence_results",
-        "results",
-        "items",
-        "rows",
-        "feature_rows",
-        "scoring_feature_rows",
-    ):
-        wrapped = _write(tmp_path / f"{key}.json", json.dumps({key: [_evidence()]}))
-        assert load_evidence_results_from_path(wrapped) == [_evidence()]
-
-
-def test_evidence_results_loader_loads_jsonl_and_csv_rows(tmp_path):
-    jsonl = _write(tmp_path / "evidence.jsonl", json.dumps(_evidence()) + "\n")
-    csv_path = _write(
-        tmp_path / "evidence.csv",
-        "job_id,evidence_ready,required_skill_coverage_ratio\nj1,true,0.9\n",
+def test_feature_packet_loader_loads_json_feature_packet_shapes(tmp_path):
+    packet = _write(tmp_path / "packet.json", json.dumps(_packet()))
+    wrapped = _write(tmp_path / "wrapped.json", json.dumps({"feature_packet": _packet()}))
+    adapter = _write(
+        tmp_path / "adapter.json",
+        json.dumps({"adapter_result": {"feature_packet": _packet()}}),
     )
-    assert load_evidence_results_from_path(jsonl) == [_evidence()]
-    assert load_evidence_results_from_path(csv_path) == [
-        {
-            "job_id": "j1",
-            "evidence_ready": "true",
-            "required_skill_coverage_ratio": "0.9",
+    rows = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    assert load_feature_packet_from_path(packet)["scoring_feature_rows"] == [_row()]
+    assert load_feature_packet_from_path(wrapped)["scoring_feature_rows"] == [_row()]
+    assert load_feature_packet_from_path(adapter)["scoring_feature_rows"] == [_row()]
+    assert load_feature_packet_from_path(rows)["scoring_feature_rows"] == [_row()]
+
+
+def test_feature_packet_loader_loads_wrapped_rows_jsonl_and_csv(tmp_path):
+    for key in ("scoring_feature_rows", "feature_rows", "rows", "items"):
+        wrapped = _write(tmp_path / f"{key}.json", json.dumps({key: [_row()]}))
+        assert load_feature_packet_from_path(wrapped) == {
+            "scoring_feature_rows": [_row()]
         }
+    jsonl = _write(tmp_path / "rows.jsonl", json.dumps(_row()) + "\n")
+    csv_path = _write(
+        tmp_path / "rows.csv",
+        "row_key,job_id,evidence_ready,scoring_inputs_ready,required_skill_coverage_ratio\nitem-1,job-1,true,true,1\n",
+    )
+    assert load_feature_packet_from_path(jsonl) == {"scoring_feature_rows": [_row()]}
+    assert load_feature_packet_from_path(csv_path) == {
+        "scoring_feature_rows": [
+            {
+                "row_key": "item-1",
+                "job_id": "job-1",
+                "evidence_ready": "true",
+                "scoring_inputs_ready": "true",
+                "required_skill_coverage_ratio": "1",
+            }
+        ]
+    }
+
+
+def test_scoring_feature_row_loader_loads_json_jsonl_and_csv(tmp_path):
+    plain = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    wrapped = _write(
+        tmp_path / "wrapped.json",
+        json.dumps({"scoring_feature_rows": [_row()]}),
+    )
+    jsonl = _write(tmp_path / "rows.jsonl", json.dumps(_row()) + "\n")
+    csv_path = _write(tmp_path / "rows.csv", "row_key,job_id\nitem-1,job-1\n")
+    assert load_scoring_feature_rows_from_path(plain) == [_row()]
+    assert load_scoring_feature_rows_from_path(wrapped) == [_row()]
+    assert load_scoring_feature_rows_from_path(jsonl) == [_row()]
+    assert load_scoring_feature_rows_from_path(csv_path) == [
+        {"row_key": "item-1", "job_id": "job-1"}
     ]
 
 
@@ -349,115 +373,117 @@ def test_loader_error_paths_are_deterministic(tmp_path):
     unsupported = _write(tmp_path / "rows.yaml", "[]")
     invalid_json = _write(tmp_path / "bad.json", "{")
     invalid_jsonl = _write(tmp_path / "bad.jsonl", "[]\n")
-    invalid_shape = _write(tmp_path / "badshape.json", json.dumps({"foo": []}))
-    bad_evidence_shape = _write(tmp_path / "evidence.json", "1")
-    for path in (unsupported, invalid_json, invalid_jsonl, invalid_shape):
+    invalid_packet = _write(tmp_path / "badpacket.json", json.dumps({"foo": []}))
+    invalid_rows = _write(tmp_path / "badrows.json", json.dumps({"foo": []}))
+    for path in (unsupported, invalid_json, invalid_jsonl, invalid_packet):
         try:
-            load_planning_rows_from_path(path)
+            load_feature_packet_from_path(path)
         except ValueError as exc:
             assert str(exc)
         else:
-            raise AssertionError(f"expected planning loader failure for {path}")
+            raise AssertionError(f"expected feature packet loader failure for {path}")
     try:
-        load_evidence_results_from_path(bad_evidence_shape)
+        load_scoring_feature_rows_from_path(invalid_rows)
     except ValueError as exc:
-        assert "evidence results json" in str(exc)
+        assert "scoring_feature_rows" in str(exc)
     else:
-        raise AssertionError("expected evidence results loader failure")
+        raise AssertionError("expected scoring feature row loader failure")
 
 
-def test_build_dry_run_payload_returns_required_keys_and_counts():
-    payload = build_dry_run_payload(
-        planning_rows=[_row()],
-        evidence_results={"job-1": _evidence(required=0.9, tools=0.9)},
-        feature_policy={
-            "high_required_skill_coverage_threshold": 0.8,
-            "low_required_skill_coverage_threshold": 0.5,
-            "high_tool_coverage_threshold": 0.8,
-            "red_flag_review_threshold": 1,
-        },
-    )
+def test_build_dry_run_payload_returns_required_keys_and_preview_data():
+    payload = build_dry_run_payload(feature_packet=_packet())
     _assert_safe(payload)
-    assert payload["planning_row_count"] == 1
-    assert payload["evidence_results_present"] is True
-    assert payload["evidence_ready_count"] == 1
-    assert payload["evidence_missing_count"] == 0
-    assert payload["high_coverage_count"] == 1
-    assert payload["low_coverage_count"] == 0
-    assert payload["red_flag_review_count"] == 0
-    assert payload["feature_packet"] == payload["adapter_result"]["feature_packet"]
-    assert payload["scoring_feature_rows"] == payload["adapter_result"][
-        "scoring_feature_rows"
+    assert payload["feature_packet_present"] is True
+    assert payload["scoring_feature_rows_present"] is False
+    assert payload["preview_result"]["phase"] == "37A"
+    assert payload["contribution_packet"] == payload["preview_result"][
+        "contribution_packet"
     ]
-    assert payload["dry_run_summary"]["stdout_only"] is True
-    assert payload["dry_run_summary"]["output_file_written"] is False
+    assert payload["contribution_rows"] == payload["preview_result"][
+        "contribution_rows"
+    ]
+    assert payload["contribution_summary"] == payload["preview_result"][
+        "contribution_summary"
+    ]
+    assert payload["positive_contribution_points_total"] == 12.0
+    assert payload["negative_contribution_points_total"] == 0
+    assert payload["bounded_contribution_points_total"] == 12.0
+    assert payload["preview_ready_count"] == 1
+    assert payload["preview_blocked_count"] == 0
 
 
-def test_payload_exposes_missing_evidence_and_red_flag_review_rows():
+def test_explicit_scoring_feature_rows_take_precedence_and_preserve_scores():
     payload = build_dry_run_payload(
-        planning_rows=[_row(), _row(item_id="item-2", job_id="job-2")],
-        evidence_results={
-            "job-1": _evidence(
-                required=0.4,
-                tools=0.4,
-                missing_required=["Spark"],
-                missing_tools=["Airflow"],
-                red_flags=[{"signal": "travel", "status": "matched"}],
+        feature_packet=_packet(scoring_feature_rows=[_row(job_id="packet")]),
+        scoring_feature_rows=[
+            _row(
+                job_id="explicit",
+                existing_score_present=True,
+                existing_score_field="final_score",
+                existing_score_value=91,
             )
-        },
-        feature_policy={
-            "high_required_skill_coverage_threshold": 0.8,
-            "low_required_skill_coverage_threshold": 0.5,
-            "high_tool_coverage_threshold": 0.8,
-            "red_flag_review_threshold": 1,
-        },
+        ],
     )
     _assert_safe(payload)
-    assert payload["evidence_ready_count"] == 1
-    assert payload["evidence_missing_count"] == 1
-    assert payload["low_coverage_count"] == 1
-    assert payload["red_flag_review_count"] == 1
+    assert payload["scoring_feature_rows_present"] is True
+    assert payload["contribution_rows"][0]["job_id"] == "explicit"
+    assert payload["existing_scores_preserved"] is True
+    assert payload["existing_score_fields_detected"] == [
+        {"row_key": "item-1", "field": "final_score", "value": 91}
+    ]
 
 
 def test_main_prints_json_to_stdout_for_valid_input(tmp_path, capsys):
-    rows = _write(tmp_path / "rows.json", json.dumps([_row()]))
-    evidence = _write(tmp_path / "evidence.json", json.dumps({"job-1": _evidence()}))
-    code = main(["--input", str(rows), "--evidence-results", str(evidence)])
+    packet = _write(tmp_path / "packet.json", json.dumps(_packet()))
+    code = main(["--input", str(packet)])
     captured = capsys.readouterr()
     assert code == 0
     assert captured.err == ""
     payload = json.loads(captured.out)
     _assert_safe(payload)
-    assert payload["feature_policy"] == {
-        "high_required_skill_coverage_threshold": 0.8,
-        "low_required_skill_coverage_threshold": 0.5,
-        "high_tool_coverage_threshold": 0.8,
-        "red_flag_review_threshold": 1,
-    }
+    assert payload["contribution_policy"]["max_positive_contribution_points"] == 12.0
 
 
-def test_main_passes_threshold_options(tmp_path, capsys):
-    rows = _write(tmp_path / "rows.json", json.dumps([_row()]))
+def test_main_passes_contribution_policy_options(tmp_path, capsys):
+    packet = _write(tmp_path / "packet.json", json.dumps(_packet()))
     code = main(
         [
             "--input",
-            str(rows),
-            "--high-required-skill-coverage-threshold",
-            "0.9",
-            "--low-required-skill-coverage-threshold",
-            "0.4",
-            "--high-tool-coverage-threshold",
-            "0.7",
+            str(packet),
+            "--max-positive-contribution-points",
+            "5",
+            "--max-negative-contribution-points",
+            "-2",
+            "--required-skill-weight",
+            "4",
+            "--preferred-skill-weight",
+            "1",
+            "--tool-weight",
+            "1",
+            "--responsibility-weight",
+            "1",
+            "--missing-required-skill-penalty",
+            "-2",
+            "--missing-tool-penalty",
+            "-1",
+            "--red-flag-penalty",
+            "-4",
             "--red-flag-review-threshold",
             "2",
         ]
     )
     payload = json.loads(capsys.readouterr().out)
     assert code == 0
-    assert payload["feature_policy"] == {
-        "high_required_skill_coverage_threshold": 0.9,
-        "low_required_skill_coverage_threshold": 0.4,
-        "high_tool_coverage_threshold": 0.7,
+    assert payload["contribution_policy"] == {
+        "max_positive_contribution_points": 5.0,
+        "max_negative_contribution_points": -2.0,
+        "required_skill_weight": 4.0,
+        "preferred_skill_weight": 1.0,
+        "tool_weight": 1.0,
+        "responsibility_weight": 1.0,
+        "missing_required_skill_penalty": -2.0,
+        "missing_tool_penalty": -1.0,
+        "red_flag_penalty": -4.0,
         "red_flag_review_threshold": 2,
     }
 
@@ -472,11 +498,19 @@ def test_main_returns_nonzero_for_missing_or_invalid_input(tmp_path, capsys):
     assert "error: invalid JSON" in bad.err
 
 
-def test_payload_contains_no_scores_tailoring_output_or_commands():
-    payload = build_dry_run_payload(
-        planning_rows=[_row(final_score=72)],
-        evidence_results={"job-1": _evidence()},
-    )
+def test_command_does_not_write_output_files(tmp_path, capsys):
+    packet = _write(tmp_path / "packet.json", json.dumps(_packet()))
+    before = sorted(path.name for path in tmp_path.iterdir())
+    assert main(["--input", str(packet)]) == 0
+    after = sorted(path.name for path in tmp_path.iterdir())
+    assert before == after
+    assert json.loads(capsys.readouterr().out)["dry_run_summary"][
+        "output_file_written"
+    ] is False
+
+
+def test_payload_contains_no_tailoring_output_score_or_commands():
+    payload = build_dry_run_payload(feature_packet=_packet())
     rendered = json.dumps(payload).lower()
     _assert_safe(payload)
     assert "generated_tailoring_text" not in rendered
@@ -486,19 +520,17 @@ def test_payload_contains_no_scores_tailoring_output_or_commands():
     assert "db_write_command" not in rendered
     assert "application_submission_command" not in rendered
     assert "application_score" not in payload
+    assert payload["real_tailoring_output_created"] is False
+    assert payload["final_score_produced"] is False
     assert payload["dry_run_summary"]["final_score_produced"] is False
     assert payload["dry_run_summary"]["existing_score_changed"] is False
-    assert payload["existing_scores_preserved"] is True
-    assert payload["existing_score_fields_detected"] == [
-        {"row_key": "item-1", "field": "final_score", "value": 72}
-    ]
 
 
 def test_source_has_no_forbidden_imports_calls_or_writes():
     source = COMMAND_PATH.read_text(encoding="utf-8")
-    assert "build_jd_evidence_final_scoring_feature_adapter_default_off" in source
+    assert "build_jd_evidence_scoring_contribution_preview_default_off" in source
     assert (
-        "from src.agents.jd_evidence_final_scoring_feature_adapter_default_off import"
+        "from src.agents.jd_evidence_scoring_contribution_preview_default_off import"
         in source
     )
     for marker in FORBIDDEN_SOURCE_MARKERS:
@@ -518,7 +550,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
         assert _sha256(ROOT / relative) == expected
 
 
-def test_changed_files_are_limited_to_phase36b_surface_and_legacy_guards():
+def test_changed_files_are_limited_to_phase37b_surface_and_legacy_guards():
     result = subprocess.run(
         ["git", "diff", "--name-only", "HEAD"],
         cwd=ROOT,
@@ -528,12 +560,6 @@ def test_changed_files_are_limited_to_phase36b_surface_and_legacy_guards():
     )
     changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
     allowed = {
-        "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
-        "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
-        "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
-        "src/agents/jd_evidence_scoring_contribution_preview_default_off.py",
-        "docs/phase37_jd_evidence_scoring_contribution_preview_default_off.md",
-        "tests/test_phase37a_jd_evidence_scoring_contribution_preview_default_off.py",
         "run_jd_evidence_scoring_contribution_preview_dry_run.py",
         "docs/phase37_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.md",
         "tests/test_phase37b_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.py",

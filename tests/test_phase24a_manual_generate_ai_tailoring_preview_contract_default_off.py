@@ -413,6 +413,14 @@ def test_phase24a_changes_only_helper_doc_test_and_legacy_guards():
                                 "run_jd_evidence_scoring_contribution_preview_dry_run.py",
                                 "docs/phase37_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.md",
                                 "tests/test_phase37b_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.py",
+                                "src/agents/jd_evidence_score_impact_preview_default_off.py",
+                                "docs/phase38_jd_evidence_score_impact_preview_default_off.md",
+                                "tests/test_phase38a_jd_evidence_score_impact_preview_default_off.py",
+                                "tests/test_phase38a_jd_evidence_score_impact_preview_default_off 2.py",
+                                "\"tests/test_phase38a_jd_evidence_score_impact_preview_default_off 2.py\"",
+                                "run_jd_evidence_score_impact_preview_dry_run.py",
+                                "docs/phase38_jd_evidence_score_impact_preview_dry_run_command_default_off.md",
+                                "tests/test_phase38b_jd_evidence_score_impact_preview_dry_run_command_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

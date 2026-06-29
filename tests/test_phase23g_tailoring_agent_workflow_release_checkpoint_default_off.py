@@ -189,6 +189,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
         "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
         "src/agents/jd_signal_resume_evidence_matrix_default_off.py",
+        "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py",
     }
 
     assert changed_runtime == set()
@@ -219,6 +220,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/jd_intelligence_llm_signal_extractor_default_off.py"
     and path != "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py"
     and path != "src/agents/jd_signal_resume_evidence_matrix_default_off.py"
+    and path != "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py"
     ]
     forbidden = (
         "provider_call(",
@@ -376,6 +378,9 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
                                 "src/agents/jd_signal_resume_evidence_matrix_default_off.py",
                                 "docs/phase35_jd_signal_resume_evidence_matrix_default_off.md",
                                 "tests/test_phase35a_jd_signal_resume_evidence_matrix_default_off.py",
+                                "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py",
+                                "docs/phase35_jd_signal_planning_artifact_evidence_enricher_default_off.md",
+                                "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

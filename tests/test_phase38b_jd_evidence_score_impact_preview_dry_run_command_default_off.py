@@ -1,0 +1,577 @@
+from __future__ import annotations
+
+from hashlib import sha256
+import importlib
+import json
+from pathlib import Path
+import subprocess
+
+import pytest
+
+import run_jd_evidence_score_impact_preview_dry_run as command
+
+
+ROOT = Path(__file__).resolve().parents[1]
+COMMAND_PATH = ROOT / "run_jd_evidence_score_impact_preview_dry_run.py"
+DOC_PATH = (
+    ROOT
+    / "docs/phase38_jd_evidence_score_impact_preview_dry_run_command_default_off.md"
+)
+
+REQUIRED_KEYS = {
+    "phase",
+    "default_off",
+    "jd_evidence_score_impact_preview_dry_run",
+    "dry_run_command_only",
+    "read_only",
+    "advisory_only",
+    "preview_only",
+    "deterministic_score_impact_preview",
+    "requires_manual_user_control",
+    "contribution_packet_present",
+    "contribution_rows_present",
+    "impact_policy",
+    "impact_result",
+    "impact_packet",
+    "impact_rows",
+    "impact_summary",
+    "preview_score_available_count",
+    "preview_score_blocked_count",
+    "positive_impact_count",
+    "negative_impact_count",
+    "neutral_impact_count",
+    "red_flag_review_count",
+    "existing_score_fields_detected",
+    "existing_scores_preserved",
+    "score_preview_values",
+    "dry_run_summary",
+    "dry_run_key",
+    "hypothetical_score_preview_produced",
+    "final_score_produced",
+    "existing_score_changed",
+    "matching_scoring_module_called",
+    "llm_call_performed",
+    "provider_call_performed",
+    "network_call_performed",
+    "stage_execution_performed",
+    "relevance_prefilter_performed",
+    "jd_intelligence_extraction_performed",
+    "evidence_matching_performed",
+    "scoring_feature_preparation_performed",
+    "contribution_preview_performed",
+    "final_scoring_performed",
+    "tailoring_opportunity_check_performed",
+    "tailoring_runtime_call_performed",
+    "ai_tailoring_generation_performed",
+    "real_tailoring_output_created",
+    "resume_rewrite_performed",
+    "resume_overwrite_performed",
+    "resume_mutation_performed",
+    "application_submission_performed",
+    "database_write_performed",
+    "persistence_performed",
+    "execution_performed",
+    "submission_performed",
+    "auto_apply_performed",
+    "auto_submit_performed",
+}
+
+FALSE_ACTION_KEYS = {
+    "final_score_produced",
+    "existing_score_changed",
+    "matching_scoring_module_called",
+    "llm_call_performed",
+    "provider_call_performed",
+    "network_call_performed",
+    "stage_execution_performed",
+    "relevance_prefilter_performed",
+    "jd_intelligence_extraction_performed",
+    "evidence_matching_performed",
+    "scoring_feature_preparation_performed",
+    "contribution_preview_performed",
+    "final_scoring_performed",
+    "tailoring_opportunity_check_performed",
+    "tailoring_runtime_call_performed",
+    "ai_tailoring_generation_performed",
+    "real_tailoring_output_created",
+    "resume_rewrite_performed",
+    "resume_overwrite_performed",
+    "resume_mutation_performed",
+    "application_submission_performed",
+    "database_write_performed",
+    "persistence_performed",
+    "execution_performed",
+    "submission_performed",
+    "auto_apply_performed",
+    "auto_submit_performed",
+}
+
+FORBIDDEN_SOURCE_MARKERS = (
+    "from src.pipeline",
+    "import src.pipeline",
+    "from src.matching",
+    "import src.matching",
+    "from src.tailoring",
+    "import src.tailoring",
+    "generate_tailoring_suggestions",
+    "application_execution_queue",
+    "from src.app",
+    "import src.app",
+    "from src.storage",
+    "import src.storage",
+    "requests",
+    "httpx",
+    "urllib",
+    "openai",
+    "anthropic",
+    "psycopg",
+    "sqlite",
+    "subprocess",
+    "run_prefilter(",
+    "score_resume_job_match(",
+    "build_jd_evidence_scoring_contribution_preview_default_off(",
+    "execute_application(",
+    "submit_application(",
+    "provider_call(",
+    "network_call(",
+)
+
+FORBIDDEN_WRITE_MARKERS = (
+    ".update(",
+    "update(",
+    ".write_text(",
+    ".write_bytes(",
+    ".mkdir(",
+    ".save(",
+    ".insert(",
+)
+
+DOC_MARKERS = (
+    "phase 38b jd evidence score impact preview dry-run command default-off",
+    "jd evidence score impact preview dry-run command",
+    "capability step on the revised path",
+    "not another safety-wrapper chain",
+    "deterministic score impact preview",
+    "reads supplied contribution packet file",
+    "supports json, jsonl, and csv contribution row inputs",
+    "supports supplied contribution rows",
+    "calls the phase 38a jd evidence score impact preview helper",
+    "prints hypothetical score impact preview json to stdout",
+    "does not write output files",
+    "produces hypothetical score preview values",
+    "preserves existing score fields",
+    "does not produce final application score",
+    "does not change existing scoring logic",
+    "does not call matching/scoring modules",
+    "does not run relevance prefilter",
+    "does not run jd intelligence extraction",
+    "does not run evidence matching",
+    "does not run scoring feature preparation",
+    "does not run contribution preview",
+    "does not run tailoring opportunity check",
+    "does not generate ai tailoring",
+    "does not call tailoring runtime",
+    "does not create real tailoring output",
+    "does not create resume rewrites",
+    "does not overwrite resumes",
+    "does not mutate resumes",
+    "does not persist data",
+    "does not write to database",
+    "does not execute applications",
+    "does not submit applications",
+    "no auto-apply",
+    "no auto-submit",
+    "no autonomous application execution",
+    "no automatic job application submission",
+    "manual user control remains required",
+    "jd intelligence remains separate from final scoring",
+    "evidence matching remains separate from final scoring",
+    "scoring feature preparation remains separate from final scoring",
+    "contribution preview remains separate from final scoring",
+    "score impact preview remains separate from final scoring",
+    "final scoring remains deterministic and controlled by scoring logic",
+    "phase38a-jd-evidence-score-impact-preview-default-off-v1",
+    "phase37-jd-evidence-scoring-contribution-preview-release-v1",
+    "phase37b-jd-evidence-scoring-contribution-preview-dry-run-command-default-off-v1",
+    "phase37a-jd-evidence-scoring-contribution-preview-default-off-v1",
+    "phase36-jd-evidence-final-scoring-feature-adapter-release-v1",
+    "phase36b-jd-evidence-final-scoring-feature-adapter-dry-run-command-default-off-v1",
+    "phase36a-jd-evidence-final-scoring-feature-adapter-default-off-v1",
+    "phase35c-jd-signal-planning-artifact-evidence-enrichment-dry-run-command-default-off-v1",
+    "phase34c-jd-intelligence-planning-artifact-enrichment-dry-run-command-default-off-v1",
+    "phase23-tailoring-agent-workflow-release-v1",
+    "phase20d-no-auto-apply-safety-checkpoint-v1",
+)
+
+PROTECTED_HASHES = {
+    "src/agents/jd_evidence_score_impact_preview_default_off.py": "94799582377fabd147fb134746d5b17a88b500589a6241e91a263356f1678ef1",
+    "src/agents/jd_evidence_scoring_contribution_preview_default_off.py": "6bfd39eb1bc51e01b990ca0a44e13645187eb0a07cb6ac1e91f6c9456cd41fd8",
+    "run_jd_evidence_scoring_contribution_preview_dry_run.py": "3890723174effc02370619c563ca33f41101f55318bd4c54796a9a03408aeae5",
+    "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py": "f7ec839c8810439f9ceb2fccd9938d34cbb2f623590f0c2c2bf80afeba6cc105",
+    "run_jd_evidence_final_scoring_feature_adapter_dry_run.py": "1cae3e0cbefef29dcb176ce16df85d241d247411ab781eb5d838a21f9c425fad",
+    "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py": "0404ff9c89895b13cf5ccc55029820d2ff5b82fb2dbd3c0c1e426bd0e83335c8",
+    "src/agents/jd_signal_resume_evidence_matrix_default_off.py": "1d0275337f4785730b27515f0e9830601fd9e3cc941fe21d2f7bb8257d64e9be",
+    "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py": "9db84fca7407329f0b0f84f46fb030f4c975fef9db0197188f0429b435f3c7c3",
+    "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py": "f8e365ab51de647dc6b45ff0c99cce075273eec61e12fc96c744118e1ca68c53",
+    "src/agents/jd_intelligence_llm_signal_extractor_default_off.py": "a73124801ce6768aebb934e1c6a7e76d4f9888bbb7b0ca28eb93e882e06f4f6c",
+    "run_jd_intelligence_planning_artifact_enrichment_dry_run.py": "d3e45057168f4daabba13077f0d27b6eb89be4d2f443c4a43a42274557ef26bb",
+    "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py": "1966a4d95eaf57b735545efd00e28803bba077192c81668165e9b3f491491fe8",
+    "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py": "7824233cbb4c6efd75481a8097a041488adfbd53f7c97e4832c02b8822741834",
+    "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py": "4f01b4e58c8e517ec633331da44341ee5596d486ae7d40d38fdca4666d6fa47e",
+    "src/agents/controlled_agent_router_readonly.py": "c1cac3d8d1858b5143d0c3ca0082f3b908410020a0e4220c1dea9531cbf3655d",
+    "run_controlled_agent_router_planning_artifact_dry_run.py": "1e49a69da5b306272319f2bef5e7162467f294aff4cbe37e8167125a56777dc4",
+    "src/app/api.py": "dd69c4813e4e25f65f611a4dadea5094e524ecd1c3d2f250ff859673d24af2d9",
+    "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
+    "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
+    "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
+    "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
+    "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
+    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
+    "generate_tailoring_suggestions.py": "a5e3dda138232fadc6d69bd9f2468459ce2759d961687bf1fa9ee9970c5490c2",
+    "application_execution_queue.py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+}
+
+
+def _sha256(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def _row(**extra) -> dict:
+    row = {
+        "row_key": "row-1",
+        "item_id": "item-1",
+        "job_id": "job-1",
+        "title": "Data Engineer",
+        "company": "Acme",
+        "existing_score_present": True,
+        "existing_score_field": "final_score",
+        "existing_score_value": 80,
+        "bounded_advisory_contribution_points": 7,
+        "requires_red_flag_review": False,
+    }
+    for key, value in extra.items():
+        row[key] = value
+    return row
+
+
+def _json(path: Path, payload) -> Path:
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _assert_safe(payload: dict) -> None:
+    assert REQUIRED_KEYS <= payload.keys()
+    assert payload["phase"] == "38B"
+    assert payload["default_off"] is True
+    assert payload["jd_evidence_score_impact_preview_dry_run"] is True
+    assert payload["dry_run_command_only"] is True
+    assert payload["read_only"] is True
+    assert payload["advisory_only"] is True
+    assert payload["preview_only"] is True
+    assert payload["deterministic_score_impact_preview"] is True
+    assert payload["requires_manual_user_control"] is True
+    assert payload["hypothetical_score_preview_produced"] is True
+    for key in FALSE_ACTION_KEYS:
+        assert payload[key] is False
+
+
+def test_command_module_is_import_safe_and_exposes_required_functions(capsys):
+    importlib.reload(command)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert callable(command.load_contribution_packet_from_path)
+    assert callable(command.load_contribution_rows_from_path)
+    assert callable(command.build_dry_run_payload)
+    assert callable(command.main)
+
+
+def test_contribution_packet_loader_accepts_json_packet_dictionary(tmp_path):
+    packet = {"packet_type": "contribution", "contribution_rows": [_row()]}
+    path = _json(tmp_path / "packet.json", packet)
+    assert command.load_contribution_packet_from_path(path) == packet
+
+
+def test_contribution_packet_loader_accepts_wrapped_contribution_packet(tmp_path):
+    path = _json(
+        tmp_path / "wrapped.json",
+        {"contribution_packet": {"contribution_rows": [_row(job_id="wrapped")]}},
+    )
+    loaded = command.load_contribution_packet_from_path(path)
+    assert loaded["contribution_rows"][0]["job_id"] == "wrapped"
+
+
+def test_contribution_packet_loader_accepts_preview_result_packet(tmp_path):
+    path = _json(
+        tmp_path / "preview.json",
+        {
+            "preview_result": {
+                "contribution_packet": {"contribution_rows": [_row(job_id="preview")]}
+            }
+        },
+    )
+    loaded = command.load_contribution_packet_from_path(path)
+    assert loaded["contribution_rows"][0]["job_id"] == "preview"
+
+
+def test_contribution_packet_loader_accepts_json_rows_and_wrapped_rows(tmp_path):
+    list_path = _json(tmp_path / "rows.json", [_row(job_id="list")])
+    wrapped_path = _json(tmp_path / "wrapped_rows.json", {"rows": [_row(job_id="rows")]})
+    items_path = _json(tmp_path / "items.json", {"items": [_row(job_id="items")]})
+    direct_path = _json(
+        tmp_path / "contribution_rows.json",
+        {"contribution_rows": [_row(job_id="direct")]},
+    )
+    assert command.load_contribution_packet_from_path(list_path)["contribution_rows"][0]["job_id"] == "list"
+    assert command.load_contribution_packet_from_path(wrapped_path)["contribution_rows"][0]["job_id"] == "rows"
+    assert command.load_contribution_packet_from_path(items_path)["contribution_rows"][0]["job_id"] == "items"
+    assert command.load_contribution_packet_from_path(direct_path)["contribution_rows"][0]["job_id"] == "direct"
+
+
+def test_contribution_packet_loader_accepts_jsonl_and_csv_rows(tmp_path):
+    jsonl_path = tmp_path / "rows.jsonl"
+    jsonl_path.write_text(json.dumps(_row(job_id="jsonl")) + "\n\n", encoding="utf-8")
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(
+        "job_id,existing_score_present,existing_score_value,bounded_advisory_contribution_points\n"
+        "csv,true,70,2\n",
+        encoding="utf-8",
+    )
+    assert command.load_contribution_packet_from_path(jsonl_path)["contribution_rows"][0]["job_id"] == "jsonl"
+    assert command.load_contribution_packet_from_path(csv_path)["contribution_rows"][0]["job_id"] == "csv"
+
+
+def test_explicit_contribution_row_loader_accepts_json_list_and_wrapped_json(tmp_path):
+    list_path = _json(tmp_path / "rows.json", [_row(job_id="list")])
+    wrapped_path = _json(
+        tmp_path / "wrapped.json",
+        {"contribution_rows": [_row(job_id="wrapped")]},
+    )
+    assert command.load_contribution_rows_from_path(list_path)[0]["job_id"] == "list"
+    assert command.load_contribution_rows_from_path(wrapped_path)[0]["job_id"] == "wrapped"
+
+
+def test_explicit_contribution_row_loader_accepts_jsonl_and_csv(tmp_path):
+    jsonl_path = tmp_path / "rows.jsonl"
+    jsonl_path.write_text(json.dumps(_row(job_id="jsonl")) + "\n", encoding="utf-8")
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(
+        "job_id,existing_score_present,existing_score_value,bounded_advisory_contribution_points\n"
+        "csv,true,70,2\n",
+        encoding="utf-8",
+    )
+    assert command.load_contribution_rows_from_path(jsonl_path)[0]["job_id"] == "jsonl"
+    assert command.load_contribution_rows_from_path(csv_path)[0]["job_id"] == "csv"
+
+
+def test_loaders_raise_deterministic_errors_for_bad_inputs(tmp_path):
+    unsupported = tmp_path / "rows.txt"
+    unsupported.write_text("[]", encoding="utf-8")
+    invalid_json = tmp_path / "bad.json"
+    invalid_json.write_text("{", encoding="utf-8")
+    invalid_jsonl = tmp_path / "bad.jsonl"
+    invalid_jsonl.write_text('{"ok": true}\n{', encoding="utf-8")
+    invalid_packet = _json(tmp_path / "bad_packet.json", {"unexpected": []})
+    invalid_rows = _json(tmp_path / "bad_rows.json", {"contribution_rows": ["bad"]})
+    invalid_csv = tmp_path / "bad.csv"
+    invalid_csv.write_text("a,b\n1,2,3\n", encoding="utf-8")
+
+    with pytest.raises(command.DryRunLoadError, match="unsupported"):
+        command.load_contribution_packet_from_path(unsupported)
+    with pytest.raises(command.DryRunLoadError, match="invalid JSON"):
+        command.load_contribution_packet_from_path(invalid_json)
+    with pytest.raises(command.DryRunLoadError, match="invalid JSONL"):
+        command.load_contribution_packet_from_path(invalid_jsonl)
+    with pytest.raises(command.DryRunLoadError, match="must include"):
+        command.load_contribution_packet_from_path(invalid_packet)
+    with pytest.raises(command.DryRunLoadError, match="must be a JSON object"):
+        command.load_contribution_rows_from_path(invalid_rows)
+    with pytest.raises(command.DryRunLoadError, match="invalid CSV"):
+        command.load_contribution_rows_from_path(invalid_csv)
+
+
+def test_build_dry_run_payload_calls_phase38a_helper_and_exposes_required_payload(monkeypatch):
+    calls = []
+
+    def fake_helper(*, contribution_packet=None, contribution_rows=None, impact_policy=None):
+        calls.append(
+            {
+                "contribution_packet": contribution_packet,
+                "contribution_rows": contribution_rows,
+                "impact_policy": impact_policy,
+            }
+        )
+        return {
+            "impact_policy": {"score_floor": 0},
+            "impact_packet": {"packet_type": "jd_evidence_score_impact_preview"},
+            "impact_rows": [
+                {
+                    "row_key": "row-1",
+                    "hypothetical_score_preview": 87,
+                    "score_preview_available": True,
+                    "impact_band": "positive",
+                }
+            ],
+            "impact_summary": {"preview_score_available_count": 1},
+            "preview_score_available_count": 1,
+            "preview_score_blocked_count": 0,
+            "positive_impact_count": 1,
+            "negative_impact_count": 0,
+            "neutral_impact_count": 0,
+            "red_flag_review_count": 0,
+            "existing_score_fields_detected": [
+                {"row_key": "row-1", "field": "final_score", "value": 80}
+            ],
+            "existing_scores_preserved": True,
+            "score_preview_values": [
+                {
+                    "row_key": "row-1",
+                    "base_score_for_preview": 80,
+                    "hypothetical_score_preview": 87,
+                    "score_preview_delta": 7,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(command, "build_jd_evidence_score_impact_preview_default_off", fake_helper)
+    payload = command.build_dry_run_payload(
+        contribution_packet={"contribution_rows": [_row()]},
+        contribution_rows=[_row(job_id="explicit")],
+        impact_policy={"score_floor": 0},
+    )
+
+    _assert_safe(payload)
+    assert calls == [
+        {
+            "contribution_packet": {"contribution_rows": [_row()]},
+            "contribution_rows": [_row(job_id="explicit")],
+            "impact_policy": {"score_floor": 0},
+        }
+    ]
+    assert payload["impact_packet"]["packet_type"] == "jd_evidence_score_impact_preview"
+    assert payload["impact_rows"][0]["hypothetical_score_preview"] == 87
+    assert payload["impact_summary"]["preview_score_available_count"] == 1
+    assert payload["preview_score_available_count"] == 1
+    assert payload["preview_score_blocked_count"] == 0
+    assert payload["positive_impact_count"] == 1
+    assert payload["negative_impact_count"] == 0
+    assert payload["neutral_impact_count"] == 0
+    assert payload["red_flag_review_count"] == 0
+    assert payload["existing_score_fields_detected"][0]["field"] == "final_score"
+    assert payload["existing_scores_preserved"] is True
+    assert payload["score_preview_values"][0]["hypothetical_score_preview"] == 87
+
+
+def test_real_payload_preserves_existing_scores_and_has_no_final_score_or_tailoring_output():
+    original_row = _row(existing_score_value=91)
+    payload = command.build_dry_run_payload(contribution_rows=[original_row])
+    _assert_safe(payload)
+    assert original_row["existing_score_value"] == 91
+    assert payload["existing_score_fields_detected"] == [
+        {"row_key": "row-1", "field": "final_score", "value": 91}
+    ]
+    assert payload["existing_scores_preserved"] is True
+    assert payload["score_preview_values"][0]["hypothetical_score_preview"] == 98.0
+    encoded = json.dumps(payload).lower()
+    assert "generated_tailoring_text" not in encoded
+    assert "tailored_resume" not in encoded
+    assert "final_application_score" not in encoded
+    assert payload["real_tailoring_output_created"] is False
+
+
+def test_command_main_prints_json_to_stdout_for_valid_input(tmp_path, capsys):
+    path = _json(tmp_path / "packet.json", {"contribution_rows": [_row()]})
+    code = command.main(
+        [
+            "--input",
+            str(path),
+            "--score-floor",
+            "0",
+            "--score-ceiling",
+            "100",
+            "--default-base-score",
+            "50",
+            "--round-digits",
+            "2",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    _assert_safe(payload)
+    assert payload["impact_policy"]["score_ceiling"] == 100.0
+    assert payload["dry_run_summary"]["stdout_only"] is True
+
+
+def test_command_main_returns_nonzero_for_missing_and_invalid_input(tmp_path, capsys):
+    missing_code = command.main([])
+    missing = capsys.readouterr()
+    assert missing_code != 0
+    assert "error:" in missing.err
+    assert missing.out == ""
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("{", encoding="utf-8")
+    invalid_code = command.main(["--input", str(bad)])
+    invalid = capsys.readouterr()
+    assert invalid_code != 0
+    assert "invalid JSON" in invalid.err
+    assert invalid.out == ""
+
+
+def test_command_does_not_write_output_files(tmp_path, capsys):
+    path = _json(tmp_path / "packet.json", {"contribution_rows": [_row()]})
+    before = sorted(item.name for item in tmp_path.iterdir())
+    assert command.main(["--input", str(path)]) == 0
+    capsys.readouterr()
+    after = sorted(item.name for item in tmp_path.iterdir())
+    assert after == before
+
+
+def test_source_has_no_forbidden_imports_calls_or_writes():
+    source = COMMAND_PATH.read_text(encoding="utf-8")
+    assert (
+        "from src.agents.jd_evidence_score_impact_preview_default_off import"
+        in source
+    )
+    assert "build_jd_evidence_score_impact_preview_default_off(" in source
+    for marker in FORBIDDEN_SOURCE_MARKERS:
+        assert marker not in source
+    for marker in FORBIDDEN_WRITE_MARKERS:
+        assert marker not in source
+
+
+def test_docs_contain_required_markers_and_references():
+    text = DOC_PATH.read_text(encoding="utf-8").lower()
+    for marker in DOC_MARKERS:
+        assert marker in text
+
+
+def test_protected_runtime_files_are_unchanged_by_hash():
+    for relative_path, expected_hash in PROTECTED_HASHES.items():
+        assert _sha256(ROOT / relative_path) == expected_hash
+
+
+def test_changed_files_are_limited_to_phase38b_and_legacy_guard_tests():
+    result = subprocess.run(
+        ["git", "diff", "--name-only"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    always_allowed = {
+        "run_jd_evidence_score_impact_preview_dry_run.py",
+        "docs/phase38_jd_evidence_score_impact_preview_dry_run_command_default_off.md",
+        "tests/test_phase38b_jd_evidence_score_impact_preview_dry_run_command_default_off.py",
+    }
+    unexpected = {
+        path
+        for path in changed
+        if path not in always_allowed
+        and not (path.startswith("tests/test_") and path.endswith(".py"))
+    }
+    assert unexpected == set()

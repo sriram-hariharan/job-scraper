@@ -555,6 +555,9 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
                                 "tests/test_phase40b_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.py",
                                 "src/agents/jd_evidence_score_impact_review_queue_builder_default_off.py",
                                 "docs/phase41_jd_evidence_score_impact_review_queue_builder_default_off.md",
+                                "run_jd_evidence_score_impact_review_queue_builder_dry_run.py",
+                                "docs/phase41_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.md",
+                                "tests/test_phase41b_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.py",
                                 "tests/test_phase41a_jd_evidence_score_impact_review_queue_builder_default_off.py",
         }
     legacy_guards = {

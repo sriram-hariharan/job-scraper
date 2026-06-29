@@ -537,6 +537,9 @@ def test_phase23f_changes_only_static_docs_tests_and_legacy_guards():
                                 "tests/test_phase40b_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.py",
                                 "src/agents/jd_evidence_score_impact_review_queue_builder_default_off.py",
                                 "docs/phase41_jd_evidence_score_impact_review_queue_builder_default_off.md",
+                                "run_jd_evidence_score_impact_review_queue_builder_dry_run.py",
+                                "docs/phase41_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.md",
+                                "tests/test_phase41b_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.py",
                                 "tests/test_phase41a_jd_evidence_score_impact_review_queue_builder_default_off.py",
     }
     legacy_guards = {

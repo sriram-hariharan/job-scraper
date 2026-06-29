@@ -509,6 +509,9 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "tests/test_phase40b_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.py",
         "src/agents/jd_evidence_score_impact_review_queue_builder_default_off.py",
         "docs/phase41_jd_evidence_score_impact_review_queue_builder_default_off.md",
+        "run_jd_evidence_score_impact_review_queue_builder_dry_run.py",
+        "docs/phase41_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.md",
+        "tests/test_phase41b_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.py",
         "tests/test_phase41a_jd_evidence_score_impact_review_queue_builder_default_off.py",
         # Pre-existing duplicate Phase 33A files in this workspace.
         "docs/phase33_controlled_agent_router_readonly 2.md",

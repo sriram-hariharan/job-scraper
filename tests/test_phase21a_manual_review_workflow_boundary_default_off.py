@@ -325,6 +325,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
                                 "tests/test_phase40b_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.py",
                                 "src/agents/jd_evidence_score_impact_review_queue_builder_default_off.py",
                                 "docs/phase41_jd_evidence_score_impact_review_queue_builder_default_off.md",
+                                "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
+                                "docs/phase42_exact_resume_change_set_proposal_builder_default_off.md",
+                                "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
                                 "run_jd_evidence_score_impact_review_queue_builder_dry_run.py",
                                 "docs/phase41_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.md",
                                 "tests/test_phase41b_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.py",
@@ -393,6 +396,7 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             ROOT
             / "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py"
         ],
+        [ROOT / "src/agents/exact_resume_change_set_proposal_builder_default_off.py"],
         [
             ROOT
             / "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py"

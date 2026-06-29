@@ -199,6 +199,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
         "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
         "src/agents/controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
+        "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py",
     }
 
     assert changed_runtime == set()
@@ -239,6 +240,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/exact_resume_change_set_proposal_builder_default_off.py"
     and path != "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py"
     and path != "src/agents/controlled_exact_resume_change_set_provider_call_boundary_default_off.py"
+    and path != "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py"
     ]
     forbidden = (
         "provider_call(",
@@ -445,6 +447,9 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
                                 "run_controlled_exact_resume_change_set_provider_call_boundary_dry_run.py",
                                 "docs/phase44_controlled_exact_resume_change_set_provider_call_boundary_dry_run_command_default_off.md",
                                 "tests/test_phase44b_controlled_exact_resume_change_set_provider_call_boundary_dry_run_command_default_off.py",
+                "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+                "docs/phase45_controlled_exact_resume_change_set_provider_response_validation_default_off.md",
+                "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
                                 "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
                                 "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",
                                 "docs/phase43_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.md",

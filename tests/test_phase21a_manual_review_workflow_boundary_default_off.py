@@ -311,6 +311,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
                                 "run_jd_evidence_score_impact_preview_dry_run.py",
                                 "docs/phase38_jd_evidence_score_impact_preview_dry_run_command_default_off.md",
                                 "tests/test_phase38b_jd_evidence_score_impact_preview_dry_run_command_default_off.py",
+                                "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+                                "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_default_off.md",
+                                "tests/test_phase39a_jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
@@ -443,6 +446,10 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
                                 [
                                     ROOT
                                     / "src/agents/jd_evidence_score_impact_preview_default_off.py"
+                                ],
+                                [
+                                    ROOT
+                                    / "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py"
                                 ],
                                 [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],

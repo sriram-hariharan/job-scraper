@@ -1,46 +1,43 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from hashlib import sha256
 import importlib
 import json
 from pathlib import Path
 import subprocess
 
-from src.agents import (
-    jd_signal_planning_artifact_evidence_enricher_default_off as enricher,
-)
-from src.agents.jd_signal_planning_artifact_evidence_enricher_default_off import (
-    build_jd_signal_planning_artifact_evidence_enricher_default_off,
+import run_jd_signal_planning_artifact_evidence_enrichment_dry_run as command
+from run_jd_signal_planning_artifact_evidence_enrichment_dry_run import (
+    DryRunLoadError,
+    build_dry_run_payload,
+    load_planning_rows_from_path,
+    load_resume_evidence_from_path,
+    main,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER_PATH = (
-    ROOT / "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py"
-)
+COMMAND_PATH = ROOT / "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py"
 DOC_PATH = (
-    ROOT / "docs/phase35_jd_signal_planning_artifact_evidence_enricher_default_off.md"
+    ROOT
+    / "docs/phase35_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.md"
 )
 
 REQUIRED_KEYS = {
     "phase",
     "default_off",
-    "jd_signal_planning_artifact_evidence_enricher",
+    "jd_signal_planning_artifact_evidence_enrichment_dry_run",
+    "dry_run_command_only",
     "read_only",
     "advisory_only",
     "deterministic_evidence_matching",
     "requires_manual_user_control",
     "planning_row_count",
-    "valid_planning_row_count",
-    "invalid_planning_row_count",
-    "enriched_rows",
-    "unmapped_rows",
-    "evidence_results",
+    "resume_evidence_present",
+    "evidence_policy",
+    "enricher_result",
     "evidence_ready_count",
     "evidence_blocked_count",
-    "resume_evidence_present",
-    "field_mapping_summary",
     "coverage_summary",
     "average_required_skill_coverage_ratio",
     "average_preferred_skill_coverage_ratio",
@@ -49,9 +46,8 @@ REQUIRED_KEYS = {
     "missing_required_skills_by_row",
     "missing_tools_by_row",
     "red_flag_findings_by_row",
-    "enricher_findings",
-    "missing_inputs",
-    "enricher_key",
+    "dry_run_summary",
+    "dry_run_key",
     "llm_call_performed",
     "provider_call_performed",
     "network_call_performed",
@@ -119,7 +115,6 @@ FORBIDDEN_SOURCE_MARKERS = (
     "database_url",
     "psycopg",
     "sqlite",
-    "subprocess",
     "requests",
     "httpx",
     "urllib",
@@ -146,15 +141,18 @@ FORBIDDEN_WRITE_MARKERS = (
 )
 
 DOC_MARKERS = (
-    "phase 35b jd signal planning artifact evidence enricher default-off",
-    "jd signal planning artifact evidence enricher",
+    "phase 35c jd signal planning artifact evidence enrichment dry-run command default-off",
+    "jd signal planning artifact evidence enrichment dry-run command",
     "capability step on the revised path",
     "not another safety-wrapper chain",
     "deterministic evidence matching",
-    "calls the phase 35a jd signal resume evidence matrix helper",
-    "enriches copied planning-like rows with evidence matrix results",
-    "supports row-level resume evidence",
-    "supports shared resume/profile evidence",
+    "reads supplied planning artifact file",
+    "reads supplied resume/profile evidence",
+    "supports json, jsonl, and csv planning-like row inputs",
+    "supports json, jsonl, csv, txt, and md resume evidence inputs",
+    "calls the phase 35b jd signal planning artifact evidence enricher",
+    "prints evidence coverage json to stdout",
+    "does not write output files",
     "aggregates required skill coverage",
     "aggregates preferred skill coverage",
     "aggregates tool coverage",
@@ -186,6 +184,8 @@ DOC_MARKERS = (
     "jd intelligence remains separate from final scoring",
     "evidence matching remains separate from final scoring",
     "final scoring remains deterministic and controlled by scoring logic",
+    'python run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py --input path/to/planning_rows.json --resume-evidence path/to/resume.txt',
+    "phase35b-jd-signal-planning-artifact-evidence-enricher-default-off-v1",
     "phase35a-jd-signal-resume-evidence-matrix-default-off-v1",
     "phase34c-jd-intelligence-planning-artifact-enrichment-dry-run-command-default-off-v1",
     "phase34b-jd-intelligence-planning-artifact-enricher-default-off-v1",
@@ -196,6 +196,7 @@ DOC_MARKERS = (
 )
 
 PROTECTED_HASHES = {
+    "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py": "0404ff9c89895b13cf5ccc55029820d2ff5b82fb2dbd3c0c1e426bd0e83335c8",
     "src/agents/jd_signal_resume_evidence_matrix_default_off.py": "1d0275337f4785730b27515f0e9830601fd9e3cc941fe21d2f7bb8257d64e9be",
     "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py": "f8e365ab51de647dc6b45ff0c99cce075273eec61e12fc96c744118e1ca68c53",
     "src/agents/jd_intelligence_llm_signal_extractor_default_off.py": "a73124801ce6768aebb934e1c6a7e76d4f9888bbb7b0ca28eb93e882e06f4f6c",
@@ -222,26 +223,32 @@ def _sha256(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
 
-def _signals(required: list[str] | None = None) -> dict:
+def _signals() -> dict:
     return {
-        "required_skills": required or ["Python", "SQL", "Kubernetes"],
-        "preferred_skills": ["Airflow", "Scala"],
-        "responsibilities": ["Own data pipelines", "Mentor engineers"],
-        "tools": ["dbt", "Snowflake"],
+        "required_skills": ["Python", "SQL"],
+        "preferred_skills": ["Airflow"],
+        "responsibilities": ["Own data pipelines"],
+        "tools": ["dbt"],
         "domain": "data platform",
-        "seniority": "senior",
-        "location_constraints": ["Remote US"],
-        "visa_constraints": ["No sponsorship"],
-        "resume_evidence_needed": ["Python pipelines"],
         "red_flags": ["on-call ambiguity"],
     }
 
 
+def _row() -> dict:
+    return {"job_id": "j1", "jd_signals": _signals()}
+
+
+def _write(path: Path, text: str) -> Path:
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 def _assert_safe(payload: dict) -> None:
     assert REQUIRED_KEYS <= payload.keys()
-    assert payload["phase"] == "35B"
+    assert payload["phase"] == "35C"
     assert payload["default_off"] is True
-    assert payload["jd_signal_planning_artifact_evidence_enricher"] is True
+    assert payload["jd_signal_planning_artifact_evidence_enrichment_dry_run"] is True
+    assert payload["dry_run_command_only"] is True
     assert payload["read_only"] is True
     assert payload["advisory_only"] is True
     assert payload["deterministic_evidence_matching"] is True
@@ -250,200 +257,183 @@ def _assert_safe(payload: dict) -> None:
         assert payload[key] is False
 
 
-def test_helper_exists_and_is_import_safe(capsys):
-    importlib.reload(enricher)
+def test_command_module_is_import_safe(capsys):
+    importlib.reload(command)
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
-    assert callable(build_jd_signal_planning_artifact_evidence_enricher_default_off)
+    assert callable(load_planning_rows_from_path)
+    assert callable(load_resume_evidence_from_path)
+    assert callable(build_dry_run_payload)
+    assert callable(main)
 
 
-def test_helper_imports_and_calls_phase35a_helper_only():
-    source = HELPER_PATH.read_text(encoding="utf-8")
-    assert "build_jd_signal_resume_evidence_matrix_default_off" in source
-    assert "from src.agents.jd_signal_resume_evidence_matrix_default_off import" in source
-    for marker in FORBIDDEN_SOURCE_MARKERS:
-        assert marker not in source
-    for marker in FORBIDDEN_WRITE_MARKERS:
-        assert marker not in source
+def test_planning_loader_loads_json_list_and_wrapped_rows(tmp_path):
+    plain = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    wrapped = _write(tmp_path / "wrapped.json", json.dumps({"planning_rows": [_row()]}))
+    assert load_planning_rows_from_path(plain) == [_row()]
+    assert load_planning_rows_from_path(wrapped) == [_row()]
 
 
-def test_missing_and_non_list_planning_rows_return_empty_blocked_result():
-    for rows in (None, {"job_id": "j1"}):
-        payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-            planning_rows=rows
-        )
-        _assert_safe(payload)
-        assert payload["planning_row_count"] == 0
-        assert payload["enriched_rows"] == []
-        assert payload["evidence_results"] == []
-        assert payload["missing_inputs"] == ["planning_rows"]
-        assert payload["unmapped_rows"][0]["reason"] == (
-            "planning_rows must be supplied as a list"
-        )
-
-
-def test_empty_planning_rows_returns_empty_enriched_rows_and_evidence_summaries():
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[]
-    )
-    _assert_safe(payload)
-    assert payload["planning_row_count"] == 0
-    assert payload["enriched_rows"] == []
-    assert payload["evidence_results"] == []
-    assert payload["missing_required_skills_by_row"] == {}
-    assert payload["missing_tools_by_row"] == {}
-    assert payload["red_flag_findings_by_row"] == {}
-
-
-def test_invalid_non_dict_rows_go_to_unmapped_rows_without_crashing():
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[{"job_id": "j1", "jd_signals": _signals()}, "bad"],
-        resume_evidence="Python SQL",
-    )
-    _assert_safe(payload)
-    assert payload["valid_planning_row_count"] == 1
-    assert payload["invalid_planning_row_count"] == 1
-    assert payload["unmapped_rows"] == [
-        {"input_index": 1, "reason": "planning row must be a dictionary"}
+def test_planning_loader_loads_jsonl_and_csv_rows(tmp_path):
+    jsonl = _write(tmp_path / "rows.jsonl", json.dumps(_row()) + "\n")
+    csv_path = _write(tmp_path / "rows.csv", "job_id,title\nj1,Engineer\n")
+    assert load_planning_rows_from_path(jsonl) == [_row()]
+    assert load_planning_rows_from_path(csv_path) == [
+        {"job_id": "j1", "title": "Engineer"}
     ]
 
 
-def test_row_level_jd_signals_and_row_level_resume_evidence_enrich_ready_row():
-    row = {
-        "item_id": "a1",
-        "jd_signals": _signals(),
-        "resume_evidence": "Python SQL Airflow dbt Own data pipelines",
-    }
-    original = deepcopy(row)
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[row],
+def test_resume_evidence_loader_loads_json_shapes(tmp_path):
+    raw_string = _write(tmp_path / "string.json", json.dumps("Python SQL"))
+    raw_dict = _write(tmp_path / "dict.json", json.dumps({"skills": ["Python"]}))
+    raw_list = _write(tmp_path / "list.json", json.dumps([{"skills": ["SQL"]}]))
+    wrapped = _write(
+        tmp_path / "wrapped.json",
+        json.dumps({"resume_evidence": {"resume_text": "Python"}}),
+    )
+    assert load_resume_evidence_from_path(raw_string) == "Python SQL"
+    assert load_resume_evidence_from_path(raw_dict) == {"skills": ["Python"]}
+    assert load_resume_evidence_from_path(raw_list) == [{"skills": ["SQL"]}]
+    assert load_resume_evidence_from_path(wrapped) == {"resume_text": "Python"}
+
+
+def test_resume_evidence_loader_loads_jsonl_csv_txt_and_md(tmp_path):
+    jsonl = _write(tmp_path / "evidence.jsonl", '{"skills":["Python"]}\n')
+    csv_path = _write(tmp_path / "evidence.csv", "skills\nPython\n")
+    txt = _write(tmp_path / "resume.txt", "Python SQL")
+    md = _write(tmp_path / "resume.md", "# Resume\nPython")
+    assert load_resume_evidence_from_path(jsonl) == [{"skills": ["Python"]}]
+    assert load_resume_evidence_from_path(csv_path) == [{"skills": "Python"}]
+    assert load_resume_evidence_from_path(txt) == "Python SQL"
+    assert load_resume_evidence_from_path(md) == "# Resume\nPython"
+
+
+def test_loader_error_paths_are_deterministic(tmp_path):
+    unsupported = _write(tmp_path / "rows.yaml", "[]")
+    invalid_json = _write(tmp_path / "bad.json", "{")
+    invalid_jsonl = _write(tmp_path / "bad.jsonl", "[]\n")
+    invalid_shape = _write(tmp_path / "badshape.json", json.dumps({"foo": []}))
+    bad_resume_shape = _write(tmp_path / "resume.json", "1")
+    for path in (unsupported, invalid_json, invalid_jsonl, invalid_shape):
+        try:
+            load_planning_rows_from_path(path)
+        except ValueError as exc:
+            assert str(exc)
+        else:
+            raise AssertionError(f"expected planning loader failure for {path}")
+    try:
+        load_resume_evidence_from_path(bad_resume_shape)
+    except ValueError as exc:
+        assert "resume evidence json" in str(exc)
+    else:
+        raise AssertionError("expected resume evidence loader failure")
+
+
+def test_build_dry_run_payload_returns_required_keys_and_evidence_counts():
+    payload = build_dry_run_payload(
+        planning_rows=[_row()],
+        resume_evidence="Python SQL Airflow dbt Own data pipelines",
+        evidence_policy={"case_sensitive": False, "minimum_token_length": 2},
     )
     _assert_safe(payload)
-    assert row == original
+    assert payload["planning_row_count"] == 1
+    assert payload["resume_evidence_present"] is True
     assert payload["evidence_ready_count"] == 1
-    enriched = payload["enriched_rows"][0]
-    assert enriched is not row
-    assert "evidence_matrix_result" in enriched
-    assert "evidence_matrix" in enriched
-    assert "evidence_coverage_summary" in enriched
-    assert enriched["evidence_matrix_result"]["evidence_ready"] is True
-    assert payload["missing_required_skills_by_row"] == {"a1": ["Kubernetes"]}
+    assert payload["evidence_blocked_count"] == 0
+    assert payload["average_required_skill_coverage_ratio"] == 1.0
+    assert payload["average_preferred_skill_coverage_ratio"] == 1.0
+    assert payload["average_tool_coverage_ratio"] == 1.0
+    assert payload["average_responsibility_coverage_ratio"] == 1.0
+    assert payload["missing_required_skills_by_row"] == {"j1": []}
+    assert payload["missing_tools_by_row"] == {"j1": []}
 
 
-def test_top_level_shared_resume_evidence_is_used_when_row_level_absent():
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[{"job_id": "j1", "jd_intelligence": _signals()}],
-        resume_evidence="Senior data platform engineer with Python SQL dbt",
+def test_payload_exposes_blocked_rows_and_red_flags():
+    payload = build_dry_run_payload(
+        planning_rows=[_row(), {"job_id": "j2", "jd_signals": _signals()}],
+        resume_evidence={"j1": "Python SQL on-call ambiguity"},
     )
     _assert_safe(payload)
     assert payload["evidence_ready_count"] == 1
-    assert payload["enriched_rows"][0]["evidence_matrix_result"]["matched_tools"] == ["dbt"]
-
-
-def test_top_level_keyed_resume_evidence_resolves_by_item_job_id_id_and_index():
-    rows = [
-        {"item_id": "item-1", "jd_signals": _signals(["Python"])},
-        {"job_id": "job-2", "jd_signals": _signals(["SQL"])},
-        {"id": "id-3", "jd_signals": _signals(["Airflow"])},
-        {"jd_signals": _signals(["dbt"])},
-    ]
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=rows,
-        resume_evidence={
-            "item-1": "Python",
-            "job-2": "SQL",
-            "id-3": "Airflow",
-            "3": "dbt",
-        },
-    )
-    _assert_safe(payload)
-    assert payload["evidence_ready_count"] == 4
-    assert payload["missing_required_skills_by_row"] == {
-        "item-1": [],
-        "job-2": [],
-        "id-3": [],
-        "3": [],
-    }
-
-
-def test_list_aligned_top_level_resume_evidence_is_deterministic():
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[
-            {"job_id": "j1", "jd_intelligence_result": _signals(["Python"])},
-            {"job_id": "j2", "jd_intelligence_result": _signals(["Snowflake"])},
-        ],
-        resume_evidence=["Python", "Snowflake"],
-    )
-    _assert_safe(payload)
-    assert payload["evidence_ready_count"] == 2
-    assert payload["missing_required_skills_by_row"] == {"j1": [], "j2": []}
-
-
-def test_blocked_rows_do_not_get_fake_evidence():
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[{"job_id": "j1", "jd_signals": _signals()}],
-        resume_evidence="",
-    )
-    _assert_safe(payload)
-    assert payload["evidence_ready_count"] == 0
     assert payload["evidence_blocked_count"] == 1
-    assert "evidence_matrix_result" not in payload["enriched_rows"][0]
-    assert "resume_evidence" in payload["evidence_results"][0]["missing_inputs"]
-
-
-def test_average_coverage_ratios_use_ready_rows_only():
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[
-            {"job_id": "j1", "jd_signals": _signals(["Python", "SQL"])},
-            {"job_id": "j2", "jd_signals": _signals(["Kubernetes"])},
-            {"job_id": "j3", "jd_signals": _signals(["Scala"])},
-        ],
-        resume_evidence={
-            "j1": "Python",
-            "j2": "Kubernetes Airflow dbt Own data pipelines",
-        },
-    )
-    _assert_safe(payload)
-    assert payload["evidence_ready_count"] == 2
-    assert payload["evidence_blocked_count"] == 1
-    assert payload["average_required_skill_coverage_ratio"] == 0.75
-    assert payload["average_preferred_skill_coverage_ratio"] == 0.25
-    assert payload["average_tool_coverage_ratio"] == 0.25
-    assert payload["average_responsibility_coverage_ratio"] == 0.25
-
-
-def test_missing_tools_and_red_flags_by_row_are_deterministic():
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[{"job_id": "j1", "jd_signals": _signals()}],
-        resume_evidence="Python SQL on-call ambiguity",
-    )
-    _assert_safe(payload)
-    assert payload["missing_tools_by_row"] == {"j1": ["dbt", "Snowflake"]}
     assert payload["red_flag_findings_by_row"]["j1"][0]["status"] == "matched"
 
 
-def test_no_final_score_is_produced_and_existing_score_is_not_changed():
-    row = {
-        "job_id": "j1",
-        "jd_signals": _signals(),
-        "existing_score": 44,
-        "final_score": 99,
+def test_main_prints_json_to_stdout_for_valid_input(tmp_path, capsys):
+    rows = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    evidence = _write(tmp_path / "resume.txt", "Python SQL Airflow dbt")
+    code = main(["--input", str(rows), "--resume-evidence", str(evidence)])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    _assert_safe(payload)
+    assert payload["evidence_policy"]["case_sensitive"] is False
+    assert payload["evidence_policy"]["minimum_token_length"] == 2
+    assert payload["evidence_policy"]["include_partial_matches"] is True
+
+
+def test_main_passes_evidence_policy_options(tmp_path, capsys):
+    rows = _write(tmp_path / "rows.json", json.dumps([_row()]))
+    code = main(
+        [
+            "--input",
+            str(rows),
+            "--case-sensitive",
+            "--minimum-token-length",
+            "4",
+            "--no-partial-matches",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["evidence_policy"] == {
+        "case_sensitive": True,
+        "minimum_token_length": 4,
+        "include_partial_matches": False,
     }
-    payload = build_jd_signal_planning_artifact_evidence_enricher_default_off(
-        planning_rows=[row],
+
+
+def test_main_returns_nonzero_for_missing_or_invalid_input(tmp_path, capsys):
+    assert main([]) == 2
+    missing = capsys.readouterr()
+    assert "error: --input is required" in missing.err
+    invalid = _write(tmp_path / "bad.json", "{")
+    assert main(["--input", str(invalid)]) == 1
+    bad = capsys.readouterr()
+    assert "error: invalid JSON" in bad.err
+
+
+def test_payload_contains_no_tailoring_output_or_commands():
+    payload = build_dry_run_payload(
+        planning_rows=[_row()],
         resume_evidence="Python SQL",
     )
     rendered = json.dumps(payload).lower()
     _assert_safe(payload)
-    assert payload["enriched_rows"][0]["existing_score"] == 44
-    assert payload["enriched_rows"][0]["final_score"] == 99
-    assert payload["coverage_summary"]["final_application_score_created"] is False
-    assert payload["coverage_summary"]["existing_score_changed"] is False
-    assert "application_score" not in payload
+    assert "generated_tailoring_text" not in rendered
     assert "provider_request" not in rendered
+    assert "network_request" not in rendered
     assert "mutation_command" not in rendered
-    assert "submission_command" not in rendered
+    assert "db_write_command" not in rendered
+    assert "application_submission_command" not in rendered
+    assert "application_score" not in payload
+    assert payload["dry_run_summary"]["final_application_score_created"] is False
+    assert payload["dry_run_summary"]["existing_score_changed"] is False
+
+
+def test_source_has_no_forbidden_imports_calls_or_writes():
+    source = COMMAND_PATH.read_text(encoding="utf-8")
+    assert "build_jd_signal_planning_artifact_evidence_enricher_default_off" in source
+    assert (
+        "from src.agents.jd_signal_planning_artifact_evidence_enricher_default_off import"
+        in source
+    )
+    for marker in FORBIDDEN_SOURCE_MARKERS:
+        assert marker not in source
+    for marker in FORBIDDEN_WRITE_MARKERS:
+        assert marker not in source
 
 
 def test_docs_contain_required_markers_and_references():
@@ -457,7 +447,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
         assert _sha256(ROOT / relative) == expected
 
 
-def test_changed_files_are_limited_to_phase35b_surface_and_legacy_guards():
+def test_changed_files_are_limited_to_phase35c_surface_and_legacy_guards():
     result = subprocess.run(
         ["git", "diff", "--name-only", "HEAD"],
         cwd=ROOT,
@@ -467,9 +457,6 @@ def test_changed_files_are_limited_to_phase35b_surface_and_legacy_guards():
     )
     changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
     allowed = {
-        "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py",
-        "docs/phase35_jd_signal_planning_artifact_evidence_enricher_default_off.md",
-        "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
         "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py",
         "docs/phase35_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.md",
         "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",

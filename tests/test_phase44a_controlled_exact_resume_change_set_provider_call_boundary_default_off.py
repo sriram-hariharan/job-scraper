@@ -496,6 +496,9 @@ def test_changed_files_are_limited_to_phase44a_and_legacy_guards():
     allowed = {
         "src/agents/controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
         "docs/phase44_controlled_exact_resume_change_set_provider_call_boundary_default_off.md",
+        "run_controlled_exact_resume_change_set_provider_call_boundary_dry_run.py",
+        "docs/phase44_controlled_exact_resume_change_set_provider_call_boundary_dry_run_command_default_off.md",
+        "tests/test_phase44b_controlled_exact_resume_change_set_provider_call_boundary_dry_run_command_default_off.py",
         "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
     }
     legacy_guards = {

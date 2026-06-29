@@ -397,6 +397,9 @@ def test_changed_files_are_limited_to_phase33e_surface_and_legacy_guards():
         "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
         "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
         "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
+        "src/agents/jd_evidence_scoring_contribution_preview_default_off.py",
+        "docs/phase37_jd_evidence_scoring_contribution_preview_default_off.md",
+        "tests/test_phase37a_jd_evidence_scoring_contribution_preview_default_off.py",
     } | {
         path
         for path in changed

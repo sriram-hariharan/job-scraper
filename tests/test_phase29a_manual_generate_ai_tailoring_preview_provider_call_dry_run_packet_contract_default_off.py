@@ -587,6 +587,9 @@ def test_phase29a_changes_only_helper_doc_test_and_legacy_guards():
                                 "src/agents/jd_signal_resume_evidence_matrix_default_off.py",
                                 "docs/phase35_jd_signal_resume_evidence_matrix_default_off.md",
                                 "tests/test_phase35a_jd_signal_resume_evidence_matrix_default_off.py",
+                                "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py",
+                                "docs/phase35_jd_signal_planning_artifact_evidence_enricher_default_off.md",
+                                "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

@@ -475,6 +475,9 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py",
         "docs/phase35_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.md",
         "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",
+        "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py",
+        "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md",
+        "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
         # Pre-existing duplicate Phase 33A files in this workspace.
         "docs/phase33_controlled_agent_router_readonly 2.md",
         "tests/test_phase33a_controlled_agent_router_readonly 2.py",

@@ -518,6 +518,9 @@ def test_phase31a_changes_only_helper_doc_test_and_legacy_guards():
                                 "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
                                 "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_default_off.md",
                                 "tests/test_phase39a_jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+                                "run_jd_evidence_score_impact_planning_artifact_annotator_dry_run.py",
+                                "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.md",
+                                "tests/test_phase39b_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.py",
         }
     legacy_guards = {
         str(path.relative_to(ROOT))

@@ -447,6 +447,9 @@ def test_changed_files_are_limited_to_phase34c_surface_and_legacy_guards():
         "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py",
         "docs/phase35_jd_signal_planning_artifact_evidence_enricher_default_off.md",
         "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
+        "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py",
+        "docs/phase35_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.md",
+        "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",
     } | {
         path
         for path in changed

@@ -289,6 +289,9 @@ def test_phase26d_changes_only_doc_test_and_legacy_guards():
                                 "src/agents/jd_evidence_scoring_contribution_preview_default_off.py",
                                 "docs/phase37_jd_evidence_scoring_contribution_preview_default_off.md",
                                 "tests/test_phase37a_jd_evidence_scoring_contribution_preview_default_off.py",
+                                "run_jd_evidence_scoring_contribution_preview_dry_run.py",
+                                "docs/phase37_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.md",
+                                "tests/test_phase37b_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

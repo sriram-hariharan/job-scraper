@@ -1,0 +1,492 @@
+from __future__ import annotations
+
+from hashlib import sha256
+from pathlib import Path
+import subprocess
+
+from src.agents import (
+    controlled_agent_router_workflow_state_adapter_readonly as adapter,
+)
+from src.agents.controlled_agent_router_workflow_state_adapter_readonly import (
+    build_controlled_agent_router_workflow_state_adapter_readonly,
+)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HELPER_PATH = (
+    ROOT
+    / "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py"
+)
+DOC_PATH = (
+    ROOT
+    / "docs/phase33_controlled_agent_router_workflow_state_adapter_readonly.md"
+)
+
+REQUIRED_KEYS = {
+    "phase",
+    "default_off",
+    "read_only",
+    "advisory_only",
+    "workflow_state_adapter_only",
+    "controlled_agent_router_adapter",
+    "allowlisted_routing_only",
+    "requires_manual_user_control",
+    "job_present",
+    "relevance_result_present",
+    "jd_intelligence_present",
+    "final_score_present",
+    "tailoring_opportunity_present",
+    "manual_tailoring_preview_present",
+    "current_state",
+    "state_adapter_findings",
+    "state_adapter_missing_inputs",
+    "router_decision",
+    "agent_handoff_packet",
+    "next_allowed_step",
+    "handoff_reason",
+    "required_inputs_for_next_step",
+    "available_inputs_for_next_step",
+    "missing_inputs_for_next_step",
+    "adapter_key",
+    "no_llm_calls",
+    "llm_call_performed",
+    "no_provider_calls",
+    "provider_call_performed",
+    "no_network_calls",
+    "network_call_performed",
+    "dispatch_performed",
+    "stage_execution_performed",
+    "tailoring_runtime_call_performed",
+    "ai_tailoring_generation_performed",
+    "real_tailoring_output_created",
+    "resume_rewrite_performed",
+    "resume_overwrite_performed",
+    "resume_mutation_performed",
+    "application_submission_performed",
+    "database_write_performed",
+    "persistence_performed",
+    "execution_performed",
+    "submission_performed",
+    "auto_apply_performed",
+    "auto_submit_performed",
+}
+
+TRUE_SAFETY_KEYS = {
+    "default_off",
+    "read_only",
+    "advisory_only",
+    "workflow_state_adapter_only",
+    "controlled_agent_router_adapter",
+    "allowlisted_routing_only",
+    "requires_manual_user_control",
+    "no_llm_calls",
+    "no_provider_calls",
+    "no_network_calls",
+}
+
+FALSE_ACTION_KEYS = {
+    "llm_call_performed",
+    "provider_call_performed",
+    "network_call_performed",
+    "dispatch_performed",
+    "stage_execution_performed",
+    "tailoring_runtime_call_performed",
+    "ai_tailoring_generation_performed",
+    "real_tailoring_output_created",
+    "resume_rewrite_performed",
+    "resume_overwrite_performed",
+    "resume_mutation_performed",
+    "application_submission_performed",
+    "database_write_performed",
+    "persistence_performed",
+    "execution_performed",
+    "submission_performed",
+    "auto_apply_performed",
+    "auto_submit_performed",
+}
+
+FORBIDDEN_SOURCE_MARKERS = (
+    "from src.pipeline",
+    "import src.pipeline",
+    "from src.matching",
+    "import src.matching",
+    "from src.tailoring",
+    "import src.tailoring",
+    "generate_tailoring_suggestions",
+    "application_execution_queue",
+    "from src.app",
+    "import src.app",
+    "from src.storage",
+    "import src.storage",
+    "database_url",
+    "psycopg",
+    "sqlite",
+    "subprocess",
+    "requests",
+    "httpx",
+    "openai",
+    "anthropic",
+    "run_chat_completion",
+    "_run_live_llm_tailoring",
+    "run_prefilter(",
+    "score_resume_job_match(",
+    "execute_application(",
+    "submit_application(",
+    "provider_call(",
+    "network_call(",
+)
+
+DOC_MARKERS = (
+    "phase 33b controlled agent router workflow state adapter read-only",
+    "controlled agent router workflow state adapter",
+    "capability step on the revised path",
+    "not another safety-wrapper chain",
+    "normalizes supplied artifacts into the phase 33a router `current_state`",
+    "calls the phase 33a router helper",
+    "returns a read-only agent handoff packet",
+    "does not run relevance prefilter",
+    "does not run jd intelligence",
+    "does not run final application scoring",
+    "does not run tailoring opportunity check",
+    "does not run manual generate ai tailoring preview preparation",
+    "does not call llm",
+    "does not call providers",
+    "does not call network",
+    "does not dispatch",
+    "does not generate ai tailoring",
+    "does not call tailoring runtime",
+    "does not create real tailoring output",
+    "does not create resume rewrites",
+    "does not overwrite resumes",
+    "does not mutate resumes",
+    "does not persist data",
+    "does not write to database",
+    "does not execute applications",
+    "does not submit applications",
+    "no auto-apply",
+    "no auto-submit",
+    "no autonomous application execution",
+    "no automatic job application submission",
+    "manual user control remains required",
+    "tailoring agent remains separate from final scoring",
+    "final scoring remains deterministic and controlled by scoring logic",
+    "llm calls are not introduced in this phase",
+    "persistence is not introduced in this phase",
+    "phase33a-controlled-agent-router-readonly-v1",
+    "phase32b-manual-generate-ai-tailoring-preview-normalized-response-preview-packet-api-readback-v1",
+    "phase32a-manual-generate-ai-tailoring-preview-normalized-response-preview-packet-contract-v1",
+    "phase31-manual-generate-ai-tailoring-preview-provider-response-normalization-release-v1",
+    "phase30-manual-generate-ai-tailoring-preview-provider-response-validation-release-v1",
+    "phase23-tailoring-agent-workflow-release-v1",
+    "phase20d-no-auto-apply-safety-checkpoint-v1",
+)
+
+PROTECTED_HASHES = {
+    "src/agents/controlled_agent_router_readonly.py": "c1cac3d8d1858b5143d0c3ca0082f3b908410020a0e4220c1dea9531cbf3655d",
+    "src/app/api.py": "dd69c4813e4e25f65f611a4dadea5094e524ecd1c3d2f250ff859673d24af2d9",
+    "src/app/services.py": "2c67ab4d78299de8e54db6ef76ea77598f7e98c1d2f516df97cea4c014e7b6ee",
+    "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
+    "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
+    "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
+    "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
+    "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
+    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
+    "generate_tailoring_suggestions.py": "a5e3dda138232fadc6d69bd9f2468459ce2759d961687bf1fa9ee9970c5490c2",
+    "application_execution_queue.py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+}
+
+
+def _sha256(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def _assert_safe_payload(payload: dict) -> None:
+    assert REQUIRED_KEYS <= payload.keys()
+    assert payload["phase"] == "33B"
+    for key in TRUE_SAFETY_KEYS:
+        assert payload[key] is True
+    for key in FALSE_ACTION_KEYS:
+        assert payload[key] is False
+    packet = payload["agent_handoff_packet"]
+    assert packet["non_executable"] is True
+    assert packet["no_executable_callback"] is True
+    assert packet["no_provider_request"] is True
+    assert packet["no_network_request"] is True
+    assert packet["no_mutation_command"] is True
+    assert packet["no_database_write_command"] is True
+    assert packet["no_application_submission_command"] is True
+    assert packet["next_allowed_step"] == payload["next_allowed_step"]
+    assert "allowed_agent_steps" in packet
+    assert "blocked_agent_steps" in packet
+
+
+def _build(**kwargs) -> dict:
+    payload = build_controlled_agent_router_workflow_state_adapter_readonly(
+        **kwargs
+    )
+    _assert_safe_payload(payload)
+    return payload
+
+
+def test_helper_exists_and_calls_phase33a_router(monkeypatch):
+    calls = []
+
+    def fake_router(*, current_state=None, router_policy=None):
+        calls.append(
+            {"current_state": current_state, "router_policy": router_policy}
+        )
+        return {
+            "phase": "33A",
+            "allowed_agent_steps": ["await_manual_review"],
+            "blocked_agent_steps": ["call_llm"],
+            "next_allowed_step": "await_manual_review",
+            "routing_reason": "fake router",
+            "missing_inputs": [],
+            "blocked_reasons": [],
+            "decision_key": "fake",
+        }
+
+    monkeypatch.setattr(
+        adapter,
+        "build_controlled_agent_router_readonly_decision",
+        fake_router,
+    )
+
+    payload = _build(job_record={"job_id": "job-1"})
+
+    assert callable(build_controlled_agent_router_workflow_state_adapter_readonly)
+    assert calls == [
+        {
+            "current_state": {"job": {"job_id": "job-1"}},
+            "router_policy": None,
+        }
+    ]
+    assert payload["next_allowed_step"] == "await_manual_review"
+
+
+def test_no_inputs_handoff_routes_to_manual_review():
+    payload = _build()
+
+    assert payload["current_state"] == {}
+    assert payload["next_allowed_step"] == "await_manual_review"
+    assert "current_state" in payload["router_decision"]["missing_inputs"]
+
+
+def test_job_only_routes_to_relevance_prefilter():
+    payload = _build(
+        job_record={
+            "job_id": "job-1",
+            "title": "Machine Learning Engineer",
+            "company": "Acme",
+            "description": "not copied into identifier summary",
+        }
+    )
+
+    assert payload["job_present"] is True
+    assert payload["current_state"]["job"] == {
+        "job_id": "job-1",
+        "title": "Machine Learning Engineer",
+        "company": "Acme",
+    }
+    assert payload["next_allowed_step"] == "run_relevance_prefilter"
+    assert payload["required_inputs_for_next_step"] == ["job_record"]
+    assert payload["missing_inputs_for_next_step"] == []
+
+
+def test_relevance_without_jd_routes_to_jd_intelligence():
+    payload = _build(
+        job_record={"job_id": "job-1"},
+        relevance_result={"passes_prefilter": True},
+    )
+
+    assert payload["next_allowed_step"] == "run_jd_intelligence"
+    assert payload["required_inputs_for_next_step"] == [
+        "job_record",
+        "relevance_result",
+    ]
+    assert payload["missing_inputs_for_next_step"] == []
+    assert "jd_intelligence_result" in payload["state_adapter_missing_inputs"]
+
+
+def test_relevance_and_jd_without_score_routes_to_final_scoring():
+    payload = _build(
+        job_record={"job_id": "job-1"},
+        relevance_result={"is_relevant": True},
+        jd_intelligence_result={"jd_signals": ["python"]},
+    )
+
+    assert payload["next_allowed_step"] == "run_final_application_scoring"
+    assert payload["required_inputs_for_next_step"] == [
+        "job_record",
+        "relevance_result",
+        "jd_intelligence_result",
+    ]
+    assert payload["missing_inputs_for_next_step"] == []
+    assert "final_score_result" in payload["state_adapter_missing_inputs"]
+
+
+def test_high_score_without_tailoring_routes_to_tailoring_opportunity():
+    payload = _build(
+        job_record={"job_id": "job-1"},
+        relevance_result={"relevant": True},
+        jd_intelligence_result={"signals": ["python"]},
+        final_score_result={"final_score": 91},
+    )
+
+    assert payload["final_score_present"] is True
+    assert payload["current_state"]["final_score"] == 91.0
+    assert payload["next_allowed_step"] == "check_tailoring_opportunity"
+    assert payload["required_inputs_for_next_step"] == [
+        "job_record",
+        "relevance_result",
+        "jd_intelligence_result",
+        "final_score_result",
+    ]
+    assert payload["missing_inputs_for_next_step"] == []
+    assert (
+        "tailoring_opportunity_result"
+        in payload["state_adapter_missing_inputs"]
+    )
+
+
+def test_helpful_tailoring_opportunity_routes_to_manual_preview():
+    payload = _build(
+        job_record={"job_id": "job-1"},
+        relevance_result={"relevant": True},
+        jd_intelligence_result={"signals": ["python"]},
+        final_score_result={"score": 91},
+        tailoring_opportunity_result={"tailoring_may_help": True},
+    )
+
+    assert payload["next_allowed_step"] == "prepare_manual_tailoring_preview"
+
+
+def test_not_helpful_tailoring_opportunity_routes_to_manual_review():
+    payload = _build(
+        job_record={"job_id": "job-1"},
+        relevance_result={"relevant": True},
+        jd_intelligence_result={"signals": ["python"]},
+        final_score_result={"score": 91},
+        tailoring_opportunity_result={"tailoring_does_not_help": True},
+    )
+
+    assert payload["next_allowed_step"] == "await_manual_review"
+    assert (
+        payload["current_state"]["tailoring_opportunity"][
+            "tailoring_may_help"
+        ]
+        is False
+    )
+
+
+def test_rejected_relevance_routes_to_manual_review():
+    payload = _build(
+        job_record={"job_id": "job-1"},
+        relevance_result={"rejected": True},
+    )
+
+    assert payload["next_allowed_step"] == "await_manual_review"
+    assert payload["current_state"]["relevance_result"]["is_relevant"] is False
+
+
+def test_manual_preview_metadata_excludes_generated_tailoring_text():
+    payload = _build(
+        job_record={"job_id": "job-1"},
+        relevance_result={"relevant": True},
+        jd_intelligence_result={"signals": ["python"]},
+        final_score_result={"score": 91},
+        tailoring_opportunity_result={"tailoring_may_help": True},
+        manual_tailoring_preview_result={
+            "preview_id": "preview-1",
+            "status": "ready",
+            "generated_tailoring_text": "real generated text",
+            "resume_rewrite": "rewritten resume",
+            "suggestions": ["generated bullet"],
+        },
+    )
+
+    preview = payload["current_state"]["manual_tailoring_preview"]
+    assert preview == {
+        "manual_tailoring_preview_present": True,
+        "preview_id": "preview-1",
+        "status": "ready",
+    }
+    assert "generated_tailoring_text" not in str(payload).lower()
+    assert "real generated text" not in str(payload).lower()
+    assert "rewritten resume" not in str(payload).lower()
+
+
+def test_source_has_only_phase33a_router_import_and_no_forbidden_calls():
+    source = HELPER_PATH.read_text(encoding="utf-8")
+
+    assert "build_controlled_agent_router_readonly_decision" in source
+    for marker in FORBIDDEN_SOURCE_MARKERS:
+        assert marker not in source
+
+
+def test_docs_contain_required_markers_and_references():
+    doc = DOC_PATH.read_text(encoding="utf-8").lower()
+
+    for marker in DOC_MARKERS:
+        assert marker in doc
+
+
+def test_protected_runtime_files_are_unchanged_by_hash():
+    for relative_path, expected_hash in PROTECTED_HASHES.items():
+        assert _sha256(ROOT / relative_path) == expected_hash
+
+
+def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
+    result = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    allowed_changed = {
+        "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py",
+        "docs/phase33_controlled_agent_router_workflow_state_adapter_readonly.md",
+        "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+        "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
+        "docs/phase33_controlled_agent_router_batch_handoff_plan_readonly.md",
+        "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+        "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
+        "docs/phase33_controlled_agent_router_planning_artifact_mapper_readonly.md",
+        "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+        "run_controlled_agent_router_planning_artifact_dry_run.py",
+        "docs/phase33_controlled_agent_router_planning_artifact_dry_run_command_readonly.md",
+        "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
+        "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
+        "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
+        "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+        "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
+        "docs/phase34_jd_intelligence_planning_artifact_enricher_default_off.md",
+        "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
+        "run_jd_intelligence_planning_artifact_enrichment_dry_run.py",
+        "docs/phase34_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.md",
+        "tests/test_phase34c_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.py",
+        "src/agents/jd_signal_resume_evidence_matrix_default_off.py",
+        "docs/phase35_jd_signal_resume_evidence_matrix_default_off.md",
+        "tests/test_phase35a_jd_signal_resume_evidence_matrix_default_off.py",
+        "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py",
+        "docs/phase35_jd_signal_planning_artifact_evidence_enricher_default_off.md",
+        "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
+        "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py",
+        "docs/phase35_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.md",
+        "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",
+        "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py",
+        "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md",
+        "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
+        "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
+        "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
+        "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
+        # Pre-existing duplicate Phase 33A files in this workspace.
+        "docs/phase33_controlled_agent_router_readonly 2.md",
+        "tests/test_phase33a_controlled_agent_router_readonly 2.py",
+    }
+    for line in result.stdout.splitlines():
+        path = line[3:].strip().strip('"')
+        if path.startswith("tests/test_") and path.endswith(".py"):
+            continue
+        assert path in allowed_changed

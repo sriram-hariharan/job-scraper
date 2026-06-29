@@ -1,5 +1,5 @@
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only c783bf766e09f43b3650ddcc79bc7043aaa5bcaaf37ed4deb365a894c951a9d6
+# phase26b legacy guard marker: changes_only dd69c4813e4e25f65f611a4dadea5094e524ecd1c3d2f250ff859673d24af2d9
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -404,6 +404,55 @@ def test_phase26b_changes_only_api_doc_test_and_legacy_guards():
                             "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
                                 "docs/phase31_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint.md",
                                 "tests/test_phase31d_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint_default_off.py",
+                                "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py",
+                                "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.md",
+                                "tests/test_phase32a_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract_default_off.py",
+                                "src/app/api.py",
+                                "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback.md",
+                                "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off.py",
+                                "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback 2.md",
+                                "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py",
+                                "src/agents/controlled_agent_router_readonly.py",
+                                "docs/phase33_controlled_agent_router_readonly.md",
+                                "tests/test_phase33a_controlled_agent_router_readonly.py",
+                                "docs/phase33_controlled_agent_router_readonly 2.md",
+                                "tests/test_phase33a_controlled_agent_router_readonly 2.py",
+                                "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py",
+                                "docs/phase33_controlled_agent_router_workflow_state_adapter_readonly.md",
+                                "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+                                "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py",
+                                "docs/phase33_controlled_agent_router_batch_handoff_plan_readonly.md",
+                                "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+                                "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py",
+                                "docs/phase33_controlled_agent_router_planning_artifact_mapper_readonly.md",
+                                "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+                                "run_controlled_agent_router_planning_artifact_dry_run.py",
+                                "docs/phase33_controlled_agent_router_planning_artifact_dry_run_command_readonly.md",
+                                "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
+                                "src/agents/jd_intelligence_llm_signal_extractor_default_off.py",
+                                "docs/phase34_jd_intelligence_llm_signal_extractor_default_off.md",
+                                "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+                                "src/agents/jd_intelligence_planning_artifact_enricher_default_off.py",
+                                "docs/phase34_jd_intelligence_planning_artifact_enricher_default_off.md",
+                                "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
+                                "run_jd_intelligence_planning_artifact_enrichment_dry_run.py",
+                                "docs/phase34_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.md",
+                                "tests/test_phase34c_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.py",
+                                "src/agents/jd_signal_resume_evidence_matrix_default_off.py",
+                                "docs/phase35_jd_signal_resume_evidence_matrix_default_off.md",
+                                "tests/test_phase35a_jd_signal_resume_evidence_matrix_default_off.py",
+                                "src/agents/jd_signal_planning_artifact_evidence_enricher_default_off.py",
+                                "docs/phase35_jd_signal_planning_artifact_evidence_enricher_default_off.md",
+                                "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
+                                "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py",
+                                "docs/phase35_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.md",
+                                "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",
+                                "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py",
+                                "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md",
+                                "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
+                                "run_jd_evidence_final_scoring_feature_adapter_dry_run.py",
+                                "docs/phase36_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.md",
+                                "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -413,7 +462,7 @@ def test_phase26b_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback",
-                "c783bf766e09f43b3650ddcc79bc7043aaa5bcaaf37ed4deb365a894c951a9d6",
+                "dd69c4813e4e25f65f611a4dadea5094e524ecd1c3d2f250ff859673d24af2d9",
                 "changes_only",
             )
         )

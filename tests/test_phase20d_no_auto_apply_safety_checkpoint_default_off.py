@@ -320,6 +320,9 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
                                 "docs/phase41_jd_evidence_score_impact_review_queue_builder_default_off.md",
                                 "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
                                 "docs/phase42_exact_resume_change_set_proposal_builder_default_off.md",
+                                "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+                                "docs/phase43_controlled_exact_resume_change_set_llm_request_packet_default_off.md",
+                                "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
                                 "run_exact_resume_change_set_proposal_builder_dry_run.py",
                                 "docs/phase42_exact_resume_change_set_proposal_builder_dry_run_command_default_off.md",
                                 "tests/test_phase42b_exact_resume_change_set_proposal_builder_dry_run_command_default_off.py",
@@ -398,6 +401,10 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             / "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py"
         ],
         [ROOT / "src/agents/exact_resume_change_set_proposal_builder_default_off.py"],
+        [
+            ROOT
+            / "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py"
+        ],
         [
             ROOT
             / "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py"

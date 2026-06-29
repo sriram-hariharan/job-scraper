@@ -587,6 +587,9 @@ def test_changed_files_are_limited_to_phase42a_and_legacy_guards():
     allowed = {
         "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
         "docs/phase42_exact_resume_change_set_proposal_builder_default_off.md",
+        "run_exact_resume_change_set_proposal_builder_dry_run.py",
+        "docs/phase42_exact_resume_change_set_proposal_builder_dry_run_command_default_off.md",
+        "tests/test_phase42b_exact_resume_change_set_proposal_builder_dry_run_command_default_off.py",
         "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
     }
     legacy_guards = {

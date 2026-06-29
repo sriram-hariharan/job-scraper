@@ -194,6 +194,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/agents/jd_evidence_scoring_contribution_preview_default_off.py",
         "src/agents/jd_evidence_score_impact_preview_default_off.py",
         "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+        "src/agents/jd_evidence_score_impact_review_packet_builder_default_off.py",
     }
 
     assert changed_runtime == set()
@@ -229,6 +230,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/jd_evidence_scoring_contribution_preview_default_off.py"
     and path != "src/agents/jd_evidence_score_impact_preview_default_off.py"
     and path != "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py"
+    and path != "src/agents/jd_evidence_score_impact_review_packet_builder_default_off.py"
     ]
     forbidden = (
         "provider_call(",
@@ -418,6 +420,12 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
                                 "run_jd_evidence_score_impact_planning_artifact_annotator_dry_run.py",
                                 "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.md",
                                 "tests/test_phase39b_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.py",
+                                "src/agents/jd_evidence_score_impact_review_packet_builder_default_off.py",
+                                "docs/phase40_jd_evidence_score_impact_review_packet_builder_default_off.md",
+                                "tests/test_phase40a_jd_evidence_score_impact_review_packet_builder_default_off.py",
+                                "run_jd_evidence_score_impact_review_packet_builder_dry_run.py",
+                                "docs/phase40_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.md",
+                                "tests/test_phase40b_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

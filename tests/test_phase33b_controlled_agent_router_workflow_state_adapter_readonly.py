@@ -498,6 +498,9 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
         "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_default_off.md",
         "tests/test_phase39a_jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+        "run_jd_evidence_score_impact_planning_artifact_annotator_dry_run.py",
+        "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.md",
+        "tests/test_phase39b_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.py",
         # Pre-existing duplicate Phase 33A files in this workspace.
         "docs/phase33_controlled_agent_router_readonly 2.md",
         "tests/test_phase33a_controlled_agent_router_readonly 2.py",

@@ -473,6 +473,9 @@ def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
                                 "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
                                 "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_default_off.md",
                                 "tests/test_phase39a_jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+                                "run_jd_evidence_score_impact_planning_artifact_annotator_dry_run.py",
+                                "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.md",
+                                "tests/test_phase39b_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.py",
         "docs/phase23_generate_ai_tailoring_action_boundary_api_readback 2.md",
         "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off 2.py",
     }

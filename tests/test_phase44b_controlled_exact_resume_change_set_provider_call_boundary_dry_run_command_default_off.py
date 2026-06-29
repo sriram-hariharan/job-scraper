@@ -513,6 +513,9 @@ def test_changed_files_are_limited_to_phase44b_and_legacy_guards():
                 "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py",
                 "docs/phase45_controlled_exact_resume_change_set_provider_response_validation_default_off.md",
                 "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+                "run_controlled_exact_resume_change_set_provider_response_validation_dry_run.py",
+                "docs/phase45_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.md",
+                "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
     }
     legacy_guards = {
         path

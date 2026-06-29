@@ -383,6 +383,9 @@ def test_changed_files_are_limited_to_phase33a_surface_and_legacy_guards():
         "run_jd_signal_planning_artifact_evidence_enrichment_dry_run.py",
         "docs/phase35_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.md",
         "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",
+        "src/agents/jd_evidence_final_scoring_feature_adapter_default_off.py",
+        "docs/phase36_jd_evidence_final_scoring_feature_adapter_default_off.md",
+        "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
         # Pre-existing untracked files from an earlier phase in this workspace.
         "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback 2.md",
         "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py",

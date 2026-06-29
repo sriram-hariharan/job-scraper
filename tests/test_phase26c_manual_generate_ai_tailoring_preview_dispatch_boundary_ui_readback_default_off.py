@@ -491,6 +491,9 @@ def test_phase26c_changes_only_static_doc_test_and_legacy_guards():
                                 "run_jd_evidence_score_impact_preview_dry_run.py",
                                 "docs/phase38_jd_evidence_score_impact_preview_dry_run_command_default_off.md",
                                 "tests/test_phase38b_jd_evidence_score_impact_preview_dry_run_command_default_off.py",
+                                "src/agents/jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+                                "docs/phase39_jd_evidence_score_impact_planning_artifact_annotator_default_off.md",
+                                "tests/test_phase39a_jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

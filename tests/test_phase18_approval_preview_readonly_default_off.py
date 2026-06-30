@@ -501,6 +501,9 @@ def test_phase18c_changes_only_approved_docs_and_tests():
         "run_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run.py",
         "docs/phase52_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run_command_default_off.md",
         "tests/test_phase52b_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run_command_default_off.py",
+        "src/agents/controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
+        "docs/phase53_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.md",
+        "tests/test_phase53a_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
 
                                 "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
                                 "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",

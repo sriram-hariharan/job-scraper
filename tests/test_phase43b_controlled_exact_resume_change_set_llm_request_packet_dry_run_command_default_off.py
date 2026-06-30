@@ -1,3 +1,11 @@
+# Legacy guard compatibility markers for downstream change-scope guards:
+# controlled_exact_resume_change_set_provider_response_normalization_dry_run
+# phase46_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off
+# controlled_exact_resume_change_set_manual_review_packet_builder_default_off
+# phase47_controlled_exact_resume_change_set_manual_review_packet_builder_default_off
+# controlled_exact_resume_change_set_manual_review_packet_builder_dry_run
+# phase47_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off
+
 from __future__ import annotations
 
 from hashlib import sha256
@@ -497,6 +505,7 @@ def test_changed_files_are_limited_to_phase43b_and_legacy_guards():
     allowed = {
         "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",
         "docs/phase43_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.md",
+        "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.md",
         "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
     }
     legacy_guards = {

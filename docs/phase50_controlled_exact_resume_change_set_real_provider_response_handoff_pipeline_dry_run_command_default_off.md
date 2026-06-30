@@ -31,3 +31,17 @@ Phase 50B calls Phase 50A only. Phase 50A preserves the exact sequence:
 `validation -> normalization -> manual review -> readback`
 
 The dry-run output includes the Phase 50A pipeline result, stage summaries, final readback payload when all stages pass, and false safety flags for provider call, LLM call, network call, mutation, persistence, scoring, artifact creation, application execution, UI/API routes, and user decision acceptance.
+
+## Safety markers
+
+- no provider call
+- no llm
+- no network
+- no mutation
+- no persistence
+- no scoring
+- no application execution
+
+The command preserves the Phase 50A sequence:
+validation -> normalization -> manual review -> readback
+

@@ -339,6 +339,12 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "run_controlled_exact_resume_change_set_provider_response_normalization_dry_run.py",
         "docs/phase46_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off.md",
         "tests/test_phase46b_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off.py",
+        "src/agents/controlled_exact_resume_change_set_manual_review_packet_builder_default_off.py",
+        "docs/phase47_controlled_exact_resume_change_set_manual_review_packet_builder_default_off.md",
+        "tests/test_phase47a_controlled_exact_resume_change_set_manual_review_packet_builder_default_off.py",
+        "run_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run.py",
+        "docs/phase47_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off.md",
+        "tests/test_phase47b_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off.py",
                                 "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
                                 "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",
                                 "docs/phase43_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.md",
@@ -518,6 +524,10 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
                                     [
                                         ROOT
                                         / "src/agents/controlled_exact_resume_change_set_provider_response_normalization_default_off.py"
+                                    ],
+                                    [
+                                        ROOT
+                                        / "src/agents/controlled_exact_resume_change_set_manual_review_packet_builder_default_off.py"
                                     ],
                         [ROOT / "src/app/api.py"],
         [ROOT / "src/app/static/agentic_review.js"],

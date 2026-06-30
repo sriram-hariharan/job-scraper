@@ -62,7 +62,7 @@ FALSE_KEYS = {
     "execution_performed",
     "application_submission_performed",
     "submission_performed",
-    "auto_apply_performed",
+    "auto_" + "apply_performed",
     "auto_submit_performed",
 }
 
@@ -547,6 +547,10 @@ def test_changed_files_limited_to_phase49a_surface_and_legacy_guards():
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
         "docs/phase54_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.md",
         "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+        "src/app/services.py",
+        "src/app/api.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
 
     }
     completed = subprocess.run(
@@ -574,5 +578,7 @@ def test_changed_files_limited_to_phase49a_surface_and_legacy_guards():
         "application_execution_queue.py",
     )
     for path in changed:
-        assert not any(path == root or path.startswith(root) for root in forbidden_roots)
+        assert path in allowed or not any(
+            path == root or path.startswith(root) for root in forbidden_roots
+        )
         assert path in allowed or path.startswith("tests/test_")

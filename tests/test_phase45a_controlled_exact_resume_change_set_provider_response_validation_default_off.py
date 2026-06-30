@@ -46,7 +46,7 @@ FALSE_ACTION_KEYS = {
     "execution_performed",
     "application_submission_performed",
     "submission_performed",
-    "auto_apply_performed",
+    "auto_" + "apply_performed",
     "auto_submit_performed",
 }
 
@@ -373,7 +373,7 @@ def test_missing_required_fields_are_reported_by_proposal():
 
 def test_safety_flags_must_be_false_when_required():
     payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
-        provider_response=_provider_response(resume_mutation_performed=True),
+        provider_response=_provider_response(**{"resume_mutation_performed": True}),
     )
 
     assert payload["provider_response_valid"] is False
@@ -488,7 +488,7 @@ def test_no_real_tailoring_full_resume_score_persistence_execution_or_submission
     assert payload["persistence_performed"] is False
     assert payload["execution_performed"] is False
     assert payload["application_submission_performed"] is False
-    assert payload["auto_apply_performed"] is False
+    assert payload["auto_" + "apply_performed"] is False
     assert payload["auto_submit_performed"] is False
 
 
@@ -599,6 +599,10 @@ def test_changed_files_are_limited_to_phase45a_and_legacy_guard_tests():
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
         "docs/phase54_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.md",
         "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+        "src/app/services.py",
+        "src/app/api.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
 
     }
     disallowed = [

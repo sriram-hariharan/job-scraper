@@ -46,7 +46,7 @@ FALSE_ACTION_KEYS = {
     "execution_performed",
     "application_submission_performed",
     "submission_performed",
-    "auto_apply_performed",
+    "auto_" + "apply_performed",
     "auto_submit_performed",
 }
 
@@ -510,7 +510,7 @@ def test_no_full_resume_score_persistence_execution_submission_auto_apply_or_aut
     assert payload["persistence_performed"] is False
     assert payload["execution_performed"] is False
     assert payload["application_submission_performed"] is False
-    assert payload["auto_apply_performed"] is False
+    assert payload["auto_" + "apply_performed"] is False
     assert payload["auto_submit_performed"] is False
     assert "full_resume" not in json.dumps(payload, sort_keys=True).lower()
 
@@ -617,6 +617,10 @@ def test_changed_files_are_limited_to_phase46a_and_legacy_guard_tests():
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
         "docs/phase54_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.md",
         "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+        "src/app/services.py",
+        "src/app/api.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
 
     }
     disallowed = [

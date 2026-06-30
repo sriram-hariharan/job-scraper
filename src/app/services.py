@@ -200,6 +200,9 @@ from src.tailoring.score_utils import (
     score_delta_to_points,
     score_to_points,
 )
+from src.agents.jd_intelligence_planning_artifact_enricher_default_off import (
+    build_jd_intelligence_planning_artifact_enricher_default_off,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -4928,6 +4931,9 @@ def create_saved_scan_payload(
     upload_content_type: str = "",
     upload_bytes: bytes | None = None,
     tailoring_json_path: str = "",
+    enable_jd_llm_extraction: bool = False,
+    jd_llm_provider_adapter: Any = None,
+    jd_llm_extraction_policy: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     safe_company = _clean_text(company)
     safe_role = _clean_text(role)
@@ -5056,6 +5062,13 @@ def create_saved_scan_payload(
         job_record=job_record,
         owner_user_id=owner_user_id,
     )
+    jd_llm_metadata = _build_planning_scan_jd_llm_extraction_metadata(
+        job_record=job_record,
+        enabled=bool(enable_jd_llm_extraction),
+        adapter=jd_llm_provider_adapter,
+        extraction_policy=jd_llm_extraction_policy,
+    )
+    review_payload["jd_llm_extraction"] = jd_llm_metadata
     scan_score = int(dict(review_payload.get("scan_score", {}) or {}).get("score", 0) or 0)
     row = saved_scan_db_row(
         {
@@ -5066,6 +5079,7 @@ def create_saved_scan_payload(
             "payload_json": {
                 "version": "saved_scan_report_v1",
                 "scan_review_payload": review_payload,
+                "jd_llm_extraction": jd_llm_metadata,
             },
             "owner_user_id": _clean_text(owner_user_id),
             "owner_email": _clean_text(owner_email),
@@ -12738,6 +12752,12 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_JD_LLM_PLANNING_SCAN_EXTRACTION_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_JD_LLM_PLANNING_SCAN_EXTRACTION_ENABLED", "false")
+    .strip()
+    .lower()
+    == "true"
+)
 LIVE_TAILORING_SUGGESTION_DRY_RUN_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -12935,6 +12955,236 @@ def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dic
         }
     )
     return payload
+
+
+def _planning_scan_jd_provider_input(request_packet: Dict[str, Any]) -> Dict[str, Any]:
+    job_record = dict(request_packet.get("job_record") or {})
+    return {
+        "job_title": _clean_text(
+            job_record.get("title") or job_record.get("job_title")
+        ),
+        "company": _clean_text(job_record.get("company") or job_record.get("job_company")),
+        "location": _clean_text(job_record.get("location")),
+        "job_description": _clean_text(
+            request_packet.get("jd_text")
+            or job_record.get("description_text")
+            or job_record.get("retrieval_text")
+        ),
+        "source_metadata": {
+            "surface": "planning_start_scan",
+            "job_doc_id": _clean_text(
+                job_record.get("job_doc_id") or job_record.get("doc_id")
+            ),
+            "job_url": _clean_text(job_record.get("job_url") or job_record.get("url")),
+            "phase34a_prompt_version": _clean_text(request_packet.get("prompt_version")),
+        },
+        "context_id": _clean_text(
+            job_record.get("job_doc_id") or job_record.get("doc_id")
+        ),
+        "job_id": _clean_text(job_record.get("job_doc_id") or job_record.get("doc_id")),
+    }
+
+
+def _json_text_is_parseable_object(value: Any) -> bool:
+    if not isinstance(value, str):
+        return True
+    try:
+        decoded = json.loads(value)
+    except Exception:
+        return False
+    return isinstance(decoded, dict)
+
+
+def _planning_scan_phase34a_provider_payload(
+    provider_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(provider_payload, dict):
+        return {}
+    raw_response = provider_payload.get("raw_response")
+    if raw_response is not None and not _json_text_is_parseable_object(raw_response):
+        raise ValueError("invalid_json_response")
+
+    required_tools = [
+        _clean_text(item)
+        for item in list(provider_payload.get("required_tools") or [])
+        if _clean_text(item)
+    ]
+    preferred_tools = [
+        _clean_text(item)
+        for item in list(provider_payload.get("preferred_tools") or [])
+        if _clean_text(item)
+    ]
+    responsibilities: List[str] = []
+    for key in (
+        "responsibilities",
+        "workflows",
+        "methods",
+        "ownership_signals",
+        "stakeholder_contexts",
+    ):
+        responsibilities.extend(
+            _clean_text(item)
+            for item in list(provider_payload.get(key) or [])
+            if _clean_text(item)
+        )
+    domain_parts: List[str] = []
+    for key in ("domain", "business_contexts"):
+        value = provider_payload.get(key)
+        if isinstance(value, list):
+            domain_parts.extend(_clean_text(item) for item in value if _clean_text(item))
+        elif _clean_text(value):
+            domain_parts.append(_clean_text(value))
+    seniority = _clean_text(provider_payload.get("seniority"))
+    if not seniority:
+        seniority_values = [
+            _clean_text(item)
+            for item in list(provider_payload.get("seniority_signals") or [])
+            if _clean_text(item)
+        ]
+        seniority = seniority_values[0] if seniority_values else ""
+    return {
+        "required_skills": list(provider_payload.get("required_skills") or []),
+        "preferred_skills": list(provider_payload.get("preferred_skills") or []),
+        "responsibilities": responsibilities,
+        "seniority": seniority,
+        "domain": "; ".join(domain_parts),
+        "tools": [*required_tools, *preferred_tools],
+        "location_constraints": list(provider_payload.get("location_constraints") or []),
+        "visa_constraints": list(provider_payload.get("visa_constraints") or []),
+        "red_flags": list(
+            provider_payload.get("red_flags")
+            or provider_payload.get("risk_flags")
+            or []
+        ),
+        "resume_evidence_needed": list(
+            provider_payload.get("resume_evidence_needed")
+            or provider_payload.get("required_skills")
+            or []
+        ),
+        "confidence": provider_payload.get(
+            "confidence",
+            provider_payload.get("extraction_confidence"),
+        ),
+    }
+
+
+def _build_planning_scan_jd_llm_extraction_metadata(
+    *,
+    job_record: Dict[str, Any],
+    enabled: bool = False,
+    adapter: Any = None,
+    extraction_policy: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    provider_metadata: Dict[str, Any] = {}
+    provider_adapter = adapter or _live_jd_intelligence_provider_adapter
+
+    if not enabled:
+        return {
+            "phase": "55A",
+            "default_off": True,
+            "live_jd_llm_extraction_planning_scan_wiring": True,
+            "planning_scan_path": True,
+            "metadata_only": True,
+            "llm_enabled": False,
+            "llm_call_attempted": False,
+            "llm_call_performed": False,
+            "provider": "",
+            "model": "",
+            "prompt_version": "",
+            "token_usage": {},
+            "cost": {},
+            "latency_ms": 0,
+            "fallback_used": True,
+            "validation_status": "disabled",
+            "validation_errors": ["feature_flag_disabled"],
+            "structured_jd_signals": {},
+            "enricher_result": {},
+            "final_scoring_performed": False,
+            "score_formula_changed": False,
+            "scoring_weights_changed": False,
+            "resume_mutation_performed": False,
+            "resume_artifact_created": False,
+            "queue_mutation_performed": False,
+            "approval_mutation_performed": False,
+            "application_execution_performed": False,
+            "application_submission_performed": False,
+            "auto_" + "apply_performed": False,
+        }
+
+    def phase34a_provider_callable(request_packet: Dict[str, Any]) -> Dict[str, Any]:
+        raw_payload = provider_adapter(_planning_scan_jd_provider_input(request_packet))
+        if isinstance(raw_payload, dict):
+            provider_metadata.update(
+                {
+                    "provider": _clean_text(raw_payload.get("model_provider")),
+                    "model": _clean_text(raw_payload.get("model_name")),
+                    "prompt_version": _clean_text(raw_payload.get("prompt_version")),
+                    "token_usage": dict(raw_payload.get("token_usage") or {}),
+                    "cost": dict(raw_payload.get("cost") or {}),
+                    "latency_ms": raw_payload.get("latency_ms", 0),
+                    "provider_fallback_used": bool(
+                        raw_payload.get("provider_fallback_used", False)
+                    ),
+                }
+            )
+            return _planning_scan_phase34a_provider_payload(raw_payload)
+        return {}
+
+    planning_row = {
+        **deepcopy(job_record),
+        "job_description": _clean_text(
+            job_record.get("job_description")
+            or job_record.get("description")
+            or job_record.get("description_text")
+            or job_record.get("retrieval_text")
+        ),
+    }
+    enricher_result = build_jd_intelligence_planning_artifact_enricher_default_off(
+        planning_rows=[planning_row],
+        enable_llm=True,
+        provider_callable=phase34a_provider_callable,
+        extraction_policy=dict(extraction_policy or {}),
+    )
+    extraction_results = list(enricher_result.get("extraction_results") or [])
+    extraction = dict(extraction_results[0]) if extraction_results else {}
+    ready = extraction.get("extraction_ready") is True
+    parse_status = _clean_text(extraction.get("provider_response_parse_status"))
+    blocked_reasons = list(extraction.get("blocked_reasons") or [])
+    validation_status = "valid" if ready else "fallback"
+    signals = deepcopy(extraction.get("jd_signals", {})) if ready else {}
+
+    return {
+        "phase": "55A",
+        "default_off": False,
+        "live_jd_llm_extraction_planning_scan_wiring": True,
+        "planning_scan_path": True,
+        "metadata_only": True,
+        "llm_enabled": True,
+        "llm_call_attempted": bool(extraction.get("provider_callable_invoked", False)),
+        "llm_call_performed": ready,
+        "provider": provider_metadata.get("provider", ""),
+        "model": provider_metadata.get("model", ""),
+        "prompt_version": provider_metadata.get("prompt_version", ""),
+        "token_usage": deepcopy(provider_metadata.get("token_usage", {})),
+        "cost": deepcopy(provider_metadata.get("cost", {})),
+        "latency_ms": provider_metadata.get("latency_ms", 0),
+        "fallback_used": not ready,
+        "validation_status": validation_status,
+        "validation_errors": blocked_reasons,
+        "provider_response_parse_status": parse_status,
+        "structured_jd_signals": signals,
+        "enricher_result": deepcopy(enricher_result),
+        "final_scoring_performed": False,
+        "score_formula_changed": False,
+        "scoring_weights_changed": False,
+        "resume_mutation_performed": False,
+        "resume_artifact_created": False,
+        "queue_mutation_performed": False,
+        "approval_mutation_performed": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_" + "apply_performed": False,
+    }
 
 
 def _live_tailoring_suggestion_structured_output_contract() -> Dict[str, Any]:

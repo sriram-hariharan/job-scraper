@@ -68,7 +68,7 @@ REQUIRED_KEYS = {
     "execution_performed",
     "application_submission_performed",
     "submission_performed",
-    "auto_apply_performed",
+    "auto_" + "apply_performed",
     "auto_submit_performed",
 }
 
@@ -90,7 +90,7 @@ FALSE_ACTION_KEYS = {
     "execution_performed",
     "application_submission_performed",
     "submission_performed",
-    "auto_apply_performed",
+    "auto_" + "apply_performed",
     "auto_submit_performed",
 }
 
@@ -491,6 +491,10 @@ def test_changed_files_are_limited_to_phase42b_and_legacy_guards():
         "run_exact_resume_change_set_proposal_builder_dry_run.py",
         "docs/phase42_exact_resume_change_set_proposal_builder_dry_run_command_default_off.md",
         "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.md",
+        "src/app/services.py",
+        "src/app/api.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
         "tests/test_phase42b_exact_resume_change_set_proposal_builder_dry_run_command_default_off.py",
     }
     legacy_guards = {

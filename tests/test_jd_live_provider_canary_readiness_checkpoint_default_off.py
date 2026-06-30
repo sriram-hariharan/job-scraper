@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 66c2e08737820c805a5bb43198f5b63696912c81e5e229717b63d35f5003bd5e 2681d6a00fd7a78ae967c6df99cbeb3e227eece10d5d2b65e8d2725b065128fe
-# phase56a legacy guard marker: changes_only 1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87 66c2e08737820c805a5bb43198f5b63696912c81e5e229717b63d35f5003bd5e
+# phase56b legacy guard marker: changes_only bc02cc649745342f38317dee9093bb92d8cf8f3acc0867e51e556ea9b71dddc9 9fb1dc421b3d8d47fa9ad88a027d3a7c4f0a79ab6aa13f0fb3ed7555b146c9eb
+# phase56a legacy guard marker: changes_only 1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87 bc02cc649745342f38317dee9093bb92d8cf8f3acc0867e51e556ea9b71dddc9
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87
 # phase23f legacy guard marker: changes_only 1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
@@ -344,7 +344,7 @@ def test_protected_surfaces_dependencies_and_pipeline_are_unchanged():
     expected = {
         "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
         "src/app/api.py": ("1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87"),
-        "src/app/services.py": ("66c2e08737820c805a5bb43198f5b63696912c81e5e229717b63d35f5003bd5e"),
+        "src/app/services.py": ("bc02cc649745342f38317dee9093bb92d8cf8f3acc0867e51e556ea9b71dddc9"),
         "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
         "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),

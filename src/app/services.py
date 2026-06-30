@@ -14698,8 +14698,11 @@ def build_planning_workspace_guarded_resume_copy_artifact_readback(
 
     return {
         "phase": "59A",
+        "readback_phase": "59B",
         "default_off": True,
         "guarded_resume_copy_artifact_wiring": True,
+        "guarded_resume_copy_artifact_readback": True,
+        "phase59b_readback_hardened": True,
         "planning_workspace_action": True,
         "api_readback": True,
         "ui_readback": True,
@@ -14739,6 +14742,40 @@ def build_planning_workspace_guarded_resume_copy_artifact_readback(
             "fallback_error_class": fallback_error_class,
             "validation_errors": validation_errors,
         },
+        "artifact_metadata": {
+            "artifact_created": bool(source.get("artifact_created", False)),
+            "artifact_id": _clean_text(
+                artifact.get("artifact_id") or source.get("artifact_id")
+            ),
+            "stable_artifact_key": _clean_text(
+                artifact.get("stable_artifact_key")
+                or artifact.get("artifact_id")
+                or source.get("artifact_id")
+            ),
+            "artifact_kind": _clean_text(
+                artifact.get("artifact_kind")
+                or source.get("artifact_kind")
+                or "guarded_resume_copy_artifact"
+            ),
+            "output_kind": _clean_text(
+                artifact.get("output_kind")
+                or source.get("output_kind")
+                or "new_copy_resume_artifact"
+            ),
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(
+                source.get("source_resume_overwritten", False)
+            ),
+            "approved_change_plan_id": _clean_text(source.get("approved_change_plan_id")),
+            "stable_plan_key": _clean_text(
+                source.get("stable_plan_key") or source.get("approved_change_plan_id")
+            ),
+            "applied_approved_change_count": len(applied_ids),
+            "applied_approved_change_ids": applied_ids,
+            "rejected_change_count": int(source.get("rejected_change_count") or 0),
+            "skipped_change_count": len(skipped_ids),
+            "skipped_change_ids": skipped_ids,
+        },
         "validation_errors": validation_errors,
         "artifact": deepcopy(artifact) if artifact else None,
         "api_readback_fields": [
@@ -14753,6 +14790,8 @@ def build_planning_workspace_guarded_resume_copy_artifact_readback(
             "approved_change_plan_id",
             "stable_plan_key",
             "applied_approved_change_count",
+            "rejected_change_count",
+            "skipped_change_count",
             "validation_status",
             "fallback_used",
             "fallback_reason",
@@ -14770,6 +14809,8 @@ def build_planning_workspace_guarded_resume_copy_artifact_readback(
             "approved_change_plan_id",
             "stable_plan_key",
             "applied_approved_change_count",
+            "rejected_change_count",
+            "skipped_change_count",
             "validation_status",
             "fallback_used",
             "fallback_reason",

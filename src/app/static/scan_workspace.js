@@ -538,7 +538,9 @@ function renderScanWorkspaceGuardedResumeCopyArtifactReadback(readbackPayload = 
   const planKey = String(readback.approved_change_plan_id || readback.stable_plan_key || "").trim();
   const artifactKind = String(readback.artifact_kind || readback.output_kind || "").trim();
   const appliedCount = Number(readback.applied_approved_change_count);
+  const rejectedCount = Number(readback.rejected_change_count);
   const skippedCount = Number(readback.skipped_change_count);
+  const invalidCount = Number(readback.invalid_change_count);
 
   root.dataset.artifactCreationEnabled = enabled ? "true" : "false";
   root.dataset.artifactCreationRequested = requested ? "true" : "false";
@@ -550,6 +552,11 @@ function renderScanWorkspaceGuardedResumeCopyArtifactReadback(readbackPayload = 
   root.dataset.guardArtifactValidationStatus = validation;
   root.dataset.guardArtifactFallbackReason = fallbackReason;
   root.dataset.guardArtifactFallbackErrorClass = fallbackErrorClass;
+  root.dataset.appliedApprovedChangeCount = Number.isFinite(appliedCount) ? String(appliedCount) : "";
+  root.dataset.rejectedChangeCount = Number.isFinite(rejectedCount) ? String(rejectedCount) : "";
+  root.dataset.skippedChangeCount = Number.isFinite(skippedCount) ? String(skippedCount) : "";
+  root.dataset.invalidChangeCount = Number.isFinite(invalidCount) ? String(invalidCount) : "";
+  root.dataset.phase59bReadbackHardened = readback.phase59b_readback_hardened === true ? "true" : "false";
 
   const parts = [
     `Guarded resume copy artifact: ${enabled ? "enabled" : "default-off"}`,
@@ -559,7 +566,9 @@ function renderScanWorkspaceGuardedResumeCopyArtifactReadback(readbackPayload = 
     `fallback ${fallback ? "yes" : "no"}`,
     `validation ${validation}`,
     Number.isFinite(appliedCount) ? `approved changes ${appliedCount}` : "",
+    Number.isFinite(rejectedCount) ? `rejected ${rejectedCount}` : "",
     Number.isFinite(skippedCount) ? `skipped ${skippedCount}` : "",
+    Number.isFinite(invalidCount) ? `invalid ${invalidCount}` : "",
     artifactKey ? `artifact ${artifactKey}` : "",
     planKey ? `plan ${planKey}` : "",
     artifactKind ? `kind ${artifactKind}` : "",

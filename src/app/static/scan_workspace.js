@@ -370,8 +370,13 @@ function renderScanWorkspaceExactChangeLlmReadback(readbackPayload = null) {
   const cost = readback.cost && typeof readback.cost === "object" ? readback.cost : {};
   const tokenValue = tokenUsage.total_token_count ?? tokenUsage.total_tokens ?? "";
   const costValue = cost.estimated_cost ?? cost.total_cost ?? "";
-  const proposalIds = Array.isArray(readback.proposed_change_ids)
+  const proposalIds = Array.isArray(readback.proposed_change_ids) && readback.proposed_change_ids.length
     ? readback.proposed_change_ids.map((value) => String(value || "").trim()).filter(Boolean)
+    : Array.isArray(readback.stable_proposed_change_keys)
+      ? readback.stable_proposed_change_keys.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+  const stableProposalKeys = Array.isArray(readback.stable_proposed_change_keys)
+    ? readback.stable_proposed_change_keys.map((value) => String(value || "").trim()).filter(Boolean)
     : [];
   const proposalCount = Number(readback.proposed_change_count);
 
@@ -382,6 +387,10 @@ function renderScanWorkspaceExactChangeLlmReadback(readbackPayload = null) {
   root.dataset.exactChangeLlmValidationStatus = validation;
   root.dataset.exactChangeLlmFallbackReason = fallbackReason;
   root.dataset.exactChangeLlmFallbackErrorClass = fallbackErrorClass;
+  root.dataset.exactChangeLlmProposedChangeCount = Number.isFinite(proposalCount)
+    ? String(proposalCount)
+    : "";
+  root.dataset.exactChangeLlmStableProposedChangeKeys = stableProposalKeys.join(",");
 
   const parts = [
     `Live exact change LLM: ${enabled ? "enabled" : "default-off"}`,

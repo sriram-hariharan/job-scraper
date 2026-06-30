@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 98dc0e30a59cfeca8de6e6dbef55a0947bfb2c5a3daf41a37d09f29567cfe974 7dcf2ac6853585a0df5e4e53b11d0a08ebee1b9f72d622b7af3495872abae57d
-# phase56a legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39 98dc0e30a59cfeca8de6e6dbef55a0947bfb2c5a3daf41a37d09f29567cfe974
+# phase56b legacy guard marker: changes_only f388091d0d77f7bc0db4d9072ccabfbc526ac93e81aa949e1526c0b80302f2e8 ba479203ff176589f33ec4456046d8ad57e4fd491376923cc32090eae6693af1
+# phase56a legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39 f388091d0d77f7bc0db4d9072ccabfbc526ac93e81aa949e1526c0b80302f2e8
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39
 from hashlib import sha256
@@ -119,7 +119,7 @@ DOC_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/services.py": "98dc0e30a59cfeca8de6e6dbef55a0947bfb2c5a3daf41a37d09f29567cfe974",
+    "src/app/services.py": "f388091d0d77f7bc0db4d9072ccabfbc526ac93e81aa949e1526c0b80302f2e8",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
@@ -270,6 +270,8 @@ def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
         "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.md",
         "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",
+        "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
+        "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -282,6 +284,8 @@ def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
         "docs/phase56_live_tailoring_suggestion_planning_workspace_wiring_default_off.md",
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.md",
         "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",
+        "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
+        "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/api.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_api_readback.md",

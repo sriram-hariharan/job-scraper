@@ -1,3 +1,5 @@
+# phase56b legacy guard marker: changes_only 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718 cde7018be5fbaec52f7a393de70d71dc1f964b6188831ab25b4fcf28f964c89c
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718
 from __future__ import annotations
 
 from copy import deepcopy
@@ -477,6 +479,18 @@ def test_protected_runtime_hashes_unchanged():
 
 def test_changed_files_are_limited_to_phase48a_contract_surface():
     allowed = {
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
+        "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/app/planning_ui.py",
+        "src/app/static/scan_workspace.js",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.md",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.py",
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_wiring_default_off.md",
+        "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/agents/controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
         "docs/phase48_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.md",
         "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",

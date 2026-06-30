@@ -1521,6 +1521,13 @@ def scan_workspace(
                 >
                   Live JD LLM: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-tailoring-llm-readback"
+                  id="scanWorkspaceTailoringLlmReadback"
+                  aria-live="polite"
+                >
+                  Live tailoring LLM: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1741,6 +1748,16 @@ def scan_workspace(
               >
                 Continue
               </button>
+              <label
+                class="subtext scan-workspace-live-tailoring-toggle"
+                for="scanWorkspaceLiveTailoringSuggestionToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceLiveTailoringSuggestionToggle"
+                />
+                Live tailoring suggestions
+              </label>
               </div>
             </div>
 

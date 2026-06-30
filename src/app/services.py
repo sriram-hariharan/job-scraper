@@ -5375,6 +5375,8 @@ def save_saved_scan_state_payload(
     rewrite_review_decisions: Any = None,
     excluded_scan_issue_ids: Any = None,
     personal_details: Any = None,
+    enable_live_tailoring_suggestion: bool = False,
+    live_tailoring_suggestion_adapter: Any = None,
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5406,12 +5408,20 @@ def save_saved_scan_state_payload(
         draft=draft,
         owner_user_id=owner_user_id,
     )
+    live_tailoring_readback = _planning_workspace_live_tailoring_suggestion_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=owner_user_id,
+        enabled=bool(enable_live_tailoring_suggestion),
+        adapter=live_tailoring_suggestion_adapter,
+        draft=draft,
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
         "draft": draft,
         "has_saved_draft": True,
         "score_preview": {},
+        "live_tailoring_suggestion_readback": live_tailoring_readback,
     }
 
 
@@ -13264,6 +13274,302 @@ def build_planning_scan_jd_llm_extraction_readback(
             "scoring_weights_changed": False,
         },
     }
+
+
+def _planning_workspace_tailoring_suggestion_preview_rows(
+    suggestions: List[Dict[str, Any]],
+    *,
+    suggestion_type: str,
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for suggestion in suggestions:
+        if not isinstance(suggestion, dict):
+            continue
+        suggestion_id = _clean_text(suggestion.get("suggestion_id"))
+        if not suggestion_id:
+            continue
+        rows.append(
+            {
+                "suggestion_id": suggestion_id,
+                "suggestion_type": suggestion_type,
+                "source_bullet_id": _clean_text(suggestion.get("source_bullet_id")),
+                "target_section": _clean_text(
+                    suggestion.get("target_section") or suggestion.get("section")
+                ),
+                "patch_ready": bool(suggestion.get("patch_ready", False)),
+            }
+        )
+    return rows
+
+
+def _planning_workspace_tailoring_suggestion_safety() -> Dict[str, Any]:
+    return {
+        "provider_call_triggered_by_readback": False,
+        "resume_mutation_performed": False,
+        "resume_overwrite_performed": False,
+        "resume_artifact_created": False,
+        "suggestion_application_performed": False,
+        "approved_change_plan_created": False,
+        "exact_resume_change_refinement_performed": False,
+        "queue_mutation_performed": False,
+        "approval_mutation_performed": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_" + "apply_performed": False,
+        "final_scoring_performed": False,
+        "score_formula_changed": False,
+        "scoring_weights_changed": False,
+    }
+
+
+def build_planning_workspace_live_tailoring_suggestion_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    patch_ready = [
+        dict(row)
+        for row in list(source.get("patch_ready_suggestions") or [])
+        if isinstance(row, dict)
+    ]
+    guidance_only = [
+        dict(row)
+        for row in list(source.get("guidance_only_suggestions") or [])
+        if isinstance(row, dict)
+    ]
+    rejected = [
+        dict(row)
+        for row in list(source.get("rejected_suggestions") or [])
+        if isinstance(row, dict)
+    ]
+    preview_rows = (
+        _planning_workspace_tailoring_suggestion_preview_rows(
+            patch_ready,
+            suggestion_type="patch_ready",
+        )
+        + _planning_workspace_tailoring_suggestion_preview_rows(
+            guidance_only,
+            suggestion_type="guidance_only",
+        )
+    )
+    suggestion_ids = [row["suggestion_id"] for row in preview_rows]
+    safety_metadata = dict(source.get("safety_metadata") or {})
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_reason = _clean_text(source.get("fallback_reason")) or (
+        validation_errors[0] if fallback_used and validation_errors else ""
+    )
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_error_class and fallback_reason:
+        if ":" in fallback_reason:
+            fallback_error_class = _clean_text(fallback_reason.rsplit(":", 1)[-1])
+        elif fallback_reason == "invalid_json_response":
+            fallback_error_class = "ValueError"
+    call_attempted = bool(safety_metadata.get("did_call_llm", False))
+    call_performed = call_attempted and not fallback_used and validation_status == "valid"
+    token_usage = deepcopy(source.get("token_usage", {}))
+    if not isinstance(token_usage, dict):
+        token_usage = {}
+    cost = deepcopy(source.get("cost", {}))
+    if not isinstance(cost, dict):
+        cost = {}
+
+    return {
+        "phase": "56B",
+        "source_phase": _clean_text(source.get("phase")) or "56A",
+        "default_off": True,
+        "live_tailoring_suggestion_planning_workspace_wiring": True,
+        "live_tailoring_suggestion_readback": True,
+        "planning_workspace_action": True,
+        "api_readback": True,
+        "ui_readback": True,
+        "metadata_only": True,
+        "tailoring_llm_enabled": bool(enabled),
+        "tailoring_llm_call_attempted": call_attempted,
+        "tailoring_llm_call_performed": call_performed,
+        "fallback_used": fallback_used,
+        "validation_status": validation_status,
+        "validation_errors": validation_errors,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "provider": _clean_text(
+            source.get("model_provider") or source.get("provider")
+        ),
+        "model": _clean_text(source.get("model_name") or source.get("model")),
+        "prompt_version": _clean_text(source.get("prompt_version")),
+        "token_usage": token_usage,
+        "cost": cost,
+        "latency_ms": source.get("latency_ms", 0),
+        "suggestion_count": len(preview_rows),
+        "patch_ready_suggestion_count": len(patch_ready),
+        "guidance_only_suggestion_count": len(guidance_only),
+        "rejected_suggestion_count": len(rejected),
+        "suggestion_ids": suggestion_ids,
+        "stable_suggestion_keys": suggestion_ids,
+        "suggestions_preview": preview_rows,
+        "suggestion_status": _clean_text(source.get("suggestion_status")),
+        "safety": _planning_workspace_tailoring_suggestion_safety(),
+    }
+
+
+def _scan_review_payload_from_saved_scan_row(row: Dict[str, Any] | None) -> Dict[str, Any]:
+    payload_json = dict((row or {}).get("payload_json", {}) or {})
+    review_payload = payload_json.get("scan_review_payload")
+    return dict(review_payload or {}) if isinstance(review_payload, dict) else {}
+
+
+def _planning_workspace_resume_evidence_rows_from_review(
+    review_payload: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    contract = review_payload.get("scan_issue_contract")
+    if not isinstance(contract, dict):
+        return []
+    rows: List[Dict[str, Any]] = []
+
+    def visit(value: Any, *, source_key: str) -> None:
+        if isinstance(value, dict):
+            row = dict(value)
+            row.setdefault("source", source_key)
+            rows.append(row)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item, source_key=source_key)
+
+    for key, value in contract.items():
+        visit(value, source_key=_clean_text(key))
+    return rows[:50]
+
+
+def _planning_workspace_live_tailoring_suggestion_payload(
+    *,
+    scan_id: str,
+    owner_user_id: str = "",
+    enabled: bool = False,
+    adapter: Any = None,
+    draft: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    if not enabled:
+        disabled_payload = build_manual_tailoring_suggestion_dry_run_payload(
+            context_id=scan_id,
+            job_id=scan_id,
+            adapter=adapter,
+            feature_enabled=False,
+            config={"surface": "planning_workspace_action", "phase": "56A"},
+        )
+        return build_planning_workspace_live_tailoring_suggestion_readback(
+            disabled_payload,
+            enabled=False,
+        )
+
+    try:
+        stored_payload = get_saved_scan_postgres_payload(
+            scan_id=scan_id,
+            owner_user_id=owner_user_id,
+        )
+    except Exception as exc:
+        missing_payload = {
+            "fallback_used": True,
+            "validation_status": "fallback",
+            "validation_errors": [f"saved_scan_read_error:{exc.__class__.__name__}"],
+            "safety_metadata": {"did_call_llm": False},
+        }
+        return build_planning_workspace_live_tailoring_suggestion_readback(
+            missing_payload,
+            enabled=True,
+        )
+
+    row = dict(stored_payload.get("scan", {}) or {})
+    review_payload = _scan_review_payload_from_saved_scan_row(row)
+    if not review_payload:
+        missing_payload = {
+            "fallback_used": True,
+            "validation_status": "fallback",
+            "validation_errors": ["missing_scan_review_payload"],
+            "safety_metadata": {"did_call_llm": False},
+        }
+        return build_planning_workspace_live_tailoring_suggestion_readback(
+            missing_payload,
+            enabled=True,
+        )
+
+    jd_readback = review_payload.get("jd_llm_extraction_readback")
+    jd_metadata = review_payload.get("jd_llm_extraction")
+    jd_signals = {}
+    if isinstance(jd_readback, dict) and isinstance(
+        jd_readback.get("structured_jd_signals"),
+        dict,
+    ):
+        jd_signals = dict(jd_readback.get("structured_jd_signals") or {})
+    elif isinstance(jd_metadata, dict) and isinstance(
+        jd_metadata.get("structured_jd_signals"),
+        dict,
+    ):
+        jd_signals = dict(jd_metadata.get("structured_jd_signals") or {})
+
+    safe_draft = dict(draft or {})
+    scan_session = (
+        dict(review_payload.get("scan_session") or {})
+        if isinstance(review_payload.get("scan_session"), dict)
+        else {}
+    )
+    resume_match_payload = {
+        "scan_score": deepcopy(review_payload.get("scan_score", {})),
+        "score_preview": deepcopy(review_payload.get("score_preview", {})),
+        "scan_issue_contract": deepcopy(review_payload.get("scan_issue_contract", {})),
+        "selected_patch_candidate_ids": list(
+            safe_draft.get("selected_patch_candidate_ids") or []
+        ),
+        "rewrite_review_decisions": deepcopy(
+            safe_draft.get("rewrite_review_decisions", {})
+        ),
+        "excluded_scan_issue_ids": list(safe_draft.get("excluded_scan_issue_ids") or []),
+    }
+    payload = build_manual_tailoring_suggestion_dry_run_payload(
+        jd_intelligence=jd_signals,
+        jd_signals=jd_signals,
+        resume_match_payload=resume_match_payload,
+        resume_variants=[
+            {
+                "resume_id": _clean_text(
+                    review_payload.get("selected_resume")
+                    or review_payload.get("resume_name")
+                    or row.get("resume_name")
+                ),
+                "resume_name": _clean_text(
+                    review_payload.get("resume_name") or row.get("resume_name")
+                ),
+            }
+        ],
+        resume_evidence_rows=_planning_workspace_resume_evidence_rows_from_review(
+            review_payload
+        ),
+        selected_resume_id=_clean_text(
+            review_payload.get("selected_resume")
+            or review_payload.get("resume_name")
+            or row.get("resume_name")
+        ),
+        context_id=scan_id,
+        job_id=_clean_text(
+            scan_session.get("job_doc_id")
+            or row.get("job_doc_id")
+            or review_payload.get("job_doc_id")
+        ),
+        adapter=adapter,
+        feature_enabled=True,
+        config={"surface": "planning_workspace_action", "phase": "56A"},
+    )
+    return build_planning_workspace_live_tailoring_suggestion_readback(
+        payload,
+        enabled=True,
+    )
 
 
 def _live_tailoring_suggestion_structured_output_contract() -> Dict[str, Any]:

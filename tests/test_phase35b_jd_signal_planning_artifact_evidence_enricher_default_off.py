@@ -567,6 +567,9 @@ def test_changed_files_are_limited_to_phase35b_surface_and_legacy_guards():
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
         "docs/phase53_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.md",
         "tests/test_phase53a_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
+        "run_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run.py",
+        "docs/phase53_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.md",
+        "tests/test_phase53b_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.py",
 
         "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
         "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",

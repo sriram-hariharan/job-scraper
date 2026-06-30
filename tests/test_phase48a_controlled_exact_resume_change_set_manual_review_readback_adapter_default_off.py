@@ -510,6 +510,9 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
         "docs/phase53_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.md",
         "tests/test_phase53a_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
+        "run_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run.py",
+        "docs/phase53_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.md",
+        "tests/test_phase53b_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.py",
 
     }
     forbidden_roots = (

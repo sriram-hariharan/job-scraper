@@ -510,6 +510,9 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         "src/agents/controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
         "docs/phase48_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.md",
         "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
+        "run_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run.py",
+        "docs/phase48_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run_command_default_off.md",
+        "tests/test_phase48b_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run_command_default_off.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))

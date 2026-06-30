@@ -532,6 +532,9 @@ def test_changed_files_limited_to_phase49a_surface_and_legacy_guards():
         "run_controlled_exact_resume_change_set_manual_decision_packet_dry_run.py",
         "docs/phase51_controlled_exact_resume_change_set_manual_decision_packet_dry_run_command_default_off.md",
         "tests/test_phase51b_controlled_exact_resume_change_set_manual_decision_packet_dry_run_command_default_off.py",
+        "src/agents/controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
+        "docs/phase52_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.md",
+        "tests/test_phase52a_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
 
     }
     completed = subprocess.run(

@@ -1,4 +1,5 @@
-# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc
+# phase56b legacy guard marker: changes_only 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718 cde7018be5fbaec52f7a393de70d71dc1f964b6188831ab25b4fcf28f964c89c
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -17,7 +18,7 @@ ENDPOINT = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e",
-    "src/app/services.py": "0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc",
+    "src/app/services.py": "8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py": "2b31a53bd2cb8f8c4aa8359d5fcbcd246cd9618e65228b38675d7bd2af9470a4",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
@@ -405,6 +406,8 @@ def test_protected_backend_runtime_files_are_unchanged():
 def test_phase31c_changes_only_static_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
+        "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
         "src/app/planning_ui.py",

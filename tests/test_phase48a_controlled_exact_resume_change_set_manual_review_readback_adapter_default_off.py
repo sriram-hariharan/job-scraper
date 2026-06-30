@@ -1,4 +1,5 @@
-# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc
+# phase56b legacy guard marker: changes_only 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718 cde7018be5fbaec52f7a393de70d71dc1f964b6188831ab25b4fcf28f964c89c
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718
 from __future__ import annotations
 
 from copy import deepcopy
@@ -478,6 +479,8 @@ def test_protected_runtime_hashes_unchanged():
 
 def test_changed_files_are_limited_to_phase48a_contract_surface():
     allowed = {
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
+        "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
         "src/app/planning_ui.py",

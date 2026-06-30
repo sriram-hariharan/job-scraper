@@ -1,4 +1,5 @@
-# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc
+# phase56b legacy guard marker: changes_only 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718 cde7018be5fbaec52f7a393de70d71dc1f964b6188831ab25b4fcf28f964c89c
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e
 from __future__ import annotations
@@ -89,7 +90,7 @@ PROTECTED_HASHES = {
         "9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e"
     ),
     "src/app/services.py": (
-        "0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc"
+        "8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718"
     ),
     "src/app/static/agentic_review.js": (
         "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"
@@ -389,6 +390,8 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         if line and line[:2].strip()
     }
     allowed = {
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
+        "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md",
         "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py",
         "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.md",

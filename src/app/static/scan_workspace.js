@@ -278,6 +278,8 @@ function renderScanWorkspaceTailoringLlmReadback(readbackPayload = null) {
   const performed = readback.tailoring_llm_call_performed === true;
   const fallback = readback.fallback_used !== false;
   const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
   const providerModel = [
     String(readback.provider || "").trim(),
     String(readback.model || "").trim(),
@@ -300,6 +302,8 @@ function renderScanWorkspaceTailoringLlmReadback(readbackPayload = null) {
   root.dataset.tailoringLlmCallPerformed = performed ? "true" : "false";
   root.dataset.tailoringLlmFallbackUsed = fallback ? "true" : "false";
   root.dataset.tailoringLlmValidationStatus = validation;
+  root.dataset.tailoringLlmFallbackReason = fallbackReason;
+  root.dataset.tailoringLlmFallbackErrorClass = fallbackErrorClass;
 
   const parts = [
     `Live tailoring LLM: ${enabled ? "enabled" : "default-off"}`,
@@ -307,6 +311,8 @@ function renderScanWorkspaceTailoringLlmReadback(readbackPayload = null) {
     `performed ${performed ? "yes" : "no"}`,
     `fallback ${fallback ? "yes" : "no"}`,
     `validation ${validation}`,
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
     Number.isFinite(suggestionCount) ? `suggestions ${suggestionCount}` : "",
     suggestionIds.length ? `ids ${suggestionIds.slice(0, 4).join(", ")}` : "",
     providerModel ? `provider ${providerModel}` : "",

@@ -13359,6 +13359,20 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
     validation_status = _clean_text(source.get("validation_status")) or (
         "disabled" if not enabled else "missing"
     )
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_reason = _clean_text(source.get("fallback_reason")) or (
+        validation_errors[0] if fallback_used and validation_errors else ""
+    )
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_error_class and fallback_reason:
+        if ":" in fallback_reason:
+            fallback_error_class = _clean_text(fallback_reason.rsplit(":", 1)[-1])
+        elif fallback_reason == "invalid_json_response":
+            fallback_error_class = "ValueError"
     call_attempted = bool(safety_metadata.get("did_call_llm", False))
     call_performed = call_attempted and not fallback_used and validation_status == "valid"
     token_usage = deepcopy(source.get("token_usage", {}))
@@ -13369,17 +13383,23 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
         cost = {}
 
     return {
-        "phase": "56A",
+        "phase": "56B",
+        "source_phase": _clean_text(source.get("phase")) or "56A",
         "default_off": True,
         "live_tailoring_suggestion_planning_workspace_wiring": True,
+        "live_tailoring_suggestion_readback": True,
         "planning_workspace_action": True,
+        "api_readback": True,
+        "ui_readback": True,
         "metadata_only": True,
         "tailoring_llm_enabled": bool(enabled),
         "tailoring_llm_call_attempted": call_attempted,
         "tailoring_llm_call_performed": call_performed,
         "fallback_used": fallback_used,
         "validation_status": validation_status,
-        "validation_errors": list(source.get("validation_errors") or []),
+        "validation_errors": validation_errors,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
         "provider": _clean_text(
             source.get("model_provider") or source.get("provider")
         ),
@@ -13393,6 +13413,7 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
         "guidance_only_suggestion_count": len(guidance_only),
         "rejected_suggestion_count": len(rejected),
         "suggestion_ids": suggestion_ids,
+        "stable_suggestion_keys": suggestion_ids,
         "suggestions_preview": preview_rows,
         "suggestion_status": _clean_text(source.get("suggestion_status")),
         "safety": _planning_workspace_tailoring_suggestion_safety(),

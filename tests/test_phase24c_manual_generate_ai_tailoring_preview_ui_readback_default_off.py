@@ -1,4 +1,5 @@
-# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc
+# phase56b legacy guard marker: changes_only 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718 cde7018be5fbaec52f7a393de70d71dc1f964b6188831ab25b4fcf28f964c89c
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e
 from hashlib import sha256
@@ -17,7 +18,7 @@ ENDPOINT = "/api/manual-generate-ai-tailoring-preview-contract"
 
 PROTECTED_HASHES = {
     "src/app/api.py": "9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e",
-    "src/app/services.py": "0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc",
+    "src/app/services.py": "8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
@@ -329,6 +330,8 @@ def test_protected_backend_runtime_files_are_unchanged():
 def test_phase24c_changes_only_static_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
+        "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
         "src/app/planning_ui.py",

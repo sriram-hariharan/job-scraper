@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637 668b774ac754afb55577b982123dc0ba6d15c197fc641d40ab32ad8e738d02b1
-# phase56a legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637
+# phase56b legacy guard marker: changes_only 66c2e08737820c805a5bb43198f5b63696912c81e5e229717b63d35f5003bd5e 2681d6a00fd7a78ae967c6df99cbeb3e227eece10d5d2b65e8d2725b065128fe
+# phase56a legacy guard marker: changes_only 1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87 66c2e08737820c805a5bb43198f5b63696912c81e5e229717b63d35f5003bd5e
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397
-# phase23f legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase26b legacy guard marker: changes_only 1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87
+# phase23f legacy guard marker: changes_only 1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from hashlib import sha256
 from pathlib import Path
@@ -24,8 +24,8 @@ RUNTIME_HASHES = {
     "src/agents/final_application_scoring.py": ("eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"),
     "src/agents/three_core_agent_shadow_operator_canary.py": ("b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"),
     "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
-    "src/app/api.py": ("069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397"),
-    "src/app/services.py": ("897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637"),
+    "src/app/api.py": ("1ab9853cafc7c1d021a8f66d0914842ae6cf782f3b205ef37e934b08f5102d87"),
+    "src/app/services.py": ("66c2e08737820c805a5bb43198f5b63696912c81e5e229717b63d35f5003bd5e"),
     "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
 }
 
@@ -482,8 +482,10 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
+        "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
+        "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -500,8 +502,10 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
+        "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
+        "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "docs/phase18_live_readiness_approval_boundary.md",
         "tests/test_phase18_live_readiness_approval_boundary_default_off.py",

@@ -5379,6 +5379,8 @@ def save_saved_scan_state_payload(
     live_tailoring_suggestion_adapter: Any = None,
     enable_live_exact_resume_change_proposal: bool = False,
     live_exact_resume_change_proposal_adapter: Any = None,
+    enable_manual_exact_change_acceptance: bool = False,
+    accepted_exact_change_proposal_ids: Any = None,
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5401,6 +5403,11 @@ def save_saved_scan_state_payload(
             excluded_scan_issue_ids or []
         ),
         "personal_details": _normalize_workspace_personal_details(personal_details or {}),
+        "accepted_exact_change_proposal_ids": [
+            _clean_text(value)
+            for value in list(accepted_exact_change_proposal_ids or [])
+            if _clean_text(value)
+        ],
         "draft_status": "saved_scan_state",
         "saved_at": _utc_now(),
     }
@@ -5424,6 +5431,11 @@ def save_saved_scan_state_payload(
         adapter=live_exact_resume_change_proposal_adapter,
         draft=draft,
     )
+    manual_acceptance_readback = _planning_workspace_manual_exact_change_acceptance_payload(
+        live_exact_change_readback=live_exact_change_readback,
+        enabled=bool(enable_manual_exact_change_acceptance),
+        accepted_proposal_ids=draft["accepted_exact_change_proposal_ids"],
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5432,6 +5444,7 @@ def save_saved_scan_state_payload(
         "score_preview": {},
         "live_tailoring_suggestion_readback": live_tailoring_readback,
         "live_exact_resume_change_proposal_readback": live_exact_change_readback,
+        "manual_exact_change_acceptance_readback": manual_acceptance_readback,
     }
 
 
@@ -13688,6 +13701,186 @@ def build_planning_workspace_live_exact_resume_change_proposal_readback(
     }
 
 
+def _planning_workspace_manual_exact_acceptance_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "resume_mutation_performed": False,
+        "resume_overwrite_performed": False,
+        "resume_artifact_created": False,
+        "suggestion_application_performed": False,
+        "proposal_approval_performed": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+        "final_score_produced": False,
+        "existing_score_changed": False,
+    }
+
+
+def build_planning_workspace_manual_exact_change_acceptance_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    plan_result = (
+        dict(source.get("plan_result") or {})
+        if isinstance(source.get("plan_result"), dict)
+        else {}
+    )
+    packet = (
+        dict(plan_result.get("approved_change_plan_packet") or {})
+        if isinstance(plan_result.get("approved_change_plan_packet"), dict)
+        else {}
+    )
+    approved_changes = [
+        dict(row)
+        for row in list(packet.get("approved_changes") or [])
+        if isinstance(row, dict)
+    ]
+    accepted_ids = [
+        _clean_text(row.get("proposal_id"))
+        for row in approved_changes
+        if _clean_text(row.get("proposal_id"))
+    ]
+    skipped_ids = [
+        _clean_text(value)
+        for value in list(source.get("skipped_proposal_ids") or [])
+        if _clean_text(value)
+    ]
+    invalid_ids = [
+        _clean_text(value)
+        for value in list(source.get("invalid_proposal_ids") or [])
+        if _clean_text(value)
+    ]
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason"))
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    if not fallback_reason and fallback_used and validation_errors:
+        fallback_reason = validation_errors[0]
+    if not fallback_error_class and fallback_reason:
+        if ":" in fallback_reason:
+            fallback_error_class = _clean_text(fallback_reason.rsplit(":", 1)[-1])
+        elif validation_status in {"fallback", "blocked"}:
+            fallback_error_class = "ValueError"
+
+    return {
+        "phase": "58A",
+        "readback_phase": "58B",
+        "default_off": True,
+        "manual_exact_change_acceptance_approved_plan_wiring": True,
+        "manual_exact_change_acceptance_approved_plan_readback": True,
+        "phase58b_readback_hardened": True,
+        "planning_workspace_action": True,
+        "api_readback": True,
+        "ui_readback": True,
+        "approved_change_plan_readback": True,
+        "metadata_only": True,
+        "plan_packet_only": True,
+        "manual_acceptance_enabled": bool(enabled),
+        "manual_acceptance_performed": bool(
+            source.get("manual_acceptance_performed", False)
+        ),
+        "accepted_proposal_count": len(accepted_ids),
+        "accepted_proposal_ids": accepted_ids,
+        "stable_accepted_proposal_keys": accepted_ids,
+        "rejected_proposal_count": int(source.get("rejected_proposal_count") or 0),
+        "skipped_proposal_count": len(skipped_ids),
+        "skipped_proposal_ids": skipped_ids,
+        "invalid_proposal_count": len(invalid_ids),
+        "invalid_proposal_ids": invalid_ids,
+        "approved_change_plan_created": bool(
+            plan_result.get("approved_change_plan_packet_created", False)
+        ),
+        "approved_change_plan_id": _clean_text(
+            plan_result.get("approved_change_plan_packet_key")
+        ),
+        "stable_plan_key": _clean_text(plan_result.get("approved_change_plan_packet_key")),
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "fallback_metadata": {
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "validation_errors": validation_errors,
+        },
+        "manual_acceptance_metadata": {
+            "accepted_proposal_count": len(accepted_ids),
+            "accepted_proposal_ids": accepted_ids,
+            "stable_accepted_proposal_keys": accepted_ids,
+            "rejected_proposal_count": int(source.get("rejected_proposal_count") or 0),
+            "skipped_proposal_count": len(skipped_ids),
+            "skipped_proposal_ids": skipped_ids,
+            "invalid_proposal_count": len(invalid_ids),
+            "invalid_proposal_ids": invalid_ids,
+            "approved_change_plan_created": bool(
+                plan_result.get("approved_change_plan_packet_created", False)
+            ),
+            "approved_change_plan_id": _clean_text(
+                plan_result.get("approved_change_plan_packet_key")
+            ),
+            "stable_plan_key": _clean_text(
+                plan_result.get("approved_change_plan_packet_key")
+            ),
+        },
+        "api_readback_fields": [
+            "manual_acceptance_enabled",
+            "manual_acceptance_performed",
+            "accepted_proposal_count",
+            "accepted_proposal_ids",
+            "stable_accepted_proposal_keys",
+            "rejected_proposal_count",
+            "skipped_proposal_count",
+            "approved_change_plan_created",
+            "approved_change_plan_id",
+            "stable_plan_key",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+        ],
+        "ui_readback_fields": [
+            "manual_acceptance_enabled",
+            "manual_acceptance_performed",
+            "accepted_proposal_count",
+            "accepted_proposal_ids",
+            "stable_accepted_proposal_keys",
+            "rejected_proposal_count",
+            "skipped_proposal_count",
+            "approved_change_plan_created",
+            "approved_change_plan_id",
+            "stable_plan_key",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+        ],
+        "validation_errors": validation_errors,
+        "approved_change_plan_packet": deepcopy(packet) if packet else None,
+        "stage_results": {
+            "manual_decision": deepcopy(source.get("manual_decision_result", {})),
+            "manual_decision_readback": deepcopy(source.get("manual_decision_readback_result", {})),
+            "approved_change_plan": deepcopy(plan_result),
+        },
+        "safety": _planning_workspace_manual_exact_acceptance_safety(),
+    }
+
+
 def _scan_review_payload_from_saved_scan_row(row: Dict[str, Any] | None) -> Dict[str, Any]:
     payload_json = dict((row or {}).get("payload_json", {}) or {})
     review_payload = payload_json.get("scan_review_payload")
@@ -14208,6 +14401,220 @@ def _planning_workspace_live_exact_resume_change_proposal_payload(
                 **normalization_result,
                 "normalized_refined_change_proposals": normalized,
             },
+        },
+        enabled=True,
+    )
+
+
+def _planning_workspace_manual_acceptance_readback_items(
+    live_exact_change_readback: Dict[str, Any] | None,
+) -> List[Dict[str, Any]]:
+    source = dict(live_exact_change_readback or {})
+    rows = source.get("proposed_changes_preview")
+    if not isinstance(rows, list):
+        rows = []
+    readback_items: List[Dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        proposal_id = _clean_text(row.get("proposal_id"))
+        if not proposal_id:
+            continue
+        readback_items.append(
+            {
+                "readback_item_id": f"phase58-readback-{proposal_id}",
+                "proposal_id": proposal_id,
+                "change_id": proposal_id,
+                "change_type": _clean_text(row.get("change_type")),
+                "target_section": _clean_text(row.get("target_section")),
+                "target_identifier": _clean_text(row.get("target_identifier")),
+                "manual_review_required": True,
+                "requires_user_acceptance": True,
+                "display_order": index + 1,
+                "resume_change_applied": False,
+                "resume_overwrite_performed": False,
+                "resume_mutation_performed": False,
+                "artifact_created": False,
+                "application_execution_performed": False,
+            }
+        )
+    return readback_items
+
+
+def _planning_workspace_manual_exact_change_acceptance_payload(
+    *,
+    live_exact_change_readback: Dict[str, Any] | None,
+    enabled: bool = False,
+    accepted_proposal_ids: Any = None,
+) -> Dict[str, Any]:
+    requested_ids = [
+        _clean_text(value)
+        for value in list(accepted_proposal_ids or [])
+        if _clean_text(value)
+    ]
+    if not enabled:
+        return build_planning_workspace_manual_exact_change_acceptance_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "skipped_proposal_ids": requested_ids,
+            },
+            enabled=False,
+        )
+
+    readback_items = _planning_workspace_manual_acceptance_readback_items(
+        live_exact_change_readback
+    )
+    known_ids = {
+        _clean_text(item.get("proposal_id"))
+        for item in readback_items
+        if _clean_text(item.get("proposal_id"))
+    }
+    accepted_ids = [proposal_id for proposal_id in requested_ids if proposal_id in known_ids]
+    invalid_ids = [proposal_id for proposal_id in requested_ids if proposal_id not in known_ids]
+    skipped_ids = sorted(known_ids.difference(accepted_ids))
+    if not requested_ids:
+        return build_planning_workspace_manual_exact_change_acceptance_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["accepted_proposal_ids_required"],
+                "fallback_reason": "accepted_proposal_ids_required",
+                "skipped_proposal_ids": sorted(known_ids),
+                "invalid_proposal_ids": invalid_ids,
+            },
+            enabled=True,
+        )
+    if not readback_items:
+        return build_planning_workspace_manual_exact_change_acceptance_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["exact_change_proposal_readback_required"],
+                "fallback_reason": "exact_change_proposal_readback_required",
+                "skipped_proposal_ids": skipped_ids,
+                "invalid_proposal_ids": invalid_ids,
+            },
+            enabled=True,
+        )
+    if invalid_ids:
+        return build_planning_workspace_manual_exact_change_acceptance_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["unknown_accepted_proposal_ids"],
+                "fallback_reason": "unknown_accepted_proposal_ids",
+                "skipped_proposal_ids": skipped_ids,
+                "invalid_proposal_ids": invalid_ids,
+            },
+            enabled=True,
+        )
+
+    from src.agents.controlled_exact_resume_change_set_manual_decision_packet_default_off import (
+        build_controlled_exact_resume_change_set_manual_decision_packet_default_off,
+    )
+    from src.agents.controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off import (
+        build_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off,
+    )
+    from src.agents.controlled_exact_resume_change_set_approved_change_plan_packet_default_off import (
+        build_controlled_exact_resume_change_set_approved_change_plan_packet_default_off,
+    )
+
+    manual_review_output = {"readback_items": readback_items}
+    manual_decisions = [
+        {
+            "proposal_id": proposal_id,
+            "decision": "approve",
+            "decision_reason": "accepted in planning workspace",
+        }
+        for proposal_id in accepted_ids
+    ] + [
+        {
+            "proposal_id": proposal_id,
+            "decision": "reject",
+            "decision_reason": "not selected in planning workspace",
+        }
+        for proposal_id in skipped_ids
+    ]
+    manual_decision_result = build_controlled_exact_resume_change_set_manual_decision_packet_default_off(
+        manual_review_output=manual_review_output,
+        manual_decisions=manual_decisions,
+        enabled=True,
+        decision_policy={"allow_manual_decision_packet": True},
+    )
+    if manual_decision_result.get("manual_decision_packet_created") is not True:
+        return build_planning_workspace_manual_exact_change_acceptance_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": [
+                    _clean_text(manual_decision_result.get("blocked_reason"))
+                    or "manual_decision_packet_failed"
+                ],
+                "fallback_reason": "manual_decision_packet_failed",
+                "manual_decision_result": manual_decision_result,
+                "skipped_proposal_ids": skipped_ids,
+                "invalid_proposal_ids": invalid_ids,
+            },
+            enabled=True,
+        )
+    manual_decision_readback_result = build_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off(
+        manual_decision_packet_result=manual_decision_result,
+        enabled=True,
+        readback_policy={"allow_manual_decision_readback": True},
+    )
+    if manual_decision_readback_result.get("readback_payload_created") is not True:
+        return build_planning_workspace_manual_exact_change_acceptance_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": [
+                    _clean_text(manual_decision_readback_result.get("blocked_reason"))
+                    or "manual_decision_readback_failed"
+                ],
+                "fallback_reason": "manual_decision_readback_failed",
+                "manual_decision_result": manual_decision_result,
+                "manual_decision_readback_result": manual_decision_readback_result,
+                "skipped_proposal_ids": skipped_ids,
+                "invalid_proposal_ids": invalid_ids,
+            },
+            enabled=True,
+        )
+    plan_result = build_controlled_exact_resume_change_set_approved_change_plan_packet_default_off(
+        manual_decision_readback_result=manual_decision_readback_result,
+        enabled=True,
+        plan_policy={"allow_approved_change_plan_packet": True},
+    )
+    if plan_result.get("approved_change_plan_packet_created") is not True:
+        return build_planning_workspace_manual_exact_change_acceptance_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": [
+                    _clean_text(plan_result.get("blocked_reason"))
+                    or "approved_change_plan_failed"
+                ],
+                "fallback_reason": "approved_change_plan_failed",
+                "manual_decision_result": manual_decision_result,
+                "manual_decision_readback_result": manual_decision_readback_result,
+                "plan_result": plan_result,
+                "skipped_proposal_ids": skipped_ids,
+                "invalid_proposal_ids": invalid_ids,
+            },
+            enabled=True,
+        )
+    return build_planning_workspace_manual_exact_change_acceptance_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "manual_acceptance_performed": True,
+            "manual_decision_result": manual_decision_result,
+            "manual_decision_readback_result": manual_decision_readback_result,
+            "plan_result": plan_result,
+            "skipped_proposal_ids": skipped_ids,
+            "invalid_proposal_ids": invalid_ids,
+            "rejected_proposal_count": len(skipped_ids),
         },
         enabled=True,
     )

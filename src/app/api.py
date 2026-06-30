@@ -160,6 +160,8 @@ class PlanningSavedScanStateRequest(BaseModel):
     personal_details: dict[str, str] = Field(default_factory=dict)
     enable_live_tailoring_suggestion: bool = False
     enable_live_exact_resume_change_proposal: bool = False
+    enable_manual_exact_change_acceptance: bool = False
+    accepted_exact_change_proposal_ids: list[str] = Field(default_factory=list)
 
 
 class AgentFeedbackRequest(BaseModel):
@@ -3192,6 +3194,8 @@ def planning_save_saved_scan_state(
             personal_details=request.personal_details,
             enable_live_tailoring_suggestion=request.enable_live_tailoring_suggestion,
             enable_live_exact_resume_change_proposal=request.enable_live_exact_resume_change_proposal,
+            enable_manual_exact_change_acceptance=request.enable_manual_exact_change_acceptance,
+            accepted_exact_change_proposal_ids=request.accepted_exact_change_proposal_ids,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -412,6 +412,81 @@ function renderScanWorkspaceExactChangeLlmReadback(readbackPayload = null) {
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceManualExactChangeAcceptanceEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceManualExactChangeAcceptanceToggle")?.checked === true;
+}
+
+function getScanWorkspaceAcceptedExactChangeProposalIds() {
+  const input = getScanWorkspaceInput("scanWorkspaceAcceptedExactChangeProposalIds");
+  const raw = String(input?.value || "").trim();
+  if (!raw) return [];
+  return raw.split(",").map((value) => value.trim()).filter(Boolean);
+}
+
+function getScanWorkspaceManualExactChangeAcceptancePayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.manual_exact_change_acceptance_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceManualExactChangeAcceptanceReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceManualExactChangeAcceptanceReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceManualExactChangeAcceptancePayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Manual exact change acceptance: default-off";
+    root.dataset.manualAcceptanceEnabled = "false";
+    root.dataset.approvedChangePlanCreated = "false";
+    return;
+  }
+
+  const enabled = readback.manual_acceptance_enabled === true;
+  const performed = readback.manual_acceptance_performed === true;
+  const planCreated = readback.approved_change_plan_created === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const acceptedIds = Array.isArray(readback.accepted_proposal_ids)
+    ? readback.accepted_proposal_ids.map((value) => String(value || "").trim()).filter(Boolean)
+    : Array.isArray(readback.stable_accepted_proposal_keys)
+      ? readback.stable_accepted_proposal_keys.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+  const acceptedCount = Number(readback.accepted_proposal_count);
+  const skippedCount = Number(readback.skipped_proposal_count);
+  const planKey = String(readback.approved_change_plan_id || readback.stable_plan_key || "").trim();
+
+  root.dataset.manualAcceptanceEnabled = enabled ? "true" : "false";
+  root.dataset.manualAcceptancePerformed = performed ? "true" : "false";
+  root.dataset.approvedChangePlanCreated = planCreated ? "true" : "false";
+  root.dataset.manualAcceptanceValidationStatus = validation;
+  root.dataset.manualAcceptanceFallbackReason = fallbackReason;
+  root.dataset.manualAcceptanceFallbackErrorClass = fallbackErrorClass;
+  root.dataset.acceptedExactChangeProposalIds = acceptedIds.join(",");
+  root.dataset.approvedChangePlanKey = planKey;
+
+  const parts = [
+    `Manual exact change acceptance: ${enabled ? "enabled" : "default-off"}`,
+    `performed ${performed ? "yes" : "no"}`,
+    `plan ${planCreated ? "created" : "not created"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    Number.isFinite(acceptedCount) ? `accepted ${acceptedCount}` : "",
+    Number.isFinite(skippedCount) ? `skipped ${skippedCount}` : "",
+    acceptedIds.length ? `ids ${acceptedIds.slice(0, 4).join(", ")}` : "",
+    planKey ? `plan ${planKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1262,6 +1337,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceJdLlmReadback();
   renderScanWorkspaceTailoringLlmReadback();
   renderScanWorkspaceExactChangeLlmReadback();
+  renderScanWorkspaceManualExactChangeAcceptanceReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1298,6 +1374,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceJdLlmReadback();
   renderScanWorkspaceTailoringLlmReadback();
   renderScanWorkspaceExactChangeLlmReadback();
+  renderScanWorkspaceManualExactChangeAcceptanceReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3065,6 +3142,8 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           personal_details: payload.personal_details || {},
           enable_live_tailoring_suggestion: getScanWorkspaceLiveTailoringSuggestionEnabled(),
           enable_live_exact_resume_change_proposal: getScanWorkspaceLiveExactChangeProposalEnabled(),
+          enable_manual_exact_change_acceptance: getScanWorkspaceManualExactChangeAcceptanceEnabled(),
+          accepted_exact_change_proposal_ids: getScanWorkspaceAcceptedExactChangeProposalIds(),
         }
       : payload;
     const response =
@@ -3091,6 +3170,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     scanWorkspacePersistenceState.loadResponse = response;
     renderScanWorkspaceTailoringLlmReadback(response);
     renderScanWorkspaceExactChangeLlmReadback(response);
+    renderScanWorkspaceManualExactChangeAcceptanceReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

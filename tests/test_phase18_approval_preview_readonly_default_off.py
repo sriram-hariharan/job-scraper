@@ -492,6 +492,9 @@ def test_phase18c_changes_only_approved_docs_and_tests():
         "src/agents/controlled_exact_resume_change_set_manual_decision_packet_default_off.py",
         "docs/phase51_controlled_exact_resume_change_set_manual_decision_packet_default_off.md",
         "tests/test_phase51a_controlled_exact_resume_change_set_manual_decision_packet_default_off.py",
+        "run_controlled_exact_resume_change_set_manual_decision_packet_dry_run.py",
+        "docs/phase51_controlled_exact_resume_change_set_manual_decision_packet_dry_run_command_default_off.md",
+        "tests/test_phase51b_controlled_exact_resume_change_set_manual_decision_packet_dry_run_command_default_off.py",
 
                                 "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
                                 "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",

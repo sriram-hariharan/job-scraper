@@ -579,6 +579,88 @@ function renderScanWorkspaceGuardedResumeCopyArtifactReadback(readbackPayload = 
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceGuardedResumeCopyArtifactVerificationEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceGuardedResumeCopyArtifactVerificationToggle")?.checked === true;
+}
+
+function getScanWorkspaceGuardedResumeCopyArtifactId() {
+  return String(getScanWorkspaceInput("scanWorkspaceGuardedResumeCopyArtifactId")?.value || "").trim();
+}
+
+function getScanWorkspaceGuardedResumeCopyArtifactVerificationPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.guarded_resume_copy_artifact_verification_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceGuardedResumeCopyArtifactVerificationReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceGuardedResumeCopyArtifactVerificationPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Guarded artifact verification: default-off";
+    root.dataset.artifactVerificationEnabled = "false";
+    root.dataset.artifactVerificationPerformed = "false";
+    return;
+  }
+
+  const enabled = readback.artifact_verification_enabled === true;
+  const requested = readback.artifact_verification_requested === true;
+  const performed = readback.artifact_verification_performed === true;
+  const passed = readback.artifact_verification_passed === true;
+  const readable = readback.artifact_readable === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase60bReadbackHardened = readback.phase60b_readback_hardened === true;
+  const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
+  const planKey = String(readback.approved_change_plan_id || readback.stable_plan_key || "").trim();
+  const appliedCount = Number(readback.applied_approved_change_count);
+  const mismatchCount = Number(readback.mismatch_count);
+
+  root.dataset.artifactVerificationEnabled = enabled ? "true" : "false";
+  root.dataset.artifactVerificationRequested = requested ? "true" : "false";
+  root.dataset.artifactVerificationPerformed = performed ? "true" : "false";
+  root.dataset.artifactVerificationPassed = passed ? "true" : "false";
+  root.dataset.artifactReadable = readable ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.guardedResumeCopyArtifactVerificationKey = artifactKey;
+  root.dataset.approvedChangePlanKey = planKey;
+  root.dataset.artifactVerificationValidationStatus = validation;
+  root.dataset.artifactVerificationFallbackReason = fallbackReason;
+  root.dataset.artifactVerificationFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase60bReadbackHardened = phase60bReadbackHardened ? "true" : "false";
+
+  const parts = [
+    `Guarded artifact verification: ${enabled ? "enabled" : "default-off"}`,
+    phase60bReadbackHardened ? "readback hardened" : "",
+    `requested ${requested ? "yes" : "no"}`,
+    `performed ${performed ? "yes" : "no"}`,
+    `passed ${passed ? "yes" : "no"}`,
+    `readable ${readable ? "yes" : "no"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    Number.isFinite(appliedCount) ? `approved changes ${appliedCount}` : "",
+    Number.isFinite(mismatchCount) ? `mismatches ${mismatchCount}` : "",
+    artifactKey ? `artifact ${artifactKey}` : "",
+    planKey ? `plan ${planKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1431,6 +1513,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceExactChangeLlmReadback();
   renderScanWorkspaceManualExactChangeAcceptanceReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactReadback();
+  renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1469,6 +1552,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceExactChangeLlmReadback();
   renderScanWorkspaceManualExactChangeAcceptanceReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactReadback();
+  renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3240,6 +3324,8 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           accepted_exact_change_proposal_ids: getScanWorkspaceAcceptedExactChangeProposalIds(),
           enable_guarded_resume_copy_artifact_creation: getScanWorkspaceGuardedResumeCopyArtifactEnabled(),
           approved_change_plan_id: getScanWorkspaceApprovedChangePlanId(),
+          enable_guarded_resume_copy_artifact_verification: getScanWorkspaceGuardedResumeCopyArtifactVerificationEnabled(),
+          guarded_resume_copy_artifact_id: getScanWorkspaceGuardedResumeCopyArtifactId(),
         }
       : payload;
     const response =
@@ -3268,6 +3354,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceExactChangeLlmReadback(response);
     renderScanWorkspaceManualExactChangeAcceptanceReadback(response);
     renderScanWorkspaceGuardedResumeCopyArtifactReadback(response);
+    renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

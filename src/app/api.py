@@ -164,6 +164,8 @@ class PlanningSavedScanStateRequest(BaseModel):
     accepted_exact_change_proposal_ids: list[str] = Field(default_factory=list)
     enable_guarded_resume_copy_artifact_creation: bool = False
     approved_change_plan_id: str = ""
+    enable_guarded_resume_copy_artifact_verification: bool = False
+    guarded_resume_copy_artifact_id: str = ""
 
 
 class AgentFeedbackRequest(BaseModel):
@@ -3200,6 +3202,8 @@ def planning_save_saved_scan_state(
             accepted_exact_change_proposal_ids=request.accepted_exact_change_proposal_ids,
             enable_guarded_resume_copy_artifact_creation=request.enable_guarded_resume_copy_artifact_creation,
             approved_change_plan_id=request.approved_change_plan_id,
+            enable_guarded_resume_copy_artifact_verification=request.enable_guarded_resume_copy_artifact_verification,
+            guarded_resume_copy_artifact_id=request.guarded_resume_copy_artifact_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

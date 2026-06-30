@@ -1549,6 +1549,13 @@ def scan_workspace(
                 >
                   Guarded resume copy artifact: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-guarded-resume-copy-artifact-verification-readback"
+                  id="scanWorkspaceGuardedResumeCopyArtifactVerificationReadback"
+                  aria-live="polite"
+                >
+                  Guarded artifact verification: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1822,6 +1829,23 @@ def scan_workspace(
                 id="scanWorkspaceApprovedChangePlanId"
                 placeholder="Approved change plan ID"
                 aria-label="Approved change plan ID"
+              />
+              <label
+                class="subtext scan-workspace-guarded-resume-copy-artifact-verification-toggle"
+                for="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle"
+                />
+                Verify guarded resume copy
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-guarded-resume-copy-artifact-id-input"
+                id="scanWorkspaceGuardedResumeCopyArtifactId"
+                placeholder="Guarded artifact ID"
+                aria-label="Guarded resume copy artifact ID"
               />
               </div>
             </div>

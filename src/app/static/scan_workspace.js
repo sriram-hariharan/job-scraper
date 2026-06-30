@@ -247,6 +247,84 @@ function renderScanWorkspaceJdLlmReadback() {
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceLiveTailoringSuggestionEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceLiveTailoringSuggestionToggle")?.checked === true;
+}
+
+function getScanWorkspaceTailoringLlmReadbackPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.live_tailoring_suggestion_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceTailoringLlmReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceTailoringLlmReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceTailoringLlmReadbackPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Live tailoring LLM: default-off";
+    root.dataset.tailoringLlmEnabled = "false";
+    root.dataset.tailoringLlmCallAttempted = "false";
+    return;
+  }
+
+  const enabled = readback.tailoring_llm_enabled === true;
+  const attempted = readback.tailoring_llm_call_attempted === true;
+  const performed = readback.tailoring_llm_call_performed === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const providerModel = [
+    String(readback.provider || "").trim(),
+    String(readback.model || "").trim(),
+  ].filter(Boolean).join("/");
+  const promptVersion = String(readback.prompt_version || "").trim();
+  const latency = Number(readback.latency_ms);
+  const tokenUsage = readback.token_usage && typeof readback.token_usage === "object"
+    ? readback.token_usage
+    : {};
+  const cost = readback.cost && typeof readback.cost === "object" ? readback.cost : {};
+  const tokenValue = tokenUsage.total_token_count ?? tokenUsage.total_tokens ?? "";
+  const costValue = cost.estimated_cost ?? cost.total_cost ?? "";
+  const suggestionIds = Array.isArray(readback.suggestion_ids)
+    ? readback.suggestion_ids.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const suggestionCount = Number(readback.suggestion_count);
+
+  root.dataset.tailoringLlmEnabled = enabled ? "true" : "false";
+  root.dataset.tailoringLlmCallAttempted = attempted ? "true" : "false";
+  root.dataset.tailoringLlmCallPerformed = performed ? "true" : "false";
+  root.dataset.tailoringLlmFallbackUsed = fallback ? "true" : "false";
+  root.dataset.tailoringLlmValidationStatus = validation;
+  root.dataset.tailoringLlmFallbackReason = fallbackReason;
+  root.dataset.tailoringLlmFallbackErrorClass = fallbackErrorClass;
+
+  const parts = [
+    `Live tailoring LLM: ${enabled ? "enabled" : "default-off"}`,
+    `attempted ${attempted ? "yes" : "no"}`,
+    `performed ${performed ? "yes" : "no"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+    Number.isFinite(suggestionCount) ? `suggestions ${suggestionCount}` : "",
+    suggestionIds.length ? `ids ${suggestionIds.slice(0, 4).join(", ")}` : "",
+    providerModel ? `provider ${providerModel}` : "",
+    promptVersion ? `prompt ${promptVersion}` : "",
+    Number.isFinite(latency) && latency > 0 ? `${latency}ms` : "",
+    tokenValue !== "" ? `tokens ${tokenValue}` : "",
+    costValue !== "" ? `cost ${costValue}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1095,6 +1173,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
     updateScanWorkspaceContextLine(payload);
   }
   renderScanWorkspaceJdLlmReadback();
+  renderScanWorkspaceTailoringLlmReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1129,6 +1208,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
     renderScanWorkspaceView();
   }
   renderScanWorkspaceJdLlmReadback();
+  renderScanWorkspaceTailoringLlmReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -2894,6 +2974,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           rewrite_review_decisions: payload.rewrite_review_decisions || {},
           excluded_scan_issue_ids: payload.excluded_scan_issue_ids || [],
           personal_details: payload.personal_details || {},
+          enable_live_tailoring_suggestion: getScanWorkspaceLiveTailoringSuggestionEnabled(),
         }
       : payload;
     const response =
@@ -2918,6 +2999,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           });
 
     scanWorkspacePersistenceState.loadResponse = response;
+    renderScanWorkspaceTailoringLlmReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

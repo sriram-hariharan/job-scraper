@@ -158,6 +158,7 @@ class PlanningSavedScanStateRequest(BaseModel):
     rewrite_review_decisions: dict[str, dict[str, str] | str] = Field(default_factory=dict)
     excluded_scan_issue_ids: list[str] = Field(default_factory=list)
     personal_details: dict[str, str] = Field(default_factory=dict)
+    enable_live_tailoring_suggestion: bool = False
 
 
 class AgentFeedbackRequest(BaseModel):
@@ -3188,6 +3189,7 @@ def planning_save_saved_scan_state(
             rewrite_review_decisions=request.rewrite_review_decisions,
             excluded_scan_issue_ids=request.excluded_scan_issue_ids,
             personal_details=request.personal_details,
+            enable_live_tailoring_suggestion=request.enable_live_tailoring_suggestion,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

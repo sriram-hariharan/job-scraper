@@ -499,6 +499,9 @@ def test_changed_files_are_limited_to_phase47b_and_legacy_guards():
         "src/agents/controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
         "docs/phase52_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.md",
         "tests/test_phase52a_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
+        "run_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run.py",
+        "docs/phase52_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run_command_default_off.md",
+        "tests/test_phase52b_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run_command_default_off.py",
 
     }
     legacy_guards = {

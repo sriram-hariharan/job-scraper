@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718 cde7018be5fbaec52f7a393de70d71dc1f964b6188831ab25b4fcf28f964c89c
-# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718
+# phase56b legacy guard marker: changes_only f388091d0d77f7bc0db4d9072ccabfbc526ac93e81aa949e1526c0b80302f2e8 ba479203ff176589f33ec4456046d8ad57e4fd491376923cc32090eae6693af1
+# phase56a legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39 f388091d0d77f7bc0db4d9072ccabfbc526ac93e81aa949e1526c0b80302f2e8
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e
-# phase23f legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase26b legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39
+# phase23f legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from copy import deepcopy
 from hashlib import sha256
@@ -370,8 +370,8 @@ def test_helper_has_no_sdk_env_direct_network_client_or_storage_wiring():
 def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
     expected = {
         "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
-        "src/app/api.py": ("9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e"),
-        "src/app/services.py": ("8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718"),
+        "src/app/api.py": ("ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39"),
+        "src/app/services.py": ("f388091d0d77f7bc0db4d9072ccabfbc526ac93e81aa949e1526c0b80302f2e8"),
         "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
         "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),

@@ -325,6 +325,93 @@ function renderScanWorkspaceTailoringLlmReadback(readbackPayload = null) {
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceLiveExactChangeProposalEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceLiveExactChangeProposalToggle")?.checked === true;
+}
+
+function getScanWorkspaceExactChangeLlmReadbackPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.live_exact_resume_change_proposal_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceExactChangeLlmReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceExactChangeLlmReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceExactChangeLlmReadbackPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Live exact change LLM: default-off";
+    root.dataset.exactChangeLlmEnabled = "false";
+    root.dataset.exactChangeLlmCallAttempted = "false";
+    return;
+  }
+
+  const enabled = readback.exact_change_llm_enabled === true;
+  const attempted = readback.exact_change_llm_call_attempted === true;
+  const performed = readback.exact_change_llm_call_performed === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const providerModel = [
+    String(readback.provider || "").trim(),
+    String(readback.model || "").trim(),
+  ].filter(Boolean).join("/");
+  const promptVersion = String(readback.prompt_version || "").trim();
+  const latency = Number(readback.latency_ms);
+  const tokenUsage = readback.token_usage && typeof readback.token_usage === "object"
+    ? readback.token_usage
+    : {};
+  const cost = readback.cost && typeof readback.cost === "object" ? readback.cost : {};
+  const tokenValue = tokenUsage.total_token_count ?? tokenUsage.total_tokens ?? "";
+  const costValue = cost.estimated_cost ?? cost.total_cost ?? "";
+  const proposalIds = Array.isArray(readback.proposed_change_ids) && readback.proposed_change_ids.length
+    ? readback.proposed_change_ids.map((value) => String(value || "").trim()).filter(Boolean)
+    : Array.isArray(readback.stable_proposed_change_keys)
+      ? readback.stable_proposed_change_keys.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+  const stableProposalKeys = Array.isArray(readback.stable_proposed_change_keys)
+    ? readback.stable_proposed_change_keys.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const proposalCount = Number(readback.proposed_change_count);
+
+  root.dataset.exactChangeLlmEnabled = enabled ? "true" : "false";
+  root.dataset.exactChangeLlmCallAttempted = attempted ? "true" : "false";
+  root.dataset.exactChangeLlmCallPerformed = performed ? "true" : "false";
+  root.dataset.exactChangeLlmFallbackUsed = fallback ? "true" : "false";
+  root.dataset.exactChangeLlmValidationStatus = validation;
+  root.dataset.exactChangeLlmFallbackReason = fallbackReason;
+  root.dataset.exactChangeLlmFallbackErrorClass = fallbackErrorClass;
+  root.dataset.exactChangeLlmProposedChangeCount = Number.isFinite(proposalCount)
+    ? String(proposalCount)
+    : "";
+  root.dataset.exactChangeLlmStableProposedChangeKeys = stableProposalKeys.join(",");
+
+  const parts = [
+    `Live exact change LLM: ${enabled ? "enabled" : "default-off"}`,
+    `attempted ${attempted ? "yes" : "no"}`,
+    `performed ${performed ? "yes" : "no"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+    Number.isFinite(proposalCount) ? `proposals ${proposalCount}` : "",
+    proposalIds.length ? `ids ${proposalIds.slice(0, 4).join(", ")}` : "",
+    providerModel ? `provider ${providerModel}` : "",
+    promptVersion ? `prompt ${promptVersion}` : "",
+    Number.isFinite(latency) && latency > 0 ? `${latency}ms` : "",
+    tokenValue !== "" ? `tokens ${tokenValue}` : "",
+    costValue !== "" ? `cost ${costValue}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1174,6 +1261,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   }
   renderScanWorkspaceJdLlmReadback();
   renderScanWorkspaceTailoringLlmReadback();
+  renderScanWorkspaceExactChangeLlmReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1209,6 +1297,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   }
   renderScanWorkspaceJdLlmReadback();
   renderScanWorkspaceTailoringLlmReadback();
+  renderScanWorkspaceExactChangeLlmReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -2975,6 +3064,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           excluded_scan_issue_ids: payload.excluded_scan_issue_ids || [],
           personal_details: payload.personal_details || {},
           enable_live_tailoring_suggestion: getScanWorkspaceLiveTailoringSuggestionEnabled(),
+          enable_live_exact_resume_change_proposal: getScanWorkspaceLiveExactChangeProposalEnabled(),
         }
       : payload;
     const response =
@@ -3000,6 +3090,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
 
     scanWorkspacePersistenceState.loadResponse = response;
     renderScanWorkspaceTailoringLlmReadback(response);
+    renderScanWorkspaceExactChangeLlmReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

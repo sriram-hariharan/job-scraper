@@ -1542,6 +1542,13 @@ def scan_workspace(
                 >
                   Manual exact change acceptance: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-guarded-resume-copy-artifact-readback"
+                  id="scanWorkspaceGuardedResumeCopyArtifactReadback"
+                  aria-live="polite"
+                >
+                  Guarded resume copy artifact: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1798,6 +1805,23 @@ def scan_workspace(
                 id="scanWorkspaceAcceptedExactChangeProposalIds"
                 placeholder="Accepted proposal IDs"
                 aria-label="Accepted exact change proposal IDs"
+              />
+              <label
+                class="subtext scan-workspace-guarded-resume-copy-artifact-toggle"
+                for="scanWorkspaceGuardedResumeCopyArtifactToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceGuardedResumeCopyArtifactToggle"
+                />
+                Create guarded resume copy
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-approved-change-plan-id-input"
+                id="scanWorkspaceApprovedChangePlanId"
+                placeholder="Approved change plan ID"
+                aria-label="Approved change plan ID"
               />
               </div>
             </div>

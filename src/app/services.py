@@ -5381,6 +5381,8 @@ def save_saved_scan_state_payload(
     live_exact_resume_change_proposal_adapter: Any = None,
     enable_manual_exact_change_acceptance: bool = False,
     accepted_exact_change_proposal_ids: Any = None,
+    enable_guarded_resume_copy_artifact_creation: bool = False,
+    approved_change_plan_id: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5408,6 +5410,7 @@ def save_saved_scan_state_payload(
             for value in list(accepted_exact_change_proposal_ids or [])
             if _clean_text(value)
         ],
+        "approved_change_plan_id": _clean_text(approved_change_plan_id),
         "draft_status": "saved_scan_state",
         "saved_at": _utc_now(),
     }
@@ -5436,6 +5439,11 @@ def save_saved_scan_state_payload(
         enabled=bool(enable_manual_exact_change_acceptance),
         accepted_proposal_ids=draft["accepted_exact_change_proposal_ids"],
     )
+    guarded_artifact_readback = _planning_workspace_guarded_resume_copy_artifact_payload(
+        manual_acceptance_readback=manual_acceptance_readback,
+        enabled=bool(enable_guarded_resume_copy_artifact_creation),
+        approved_change_plan_id=draft["approved_change_plan_id"],
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5445,6 +5453,7 @@ def save_saved_scan_state_payload(
         "live_tailoring_suggestion_readback": live_tailoring_readback,
         "live_exact_resume_change_proposal_readback": live_exact_change_readback,
         "manual_exact_change_acceptance_readback": manual_acceptance_readback,
+        "guarded_resume_copy_artifact_readback": guarded_artifact_readback,
     }
 
 
@@ -14615,6 +14624,357 @@ def _planning_workspace_manual_exact_change_acceptance_payload(
             "skipped_proposal_ids": skipped_ids,
             "invalid_proposal_ids": invalid_ids,
             "rejected_proposal_count": len(skipped_ids),
+        },
+        enabled=True,
+    )
+
+
+def _planning_workspace_guarded_resume_copy_artifact_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "source_resume_state_mutated": False,
+        "unapproved_change_applied": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+        "final_score_produced": False,
+        "existing_score_changed": False,
+    }
+
+
+def build_planning_workspace_guarded_resume_copy_artifact_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    artifact = (
+        dict(source.get("artifact") or {})
+        if isinstance(source.get("artifact"), dict)
+        else {}
+    )
+    approved_changes = [
+        dict(row)
+        for row in list(source.get("approved_changes") or artifact.get("approved_changes") or [])
+        if isinstance(row, dict)
+    ]
+    applied_ids = [
+        _clean_text(row.get("proposal_id") or row.get("change_id") or row.get("plan_item_id"))
+        for row in approved_changes
+        if _clean_text(row.get("proposal_id") or row.get("change_id") or row.get("plan_item_id"))
+    ]
+    skipped_ids = [
+        _clean_text(value)
+        for value in list(source.get("skipped_change_ids") or [])
+        if _clean_text(value)
+    ]
+    invalid_ids = [
+        _clean_text(value)
+        for value in list(source.get("invalid_change_ids") or [])
+        if _clean_text(value)
+    ]
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason"))
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_reason and fallback_used and validation_errors:
+        fallback_reason = validation_errors[0]
+    if not fallback_error_class and fallback_reason and validation_status in {"fallback", "blocked"}:
+        fallback_error_class = "ValueError"
+
+    return {
+        "phase": "59A",
+        "readback_phase": "59B",
+        "default_off": True,
+        "guarded_resume_copy_artifact_wiring": True,
+        "guarded_resume_copy_artifact_readback": True,
+        "phase59b_readback_hardened": True,
+        "planning_workspace_action": True,
+        "api_readback": True,
+        "ui_readback": True,
+        "new_copy_artifact_only": True,
+        "artifact_creation_enabled": bool(enabled),
+        "artifact_creation_requested": bool(source.get("artifact_creation_requested", False)),
+        "artifact_created": bool(source.get("artifact_created", False)),
+        "artifact_id": _clean_text(artifact.get("artifact_id") or source.get("artifact_id")),
+        "stable_artifact_key": _clean_text(
+            artifact.get("stable_artifact_key") or artifact.get("artifact_id") or source.get("artifact_id")
+        ),
+        "artifact_kind": _clean_text(
+            artifact.get("artifact_kind") or source.get("artifact_kind") or "guarded_resume_copy_artifact"
+        ),
+        "output_kind": _clean_text(
+            artifact.get("output_kind") or source.get("output_kind") or "new_copy_resume_artifact"
+        ),
+        "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+        "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        "source_resume_mutated": bool(source.get("source_resume_mutated", False)),
+        "approved_change_plan_id": _clean_text(source.get("approved_change_plan_id")),
+        "stable_plan_key": _clean_text(source.get("stable_plan_key") or source.get("approved_change_plan_id")),
+        "applied_approved_change_count": len(applied_ids),
+        "applied_approved_change_ids": applied_ids,
+        "rejected_change_count": int(source.get("rejected_change_count") or 0),
+        "skipped_change_count": len(skipped_ids),
+        "skipped_change_ids": skipped_ids,
+        "invalid_change_count": len(invalid_ids),
+        "invalid_change_ids": invalid_ids,
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "fallback_metadata": {
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "validation_errors": validation_errors,
+        },
+        "artifact_metadata": {
+            "artifact_created": bool(source.get("artifact_created", False)),
+            "artifact_id": _clean_text(
+                artifact.get("artifact_id") or source.get("artifact_id")
+            ),
+            "stable_artifact_key": _clean_text(
+                artifact.get("stable_artifact_key")
+                or artifact.get("artifact_id")
+                or source.get("artifact_id")
+            ),
+            "artifact_kind": _clean_text(
+                artifact.get("artifact_kind")
+                or source.get("artifact_kind")
+                or "guarded_resume_copy_artifact"
+            ),
+            "output_kind": _clean_text(
+                artifact.get("output_kind")
+                or source.get("output_kind")
+                or "new_copy_resume_artifact"
+            ),
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(
+                source.get("source_resume_overwritten", False)
+            ),
+            "approved_change_plan_id": _clean_text(source.get("approved_change_plan_id")),
+            "stable_plan_key": _clean_text(
+                source.get("stable_plan_key") or source.get("approved_change_plan_id")
+            ),
+            "applied_approved_change_count": len(applied_ids),
+            "applied_approved_change_ids": applied_ids,
+            "rejected_change_count": int(source.get("rejected_change_count") or 0),
+            "skipped_change_count": len(skipped_ids),
+            "skipped_change_ids": skipped_ids,
+        },
+        "validation_errors": validation_errors,
+        "artifact": deepcopy(artifact) if artifact else None,
+        "api_readback_fields": [
+            "artifact_creation_enabled",
+            "artifact_creation_requested",
+            "artifact_created",
+            "artifact_id",
+            "stable_artifact_key",
+            "artifact_kind",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "approved_change_plan_id",
+            "stable_plan_key",
+            "applied_approved_change_count",
+            "rejected_change_count",
+            "skipped_change_count",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+        ],
+        "ui_readback_fields": [
+            "artifact_creation_enabled",
+            "artifact_creation_requested",
+            "artifact_created",
+            "artifact_id",
+            "stable_artifact_key",
+            "artifact_kind",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "approved_change_plan_id",
+            "stable_plan_key",
+            "applied_approved_change_count",
+            "rejected_change_count",
+            "skipped_change_count",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+        ],
+        "safety": _planning_workspace_guarded_resume_copy_artifact_safety(),
+    }
+
+
+def _planning_workspace_guarded_resume_copy_artifact_payload(
+    *,
+    manual_acceptance_readback: Dict[str, Any] | None,
+    enabled: bool = False,
+    approved_change_plan_id: str = "",
+) -> Dict[str, Any]:
+    requested_plan_id = _clean_text(approved_change_plan_id)
+    if not enabled:
+        return build_planning_workspace_guarded_resume_copy_artifact_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "approved_change_plan_id": requested_plan_id,
+                "stable_plan_key": requested_plan_id,
+                "artifact_creation_requested": False,
+                "artifact_created": False,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=False,
+        )
+
+    source = dict(manual_acceptance_readback or {})
+    plan_key = _clean_text(source.get("approved_change_plan_id") or source.get("stable_plan_key"))
+    packet = (
+        dict(source.get("approved_change_plan_packet") or {})
+        if isinstance(source.get("approved_change_plan_packet"), dict)
+        else {}
+    )
+    approved_changes = [
+        deepcopy(row)
+        for row in list(packet.get("approved_changes") or [])
+        if isinstance(row, dict)
+    ]
+    if not requested_plan_id:
+        return build_planning_workspace_guarded_resume_copy_artifact_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["approved_change_plan_id_required"],
+                "fallback_reason": "approved_change_plan_id_required",
+                "artifact_creation_requested": True,
+                "artifact_created": False,
+                "approved_change_plan_id": requested_plan_id,
+                "stable_plan_key": plan_key,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=True,
+        )
+    if source.get("approved_change_plan_created") is not True or not packet:
+        return build_planning_workspace_guarded_resume_copy_artifact_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["approved_change_plan_required"],
+                "fallback_reason": "approved_change_plan_required",
+                "artifact_creation_requested": True,
+                "artifact_created": False,
+                "approved_change_plan_id": requested_plan_id,
+                "stable_plan_key": plan_key,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=True,
+        )
+    if requested_plan_id != plan_key:
+        return build_planning_workspace_guarded_resume_copy_artifact_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["approved_change_plan_id_mismatch"],
+                "fallback_reason": "approved_change_plan_id_mismatch",
+                "artifact_creation_requested": True,
+                "artifact_created": False,
+                "approved_change_plan_id": requested_plan_id,
+                "stable_plan_key": plan_key,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=True,
+        )
+    if not approved_changes:
+        return build_planning_workspace_guarded_resume_copy_artifact_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["approved_changes_required"],
+                "fallback_reason": "approved_changes_required",
+                "artifact_creation_requested": True,
+                "artifact_created": False,
+                "approved_change_plan_id": requested_plan_id,
+                "stable_plan_key": plan_key,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=True,
+        )
+
+    artifact_seed = json.dumps(
+        {
+            "approved_change_plan_id": plan_key,
+            "approved_change_ids": [
+                _clean_text(row.get("proposal_id") or row.get("change_id") or row.get("plan_item_id"))
+                for row in approved_changes
+            ],
+        },
+        sort_keys=True,
+    )
+    artifact_id = f"phase59-guarded-resume-copy-{hashlib.sha256(artifact_seed.encode('utf-8')).hexdigest()[:16]}"
+    sanitized_changes: List[Dict[str, Any]] = []
+    for row in approved_changes:
+        clean_row = deepcopy(row)
+        clean_row["source_resume_unchanged"] = True
+        clean_row["source_resume_overwritten"] = False
+        clean_row["source_resume_mutated"] = False
+        clean_row["unapproved_change_applied"] = False
+        sanitized_changes.append(clean_row)
+
+    artifact = {
+        "artifact_id": artifact_id,
+        "stable_artifact_key": artifact_id,
+        "artifact_kind": "guarded_resume_copy_artifact",
+        "output_kind": "new_copy_resume_artifact",
+        "approved_change_plan_id": plan_key,
+        "source_resume_unchanged": True,
+        "source_resume_overwritten": False,
+        "source_resume_mutated": False,
+        "approved_changes": sanitized_changes,
+        "applied_approved_change_count": len(sanitized_changes),
+        "resume_artifact_created": True,
+        "new_copy_only": True,
+        "persisted": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+    }
+    return build_planning_workspace_guarded_resume_copy_artifact_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "artifact_creation_requested": True,
+            "artifact_created": True,
+            "artifact_id": artifact_id,
+            "artifact_kind": "guarded_resume_copy_artifact",
+            "output_kind": "new_copy_resume_artifact",
+            "approved_change_plan_id": plan_key,
+            "stable_plan_key": plan_key,
+            "approved_changes": sanitized_changes,
+            "rejected_change_count": int(source.get("rejected_proposal_count") or 0),
+            "skipped_change_ids": list(source.get("skipped_proposal_ids") or []),
+            "source_resume_unchanged": True,
+            "source_resume_overwritten": False,
+            "source_resume_mutated": False,
+            "artifact": artifact,
         },
         enabled=True,
     )

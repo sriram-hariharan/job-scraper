@@ -1535,6 +1535,13 @@ def scan_workspace(
                 >
                   Live exact change LLM: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-manual-exact-change-acceptance-readback"
+                  id="scanWorkspaceManualExactChangeAcceptanceReadback"
+                  aria-live="polite"
+                >
+                  Manual exact change acceptance: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1775,6 +1782,23 @@ def scan_workspace(
                 />
                 Live exact change proposals
               </label>
+              <label
+                class="subtext scan-workspace-manual-exact-change-acceptance-toggle"
+                for="scanWorkspaceManualExactChangeAcceptanceToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceManualExactChangeAcceptanceToggle"
+                />
+                Accept selected exact changes
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-manual-exact-change-ids-input"
+                id="scanWorkspaceAcceptedExactChangeProposalIds"
+                placeholder="Accepted proposal IDs"
+                aria-label="Accepted exact change proposal IDs"
+              />
               </div>
             </div>
 

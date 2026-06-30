@@ -447,6 +447,9 @@ def test_phase19h_changes_only_approved_files():
             "src/agents/controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
             "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.md",
             "tests/test_phase50a_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
+        "run_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run.py",
+        "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.md",
+        "tests/test_phase50b_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.py",
 
                                 "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
                                 "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",

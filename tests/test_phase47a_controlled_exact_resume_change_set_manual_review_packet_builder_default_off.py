@@ -524,6 +524,9 @@ def test_changed_files_are_limited_to_phase47a_and_legacy_guard_tests():
             "src/agents/controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
             "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.md",
             "tests/test_phase50a_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
+        "run_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run.py",
+        "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.md",
+        "tests/test_phase50b_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.py",
 
     }
     legacy_guards = {

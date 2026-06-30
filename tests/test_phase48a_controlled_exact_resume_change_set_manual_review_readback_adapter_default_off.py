@@ -492,6 +492,9 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
             "src/agents/controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
             "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.md",
             "tests/test_phase50a_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
+        "run_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run.py",
+        "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.md",
+        "tests/test_phase50b_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.py",
 
     }
     forbidden_roots = (

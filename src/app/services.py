@@ -15052,6 +15052,8 @@ def build_planning_workspace_guarded_resume_copy_artifact_verification_readback(
 
     return {
         "phase": "60A",
+        "readback_phase": "60B",
+        "phase60b_readback_hardened": True,
         "default_off": True,
         "guarded_artifact_verification": True,
         "artifact_readback_verification": True,
@@ -15090,9 +15092,40 @@ def build_planning_workspace_guarded_resume_copy_artifact_verification_readback(
             "fallback_error_class": fallback_error_class,
             "validation_errors": validation_errors,
         },
+        "verification_metadata": {
+            "readback_phase": "60B",
+            "phase60b_readback_hardened": True,
+            "artifact_verification_enabled": bool(enabled),
+            "artifact_verification_requested": bool(
+                source.get("artifact_verification_requested", False)
+            ),
+            "artifact_verification_performed": bool(
+                source.get("artifact_verification_performed", False)
+            ),
+            "artifact_verification_passed": bool(
+                source.get("artifact_verification_passed", False)
+            ),
+            "artifact_id": artifact_id,
+            "stable_artifact_key": artifact_id,
+            "approved_change_plan_id": plan_key,
+            "stable_plan_key": plan_key,
+            "artifact_readable": bool(source.get("artifact_readable", False)),
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+            "applied_approved_change_count": int(
+                source.get("applied_approved_change_count") or 0
+            ),
+            "mismatch_count": len(mismatch_items),
+            "validation_status": validation_status,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+        },
         "validation_errors": validation_errors,
         "verified_artifact": deepcopy(artifact) if artifact else None,
         "api_readback_fields": [
+            "readback_phase",
+            "phase60b_readback_hardened",
             "artifact_verification_enabled",
             "artifact_verification_requested",
             "artifact_verification_performed",
@@ -15110,8 +15143,11 @@ def build_planning_workspace_guarded_resume_copy_artifact_verification_readback(
             "fallback_used",
             "fallback_reason",
             "fallback_error_class",
+            "verification_metadata",
         ],
         "ui_readback_fields": [
+            "readback_phase",
+            "phase60b_readback_hardened",
             "artifact_verification_enabled",
             "artifact_verification_requested",
             "artifact_verification_performed",
@@ -15129,6 +15165,7 @@ def build_planning_workspace_guarded_resume_copy_artifact_verification_readback(
             "fallback_used",
             "fallback_reason",
             "fallback_error_class",
+            "verification_metadata",
         ],
         "safety": _planning_workspace_guarded_resume_copy_artifact_verification_safety(),
     }

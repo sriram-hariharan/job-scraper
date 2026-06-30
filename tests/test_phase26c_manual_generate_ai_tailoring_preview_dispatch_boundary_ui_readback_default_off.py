@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only c265ce460eb8b6412bade373dfb77d2d28460372191630d4d3f11836c1ab6357 902e10b1f29df0ddd4fdeb987e1eec68c2fc7074cc8cc6fefb482c8f441b6fbc
-# phase56a legacy guard marker: changes_only d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7 c265ce460eb8b6412bade373dfb77d2d28460372191630d4d3f11836c1ab6357
+# phase56b legacy guard marker: changes_only 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35 9fde4169a5a94ae3ab09c4b19d70257019f997f69e71fe11262ae740937f0728
+# phase56a legacy guard marker: changes_only d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 from hashlib import sha256
 from pathlib import Path
@@ -19,7 +19,7 @@ ENDPOINT = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7",
-    "src/app/services.py": "c265ce460eb8b6412bade373dfb77d2d28460372191630d4d3f11836c1ab6357",
+    "src/app/services.py": "38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
     "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
@@ -374,11 +374,13 @@ def test_phase26c_changes_only_static_doc_test_and_legacy_guards():
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.md",
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_readback_verification_default_off.md",
+        "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
         "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
+        "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -398,11 +400,13 @@ def test_phase26c_changes_only_static_doc_test_and_legacy_guards():
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.md",
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_readback_verification_default_off.md",
+        "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
         "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
+        "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",

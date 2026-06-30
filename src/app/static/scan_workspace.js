@@ -620,6 +620,7 @@ function renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(readba
   const validation = String(readback.validation_status || "missing").trim() || "missing";
   const fallbackReason = String(readback.fallback_reason || "").trim();
   const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase60bReadbackHardened = readback.phase60b_readback_hardened === true;
   const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
   const planKey = String(readback.approved_change_plan_id || readback.stable_plan_key || "").trim();
   const appliedCount = Number(readback.applied_approved_change_count);
@@ -637,9 +638,11 @@ function renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(readba
   root.dataset.artifactVerificationValidationStatus = validation;
   root.dataset.artifactVerificationFallbackReason = fallbackReason;
   root.dataset.artifactVerificationFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase60bReadbackHardened = phase60bReadbackHardened ? "true" : "false";
 
   const parts = [
     `Guarded artifact verification: ${enabled ? "enabled" : "default-off"}`,
+    phase60bReadbackHardened ? "readback hardened" : "",
     `requested ${requested ? "yes" : "no"}`,
     `performed ${performed ? "yes" : "no"}`,
     `passed ${passed ? "yes" : "no"}`,

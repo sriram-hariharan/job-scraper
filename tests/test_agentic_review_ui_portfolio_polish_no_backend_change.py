@@ -1,6 +1,6 @@
-# phase56b legacy guard marker: changes_only 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718 cde7018be5fbaec52f7a393de70d71dc1f964b6188831ab25b4fcf28f964c89c
-# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 8e1cfc6368ce71885a523928682913e6d361259f44f38cc00f50ca093ae7b718
-# phase26b legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e
+# phase56b legacy guard marker: changes_only 98dc0e30a59cfeca8de6e6dbef55a0947bfb2c5a3daf41a37d09f29567cfe974 7dcf2ac6853585a0df5e4e53b11d0a08ebee1b9f72d622b7af3495872abae57d
+# phase56a legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39 98dc0e30a59cfeca8de6e6dbef55a0947bfb2c5a3daf41a37d09f29567cfe974
+# phase26b legacy guard marker: changes_only ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39
 from hashlib import sha256
 from pathlib import Path
 
@@ -11,7 +11,7 @@ DOC_PATH = Path("docs/agentic_review_ui_portfolio_polish_no_backend_change.md")
 ORCHESTRATOR_READINESS_DOC_PATH = Path("docs/orchestrator_readiness.md")
 
 PROTECTED_FILE_HASHES = {
-    "src/app/api.py": "9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e",
+    "src/app/api.py": "ccd2e74eed88a244fd05c430cacf7ba8a2867ac8959de00e21c64cd7fe2d3c39",
     "src/storage/agent_state/store.py": "3bd4d72496693c5a9391ff0ff5e3fb229b6c58df23a520113981eba0f96288cc",
     "src/storage/agent_state/schema.sql": "d7e91c2b7e6e7720a8aeb64b7292d9ce28d6008b14c1d149f56a6c1fa39b3526",
     "src/storage/agent_state/migration_runner.py": "488e25670d7043c6a5b938441e13d7c066bbcf5fccda1a41401723650e61969e",

@@ -5377,6 +5377,8 @@ def save_saved_scan_state_payload(
     personal_details: Any = None,
     enable_live_tailoring_suggestion: bool = False,
     live_tailoring_suggestion_adapter: Any = None,
+    enable_live_exact_resume_change_proposal: bool = False,
+    live_exact_resume_change_proposal_adapter: Any = None,
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5415,6 +5417,13 @@ def save_saved_scan_state_payload(
         adapter=live_tailoring_suggestion_adapter,
         draft=draft,
     )
+    live_exact_change_readback = _planning_workspace_live_exact_resume_change_proposal_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=owner_user_id,
+        enabled=bool(enable_live_exact_resume_change_proposal),
+        adapter=live_exact_resume_change_proposal_adapter,
+        draft=draft,
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5422,6 +5431,7 @@ def save_saved_scan_state_payload(
         "has_saved_draft": True,
         "score_preview": {},
         "live_tailoring_suggestion_readback": live_tailoring_readback,
+        "live_exact_resume_change_proposal_readback": live_exact_change_readback,
     }
 
 
@@ -12850,6 +12860,21 @@ LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER = os.getenv(
+    "APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER",
+    os.getenv("LLM_PROVIDER", "groq"),
+).strip().lower()
+LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL = os.getenv(
+    "APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL",
+    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+).strip()
+LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROMPT_VERSION = "v1"
+LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED", "false")
+    .strip()
+    .lower()
+    == "true"
+)
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -13420,6 +13445,189 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
     }
 
 
+def _planning_workspace_exact_change_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "resume_mutation_performed": False,
+        "resume_overwrite_performed": False,
+        "resume_artifact_created": False,
+        "suggestion_application_performed": False,
+        "approved_change_plan_created": False,
+        "proposal_approval_performed": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+        "final_score_produced": False,
+        "existing_score_changed": False,
+    }
+
+
+def _planning_workspace_exact_change_preview_rows(
+    proposals: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for index, proposal in enumerate(proposals[:8]):
+        if not isinstance(proposal, dict):
+            continue
+        proposal_id = _clean_text(proposal.get("proposal_id")) or f"proposal-{index + 1}"
+        rows.append(
+            {
+                "proposal_id": proposal_id,
+                "change_type": _clean_text(proposal.get("change_type")),
+                "target_section": _clean_text(proposal.get("target_section")),
+                "target_identifier": _clean_text(proposal.get("target_identifier")),
+                "manual_review_required": proposal.get("manual_review_required") is True,
+                "requires_user_acceptance": proposal.get("requires_user_acceptance") is True,
+            }
+        )
+    return rows
+
+
+def build_planning_workspace_live_exact_resume_change_proposal_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    runtime_result = (
+        dict(source.get("runtime_result") or {})
+        if isinstance(source.get("runtime_result"), dict)
+        else {}
+    )
+    validation_result = (
+        dict(source.get("validation_result") or {})
+        if isinstance(source.get("validation_result"), dict)
+        else {}
+    )
+    normalization_result = (
+        dict(source.get("normalization_result") or {})
+        if isinstance(source.get("normalization_result"), dict)
+        else {}
+    )
+    normalized_proposals = [
+        dict(row)
+        for row in list(normalization_result.get("normalized_refined_change_proposals") or [])
+        if isinstance(row, dict)
+    ]
+    preview_rows = _planning_workspace_exact_change_preview_rows(normalized_proposals)
+    proposal_ids = [row["proposal_id"] for row in preview_rows if row.get("proposal_id")]
+    provider_response = runtime_result.get("provider_response")
+    provider_response_dict = provider_response if isinstance(provider_response, dict) else {}
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    if not validation_errors and isinstance(validation_result, dict):
+        validation_errors = [
+            _clean_text(error)
+            for error in list(validation_result.get("validation_errors") or [])
+            if _clean_text(error)
+        ]
+    if not validation_errors and isinstance(normalization_result, dict):
+        validation_errors = [
+            _clean_text(error)
+            for error in list(normalization_result.get("normalization_errors") or [])
+            if _clean_text(error)
+        ]
+
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason")) or (
+        validation_errors[0] if fallback_used and validation_errors else ""
+    )
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_error_class and fallback_reason:
+        if ":" in fallback_reason:
+            fallback_error_class = _clean_text(fallback_reason.rsplit(":", 1)[-1])
+        elif fallback_reason in {"provider_response_invalid", "normalization_failed"}:
+            fallback_error_class = "ValueError"
+
+    token_usage = deepcopy(
+        source.get("token_usage")
+        or provider_response_dict.get("token_usage")
+        or provider_response_dict.get("token_usage_json")
+        or {}
+    )
+    if not isinstance(token_usage, dict):
+        token_usage = {}
+    cost = deepcopy(
+        source.get("cost")
+        or provider_response_dict.get("cost")
+        or provider_response_dict.get("cost_json")
+        or {}
+    )
+    if not isinstance(cost, dict):
+        cost = {}
+    call_attempted = bool(runtime_result.get("real_provider_call_attempted", False))
+    call_performed = (
+        bool(runtime_result.get("real_provider_call_performed", False))
+        and not fallback_used
+        and validation_status == "valid"
+    )
+
+    return {
+        "phase": "57A",
+        "default_off": True,
+        "live_exact_resume_change_proposal_planning_workspace_wiring": True,
+        "live_exact_resume_change_proposal_readback": True,
+        "planning_workspace_action": True,
+        "api_readback": True,
+        "ui_readback": True,
+        "metadata_only": True,
+        "proposal_only": True,
+        "manual_review_required": True,
+        "requires_manual_user_control": True,
+        "exact_change_llm_enabled": bool(enabled),
+        "exact_change_llm_call_attempted": call_attempted,
+        "exact_change_llm_call_performed": call_performed,
+        "fallback_used": fallback_used,
+        "validation_status": validation_status,
+        "validation_errors": validation_errors,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "provider": _clean_text(
+            source.get("provider")
+            or provider_response_dict.get("model_provider")
+            or provider_response_dict.get("provider")
+        ),
+        "model": _clean_text(
+            source.get("model")
+            or provider_response_dict.get("model_name")
+            or provider_response_dict.get("model")
+        ),
+        "prompt_version": _clean_text(
+            source.get("prompt_version")
+            or provider_response_dict.get("prompt_version")
+            or LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROMPT_VERSION
+        )
+        if enabled
+        else "",
+        "token_usage": token_usage,
+        "cost": cost,
+        "latency_ms": source.get("latency_ms", provider_response_dict.get("latency_ms", 0)),
+        "proposed_change_count": len(preview_rows),
+        "proposed_change_ids": proposal_ids,
+        "stable_proposed_change_keys": proposal_ids,
+        "proposed_changes_preview": preview_rows,
+        "stage_results": {
+            "proposal_builder": deepcopy(source.get("proposal_result", {})),
+            "request_packet": deepcopy(source.get("request_result", {})),
+            "runtime": deepcopy(runtime_result),
+            "validation": deepcopy(validation_result),
+            "normalization": deepcopy(normalization_result),
+        },
+        "safety": _planning_workspace_exact_change_safety(),
+    }
+
+
 def _scan_review_payload_from_saved_scan_row(row: Dict[str, Any] | None) -> Dict[str, Any]:
     payload_json = dict((row or {}).get("payload_json", {}) or {})
     review_payload = payload_json.get("scan_review_payload")
@@ -13568,6 +13776,379 @@ def _planning_workspace_live_tailoring_suggestion_payload(
     )
     return build_planning_workspace_live_tailoring_suggestion_readback(
         payload,
+        enabled=True,
+    )
+
+
+def _planning_workspace_exact_change_review_queue(
+    *,
+    scan_id: str,
+    row: Dict[str, Any],
+    review_payload: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    scan_session = (
+        dict(review_payload.get("scan_session") or {})
+        if isinstance(review_payload.get("scan_session"), dict)
+        else {}
+    )
+    return [
+        {
+            "item_id": _clean_text(scan_id),
+            "job_id": _clean_text(
+                scan_session.get("job_doc_id")
+                or row.get("job_doc_id")
+                or review_payload.get("job_doc_id")
+            ),
+            "title": _clean_text(
+                review_payload.get("job_title")
+                or review_payload.get("title")
+                or row.get("job_title")
+            ),
+            "company": _clean_text(
+                review_payload.get("job_company")
+                or review_payload.get("company")
+                or row.get("job_company")
+            ),
+            "priority": "manual_planning_workspace_action",
+        }
+    ]
+
+
+def _planning_workspace_exact_change_resume_context(
+    *,
+    row: Dict[str, Any],
+    review_payload: Dict[str, Any],
+    draft: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    safe_draft = dict(draft or {})
+    evidence_rows = _planning_workspace_resume_evidence_rows_from_review(review_payload)
+    bullets: List[Dict[str, Any]] = []
+    for index, evidence in enumerate(evidence_rows):
+        if not isinstance(evidence, dict):
+            continue
+        text = _clean_text(
+            evidence.get("evidence")
+            or evidence.get("text")
+            or evidence.get("resume_evidence")
+            or evidence.get("bullet")
+        )
+        if not text:
+            continue
+        bullets.append(
+            {
+                "id": _clean_text(evidence.get("bullet_id") or evidence.get("candidate_id"))
+                or f"evidence-{index + 1}",
+                "text": text,
+            }
+        )
+    for bullet_id, text in dict(safe_draft.get("manual_bullet_edits") or {}).items():
+        clean_text = _clean_text(text)
+        if clean_text:
+            bullets.append({"id": _clean_text(bullet_id), "text": clean_text})
+    skills = review_payload.get("skills")
+    if not isinstance(skills, list):
+        skills = review_payload.get("resume_skills")
+    return {
+        "resume_id": _clean_text(
+            review_payload.get("selected_resume")
+            or review_payload.get("resume_name")
+            or row.get("resume_name")
+        ),
+        "resume_name": _clean_text(review_payload.get("resume_name") or row.get("resume_name")),
+        "profile_summary": _clean_text(
+            review_payload.get("profile_summary")
+            or review_payload.get("resume_summary")
+            or "Manual planning workspace resume context."
+        ),
+        "resume_bullets": bullets,
+        "skills": list(skills or []) if isinstance(skills, list) else [],
+    }
+
+
+def _planning_workspace_exact_change_jd_context(
+    review_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    jd_readback = review_payload.get("jd_llm_extraction_readback")
+    jd_metadata = review_payload.get("jd_llm_extraction")
+    signals: Dict[str, Any] = {}
+    if isinstance(jd_readback, dict) and isinstance(
+        jd_readback.get("structured_jd_signals"),
+        dict,
+    ):
+        signals = dict(jd_readback.get("structured_jd_signals") or {})
+    elif isinstance(jd_metadata, dict) and isinstance(
+        jd_metadata.get("structured_jd_signals"),
+        dict,
+    ):
+        signals = dict(jd_metadata.get("structured_jd_signals") or {})
+    if not signals:
+        signals = {
+            "required_skills": list(review_payload.get("required_skills") or [])
+            if isinstance(review_payload.get("required_skills"), list)
+            else [],
+            "tools": list(review_payload.get("tools") or [])
+            if isinstance(review_payload.get("tools"), list)
+            else [],
+        }
+    return signals
+
+
+def _planning_workspace_exact_change_tailoring_context(
+    *,
+    review_payload: Dict[str, Any],
+    draft: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    safe_draft = dict(draft or {})
+    return {
+        "matched_required_skills": list(review_payload.get("matched_required_skills") or [])
+        if isinstance(review_payload.get("matched_required_skills"), list)
+        else [],
+        "matched_tools": list(review_payload.get("matched_tools") or [])
+        if isinstance(review_payload.get("matched_tools"), list)
+        else [],
+        "suggested_focus": list(safe_draft.get("selected_patch_candidate_ids") or []),
+        "evidence_matrix": _planning_workspace_resume_evidence_rows_from_review(review_payload),
+    }
+
+
+def _live_exact_resume_change_proposal_provider_adapter(
+    request_packet: Dict[str, Any],
+) -> Dict[str, Any]:
+    from src.ai.llm_client import run_chat_completion_with_metadata
+
+    result = run_chat_completion_with_metadata(
+        provider=LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER,
+        model=LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL,
+        temperature=request_packet.get("temperature", 0),
+        max_tokens=int(request_packet.get("max_output_tokens") or 1800),
+        response_mime_type="application/json",
+        response_schema=request_packet.get("request_schema") or {},
+        return_parsed=True,
+        thinking_budget=0,
+        fallback_enabled=LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED,
+        messages=list(request_packet.get("request_messages") or []),
+    )
+    content = result.get("content")
+    payload = dict(content or {}) if isinstance(content, dict) else {"raw_response": content}
+    payload.update(
+        {
+            "model_provider": _clean_text(result.get("provider")),
+            "model_name": _clean_text(result.get("model")),
+            "prompt_version": LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROMPT_VERSION,
+            "token_usage": dict(result.get("token_usage") or result.get("token_usage_json") or {}),
+            "cost": dict(result.get("cost") or result.get("cost_json") or {}),
+            "latency_ms": result.get("latency_ms", 0),
+            "provider_fallback_used": bool(result.get("fallback_used", False)),
+        }
+    )
+    return payload
+
+
+def _planning_workspace_live_exact_resume_change_proposal_payload(
+    *,
+    scan_id: str,
+    owner_user_id: str = "",
+    enabled: bool = False,
+    adapter: Any = None,
+    draft: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    if not enabled:
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "runtime_result": {
+                    "real_provider_call_attempted": False,
+                    "real_provider_call_performed": False,
+                },
+            },
+            enabled=False,
+        )
+
+    try:
+        stored_payload = get_saved_scan_postgres_payload(
+            scan_id=scan_id,
+            owner_user_id=owner_user_id,
+        )
+    except Exception as exc:
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": [f"saved_scan_read_error:{exc.__class__.__name__}"],
+                "fallback_error_class": exc.__class__.__name__,
+                "runtime_result": {
+                    "real_provider_call_attempted": False,
+                    "real_provider_call_performed": False,
+                },
+            },
+            enabled=True,
+        )
+
+    row = dict(stored_payload.get("scan", {}) or {})
+    review_payload = _scan_review_payload_from_saved_scan_row(row)
+    if not review_payload:
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["missing_scan_review_payload"],
+                "runtime_result": {
+                    "real_provider_call_attempted": False,
+                    "real_provider_call_performed": False,
+                },
+            },
+            enabled=True,
+        )
+
+    from src.agents.exact_resume_change_set_proposal_builder_default_off import (
+        build_exact_resume_change_set_proposal_builder_default_off,
+    )
+    from src.agents.controlled_exact_resume_change_set_llm_request_packet_default_off import (
+        build_controlled_exact_resume_change_set_llm_request_packet_default_off,
+    )
+    from src.agents.controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off import (
+        build_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off,
+    )
+    from src.agents.controlled_exact_resume_change_set_provider_response_validation_default_off import (
+        build_controlled_exact_resume_change_set_provider_response_validation_default_off,
+    )
+    from src.agents.controlled_exact_resume_change_set_provider_response_normalization_default_off import (
+        build_controlled_exact_resume_change_set_provider_response_normalization_default_off,
+    )
+
+    review_queue = _planning_workspace_exact_change_review_queue(
+        scan_id=scan_id,
+        row=row,
+        review_payload=review_payload,
+    )
+    resume_context = _planning_workspace_exact_change_resume_context(
+        row=row,
+        review_payload=review_payload,
+        draft=draft,
+    )
+    jd_context = _planning_workspace_exact_change_jd_context(review_payload)
+    tailoring_context = _planning_workspace_exact_change_tailoring_context(
+        review_payload=review_payload,
+        draft=draft,
+    )
+    proposal_result = build_exact_resume_change_set_proposal_builder_default_off(
+        review_queue=review_queue,
+        resume_context=resume_context,
+        jd_context=jd_context,
+        tailoring_context=tailoring_context,
+    )
+    request_result = build_controlled_exact_resume_change_set_llm_request_packet_default_off(
+        proposal_result=proposal_result,
+        resume_context=resume_context,
+        jd_context=jd_context,
+        tailoring_context=tailoring_context,
+    )
+    request_packet = request_result.get("request_packet") if isinstance(request_result, dict) else {}
+    if not isinstance(request_packet, dict) or not request_packet:
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["request_packet_missing"],
+                "proposal_result": proposal_result,
+                "request_result": request_result,
+                "runtime_result": {
+                    "real_provider_call_attempted": False,
+                    "real_provider_call_performed": False,
+                },
+            },
+            enabled=True,
+        )
+
+    effective_adapter = adapter or _live_exact_resume_change_proposal_provider_adapter
+    runtime_result = build_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off(
+        request_packet=request_packet,
+        provider_callable=effective_adapter,
+        enable_real_provider_call=True,
+        manual_trigger_confirmed=True,
+        provider_policy={"allow_real_provider_call": True, "max_response_chars": 12000},
+    )
+    if not runtime_result.get("real_provider_call_performed"):
+        error = _clean_text(runtime_result.get("provider_runtime_error"))
+        reason = error or _clean_text(runtime_result.get("real_provider_call_blocked_reason")) or "provider_call_not_performed"
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": [reason],
+                "fallback_reason": reason,
+                "fallback_error_class": reason.split(":", 1)[0] if ":" in reason else "",
+                "proposal_result": proposal_result,
+                "request_result": request_result,
+                "runtime_result": runtime_result,
+            },
+            enabled=True,
+        )
+
+    validation_result = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
+        provider_call_result=runtime_result,
+        original_request_packet=request_packet,
+    )
+    if validation_result.get("provider_response_valid") is not True:
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": list(validation_result.get("validation_errors") or ["provider_response_invalid"]),
+                "fallback_reason": "provider_response_invalid",
+                "proposal_result": proposal_result,
+                "request_result": request_result,
+                "runtime_result": runtime_result,
+                "validation_result": validation_result,
+            },
+            enabled=True,
+        )
+
+    normalization_result = build_controlled_exact_resume_change_set_provider_response_normalization_default_off(
+        validation_result=validation_result,
+        original_change_proposals=proposal_result,
+    )
+    normalization_errors = list(normalization_result.get("normalization_errors") or [])
+    normalized = list(normalization_result.get("normalized_refined_change_proposals") or [])
+    if normalization_errors:
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": normalization_errors,
+                "fallback_reason": "normalization_failed",
+                "proposal_result": proposal_result,
+                "request_result": request_result,
+                "runtime_result": runtime_result,
+                "validation_result": validation_result,
+                "normalization_result": normalization_result,
+            },
+            enabled=True,
+        )
+
+    provider_response = runtime_result.get("provider_response")
+    provider_response_dict = provider_response if isinstance(provider_response, dict) else {}
+    return build_planning_workspace_live_exact_resume_change_proposal_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "provider": provider_response_dict.get("model_provider"),
+            "model": provider_response_dict.get("model_name"),
+            "prompt_version": provider_response_dict.get("prompt_version"),
+            "token_usage": provider_response_dict.get("token_usage", {}),
+            "cost": provider_response_dict.get("cost", {}),
+            "latency_ms": provider_response_dict.get("latency_ms", 0),
+            "proposal_result": proposal_result,
+            "request_result": request_result,
+            "runtime_result": runtime_result,
+            "validation_result": validation_result,
+            "normalization_result": {
+                **normalization_result,
+                "normalized_refined_change_proposals": normalized,
+            },
+        },
         enabled=True,
     )
 

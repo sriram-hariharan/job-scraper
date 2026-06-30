@@ -1528,6 +1528,13 @@ def scan_workspace(
                 >
                   Live tailoring LLM: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-exact-change-llm-readback"
+                  id="scanWorkspaceExactChangeLlmReadback"
+                  aria-live="polite"
+                >
+                  Live exact change LLM: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1757,6 +1764,16 @@ def scan_workspace(
                   id="scanWorkspaceLiveTailoringSuggestionToggle"
                 />
                 Live tailoring suggestions
+              </label>
+              <label
+                class="subtext scan-workspace-live-exact-change-toggle"
+                for="scanWorkspaceLiveExactChangeProposalToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceLiveExactChangeProposalToggle"
+                />
+                Live exact change proposals
               </label>
               </div>
             </div>

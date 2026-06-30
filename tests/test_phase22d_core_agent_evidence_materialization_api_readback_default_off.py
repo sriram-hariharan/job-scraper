@@ -569,6 +569,9 @@ def test_phase22d_changes_only_api_doc_test_and_legacy_guards():
         "run_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run.py",
         "docs/phase53_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.md",
         "tests/test_phase53b_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.py",
+        "src/agents/controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+        "docs/phase54_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.md",
+        "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
 
                                 "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
                                 "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",

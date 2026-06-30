@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac 7b2fb8f3003d7315919d1aba772dd42539c347ff9a0aa96f2c0ceca9056545db
-# phase56a legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac
+# phase56b legacy guard marker: changes_only 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637 668b774ac754afb55577b982123dc0ba6d15c197fc641d40ab32ad8e738d02b1
+# phase56a legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637
 from __future__ import annotations
 
 import csv
@@ -506,7 +506,9 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
+        "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+        "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -522,7 +524,9 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
+        "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+        "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "run_controlled_exact_resume_change_set_provider_response_normalization_dry_run.py",
         "docs/phase46_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off.md",

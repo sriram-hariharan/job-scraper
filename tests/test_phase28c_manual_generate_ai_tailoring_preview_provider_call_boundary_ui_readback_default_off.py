@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac 7b2fb8f3003d7315919d1aba772dd42539c347ff9a0aa96f2c0ceca9056545db
-# phase56a legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac
+# phase56b legacy guard marker: changes_only 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637 668b774ac754afb55577b982123dc0ba6d15c197fc641d40ab32ad8e738d02b1
+# phase56a legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -18,7 +18,7 @@ ENDPOINT = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397",
-    "src/app/services.py": "dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac",
+    "src/app/services.py": "897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
@@ -404,7 +404,9 @@ def test_phase28c_changes_only_static_doc_test_and_legacy_guards():
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
+        "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+        "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -420,7 +422,9 @@ def test_phase28c_changes_only_static_doc_test_and_legacy_guards():
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
+        "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+        "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",

@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac 7b2fb8f3003d7315919d1aba772dd42539c347ff9a0aa96f2c0ceca9056545db
-# phase56a legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac
+# phase56b legacy guard marker: changes_only 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637 668b774ac754afb55577b982123dc0ba6d15c197fc641d40ab32ad8e738d02b1
+# phase56a legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397
 # phase23f legacy guard marker: changes_only 069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
@@ -15,7 +15,7 @@ CSS_PATH = ROOT / "src/app/static/app_redesign.css"
 
 PROTECTED_HASHES = {
     "src/app/api.py": "069a4f8d4d936ca88dfa28591c5b0e5f8fea552ca93101642691ec137c3c1397",
-    "src/app/services.py": "dffd3c9eb0e5c2b3a2e932a5c51086167e78aafce6024288d56d07f253dfcfac",
+    "src/app/services.py": "897e97fd62e52a3b50ea6e7589f160817fee2392a05355dae3f2e8fca5655637",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
     "src/agents/three_core_approval_preview_service_readback.py": "aed9fc35ee7f0c72ddb46e5db87efde799e5bb5218be252db113e7ac7ab5c71c",
@@ -497,7 +497,9 @@ def test_phase19d_changes_only_approved_files():
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
+        "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+        "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -513,7 +515,9 @@ def test_phase19d_changes_only_approved_files():
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.md",
         "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase58_manual_exact_change_acceptance_approved_plan_wiring_default_off.md",
+        "docs/phase58_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+        "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",

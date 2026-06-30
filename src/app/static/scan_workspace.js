@@ -459,6 +459,8 @@ function renderScanWorkspaceManualExactChangeAcceptanceReadback(readbackPayload 
       : [];
   const acceptedCount = Number(readback.accepted_proposal_count);
   const skippedCount = Number(readback.skipped_proposal_count);
+  const rejectedCount = Number(readback.rejected_proposal_count);
+  const invalidCount = Number(readback.invalid_proposal_count);
   const planKey = String(readback.approved_change_plan_id || readback.stable_plan_key || "").trim();
 
   root.dataset.manualAcceptanceEnabled = enabled ? "true" : "false";
@@ -469,6 +471,10 @@ function renderScanWorkspaceManualExactChangeAcceptanceReadback(readbackPayload 
   root.dataset.manualAcceptanceFallbackErrorClass = fallbackErrorClass;
   root.dataset.acceptedExactChangeProposalIds = acceptedIds.join(",");
   root.dataset.approvedChangePlanKey = planKey;
+  root.dataset.manualAcceptanceRejectedCount = Number.isFinite(rejectedCount) ? String(rejectedCount) : "";
+  root.dataset.manualAcceptanceSkippedCount = Number.isFinite(skippedCount) ? String(skippedCount) : "";
+  root.dataset.manualAcceptanceInvalidCount = Number.isFinite(invalidCount) ? String(invalidCount) : "";
+  root.dataset.phase58bReadbackHardened = readback.phase58b_readback_hardened === true ? "true" : "false";
 
   const parts = [
     `Manual exact change acceptance: ${enabled ? "enabled" : "default-off"}`,
@@ -477,7 +483,9 @@ function renderScanWorkspaceManualExactChangeAcceptanceReadback(readbackPayload 
     `fallback ${fallback ? "yes" : "no"}`,
     `validation ${validation}`,
     Number.isFinite(acceptedCount) ? `accepted ${acceptedCount}` : "",
+    Number.isFinite(rejectedCount) ? `rejected ${rejectedCount}` : "",
     Number.isFinite(skippedCount) ? `skipped ${skippedCount}` : "",
+    Number.isFinite(invalidCount) ? `invalid ${invalidCount}` : "",
     acceptedIds.length ? `ids ${acceptedIds.slice(0, 4).join(", ")}` : "",
     planKey ? `plan ${planKey}` : "",
     fallbackReason ? `reason ${fallbackReason}` : "",

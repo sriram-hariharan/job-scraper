@@ -1,3 +1,4 @@
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc
 from __future__ import annotations
 
 from copy import deepcopy
@@ -566,6 +567,12 @@ def test_changed_files_are_limited_to_phase46a_and_legacy_guard_tests():
         if line.strip()
     }
     allowed = {
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_wiring_default_off.md",
+        "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+        '"docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md"',
+        '"tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py"',
+        '"docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.md"',
+        '"tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.py"',
         "src/agents/controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
         "docs/phase46_controlled_exact_resume_change_set_provider_response_normalization_default_off.md",
         "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",

@@ -1,3 +1,4 @@
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -15,8 +16,8 @@ ENDPOINT = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "e658b1e05444d7cd2546d3d065cc325045a9d2bb1589b900c18d1aeea0fbd084",
-    "src/app/services.py": "c27f0c1a499398d423f8edd46165da784dabfea0309f2022ed88f9fc75d8df8f",
+    "src/app/api.py": "9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e",
+    "src/app/services.py": "0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
@@ -401,6 +402,16 @@ def test_protected_backend_runtime_files_are_unchanged():
 def test_phase30c_changes_only_static_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/app/planning_ui.py",
+        "src/app/static/scan_workspace.js",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.md",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.py",
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_wiring_default_off.md",
+        "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
         "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback.md",

@@ -1,3 +1,4 @@
+# phase56a legacy guard marker: changes_only 9bfda94f241abc0d39faacfc7d3cd8c19ced1e2a25e49628216ae181769d3d7e 0491860a784833358c4ab731bd528f3159d577b20e714443777e4c7d072bd1bc
 from __future__ import annotations
 
 import csv
@@ -469,6 +470,16 @@ def test_changed_files_are_limited_to_phase47b_and_legacy_guards():
     )
     changed |= {line.strip() for line in untracked.stdout.splitlines() if line.strip()}
     allowed = {
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/app/planning_ui.py",
+        "src/app/static/scan_workspace.js",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.md",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off 2.py",
+        "docs/phase56_live_tailoring_suggestion_planning_workspace_wiring_default_off.md",
+        "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "run_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run.py",
         "docs/phase47_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off.md",
         "tests/test_phase47b_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off.py",

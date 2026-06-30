@@ -1513,6 +1513,14 @@ def scan_workspace(
                     <span class="scan-workspace-review-inline-metric-value" id="scanWorkspaceGuidanceCount">0</span>
                   </span>
                 </div>
+
+                <div
+                  class="subtext scan-workspace-jd-llm-readback"
+                  id="scanWorkspaceJdLlmReadback"
+                  aria-live="polite"
+                >
+                  Live JD LLM: default-off
+                </div>
               </div>
             </div>
           </div>

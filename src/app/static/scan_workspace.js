@@ -148,6 +148,105 @@ function getScanWorkspaceInlineDocumentPreview() {
   return pages.length || preview.error_message ? preview : null;
 }
 
+function getScanWorkspaceJdLlmReadbackPayload(payload = getScanWorkspacePreloadPayloadForSurface()) {
+  if (!payload || typeof payload !== "object") return null;
+
+  const explicitReadback = payload.jd_llm_extraction_readback;
+  if (explicitReadback && typeof explicitReadback === "object") return explicitReadback;
+
+  const metadata = payload.jd_llm_extraction;
+  if (!metadata || typeof metadata !== "object") return null;
+
+  return {
+    live_jd_llm_readback: true,
+    llm_enabled: metadata.llm_enabled === true,
+    llm_call_attempted: metadata.llm_call_attempted === true,
+    llm_call_performed: metadata.llm_call_performed === true,
+    fallback_used: metadata.fallback_used !== false,
+    validation_status: String(metadata.validation_status || "missing").trim() || "missing",
+    provider: String(metadata.provider || "").trim(),
+    model: String(metadata.model || "").trim(),
+    prompt_version: String(metadata.prompt_version || "").trim(),
+    token_usage: metadata.token_usage && typeof metadata.token_usage === "object"
+      ? metadata.token_usage
+      : {},
+    cost: metadata.cost && typeof metadata.cost === "object" ? metadata.cost : {},
+    latency_ms: metadata.latency_ms || 0,
+    structured_jd_signals: metadata.structured_jd_signals && typeof metadata.structured_jd_signals === "object"
+      ? metadata.structured_jd_signals
+      : {},
+  };
+}
+
+function summarizeScanWorkspaceJdSignalList(signals, key, label) {
+  const values = Array.isArray(signals?.[key])
+    ? signals[key].map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  if (!values.length) return "";
+  return `${label}: ${values.slice(0, 4).join(", ")}${values.length > 4 ? ` +${values.length - 4}` : ""}`;
+}
+
+function renderScanWorkspaceJdLlmReadback() {
+  const root = getScanWorkspaceInput("scanWorkspaceJdLlmReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceJdLlmReadbackPayload();
+  if (!readback) {
+    root.textContent = "Live JD LLM: default-off";
+    root.dataset.llmEnabled = "false";
+    root.dataset.llmCallAttempted = "false";
+    return;
+  }
+
+  const enabled = readback.llm_enabled === true;
+  const attempted = readback.llm_call_attempted === true;
+  const performed = readback.llm_call_performed === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const providerModel = [
+    String(readback.provider || "").trim(),
+    String(readback.model || "").trim(),
+  ].filter(Boolean).join("/");
+  const promptVersion = String(readback.prompt_version || "").trim();
+  const latency = Number(readback.latency_ms);
+  const tokenUsage = readback.token_usage && typeof readback.token_usage === "object"
+    ? readback.token_usage
+    : {};
+  const cost = readback.cost && typeof readback.cost === "object" ? readback.cost : {};
+  const tokenValue = tokenUsage.total_token_count ?? tokenUsage.total_tokens ?? "";
+  const costValue = cost.estimated_cost ?? cost.total_cost ?? "";
+  const signals = readback.structured_jd_signals && typeof readback.structured_jd_signals === "object"
+    ? readback.structured_jd_signals
+    : {};
+  const signalSnippets = [
+    summarizeScanWorkspaceJdSignalList(signals, "required_skills", "skills"),
+    summarizeScanWorkspaceJdSignalList(signals, "tools", "tools"),
+    summarizeScanWorkspaceJdSignalList(signals, "responsibilities", "signals"),
+  ].filter(Boolean);
+
+  root.dataset.llmEnabled = enabled ? "true" : "false";
+  root.dataset.llmCallAttempted = attempted ? "true" : "false";
+  root.dataset.llmCallPerformed = performed ? "true" : "false";
+  root.dataset.llmFallbackUsed = fallback ? "true" : "false";
+  root.dataset.llmValidationStatus = validation;
+
+  const parts = [
+    `Live JD LLM: ${enabled ? "enabled" : "default-off"}`,
+    `attempted ${attempted ? "yes" : "no"}`,
+    `performed ${performed ? "yes" : "no"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    providerModel ? `provider ${providerModel}` : "",
+    promptVersion ? `prompt ${promptVersion}` : "",
+    Number.isFinite(latency) && latency > 0 ? `${latency}ms` : "",
+    tokenValue !== "" ? `tokens ${tokenValue}` : "",
+    costValue !== "" ? `cost ${costValue}` : "",
+    signalSnippets.length ? signalSnippets.join(" · ") : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -995,6 +1094,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   if (typeof updateScanWorkspaceContextLine === "function") {
     updateScanWorkspaceContextLine(payload);
   }
+  renderScanWorkspaceJdLlmReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1028,6 +1128,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   if (typeof renderScanWorkspaceView === "function") {
     renderScanWorkspaceView();
   }
+  renderScanWorkspaceJdLlmReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {

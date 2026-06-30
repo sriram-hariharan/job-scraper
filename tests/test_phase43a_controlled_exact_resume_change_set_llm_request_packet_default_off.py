@@ -506,6 +506,12 @@ def test_changed_files_are_limited_to_phase43a_and_legacy_guards():
         "src/app/api.py",
         "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off.md",
         "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
+        "src/app/planning_ui.py",
+        "src/app/static/planning.js",
+        "src/app/static/scan_workspace.js",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.md",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+        "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
 
         "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
         "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",

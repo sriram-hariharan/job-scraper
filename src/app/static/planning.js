@@ -11402,6 +11402,9 @@ function renderScanWorkspaceView() {
     `;
     updateScanWorkspaceMeta();
     updateScanWorkspaceActionBar();
+    if (typeof renderScanWorkspaceJdLlmReadback === "function") {
+      renderScanWorkspaceJdLlmReadback();
+    }
     syncScanWorkspaceAnnotationMarkers(null);
     return;
   }
@@ -11420,6 +11423,9 @@ function renderScanWorkspaceView() {
   renderScanWorkspaceTabs();
   updateScanWorkspaceMeta();
   updateScanWorkspaceActionBar();
+  if (typeof renderScanWorkspaceJdLlmReadback === "function") {
+    renderScanWorkspaceJdLlmReadback();
+  }
   syncScanWorkspaceAnnotationMarkers(payload);
 }
 

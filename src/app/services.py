@@ -5068,7 +5068,9 @@ def create_saved_scan_payload(
         adapter=jd_llm_provider_adapter,
         extraction_policy=jd_llm_extraction_policy,
     )
+    jd_llm_readback = build_planning_scan_jd_llm_extraction_readback(jd_llm_metadata)
     review_payload["jd_llm_extraction"] = jd_llm_metadata
+    review_payload["jd_llm_extraction_readback"] = jd_llm_readback
     scan_score = int(dict(review_payload.get("scan_score", {}) or {}).get("score", 0) or 0)
     row = saved_scan_db_row(
         {
@@ -5080,6 +5082,7 @@ def create_saved_scan_payload(
                 "version": "saved_scan_report_v1",
                 "scan_review_payload": review_payload,
                 "jd_llm_extraction": jd_llm_metadata,
+                "jd_llm_extraction_readback": jd_llm_readback,
             },
             "owner_user_id": _clean_text(owner_user_id),
             "owner_email": _clean_text(owner_email),
@@ -5101,6 +5104,7 @@ def create_saved_scan_payload(
         "scan_status": row["scan_status"],
         "scan": row,
         "scan_review_payload": review_payload,
+        "jd_llm_extraction_readback": jd_llm_readback,
         "postgres_write": postgres_write,
     }
 
@@ -5319,11 +5323,27 @@ def saved_scan_report_payload(
         resume_name=resume_name,
         personal_details=personal_details,
     )
+    jd_llm_metadata = (
+        refreshed_payload.get("jd_llm_extraction")
+        if isinstance(refreshed_payload.get("jd_llm_extraction"), dict)
+        else report_payload.get("jd_llm_extraction")
+    )
+    jd_llm_readback = (
+        refreshed_payload.get("jd_llm_extraction_readback")
+        if isinstance(refreshed_payload.get("jd_llm_extraction_readback"), dict)
+        else report_payload.get("jd_llm_extraction_readback")
+    )
+    if not isinstance(jd_llm_readback, dict):
+        jd_llm_readback = build_planning_scan_jd_llm_extraction_readback(
+            jd_llm_metadata if isinstance(jd_llm_metadata, dict) else {}
+        )
+    refreshed_payload["jd_llm_extraction_readback"] = jd_llm_readback
 
     return {
         "ok": True,
         "scan": row,
         "scan_review_payload": refreshed_payload,
+        "jd_llm_extraction_readback": jd_llm_readback,
     }
 
 
@@ -13184,6 +13204,65 @@ def _build_planning_scan_jd_llm_extraction_metadata(
         "application_execution_performed": False,
         "application_submission_performed": False,
         "auto_" + "apply_performed": False,
+    }
+
+
+def build_planning_scan_jd_llm_extraction_readback(
+    metadata: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    source = dict(metadata or {})
+    structured_signals = deepcopy(source.get("structured_jd_signals", {}))
+    if not isinstance(structured_signals, dict):
+        structured_signals = {}
+
+    token_usage = deepcopy(source.get("token_usage", {}))
+    if not isinstance(token_usage, dict):
+        token_usage = {}
+    cost = deepcopy(source.get("cost", {}))
+    if not isinstance(cost, dict):
+        cost = {}
+
+    return {
+        "phase": "55B",
+        "source_phase": _clean_text(source.get("phase")) or "55A",
+        "default_off": True,
+        "live_jd_llm_readback": True,
+        "planning_scan_path": True,
+        "api_readback": True,
+        "ui_readback": True,
+        "metadata_only": True,
+        "llm_enabled": bool(source.get("llm_enabled", False)),
+        "llm_call_attempted": bool(source.get("llm_call_attempted", False)),
+        "llm_call_performed": bool(source.get("llm_call_performed", False)),
+        "fallback_used": bool(source.get("fallback_used", True)),
+        "validation_status": _clean_text(source.get("validation_status")) or "missing",
+        "validation_errors": list(source.get("validation_errors") or []),
+        "provider": _clean_text(source.get("provider")),
+        "model": _clean_text(source.get("model")),
+        "prompt_version": _clean_text(source.get("prompt_version")),
+        "token_usage": token_usage,
+        "cost": cost,
+        "latency_ms": source.get("latency_ms", 0),
+        "structured_jd_signals": structured_signals,
+        "signal_summary": {
+            "required_skill_count": len(list(structured_signals.get("required_skills") or [])),
+            "preferred_skill_count": len(list(structured_signals.get("preferred_skills") or [])),
+            "tool_count": len(list(structured_signals.get("tools") or [])),
+            "responsibility_count": len(list(structured_signals.get("responsibilities") or [])),
+            "has_seniority": bool(_clean_text(structured_signals.get("seniority"))),
+            "has_domain": bool(_clean_text(structured_signals.get("domain"))),
+        },
+        "safety": {
+            "provider_call_triggered_by_readback": False,
+            "resume_mutation_performed": False,
+            "resume_artifact_created": False,
+            "application_execution_performed": False,
+            "application_submission_performed": False,
+            "auto_" + "apply_performed": False,
+            "final_scoring_performed": False,
+            "score_formula_changed": False,
+            "scoring_weights_changed": False,
+        },
     }
 
 

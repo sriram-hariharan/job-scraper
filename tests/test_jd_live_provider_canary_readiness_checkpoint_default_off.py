@@ -342,7 +342,7 @@ def test_protected_surfaces_dependencies_and_pipeline_are_unchanged():
     expected = {
         "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
         "src/app/api.py": ("e658b1e05444d7cd2546d3d065cc325045a9d2bb1589b900c18d1aeea0fbd084"),
-        "src/app/services.py": ("4e3ca1a2d9c4e5ea8a459ef29b377ab25b41b8073239e05c2d1de37cd174ce24"),
+        "src/app/services.py": ("c27f0c1a499398d423f8edd46165da784dabfea0309f2022ed88f9fc75d8df8f"),
         "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
         "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),

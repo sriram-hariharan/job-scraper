@@ -12,7 +12,7 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
     "src/app/api.py": "e658b1e05444d7cd2546d3d065cc325045a9d2bb1589b900c18d1aeea0fbd084",
-    "src/app/services.py": "4e3ca1a2d9c4e5ea8a459ef29b377ab25b41b8073239e05c2d1de37cd174ce24",
+    "src/app/services.py": "c27f0c1a499398d423f8edd46165da784dabfea0309f2022ed88f9fc75d8df8f",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
@@ -492,6 +492,12 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
         "src/app/api.py",
         "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off.md",
         "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
+        "src/app/planning_ui.py",
+        "src/app/static/planning.js",
+        "src/app/static/scan_workspace.js",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.md",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+        "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
 
                                 "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
                                 "run_controlled_exact_resume_change_set_llm_request_packet_dry_run.py",

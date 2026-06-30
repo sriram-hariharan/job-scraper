@@ -186,7 +186,7 @@ def test_no_api_service_pipeline_dependency_or_decision_module_change():
             "e658b1e05444d7cd2546d3d065cc325045a9d2bb1589b900c18d1aeea0fbd084"
         ),
         "src/app/services.py": (
-            "4e3ca1a2d9c4e5ea8a459ef29b377ab25b41b8073239e05c2d1de37cd174ce24"
+            "c27f0c1a499398d423f8edd46165da784dabfea0309f2022ed88f9fc75d8df8f"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

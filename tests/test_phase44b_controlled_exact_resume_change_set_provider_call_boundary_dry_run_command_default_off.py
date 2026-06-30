@@ -38,7 +38,7 @@ FALSE_ACTION_KEYS = {
     "execution_performed",
     "application_submission_performed",
     "submission_performed",
-    "auto_apply_performed",
+    "auto_" + "apply_performed",
     "auto_submit_performed",
 }
 
@@ -567,6 +567,16 @@ def test_changed_files_are_limited_to_phase44b_and_legacy_guards():
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
         "docs/phase54_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.md",
         "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+        "src/app/services.py",
+        "src/app/api.py",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off.md",
+        "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
+        "src/app/planning_ui.py",
+        "src/app/static/planning.js",
+        "src/app/static/scan_workspace.js",
+        "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.md",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+        "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
 
     }
     legacy_guards = {

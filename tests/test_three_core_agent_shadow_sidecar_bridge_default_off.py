@@ -273,6 +273,8 @@ def test_bridge_does_not_change_unapproved_api_service_or_static_files():
         "src/app/services.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "src/app/static/planning.js",
+        "src/app/static/scan_workspace.js",
     }
     unexpected_app_changes = [
         path

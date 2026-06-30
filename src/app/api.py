@@ -145,6 +145,7 @@ class PlanningStartScanRequest(BaseModel):
     upload_filename: str = ""
     upload_content_type: str = ""
     upload_base64: str = ""
+    enable_jd_llm_extraction: bool = False
 
 class PlanningExtractResumeUploadRequest(BaseModel):
     filename: str
@@ -3157,6 +3158,7 @@ def planning_start_scan(http_request: Request, request: PlanningStartScanRequest
             upload_content_type=request.upload_content_type,
             upload_bytes=upload_bytes,
             tailoring_json_path=request.tailoring_json_path,
+            enable_jd_llm_extraction=request.enable_jd_llm_extraction,
         )
     except (binascii.Error, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

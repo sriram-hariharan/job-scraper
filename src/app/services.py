@@ -5385,6 +5385,8 @@ def save_saved_scan_state_payload(
     approved_change_plan_id: str = "",
     enable_guarded_resume_copy_artifact_verification: bool = False,
     guarded_resume_copy_artifact_id: str = "",
+    enable_verified_artifact_operator_review_packet: bool = False,
+    verified_artifact_operator_review_artifact_id: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5414,6 +5416,9 @@ def save_saved_scan_state_payload(
         ],
         "approved_change_plan_id": _clean_text(approved_change_plan_id),
         "guarded_resume_copy_artifact_id": _clean_text(guarded_resume_copy_artifact_id),
+        "verified_artifact_operator_review_artifact_id": _clean_text(
+            verified_artifact_operator_review_artifact_id
+        ),
         "draft_status": "saved_scan_state",
         "saved_at": _utc_now(),
     }
@@ -5452,6 +5457,11 @@ def save_saved_scan_state_payload(
         enabled=bool(enable_guarded_resume_copy_artifact_verification),
         artifact_id=draft["guarded_resume_copy_artifact_id"],
     )
+    verified_artifact_operator_review_packet_readback = _planning_workspace_verified_artifact_operator_review_packet_payload(
+        verification_readback=guarded_artifact_verification_readback,
+        enabled=bool(enable_verified_artifact_operator_review_packet),
+        artifact_id=draft["verified_artifact_operator_review_artifact_id"],
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5463,6 +5473,7 @@ def save_saved_scan_state_payload(
         "manual_exact_change_acceptance_readback": manual_acceptance_readback,
         "guarded_resume_copy_artifact_readback": guarded_artifact_readback,
         "guarded_resume_copy_artifact_verification_readback": guarded_artifact_verification_readback,
+        "verified_artifact_operator_review_packet_readback": verified_artifact_operator_review_packet_readback,
     }
 
 
@@ -15296,6 +15307,313 @@ def _planning_workspace_guarded_resume_copy_artifact_verification_payload(
             "applied_approved_change_count": len(approved_changes),
             "mismatch_items": mismatch_items,
             "artifact": artifact,
+        },
+        enabled=True,
+    )
+
+
+def _planning_workspace_verified_artifact_operator_review_packet_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "artifact_created": False,
+        "artifact_created_by_review_packet": False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "source_resume_state_mutated": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+    }
+
+
+def build_planning_workspace_verified_artifact_operator_review_packet_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    packet = (
+        dict(source.get("operator_review_packet") or {})
+        if isinstance(source.get("operator_review_packet"), dict)
+        else {}
+    )
+    review_items = [
+        dict(item)
+        for item in list(packet.get("review_items") or source.get("review_items") or [])
+        if isinstance(item, dict)
+    ]
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason"))
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_reason and fallback_used and validation_errors:
+        fallback_reason = validation_errors[0]
+    if not fallback_error_class and fallback_reason and validation_status in {"fallback", "blocked"}:
+        fallback_error_class = "ValueError"
+    artifact_id = _clean_text(
+        source.get("artifact_id")
+        or source.get("stable_artifact_key")
+        or packet.get("artifact_id")
+        or packet.get("stable_artifact_key")
+    )
+    plan_key = _clean_text(
+        source.get("approved_change_plan_id")
+        or source.get("stable_plan_key")
+        or packet.get("approved_change_plan_id")
+        or packet.get("stable_plan_key")
+    )
+    packet_id = _clean_text(
+        source.get("operator_review_packet_id")
+        or source.get("stable_packet_key")
+        or packet.get("operator_review_packet_id")
+        or packet.get("stable_packet_key")
+    )
+
+    return {
+        "phase": "61A",
+        "default_off": True,
+        "verified_artifact_operator_review_packet": True,
+        "planning_workspace_action": True,
+        "operator_review_packet_enabled": bool(enabled),
+        "operator_review_packet_requested": bool(
+            source.get("operator_review_packet_requested", False)
+        ),
+        "operator_review_packet_created": bool(
+            source.get("operator_review_packet_created", False)
+        ),
+        "operator_review_packet_id": packet_id,
+        "stable_packet_key": packet_id,
+        "artifact_id": artifact_id,
+        "stable_artifact_key": artifact_id,
+        "artifact_verification_passed": bool(
+            source.get("artifact_verification_passed", False)
+        ),
+        "approved_change_plan_id": plan_key,
+        "stable_plan_key": plan_key,
+        "review_item_count": len(review_items),
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+        "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        "fallback_metadata": {
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "validation_errors": validation_errors,
+        },
+        "validation_errors": validation_errors,
+        "operator_review_packet": deepcopy(packet) if packet else None,
+        "review_items": review_items,
+        "api_readback_fields": [
+            "operator_review_packet_enabled",
+            "operator_review_packet_requested",
+            "operator_review_packet_created",
+            "operator_review_packet_id",
+            "stable_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "artifact_verification_passed",
+            "approved_change_plan_id",
+            "stable_plan_key",
+            "review_item_count",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+        ],
+        "ui_readback_fields": [
+            "operator_review_packet_enabled",
+            "operator_review_packet_requested",
+            "operator_review_packet_created",
+            "operator_review_packet_id",
+            "stable_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "artifact_verification_passed",
+            "approved_change_plan_id",
+            "stable_plan_key",
+            "review_item_count",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+        ],
+        "safety": _planning_workspace_verified_artifact_operator_review_packet_safety(),
+    }
+
+
+def _planning_workspace_verified_artifact_operator_review_packet_payload(
+    *,
+    verification_readback: Dict[str, Any] | None,
+    enabled: bool = False,
+    artifact_id: str = "",
+) -> Dict[str, Any]:
+    requested_artifact_id = _clean_text(artifact_id)
+    if not enabled:
+        return build_planning_workspace_verified_artifact_operator_review_packet_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "artifact_id": requested_artifact_id,
+                "operator_review_packet_requested": False,
+                "operator_review_packet_created": False,
+                "artifact_verification_passed": False,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=False,
+        )
+
+    source = dict(verification_readback or {})
+    existing_artifact_id = _clean_text(
+        source.get("artifact_id") or source.get("stable_artifact_key")
+    )
+    if not requested_artifact_id:
+        return build_planning_workspace_verified_artifact_operator_review_packet_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["artifact_id_required"],
+                "fallback_reason": "artifact_id_required",
+                "artifact_id": requested_artifact_id,
+                "approved_change_plan_id": source.get("approved_change_plan_id"),
+                "stable_plan_key": source.get("stable_plan_key"),
+                "operator_review_packet_requested": True,
+                "operator_review_packet_created": False,
+                "artifact_verification_passed": bool(
+                    source.get("artifact_verification_passed", False)
+                ),
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=True,
+        )
+    if requested_artifact_id != existing_artifact_id:
+        return build_planning_workspace_verified_artifact_operator_review_packet_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["artifact_id_mismatch"],
+                "fallback_reason": "artifact_id_mismatch",
+                "artifact_id": requested_artifact_id,
+                "approved_change_plan_id": source.get("approved_change_plan_id"),
+                "stable_plan_key": source.get("stable_plan_key"),
+                "operator_review_packet_requested": True,
+                "operator_review_packet_created": False,
+                "artifact_verification_passed": bool(
+                    source.get("artifact_verification_passed", False)
+                ),
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=True,
+        )
+    if source.get("artifact_verification_passed") is not True:
+        return build_planning_workspace_verified_artifact_operator_review_packet_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": ["artifact_verification_required"],
+                "fallback_reason": "artifact_verification_required",
+                "artifact_id": requested_artifact_id,
+                "approved_change_plan_id": source.get("approved_change_plan_id"),
+                "stable_plan_key": source.get("stable_plan_key"),
+                "operator_review_packet_requested": True,
+                "operator_review_packet_created": False,
+                "artifact_verification_passed": False,
+                "source_resume_unchanged": source.get("source_resume_unchanged", True),
+                "source_resume_overwritten": source.get("source_resume_overwritten", False),
+            },
+            enabled=True,
+        )
+
+    artifact = (
+        dict(source.get("verified_artifact") or {})
+        if isinstance(source.get("verified_artifact"), dict)
+        else {}
+    )
+    approved_changes = [
+        dict(row) for row in list(artifact.get("approved_changes") or []) if isinstance(row, dict)
+    ]
+    review_items = [
+        {
+            "review_item_id": _clean_text(
+                row.get("proposal_id") or row.get("change_id") or row.get("id")
+            )
+            or f"review-item-{index + 1}",
+            "artifact_id": existing_artifact_id,
+            "approved_change_plan_id": _clean_text(source.get("approved_change_plan_id")),
+            "change_type": _clean_text(row.get("change_type") or row.get("type")),
+            "target_identifier": _clean_text(
+                row.get("target_identifier") or row.get("target_id") or row.get("section")
+            ),
+            "operator_review_required": True,
+            "source_resume_unchanged": source.get("source_resume_unchanged", True),
+            "source_resume_overwritten": source.get("source_resume_overwritten", False),
+        }
+        for index, row in enumerate(approved_changes)
+    ]
+    packet_seed = "|".join(
+        [
+            existing_artifact_id,
+            _clean_text(source.get("approved_change_plan_id")),
+            str(len(review_items)),
+        ]
+    )
+    packet_id = f"phase61-verified-artifact-review-{hashlib.sha256(packet_seed.encode('utf-8')).hexdigest()[:16]}"
+    packet = {
+        "operator_review_packet_id": packet_id,
+        "stable_packet_key": packet_id,
+        "artifact_id": existing_artifact_id,
+        "stable_artifact_key": existing_artifact_id,
+        "artifact_verification_passed": True,
+        "approved_change_plan_id": _clean_text(source.get("approved_change_plan_id")),
+        "stable_plan_key": _clean_text(source.get("stable_plan_key")),
+        "review_items": review_items,
+        "review_item_count": len(review_items),
+        "operator_review_only": True,
+        "artifact_creation_performed": False,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+    }
+
+    return build_planning_workspace_verified_artifact_operator_review_packet_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "operator_review_packet_requested": True,
+            "operator_review_packet_created": True,
+            "operator_review_packet_id": packet_id,
+            "stable_packet_key": packet_id,
+            "artifact_id": existing_artifact_id,
+            "approved_change_plan_id": source.get("approved_change_plan_id"),
+            "stable_plan_key": source.get("stable_plan_key"),
+            "artifact_verification_passed": True,
+            "review_items": review_items,
+            "source_resume_unchanged": source.get("source_resume_unchanged", True),
+            "source_resume_overwritten": source.get("source_resume_overwritten", False),
+            "operator_review_packet": packet,
         },
         enabled=True,
     )

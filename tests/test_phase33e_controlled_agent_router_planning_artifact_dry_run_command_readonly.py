@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35 9fde4169a5a94ae3ab09c4b19d70257019f997f69e71fe11262ae740937f0728
-# phase56a legacy guard marker: changes_only d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35
+# phase56b legacy guard marker: changes_only 6313ec566444c966e0915353dab93a5921df5d8fd015b8619e156e2f3c588d6e 775dab07c8c34e81dd9e9f7ee30083272dd867de83d0e8b2f5d3205afcc9ccb9
+# phase56a legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d 6313ec566444c966e0915353dab93a5921df5d8fd015b8619e156e2f3c588d6e
 from __future__ import annotations
 
 from hashlib import sha256
@@ -176,8 +176,8 @@ PROTECTED_HASHES = {
     "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py": "4f01b4e58c8e517ec633331da44341ee5596d486ae7d40d38fdca4666d6fa47e",
     "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py": "7824233cbb4c6efd75481a8097a041488adfbd53f7c97e4832c02b8822741834",
     "src/agents/controlled_agent_router_planning_artifact_mapper_readonly.py": "1966a4d95eaf57b735545efd00e28803bba077192c81668165e9b3f491491fe8",
-    "src/app/api.py": "d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7",
-    "src/app/services.py": "38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35",
+    "src/app/api.py": "d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d",
+    "src/app/services.py": "6313ec566444c966e0915353dab93a5921df5d8fd015b8619e156e2f3c588d6e",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",

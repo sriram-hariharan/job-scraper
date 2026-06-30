@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35 9fde4169a5a94ae3ab09c4b19d70257019f997f69e71fe11262ae740937f0728
-# phase56a legacy guard marker: changes_only d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35
+# phase56b legacy guard marker: changes_only 6313ec566444c966e0915353dab93a5921df5d8fd015b8619e156e2f3c588d6e 775dab07c8c34e81dd9e9f7ee30083272dd867de83d0e8b2f5d3205afcc9ccb9
+# phase56a legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d 6313ec566444c966e0915353dab93a5921df5d8fd015b8619e156e2f3c588d6e
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7
-# phase23f legacy guard marker: changes_only d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase26b legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d
+# phase23f legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from copy import deepcopy
 from hashlib import sha256
@@ -99,8 +99,8 @@ REQUIRED_TAGS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7",
-    "src/app/services.py": "38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35",
+    "src/app/api.py": "d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d",
+    "src/app/services.py": "6313ec566444c966e0915353dab93a5921df5d8fd015b8619e156e2f3c588d6e",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
@@ -310,12 +310,14 @@ def test_phase22c_changes_only_helper_doc_test_and_legacy_guards():
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_readback_verification_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
+        "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
         "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
+        "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -336,12 +338,14 @@ def test_phase22c_changes_only_helper_doc_test_and_legacy_guards():
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_readback_verification_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
+        "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
         "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
+        "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/agents/core_agent_evidence_materialization_preview.py",
         "docs/phase22_core_agent_evidence_materialization_preview.md",
@@ -643,7 +647,7 @@ def test_phase22c_changes_only_helper_doc_test_and_legacy_guards():
         for path in (ROOT / "tests").glob("test_*.py")
         if (
             "changes_only" in path.read_text(encoding="utf-8")
-            or "d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7"
+            or "d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d"
             in path.read_text(encoding="utf-8")
             or "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab"
             in path.read_text(encoding="utf-8")

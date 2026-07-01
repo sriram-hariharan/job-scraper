@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e cc56b3bd7460451ac255f57f6232fed9b607c1a90eac61b108bcf05005908fff
-# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e
+# phase56b legacy guard marker: changes_only f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e 58db18e3007680b19c74832a1b81ba246b15ad45681e2c76ade4ac2fab034c1b
+# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e
 # phase26b legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf
 from hashlib import sha256
 from pathlib import Path
@@ -181,7 +181,7 @@ def test_no_pipeline_dependency_or_decision_module_change():
             "1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf"
         ),
         "src/app/services.py": (
-            "ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e"
+            "f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

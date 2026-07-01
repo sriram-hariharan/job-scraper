@@ -15752,9 +15752,13 @@ def build_planning_workspace_verified_artifact_operator_decision_readback(
 
     return {
         "phase": "62A",
+        "readback_phase": "62B",
+        "phase62b_readback_hardened": True,
         "default_off": True,
         "verified_artifact_operator_decision_capture": True,
         "planning_workspace_action": True,
+        "api_readback": True,
+        "ui_readback": True,
         "operator_decision_enabled": bool(enabled),
         "operator_decision_requested": bool(
             source.get("operator_decision_requested", False)
@@ -15785,6 +15789,8 @@ def build_planning_workspace_verified_artifact_operator_decision_readback(
             "validation_errors": validation_errors,
         },
         "operator_decision_metadata": {
+            "readback_phase": "62B",
+            "phase62b_readback_hardened": True,
             "operator_decision_enabled": bool(enabled),
             "operator_decision_requested": bool(
                 source.get("operator_decision_requested", False)
@@ -15812,6 +15818,8 @@ def build_planning_workspace_verified_artifact_operator_decision_readback(
         "validation_errors": validation_errors,
         "operator_decision_packet": deepcopy(decision_packet) if decision_packet else None,
         "api_readback_fields": [
+            "readback_phase",
+            "phase62b_readback_hardened",
             "operator_decision_enabled",
             "operator_decision_requested",
             "operator_decision_captured",
@@ -15832,6 +15840,8 @@ def build_planning_workspace_verified_artifact_operator_decision_readback(
             "operator_decision_metadata",
         ],
         "ui_readback_fields": [
+            "readback_phase",
+            "phase62b_readback_hardened",
             "operator_decision_enabled",
             "operator_decision_requested",
             "operator_decision_captured",

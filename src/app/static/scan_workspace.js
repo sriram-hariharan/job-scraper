@@ -789,6 +789,7 @@ function renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback(readbackPay
   const validation = String(readback.validation_status || "missing").trim() || "missing";
   const fallbackReason = String(readback.fallback_reason || "").trim();
   const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase62bReadbackHardened = readback.phase62b_readback_hardened === true;
   const decisionKey = String(readback.operator_decision_id || readback.stable_decision_key || "").trim();
   const packetKey = String(readback.operator_review_packet_id || readback.stable_packet_key || "").trim();
   const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
@@ -807,9 +808,11 @@ function renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback(readbackPay
   root.dataset.operatorDecisionValidationStatus = validation;
   root.dataset.operatorDecisionFallbackReason = fallbackReason;
   root.dataset.operatorDecisionFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase62bReadbackHardened = phase62bReadbackHardened ? "true" : "false";
 
   const parts = [
     `Verified artifact operator decision: ${enabled ? "enabled" : "default-off"}`,
+    phase62bReadbackHardened ? "readback hardened" : "",
     `requested ${requested ? "yes" : "no"}`,
     `captured ${captured ? "yes" : "no"}`,
     decisionValue ? `decision ${decisionValue}` : "",

@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e cc56b3bd7460451ac255f57f6232fed9b607c1a90eac61b108bcf05005908fff
-# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e
+# phase56b legacy guard marker: changes_only f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e 58db18e3007680b19c74832a1b81ba246b15ad45681e2c76ade4ac2fab034c1b
+# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf
 from __future__ import annotations
@@ -90,7 +90,7 @@ PROTECTED_HASHES = {
         "1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf"
     ),
     "src/app/services.py": (
-        "ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e"
+        "f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e"
     ),
     "src/app/static/agentic_review.js": (
         "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"
@@ -404,6 +404,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -413,6 +414,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
             "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
+            "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md",
         "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py",
@@ -432,6 +434,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -441,6 +444,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
             "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
+            "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         '"docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md"',
         '"tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py"',

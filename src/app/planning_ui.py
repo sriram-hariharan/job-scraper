@@ -1577,6 +1577,13 @@ def scan_workspace(
                 >
                   Application readiness packet: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-manual-application-handoff-packet-readback"
+                  id="scanWorkspaceManualApplicationHandoffPacketReadback"
+                  aria-live="polite"
+                >
+                  Manual application handoff packet: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1949,6 +1956,30 @@ def scan_workspace(
                 id="scanWorkspaceApplicationReadinessArtifactId"
                 placeholder="Verified artifact ID"
                 aria-label="Application readiness artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-manual-application-handoff-packet-toggle"
+                for="scanWorkspaceManualApplicationHandoffPacketToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceManualApplicationHandoffPacketToggle"
+                />
+                Create human-only manual application handoff packet
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-manual-handoff-readiness-packet-id-input"
+                id="scanWorkspaceManualHandoffReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Manual handoff application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-manual-handoff-artifact-id-input"
+                id="scanWorkspaceManualHandoffArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Manual handoff verified artifact ID"
               />
               </div>
             </div>

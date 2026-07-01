@@ -1361,6 +1361,102 @@ function renderScanWorkspaceWorkflowReadinessCheckpointReadback(readbackPayload 
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceAgenticWorkflowIntegrationPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.agentic_workflow_integration_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceAgenticWorkflowIntegrationReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceAgenticWorkflowIntegrationPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Agentic workflow integration: default-off";
+    root.dataset.agenticWorkflowIntegrationEnabled = "false";
+    root.dataset.agenticWorkflowIntegrationPerformed = "false";
+    return;
+  }
+
+  const enabled = readback.agentic_workflow_integration_enabled === true;
+  const requested = readback.agentic_workflow_integration_requested === true;
+  const performed = readback.agentic_workflow_integration_performed === true;
+  const userStarted = readback.user_started_scan_or_evaluation === true;
+  const coreLlmWorkflowAutomatic = readback.core_llm_inference_workflow_automatic === true;
+  const jdSignals = readback.jd_signal_extraction_available === true;
+  const skills = readback.skills_extraction_available === true;
+  const requirements = readback.requirements_extraction_available === true;
+  const evidence = readback.resume_evidence_available === true;
+  const scoring = readback.scoring_ranking_available === true;
+  const nextActions = readback.planning_workspace_next_actions_available === true;
+  const tailoringAction = readback.tailoring_suggestion_action_available === true;
+  const exactChangeAction = readback.exact_change_proposal_action_available === true;
+  const manualMutationGated = readback.manual_mutation_requires_operator_action === true;
+  const humanOnly = readback.human_only_application_boundary === true;
+  const atsAutomation = readback.ats_automation_performed === true;
+  const submission = readback.application_submission_performed === true;
+  const queued = readback.apply_queue_enqueued === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+
+  root.dataset.agenticWorkflowIntegrationEnabled = enabled ? "true" : "false";
+  root.dataset.agenticWorkflowIntegrationRequested = requested ? "true" : "false";
+  root.dataset.agenticWorkflowIntegrationPerformed = performed ? "true" : "false";
+  root.dataset.userStartedScanOrEvaluation = userStarted ? "true" : "false";
+  root.dataset.coreLlmInferenceWorkflowAutomatic = coreLlmWorkflowAutomatic ? "true" : "false";
+  root.dataset.jdSignalExtractionAvailable = jdSignals ? "true" : "false";
+  root.dataset.resumeEvidenceAvailable = evidence ? "true" : "false";
+  root.dataset.scoringRankingAvailable = scoring ? "true" : "false";
+  root.dataset.planningWorkspaceNextActionsAvailable = nextActions ? "true" : "false";
+  root.dataset.manualMutationRequiresOperatorAction = manualMutationGated ? "true" : "false";
+  root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
+  root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
+  root.dataset.applicationSubmissionPerformed = submission ? "true" : "false";
+  root.dataset.applyQueueEnqueued = queued ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.agenticWorkflowValidationStatus = validation;
+  root.dataset.agenticWorkflowFallbackReason = fallbackReason;
+  root.dataset.agenticWorkflowFallbackErrorClass = fallbackErrorClass;
+
+  const parts = [
+    `Agentic workflow integration: ${enabled ? "enabled" : "default-off"}`,
+    `requested ${requested ? "yes" : "no"}`,
+    `performed ${performed ? "yes" : "no"}`,
+    `user-started ${userStarted ? "yes" : "no"}`,
+    coreLlmWorkflowAutomatic ? "core LLM workflow-automatic" : "",
+    jdSignals ? "JD signals" : "",
+    skills ? "skills" : "",
+    requirements ? "requirements" : "",
+    evidence ? "resume evidence" : "",
+    scoring ? "scoring/ranking" : "",
+    nextActions ? "planning next actions" : "",
+    tailoringAction ? "tailoring action available" : "",
+    exactChangeAction ? "exact-change action available" : "",
+    manualMutationGated ? "manual mutation operator-gated" : "",
+    humanOnly ? "human-only boundary" : "",
+    `ATS automation ${atsAutomation ? "performed" : "not performed"}`,
+    `submission ${submission ? "performed" : "not performed"}`,
+    `queue ${queued ? "enqueued" : "not enqueued"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -2221,6 +2317,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceHandoffAuditTrailReadback();
   renderScanWorkspaceSafetyBoundarySummaryReadback();
   renderScanWorkspaceWorkflowReadinessCheckpointReadback();
+  renderScanWorkspaceAgenticWorkflowIntegrationReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -2267,6 +2364,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceHandoffAuditTrailReadback();
   renderScanWorkspaceSafetyBoundarySummaryReadback();
   renderScanWorkspaceWorkflowReadinessCheckpointReadback();
+  renderScanWorkspaceAgenticWorkflowIntegrationReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -4104,6 +4202,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceHandoffAuditTrailReadback(response);
     renderScanWorkspaceSafetyBoundarySummaryReadback(response);
     renderScanWorkspaceWorkflowReadinessCheckpointReadback(response);
+    renderScanWorkspaceAgenticWorkflowIntegrationReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

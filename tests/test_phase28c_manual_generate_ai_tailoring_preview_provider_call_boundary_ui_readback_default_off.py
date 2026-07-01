@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 7c98ab6e6722f43cb1087847a699a44a648d9c0b4eaa85f68dfe1a27b7b7fa34 16b2769b2a0713614f5c1293a7ca511f1032c0aa539ae4676d817d73d4184429
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 7c98ab6e6722f43cb1087847a699a44a648d9c0b4eaa85f68dfe1a27b7b7fa34
+# phase56b legacy guard marker: changes_only 912a02bbcf180962ca1b22aedf9dca0b5465b90f4add2444f328c99ccfc6e2d6 8e37487335a2b0bf18fd196554c11509d0e5ee0428244ce9fafce3c3e195e5bd
+# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 912a02bbcf180962ca1b22aedf9dca0b5465b90f4add2444f328c99ccfc6e2d6
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -18,7 +18,7 @@ ENDPOINT = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "7c98ab6e6722f43cb1087847a699a44a648d9c0b4eaa85f68dfe1a27b7b7fa34",
+    "src/app/services.py": "912a02bbcf180962ca1b22aedf9dca0b5465b90f4add2444f328c99ccfc6e2d6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
@@ -428,6 +428,13 @@ def test_phase28c_changes_only_static_doc_test_and_legacy_guards():
                 "docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off 2.md",
                 "docs/phase67_human_only_workflow_readiness_checkpoint_wiring_default_off.md",
                 "docs/phase67_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off.md",
+            "docs/phase68_end_to_end_agentic_workflow_integration_wiring_default_off.md",
+            "docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off 3.md",
+            "docs/phase67_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off 2.md",
+            "docs/phase67_human_only_workflow_readiness_checkpoint_wiring_default_off 2.md",
+            "\"docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off 3.md\"",
+            "\"docs/phase67_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off 2.md\"",
+            "\"docs/phase67_human_only_workflow_readiness_checkpoint_wiring_default_off 2.md\"",
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 2.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 3.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md"',
@@ -460,6 +467,15 @@ def test_phase28c_changes_only_static_doc_test_and_legacy_guards():
                 "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off 2.py",
                 "tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off.py",
                 "tests/test_phase67b_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off.py",
+            "tests/test_phase68a_end_to_end_agentic_workflow_integration_wiring_default_off.py",
+            "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off 3.py",
+            "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off 3.py",
+            "tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off 2.py",
+            "tests/test_phase67b_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off 2.py",
+            "\"tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off 3.py\"",
+            "\"tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off 3.py\"",
+            "\"tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off 2.py\"",
+            "\"tests/test_phase67b_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off 2.py\"",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",

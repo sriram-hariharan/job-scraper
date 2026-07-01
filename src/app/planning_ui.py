@@ -1591,6 +1591,13 @@ def scan_workspace(
                 >
                   Handoff audit trail: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-safety-boundary-summary-readback"
+                  id="scanWorkspaceSafetyBoundarySummaryReadback"
+                  aria-live="polite"
+                >
+                  Safety boundary summary: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -2018,6 +2025,44 @@ def scan_workspace(
                 id="scanWorkspaceHandoffAuditArtifactId"
                 placeholder="Verified artifact ID"
                 aria-label="Handoff audit verified artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-safety-boundary-summary-toggle"
+                for="scanWorkspaceSafetyBoundarySummaryToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceSafetyBoundarySummaryToggle"
+                />
+                Create human-only safety boundary summary
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-audit-id-input"
+                id="scanWorkspaceSafetyBoundaryAuditTrailId"
+                placeholder="Handoff audit trail ID"
+                aria-label="Safety boundary handoff audit trail ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-handoff-packet-id-input"
+                id="scanWorkspaceSafetyBoundaryHandoffPacketId"
+                placeholder="Manual handoff packet ID"
+                aria-label="Safety boundary manual handoff packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-readiness-packet-id-input"
+                id="scanWorkspaceSafetyBoundaryReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Safety boundary application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-artifact-id-input"
+                id="scanWorkspaceSafetyBoundaryArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Safety boundary verified artifact ID"
               />
               </div>
             </div>

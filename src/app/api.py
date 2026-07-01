@@ -183,6 +183,11 @@ class PlanningSavedScanStateRequest(BaseModel):
     handoff_audit_manual_handoff_packet_id: str = ""
     handoff_audit_application_readiness_packet_id: str = ""
     handoff_audit_artifact_id: str = ""
+    enable_human_only_safety_boundary_summary: bool = False
+    safety_boundary_handoff_audit_trail_id: str = ""
+    safety_boundary_manual_handoff_packet_id: str = ""
+    safety_boundary_application_readiness_packet_id: str = ""
+    safety_boundary_artifact_id: str = ""
 
 
 class AgentFeedbackRequest(BaseModel):
@@ -3238,6 +3243,11 @@ def planning_save_saved_scan_state(
             handoff_audit_manual_handoff_packet_id=request.handoff_audit_manual_handoff_packet_id,
             handoff_audit_application_readiness_packet_id=request.handoff_audit_application_readiness_packet_id,
             handoff_audit_artifact_id=request.handoff_audit_artifact_id,
+            enable_human_only_safety_boundary_summary=request.enable_human_only_safety_boundary_summary,
+            safety_boundary_handoff_audit_trail_id=request.safety_boundary_handoff_audit_trail_id,
+            safety_boundary_manual_handoff_packet_id=request.safety_boundary_manual_handoff_packet_id,
+            safety_boundary_application_readiness_packet_id=request.safety_boundary_application_readiness_packet_id,
+            safety_boundary_artifact_id=request.safety_boundary_artifact_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

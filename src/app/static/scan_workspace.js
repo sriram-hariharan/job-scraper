@@ -1123,6 +1123,114 @@ function renderScanWorkspaceHandoffAuditTrailReadback(readbackPayload = null) {
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceSafetyBoundarySummaryEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceSafetyBoundarySummaryToggle")?.checked === true;
+}
+
+function getScanWorkspaceSafetyBoundaryAuditTrailId() {
+  return String(getScanWorkspaceInput("scanWorkspaceSafetyBoundaryAuditTrailId")?.value || "").trim();
+}
+
+function getScanWorkspaceSafetyBoundaryHandoffPacketId() {
+  return String(getScanWorkspaceInput("scanWorkspaceSafetyBoundaryHandoffPacketId")?.value || "").trim();
+}
+
+function getScanWorkspaceSafetyBoundaryReadinessPacketId() {
+  return String(getScanWorkspaceInput("scanWorkspaceSafetyBoundaryReadinessPacketId")?.value || "").trim();
+}
+
+function getScanWorkspaceSafetyBoundaryArtifactId() {
+  return String(getScanWorkspaceInput("scanWorkspaceSafetyBoundaryArtifactId")?.value || "").trim();
+}
+
+function getScanWorkspaceSafetyBoundarySummaryPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.human_only_safety_boundary_summary_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceSafetyBoundarySummaryReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceSafetyBoundarySummaryReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceSafetyBoundarySummaryPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Safety boundary summary: default-off";
+    root.dataset.safetyBoundarySummaryEnabled = "false";
+    root.dataset.safetyBoundarySummaryCreated = "false";
+    return;
+  }
+
+  const enabled = readback.safety_boundary_summary_enabled === true;
+  const requested = readback.safety_boundary_summary_requested === true;
+  const created = readback.safety_boundary_summary_created === true;
+  const humanOnly = readback.human_only_application_boundary === true;
+  const atsAutomation = readback.ats_automation_performed === true;
+  const submission = readback.application_submission_performed === true;
+  const queued = readback.apply_queue_enqueued === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const summaryKey = String(readback.safety_boundary_summary_id || readback.stable_summary_key || "").trim();
+  const auditKey = String(readback.handoff_audit_trail_id || readback.stable_audit_key || "").trim();
+  const handoffKey = String(readback.manual_handoff_packet_id || readback.stable_handoff_packet_key || "").trim();
+  const readinessKey = String(readback.application_readiness_packet_id || readback.stable_readiness_packet_key || "").trim();
+  const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
+  const llmCapableCount = Number(readback.llm_capable_action_count);
+  const mutationCapableCount = Number(readback.mutation_capable_action_count);
+  const forbiddenPathCount = Number(readback.forbidden_path_count);
+
+  root.dataset.safetyBoundarySummaryEnabled = enabled ? "true" : "false";
+  root.dataset.safetyBoundarySummaryRequested = requested ? "true" : "false";
+  root.dataset.safetyBoundarySummaryCreated = created ? "true" : "false";
+  root.dataset.safetyBoundarySummaryKey = summaryKey;
+  root.dataset.handoffAuditTrailKey = auditKey;
+  root.dataset.manualHandoffPacketKey = handoffKey;
+  root.dataset.applicationReadinessPacketKey = readinessKey;
+  root.dataset.guardedResumeCopyArtifactKey = artifactKey;
+  root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
+  root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
+  root.dataset.applicationSubmissionPerformed = submission ? "true" : "false";
+  root.dataset.applyQueueEnqueued = queued ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.safetyBoundaryValidationStatus = validation;
+  root.dataset.safetyBoundaryFallbackReason = fallbackReason;
+  root.dataset.safetyBoundaryFallbackErrorClass = fallbackErrorClass;
+
+  const parts = [
+    `Safety boundary summary: ${enabled ? "enabled" : "default-off"}`,
+    `requested ${requested ? "yes" : "no"}`,
+    `created ${created ? "yes" : "no"}`,
+    humanOnly ? "human-only boundary" : "",
+    `ATS automation ${atsAutomation ? "performed" : "not performed"}`,
+    `submission ${submission ? "performed" : "not performed"}`,
+    `queue ${queued ? "enqueued" : "not enqueued"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    Number.isFinite(llmCapableCount) ? `llm-capable ${llmCapableCount}` : "",
+    Number.isFinite(mutationCapableCount) ? `mutation-capable ${mutationCapableCount}` : "",
+    Number.isFinite(forbiddenPathCount) ? `forbidden paths ${forbiddenPathCount}` : "",
+    summaryKey ? `summary ${summaryKey}` : "",
+    auditKey ? `audit ${auditKey}` : "",
+    handoffKey ? `handoff ${handoffKey}` : "",
+    readinessKey ? `readiness ${readinessKey}` : "",
+    artifactKey ? `artifact ${artifactKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1981,6 +2089,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceApplicationReadinessPacketReadback();
   renderScanWorkspaceManualApplicationHandoffPacketReadback();
   renderScanWorkspaceHandoffAuditTrailReadback();
+  renderScanWorkspaceSafetyBoundarySummaryReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -2025,6 +2134,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceApplicationReadinessPacketReadback();
   renderScanWorkspaceManualApplicationHandoffPacketReadback();
   renderScanWorkspaceHandoffAuditTrailReadback();
+  renderScanWorkspaceSafetyBoundarySummaryReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3815,6 +3925,11 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           handoff_audit_manual_handoff_packet_id: getScanWorkspaceHandoffAuditHandoffPacketId(),
           handoff_audit_application_readiness_packet_id: getScanWorkspaceHandoffAuditReadinessPacketId(),
           handoff_audit_artifact_id: getScanWorkspaceHandoffAuditArtifactId(),
+          enable_human_only_safety_boundary_summary: getScanWorkspaceSafetyBoundarySummaryEnabled(),
+          safety_boundary_handoff_audit_trail_id: getScanWorkspaceSafetyBoundaryAuditTrailId(),
+          safety_boundary_manual_handoff_packet_id: getScanWorkspaceSafetyBoundaryHandoffPacketId(),
+          safety_boundary_application_readiness_packet_id: getScanWorkspaceSafetyBoundaryReadinessPacketId(),
+          safety_boundary_artifact_id: getScanWorkspaceSafetyBoundaryArtifactId(),
         }
       : payload;
     const response =
@@ -3849,6 +3964,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceApplicationReadinessPacketReadback(response);
     renderScanWorkspaceManualApplicationHandoffPacketReadback(response);
     renderScanWorkspaceHandoffAuditTrailReadback(response);
+    renderScanWorkspaceSafetyBoundarySummaryReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

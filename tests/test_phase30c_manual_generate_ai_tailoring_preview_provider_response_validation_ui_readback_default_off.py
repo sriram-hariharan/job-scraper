@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f 992b95259e278a6dd0f9b8d37be916ece433b562529fc2d3ff0d683d8f9cc25e
-# phase56a legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f
+# phase56b legacy guard marker: changes_only 9aa2bdfa1255c2fef3c5c41145299c5f6853bf25c25a9b74a1330f1c4e31194c 9792b71bd30cc16a739a0b53f1e89c9e2f8c0b3fb1535ee23d650500f2e8b135
+# phase56a legacy guard marker: changes_only e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786 9aa2bdfa1255c2fef3c5c41145299c5f6853bf25c25a9b74a1330f1c4e31194c
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -17,8 +17,8 @@ ENDPOINT = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32",
-    "src/app/services.py": "7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f",
+    "src/app/api.py": "e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786",
+    "src/app/services.py": "9aa2bdfa1255c2fef3c5c41145299c5f6853bf25c25a9b74a1330f1c4e31194c",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
@@ -428,6 +428,7 @@ def test_phase30c_changes_only_static_doc_test_and_legacy_guards():
                 "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md",
             "docs/phase65_human_only_handoff_audit_trail_wiring_default_off.md",
                 "docs/phase65_human_only_handoff_audit_trail_readback_ui_api_default_off.md",
+                "docs/phase66_human_only_safety_boundary_summary_wiring_default_off.md",
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 2.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 3.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md"',
@@ -454,6 +455,7 @@ def test_phase30c_changes_only_static_doc_test_and_legacy_guards():
                 "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.py",
             "tests/test_phase65a_human_only_handoff_audit_trail_wiring_default_off.py",
                 "tests/test_phase65b_human_only_handoff_audit_trail_readback_ui_api_default_off.py",
+                "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",

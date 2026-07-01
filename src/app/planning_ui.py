@@ -1563,6 +1563,13 @@ def scan_workspace(
                 >
                   Verified artifact operator review packet: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-verified-artifact-operator-decision-readback"
+                  id="scanWorkspaceVerifiedArtifactOperatorDecisionReadback"
+                  aria-live="polite"
+                >
+                  Verified artifact operator decision: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1871,6 +1878,40 @@ def scan_workspace(
                 placeholder="Verified artifact ID"
                 aria-label="Verified artifact operator review artifact ID"
               />
+              <label
+                class="subtext scan-workspace-verified-artifact-operator-decision-toggle"
+                for="scanWorkspaceVerifiedArtifactOperatorDecisionToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceVerifiedArtifactOperatorDecisionToggle"
+                />
+                Capture verified artifact operator decision
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-verified-artifact-operator-decision-packet-id-input"
+                id="scanWorkspaceVerifiedArtifactOperatorDecisionPacketId"
+                placeholder="Operator review packet ID"
+                aria-label="Verified artifact operator decision packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-verified-artifact-operator-decision-artifact-id-input"
+                id="scanWorkspaceVerifiedArtifactOperatorDecisionArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Verified artifact operator decision artifact ID"
+              />
+              <select
+                class="scan-workspace-verified-artifact-operator-decision-value-input"
+                id="scanWorkspaceVerifiedArtifactOperatorDecisionValue"
+                aria-label="Verified artifact operator decision value"
+              >
+                <option value="">Decision</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="needs_changes">Needs changes</option>
+              </select>
               </div>
             </div>
 

@@ -5077,8 +5077,16 @@ def create_saved_scan_payload(
             enabled=True,
         )
     )
+    production_readiness_checkpoint = (
+        build_agentic_workflow_production_readiness_checkpoint(
+            agentic_workflow_integration_readback=agentic_workflow_integration_readback,
+        )
+    )
     review_payload["agentic_workflow_integration_readback"] = (
         agentic_workflow_integration_readback
+    )
+    review_payload["agentic_workflow_production_readiness_checkpoint"] = (
+        production_readiness_checkpoint
     )
     scan_score = int(dict(review_payload.get("scan_score", {}) or {}).get("score", 0) or 0)
     row = saved_scan_db_row(
@@ -5093,6 +5101,7 @@ def create_saved_scan_payload(
                 "jd_llm_extraction": jd_llm_metadata,
                 "jd_llm_extraction_readback": jd_llm_readback,
                 "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
+                "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
             },
             "owner_user_id": _clean_text(owner_user_id),
             "owner_email": _clean_text(owner_email),
@@ -5116,6 +5125,7 @@ def create_saved_scan_payload(
         "scan_review_payload": review_payload,
         "jd_llm_extraction_readback": jd_llm_readback,
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
+        "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
         "postgres_write": postgres_write,
     }
 
@@ -5364,6 +5374,23 @@ def saved_scan_report_payload(
     refreshed_payload["agentic_workflow_integration_readback"] = (
         agentic_workflow_integration_readback
     )
+    production_readiness_checkpoint = (
+        refreshed_payload.get("agentic_workflow_production_readiness_checkpoint")
+        if isinstance(
+            refreshed_payload.get("agentic_workflow_production_readiness_checkpoint"),
+            dict,
+        )
+        else report_payload.get("agentic_workflow_production_readiness_checkpoint")
+    )
+    if not isinstance(production_readiness_checkpoint, dict):
+        production_readiness_checkpoint = (
+            build_agentic_workflow_production_readiness_checkpoint(
+                agentic_workflow_integration_readback=agentic_workflow_integration_readback,
+            )
+        )
+    refreshed_payload["agentic_workflow_production_readiness_checkpoint"] = (
+        production_readiness_checkpoint
+    )
 
     return {
         "ok": True,
@@ -5371,6 +5398,7 @@ def saved_scan_report_payload(
         "scan_review_payload": refreshed_payload,
         "jd_llm_extraction_readback": jd_llm_readback,
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
+        "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
     }
 
 
@@ -5650,6 +5678,18 @@ def save_saved_scan_state_payload(
             enabled=bool(scan_review_payload),
         )
     )
+    production_readiness_checkpoint = (
+        build_agentic_workflow_production_readiness_checkpoint(
+            agentic_workflow_integration_readback=agentic_workflow_integration_readback,
+            planning_workspace_payload={
+                **planning_workspace_readbacks,
+                "guarded_resume_copy_artifact_readback": guarded_artifact_readback,
+                "guarded_resume_copy_artifact_verification_readback": guarded_artifact_verification_readback,
+                "verified_artifact_operator_review_packet_readback": verified_artifact_operator_review_packet_readback,
+                "verified_artifact_operator_decision_readback": verified_artifact_operator_decision_readback,
+            },
+        )
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5657,6 +5697,7 @@ def save_saved_scan_state_payload(
         "has_saved_draft": True,
         "score_preview": {},
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
+        "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
         "live_tailoring_suggestion_readback": live_tailoring_readback,
         "live_exact_resume_change_proposal_readback": live_exact_change_readback,
         "manual_exact_change_acceptance_readback": manual_acceptance_readback,
@@ -13745,6 +13786,212 @@ def build_end_to_end_agentic_workflow_integration_readback(
             "manual_mutation_handoff_separate_from_analysis_automation": True,
         },
         "safety": _agentic_workflow_integration_safety(),
+    }
+
+
+def build_agentic_workflow_production_readiness_checkpoint(
+    *,
+    agentic_workflow_integration_readback: Dict[str, Any] | None = None,
+    planning_workspace_payload: Dict[str, Any] | None = None,
+    enabled: bool = True,
+) -> Dict[str, Any]:
+    integration = dict(agentic_workflow_integration_readback or {})
+    workspace = dict(planning_workspace_payload or {})
+    safety = dict(integration.get("safety") or {})
+    boundaries = dict(integration.get("responsibility_boundaries") or {})
+    handoff_readbacks = dict(integration.get("human_only_handoff_readbacks") or {})
+    has_integration = bool(integration.get("end_to_end_agentic_workflow_integration"))
+    user_started = bool(integration.get("user_started_scan_or_evaluation"))
+    forbidden_clear = not any(
+        bool(integration.get(key) or safety.get(key))
+        for key in (
+            "source_resume_mutated",
+            "source_resume_overwritten",
+            "ats_automation_performed",
+            "application_submission_performed",
+            "apply_queue_enqueued",
+            "application_execution_enqueued",
+            "application_execution_performed",
+            "auto_apply_performed",
+            "auto_submit_performed",
+            "resume_artifact_created",
+        )
+    )
+    responsibility_clear = all(
+        bool(boundaries.get(key))
+        for key in (
+            "scan_flow_stays_in_scan_path",
+            "deterministic_prefilter_separate_from_llm_evaluation",
+            "jd_intelligence_separate_from_resume_evidence",
+            "final_scoring_ranking_separate_from_llm_evaluation",
+            "manual_mutation_handoff_separate_from_analysis_automation",
+        )
+    )
+    performed = bool(enabled and has_integration and user_started)
+    validation_errors: List[str] = []
+    if enabled and not has_integration:
+        validation_errors.append("agentic_workflow_integration_required")
+    if enabled and has_integration and not user_started:
+        validation_errors.append("user_started_scan_or_evaluation_required")
+    if enabled and not forbidden_clear:
+        validation_errors.append("forbidden_automation_or_mutation_detected")
+    if enabled and not responsibility_clear:
+        validation_errors.append("responsibility_boundary_incomplete")
+    validation_status = "valid" if performed and not validation_errors else (
+        "fallback" if enabled else "disabled"
+    )
+    fallback_used = validation_status != "valid"
+    fallback_reason = validation_errors[0] if validation_errors else (
+        "feature_flag_disabled" if not enabled else ""
+    )
+    fallback_error_class = "ValueError" if fallback_reason and enabled else ""
+    guarded_artifact_readback = dict(
+        workspace.get("guarded_resume_copy_artifact_readback") or {}
+    )
+    artifact_verification_readback = dict(
+        workspace.get("guarded_resume_copy_artifact_verification_readback") or {}
+    )
+    human_handoff_readback = dict(
+        workspace.get("human_only_manual_application_handoff_packet_readback")
+        or handoff_readbacks.get("human_only_manual_application_handoff_packet_readback")
+        or {}
+    )
+    workflow_ready_for_ux_polish = bool(
+        validation_status == "valid"
+        and responsibility_clear
+        and forbidden_clear
+        and integration.get("planning_workspace_next_actions_available")
+        and integration.get("manual_mutation_requires_operator_action")
+        and integration.get("human_only_application_boundary")
+    )
+    backend_agentic_workflow_complete = bool(workflow_ready_for_ux_polish)
+
+    return {
+        "phase": "69A",
+        "source_phase": "69A",
+        "readback_phase": "69B",
+        "api_readback": True,
+        "ui_readback": True,
+        "api_readback_available": True,
+        "ui_readback_available": True,
+        "default_off": True,
+        "readback_only": True,
+        "agentic_workflow_production_readiness_checkpoint": True,
+        "production_readiness_checkpoint_enabled": bool(enabled),
+        "production_readiness_checkpoint_requested": bool(enabled),
+        "production_readiness_checkpoint_performed": performed,
+        "agentic_workflow_integration_available": has_integration,
+        "user_started_scan_or_evaluation": user_started,
+        "core_llm_inference_workflow_automatic": bool(
+            integration.get("core_llm_inference_workflow_automatic")
+        ),
+        "jd_signal_extraction_available": bool(
+            integration.get("jd_signal_extraction_available")
+        ),
+        "jd_signal_extraction_status": _clean_text(
+            integration.get("jd_signal_extraction_status")
+        ),
+        "skills_extraction_available": bool(
+            integration.get("skills_extraction_available")
+        ),
+        "skills_extraction_status": _clean_text(
+            integration.get("skills_extraction_status")
+        ),
+        "requirements_extraction_available": bool(
+            integration.get("requirements_extraction_available")
+        ),
+        "requirements_extraction_status": _clean_text(
+            integration.get("requirements_extraction_status")
+        ),
+        "resume_evidence_available": bool(
+            integration.get("resume_evidence_available")
+        ),
+        "resume_evidence_status": _clean_text(
+            integration.get("resume_evidence_status")
+        ),
+        "llm_evaluation_available": bool(integration.get("llm_evaluation_available")),
+        "llm_evaluation_status": _clean_text(integration.get("llm_evaluation_status")),
+        "scoring_ranking_available": bool(
+            integration.get("scoring_ranking_available")
+        ),
+        "scoring_ranking_status": _clean_text(
+            integration.get("scoring_ranking_status")
+        ),
+        "planning_workspace_next_actions_available": bool(
+            integration.get("planning_workspace_next_actions_available")
+        ),
+        "tailoring_suggestion_action_available": bool(
+            integration.get("tailoring_suggestion_action_available")
+        ),
+        "exact_change_proposal_action_available": bool(
+            integration.get("exact_change_proposal_action_available")
+        ),
+        "guarded_resume_artifact_path_available": True,
+        "guarded_resume_artifact_path_status": _clean_text(
+            guarded_artifact_readback.get("validation_status")
+        ) or "available_as_explicit_operator_path",
+        "artifact_verification_path_available": True,
+        "artifact_verification_path_status": _clean_text(
+            artifact_verification_readback.get("validation_status")
+        ) or "available_as_explicit_operator_path",
+        "human_only_handoff_path_available": True,
+        "human_only_handoff_path_status": _clean_text(
+            human_handoff_readback.get("validation_status")
+        ) or "available_as_explicit_operator_path",
+        "workflow_ready_for_ux_polish": workflow_ready_for_ux_polish,
+        "backend_agentic_workflow_complete": backend_agentic_workflow_complete,
+        "backend_agentic_workflow_completion_status": (
+            "complete" if backend_agentic_workflow_complete else "incomplete"
+        ),
+        "manual_mutation_requires_operator_action": bool(
+            integration.get("manual_mutation_requires_operator_action")
+        ),
+        "human_only_application_boundary": bool(
+            integration.get("human_only_application_boundary")
+        ),
+        "source_resume_unchanged": integration.get("source_resume_unchanged") is not False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": bool(integration.get("source_resume_overwritten")),
+        "resume_artifact_created": False,
+        "ats_automation_performed": bool(integration.get("ats_automation_performed")),
+        "application_submission_performed": bool(
+            integration.get("application_submission_performed")
+        ),
+        "apply_queue_enqueued": bool(integration.get("apply_queue_enqueued")),
+        "application_execution_enqueued": bool(
+            integration.get("application_execution_enqueued")
+        ),
+        "application_execution_performed": bool(
+            integration.get("application_execution_performed")
+        ),
+        "provider_call_performed_by_checkpoint": False,
+        "llm_call_performed_by_checkpoint": False,
+        "network_call_performed_by_checkpoint": False,
+        "manual_mutation_performed_by_checkpoint": False,
+        "artifact_creation_performed_by_checkpoint": False,
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "validation_errors": validation_errors,
+        "responsibility_boundaries": deepcopy(boundaries),
+        "agentic_workflow_integration_readback": deepcopy(integration),
+        "explicit_operator_paths": {
+            "manual_tailoring_and_exact_change_path": True,
+            "guarded_resume_artifact_path": True,
+            "artifact_verification_path": True,
+            "human_only_handoff_path": True,
+        },
+        "safety": {
+            **_agentic_workflow_integration_safety(),
+            "provider_call_performed_by_checkpoint": False,
+            "llm_call_performed_by_checkpoint": False,
+            "network_call_performed_by_checkpoint": False,
+            "manual_mutation_performed_by_checkpoint": False,
+            "artifact_creation_performed_by_checkpoint": False,
+            "workflow_ready_for_ux_polish": workflow_ready_for_ux_polish,
+            "backend_agentic_workflow_complete": backend_agentic_workflow_complete,
+        },
     }
 
 

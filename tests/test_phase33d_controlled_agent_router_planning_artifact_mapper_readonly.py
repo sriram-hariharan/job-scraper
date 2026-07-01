@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 8fef39b25015df90e25acdd2e160d7242bb44aec6a5be97b52701fcafb71f4ca 3b39f4b6b73b0e575d7af6362f0cd70252b645e9b6066ed0509fd62621e8f1e5
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 8fef39b25015df90e25acdd2e160d7242bb44aec6a5be97b52701fcafb71f4ca
+# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 73a21e09d6e0c5213c1a7b2ea2f571cef7631c4cb18dcfa8177cfc8e44eb40d5
+# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
 from __future__ import annotations
 
 from hashlib import sha256
@@ -176,7 +176,7 @@ PROTECTED_HASHES = {
     "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py": "4f01b4e58c8e517ec633331da44341ee5596d486ae7d40d38fdca4666d6fa47e",
     "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py": "7824233cbb4c6efd75481a8097a041488adfbd53f7c97e4832c02b8822741834",
     "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "8fef39b25015df90e25acdd2e160d7242bb44aec6a5be97b52701fcafb71f4ca",
+    "src/app/services.py": "0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
@@ -413,6 +413,8 @@ def test_changed_files_are_limited_to_phase33d_surface_and_legacy_guards():
                 "docs/phase67_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off.md",
             "docs/phase68_end_to_end_agentic_workflow_integration_wiring_default_off.md",
             "docs/phase68_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.md",
+            "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off.md",
+            "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off.md",
             "docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off 3.md",
             "docs/phase67_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off 2.md",
             "docs/phase67_human_only_workflow_readiness_checkpoint_wiring_default_off 2.md",
@@ -453,6 +455,8 @@ def test_changed_files_are_limited_to_phase33d_surface_and_legacy_guards():
                 "tests/test_phase67b_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off.py",
             "tests/test_phase68a_end_to_end_agentic_workflow_integration_wiring_default_off.py",
             "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
+            "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
+            "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
             "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off 3.py",
             "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off 3.py",
             "tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off 2.py",

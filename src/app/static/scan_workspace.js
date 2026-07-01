@@ -701,6 +701,7 @@ function renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(readbac
   const validation = String(readback.validation_status || "missing").trim() || "missing";
   const fallbackReason = String(readback.fallback_reason || "").trim();
   const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase61bReadbackHardened = readback.phase61b_readback_hardened === true;
   const packetKey = String(readback.operator_review_packet_id || readback.stable_packet_key || "").trim();
   const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
   const planKey = String(readback.approved_change_plan_id || readback.stable_plan_key || "").trim();
@@ -718,9 +719,11 @@ function renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(readbac
   root.dataset.operatorReviewPacketValidationStatus = validation;
   root.dataset.operatorReviewPacketFallbackReason = fallbackReason;
   root.dataset.operatorReviewPacketFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase61bReadbackHardened = phase61bReadbackHardened ? "true" : "false";
 
   const parts = [
     `Verified artifact operator review packet: ${enabled ? "enabled" : "default-off"}`,
+    phase61bReadbackHardened ? "readback hardened" : "",
     `requested ${requested ? "yes" : "no"}`,
     `created ${created ? "yes" : "no"}`,
     `verification ${verificationPassed ? "passed" : "not passed"}`,

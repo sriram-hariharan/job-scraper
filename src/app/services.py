@@ -15383,9 +15383,13 @@ def build_planning_workspace_verified_artifact_operator_review_packet_readback(
 
     return {
         "phase": "61A",
+        "readback_phase": "61B",
+        "phase61b_readback_hardened": True,
         "default_off": True,
         "verified_artifact_operator_review_packet": True,
         "planning_workspace_action": True,
+        "api_readback": True,
+        "ui_readback": True,
         "operator_review_packet_enabled": bool(enabled),
         "operator_review_packet_requested": bool(
             source.get("operator_review_packet_requested", False)
@@ -15415,10 +15419,39 @@ def build_planning_workspace_verified_artifact_operator_review_packet_readback(
             "fallback_error_class": fallback_error_class,
             "validation_errors": validation_errors,
         },
+        "operator_review_packet_metadata": {
+            "readback_phase": "61B",
+            "phase61b_readback_hardened": True,
+            "operator_review_packet_enabled": bool(enabled),
+            "operator_review_packet_requested": bool(
+                source.get("operator_review_packet_requested", False)
+            ),
+            "operator_review_packet_created": bool(
+                source.get("operator_review_packet_created", False)
+            ),
+            "operator_review_packet_id": packet_id,
+            "stable_packet_key": packet_id,
+            "artifact_id": artifact_id,
+            "stable_artifact_key": artifact_id,
+            "artifact_verification_passed": bool(
+                source.get("artifact_verification_passed", False)
+            ),
+            "approved_change_plan_id": plan_key,
+            "stable_plan_key": plan_key,
+            "review_item_count": len(review_items),
+            "validation_status": validation_status,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        },
         "validation_errors": validation_errors,
         "operator_review_packet": deepcopy(packet) if packet else None,
         "review_items": review_items,
         "api_readback_fields": [
+            "readback_phase",
+            "phase61b_readback_hardened",
             "operator_review_packet_enabled",
             "operator_review_packet_requested",
             "operator_review_packet_created",
@@ -15436,8 +15469,11 @@ def build_planning_workspace_verified_artifact_operator_review_packet_readback(
             "fallback_error_class",
             "source_resume_unchanged",
             "source_resume_overwritten",
+            "operator_review_packet_metadata",
         ],
         "ui_readback_fields": [
+            "readback_phase",
+            "phase61b_readback_hardened",
             "operator_review_packet_enabled",
             "operator_review_packet_requested",
             "operator_review_packet_created",
@@ -15455,6 +15491,7 @@ def build_planning_workspace_verified_artifact_operator_review_packet_readback(
             "fallback_error_class",
             "source_resume_unchanged",
             "source_resume_overwritten",
+            "operator_review_packet_metadata",
         ],
         "safety": _planning_workspace_verified_artifact_operator_review_packet_safety(),
     }

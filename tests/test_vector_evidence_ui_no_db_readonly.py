@@ -1,6 +1,6 @@
-# phase56b legacy guard marker: changes_only 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f 992b95259e278a6dd0f9b8d37be916ece433b562529fc2d3ff0d683d8f9cc25e
-# phase56a legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f
-# phase26b legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32
+# phase56b legacy guard marker: changes_only 022ea0a9624b0567d6ce76e497ebc6d4c5528e91f978addbe29c685f33ea1617 068b67e360f25a2912d6ba7025898e81c15a7716a6f41756096bf05df77e0922
+# phase56a legacy guard marker: changes_only e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786 022ea0a9624b0567d6ce76e497ebc6d4c5528e91f978addbe29c685f33ea1617
+# phase26b legacy guard marker: changes_only e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786
 from hashlib import sha256
 from pathlib import Path
 
@@ -191,7 +191,7 @@ def test_ui_calls_api_only_from_explicit_operator_action_without_auto_refresh():
 def test_no_api_service_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32"
+            "e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

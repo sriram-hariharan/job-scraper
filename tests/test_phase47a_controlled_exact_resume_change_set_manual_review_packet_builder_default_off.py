@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f 992b95259e278a6dd0f9b8d37be916ece433b562529fc2d3ff0d683d8f9cc25e
-# phase56a legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f
+# phase56b legacy guard marker: changes_only 022ea0a9624b0567d6ce76e497ebc6d4c5528e91f978addbe29c685f33ea1617 068b67e360f25a2912d6ba7025898e81c15a7716a6f41756096bf05df77e0922
+# phase56a legacy guard marker: changes_only e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786 022ea0a9624b0567d6ce76e497ebc6d4c5528e91f978addbe29c685f33ea1617
 from __future__ import annotations
 
 from copy import deepcopy
@@ -530,6 +530,8 @@ def test_changed_files_are_limited_to_phase47a_and_legacy_guard_tests():
                 "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md",
             "docs/phase65_human_only_handoff_audit_trail_wiring_default_off.md",
                 "docs/phase65_human_only_handoff_audit_trail_readback_ui_api_default_off.md",
+                "docs/phase66_human_only_safety_boundary_summary_wiring_default_off.md",
+                "docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off.md",
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 2.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 3.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md"',
@@ -556,6 +558,8 @@ def test_changed_files_are_limited_to_phase47a_and_legacy_guard_tests():
                 "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.py",
             "tests/test_phase65a_human_only_handoff_audit_trail_wiring_default_off.py",
                 "tests/test_phase65b_human_only_handoff_audit_trail_readback_ui_api_default_off.py",
+                "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off.py",
+                "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",

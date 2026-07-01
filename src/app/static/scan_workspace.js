@@ -1169,6 +1169,8 @@ function renderScanWorkspaceSafetyBoundarySummaryReadback(readbackPayload = null
   const requested = readback.safety_boundary_summary_requested === true;
   const created = readback.safety_boundary_summary_created === true;
   const humanOnly = readback.human_only_application_boundary === true;
+  const coreLlmWorkflowAutomatic = readback.core_llm_inference_workflow_automatic === true;
+  const manualMutationGated = readback.manual_mutation_requires_operator_action === true;
   const atsAutomation = readback.ats_automation_performed === true;
   const submission = readback.application_submission_performed === true;
   const queued = readback.apply_queue_enqueued === true;
@@ -1196,6 +1198,8 @@ function renderScanWorkspaceSafetyBoundarySummaryReadback(readbackPayload = null
   root.dataset.applicationReadinessPacketKey = readinessKey;
   root.dataset.guardedResumeCopyArtifactKey = artifactKey;
   root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
+  root.dataset.coreLlmInferenceWorkflowAutomatic = coreLlmWorkflowAutomatic ? "true" : "false";
+  root.dataset.manualMutationRequiresOperatorAction = manualMutationGated ? "true" : "false";
   root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
   root.dataset.applicationSubmissionPerformed = submission ? "true" : "false";
   root.dataset.applyQueueEnqueued = queued ? "true" : "false";
@@ -1210,6 +1214,8 @@ function renderScanWorkspaceSafetyBoundarySummaryReadback(readbackPayload = null
     `requested ${requested ? "yes" : "no"}`,
     `created ${created ? "yes" : "no"}`,
     humanOnly ? "human-only boundary" : "",
+    coreLlmWorkflowAutomatic ? "core LLM workflow-automatic" : "",
+    manualMutationGated ? "manual mutation operator-gated" : "",
     `ATS automation ${atsAutomation ? "performed" : "not performed"}`,
     `submission ${submission ? "performed" : "not performed"}`,
     `queue ${queued ? "enqueued" : "not enqueued"}`,

@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 9aa2bdfa1255c2fef3c5c41145299c5f6853bf25c25a9b74a1330f1c4e31194c 9792b71bd30cc16a739a0b53f1e89c9e2f8c0b3fb1535ee23d650500f2e8b135
-# phase56a legacy guard marker: changes_only e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786 9aa2bdfa1255c2fef3c5c41145299c5f6853bf25c25a9b74a1330f1c4e31194c
+# phase56b legacy guard marker: changes_only 022ea0a9624b0567d6ce76e497ebc6d4c5528e91f978addbe29c685f33ea1617 068b67e360f25a2912d6ba7025898e81c15a7716a6f41756096bf05df77e0922
+# phase56a legacy guard marker: changes_only e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786 022ea0a9624b0567d6ce76e497ebc6d4c5528e91f978addbe29c685f33ea1617
 from __future__ import annotations
 
 from hashlib import sha256
@@ -176,7 +176,7 @@ PROTECTED_HASHES = {
     "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py": "4f01b4e58c8e517ec633331da44341ee5596d486ae7d40d38fdca4666d6fa47e",
     "src/agents/controlled_agent_router_batch_handoff_plan_readonly.py": "7824233cbb4c6efd75481a8097a041488adfbd53f7c97e4832c02b8822741834",
     "src/app/api.py": "e8fb43d10450dd30010d9dbc5281b6487c999b0910e0d6405ae98f0c8c82d786",
-    "src/app/services.py": "9aa2bdfa1255c2fef3c5c41145299c5f6853bf25c25a9b74a1330f1c4e31194c",
+    "src/app/services.py": "022ea0a9624b0567d6ce76e497ebc6d4c5528e91f978addbe29c685f33ea1617",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
@@ -407,6 +407,7 @@ def test_changed_files_are_limited_to_phase33d_surface_and_legacy_guards():
             "docs/phase65_human_only_handoff_audit_trail_wiring_default_off.md",
                 "docs/phase65_human_only_handoff_audit_trail_readback_ui_api_default_off.md",
                 "docs/phase66_human_only_safety_boundary_summary_wiring_default_off.md",
+                "docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off.md",
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 2.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 3.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md"',
@@ -434,6 +435,7 @@ def test_changed_files_are_limited_to_phase33d_surface_and_legacy_guards():
             "tests/test_phase65a_human_only_handoff_audit_trail_wiring_default_off.py",
                 "tests/test_phase65b_human_only_handoff_audit_trail_readback_ui_api_default_off.py",
                 "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off.py",
+                "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "docs/phase55_live_jd_llm_extraction_planning_scan_wiring_default_off 2.md",
         "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off 2.py",

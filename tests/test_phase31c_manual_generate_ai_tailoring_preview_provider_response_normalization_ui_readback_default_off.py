@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35 9fde4169a5a94ae3ab09c4b19d70257019f997f69e71fe11262ae740937f0728
-# phase56a legacy guard marker: changes_only d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7 38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35
+# phase56b legacy guard marker: changes_only 55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73 aafc8a883fe8f4b7ea48fff9d8cd8500e1190b2650290370195d79c3f91b19db
+# phase56a legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d 55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -17,8 +17,8 @@ ENDPOINT = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "d82ec915f4f41c0c57dabd372defcfd377078e3db4be54f00105a26b0a1d6ee7",
-    "src/app/services.py": "38c3c389c970d009ec040b6542c81c150d55f9f7f9957d2c0ba2760a3440fe35",
+    "src/app/api.py": "d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d",
+    "src/app/services.py": "55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py": "2b31a53bd2cb8f8c4aa8359d5fcbcd246cd9618e65228b38675d7bd2af9470a4",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
@@ -417,12 +417,16 @@ def test_phase31c_changes_only_static_doc_test_and_legacy_guards():
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_readback_verification_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
+        "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
+        "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
         "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
+        "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
+        "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -443,12 +447,16 @@ def test_phase31c_changes_only_static_doc_test_and_legacy_guards():
         "docs/phase59_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_readback_verification_default_off.md",
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
+        "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
+        "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
         "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
         "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
+        "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
+        "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",

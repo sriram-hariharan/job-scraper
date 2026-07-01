@@ -661,6 +661,86 @@ function renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(readba
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceVerifiedArtifactOperatorReviewPacketEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle")?.checked === true;
+}
+
+function getScanWorkspaceVerifiedArtifactOperatorReviewArtifactId() {
+  return String(getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorReviewArtifactId")?.value || "").trim();
+}
+
+function getScanWorkspaceVerifiedArtifactOperatorReviewPacketPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.verified_artifact_operator_review_packet_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorReviewPacketReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceVerifiedArtifactOperatorReviewPacketPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Verified artifact operator review packet: default-off";
+    root.dataset.operatorReviewPacketEnabled = "false";
+    root.dataset.operatorReviewPacketCreated = "false";
+    return;
+  }
+
+  const enabled = readback.operator_review_packet_enabled === true;
+  const requested = readback.operator_review_packet_requested === true;
+  const created = readback.operator_review_packet_created === true;
+  const verificationPassed = readback.artifact_verification_passed === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase61bReadbackHardened = readback.phase61b_readback_hardened === true;
+  const packetKey = String(readback.operator_review_packet_id || readback.stable_packet_key || "").trim();
+  const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
+  const planKey = String(readback.approved_change_plan_id || readback.stable_plan_key || "").trim();
+  const reviewItemCount = Number(readback.review_item_count);
+
+  root.dataset.operatorReviewPacketEnabled = enabled ? "true" : "false";
+  root.dataset.operatorReviewPacketRequested = requested ? "true" : "false";
+  root.dataset.operatorReviewPacketCreated = created ? "true" : "false";
+  root.dataset.artifactVerificationPassed = verificationPassed ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.operatorReviewPacketKey = packetKey;
+  root.dataset.guardedResumeCopyArtifactKey = artifactKey;
+  root.dataset.approvedChangePlanKey = planKey;
+  root.dataset.operatorReviewPacketValidationStatus = validation;
+  root.dataset.operatorReviewPacketFallbackReason = fallbackReason;
+  root.dataset.operatorReviewPacketFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase61bReadbackHardened = phase61bReadbackHardened ? "true" : "false";
+
+  const parts = [
+    `Verified artifact operator review packet: ${enabled ? "enabled" : "default-off"}`,
+    phase61bReadbackHardened ? "readback hardened" : "",
+    `requested ${requested ? "yes" : "no"}`,
+    `created ${created ? "yes" : "no"}`,
+    `verification ${verificationPassed ? "passed" : "not passed"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    Number.isFinite(reviewItemCount) ? `review items ${reviewItemCount}` : "",
+    packetKey ? `packet ${packetKey}` : "",
+    artifactKey ? `artifact ${artifactKey}` : "",
+    planKey ? `plan ${planKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1514,6 +1594,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceManualExactChangeAcceptanceReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
+  renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1553,6 +1634,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceManualExactChangeAcceptanceReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
+  renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3326,6 +3408,8 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           approved_change_plan_id: getScanWorkspaceApprovedChangePlanId(),
           enable_guarded_resume_copy_artifact_verification: getScanWorkspaceGuardedResumeCopyArtifactVerificationEnabled(),
           guarded_resume_copy_artifact_id: getScanWorkspaceGuardedResumeCopyArtifactId(),
+          enable_verified_artifact_operator_review_packet: getScanWorkspaceVerifiedArtifactOperatorReviewPacketEnabled(),
+          verified_artifact_operator_review_artifact_id: getScanWorkspaceVerifiedArtifactOperatorReviewArtifactId(),
         }
       : payload;
     const response =
@@ -3355,6 +3439,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceManualExactChangeAcceptanceReadback(response);
     renderScanWorkspaceGuardedResumeCopyArtifactReadback(response);
     renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(response);
+    renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

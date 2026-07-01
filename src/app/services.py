@@ -17682,6 +17682,10 @@ def build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
 
     return {
         "phase": "67A",
+        "readback_phase": "67B",
+        "phase67b_readback_hardened": True,
+        "api_readback": True,
+        "ui_readback": True,
         "default_off": True,
         "human_only_workflow_readiness_checkpoint": True,
         "planning_workspace_action": True,
@@ -17717,6 +17721,8 @@ def build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
         "auto_apply_forbidden": True,
         "checkpoint_action_llm_call_performed": False,
         "checkpoint_action_provider_call_performed": False,
+        "readback_action_llm_call_performed": False,
+        "readback_action_provider_call_performed": False,
         "llm_capable_action_count": llm_capable_action_count,
         "mutation_capable_action_count": mutation_capable_action_count,
         "forbidden_path_count": forbidden_path_count,
@@ -17738,6 +17744,10 @@ def build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
             "validation_errors": validation_errors,
         },
         "workflow_readiness_checkpoint_metadata": {
+            "readback_phase": "67B",
+            "phase67b_readback_hardened": True,
+            "api_readback": True,
+            "ui_readback": True,
             "workflow_readiness_checkpoint_enabled": bool(enabled),
             "workflow_readiness_checkpoint_requested": bool(
                 source.get("workflow_readiness_checkpoint_requested", False)
@@ -17763,6 +17773,18 @@ def build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
             "workflow_ready_for_human_handoff": bool(
                 source.get("workflow_ready_for_human_handoff", False)
             ),
+            "ats_automation_forbidden": True,
+            "application_submission_forbidden": True,
+            "apply_queue_enqueue_forbidden": True,
+            "source_resume_overwrite_forbidden": True,
+            "auto_apply_forbidden": True,
+            "checkpoint_action_llm_call_performed": False,
+            "checkpoint_action_provider_call_performed": False,
+            "readback_action_llm_call_performed": False,
+            "readback_action_provider_call_performed": False,
+            "llm_capable_action_count": llm_capable_action_count,
+            "mutation_capable_action_count": mutation_capable_action_count,
+            "forbidden_path_count": forbidden_path_count,
             "ats_automation_performed": False,
             "application_submission_performed": False,
             "apply_queue_enqueued": False,

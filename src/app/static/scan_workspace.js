@@ -1476,6 +1476,103 @@ function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload =
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceProductionReadinessCheckpointPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.agentic_workflow_production_readiness_checkpoint;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceProductionReadinessCheckpointReadback");
+  if (!root) return;
+
+  const checkpoint = getScanWorkspaceProductionReadinessCheckpointPayload(readbackPayload);
+  if (!checkpoint) {
+    root.textContent = "Production readiness checkpoint: default-off";
+    root.dataset.productionReadinessCheckpointEnabled = "false";
+    root.dataset.productionReadinessCheckpointPerformed = "false";
+    return;
+  }
+
+  const enabled = checkpoint.production_readiness_checkpoint_enabled === true;
+  const requested = checkpoint.production_readiness_checkpoint_requested === true;
+  const performed = checkpoint.production_readiness_checkpoint_performed === true;
+  const integrationAvailable = checkpoint.agentic_workflow_integration_available === true;
+  const userStarted = checkpoint.user_started_scan_or_evaluation === true;
+  const coreLlmWorkflowAutomatic = checkpoint.core_llm_inference_workflow_automatic === true;
+  const planningActions = checkpoint.planning_workspace_next_actions_available === true;
+  const guardedArtifact = checkpoint.guarded_resume_artifact_path_available === true;
+  const artifactVerification = checkpoint.artifact_verification_path_available === true;
+  const humanHandoff = checkpoint.human_only_handoff_path_available === true;
+  const readyForUxPolish = checkpoint.workflow_ready_for_ux_polish === true;
+  const backendComplete = checkpoint.backend_agentic_workflow_complete === true;
+  const manualMutationGated = checkpoint.manual_mutation_requires_operator_action === true;
+  const humanOnly = checkpoint.human_only_application_boundary === true;
+  const atsAutomation = checkpoint.ats_automation_performed === true;
+  const submission = checkpoint.application_submission_performed === true;
+  const queued = checkpoint.apply_queue_enqueued === true;
+  const sourceUnchanged = checkpoint.source_resume_unchanged !== false;
+  const sourceOverwritten = checkpoint.source_resume_overwritten === true;
+  const validation = String(checkpoint.validation_status || "missing").trim() || "missing";
+  const fallback = checkpoint.fallback_used !== false;
+  const fallbackReason = String(checkpoint.fallback_reason || "").trim();
+  const fallbackErrorClass = String(checkpoint.fallback_error_class || "").trim();
+
+  root.dataset.productionReadinessCheckpointEnabled = enabled ? "true" : "false";
+  root.dataset.productionReadinessCheckpointRequested = requested ? "true" : "false";
+  root.dataset.productionReadinessCheckpointPerformed = performed ? "true" : "false";
+  root.dataset.agenticWorkflowIntegrationAvailable = integrationAvailable ? "true" : "false";
+  root.dataset.userStartedScanOrEvaluation = userStarted ? "true" : "false";
+  root.dataset.coreLlmInferenceWorkflowAutomatic = coreLlmWorkflowAutomatic ? "true" : "false";
+  root.dataset.planningWorkspaceNextActionsAvailable = planningActions ? "true" : "false";
+  root.dataset.guardedResumeArtifactPathAvailable = guardedArtifact ? "true" : "false";
+  root.dataset.artifactVerificationPathAvailable = artifactVerification ? "true" : "false";
+  root.dataset.humanOnlyHandoffPathAvailable = humanHandoff ? "true" : "false";
+  root.dataset.workflowReadyForUxPolish = readyForUxPolish ? "true" : "false";
+  root.dataset.backendAgenticWorkflowComplete = backendComplete ? "true" : "false";
+  root.dataset.manualMutationRequiresOperatorAction = manualMutationGated ? "true" : "false";
+  root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
+  root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
+  root.dataset.applicationSubmissionPerformed = submission ? "true" : "false";
+  root.dataset.applyQueueEnqueued = queued ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.productionReadinessValidationStatus = validation;
+  root.dataset.productionReadinessFallbackReason = fallbackReason;
+  root.dataset.productionReadinessFallbackErrorClass = fallbackErrorClass;
+
+  const parts = [
+    `Production readiness checkpoint: ${enabled ? "enabled" : "default-off"}`,
+    `requested ${requested ? "yes" : "no"}`,
+    `performed ${performed ? "yes" : "no"}`,
+    integrationAvailable ? "agentic workflow integration" : "",
+    userStarted ? "user-started scan/evaluation" : "",
+    coreLlmWorkflowAutomatic ? "core LLM workflow-automatic" : "",
+    planningActions ? "planning next actions" : "",
+    guardedArtifact ? "guarded artifact path" : "",
+    artifactVerification ? "artifact verification path" : "",
+    humanHandoff ? "human-only handoff path" : "",
+    readyForUxPolish ? "ready for UX polish" : "not ready for UX polish",
+    backendComplete ? "backend agentic workflow complete" : "backend agentic workflow incomplete",
+    manualMutationGated ? "manual mutation operator-gated" : "",
+    humanOnly ? "human-only boundary" : "",
+    `ATS automation ${atsAutomation ? "performed" : "not performed"}`,
+    `submission ${submission ? "performed" : "not performed"}`,
+    `queue ${queued ? "enqueued" : "not enqueued"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -2337,6 +2434,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceSafetyBoundarySummaryReadback();
   renderScanWorkspaceWorkflowReadinessCheckpointReadback();
   renderScanWorkspaceAgenticWorkflowIntegrationReadback();
+  renderScanWorkspaceProductionReadinessCheckpoint();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -2384,6 +2482,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceSafetyBoundarySummaryReadback();
   renderScanWorkspaceWorkflowReadinessCheckpointReadback();
   renderScanWorkspaceAgenticWorkflowIntegrationReadback();
+  renderScanWorkspaceProductionReadinessCheckpoint();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -4222,6 +4321,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceSafetyBoundarySummaryReadback(response);
     renderScanWorkspaceWorkflowReadinessCheckpointReadback(response);
     renderScanWorkspaceAgenticWorkflowIntegrationReadback(response);
+    renderScanWorkspaceProductionReadinessCheckpoint(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

@@ -1377,7 +1377,7 @@ function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload =
 
   const readback = getScanWorkspaceAgenticWorkflowIntegrationPayload(readbackPayload);
   if (!readback) {
-    root.textContent = "Agentic workflow demo readiness: waiting for scan/evaluation readback";
+    root.textContent = "Agentic workflow demo readiness: waiting for existing scan/evaluation readback";
     root.dataset.agenticWorkflowIntegrationEnabled = "false";
     root.dataset.agenticWorkflowIntegrationPerformed = "false";
     return;
@@ -1447,9 +1447,9 @@ function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload =
   root.dataset.agenticWorkflowFallbackErrorClass = fallbackErrorClass;
 
   const parts = [
-    `Agentic workflow demo readiness: ${performed ? "scan/evaluation connected" : "waiting"}`,
+    `Agentic workflow demo readiness: ${performed ? "demo-ready scan/evaluation connected" : "waiting for readback"}`,
     `integration ${enabled ? "enabled" : "default-off"}`,
-    requested ? "readback requested" : "readback not requested",
+    requested ? "existing readback requested" : "existing readback not requested",
     userStarted ? "user-started scan/evaluation" : "waiting for user-started scan/evaluation",
     coreLlmWorkflowAutomatic ? "analysis automation: workflow-automatic core LLM inference" : "",
     jdSignals ? `JD signal extraction ${jdSignalStatus || "available"}` : "",
@@ -1461,11 +1461,11 @@ function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload =
     nextActions ? `planning workspace next actions ${nextActionsStatus || "available"}` : "",
     tailoringAction ? "tailoring suggestion action: explicit manual next action" : "",
     exactChangeAction ? "exact change proposal action: explicit manual next action" : "",
-    manualMutationGated ? "manual-only mutation: operator action required" : "",
+    manualMutationGated ? "manual-only mutation: operator action required before any resume change" : "",
     humanOnly ? "human-only handoff/application boundary" : "",
-    atsAutomation ? "ATS automation performed" : "safe: no ATS automation",
-    submission ? "application submission performed" : "safe: no application submission",
-    queued ? "apply queue enqueued" : "safe: no apply queue enqueue",
+    atsAutomation ? "attention: ATS automation reported" : "safe: no ATS automation",
+    submission ? "attention: application submission reported" : "safe: no application submission",
+    queued ? "attention: apply queue enqueue reported" : "safe: no apply queue enqueue",
     `source resume ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
     `fallback ${fallback ? "yes" : "no"}`,
     `validation ${validation}`,
@@ -1492,7 +1492,7 @@ function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null
 
   const checkpoint = getScanWorkspaceProductionReadinessCheckpointPayload(readbackPayload);
   if (!checkpoint) {
-    root.textContent = "Demo readiness: backend checkpoint waiting for readback";
+    root.textContent = "Demo readiness: backend checkpoint readback waiting for existing data";
     root.dataset.productionReadinessCheckpointEnabled = "false";
     root.dataset.productionReadinessCheckpointPerformed = "false";
     return;
@@ -1548,7 +1548,7 @@ function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null
   const parts = [
     `Demo readiness: ${backendComplete ? "backend agentic workflow complete" : "backend readback pending"}`,
     `production checkpoint ${enabled ? "enabled" : "default-off"}`,
-    requested ? "readback requested" : "readback not requested",
+    requested ? "existing readback requested" : "existing readback not requested",
     performed ? "checkpoint performed" : "checkpoint pending",
     integrationAvailable ? "end-to-end agentic workflow integration" : "",
     userStarted ? "user-started scan/evaluation" : "",
@@ -1557,14 +1557,14 @@ function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null
     guardedArtifact ? "guarded resume artifact path: explicit manual/operator path" : "",
     artifactVerification ? "artifact verification path: explicit manual/operator path" : "",
     humanHandoff ? "human-only handoff path" : "",
-    readyForUxPolish ? "ready for UX polish" : "not ready for UX polish",
+    readyForUxPolish ? "ready for UX polish / demo readiness" : "not ready for UX polish yet",
     backendComplete ? "backend agentic workflow complete" : "backend agentic workflow incomplete",
-    manualMutationGated ? "manual-only mutation: operator action required" : "",
+    manualMutationGated ? "manual-only mutation: operator action required before any resume change" : "",
     humanOnly ? "human-only handoff/application boundary" : "",
     "ApplyLens never applies for jobs",
-    atsAutomation ? "ATS automation performed" : "safe: no ATS automation",
-    submission ? "application submission performed" : "safe: no application submission",
-    queued ? "apply queue enqueued" : "safe: no apply queue enqueue",
+    atsAutomation ? "attention: ATS automation reported" : "safe: no ATS automation",
+    submission ? "attention: application submission reported" : "safe: no application submission",
+    queued ? "attention: apply queue enqueue reported" : "safe: no apply queue enqueue",
     `source resume ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
     `fallback ${fallback ? "yes" : "no"}`,
     `validation ${validation}`,

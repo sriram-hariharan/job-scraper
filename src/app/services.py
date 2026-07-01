@@ -13864,9 +13864,16 @@ def build_agentic_workflow_production_readiness_checkpoint(
         and integration.get("manual_mutation_requires_operator_action")
         and integration.get("human_only_application_boundary")
     )
+    backend_agentic_workflow_complete = bool(workflow_ready_for_ux_polish)
 
     return {
         "phase": "69A",
+        "source_phase": "69A",
+        "readback_phase": "69B",
+        "api_readback": True,
+        "ui_readback": True,
+        "api_readback_available": True,
+        "ui_readback_available": True,
         "default_off": True,
         "readback_only": True,
         "agentic_workflow_production_readiness_checkpoint": True,
@@ -13932,6 +13939,10 @@ def build_agentic_workflow_production_readiness_checkpoint(
             human_handoff_readback.get("validation_status")
         ) or "available_as_explicit_operator_path",
         "workflow_ready_for_ux_polish": workflow_ready_for_ux_polish,
+        "backend_agentic_workflow_complete": backend_agentic_workflow_complete,
+        "backend_agentic_workflow_completion_status": (
+            "complete" if backend_agentic_workflow_complete else "incomplete"
+        ),
         "manual_mutation_requires_operator_action": bool(
             integration.get("manual_mutation_requires_operator_action")
         ),
@@ -13979,6 +13990,7 @@ def build_agentic_workflow_production_readiness_checkpoint(
             "manual_mutation_performed_by_checkpoint": False,
             "artifact_creation_performed_by_checkpoint": False,
             "workflow_ready_for_ux_polish": workflow_ready_for_ux_polish,
+            "backend_agentic_workflow_complete": backend_agentic_workflow_complete,
         },
     }
 

@@ -1509,6 +1509,7 @@ function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null
   const artifactVerification = checkpoint.artifact_verification_path_available === true;
   const humanHandoff = checkpoint.human_only_handoff_path_available === true;
   const readyForUxPolish = checkpoint.workflow_ready_for_ux_polish === true;
+  const backendComplete = checkpoint.backend_agentic_workflow_complete === true;
   const manualMutationGated = checkpoint.manual_mutation_requires_operator_action === true;
   const humanOnly = checkpoint.human_only_application_boundary === true;
   const atsAutomation = checkpoint.ats_automation_performed === true;
@@ -1532,6 +1533,7 @@ function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null
   root.dataset.artifactVerificationPathAvailable = artifactVerification ? "true" : "false";
   root.dataset.humanOnlyHandoffPathAvailable = humanHandoff ? "true" : "false";
   root.dataset.workflowReadyForUxPolish = readyForUxPolish ? "true" : "false";
+  root.dataset.backendAgenticWorkflowComplete = backendComplete ? "true" : "false";
   root.dataset.manualMutationRequiresOperatorAction = manualMutationGated ? "true" : "false";
   root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
   root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
@@ -1555,6 +1557,7 @@ function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null
     artifactVerification ? "artifact verification path" : "",
     humanHandoff ? "human-only handoff path" : "",
     readyForUxPolish ? "ready for UX polish" : "not ready for UX polish",
+    backendComplete ? "backend agentic workflow complete" : "backend agentic workflow incomplete",
     manualMutationGated ? "manual mutation operator-gated" : "",
     humanOnly ? "human-only boundary" : "",
     `ATS automation ${atsAutomation ? "performed" : "not performed"}`,

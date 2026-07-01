@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only fac919bde37e17f8c75faca6fce01e73240447201c8510ce420f1983e7aa633e dcbfcf26e1d1e7089581c9ecedc4bf6e151ff51574f717077e4ff731eb583a09
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f fac919bde37e17f8c75faca6fce01e73240447201c8510ce420f1983e7aa633e
+# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 73a21e09d6e0c5213c1a7b2ea2f571cef7631c4cb18dcfa8177cfc8e44eb40d5
+# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -18,7 +18,7 @@ ENDPOINT = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "fac919bde37e17f8c75faca6fce01e73240447201c8510ce420f1983e7aa633e",
+    "src/app/services.py": "0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
     "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",
@@ -415,6 +415,7 @@ def test_phase27c_changes_only_static_doc_test_and_legacy_guards():
             "docs/phase68_end_to_end_agentic_workflow_integration_wiring_default_off.md",
             "docs/phase68_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.md",
             "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off.md",
+            "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off.md",
             "docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off 3.md",
             "docs/phase67_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off 2.md",
             "docs/phase67_human_only_workflow_readiness_checkpoint_wiring_default_off 2.md",
@@ -456,6 +457,7 @@ def test_phase27c_changes_only_static_doc_test_and_legacy_guards():
             "tests/test_phase68a_end_to_end_agentic_workflow_integration_wiring_default_off.py",
             "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
             "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
+            "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
             "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off 3.py",
             "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off 3.py",
             "tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off 2.py",

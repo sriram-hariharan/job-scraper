@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only 55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73 aafc8a883fe8f4b7ea48fff9d8cd8500e1190b2650290370195d79c3f91b19db
-# phase56a legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d 55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73
+# phase56b legacy guard marker: changes_only ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e cc56b3bd7460451ac255f57f6232fed9b607c1a90eac61b108bcf05005908fff
+# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d
-# phase23f legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase26b legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf
+# phase23f legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from hashlib import sha256
 from pathlib import Path
@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d",
-    "src/app/services.py": "55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73",
+    "src/app/api.py": "1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf",
+    "src/app/services.py": "ae6dd71675b3004e28f37754c348f648970c154730fb8c1c28ec944f098f381e",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
     "src/agents/three_core_approval_preview_service_readback.py": "aed9fc35ee7f0c72ddb46e5db87efde799e5bb5218be252db113e7ac7ab5c71c",
@@ -488,6 +488,7 @@ def test_phase19f_changes_only_approved_files():
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -496,6 +497,7 @@ def test_phase19f_changes_only_approved_files():
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
         "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
+            "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -518,6 +520,7 @@ def test_phase19f_changes_only_approved_files():
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -526,6 +529,7 @@ def test_phase19f_changes_only_approved_files():
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
         "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
+            "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
@@ -580,7 +584,7 @@ def test_phase19f_changes_only_approved_files():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "agentic_review.js",
-                "d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d",
+                "1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf",
             )
         )
     }

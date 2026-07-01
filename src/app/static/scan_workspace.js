@@ -741,6 +741,92 @@ function renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(readbac
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceVerifiedArtifactOperatorDecisionEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorDecisionToggle")?.checked === true;
+}
+
+function getScanWorkspaceVerifiedArtifactOperatorDecisionPacketId() {
+  return String(getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorDecisionPacketId")?.value || "").trim();
+}
+
+function getScanWorkspaceVerifiedArtifactOperatorDecisionArtifactId() {
+  return String(getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorDecisionArtifactId")?.value || "").trim();
+}
+
+function getScanWorkspaceVerifiedArtifactOperatorDecisionValue() {
+  return String(getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorDecisionValue")?.value || "").trim();
+}
+
+function getScanWorkspaceVerifiedArtifactOperatorDecisionPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.verified_artifact_operator_decision_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceVerifiedArtifactOperatorDecisionReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceVerifiedArtifactOperatorDecisionPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Verified artifact operator decision: default-off";
+    root.dataset.operatorDecisionEnabled = "false";
+    root.dataset.operatorDecisionCaptured = "false";
+    return;
+  }
+
+  const enabled = readback.operator_decision_enabled === true;
+  const requested = readback.operator_decision_requested === true;
+  const captured = readback.operator_decision_captured === true;
+  const verificationPassed = readback.artifact_verification_passed === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const decisionKey = String(readback.operator_decision_id || readback.stable_decision_key || "").trim();
+  const packetKey = String(readback.operator_review_packet_id || readback.stable_packet_key || "").trim();
+  const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
+  const decisionValue = String(readback.operator_decision_value || "").trim();
+
+  root.dataset.operatorDecisionEnabled = enabled ? "true" : "false";
+  root.dataset.operatorDecisionRequested = requested ? "true" : "false";
+  root.dataset.operatorDecisionCaptured = captured ? "true" : "false";
+  root.dataset.operatorDecisionValue = decisionValue;
+  root.dataset.operatorDecisionKey = decisionKey;
+  root.dataset.operatorReviewPacketKey = packetKey;
+  root.dataset.guardedResumeCopyArtifactKey = artifactKey;
+  root.dataset.artifactVerificationPassed = verificationPassed ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.operatorDecisionValidationStatus = validation;
+  root.dataset.operatorDecisionFallbackReason = fallbackReason;
+  root.dataset.operatorDecisionFallbackErrorClass = fallbackErrorClass;
+
+  const parts = [
+    `Verified artifact operator decision: ${enabled ? "enabled" : "default-off"}`,
+    `requested ${requested ? "yes" : "no"}`,
+    `captured ${captured ? "yes" : "no"}`,
+    decisionValue ? `decision ${decisionValue}` : "",
+    `verification ${verificationPassed ? "passed" : "not passed"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    decisionKey ? `decision id ${decisionKey}` : "",
+    packetKey ? `packet ${packetKey}` : "",
+    artifactKey ? `artifact ${artifactKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1595,6 +1681,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceGuardedResumeCopyArtifactReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
   renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
+  renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1635,6 +1722,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceGuardedResumeCopyArtifactReadback();
   renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
   renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
+  renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3410,6 +3498,10 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           guarded_resume_copy_artifact_id: getScanWorkspaceGuardedResumeCopyArtifactId(),
           enable_verified_artifact_operator_review_packet: getScanWorkspaceVerifiedArtifactOperatorReviewPacketEnabled(),
           verified_artifact_operator_review_artifact_id: getScanWorkspaceVerifiedArtifactOperatorReviewArtifactId(),
+          enable_verified_artifact_operator_decision_capture: getScanWorkspaceVerifiedArtifactOperatorDecisionEnabled(),
+          verified_artifact_operator_decision_packet_id: getScanWorkspaceVerifiedArtifactOperatorDecisionPacketId(),
+          verified_artifact_operator_decision_artifact_id: getScanWorkspaceVerifiedArtifactOperatorDecisionArtifactId(),
+          verified_artifact_operator_decision_value: getScanWorkspaceVerifiedArtifactOperatorDecisionValue(),
         }
       : payload;
     const response =
@@ -3440,6 +3532,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceGuardedResumeCopyArtifactReadback(response);
     renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(response);
     renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(response);
+    renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

@@ -5387,6 +5387,10 @@ def save_saved_scan_state_payload(
     guarded_resume_copy_artifact_id: str = "",
     enable_verified_artifact_operator_review_packet: bool = False,
     verified_artifact_operator_review_artifact_id: str = "",
+    enable_verified_artifact_operator_decision_capture: bool = False,
+    verified_artifact_operator_decision_packet_id: str = "",
+    verified_artifact_operator_decision_artifact_id: str = "",
+    verified_artifact_operator_decision_value: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5418,6 +5422,15 @@ def save_saved_scan_state_payload(
         "guarded_resume_copy_artifact_id": _clean_text(guarded_resume_copy_artifact_id),
         "verified_artifact_operator_review_artifact_id": _clean_text(
             verified_artifact_operator_review_artifact_id
+        ),
+        "verified_artifact_operator_decision_packet_id": _clean_text(
+            verified_artifact_operator_decision_packet_id
+        ),
+        "verified_artifact_operator_decision_artifact_id": _clean_text(
+            verified_artifact_operator_decision_artifact_id
+        ),
+        "verified_artifact_operator_decision_value": _clean_text(
+            verified_artifact_operator_decision_value
         ),
         "draft_status": "saved_scan_state",
         "saved_at": _utc_now(),
@@ -5462,6 +5475,13 @@ def save_saved_scan_state_payload(
         enabled=bool(enable_verified_artifact_operator_review_packet),
         artifact_id=draft["verified_artifact_operator_review_artifact_id"],
     )
+    verified_artifact_operator_decision_readback = _planning_workspace_verified_artifact_operator_decision_capture_payload(
+        operator_review_packet_readback=verified_artifact_operator_review_packet_readback,
+        enabled=bool(enable_verified_artifact_operator_decision_capture),
+        operator_review_packet_id=draft["verified_artifact_operator_decision_packet_id"],
+        artifact_id=draft["verified_artifact_operator_decision_artifact_id"],
+        decision_value=draft["verified_artifact_operator_decision_value"],
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5474,6 +5494,7 @@ def save_saved_scan_state_payload(
         "guarded_resume_copy_artifact_readback": guarded_artifact_readback,
         "guarded_resume_copy_artifact_verification_readback": guarded_artifact_verification_readback,
         "verified_artifact_operator_review_packet_readback": verified_artifact_operator_review_packet_readback,
+        "verified_artifact_operator_decision_readback": verified_artifact_operator_decision_readback,
     }
 
 
@@ -15651,6 +15672,361 @@ def _planning_workspace_verified_artifact_operator_review_packet_payload(
             "source_resume_unchanged": source.get("source_resume_unchanged", True),
             "source_resume_overwritten": source.get("source_resume_overwritten", False),
             "operator_review_packet": packet,
+        },
+        enabled=True,
+    )
+
+
+def _planning_workspace_verified_artifact_operator_decision_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "artifact_created": False,
+        "artifact_created_by_decision_capture": False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "source_resume_state_mutated": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+    }
+
+
+def _normalize_verified_artifact_operator_decision_value(value: Any) -> str:
+    return _clean_text(value).lower().replace("-", "_").replace(" ", "_")
+
+
+def build_planning_workspace_verified_artifact_operator_decision_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    decision_packet = (
+        dict(source.get("operator_decision_packet") or {})
+        if isinstance(source.get("operator_decision_packet"), dict)
+        else {}
+    )
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason"))
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_reason and fallback_used and validation_errors:
+        fallback_reason = validation_errors[0]
+    if not fallback_error_class and fallback_reason and validation_status in {"fallback", "blocked"}:
+        fallback_error_class = "ValueError"
+
+    packet_id = _clean_text(
+        source.get("operator_review_packet_id")
+        or source.get("stable_packet_key")
+        or decision_packet.get("operator_review_packet_id")
+        or decision_packet.get("stable_packet_key")
+    )
+    artifact_id = _clean_text(
+        source.get("artifact_id")
+        or source.get("stable_artifact_key")
+        or decision_packet.get("artifact_id")
+        or decision_packet.get("stable_artifact_key")
+    )
+    decision_value = _normalize_verified_artifact_operator_decision_value(
+        source.get("operator_decision_value")
+        or decision_packet.get("operator_decision_value")
+    )
+    decision_id = _clean_text(
+        source.get("operator_decision_id")
+        or source.get("stable_decision_key")
+        or decision_packet.get("operator_decision_id")
+        or decision_packet.get("stable_decision_key")
+    )
+
+    return {
+        "phase": "62A",
+        "default_off": True,
+        "verified_artifact_operator_decision_capture": True,
+        "planning_workspace_action": True,
+        "operator_decision_enabled": bool(enabled),
+        "operator_decision_requested": bool(
+            source.get("operator_decision_requested", False)
+        ),
+        "operator_decision_captured": bool(
+            source.get("operator_decision_captured", False)
+        ),
+        "operator_decision_value": decision_value,
+        "operator_decision_id": decision_id,
+        "stable_decision_key": decision_id,
+        "operator_review_packet_id": packet_id,
+        "stable_packet_key": packet_id,
+        "artifact_id": artifact_id,
+        "stable_artifact_key": artifact_id,
+        "artifact_verification_passed": bool(
+            source.get("artifact_verification_passed", False)
+        ),
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+        "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        "fallback_metadata": {
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "validation_errors": validation_errors,
+        },
+        "operator_decision_metadata": {
+            "operator_decision_enabled": bool(enabled),
+            "operator_decision_requested": bool(
+                source.get("operator_decision_requested", False)
+            ),
+            "operator_decision_captured": bool(
+                source.get("operator_decision_captured", False)
+            ),
+            "operator_decision_value": decision_value,
+            "operator_decision_id": decision_id,
+            "stable_decision_key": decision_id,
+            "operator_review_packet_id": packet_id,
+            "stable_packet_key": packet_id,
+            "artifact_id": artifact_id,
+            "stable_artifact_key": artifact_id,
+            "artifact_verification_passed": bool(
+                source.get("artifact_verification_passed", False)
+            ),
+            "validation_status": validation_status,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        },
+        "validation_errors": validation_errors,
+        "operator_decision_packet": deepcopy(decision_packet) if decision_packet else None,
+        "api_readback_fields": [
+            "operator_decision_enabled",
+            "operator_decision_requested",
+            "operator_decision_captured",
+            "operator_decision_value",
+            "operator_decision_id",
+            "stable_decision_key",
+            "operator_review_packet_id",
+            "stable_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "artifact_verification_passed",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "operator_decision_metadata",
+        ],
+        "ui_readback_fields": [
+            "operator_decision_enabled",
+            "operator_decision_requested",
+            "operator_decision_captured",
+            "operator_decision_value",
+            "operator_decision_id",
+            "stable_decision_key",
+            "operator_review_packet_id",
+            "stable_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "artifact_verification_passed",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "operator_decision_metadata",
+        ],
+        "safety": _planning_workspace_verified_artifact_operator_decision_safety(),
+    }
+
+
+def _planning_workspace_verified_artifact_operator_decision_capture_payload(
+    *,
+    operator_review_packet_readback: Dict[str, Any] | None,
+    enabled: bool = False,
+    operator_review_packet_id: str = "",
+    artifact_id: str = "",
+    decision_value: str = "",
+) -> Dict[str, Any]:
+    requested_packet_id = _clean_text(operator_review_packet_id)
+    requested_artifact_id = _clean_text(artifact_id)
+    normalized_decision = _normalize_verified_artifact_operator_decision_value(decision_value)
+    valid_decisions = {"accepted", "rejected", "needs_changes"}
+
+    if not enabled:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "operator_decision_requested": False,
+                "operator_decision_captured": False,
+                "operator_review_packet_id": requested_packet_id,
+                "artifact_id": requested_artifact_id,
+                "operator_decision_value": normalized_decision,
+                "artifact_verification_passed": False,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=False,
+        )
+
+    source = dict(operator_review_packet_readback or {})
+    existing_packet_id = _clean_text(
+        source.get("operator_review_packet_id") or source.get("stable_packet_key")
+    )
+    existing_artifact_id = _clean_text(
+        source.get("artifact_id") or source.get("stable_artifact_key")
+    )
+    base_payload = {
+        "fallback_used": True,
+        "validation_status": "fallback",
+        "operator_decision_requested": True,
+        "operator_decision_captured": False,
+        "operator_review_packet_id": requested_packet_id,
+        "artifact_id": requested_artifact_id,
+        "operator_decision_value": normalized_decision,
+        "artifact_verification_passed": bool(source.get("artifact_verification_passed", False)),
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+    }
+
+    if not requested_packet_id:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "validation_errors": ["operator_review_packet_id_required"],
+                "fallback_reason": "operator_review_packet_id_required",
+            },
+            enabled=True,
+        )
+    if requested_packet_id != existing_packet_id:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "validation_errors": ["operator_review_packet_id_mismatch"],
+                "fallback_reason": "operator_review_packet_id_mismatch",
+            },
+            enabled=True,
+        )
+    if not requested_artifact_id:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "operator_review_packet_id": existing_packet_id,
+                "validation_errors": ["artifact_id_required"],
+                "fallback_reason": "artifact_id_required",
+            },
+            enabled=True,
+        )
+    if requested_artifact_id != existing_artifact_id:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "operator_review_packet_id": existing_packet_id,
+                "validation_errors": ["artifact_id_mismatch"],
+                "fallback_reason": "artifact_id_mismatch",
+            },
+            enabled=True,
+        )
+    if source.get("operator_review_packet_created") is not True:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "operator_review_packet_id": existing_packet_id,
+                "artifact_id": existing_artifact_id,
+                "validation_errors": ["operator_review_packet_required"],
+                "fallback_reason": "operator_review_packet_required",
+            },
+            enabled=True,
+        )
+    if source.get("artifact_verification_passed") is not True:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "operator_review_packet_id": existing_packet_id,
+                "artifact_id": existing_artifact_id,
+                "validation_errors": ["artifact_verification_required"],
+                "fallback_reason": "artifact_verification_required",
+            },
+            enabled=True,
+        )
+    if not normalized_decision:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "operator_review_packet_id": existing_packet_id,
+                "artifact_id": existing_artifact_id,
+                "validation_errors": ["operator_decision_value_required"],
+                "fallback_reason": "operator_decision_value_required",
+            },
+            enabled=True,
+        )
+    if normalized_decision not in valid_decisions:
+        return build_planning_workspace_verified_artifact_operator_decision_readback(
+            {
+                **base_payload,
+                "operator_review_packet_id": existing_packet_id,
+                "artifact_id": existing_artifact_id,
+                "validation_errors": ["invalid_operator_decision_value"],
+                "fallback_reason": "invalid_operator_decision_value",
+            },
+            enabled=True,
+        )
+
+    decision_seed = "|".join(
+        [existing_packet_id, existing_artifact_id, normalized_decision]
+    )
+    decision_id = f"phase62-verified-artifact-decision-{hashlib.sha256(decision_seed.encode('utf-8')).hexdigest()[:16]}"
+    decision_packet = {
+        "operator_decision_id": decision_id,
+        "stable_decision_key": decision_id,
+        "operator_review_packet_id": existing_packet_id,
+        "stable_packet_key": existing_packet_id,
+        "artifact_id": existing_artifact_id,
+        "stable_artifact_key": existing_artifact_id,
+        "artifact_verification_passed": True,
+        "operator_decision_value": normalized_decision,
+        "operator_decision_only": True,
+        "artifact_creation_performed": False,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+    }
+
+    return build_planning_workspace_verified_artifact_operator_decision_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "operator_decision_requested": True,
+            "operator_decision_captured": True,
+            "operator_decision_id": decision_id,
+            "stable_decision_key": decision_id,
+            "operator_review_packet_id": existing_packet_id,
+            "stable_packet_key": existing_packet_id,
+            "artifact_id": existing_artifact_id,
+            "stable_artifact_key": existing_artifact_id,
+            "artifact_verification_passed": True,
+            "operator_decision_value": normalized_decision,
+            "source_resume_unchanged": source.get("source_resume_unchanged", True),
+            "source_resume_overwritten": source.get("source_resume_overwritten", False),
+            "operator_decision_packet": decision_packet,
         },
         enabled=True,
     )

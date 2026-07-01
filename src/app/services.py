@@ -5398,6 +5398,10 @@ def save_saved_scan_state_payload(
     enable_human_only_manual_application_handoff_packet: bool = False,
     manual_handoff_application_readiness_packet_id: str = "",
     manual_handoff_artifact_id: str = "",
+    enable_human_only_handoff_audit_trail: bool = False,
+    handoff_audit_manual_handoff_packet_id: str = "",
+    handoff_audit_application_readiness_packet_id: str = "",
+    handoff_audit_artifact_id: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5452,6 +5456,13 @@ def save_saved_scan_state_payload(
             manual_handoff_application_readiness_packet_id
         ),
         "manual_handoff_artifact_id": _clean_text(manual_handoff_artifact_id),
+        "handoff_audit_manual_handoff_packet_id": _clean_text(
+            handoff_audit_manual_handoff_packet_id
+        ),
+        "handoff_audit_application_readiness_packet_id": _clean_text(
+            handoff_audit_application_readiness_packet_id
+        ),
+        "handoff_audit_artifact_id": _clean_text(handoff_audit_artifact_id),
         "draft_status": "saved_scan_state",
         "saved_at": _utc_now(),
     }
@@ -5517,6 +5528,15 @@ def save_saved_scan_state_payload(
         ],
         artifact_id=draft["manual_handoff_artifact_id"],
     )
+    human_only_handoff_audit_trail_readback = _planning_workspace_human_only_handoff_audit_trail_payload(
+        manual_handoff_readback=human_only_manual_application_handoff_packet_readback,
+        enabled=bool(enable_human_only_handoff_audit_trail),
+        manual_handoff_packet_id=draft["handoff_audit_manual_handoff_packet_id"],
+        application_readiness_packet_id=draft[
+            "handoff_audit_application_readiness_packet_id"
+        ],
+        artifact_id=draft["handoff_audit_artifact_id"],
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5532,6 +5552,7 @@ def save_saved_scan_state_payload(
         "verified_artifact_operator_decision_readback": verified_artifact_operator_decision_readback,
         "operator_approved_artifact_application_readiness_packet_readback": operator_approved_artifact_application_readiness_packet_readback,
         "human_only_manual_application_handoff_packet_readback": human_only_manual_application_handoff_packet_readback,
+        "human_only_handoff_audit_trail_readback": human_only_handoff_audit_trail_readback,
     }
 
 
@@ -16793,6 +16814,365 @@ def _planning_workspace_human_only_manual_application_handoff_packet_payload(
             "source_resume_unchanged": source.get("source_resume_unchanged", True),
             "source_resume_overwritten": source.get("source_resume_overwritten", False),
             "manual_handoff_packet": handoff_packet,
+        },
+        enabled=True,
+    )
+
+
+def _planning_workspace_human_only_handoff_audit_trail_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "resume_artifact_created": False,
+        "artifact_created": False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "source_resume_state_mutated": False,
+        "ats_automation_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+    }
+
+
+def build_planning_workspace_human_only_handoff_audit_trail_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    audit_trail = (
+        dict(source.get("handoff_audit_trail") or {})
+        if isinstance(source.get("handoff_audit_trail"), dict)
+        else {}
+    )
+    audit_events = [
+        dict(item)
+        for item in list(source.get("audit_events") or audit_trail.get("audit_events") or [])
+        if isinstance(item, dict)
+    ]
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason"))
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_reason and fallback_used and validation_errors:
+        fallback_reason = validation_errors[0]
+    if not fallback_error_class and fallback_reason and validation_status in {"fallback", "blocked"}:
+        fallback_error_class = "ValueError"
+
+    audit_trail_id = _clean_text(
+        source.get("handoff_audit_trail_id")
+        or source.get("stable_audit_key")
+        or audit_trail.get("handoff_audit_trail_id")
+        or audit_trail.get("stable_audit_key")
+    )
+    handoff_packet_id = _clean_text(
+        source.get("manual_handoff_packet_id")
+        or source.get("stable_handoff_packet_key")
+        or audit_trail.get("manual_handoff_packet_id")
+        or audit_trail.get("stable_handoff_packet_key")
+    )
+    readiness_packet_id = _clean_text(
+        source.get("application_readiness_packet_id")
+        or source.get("stable_readiness_packet_key")
+        or audit_trail.get("application_readiness_packet_id")
+        or audit_trail.get("stable_readiness_packet_key")
+    )
+    artifact_id = _clean_text(
+        source.get("artifact_id")
+        or source.get("stable_artifact_key")
+        or audit_trail.get("artifact_id")
+        or audit_trail.get("stable_artifact_key")
+    )
+
+    return {
+        "phase": "65A",
+        "default_off": True,
+        "human_only_handoff_audit_trail": True,
+        "planning_workspace_action": True,
+        "handoff_audit_trail_enabled": bool(enabled),
+        "handoff_audit_trail_requested": bool(
+            source.get("handoff_audit_trail_requested", False)
+        ),
+        "handoff_audit_trail_created": bool(
+            source.get("handoff_audit_trail_created", False)
+        ),
+        "handoff_audit_trail_id": audit_trail_id,
+        "stable_audit_key": audit_trail_id,
+        "manual_handoff_packet_id": handoff_packet_id,
+        "stable_handoff_packet_key": handoff_packet_id,
+        "application_readiness_packet_id": readiness_packet_id,
+        "stable_readiness_packet_key": readiness_packet_id,
+        "artifact_id": artifact_id,
+        "stable_artifact_key": artifact_id,
+        "human_only_application_boundary": True,
+        "audit_event_count": len(audit_events),
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+        "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        "fallback_metadata": {
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "validation_errors": validation_errors,
+        },
+        "handoff_audit_trail_metadata": {
+            "handoff_audit_trail_enabled": bool(enabled),
+            "handoff_audit_trail_requested": bool(
+                source.get("handoff_audit_trail_requested", False)
+            ),
+            "handoff_audit_trail_created": bool(
+                source.get("handoff_audit_trail_created", False)
+            ),
+            "handoff_audit_trail_id": audit_trail_id,
+            "stable_audit_key": audit_trail_id,
+            "manual_handoff_packet_id": handoff_packet_id,
+            "stable_handoff_packet_key": handoff_packet_id,
+            "application_readiness_packet_id": readiness_packet_id,
+            "stable_readiness_packet_key": readiness_packet_id,
+            "artifact_id": artifact_id,
+            "stable_artifact_key": artifact_id,
+            "human_only_application_boundary": True,
+            "audit_event_count": len(audit_events),
+            "ats_automation_performed": False,
+            "application_submission_performed": False,
+            "apply_queue_enqueued": False,
+            "application_execution_enqueued": False,
+            "application_execution_performed": False,
+            "validation_status": validation_status,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        },
+        "validation_errors": validation_errors,
+        "handoff_audit_trail": deepcopy(audit_trail) if audit_trail else None,
+        "audit_events": audit_events,
+        "api_readback_fields": [
+            "handoff_audit_trail_enabled",
+            "handoff_audit_trail_requested",
+            "handoff_audit_trail_created",
+            "handoff_audit_trail_id",
+            "stable_audit_key",
+            "manual_handoff_packet_id",
+            "stable_handoff_packet_key",
+            "application_readiness_packet_id",
+            "stable_readiness_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "human_only_application_boundary",
+            "audit_event_count",
+            "ats_automation_performed",
+            "application_submission_performed",
+            "apply_queue_enqueued",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "handoff_audit_trail_metadata",
+        ],
+        "ui_readback_fields": [
+            "handoff_audit_trail_enabled",
+            "handoff_audit_trail_requested",
+            "handoff_audit_trail_created",
+            "handoff_audit_trail_id",
+            "stable_audit_key",
+            "manual_handoff_packet_id",
+            "stable_handoff_packet_key",
+            "application_readiness_packet_id",
+            "stable_readiness_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "human_only_application_boundary",
+            "audit_event_count",
+            "ats_automation_performed",
+            "application_submission_performed",
+            "apply_queue_enqueued",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "handoff_audit_trail_metadata",
+        ],
+        "safety": _planning_workspace_human_only_handoff_audit_trail_safety(),
+    }
+
+
+def _planning_workspace_human_only_handoff_audit_trail_payload(
+    *,
+    manual_handoff_readback: Dict[str, Any] | None,
+    enabled: bool = False,
+    manual_handoff_packet_id: str = "",
+    application_readiness_packet_id: str = "",
+    artifact_id: str = "",
+) -> Dict[str, Any]:
+    requested_handoff_packet_id = _clean_text(manual_handoff_packet_id)
+    requested_readiness_packet_id = _clean_text(application_readiness_packet_id)
+    requested_artifact_id = _clean_text(artifact_id)
+
+    if not enabled:
+        return build_planning_workspace_human_only_handoff_audit_trail_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "handoff_audit_trail_requested": False,
+                "handoff_audit_trail_created": False,
+                "manual_handoff_packet_id": requested_handoff_packet_id,
+                "application_readiness_packet_id": requested_readiness_packet_id,
+                "artifact_id": requested_artifact_id,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=False,
+        )
+
+    source = dict(manual_handoff_readback or {})
+    existing_handoff_packet_id = _clean_text(
+        source.get("manual_handoff_packet_id") or source.get("stable_packet_key")
+    )
+    existing_readiness_packet_id = _clean_text(
+        source.get("application_readiness_packet_id")
+        or source.get("stable_readiness_packet_key")
+    )
+    existing_artifact_id = _clean_text(
+        source.get("artifact_id") or source.get("stable_artifact_key")
+    )
+    base_payload = {
+        "fallback_used": True,
+        "validation_status": "fallback",
+        "handoff_audit_trail_requested": True,
+        "handoff_audit_trail_created": False,
+        "manual_handoff_packet_id": requested_handoff_packet_id,
+        "application_readiness_packet_id": requested_readiness_packet_id,
+        "artifact_id": requested_artifact_id,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+    }
+
+    if not requested_handoff_packet_id:
+        return build_planning_workspace_human_only_handoff_audit_trail_readback(
+            {**base_payload, "validation_errors": ["manual_handoff_packet_id_required"], "fallback_reason": "manual_handoff_packet_id_required"},
+            enabled=True,
+        )
+    if requested_handoff_packet_id != existing_handoff_packet_id:
+        return build_planning_workspace_human_only_handoff_audit_trail_readback(
+            {**base_payload, "validation_errors": ["manual_handoff_packet_id_mismatch"], "fallback_reason": "manual_handoff_packet_id_mismatch"},
+            enabled=True,
+        )
+    if requested_readiness_packet_id and requested_readiness_packet_id != existing_readiness_packet_id:
+        return build_planning_workspace_human_only_handoff_audit_trail_readback(
+            {**base_payload, "manual_handoff_packet_id": existing_handoff_packet_id, "validation_errors": ["application_readiness_packet_id_mismatch"], "fallback_reason": "application_readiness_packet_id_mismatch"},
+            enabled=True,
+        )
+    if requested_artifact_id and requested_artifact_id != existing_artifact_id:
+        return build_planning_workspace_human_only_handoff_audit_trail_readback(
+            {**base_payload, "manual_handoff_packet_id": existing_handoff_packet_id, "application_readiness_packet_id": existing_readiness_packet_id, "validation_errors": ["artifact_id_mismatch"], "fallback_reason": "artifact_id_mismatch"},
+            enabled=True,
+        )
+    if source.get("manual_handoff_packet_created") is not True:
+        return build_planning_workspace_human_only_handoff_audit_trail_readback(
+            {**base_payload, "manual_handoff_packet_id": existing_handoff_packet_id, "application_readiness_packet_id": existing_readiness_packet_id, "artifact_id": existing_artifact_id, "validation_errors": ["manual_handoff_packet_required"], "fallback_reason": "manual_handoff_packet_required"},
+            enabled=True,
+        )
+    if source.get("human_only_application_boundary") is not True:
+        return build_planning_workspace_human_only_handoff_audit_trail_readback(
+            {**base_payload, "manual_handoff_packet_id": existing_handoff_packet_id, "application_readiness_packet_id": existing_readiness_packet_id, "artifact_id": existing_artifact_id, "validation_errors": ["human_only_application_boundary_required"], "fallback_reason": "human_only_application_boundary_required"},
+            enabled=True,
+        )
+
+    resolved_readiness_packet_id = requested_readiness_packet_id or existing_readiness_packet_id
+    resolved_artifact_id = requested_artifact_id or existing_artifact_id
+    audit_seed = "|".join([existing_handoff_packet_id, resolved_readiness_packet_id, resolved_artifact_id])
+    audit_trail_id = f"phase65-handoff-audit-{hashlib.sha256(audit_seed.encode('utf-8')).hexdigest()[:16]}"
+    audit_events = [
+        {
+            "audit_event_id": "proposal-to-approved-plan",
+            "event_summary": "Exact change proposals were manually accepted before artifact creation.",
+            "human_only_application_boundary": True,
+        },
+        {
+            "audit_event_id": "verified-artifact-to-readiness",
+            "event_summary": "Verified artifact was reviewed and converted into application readiness.",
+            "application_readiness_packet_id": resolved_readiness_packet_id,
+            "artifact_id": resolved_artifact_id,
+            "human_only_application_boundary": True,
+        },
+        {
+            "audit_event_id": "manual-handoff-boundary",
+            "event_summary": "Manual handoff packet prepared for human-only application outside the app.",
+            "manual_handoff_packet_id": existing_handoff_packet_id,
+            "ats_automation_performed": False,
+            "application_submission_performed": False,
+            "apply_queue_enqueued": False,
+        },
+    ]
+    audit_trail = {
+        "handoff_audit_trail_id": audit_trail_id,
+        "stable_audit_key": audit_trail_id,
+        "manual_handoff_packet_id": existing_handoff_packet_id,
+        "stable_handoff_packet_key": existing_handoff_packet_id,
+        "application_readiness_packet_id": resolved_readiness_packet_id,
+        "stable_readiness_packet_key": resolved_readiness_packet_id,
+        "artifact_id": resolved_artifact_id,
+        "stable_artifact_key": resolved_artifact_id,
+        "human_only_application_boundary": True,
+        "audit_events": audit_events,
+        "audit_event_count": len(audit_events),
+        "resume_artifact_creation_performed": False,
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+    }
+
+    return build_planning_workspace_human_only_handoff_audit_trail_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "handoff_audit_trail_requested": True,
+            "handoff_audit_trail_created": True,
+            "handoff_audit_trail_id": audit_trail_id,
+            "stable_audit_key": audit_trail_id,
+            "manual_handoff_packet_id": existing_handoff_packet_id,
+            "stable_handoff_packet_key": existing_handoff_packet_id,
+            "application_readiness_packet_id": resolved_readiness_packet_id,
+            "stable_readiness_packet_key": resolved_readiness_packet_id,
+            "artifact_id": resolved_artifact_id,
+            "stable_artifact_key": resolved_artifact_id,
+            "audit_events": audit_events,
+            "source_resume_unchanged": source.get("source_resume_unchanged", True),
+            "source_resume_overwritten": source.get("source_resume_overwritten", False),
+            "handoff_audit_trail": audit_trail,
         },
         enabled=True,
     )

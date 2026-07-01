@@ -1584,6 +1584,13 @@ def scan_workspace(
                 >
                   Manual application handoff packet: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-handoff-audit-trail-readback"
+                  id="scanWorkspaceHandoffAuditTrailReadback"
+                  aria-live="polite"
+                >
+                  Handoff audit trail: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1980,6 +1987,37 @@ def scan_workspace(
                 id="scanWorkspaceManualHandoffArtifactId"
                 placeholder="Verified artifact ID"
                 aria-label="Manual handoff verified artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-handoff-audit-trail-toggle"
+                for="scanWorkspaceHandoffAuditTrailToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceHandoffAuditTrailToggle"
+                />
+                Create human-only handoff audit trail
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-handoff-audit-handoff-packet-id-input"
+                id="scanWorkspaceHandoffAuditHandoffPacketId"
+                placeholder="Manual handoff packet ID"
+                aria-label="Handoff audit manual handoff packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-handoff-audit-readiness-packet-id-input"
+                id="scanWorkspaceHandoffAuditReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Handoff audit application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-handoff-audit-artifact-id-input"
+                id="scanWorkspaceHandoffAuditArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Handoff audit verified artifact ID"
               />
               </div>
             </div>

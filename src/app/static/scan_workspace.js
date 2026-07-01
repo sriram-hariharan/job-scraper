@@ -881,6 +881,7 @@ function renderScanWorkspaceApplicationReadinessPacketReadback(readbackPayload =
   const validation = String(readback.validation_status || "missing").trim() || "missing";
   const fallbackReason = String(readback.fallback_reason || "").trim();
   const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase63bReadbackHardened = readback.phase63b_readback_hardened === true;
   const readinessKey = String(readback.application_readiness_packet_id || readback.stable_packet_key || "").trim();
   const decisionKey = String(readback.operator_decision_id || readback.stable_decision_key || "").trim();
   const reviewPacketKey = String(readback.operator_review_packet_id || readback.stable_review_packet_key || "").trim();
@@ -905,9 +906,11 @@ function renderScanWorkspaceApplicationReadinessPacketReadback(readbackPayload =
   root.dataset.applicationReadinessValidationStatus = validation;
   root.dataset.applicationReadinessFallbackReason = fallbackReason;
   root.dataset.applicationReadinessFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase63bReadbackHardened = phase63bReadbackHardened ? "true" : "false";
 
   const parts = [
     `Application readiness packet: ${enabled ? "enabled" : "default-off"}`,
+    phase63bReadbackHardened ? "readback hardened" : "",
     `requested ${requested ? "yes" : "no"}`,
     `created ${created ? "yes" : "no"}`,
     decisionValue ? `decision ${decisionValue}` : "",

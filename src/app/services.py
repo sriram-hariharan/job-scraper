@@ -16146,6 +16146,8 @@ def build_planning_workspace_operator_approved_artifact_application_readiness_pa
 
     return {
         "phase": "63A",
+        "readback_phase": "63B",
+        "phase63b_readback_hardened": True,
         "default_off": True,
         "operator_approved_artifact_application_readiness_packet": True,
         "planning_workspace_action": True,
@@ -16185,6 +16187,8 @@ def build_planning_workspace_operator_approved_artifact_application_readiness_pa
             "validation_errors": validation_errors,
         },
         "application_readiness_packet_metadata": {
+            "readback_phase": "63B",
+            "phase63b_readback_hardened": True,
             "application_readiness_packet_enabled": bool(enabled),
             "application_readiness_packet_requested": bool(
                 source.get("application_readiness_packet_requested", False)
@@ -16219,6 +16223,8 @@ def build_planning_workspace_operator_approved_artifact_application_readiness_pa
         "application_readiness_packet": deepcopy(readiness_packet) if readiness_packet else None,
         "readiness_items": readiness_items,
         "api_readback_fields": [
+            "readback_phase",
+            "phase63b_readback_hardened",
             "application_readiness_packet_enabled",
             "application_readiness_packet_requested",
             "application_readiness_packet_created",
@@ -16245,6 +16251,8 @@ def build_planning_workspace_operator_approved_artifact_application_readiness_pa
             "application_readiness_packet_metadata",
         ],
         "ui_readback_fields": [
+            "readback_phase",
+            "phase63b_readback_hardened",
             "application_readiness_packet_enabled",
             "application_readiness_packet_requested",
             "application_readiness_packet_created",

@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320 175fc37fdd6a318db5a156e5f0f3fa780de69d7e048c3c76e5ad6cb65bdc1524
-# phase56a legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320
+# phase56b legacy guard marker: changes_only 6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d 9154ee68f0a5b394b66e7d187d6a0493a07f1521eeefc9e640637ebca27be711
+# phase56a legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -18,7 +18,7 @@ ENDPOINT = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c",
-    "src/app/services.py": "10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320",
+    "src/app/services.py": "6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
@@ -393,6 +393,7 @@ def test_phase29c_changes_only_static_doc_test_and_legacy_guards():
             "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
             "docs/phase63_operator_approved_artifact_application_readiness_packet_wiring_default_off.md",
+            "docs/phase63_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -404,6 +405,7 @@ def test_phase29c_changes_only_static_doc_test_and_legacy_guards():
             "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
             "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
             "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
+            "tests/test_phase63b_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -429,6 +431,7 @@ def test_phase29c_changes_only_static_doc_test_and_legacy_guards():
             "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
             "docs/phase63_operator_approved_artifact_application_readiness_packet_wiring_default_off.md",
+            "docs/phase63_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -440,6 +443,7 @@ def test_phase29c_changes_only_static_doc_test_and_legacy_guards():
             "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
             "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
             "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
+            "tests/test_phase63b_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",

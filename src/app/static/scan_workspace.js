@@ -979,6 +979,7 @@ function renderScanWorkspaceManualApplicationHandoffPacketReadback(readbackPaylo
   const validation = String(readback.validation_status || "missing").trim() || "missing";
   const fallbackReason = String(readback.fallback_reason || "").trim();
   const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase64bReadbackHardened = readback.phase64b_readback_hardened === true;
   const handoffKey = String(readback.manual_handoff_packet_id || readback.stable_packet_key || "").trim();
   const readinessKey = String(readback.application_readiness_packet_id || readback.stable_readiness_packet_key || "").trim();
   const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
@@ -1000,9 +1001,11 @@ function renderScanWorkspaceManualApplicationHandoffPacketReadback(readbackPaylo
   root.dataset.manualHandoffValidationStatus = validation;
   root.dataset.manualHandoffFallbackReason = fallbackReason;
   root.dataset.manualHandoffFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase64bReadbackHardened = phase64bReadbackHardened ? "true" : "false";
 
   const parts = [
     `Manual application handoff packet: ${enabled ? "enabled" : "default-off"}`,
+    phase64bReadbackHardened ? "readback hardened" : "",
     `requested ${requested ? "yes" : "no"}`,
     `created ${created ? "yes" : "no"}`,
     humanOnly ? "human-only boundary" : "",

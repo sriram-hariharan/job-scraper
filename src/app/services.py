@@ -16540,6 +16540,8 @@ def build_planning_workspace_human_only_manual_application_handoff_packet_readba
 
     return {
         "phase": "64A",
+        "readback_phase": "64B",
+        "phase64b_readback_hardened": True,
         "default_off": True,
         "human_only_manual_application_handoff_packet": True,
         "planning_workspace_action": True,
@@ -16577,6 +16579,8 @@ def build_planning_workspace_human_only_manual_application_handoff_packet_readba
             "validation_errors": validation_errors,
         },
         "manual_handoff_packet_metadata": {
+            "readback_phase": "64B",
+            "phase64b_readback_hardened": True,
             "manual_handoff_packet_enabled": bool(enabled),
             "manual_handoff_packet_requested": bool(
                 source.get("manual_handoff_packet_requested", False)
@@ -16609,6 +16613,8 @@ def build_planning_workspace_human_only_manual_application_handoff_packet_readba
         "manual_handoff_packet": deepcopy(handoff_packet) if handoff_packet else None,
         "manual_handoff_checklist_items": checklist_items,
         "api_readback_fields": [
+            "readback_phase",
+            "phase64b_readback_hardened",
             "manual_handoff_packet_enabled",
             "manual_handoff_packet_requested",
             "manual_handoff_packet_created",
@@ -16632,6 +16638,8 @@ def build_planning_workspace_human_only_manual_application_handoff_packet_readba
             "manual_handoff_packet_metadata",
         ],
         "ui_readback_fields": [
+            "readback_phase",
+            "phase64b_readback_hardened",
             "manual_handoff_packet_enabled",
             "manual_handoff_packet_requested",
             "manual_handoff_packet_created",

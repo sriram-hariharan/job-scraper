@@ -1,6 +1,6 @@
-# phase56b legacy guard marker: changes_only f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e 58db18e3007680b19c74832a1b81ba246b15ad45681e2c76ade4ac2fab034c1b
-# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e
-# phase26b legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf
+# phase56b legacy guard marker: changes_only 10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320 175fc37fdd6a318db5a156e5f0f3fa780de69d7e048c3c76e5ad6cb65bdc1524
+# phase56a legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320
+# phase26b legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c
 from hashlib import sha256
 from pathlib import Path
 
@@ -185,10 +185,10 @@ def test_no_api_service_pipeline_dependency_or_decision_module_change():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/app/api.py": (
-            "1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf"
+            "e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c"
         ),
         "src/app/services.py": (
-            "f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e"
+            "10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320"
         ),
         "src/pipeline/collector.py": (
             "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"

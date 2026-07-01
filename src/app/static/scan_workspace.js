@@ -830,6 +830,105 @@ function renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback(readbackPay
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceApplicationReadinessPacketEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceApplicationReadinessPacketToggle")?.checked === true;
+}
+
+function getScanWorkspaceApplicationReadinessDecisionId() {
+  return String(getScanWorkspaceInput("scanWorkspaceApplicationReadinessDecisionId")?.value || "").trim();
+}
+
+function getScanWorkspaceApplicationReadinessReviewPacketId() {
+  return String(getScanWorkspaceInput("scanWorkspaceApplicationReadinessReviewPacketId")?.value || "").trim();
+}
+
+function getScanWorkspaceApplicationReadinessArtifactId() {
+  return String(getScanWorkspaceInput("scanWorkspaceApplicationReadinessArtifactId")?.value || "").trim();
+}
+
+function getScanWorkspaceApplicationReadinessPacketPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.operator_approved_artifact_application_readiness_packet_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceApplicationReadinessPacketReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceApplicationReadinessPacketReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceApplicationReadinessPacketPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Application readiness packet: default-off";
+    root.dataset.applicationReadinessPacketEnabled = "false";
+    root.dataset.applicationReadinessPacketCreated = "false";
+    return;
+  }
+
+  const enabled = readback.application_readiness_packet_enabled === true;
+  const requested = readback.application_readiness_packet_requested === true;
+  const created = readback.application_readiness_packet_created === true;
+  const verificationPassed = readback.artifact_verification_passed === true;
+  const execution = readback.application_execution_performed === true;
+  const submission = readback.application_submission_performed === true;
+  const enqueued = readback.application_execution_enqueued === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const readinessKey = String(readback.application_readiness_packet_id || readback.stable_packet_key || "").trim();
+  const decisionKey = String(readback.operator_decision_id || readback.stable_decision_key || "").trim();
+  const reviewPacketKey = String(readback.operator_review_packet_id || readback.stable_review_packet_key || "").trim();
+  const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
+  const decisionValue = String(readback.operator_decision_value || "").trim();
+  const readinessItemCount = Number(readback.readiness_item_count);
+
+  root.dataset.applicationReadinessPacketEnabled = enabled ? "true" : "false";
+  root.dataset.applicationReadinessPacketRequested = requested ? "true" : "false";
+  root.dataset.applicationReadinessPacketCreated = created ? "true" : "false";
+  root.dataset.applicationReadinessPacketKey = readinessKey;
+  root.dataset.operatorDecisionKey = decisionKey;
+  root.dataset.operatorReviewPacketKey = reviewPacketKey;
+  root.dataset.guardedResumeCopyArtifactKey = artifactKey;
+  root.dataset.operatorDecisionValue = decisionValue;
+  root.dataset.artifactVerificationPassed = verificationPassed ? "true" : "false";
+  root.dataset.applicationExecutionEnqueued = enqueued ? "true" : "false";
+  root.dataset.applicationExecutionPerformed = execution ? "true" : "false";
+  root.dataset.applicationSubmissionPerformed = submission ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.applicationReadinessValidationStatus = validation;
+  root.dataset.applicationReadinessFallbackReason = fallbackReason;
+  root.dataset.applicationReadinessFallbackErrorClass = fallbackErrorClass;
+
+  const parts = [
+    `Application readiness packet: ${enabled ? "enabled" : "default-off"}`,
+    `requested ${requested ? "yes" : "no"}`,
+    `created ${created ? "yes" : "no"}`,
+    decisionValue ? `decision ${decisionValue}` : "",
+    `verification ${verificationPassed ? "passed" : "not passed"}`,
+    `execution ${execution || enqueued ? "started" : "not started"}`,
+    `submission ${submission ? "performed" : "not performed"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    Number.isFinite(readinessItemCount) ? `items ${readinessItemCount}` : "",
+    readinessKey ? `packet ${readinessKey}` : "",
+    decisionKey ? `decision id ${decisionKey}` : "",
+    reviewPacketKey ? `review packet ${reviewPacketKey}` : "",
+    artifactKey ? `artifact ${artifactKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1685,6 +1784,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
   renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
   renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback();
+  renderScanWorkspaceApplicationReadinessPacketReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1726,6 +1826,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback();
   renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
   renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback();
+  renderScanWorkspaceApplicationReadinessPacketReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3505,6 +3606,10 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           verified_artifact_operator_decision_packet_id: getScanWorkspaceVerifiedArtifactOperatorDecisionPacketId(),
           verified_artifact_operator_decision_artifact_id: getScanWorkspaceVerifiedArtifactOperatorDecisionArtifactId(),
           verified_artifact_operator_decision_value: getScanWorkspaceVerifiedArtifactOperatorDecisionValue(),
+          enable_operator_approved_artifact_application_readiness_packet: getScanWorkspaceApplicationReadinessPacketEnabled(),
+          application_readiness_operator_decision_id: getScanWorkspaceApplicationReadinessDecisionId(),
+          application_readiness_operator_review_packet_id: getScanWorkspaceApplicationReadinessReviewPacketId(),
+          application_readiness_artifact_id: getScanWorkspaceApplicationReadinessArtifactId(),
         }
       : payload;
     const response =
@@ -3536,6 +3641,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceGuardedResumeCopyArtifactVerificationReadback(response);
     renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(response);
     renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback(response);
+    renderScanWorkspaceApplicationReadinessPacketReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

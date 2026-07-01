@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e 58db18e3007680b19c74832a1b81ba246b15ad45681e2c76ade4ac2fab034c1b
-# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e
+# phase56b legacy guard marker: changes_only 10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320 175fc37fdd6a318db5a156e5f0f3fa780de69d7e048c3c76e5ad6cb65bdc1524
+# phase56a legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf
-# phase23f legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase26b legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c
+# phase23f legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from hashlib import sha256
 from pathlib import Path
@@ -24,8 +24,8 @@ RUNTIME_HASHES = {
     "src/agents/final_application_scoring.py": ("eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"),
     "src/agents/three_core_agent_shadow_operator_canary.py": ("b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"),
     "src/pipeline/collector.py": ("73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405"),
-    "src/app/api.py": ("1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf"),
-    "src/app/services.py": ("f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e"),
+    "src/app/api.py": ("e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c"),
+    "src/app/services.py": ("10665f9ebc4000949af80fab5b6f2e69892e3c3b2654afa4b6cc766235f5c320"),
     "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
 }
 
@@ -490,6 +490,7 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
+            "docs/phase63_operator_approved_artifact_application_readiness_packet_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -500,6 +501,7 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
             "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
             "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
+            "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -524,6 +526,7 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
             "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
+            "docs/phase63_operator_approved_artifact_application_readiness_packet_wiring_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -534,6 +537,7 @@ def test_phase18a_changes_only_approved_docs_and_tests():
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
             "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
             "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
+            "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "docs/phase18_live_readiness_approval_boundary.md",
         "tests/test_phase18_live_readiness_approval_boundary_default_off.py",

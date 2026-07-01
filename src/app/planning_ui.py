@@ -1556,6 +1556,13 @@ def scan_workspace(
                 >
                   Guarded artifact verification: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-verified-artifact-operator-review-packet-readback"
+                  id="scanWorkspaceVerifiedArtifactOperatorReviewPacketReadback"
+                  aria-live="polite"
+                >
+                  Verified artifact operator review packet: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1846,6 +1853,23 @@ def scan_workspace(
                 id="scanWorkspaceGuardedResumeCopyArtifactId"
                 placeholder="Guarded artifact ID"
                 aria-label="Guarded resume copy artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-verified-artifact-operator-review-packet-toggle"
+                for="scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle"
+                />
+                Create verified artifact review packet
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-verified-artifact-operator-review-artifact-id-input"
+                id="scanWorkspaceVerifiedArtifactOperatorReviewArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Verified artifact operator review artifact ID"
               />
               </div>
             </div>

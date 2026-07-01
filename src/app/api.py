@@ -188,6 +188,12 @@ class PlanningSavedScanStateRequest(BaseModel):
     safety_boundary_manual_handoff_packet_id: str = ""
     safety_boundary_application_readiness_packet_id: str = ""
     safety_boundary_artifact_id: str = ""
+    enable_human_only_workflow_readiness_checkpoint: bool = False
+    workflow_readiness_safety_boundary_summary_id: str = ""
+    workflow_readiness_handoff_audit_trail_id: str = ""
+    workflow_readiness_manual_handoff_packet_id: str = ""
+    workflow_readiness_application_readiness_packet_id: str = ""
+    workflow_readiness_artifact_id: str = ""
 
 
 class AgentFeedbackRequest(BaseModel):
@@ -3248,6 +3254,12 @@ def planning_save_saved_scan_state(
             safety_boundary_manual_handoff_packet_id=request.safety_boundary_manual_handoff_packet_id,
             safety_boundary_application_readiness_packet_id=request.safety_boundary_application_readiness_packet_id,
             safety_boundary_artifact_id=request.safety_boundary_artifact_id,
+            enable_human_only_workflow_readiness_checkpoint=request.enable_human_only_workflow_readiness_checkpoint,
+            workflow_readiness_safety_boundary_summary_id=request.workflow_readiness_safety_boundary_summary_id,
+            workflow_readiness_handoff_audit_trail_id=request.workflow_readiness_handoff_audit_trail_id,
+            workflow_readiness_manual_handoff_packet_id=request.workflow_readiness_manual_handoff_packet_id,
+            workflow_readiness_application_readiness_packet_id=request.workflow_readiness_application_readiness_packet_id,
+            workflow_readiness_artifact_id=request.workflow_readiness_artifact_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -5407,6 +5407,12 @@ def save_saved_scan_state_payload(
     safety_boundary_manual_handoff_packet_id: str = "",
     safety_boundary_application_readiness_packet_id: str = "",
     safety_boundary_artifact_id: str = "",
+    enable_human_only_workflow_readiness_checkpoint: bool = False,
+    workflow_readiness_safety_boundary_summary_id: str = "",
+    workflow_readiness_handoff_audit_trail_id: str = "",
+    workflow_readiness_manual_handoff_packet_id: str = "",
+    workflow_readiness_application_readiness_packet_id: str = "",
+    workflow_readiness_artifact_id: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5478,6 +5484,19 @@ def save_saved_scan_state_payload(
             safety_boundary_application_readiness_packet_id
         ),
         "safety_boundary_artifact_id": _clean_text(safety_boundary_artifact_id),
+        "workflow_readiness_safety_boundary_summary_id": _clean_text(
+            workflow_readiness_safety_boundary_summary_id
+        ),
+        "workflow_readiness_handoff_audit_trail_id": _clean_text(
+            workflow_readiness_handoff_audit_trail_id
+        ),
+        "workflow_readiness_manual_handoff_packet_id": _clean_text(
+            workflow_readiness_manual_handoff_packet_id
+        ),
+        "workflow_readiness_application_readiness_packet_id": _clean_text(
+            workflow_readiness_application_readiness_packet_id
+        ),
+        "workflow_readiness_artifact_id": _clean_text(workflow_readiness_artifact_id),
         "draft_status": "saved_scan_state",
         "saved_at": _utc_now(),
     }
@@ -5562,6 +5581,19 @@ def save_saved_scan_state_payload(
         ],
         artifact_id=draft["safety_boundary_artifact_id"],
     )
+    human_only_workflow_readiness_checkpoint_readback = _planning_workspace_human_only_workflow_readiness_checkpoint_payload(
+        safety_boundary_summary_readback=human_only_safety_boundary_summary_readback,
+        enabled=bool(enable_human_only_workflow_readiness_checkpoint),
+        safety_boundary_summary_id=draft[
+            "workflow_readiness_safety_boundary_summary_id"
+        ],
+        handoff_audit_trail_id=draft["workflow_readiness_handoff_audit_trail_id"],
+        manual_handoff_packet_id=draft["workflow_readiness_manual_handoff_packet_id"],
+        application_readiness_packet_id=draft[
+            "workflow_readiness_application_readiness_packet_id"
+        ],
+        artifact_id=draft["workflow_readiness_artifact_id"],
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5579,6 +5611,7 @@ def save_saved_scan_state_payload(
         "human_only_manual_application_handoff_packet_readback": human_only_manual_application_handoff_packet_readback,
         "human_only_handoff_audit_trail_readback": human_only_handoff_audit_trail_readback,
         "human_only_safety_boundary_summary_readback": human_only_safety_boundary_summary_readback,
+        "human_only_workflow_readiness_checkpoint_readback": human_only_workflow_readiness_checkpoint_readback,
     }
 
 
@@ -17553,6 +17586,366 @@ def _planning_workspace_human_only_safety_boundary_summary_payload(
             "source_resume_unchanged": source.get("source_resume_unchanged", True),
             "source_resume_overwritten": source.get("source_resume_overwritten", False),
             "safety_boundary_summary": summary,
+        },
+        enabled=True,
+    )
+
+
+def _planning_workspace_human_only_workflow_readiness_checkpoint_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "resume_artifact_created": False,
+        "artifact_created": False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "source_resume_state_mutated": False,
+        "ats_automation_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+    }
+
+
+def build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    checkpoint = (
+        dict(source.get("workflow_readiness_checkpoint") or {})
+        if isinstance(source.get("workflow_readiness_checkpoint"), dict)
+        else {}
+    )
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason"))
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_reason and fallback_used and validation_errors:
+        fallback_reason = validation_errors[0]
+    if not fallback_error_class and fallback_reason and validation_status in {"fallback", "blocked"}:
+        fallback_error_class = "ValueError"
+
+    checkpoint_id = _clean_text(
+        source.get("workflow_readiness_checkpoint_id")
+        or source.get("stable_checkpoint_key")
+        or checkpoint.get("workflow_readiness_checkpoint_id")
+        or checkpoint.get("stable_checkpoint_key")
+    )
+    summary_id = _clean_text(
+        source.get("safety_boundary_summary_id")
+        or source.get("stable_summary_key")
+        or checkpoint.get("safety_boundary_summary_id")
+        or checkpoint.get("stable_summary_key")
+    )
+    audit_trail_id = _clean_text(
+        source.get("handoff_audit_trail_id")
+        or source.get("stable_audit_key")
+        or checkpoint.get("handoff_audit_trail_id")
+        or checkpoint.get("stable_audit_key")
+    )
+    handoff_packet_id = _clean_text(
+        source.get("manual_handoff_packet_id")
+        or source.get("stable_handoff_packet_key")
+        or checkpoint.get("manual_handoff_packet_id")
+        or checkpoint.get("stable_handoff_packet_key")
+    )
+    readiness_packet_id = _clean_text(
+        source.get("application_readiness_packet_id")
+        or source.get("stable_readiness_packet_key")
+        or checkpoint.get("application_readiness_packet_id")
+        or checkpoint.get("stable_readiness_packet_key")
+    )
+    artifact_id = _clean_text(
+        source.get("artifact_id")
+        or source.get("stable_artifact_key")
+        or checkpoint.get("artifact_id")
+        or checkpoint.get("stable_artifact_key")
+    )
+    llm_capable_action_count = int(source.get("llm_capable_action_count", checkpoint.get("llm_capable_action_count", 0)) or 0)
+    mutation_capable_action_count = int(source.get("mutation_capable_action_count", checkpoint.get("mutation_capable_action_count", 0)) or 0)
+    forbidden_path_count = int(source.get("forbidden_path_count", checkpoint.get("forbidden_path_count", 0)) or 0)
+
+    return {
+        "phase": "67A",
+        "default_off": True,
+        "human_only_workflow_readiness_checkpoint": True,
+        "planning_workspace_action": True,
+        "workflow_readiness_checkpoint_enabled": bool(enabled),
+        "workflow_readiness_checkpoint_requested": bool(
+            source.get("workflow_readiness_checkpoint_requested", False)
+        ),
+        "workflow_readiness_checkpoint_created": bool(
+            source.get("workflow_readiness_checkpoint_created", False)
+        ),
+        "workflow_readiness_checkpoint_id": checkpoint_id,
+        "stable_checkpoint_key": checkpoint_id,
+        "safety_boundary_summary_id": summary_id,
+        "stable_summary_key": summary_id,
+        "handoff_audit_trail_id": audit_trail_id,
+        "stable_audit_key": audit_trail_id,
+        "manual_handoff_packet_id": handoff_packet_id,
+        "stable_handoff_packet_key": handoff_packet_id,
+        "application_readiness_packet_id": readiness_packet_id,
+        "stable_readiness_packet_key": readiness_packet_id,
+        "artifact_id": artifact_id,
+        "stable_artifact_key": artifact_id,
+        "human_only_application_boundary": True,
+        "core_llm_inference_workflow_automatic": True,
+        "manual_mutation_requires_operator_action": True,
+        "workflow_ready_for_human_handoff": bool(
+            source.get("workflow_ready_for_human_handoff", False)
+        ),
+        "ats_automation_forbidden": True,
+        "application_submission_forbidden": True,
+        "apply_queue_enqueue_forbidden": True,
+        "source_resume_overwrite_forbidden": True,
+        "auto_apply_forbidden": True,
+        "checkpoint_action_llm_call_performed": False,
+        "checkpoint_action_provider_call_performed": False,
+        "llm_capable_action_count": llm_capable_action_count,
+        "mutation_capable_action_count": mutation_capable_action_count,
+        "forbidden_path_count": forbidden_path_count,
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+        "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        "fallback_metadata": {
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "validation_errors": validation_errors,
+        },
+        "workflow_readiness_checkpoint_metadata": {
+            "workflow_readiness_checkpoint_enabled": bool(enabled),
+            "workflow_readiness_checkpoint_requested": bool(
+                source.get("workflow_readiness_checkpoint_requested", False)
+            ),
+            "workflow_readiness_checkpoint_created": bool(
+                source.get("workflow_readiness_checkpoint_created", False)
+            ),
+            "workflow_readiness_checkpoint_id": checkpoint_id,
+            "stable_checkpoint_key": checkpoint_id,
+            "safety_boundary_summary_id": summary_id,
+            "stable_summary_key": summary_id,
+            "handoff_audit_trail_id": audit_trail_id,
+            "stable_audit_key": audit_trail_id,
+            "manual_handoff_packet_id": handoff_packet_id,
+            "stable_handoff_packet_key": handoff_packet_id,
+            "application_readiness_packet_id": readiness_packet_id,
+            "stable_readiness_packet_key": readiness_packet_id,
+            "artifact_id": artifact_id,
+            "stable_artifact_key": artifact_id,
+            "human_only_application_boundary": True,
+            "core_llm_inference_workflow_automatic": True,
+            "manual_mutation_requires_operator_action": True,
+            "workflow_ready_for_human_handoff": bool(
+                source.get("workflow_ready_for_human_handoff", False)
+            ),
+            "ats_automation_performed": False,
+            "application_submission_performed": False,
+            "apply_queue_enqueued": False,
+            "validation_status": validation_status,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        },
+        "validation_errors": validation_errors,
+        "workflow_readiness_checkpoint": deepcopy(checkpoint) if checkpoint else None,
+        "safety": _planning_workspace_human_only_workflow_readiness_checkpoint_safety(),
+    }
+
+
+def _planning_workspace_human_only_workflow_readiness_checkpoint_payload(
+    *,
+    safety_boundary_summary_readback: Dict[str, Any] | None,
+    enabled: bool = False,
+    safety_boundary_summary_id: str = "",
+    handoff_audit_trail_id: str = "",
+    manual_handoff_packet_id: str = "",
+    application_readiness_packet_id: str = "",
+    artifact_id: str = "",
+) -> Dict[str, Any]:
+    requested_summary_id = _clean_text(safety_boundary_summary_id)
+    requested_audit_trail_id = _clean_text(handoff_audit_trail_id)
+    requested_handoff_packet_id = _clean_text(manual_handoff_packet_id)
+    requested_readiness_packet_id = _clean_text(application_readiness_packet_id)
+    requested_artifact_id = _clean_text(artifact_id)
+
+    if not enabled:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "workflow_readiness_checkpoint_requested": False,
+                "workflow_readiness_checkpoint_created": False,
+                "safety_boundary_summary_id": requested_summary_id,
+                "handoff_audit_trail_id": requested_audit_trail_id,
+                "manual_handoff_packet_id": requested_handoff_packet_id,
+                "application_readiness_packet_id": requested_readiness_packet_id,
+                "artifact_id": requested_artifact_id,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=False,
+        )
+
+    source = dict(safety_boundary_summary_readback or {})
+    existing_summary_id = _clean_text(
+        source.get("safety_boundary_summary_id") or source.get("stable_summary_key")
+    )
+    existing_audit_trail_id = _clean_text(
+        source.get("handoff_audit_trail_id") or source.get("stable_audit_key")
+    )
+    existing_handoff_packet_id = _clean_text(
+        source.get("manual_handoff_packet_id") or source.get("stable_handoff_packet_key")
+    )
+    existing_readiness_packet_id = _clean_text(
+        source.get("application_readiness_packet_id")
+        or source.get("stable_readiness_packet_key")
+    )
+    existing_artifact_id = _clean_text(
+        source.get("artifact_id") or source.get("stable_artifact_key")
+    )
+    base_payload = {
+        "fallback_used": True,
+        "validation_status": "fallback",
+        "workflow_readiness_checkpoint_requested": True,
+        "workflow_readiness_checkpoint_created": False,
+        "safety_boundary_summary_id": requested_summary_id,
+        "handoff_audit_trail_id": requested_audit_trail_id,
+        "manual_handoff_packet_id": requested_handoff_packet_id,
+        "application_readiness_packet_id": requested_readiness_packet_id,
+        "artifact_id": requested_artifact_id,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+    }
+
+    if not requested_summary_id:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {**base_payload, "validation_errors": ["safety_boundary_summary_id_required"], "fallback_reason": "safety_boundary_summary_id_required"},
+            enabled=True,
+        )
+    if requested_summary_id != existing_summary_id:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {**base_payload, "validation_errors": ["safety_boundary_summary_id_mismatch"], "fallback_reason": "safety_boundary_summary_id_mismatch"},
+            enabled=True,
+        )
+    if requested_audit_trail_id and requested_audit_trail_id != existing_audit_trail_id:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {**base_payload, "safety_boundary_summary_id": existing_summary_id, "validation_errors": ["handoff_audit_trail_id_mismatch"], "fallback_reason": "handoff_audit_trail_id_mismatch"},
+            enabled=True,
+        )
+    if requested_handoff_packet_id and requested_handoff_packet_id != existing_handoff_packet_id:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {**base_payload, "safety_boundary_summary_id": existing_summary_id, "handoff_audit_trail_id": existing_audit_trail_id, "validation_errors": ["manual_handoff_packet_id_mismatch"], "fallback_reason": "manual_handoff_packet_id_mismatch"},
+            enabled=True,
+        )
+    if requested_readiness_packet_id and requested_readiness_packet_id != existing_readiness_packet_id:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {**base_payload, "safety_boundary_summary_id": existing_summary_id, "handoff_audit_trail_id": existing_audit_trail_id, "manual_handoff_packet_id": existing_handoff_packet_id, "validation_errors": ["application_readiness_packet_id_mismatch"], "fallback_reason": "application_readiness_packet_id_mismatch"},
+            enabled=True,
+        )
+    if requested_artifact_id and requested_artifact_id != existing_artifact_id:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {**base_payload, "safety_boundary_summary_id": existing_summary_id, "handoff_audit_trail_id": existing_audit_trail_id, "manual_handoff_packet_id": existing_handoff_packet_id, "application_readiness_packet_id": existing_readiness_packet_id, "validation_errors": ["artifact_id_mismatch"], "fallback_reason": "artifact_id_mismatch"},
+            enabled=True,
+        )
+    if source.get("safety_boundary_summary_created") is not True:
+        return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+            {**base_payload, "safety_boundary_summary_id": existing_summary_id, "handoff_audit_trail_id": existing_audit_trail_id, "manual_handoff_packet_id": existing_handoff_packet_id, "application_readiness_packet_id": existing_readiness_packet_id, "artifact_id": existing_artifact_id, "validation_errors": ["safety_boundary_summary_required"], "fallback_reason": "safety_boundary_summary_required"},
+            enabled=True,
+        )
+
+    resolved_audit_trail_id = requested_audit_trail_id or existing_audit_trail_id
+    resolved_handoff_packet_id = requested_handoff_packet_id or existing_handoff_packet_id
+    resolved_readiness_packet_id = requested_readiness_packet_id or existing_readiness_packet_id
+    resolved_artifact_id = requested_artifact_id or existing_artifact_id
+    checkpoint_seed = "|".join([
+        existing_summary_id,
+        resolved_audit_trail_id,
+        resolved_handoff_packet_id,
+        resolved_readiness_packet_id,
+        resolved_artifact_id,
+    ])
+    checkpoint_id = f"phase67-workflow-readiness-{hashlib.sha256(checkpoint_seed.encode('utf-8')).hexdigest()[:16]}"
+    checkpoint = {
+        "workflow_readiness_checkpoint_id": checkpoint_id,
+        "stable_checkpoint_key": checkpoint_id,
+        "safety_boundary_summary_id": existing_summary_id,
+        "stable_summary_key": existing_summary_id,
+        "handoff_audit_trail_id": resolved_audit_trail_id,
+        "stable_audit_key": resolved_audit_trail_id,
+        "manual_handoff_packet_id": resolved_handoff_packet_id,
+        "stable_handoff_packet_key": resolved_handoff_packet_id,
+        "application_readiness_packet_id": resolved_readiness_packet_id,
+        "stable_readiness_packet_key": resolved_readiness_packet_id,
+        "artifact_id": resolved_artifact_id,
+        "stable_artifact_key": resolved_artifact_id,
+        "human_only_application_boundary": True,
+        "core_llm_inference_workflow_automatic": True,
+        "manual_mutation_requires_operator_action": True,
+        "workflow_ready_for_human_handoff": True,
+        "llm_capable_action_count": int(source.get("llm_capable_action_count", 0) or 0),
+        "mutation_capable_action_count": int(source.get("mutation_capable_action_count", 0) or 0),
+        "forbidden_path_count": int(source.get("forbidden_path_count", 0) or 0),
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+    }
+    return build_planning_workspace_human_only_workflow_readiness_checkpoint_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "workflow_readiness_checkpoint_requested": True,
+            "workflow_readiness_checkpoint_created": True,
+            "workflow_readiness_checkpoint_id": checkpoint_id,
+            "stable_checkpoint_key": checkpoint_id,
+            "safety_boundary_summary_id": existing_summary_id,
+            "stable_summary_key": existing_summary_id,
+            "handoff_audit_trail_id": resolved_audit_trail_id,
+            "stable_audit_key": resolved_audit_trail_id,
+            "manual_handoff_packet_id": resolved_handoff_packet_id,
+            "stable_handoff_packet_key": resolved_handoff_packet_id,
+            "application_readiness_packet_id": resolved_readiness_packet_id,
+            "stable_readiness_packet_key": resolved_readiness_packet_id,
+            "artifact_id": resolved_artifact_id,
+            "stable_artifact_key": resolved_artifact_id,
+            "workflow_ready_for_human_handoff": True,
+            "llm_capable_action_count": int(source.get("llm_capable_action_count", 0) or 0),
+            "mutation_capable_action_count": int(source.get("mutation_capable_action_count", 0) or 0),
+            "forbidden_path_count": int(source.get("forbidden_path_count", 0) or 0),
+            "source_resume_unchanged": source.get("source_resume_unchanged", True),
+            "source_resume_overwritten": source.get("source_resume_overwritten", False),
+            "workflow_readiness_checkpoint": checkpoint,
         },
         enabled=True,
     )

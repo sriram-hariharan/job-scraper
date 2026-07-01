@@ -1,4 +1,4 @@
-# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 73a21e09d6e0c5213c1a7b2ea2f571cef7631c4cb18dcfa8177cfc8e44eb40d5
+# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 3e6c0325dc306b45465cc84149eecb91b40acdd503603da32648bb1b8c0456ed
 # phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
 from __future__ import annotations
 
@@ -552,6 +552,11 @@ def test_phase29a_changes_only_helper_doc_test_and_legacy_guards():
             "docs/phase68_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.md",
             "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off.md",
             "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off.md",
+            "docs/phase70_ux_polish_agentic_workflow_demo_readiness_default_off.md",
+            "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md",
+            "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off 2.md",
+            "\"docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md\"",
+            "\"docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off 2.md\"",
             "docs/phase66_human_only_safety_boundary_summary_readback_ui_api_default_off 3.md",
             "docs/phase67_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off 2.md",
             "docs/phase67_human_only_workflow_readiness_checkpoint_wiring_default_off 2.md",
@@ -594,6 +599,11 @@ def test_phase29a_changes_only_helper_doc_test_and_legacy_guards():
             "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
             "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
             "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
+            "tests/test_phase70a_ux_polish_agentic_workflow_demo_readiness_default_off.py",
+            "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off 2.py",
+            "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off 2.py",
+            "\"tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off 2.py\"",
+            "\"tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off 2.py\"",
             "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off 3.py",
             "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off 3.py",
             "tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off 2.py",

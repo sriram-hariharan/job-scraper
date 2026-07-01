@@ -5395,6 +5395,9 @@ def save_saved_scan_state_payload(
     application_readiness_operator_decision_id: str = "",
     application_readiness_operator_review_packet_id: str = "",
     application_readiness_artifact_id: str = "",
+    enable_human_only_manual_application_handoff_packet: bool = False,
+    manual_handoff_application_readiness_packet_id: str = "",
+    manual_handoff_artifact_id: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
@@ -5445,6 +5448,10 @@ def save_saved_scan_state_payload(
         "application_readiness_artifact_id": _clean_text(
             application_readiness_artifact_id
         ),
+        "manual_handoff_application_readiness_packet_id": _clean_text(
+            manual_handoff_application_readiness_packet_id
+        ),
+        "manual_handoff_artifact_id": _clean_text(manual_handoff_artifact_id),
         "draft_status": "saved_scan_state",
         "saved_at": _utc_now(),
     }
@@ -5502,6 +5509,14 @@ def save_saved_scan_state_payload(
         operator_review_packet_id=draft["application_readiness_operator_review_packet_id"],
         artifact_id=draft["application_readiness_artifact_id"],
     )
+    human_only_manual_application_handoff_packet_readback = _planning_workspace_human_only_manual_application_handoff_packet_payload(
+        application_readiness_readback=operator_approved_artifact_application_readiness_packet_readback,
+        enabled=bool(enable_human_only_manual_application_handoff_packet),
+        application_readiness_packet_id=draft[
+            "manual_handoff_application_readiness_packet_id"
+        ],
+        artifact_id=draft["manual_handoff_artifact_id"],
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -5516,6 +5531,7 @@ def save_saved_scan_state_payload(
         "verified_artifact_operator_review_packet_readback": verified_artifact_operator_review_packet_readback,
         "verified_artifact_operator_decision_readback": verified_artifact_operator_decision_readback,
         "operator_approved_artifact_application_readiness_packet_readback": operator_approved_artifact_application_readiness_packet_readback,
+        "human_only_manual_application_handoff_packet_readback": human_only_manual_application_handoff_packet_readback,
     }
 
 
@@ -16436,6 +16452,347 @@ def _planning_workspace_operator_approved_artifact_application_readiness_packet_
             "source_resume_unchanged": source.get("source_resume_unchanged", True),
             "source_resume_overwritten": source.get("source_resume_overwritten", False),
             "application_readiness_packet": readiness_packet,
+        },
+        enabled=True,
+    )
+
+
+def _planning_workspace_human_only_manual_application_handoff_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "llm_call_performed": False,
+        "network_call_performed": False,
+        "resume_artifact_created": False,
+        "artifact_created": False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "source_resume_state_mutated": False,
+        "ats_automation_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "application_submission_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+    }
+
+
+def build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+    payload: Dict[str, Any] | None,
+    *,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    handoff_packet = (
+        dict(source.get("manual_handoff_packet") or {})
+        if isinstance(source.get("manual_handoff_packet"), dict)
+        else {}
+    )
+    checklist_items = [
+        dict(item)
+        for item in list(
+            source.get("manual_handoff_checklist_items")
+            or handoff_packet.get("manual_handoff_checklist_items")
+            or []
+        )
+        if isinstance(item, dict)
+    ]
+    validation_errors = [
+        _clean_text(error)
+        for error in list(source.get("validation_errors") or [])
+        if _clean_text(error)
+    ]
+    fallback_used = bool(source.get("fallback_used", True))
+    validation_status = _clean_text(source.get("validation_status")) or (
+        "disabled" if not enabled else "missing"
+    )
+    fallback_reason = _clean_text(source.get("fallback_reason"))
+    fallback_error_class = _clean_text(source.get("fallback_error_class"))
+    if not fallback_reason and fallback_used and validation_errors:
+        fallback_reason = validation_errors[0]
+    if not fallback_error_class and fallback_reason and validation_status in {"fallback", "blocked"}:
+        fallback_error_class = "ValueError"
+
+    handoff_packet_id = _clean_text(
+        source.get("manual_handoff_packet_id")
+        or source.get("stable_packet_key")
+        or handoff_packet.get("manual_handoff_packet_id")
+        or handoff_packet.get("stable_packet_key")
+    )
+    readiness_packet_id = _clean_text(
+        source.get("application_readiness_packet_id")
+        or source.get("stable_readiness_packet_key")
+        or handoff_packet.get("application_readiness_packet_id")
+        or handoff_packet.get("stable_readiness_packet_key")
+    )
+    artifact_id = _clean_text(
+        source.get("artifact_id")
+        or source.get("stable_artifact_key")
+        or handoff_packet.get("artifact_id")
+        or handoff_packet.get("stable_artifact_key")
+    )
+    operator_decision_value = _normalize_verified_artifact_operator_decision_value(
+        source.get("operator_decision_value")
+        or handoff_packet.get("operator_decision_value")
+    )
+
+    return {
+        "phase": "64A",
+        "readback_phase": "64B",
+        "phase64b_readback_hardened": True,
+        "default_off": True,
+        "human_only_manual_application_handoff_packet": True,
+        "planning_workspace_action": True,
+        "manual_handoff_packet_enabled": bool(enabled),
+        "manual_handoff_packet_requested": bool(
+            source.get("manual_handoff_packet_requested", False)
+        ),
+        "manual_handoff_packet_created": bool(
+            source.get("manual_handoff_packet_created", False)
+        ),
+        "manual_handoff_packet_id": handoff_packet_id,
+        "stable_packet_key": handoff_packet_id,
+        "application_readiness_packet_id": readiness_packet_id,
+        "stable_readiness_packet_key": readiness_packet_id,
+        "artifact_id": artifact_id,
+        "stable_artifact_key": artifact_id,
+        "operator_decision_value": operator_decision_value,
+        "human_only_application_boundary": True,
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "manual_handoff_checklist_item_count": len(checklist_items),
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+        "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        "fallback_metadata": {
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "validation_errors": validation_errors,
+        },
+        "manual_handoff_packet_metadata": {
+            "readback_phase": "64B",
+            "phase64b_readback_hardened": True,
+            "manual_handoff_packet_enabled": bool(enabled),
+            "manual_handoff_packet_requested": bool(
+                source.get("manual_handoff_packet_requested", False)
+            ),
+            "manual_handoff_packet_created": bool(
+                source.get("manual_handoff_packet_created", False)
+            ),
+            "manual_handoff_packet_id": handoff_packet_id,
+            "stable_packet_key": handoff_packet_id,
+            "application_readiness_packet_id": readiness_packet_id,
+            "stable_readiness_packet_key": readiness_packet_id,
+            "artifact_id": artifact_id,
+            "stable_artifact_key": artifact_id,
+            "operator_decision_value": operator_decision_value,
+            "human_only_application_boundary": True,
+            "ats_automation_performed": False,
+            "application_submission_performed": False,
+            "apply_queue_enqueued": False,
+            "application_execution_enqueued": False,
+            "application_execution_performed": False,
+            "manual_handoff_checklist_item_count": len(checklist_items),
+            "validation_status": validation_status,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "fallback_error_class": fallback_error_class,
+            "source_resume_unchanged": bool(source.get("source_resume_unchanged", True)),
+            "source_resume_overwritten": bool(source.get("source_resume_overwritten", False)),
+        },
+        "validation_errors": validation_errors,
+        "manual_handoff_packet": deepcopy(handoff_packet) if handoff_packet else None,
+        "manual_handoff_checklist_items": checklist_items,
+        "api_readback_fields": [
+            "readback_phase",
+            "phase64b_readback_hardened",
+            "manual_handoff_packet_enabled",
+            "manual_handoff_packet_requested",
+            "manual_handoff_packet_created",
+            "manual_handoff_packet_id",
+            "stable_packet_key",
+            "application_readiness_packet_id",
+            "stable_readiness_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "operator_decision_value",
+            "human_only_application_boundary",
+            "ats_automation_performed",
+            "application_submission_performed",
+            "apply_queue_enqueued",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "manual_handoff_packet_metadata",
+        ],
+        "ui_readback_fields": [
+            "readback_phase",
+            "phase64b_readback_hardened",
+            "manual_handoff_packet_enabled",
+            "manual_handoff_packet_requested",
+            "manual_handoff_packet_created",
+            "manual_handoff_packet_id",
+            "stable_packet_key",
+            "application_readiness_packet_id",
+            "stable_readiness_packet_key",
+            "artifact_id",
+            "stable_artifact_key",
+            "operator_decision_value",
+            "human_only_application_boundary",
+            "ats_automation_performed",
+            "application_submission_performed",
+            "apply_queue_enqueued",
+            "validation_status",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "manual_handoff_packet_metadata",
+        ],
+        "safety": _planning_workspace_human_only_manual_application_handoff_safety(),
+    }
+
+
+def _planning_workspace_human_only_manual_application_handoff_packet_payload(
+    *,
+    application_readiness_readback: Dict[str, Any] | None,
+    enabled: bool = False,
+    application_readiness_packet_id: str = "",
+    artifact_id: str = "",
+) -> Dict[str, Any]:
+    requested_readiness_packet_id = _clean_text(application_readiness_packet_id)
+    requested_artifact_id = _clean_text(artifact_id)
+
+    if not enabled:
+        return build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+            {
+                "fallback_used": True,
+                "validation_status": "disabled",
+                "validation_errors": ["feature_flag_disabled"],
+                "manual_handoff_packet_requested": False,
+                "manual_handoff_packet_created": False,
+                "application_readiness_packet_id": requested_readiness_packet_id,
+                "artifact_id": requested_artifact_id,
+                "source_resume_unchanged": True,
+                "source_resume_overwritten": False,
+            },
+            enabled=False,
+        )
+
+    source = dict(application_readiness_readback or {})
+    existing_readiness_packet_id = _clean_text(
+        source.get("application_readiness_packet_id") or source.get("stable_packet_key")
+    )
+    existing_artifact_id = _clean_text(
+        source.get("artifact_id") or source.get("stable_artifact_key")
+    )
+    decision_value = _normalize_verified_artifact_operator_decision_value(
+        source.get("operator_decision_value")
+    )
+    base_payload = {
+        "fallback_used": True,
+        "validation_status": "fallback",
+        "manual_handoff_packet_requested": True,
+        "manual_handoff_packet_created": False,
+        "application_readiness_packet_id": requested_readiness_packet_id,
+        "artifact_id": requested_artifact_id,
+        "operator_decision_value": decision_value,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+    }
+
+    if not requested_readiness_packet_id:
+        return build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+            {**base_payload, "validation_errors": ["application_readiness_packet_id_required"], "fallback_reason": "application_readiness_packet_id_required"},
+            enabled=True,
+        )
+    if requested_readiness_packet_id != existing_readiness_packet_id:
+        return build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+            {**base_payload, "validation_errors": ["application_readiness_packet_id_mismatch"], "fallback_reason": "application_readiness_packet_id_mismatch"},
+            enabled=True,
+        )
+    if requested_artifact_id and requested_artifact_id != existing_artifact_id:
+        return build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+            {**base_payload, "application_readiness_packet_id": existing_readiness_packet_id, "validation_errors": ["artifact_id_mismatch"], "fallback_reason": "artifact_id_mismatch"},
+            enabled=True,
+        )
+    if source.get("application_readiness_packet_created") is not True:
+        return build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+            {**base_payload, "application_readiness_packet_id": existing_readiness_packet_id, "artifact_id": existing_artifact_id, "validation_errors": ["application_readiness_packet_required"], "fallback_reason": "application_readiness_packet_required"},
+            enabled=True,
+        )
+    if decision_value != "accepted":
+        return build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+            {**base_payload, "application_readiness_packet_id": existing_readiness_packet_id, "artifact_id": existing_artifact_id, "validation_errors": ["operator_decision_not_accepted"], "fallback_reason": "operator_decision_not_accepted"},
+            enabled=True,
+        )
+
+    resolved_artifact_id = requested_artifact_id or existing_artifact_id
+    handoff_seed = "|".join([existing_readiness_packet_id, resolved_artifact_id, decision_value])
+    handoff_packet_id = f"phase64-manual-handoff-{hashlib.sha256(handoff_seed.encode('utf-8')).hexdigest()[:16]}"
+    checklist_items = [
+        {
+            "manual_handoff_checklist_item_id": "human-review-verified-artifact",
+            "application_readiness_packet_id": existing_readiness_packet_id,
+            "artifact_id": resolved_artifact_id,
+            "operator_decision_value": decision_value,
+            "human_only_application_boundary": True,
+            "ats_automation_performed": False,
+            "application_submission_performed": False,
+            "apply_queue_enqueued": False,
+        }
+    ]
+    handoff_packet = {
+        "manual_handoff_packet_id": handoff_packet_id,
+        "stable_packet_key": handoff_packet_id,
+        "application_readiness_packet_id": existing_readiness_packet_id,
+        "stable_readiness_packet_key": existing_readiness_packet_id,
+        "artifact_id": resolved_artifact_id,
+        "stable_artifact_key": resolved_artifact_id,
+        "operator_decision_value": decision_value,
+        "human_only_application_boundary": True,
+        "manual_handoff_checklist_items": checklist_items,
+        "manual_handoff_checklist_item_count": len(checklist_items),
+        "resume_artifact_creation_performed": False,
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "source_resume_unchanged": source.get("source_resume_unchanged", True),
+        "source_resume_overwritten": source.get("source_resume_overwritten", False),
+    }
+
+    return build_planning_workspace_human_only_manual_application_handoff_packet_readback(
+        {
+            "fallback_used": False,
+            "validation_status": "valid",
+            "manual_handoff_packet_requested": True,
+            "manual_handoff_packet_created": True,
+            "manual_handoff_packet_id": handoff_packet_id,
+            "stable_packet_key": handoff_packet_id,
+            "application_readiness_packet_id": existing_readiness_packet_id,
+            "stable_readiness_packet_key": existing_readiness_packet_id,
+            "artifact_id": resolved_artifact_id,
+            "stable_artifact_key": resolved_artifact_id,
+            "operator_decision_value": decision_value,
+            "manual_handoff_checklist_items": checklist_items,
+            "source_resume_unchanged": source.get("source_resume_unchanged", True),
+            "source_resume_overwritten": source.get("source_resume_overwritten", False),
+            "manual_handoff_packet": handoff_packet,
         },
         enabled=True,
     )

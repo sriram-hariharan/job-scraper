@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d 9154ee68f0a5b394b66e7d187d6a0493a07f1521eeefc9e640637ebca27be711
-# phase56a legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d
+# phase56b legacy guard marker: changes_only 8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2 2f6610422f7107a934fbf69eb458d3b6bf4de6f99201c977b95e367cc3a237ab
+# phase56a legacy guard marker: changes_only b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce 8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2
 from __future__ import annotations
 
 from hashlib import sha256
@@ -553,6 +553,8 @@ def test_changed_files_limited_to_phase49b_surface_and_legacy_guards():
             "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
             "docs/phase63_operator_approved_artifact_application_readiness_packet_wiring_default_off.md",
             "docs/phase63_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.md",
+            "docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off.md",
+            "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -565,6 +567,8 @@ def test_changed_files_limited_to_phase49b_surface_and_legacy_guards():
             "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
             "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
             "tests/test_phase63b_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.py",
+            "tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off.py",
+            "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",

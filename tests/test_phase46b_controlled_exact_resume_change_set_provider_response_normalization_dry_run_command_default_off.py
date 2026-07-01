@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73 aafc8a883fe8f4b7ea48fff9d8cd8500e1190b2650290370195d79c3f91b19db
-# phase56a legacy guard marker: changes_only d648586134fc13216ff75c6f362dd430ff4b772de6999adff0adc3452d96627d 55cd268d47f736c91a7439c6c2e2b4ce0e6ffc8610a63e62d1b2cf2d82e6be73
+# phase56b legacy guard marker: changes_only f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e 58db18e3007680b19c74832a1b81ba246b15ad45681e2c76ade4ac2fab034c1b
+# phase56a legacy guard marker: changes_only 1d8351d5217438a9af900c39f5733381dc22c80722821cf56e88f688d40709cf f8437cbdfc7c1b1aa177606676a3beea555f98615d181ef9dc5ab1a6e45f939e
 from __future__ import annotations
 
 import csv
@@ -513,6 +513,8 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -521,6 +523,8 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
         "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
+            "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
+            "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -543,6 +547,8 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         "docs/phase60_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_wiring_default_off.md",
         "docs/phase61_verified_artifact_operator_review_packet_readback_ui_api_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_wiring_default_off.md",
+            "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -551,6 +557,8 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
         "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
         "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
+            "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
+            "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
         "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
         "run_controlled_exact_resume_change_set_provider_response_normalization_dry_run.py",
         "docs/phase46_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off.md",

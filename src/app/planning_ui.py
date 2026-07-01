@@ -1605,6 +1605,13 @@ def scan_workspace(
                 >
                   Workflow readiness checkpoint: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-agentic-workflow-integration-readback"
+                  id="scanWorkspaceAgenticWorkflowIntegrationReadback"
+                  aria-live="polite"
+                >
+                  Agentic workflow integration: default-off
+                </div>
               </div>
             </div>
           </div>

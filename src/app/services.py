@@ -5071,6 +5071,15 @@ def create_saved_scan_payload(
     jd_llm_readback = build_planning_scan_jd_llm_extraction_readback(jd_llm_metadata)
     review_payload["jd_llm_extraction"] = jd_llm_metadata
     review_payload["jd_llm_extraction_readback"] = jd_llm_readback
+    agentic_workflow_integration_readback = (
+        build_end_to_end_agentic_workflow_integration_readback(
+            scan_review_payload=review_payload,
+            enabled=True,
+        )
+    )
+    review_payload["agentic_workflow_integration_readback"] = (
+        agentic_workflow_integration_readback
+    )
     scan_score = int(dict(review_payload.get("scan_score", {}) or {}).get("score", 0) or 0)
     row = saved_scan_db_row(
         {
@@ -5083,6 +5092,7 @@ def create_saved_scan_payload(
                 "scan_review_payload": review_payload,
                 "jd_llm_extraction": jd_llm_metadata,
                 "jd_llm_extraction_readback": jd_llm_readback,
+                "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
             },
             "owner_user_id": _clean_text(owner_user_id),
             "owner_email": _clean_text(owner_email),
@@ -5105,6 +5115,7 @@ def create_saved_scan_payload(
         "scan": row,
         "scan_review_payload": review_payload,
         "jd_llm_extraction_readback": jd_llm_readback,
+        "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
         "postgres_write": postgres_write,
     }
 
@@ -5338,12 +5349,28 @@ def saved_scan_report_payload(
             jd_llm_metadata if isinstance(jd_llm_metadata, dict) else {}
         )
     refreshed_payload["jd_llm_extraction_readback"] = jd_llm_readback
+    agentic_workflow_integration_readback = (
+        refreshed_payload.get("agentic_workflow_integration_readback")
+        if isinstance(refreshed_payload.get("agentic_workflow_integration_readback"), dict)
+        else report_payload.get("agentic_workflow_integration_readback")
+    )
+    if not isinstance(agentic_workflow_integration_readback, dict):
+        agentic_workflow_integration_readback = (
+            build_end_to_end_agentic_workflow_integration_readback(
+                scan_review_payload=refreshed_payload,
+                enabled=True,
+            )
+        )
+    refreshed_payload["agentic_workflow_integration_readback"] = (
+        agentic_workflow_integration_readback
+    )
 
     return {
         "ok": True,
         "scan": row,
         "scan_review_payload": refreshed_payload,
         "jd_llm_extraction_readback": jd_llm_readback,
+        "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
     }
 
 
@@ -5594,12 +5621,42 @@ def save_saved_scan_state_payload(
         ],
         artifact_id=draft["workflow_readiness_artifact_id"],
     )
+    scan_review_payload: Dict[str, Any] = {}
+    try:
+        stored_scan_payload = get_saved_scan_postgres_payload(
+            scan_id=safe_scan_id,
+            owner_user_id=owner_user_id,
+        )
+        stored_row = dict(stored_scan_payload.get("scan", {}) or {})
+        stored_report_payload = dict(stored_row.get("payload_json", {}) or {})
+        maybe_review_payload = stored_report_payload.get("scan_review_payload")
+        if isinstance(maybe_review_payload, dict):
+            scan_review_payload = dict(maybe_review_payload)
+    except Exception:
+        scan_review_payload = {}
+    planning_workspace_readbacks = {
+        "live_tailoring_suggestion_readback": live_tailoring_readback,
+        "live_exact_resume_change_proposal_readback": live_exact_change_readback,
+        "operator_approved_artifact_application_readiness_packet_readback": operator_approved_artifact_application_readiness_packet_readback,
+        "human_only_manual_application_handoff_packet_readback": human_only_manual_application_handoff_packet_readback,
+        "human_only_handoff_audit_trail_readback": human_only_handoff_audit_trail_readback,
+        "human_only_safety_boundary_summary_readback": human_only_safety_boundary_summary_readback,
+        "human_only_workflow_readiness_checkpoint_readback": human_only_workflow_readiness_checkpoint_readback,
+    }
+    agentic_workflow_integration_readback = (
+        build_end_to_end_agentic_workflow_integration_readback(
+            scan_review_payload=scan_review_payload,
+            planning_workspace_payload=planning_workspace_readbacks,
+            enabled=bool(scan_review_payload),
+        )
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
         "draft": draft,
         "has_saved_draft": True,
         "score_preview": {},
+        "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
         "live_tailoring_suggestion_readback": live_tailoring_readback,
         "live_exact_resume_change_proposal_readback": live_exact_change_readback,
         "manual_exact_change_acceptance_readback": manual_acceptance_readback,
@@ -13478,6 +13535,216 @@ def build_planning_scan_jd_llm_extraction_readback(
             "score_formula_changed": False,
             "scoring_weights_changed": False,
         },
+    }
+
+
+def _agentic_workflow_integration_safety() -> Dict[str, bool]:
+    return {
+        "provider_call_performed_by_integration": False,
+        "llm_call_performed_by_integration": False,
+        "network_call_performed_by_integration": False,
+        "resume_artifact_created": False,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "source_resume_state_mutated": False,
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "auto_apply_performed": False,
+        "auto_submit_performed": False,
+        "scoring_formula_changed": False,
+        "scoring_weights_changed": False,
+    }
+
+
+def build_end_to_end_agentic_workflow_integration_readback(
+    *,
+    scan_review_payload: Dict[str, Any] | None = None,
+    planning_workspace_payload: Dict[str, Any] | None = None,
+    enabled: bool = True,
+) -> Dict[str, Any]:
+    scan_payload = dict(scan_review_payload or {})
+    workspace_payload = dict(planning_workspace_payload or {})
+    jd_readback = (
+        scan_payload.get("jd_llm_extraction_readback")
+        if isinstance(scan_payload.get("jd_llm_extraction_readback"), dict)
+        else scan_payload.get("jd_llm_extraction")
+    )
+    jd_readback = dict(jd_readback or {}) if isinstance(jd_readback, dict) else {}
+    score_payload = dict(scan_payload.get("scan_score") or {})
+    score_preview = dict(scan_payload.get("score_preview") or {})
+    issue_contract = dict(scan_payload.get("scan_issue_contract") or {})
+    matched_evidence = list(issue_contract.get("matched_evidence") or [])
+    trusted_suggestions = dict(scan_payload.get("trusted_suggestions") or {})
+    ai_suggestions = list(scan_payload.get("ai_optimize_suggestions") or [])
+    live_tailoring = dict(workspace_payload.get("live_tailoring_suggestion_readback") or {})
+    live_exact_change = dict(workspace_payload.get("live_exact_resume_change_proposal_readback") or {})
+    readiness = dict(
+        workspace_payload.get("operator_approved_artifact_application_readiness_packet_readback")
+        or {}
+    )
+    handoff = dict(workspace_payload.get("human_only_manual_application_handoff_packet_readback") or {})
+    audit = dict(workspace_payload.get("human_only_handoff_audit_trail_readback") or {})
+    safety_summary = dict(workspace_payload.get("human_only_safety_boundary_summary_readback") or {})
+    workflow_checkpoint = dict(
+        workspace_payload.get("human_only_workflow_readiness_checkpoint_readback")
+        or scan_payload.get("human_only_workflow_readiness_checkpoint_readback")
+        or {}
+    )
+
+    user_started = bool(
+        scan_payload.get("ok") is True
+        or scan_payload.get("scan_entry_source")
+        or scan_payload.get("scan_session")
+        or scan_payload.get("new_scan")
+    )
+    jd_signal_available = bool(jd_readback or scan_payload.get("selected_jd_record"))
+    structured_signals = (
+        jd_readback.get("structured_jd_signals")
+        if isinstance(jd_readback.get("structured_jd_signals"), dict)
+        else {}
+    )
+    skills_available = bool(
+        structured_signals.get("required_skills")
+        or structured_signals.get("preferred_skills")
+        or issue_contract
+    )
+    requirements_available = bool(
+        structured_signals.get("responsibilities")
+        or structured_signals.get("tools")
+        or scan_payload.get("selected_jd_record")
+    )
+    resume_evidence_available = bool(matched_evidence or issue_contract)
+    scoring_available = bool(score_payload or score_preview)
+    planning_actions_available = bool(
+        live_tailoring
+        or live_exact_change
+        or scan_payload.get("draft") is not None
+        or trusted_suggestions
+        or ai_suggestions
+    )
+    integration_performed = bool(enabled and user_started)
+    validation_errors: List[str] = []
+    if enabled and not user_started:
+        validation_errors.append("user_started_scan_or_evaluation_required")
+    validation_status = "valid" if integration_performed else ("fallback" if enabled else "disabled")
+    fallback_used = not integration_performed
+    fallback_reason = validation_errors[0] if validation_errors else (
+        "feature_flag_disabled" if not enabled else ""
+    )
+    fallback_error_class = "ValueError" if fallback_reason and enabled else ""
+
+    return {
+        "phase": "68A",
+        "source_phase": "68A",
+        "readback_phase": "68B",
+        "api_readback": True,
+        "ui_readback": True,
+        "api_readback_available": True,
+        "ui_readback_available": True,
+        "readback_only": True,
+        "default_off": True,
+        "end_to_end_agentic_workflow_integration": True,
+        "agentic_workflow_integration_enabled": bool(enabled),
+        "agentic_workflow_integration_requested": bool(enabled),
+        "agentic_workflow_integration_performed": integration_performed,
+        "user_started_scan_or_evaluation": user_started,
+        "scan_evaluation_path": True,
+        "core_llm_inference_workflow_automatic": True,
+        "core_llm_inference_requires_user_started_workflow": True,
+        "jd_signal_extraction_available": jd_signal_available,
+        "jd_signal_extraction_status": _clean_text(jd_readback.get("validation_status")) or (
+            "available" if jd_signal_available else "missing"
+        ),
+        "jd_signal_extraction_performed": bool(jd_readback.get("llm_call_performed", False)),
+        "skills_extraction_available": skills_available,
+        "skills_extraction_status": "available" if skills_available else "missing",
+        "skills_extraction_performed": skills_available,
+        "requirements_extraction_available": requirements_available,
+        "requirements_extraction_status": "available" if requirements_available else "missing",
+        "requirements_extraction_performed": requirements_available,
+        "resume_evidence_available": resume_evidence_available,
+        "resume_evidence_status": "available" if resume_evidence_available else "missing",
+        "resume_evidence_performed": resume_evidence_available,
+        "resume_evidence_count": len(matched_evidence),
+        "llm_evaluation_available": bool(jd_readback),
+        "llm_evaluation_status": _clean_text(jd_readback.get("validation_status")) or (
+            "available" if jd_readback else "not_configured"
+        ),
+        "llm_evaluation_performed": bool(jd_readback.get("llm_call_performed", False)),
+        "llm_evaluation_call_attempted": bool(jd_readback.get("llm_call_attempted", False)),
+        "scoring_ranking_available": scoring_available,
+        "scoring_ranking_status": "available" if scoring_available else "missing",
+        "scoring_ranking_performed": scoring_available,
+        "planning_workspace_next_actions_available": planning_actions_available,
+        "planning_workspace_next_actions_status": (
+            "available" if planning_actions_available else "missing"
+        ),
+        "tailoring_suggestion_action_available": True,
+        "tailoring_suggestion_action_status": _clean_text(
+            live_tailoring.get("validation_status")
+        ) or "available_as_explicit_action",
+        "tailoring_suggestion_action_performed": False,
+        "exact_change_proposal_action_available": True,
+        "exact_change_proposal_action_status": _clean_text(
+            live_exact_change.get("validation_status")
+        ) or "available_as_explicit_action",
+        "exact_change_proposal_action_performed": False,
+        "manual_mutation_requires_operator_action": True,
+        "manual_mutation_performed_by_readback": False,
+        "human_only_application_boundary": True,
+        "source_resume_unchanged": True,
+        "source_resume_mutated": False,
+        "source_resume_overwritten": False,
+        "resume_artifact_created": False,
+        "ats_automation_performed": False,
+        "application_submission_performed": False,
+        "apply_queue_enqueued": False,
+        "application_execution_enqueued": False,
+        "application_execution_performed": False,
+        "provider_call_performed_by_readback": False,
+        "llm_call_performed_by_readback": False,
+        "network_call_performed_by_readback": False,
+        "artifact_creation_performed_by_readback": False,
+        "manual_mutation_action_performed_by_readback": False,
+        "validation_status": validation_status,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "fallback_error_class": fallback_error_class,
+        "validation_errors": validation_errors,
+        "workflow_policy": {
+            "core_llm_inference_may_run_inside_user_started_scan": True,
+            "manual_mutation_actions_require_explicit_operator_action": True,
+            "ats_automation_forbidden": True,
+            "application_submission_forbidden": True,
+            "apply_queue_enqueue_forbidden": True,
+            "source_resume_overwrite_forbidden": True,
+            "auto_apply_forbidden": True,
+        },
+        "score_snapshot": deepcopy(score_payload),
+        "score_preview": deepcopy(score_preview),
+        "jd_llm_extraction_readback": deepcopy(jd_readback),
+        "planning_next_action_readbacks": {
+            "live_tailoring_suggestion_readback": deepcopy(live_tailoring),
+            "live_exact_resume_change_proposal_readback": deepcopy(live_exact_change),
+        },
+        "human_only_handoff_readbacks": {
+            "operator_approved_artifact_application_readiness_packet_readback": deepcopy(readiness),
+            "human_only_manual_application_handoff_packet_readback": deepcopy(handoff),
+            "human_only_handoff_audit_trail_readback": deepcopy(audit),
+            "human_only_safety_boundary_summary_readback": deepcopy(safety_summary),
+            "human_only_workflow_readiness_checkpoint_readback": deepcopy(workflow_checkpoint),
+        },
+        "responsibility_boundaries": {
+            "scan_flow_stays_in_scan_path": True,
+            "deterministic_prefilter_separate_from_llm_evaluation": True,
+            "jd_intelligence_separate_from_resume_evidence": True,
+            "final_scoring_ranking_separate_from_llm_evaluation": True,
+            "manual_mutation_handoff_separate_from_analysis_automation": True,
+        },
+        "safety": _agentic_workflow_integration_safety(),
     }
 
 

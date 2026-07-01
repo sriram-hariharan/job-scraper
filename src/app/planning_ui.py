@@ -1598,6 +1598,13 @@ def scan_workspace(
                 >
                   Safety boundary summary: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-workflow-readiness-checkpoint-readback"
+                  id="scanWorkspaceWorkflowReadinessCheckpointReadback"
+                  aria-live="polite"
+                >
+                  Workflow readiness checkpoint: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -2063,6 +2070,51 @@ def scan_workspace(
                 id="scanWorkspaceSafetyBoundaryArtifactId"
                 placeholder="Verified artifact ID"
                 aria-label="Safety boundary verified artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-workflow-readiness-checkpoint-toggle"
+                for="scanWorkspaceWorkflowReadinessCheckpointToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceWorkflowReadinessCheckpointToggle"
+                />
+                Create human-only workflow readiness checkpoint
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-summary-id-input"
+                id="scanWorkspaceWorkflowReadinessSummaryId"
+                placeholder="Safety boundary summary ID"
+                aria-label="Workflow readiness safety boundary summary ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-audit-id-input"
+                id="scanWorkspaceWorkflowReadinessAuditTrailId"
+                placeholder="Handoff audit trail ID"
+                aria-label="Workflow readiness handoff audit trail ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-handoff-packet-id-input"
+                id="scanWorkspaceWorkflowReadinessHandoffPacketId"
+                placeholder="Manual handoff packet ID"
+                aria-label="Workflow readiness manual handoff packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-readiness-packet-id-input"
+                id="scanWorkspaceWorkflowReadinessReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Workflow readiness application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-artifact-id-input"
+                id="scanWorkspaceWorkflowReadinessArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Workflow readiness verified artifact ID"
               />
               </div>
             </div>

@@ -932,6 +932,100 @@ function renderScanWorkspaceApplicationReadinessPacketReadback(readbackPayload =
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceManualApplicationHandoffPacketEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceManualApplicationHandoffPacketToggle")?.checked === true;
+}
+
+function getScanWorkspaceManualHandoffReadinessPacketId() {
+  return String(getScanWorkspaceInput("scanWorkspaceManualHandoffReadinessPacketId")?.value || "").trim();
+}
+
+function getScanWorkspaceManualHandoffArtifactId() {
+  return String(getScanWorkspaceInput("scanWorkspaceManualHandoffArtifactId")?.value || "").trim();
+}
+
+function getScanWorkspaceManualApplicationHandoffPacketPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.human_only_manual_application_handoff_packet_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceManualApplicationHandoffPacketReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceManualApplicationHandoffPacketReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceManualApplicationHandoffPacketPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Manual application handoff packet: default-off";
+    root.dataset.manualHandoffPacketEnabled = "false";
+    root.dataset.manualHandoffPacketCreated = "false";
+    return;
+  }
+
+  const enabled = readback.manual_handoff_packet_enabled === true;
+  const requested = readback.manual_handoff_packet_requested === true;
+  const created = readback.manual_handoff_packet_created === true;
+  const humanOnly = readback.human_only_application_boundary === true;
+  const atsAutomation = readback.ats_automation_performed === true;
+  const submission = readback.application_submission_performed === true;
+  const queued = readback.apply_queue_enqueued === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const phase64bReadbackHardened = readback.phase64b_readback_hardened === true;
+  const handoffKey = String(readback.manual_handoff_packet_id || readback.stable_packet_key || "").trim();
+  const readinessKey = String(readback.application_readiness_packet_id || readback.stable_readiness_packet_key || "").trim();
+  const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
+  const decisionValue = String(readback.operator_decision_value || "").trim();
+
+  root.dataset.manualHandoffPacketEnabled = enabled ? "true" : "false";
+  root.dataset.manualHandoffPacketRequested = requested ? "true" : "false";
+  root.dataset.manualHandoffPacketCreated = created ? "true" : "false";
+  root.dataset.manualHandoffPacketKey = handoffKey;
+  root.dataset.applicationReadinessPacketKey = readinessKey;
+  root.dataset.guardedResumeCopyArtifactKey = artifactKey;
+  root.dataset.operatorDecisionValue = decisionValue;
+  root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
+  root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
+  root.dataset.applicationSubmissionPerformed = submission ? "true" : "false";
+  root.dataset.applyQueueEnqueued = queued ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.manualHandoffValidationStatus = validation;
+  root.dataset.manualHandoffFallbackReason = fallbackReason;
+  root.dataset.manualHandoffFallbackErrorClass = fallbackErrorClass;
+  root.dataset.phase64bReadbackHardened = phase64bReadbackHardened ? "true" : "false";
+
+  const parts = [
+    `Manual application handoff packet: ${enabled ? "enabled" : "default-off"}`,
+    phase64bReadbackHardened ? "readback hardened" : "",
+    `requested ${requested ? "yes" : "no"}`,
+    `created ${created ? "yes" : "no"}`,
+    humanOnly ? "human-only boundary" : "",
+    decisionValue ? `decision ${decisionValue}` : "",
+    `ATS automation ${atsAutomation ? "performed" : "not performed"}`,
+    `submission ${submission ? "performed" : "not performed"}`,
+    `queue ${queued ? "enqueued" : "not enqueued"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    handoffKey ? `packet ${handoffKey}` : "",
+    readinessKey ? `readiness ${readinessKey}` : "",
+    artifactKey ? `artifact ${artifactKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -1788,6 +1882,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
   renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback();
   renderScanWorkspaceApplicationReadinessPacketReadback();
+  renderScanWorkspaceManualApplicationHandoffPacketReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -1830,6 +1925,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback();
   renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback();
   renderScanWorkspaceApplicationReadinessPacketReadback();
+  renderScanWorkspaceManualApplicationHandoffPacketReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3613,6 +3709,9 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           application_readiness_operator_decision_id: getScanWorkspaceApplicationReadinessDecisionId(),
           application_readiness_operator_review_packet_id: getScanWorkspaceApplicationReadinessReviewPacketId(),
           application_readiness_artifact_id: getScanWorkspaceApplicationReadinessArtifactId(),
+          enable_human_only_manual_application_handoff_packet: getScanWorkspaceManualApplicationHandoffPacketEnabled(),
+          manual_handoff_application_readiness_packet_id: getScanWorkspaceManualHandoffReadinessPacketId(),
+          manual_handoff_artifact_id: getScanWorkspaceManualHandoffArtifactId(),
         }
       : payload;
     const response =
@@ -3645,6 +3744,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceVerifiedArtifactOperatorReviewPacketReadback(response);
     renderScanWorkspaceVerifiedArtifactOperatorDecisionReadback(response);
     renderScanWorkspaceApplicationReadinessPacketReadback(response);
+    renderScanWorkspaceManualApplicationHandoffPacketReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

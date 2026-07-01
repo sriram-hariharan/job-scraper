@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only 6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d 9154ee68f0a5b394b66e7d187d6a0493a07f1521eeefc9e640637ebca27be711
-# phase56a legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d
+# phase56b legacy guard marker: changes_only 8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2 2f6610422f7107a934fbf69eb458d3b6bf4de6f99201c977b95e367cc3a237ab
+# phase56a legacy guard marker: changes_only b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce 8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c
-# phase23f legacy guard marker: changes_only e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase26b legacy guard marker: changes_only b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce
+# phase23f legacy guard marker: changes_only b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from hashlib import sha256
 from pathlib import Path
@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c",
-    "src/app/services.py": "6f14bb0cb8d3ecd9cc192bc13570b24900f2ff8f4e81f9868b1f4f138cc2010d",
+    "src/app/api.py": "b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce",
+    "src/app/services.py": "8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
 }
@@ -540,6 +540,8 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
             "docs/phase62_verified_artifact_operator_decision_capture_readback_ui_api_default_off.md",
             "docs/phase63_operator_approved_artifact_application_readiness_packet_wiring_default_off.md",
             "docs/phase63_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.md",
+            "docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off.md",
+            "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off.md",
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -552,6 +554,8 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
             "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
             "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
             "tests/test_phase63b_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.py",
+            "tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off.py",
+            "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -626,7 +630,7 @@ def test_phase20c_changes_only_static_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "agentic_review.js",
-                "e2eee82ef5c27d75d8326b260d7f9d6f8d55a717b762e64cadd0941de05b808c",
+                "b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce",
             )
         )
     }

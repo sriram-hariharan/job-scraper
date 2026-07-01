@@ -176,6 +176,9 @@ class PlanningSavedScanStateRequest(BaseModel):
     application_readiness_operator_decision_id: str = ""
     application_readiness_operator_review_packet_id: str = ""
     application_readiness_artifact_id: str = ""
+    enable_human_only_manual_application_handoff_packet: bool = False
+    manual_handoff_application_readiness_packet_id: str = ""
+    manual_handoff_artifact_id: str = ""
 
 
 class AgentFeedbackRequest(BaseModel):
@@ -3224,6 +3227,9 @@ def planning_save_saved_scan_state(
             application_readiness_operator_decision_id=request.application_readiness_operator_decision_id,
             application_readiness_operator_review_packet_id=request.application_readiness_operator_review_packet_id,
             application_readiness_artifact_id=request.application_readiness_artifact_id,
+            enable_human_only_manual_application_handoff_packet=request.enable_human_only_manual_application_handoff_packet,
+            manual_handoff_application_readiness_packet_id=request.manual_handoff_application_readiness_packet_id,
+            manual_handoff_artifact_id=request.manual_handoff_artifact_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

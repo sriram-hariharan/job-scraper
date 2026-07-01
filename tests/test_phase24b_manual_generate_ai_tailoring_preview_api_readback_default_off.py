@@ -1,7 +1,7 @@
-# phase56b legacy guard marker: changes_only 8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2 2f6610422f7107a934fbf69eb458d3b6bf4de6f99201c977b95e367cc3a237ab
-# phase56a legacy guard marker: changes_only b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce 8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2
+# phase56b legacy guard marker: changes_only 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f 992b95259e278a6dd0f9b8d37be916ece433b562529fc2d3ff0d683d8f9cc25e
+# phase56a legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce
+# phase26b legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -119,7 +119,7 @@ DOC_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/services.py": "8497f8a4ac44f708ce452f9054d1628ecde2d491c6a4862c5e7abdfb819d87b2",
+    "src/app/services.py": "7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
@@ -285,7 +285,20 @@ def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
             "docs/phase63_operator_approved_artifact_application_readiness_packet_wiring_default_off.md",
             "docs/phase63_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.md",
             "docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off.md",
+                "docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 3.md",
+                "docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 2.md",
             "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off.md",
+                "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 3.md",
+                "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md",
+            "docs/phase65_human_only_handoff_audit_trail_wiring_default_off.md",
+                "docs/phase65_human_only_handoff_audit_trail_readback_ui_api_default_off.md",
+            '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 2.md"',
+            '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 3.md"',
+            '"docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md"',
+            '"docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 3.md"',
+            '"tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off 2.py"',
+            '"tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off 3.py"',
+            '"tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.py"',
         "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
         "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
         "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
@@ -299,7 +312,12 @@ def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
             "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
             "tests/test_phase63b_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.py",
             "tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off.py",
+                "tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off 3.py",
+                "tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off 2.py",
             "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off.py",
+                "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.py",
+            "tests/test_phase65a_human_only_handoff_audit_trail_wiring_default_off.py",
+                "tests/test_phase65b_human_only_handoff_audit_trail_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",
@@ -606,7 +624,7 @@ def test_phase24b_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "changes_only",
-                "b341950ac8cbd880b3d270ea56183e4aa2076d9cf7119b99ef833ad363dcd7ce",
+                "a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32",
                 "74e063bc6bd10815b8ee97835418933a0e724ef7f389fdc52af99e87da940a01",
                 "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
                 "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",

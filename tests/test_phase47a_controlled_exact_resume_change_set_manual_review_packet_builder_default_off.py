@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 5c951b6b6b06b47caa9c7874b94f0f8e968de487817ef4bdceb745c225517386 992b95259e278a6dd0f9b8d37be916ece433b562529fc2d3ff0d683d8f9cc25e
-# phase56a legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32 5c951b6b6b06b47caa9c7874b94f0f8e968de487817ef4bdceb745c225517386
+# phase56b legacy guard marker: changes_only 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f 992b95259e278a6dd0f9b8d37be916ece433b562529fc2d3ff0d683d8f9cc25e
+# phase56a legacy guard marker: changes_only a52216e4920bc866d09f8899c12b3a1e8b2dd86a92d9e366d383db09f9e10a32 7d8b498df776439e010d1a397a66e8815846429cbb6f5c9b9eab9335c5ba8a7f
 from __future__ import annotations
 
 from copy import deepcopy
@@ -529,6 +529,7 @@ def test_changed_files_are_limited_to_phase47a_and_legacy_guard_tests():
                 "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 3.md",
                 "docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md",
             "docs/phase65_human_only_handoff_audit_trail_wiring_default_off.md",
+                "docs/phase65_human_only_handoff_audit_trail_readback_ui_api_default_off.md",
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 2.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_wiring_default_off 3.md"',
             '"docs/phase64_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.md"',
@@ -554,6 +555,7 @@ def test_changed_files_are_limited_to_phase47a_and_legacy_guard_tests():
             "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off.py",
                 "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off 2.py",
             "tests/test_phase65a_human_only_handoff_audit_trail_wiring_default_off.py",
+                "tests/test_phase65b_human_only_handoff_audit_trail_readback_ui_api_default_off.py",
         "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
         "src/app/api.py",
         "src/app/services.py",

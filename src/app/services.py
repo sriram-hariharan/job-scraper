@@ -16900,6 +16900,10 @@ def build_planning_workspace_human_only_handoff_audit_trail_readback(
 
     return {
         "phase": "65A",
+        "readback_phase": "65B",
+        "phase65b_readback_hardened": True,
+        "api_readback": True,
+        "ui_readback": True,
         "default_off": True,
         "human_only_handoff_audit_trail": True,
         "planning_workspace_action": True,

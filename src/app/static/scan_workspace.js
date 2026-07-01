@@ -1237,6 +1237,130 @@ function renderScanWorkspaceSafetyBoundarySummaryReadback(readbackPayload = null
   root.textContent = parts.join(" · ");
 }
 
+function getScanWorkspaceWorkflowReadinessCheckpointEnabled() {
+  return getScanWorkspaceInput("scanWorkspaceWorkflowReadinessCheckpointToggle")?.checked === true;
+}
+
+function getScanWorkspaceWorkflowReadinessSummaryId() {
+  return String(getScanWorkspaceInput("scanWorkspaceWorkflowReadinessSummaryId")?.value || "").trim();
+}
+
+function getScanWorkspaceWorkflowReadinessAuditTrailId() {
+  return String(getScanWorkspaceInput("scanWorkspaceWorkflowReadinessAuditTrailId")?.value || "").trim();
+}
+
+function getScanWorkspaceWorkflowReadinessHandoffPacketId() {
+  return String(getScanWorkspaceInput("scanWorkspaceWorkflowReadinessHandoffPacketId")?.value || "").trim();
+}
+
+function getScanWorkspaceWorkflowReadinessReadinessPacketId() {
+  return String(getScanWorkspaceInput("scanWorkspaceWorkflowReadinessReadinessPacketId")?.value || "").trim();
+}
+
+function getScanWorkspaceWorkflowReadinessArtifactId() {
+  return String(getScanWorkspaceInput("scanWorkspaceWorkflowReadinessArtifactId")?.value || "").trim();
+}
+
+function getScanWorkspaceWorkflowReadinessCheckpointPayload(payload = null) {
+  const source = payload && typeof payload === "object"
+    ? payload
+    : getScanWorkspacePreloadPayloadForSurface();
+  if (!source || typeof source !== "object") return null;
+
+  const readback = source.human_only_workflow_readiness_checkpoint_readback;
+  return readback && typeof readback === "object" ? readback : null;
+}
+
+function renderScanWorkspaceWorkflowReadinessCheckpointReadback(readbackPayload = null) {
+  const root = getScanWorkspaceInput("scanWorkspaceWorkflowReadinessCheckpointReadback");
+  if (!root) return;
+
+  const readback = getScanWorkspaceWorkflowReadinessCheckpointPayload(readbackPayload);
+  if (!readback) {
+    root.textContent = "Workflow readiness checkpoint: default-off";
+    root.dataset.workflowReadinessCheckpointEnabled = "false";
+    root.dataset.workflowReadinessCheckpointCreated = "false";
+    return;
+  }
+
+  const enabled = readback.workflow_readiness_checkpoint_enabled === true;
+  const requested = readback.workflow_readiness_checkpoint_requested === true;
+  const created = readback.workflow_readiness_checkpoint_created === true;
+  const ready = readback.workflow_ready_for_human_handoff === true;
+  const humanOnly = readback.human_only_application_boundary === true;
+  const coreLlmWorkflowAutomatic = readback.core_llm_inference_workflow_automatic === true;
+  const manualMutationGated = readback.manual_mutation_requires_operator_action === true;
+  const atsAutomation = readback.ats_automation_performed === true;
+  const submission = readback.application_submission_performed === true;
+  const queued = readback.apply_queue_enqueued === true;
+  const sourceUnchanged = readback.source_resume_unchanged !== false;
+  const sourceOverwritten = readback.source_resume_overwritten === true;
+  const fallback = readback.fallback_used !== false;
+  const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const fallbackReason = String(readback.fallback_reason || "").trim();
+  const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
+  const checkpointKey = String(readback.workflow_readiness_checkpoint_id || readback.stable_checkpoint_key || "").trim();
+  const summaryKey = String(readback.safety_boundary_summary_id || readback.stable_summary_key || "").trim();
+  const auditKey = String(readback.handoff_audit_trail_id || readback.stable_audit_key || "").trim();
+  const handoffKey = String(readback.manual_handoff_packet_id || readback.stable_handoff_packet_key || "").trim();
+  const readinessKey = String(readback.application_readiness_packet_id || readback.stable_readiness_packet_key || "").trim();
+  const artifactKey = String(readback.artifact_id || readback.stable_artifact_key || "").trim();
+  const llmCapableCount = Number(readback.llm_capable_action_count);
+  const mutationCapableCount = Number(readback.mutation_capable_action_count);
+  const forbiddenPathCount = Number(readback.forbidden_path_count);
+
+  root.dataset.workflowReadinessCheckpointEnabled = enabled ? "true" : "false";
+  root.dataset.workflowReadinessCheckpointRequested = requested ? "true" : "false";
+  root.dataset.workflowReadinessCheckpointCreated = created ? "true" : "false";
+  root.dataset.workflowReadinessCheckpointKey = checkpointKey;
+  root.dataset.safetyBoundarySummaryKey = summaryKey;
+  root.dataset.handoffAuditTrailKey = auditKey;
+  root.dataset.manualHandoffPacketKey = handoffKey;
+  root.dataset.applicationReadinessPacketKey = readinessKey;
+  root.dataset.guardedResumeCopyArtifactKey = artifactKey;
+  root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
+  root.dataset.coreLlmInferenceWorkflowAutomatic = coreLlmWorkflowAutomatic ? "true" : "false";
+  root.dataset.manualMutationRequiresOperatorAction = manualMutationGated ? "true" : "false";
+  root.dataset.workflowReadyForHumanHandoff = ready ? "true" : "false";
+  root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
+  root.dataset.applicationSubmissionPerformed = submission ? "true" : "false";
+  root.dataset.applyQueueEnqueued = queued ? "true" : "false";
+  root.dataset.sourceResumeUnchanged = sourceUnchanged ? "true" : "false";
+  root.dataset.sourceResumeOverwritten = sourceOverwritten ? "true" : "false";
+  root.dataset.workflowReadinessValidationStatus = validation;
+  root.dataset.workflowReadinessFallbackReason = fallbackReason;
+  root.dataset.workflowReadinessFallbackErrorClass = fallbackErrorClass;
+
+  const parts = [
+    `Workflow readiness checkpoint: ${enabled ? "enabled" : "default-off"}`,
+    `requested ${requested ? "yes" : "no"}`,
+    `created ${created ? "yes" : "no"}`,
+    `ready ${ready ? "yes" : "no"}`,
+    humanOnly ? "human-only boundary" : "",
+    coreLlmWorkflowAutomatic ? "core LLM workflow-automatic" : "",
+    manualMutationGated ? "manual mutation operator-gated" : "",
+    `ATS automation ${atsAutomation ? "performed" : "not performed"}`,
+    `submission ${submission ? "performed" : "not performed"}`,
+    `queue ${queued ? "enqueued" : "not enqueued"}`,
+    `source ${sourceUnchanged && !sourceOverwritten ? "unchanged" : "changed"}`,
+    `fallback ${fallback ? "yes" : "no"}`,
+    `validation ${validation}`,
+    Number.isFinite(llmCapableCount) ? `llm-capable ${llmCapableCount}` : "",
+    Number.isFinite(mutationCapableCount) ? `mutation-capable ${mutationCapableCount}` : "",
+    Number.isFinite(forbiddenPathCount) ? `forbidden paths ${forbiddenPathCount}` : "",
+    checkpointKey ? `checkpoint ${checkpointKey}` : "",
+    summaryKey ? `summary ${summaryKey}` : "",
+    auditKey ? `audit ${auditKey}` : "",
+    handoffKey ? `handoff ${handoffKey}` : "",
+    readinessKey ? `readiness ${readinessKey}` : "",
+    artifactKey ? `artifact ${artifactKey}` : "",
+    fallbackReason ? `reason ${fallbackReason}` : "",
+    fallbackErrorClass ? `error ${fallbackErrorClass}` : "",
+  ].filter(Boolean);
+
+  root.textContent = parts.join(" · ");
+}
+
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
   return Boolean(context?.tailoringJsonPath && context?.resumeName);
@@ -2096,6 +2220,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceManualApplicationHandoffPacketReadback();
   renderScanWorkspaceHandoffAuditTrailReadback();
   renderScanWorkspaceSafetyBoundarySummaryReadback();
+  renderScanWorkspaceWorkflowReadinessCheckpointReadback();
 
   const savedDraft = payload && payload.draft && typeof payload.draft === "object"
     ? payload.draft
@@ -2141,6 +2266,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   renderScanWorkspaceManualApplicationHandoffPacketReadback();
   renderScanWorkspaceHandoffAuditTrailReadback();
   renderScanWorkspaceSafetyBoundarySummaryReadback();
+  renderScanWorkspaceWorkflowReadinessCheckpointReadback();
   renderScanWorkspaceLiveDraftPreviewInto();
 
   window.setTimeout(() => {
@@ -3936,6 +4062,12 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           safety_boundary_manual_handoff_packet_id: getScanWorkspaceSafetyBoundaryHandoffPacketId(),
           safety_boundary_application_readiness_packet_id: getScanWorkspaceSafetyBoundaryReadinessPacketId(),
           safety_boundary_artifact_id: getScanWorkspaceSafetyBoundaryArtifactId(),
+          enable_human_only_workflow_readiness_checkpoint: getScanWorkspaceWorkflowReadinessCheckpointEnabled(),
+          workflow_readiness_safety_boundary_summary_id: getScanWorkspaceWorkflowReadinessSummaryId(),
+          workflow_readiness_handoff_audit_trail_id: getScanWorkspaceWorkflowReadinessAuditTrailId(),
+          workflow_readiness_manual_handoff_packet_id: getScanWorkspaceWorkflowReadinessHandoffPacketId(),
+          workflow_readiness_application_readiness_packet_id: getScanWorkspaceWorkflowReadinessReadinessPacketId(),
+          workflow_readiness_artifact_id: getScanWorkspaceWorkflowReadinessArtifactId(),
         }
       : payload;
     const response =
@@ -3971,6 +4103,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceManualApplicationHandoffPacketReadback(response);
     renderScanWorkspaceHandoffAuditTrailReadback(response);
     renderScanWorkspaceSafetyBoundarySummaryReadback(response);
+    renderScanWorkspaceWorkflowReadinessCheckpointReadback(response);
     scanWorkspacePersistenceState.manualBulletEdits = {
       ...getScanWorkspaceManualBulletEdits(),
       ...(

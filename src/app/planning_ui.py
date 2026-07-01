@@ -1610,14 +1610,14 @@ def scan_workspace(
                   id="scanWorkspaceAgenticWorkflowIntegrationReadback"
                   aria-live="polite"
                 >
-                  Agentic workflow integration: default-off
+                  Agentic workflow demo readiness: waiting for existing scan/evaluation readback
                 </div>
                 <div
                   class="subtext scan-workspace-production-readiness-checkpoint-readback"
                   id="scanWorkspaceProductionReadinessCheckpointReadback"
                   aria-live="polite"
                 >
-                  Production readiness checkpoint: default-off
+                  Demo readiness: backend checkpoint readback waiting for existing data
                 </div>
               </div>
             </div>

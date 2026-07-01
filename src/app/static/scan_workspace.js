@@ -1405,6 +1405,13 @@ function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload =
   const sourceOverwritten = readback.source_resume_overwritten === true;
   const fallback = readback.fallback_used !== false;
   const validation = String(readback.validation_status || "missing").trim() || "missing";
+  const jdSignalStatus = String(readback.jd_signal_extraction_status || "").trim();
+  const skillsStatus = String(readback.skills_extraction_status || "").trim();
+  const requirementsStatus = String(readback.requirements_extraction_status || "").trim();
+  const evidenceStatus = String(readback.resume_evidence_status || "").trim();
+  const llmEvaluationStatus = String(readback.llm_evaluation_status || "").trim();
+  const scoringStatus = String(readback.scoring_ranking_status || "").trim();
+  const nextActionsStatus = String(readback.planning_workspace_next_actions_status || "").trim();
   const fallbackReason = String(readback.fallback_reason || "").trim();
   const fallbackErrorClass = String(readback.fallback_error_class || "").trim();
 
@@ -1414,9 +1421,20 @@ function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload =
   root.dataset.userStartedScanOrEvaluation = userStarted ? "true" : "false";
   root.dataset.coreLlmInferenceWorkflowAutomatic = coreLlmWorkflowAutomatic ? "true" : "false";
   root.dataset.jdSignalExtractionAvailable = jdSignals ? "true" : "false";
+  root.dataset.jdSignalExtractionStatus = jdSignalStatus;
+  root.dataset.skillsExtractionAvailable = skills ? "true" : "false";
+  root.dataset.skillsExtractionStatus = skillsStatus;
+  root.dataset.requirementsExtractionAvailable = requirements ? "true" : "false";
+  root.dataset.requirementsExtractionStatus = requirementsStatus;
   root.dataset.resumeEvidenceAvailable = evidence ? "true" : "false";
+  root.dataset.resumeEvidenceStatus = evidenceStatus;
+  root.dataset.llmEvaluationStatus = llmEvaluationStatus;
   root.dataset.scoringRankingAvailable = scoring ? "true" : "false";
+  root.dataset.scoringRankingStatus = scoringStatus;
   root.dataset.planningWorkspaceNextActionsAvailable = nextActions ? "true" : "false";
+  root.dataset.planningWorkspaceNextActionsStatus = nextActionsStatus;
+  root.dataset.tailoringSuggestionActionAvailable = tailoringAction ? "true" : "false";
+  root.dataset.exactChangeProposalActionAvailable = exactChangeAction ? "true" : "false";
   root.dataset.manualMutationRequiresOperatorAction = manualMutationGated ? "true" : "false";
   root.dataset.humanOnlyApplicationBoundary = humanOnly ? "true" : "false";
   root.dataset.atsAutomationPerformed = atsAutomation ? "true" : "false";
@@ -1434,12 +1452,13 @@ function renderScanWorkspaceAgenticWorkflowIntegrationReadback(readbackPayload =
     `performed ${performed ? "yes" : "no"}`,
     `user-started ${userStarted ? "yes" : "no"}`,
     coreLlmWorkflowAutomatic ? "core LLM workflow-automatic" : "",
-    jdSignals ? "JD signals" : "",
-    skills ? "skills" : "",
-    requirements ? "requirements" : "",
-    evidence ? "resume evidence" : "",
-    scoring ? "scoring/ranking" : "",
-    nextActions ? "planning next actions" : "",
+    jdSignals ? `JD signals ${jdSignalStatus || "available"}` : "",
+    skills ? `skills ${skillsStatus || "available"}` : "",
+    requirements ? `requirements ${requirementsStatus || "available"}` : "",
+    evidence ? `resume evidence ${evidenceStatus || "available"}` : "",
+    llmEvaluationStatus ? `LLM evaluation ${llmEvaluationStatus}` : "",
+    scoring ? `scoring/ranking ${scoringStatus || "available"}` : "",
+    nextActions ? `planning next actions ${nextActionsStatus || "available"}` : "",
     tailoringAction ? "tailoring action available" : "",
     exactChangeAction ? "exact-change action available" : "",
     manualMutationGated ? "manual mutation operator-gated" : "",

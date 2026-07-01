@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 912a02bbcf180962ca1b22aedf9dca0b5465b90f4add2444f328c99ccfc6e2d6 8e37487335a2b0bf18fd196554c11509d0e5ee0428244ce9fafce3c3e195e5bd
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 912a02bbcf180962ca1b22aedf9dca0b5465b90f4add2444f328c99ccfc6e2d6
+# phase56b legacy guard marker: changes_only 8fef39b25015df90e25acdd2e160d7242bb44aec6a5be97b52701fcafb71f4ca 3b39f4b6b73b0e575d7af6362f0cd70252b645e9b6066ed0509fd62621e8f1e5
+# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 8fef39b25015df90e25acdd2e160d7242bb44aec6a5be97b52701fcafb71f4ca
 from __future__ import annotations
 
 from copy import deepcopy
@@ -241,7 +241,7 @@ PROTECTED_HASHES = {
     "src/agents/controlled_agent_router_readonly.py": "c1cac3d8d1858b5143d0c3ca0082f3b908410020a0e4220c1dea9531cbf3655d",
     "run_controlled_agent_router_planning_artifact_dry_run.py": "1e49a69da5b306272319f2bef5e7162467f294aff4cbe37e8167125a56777dc4",
     "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "912a02bbcf180962ca1b22aedf9dca0b5465b90f4add2444f328c99ccfc6e2d6",
+    "src/app/services.py": "8fef39b25015df90e25acdd2e160d7242bb44aec6a5be97b52701fcafb71f4ca",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",

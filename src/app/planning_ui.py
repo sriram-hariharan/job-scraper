@@ -1570,6 +1570,13 @@ def scan_workspace(
                 >
                   Verified artifact operator decision: default-off
                 </div>
+                <div
+                  class="subtext scan-workspace-application-readiness-packet-readback"
+                  id="scanWorkspaceApplicationReadinessPacketReadback"
+                  aria-live="polite"
+                >
+                  Application readiness packet: default-off
+                </div>
               </div>
             </div>
           </div>
@@ -1912,6 +1919,37 @@ def scan_workspace(
                 <option value="rejected">Rejected</option>
                 <option value="needs_changes">Needs changes</option>
               </select>
+              <label
+                class="subtext scan-workspace-application-readiness-packet-toggle"
+                for="scanWorkspaceApplicationReadinessPacketToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceApplicationReadinessPacketToggle"
+                />
+                Create application-readiness packet
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-application-readiness-decision-id-input"
+                id="scanWorkspaceApplicationReadinessDecisionId"
+                placeholder="Operator decision ID"
+                aria-label="Application readiness operator decision ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-application-readiness-review-packet-id-input"
+                id="scanWorkspaceApplicationReadinessReviewPacketId"
+                placeholder="Operator review packet ID"
+                aria-label="Application readiness operator review packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-application-readiness-artifact-id-input"
+                id="scanWorkspaceApplicationReadinessArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Application readiness artifact ID"
+              />
               </div>
             </div>
 

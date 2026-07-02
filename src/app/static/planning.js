@@ -4351,16 +4351,27 @@ function openTailoringModal(row) {
   getTailoringModal().classList.remove("hidden");
 }
 
-function buildArtifactUrl(path) {
+function buildPlanningEndpoint(path, outputDir = "") {
+  const safeOutputDir = String(outputDir || "").trim();
+  if (!safeOutputDir) return path;
+
+  const params = new URLSearchParams();
+  params.set("output_dir", safeOutputDir);
+  return `${path}?${params.toString()}`;
+}
+
+function buildArtifactUrl(path, outputDir = "") {
   const params = new URLSearchParams();
   params.set("path", path);
+  const safeOutputDir = String(outputDir || "").trim();
+  if (safeOutputDir) params.set("output_dir", safeOutputDir);
   return `/planning-artifact?${params.toString()}`;
 }
 
-async function loadArtifact(path) {
+async function loadArtifact(path, outputDir = "") {
   const raw = String(path || "").trim();
   if (!raw || raw === ".") return null;
-  return fetchJson(buildArtifactUrl(raw));
+  return fetchJson(buildArtifactUrl(raw, outputDir));
 }
 
 function formatMarkdownInline(text) {
@@ -4767,6 +4778,7 @@ function getScanWorkspaceContext() {
     tailoringMdPath: String(page.dataset.tailoringMdPath || "").trim(),
     tailoringLlmJsonPath: String(page.dataset.tailoringLlmJsonPath || "").trim(),
     packetJsonPath: String(page.dataset.packetJsonPath || "").trim(),
+    planningOutputDir: String(page.dataset.planningOutputDir || "").trim(),
   };
 }
 
@@ -4778,6 +4790,7 @@ function getTailoringWorkspaceContext() {
     jobDocId: String(page.dataset.jobDocId || "").trim(),
     tailoringJsonPath: String(page.dataset.tailoringJsonPath || "").trim(),
     resumeName: String(page.dataset.resumeName || "").trim(),
+    planningOutputDir: String(page.dataset.planningOutputDir || "").trim(),
   };
 }
 
@@ -4785,7 +4798,7 @@ async function loadTailoringWorkspaceDraft() {
   const context = getTailoringWorkspaceContext();
   if (!context || !context.tailoringJsonPath) return null;
 
-  return postJson("/planning/load-workspace-draft", {
+  return postJson(buildPlanningEndpoint("/planning/load-workspace-draft", context.planningOutputDir), {
     tailoring_json_path: context.tailoringJsonPath,
     selected_resume: context.resumeName,
   });
@@ -4824,7 +4837,7 @@ async function fetchTailoringWorkspaceDocumentPreview() {
 
   try {
     const response = await postJsonWithTimeout(
-      "/planning/render-workspace-draft-preview",
+      buildPlanningEndpoint("/planning/render-workspace-draft-preview", getTailoringWorkspaceContext()?.planningOutputDir),
       requestBody,
       20000
     );
@@ -7761,7 +7774,10 @@ async function handleTailoringWorkspaceExportSelection(format) {
   }
 
   try {
-    const response = await fetch("/planning/export-workspace-draft", {
+    const response = await fetch(buildPlanningEndpoint(
+      "/planning/export-workspace-draft",
+      context.planningOutputDir
+    ), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -7917,7 +7933,7 @@ async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
   updateTailoringWorkspaceSelectionActionBar();
 
   try {
-    const response = await postJson("/planning/preview-workspace-draft", {
+    const response = await postJson(buildPlanningEndpoint("/planning/preview-workspace-draft", context.planningOutputDir), {
       tailoring_json_path: context.tailoringJsonPath,
       selected_resume: context.resumeName,
       selected_patch_candidate_ids: selectedIds,
@@ -7974,7 +7990,7 @@ async function saveTailoringWorkspaceSelection() {
   updateTailoringWorkspaceSelectionActionBar();
 
   try {
-    const response = await postJson("/planning/save-workspace-draft", {
+    const response = await postJson(buildPlanningEndpoint("/planning/save-workspace-draft", context.planningOutputDir), {
       tailoring_json_path: context.tailoringJsonPath,
       selected_resume: context.resumeName,
       selected_patch_candidate_ids: selectedIds,
@@ -8999,7 +9015,7 @@ async function initTailoringWorkspacePage() {
       meta.textContent = "Loading action-first suggestion set...";
     }
 
-    const tailoringJsonArtifact = await loadArtifact(tailoringJsonPath);
+    const tailoringJsonArtifact = await loadArtifact(tailoringJsonPath, getTailoringWorkspaceContext()?.planningOutputDir);
 
     let draftResponse = null;
     try {
@@ -9057,6 +9073,7 @@ function buildScanWorkspaceBackToTailoringUrl() {
   if (context.tailoringMdPath) params.set("tailoring_md", context.tailoringMdPath);
   if (context.tailoringLlmJsonPath) params.set("tailoring_llm_json", context.tailoringLlmJsonPath);
   if (context.packetJsonPath) params.set("packet_json", context.packetJsonPath);
+  if (context.planningOutputDir) params.set("output_dir", context.planningOutputDir);
 
   return `/tailoring-workspace?${params.toString()}`;
 }
@@ -9065,7 +9082,7 @@ async function loadScanWorkspacePreload() {
   const context = getScanWorkspaceContext();
   if (!context || !context.tailoringJsonPath) return null;
 
-  return postJson("/planning/scan-preload", {
+  return postJson(buildPlanningEndpoint("/planning/scan-preload", context.planningOutputDir), {
     tailoring_json_path: context.tailoringJsonPath,
     selected_resume: context.resumeName,
   });
@@ -11441,7 +11458,7 @@ async function previewScanWorkspaceState() {
   updateScanWorkspaceActionBar();
 
   try {
-    const response = await postJson("/planning/preview-workspace-draft", {
+    const response = await postJson(buildPlanningEndpoint("/planning/preview-workspace-draft", context.planningOutputDir), {
       tailoring_json_path: context.tailoringJsonPath,
       selected_resume: context.resumeName,
       selected_patch_candidate_ids: selectedIds,
@@ -11479,7 +11496,7 @@ async function saveScanWorkspaceState() {
   updateScanWorkspaceActionBar();
 
   try {
-    const response = await postJson("/planning/save-workspace-draft", {
+    const response = await postJson(buildPlanningEndpoint("/planning/save-workspace-draft", context.planningOutputDir), {
       tailoring_json_path: context.tailoringJsonPath,
       selected_resume: context.resumeName,
       selected_patch_candidate_ids: getScanWorkspaceSelectedCandidateIds(),
@@ -11874,6 +11891,7 @@ function buildTailoringWorkspaceUrl(row) {
   if (row.tailoring_md) params.set("tailoring_md", row.tailoring_md);
   if (row.tailoring_llm_json) params.set("tailoring_llm_json", row.tailoring_llm_json);
   if (row.packet_json) params.set("packet_json", row.packet_json);
+  if (row.planning_output_dir) params.set("output_dir", row.planning_output_dir);
 
   return `/tailoring-workspace?${params.toString()}`;
 }
@@ -11939,6 +11957,7 @@ function buildTailoringButtonHtml(row) {
       data-tailoring-md="${escapeHtml(row.tailoring_md || "")}"
       data-tailoring-llm-json="${escapeHtml(row.tailoring_llm_json || "")}"
       data-packet-json="${escapeHtml(row.packet_json || "")}"
+      data-planning-output-dir="${escapeHtml(row.planning_output_dir || "")}"
       data-tailoring-workspace-state="${escapeHtml(row.tailoring_workspace_state || "")}"
       data-tailoring-actionable-replacement-count="${escapeHtml(row.tailoring_actionable_replacement_count || "")}"
       data-tailoring-review-replacement-count="${escapeHtml(row.tailoring_review_replacement_count || "")}"
@@ -11960,6 +11979,7 @@ async function handleTailoringClick(button) {
     tailoring_md: button.dataset.tailoringMd || "",
     tailoring_llm_json: button.dataset.tailoringLlmJson || "",
     packet_json: button.dataset.packetJson || "",
+    planning_output_dir: button.dataset.planningOutputDir || "",
     tailoring_workspace_state: button.dataset.tailoringWorkspaceState || "",
     tailoring_actionable_replacement_count: button.dataset.tailoringActionableReplacementCount || "",
     tailoring_review_replacement_count: button.dataset.tailoringReviewReplacementCount || "",

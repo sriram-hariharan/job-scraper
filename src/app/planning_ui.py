@@ -683,6 +683,7 @@ def tailoring_workspace(
     tailoring_md: str = "",
     tailoring_llm_json: str = "",
     packet_json: str = "",
+    output_dir: str = "",
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
@@ -698,6 +699,7 @@ def tailoring_workspace(
     tailoring_md_safe = escape(tailoring_md or "")
     tailoring_llm_json_safe = escape(tailoring_llm_json or "")
     packet_json_safe = escape(packet_json or "")
+    output_dir_safe = escape(output_dir or "")
 
     scan_query = urlencode(
         {
@@ -710,6 +712,7 @@ def tailoring_workspace(
             "tailoring_md": tailoring_md or "",
             "tailoring_llm_json": tailoring_llm_json or "",
             "packet_json": packet_json or "",
+            "output_dir": output_dir or "",
         }
     )
     scan_href_safe = escape(f"/scan-workspace?{scan_query}", quote=True)
@@ -740,6 +743,7 @@ def tailoring_workspace(
     data-tailoring-md-path="{tailoring_md_safe}"
     data-tailoring-llm-json-path="{tailoring_llm_json_safe}"
     data-packet-json-path="{packet_json_safe}"
+    data-planning-output-dir="{output_dir_safe}"
   >
     <header class="page-header tailoring-workspace-header">
       <div>
@@ -1131,6 +1135,7 @@ def scan_workspace(
     tailoring_llm_json: str = "",
     packet_json: str = "",
     saved_scan_id: str = "",
+    output_dir: str = "",
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
@@ -1147,8 +1152,10 @@ def scan_workspace(
     tailoring_llm_json_safe = escape(tailoring_llm_json or "")
     packet_json_safe = escape(packet_json or "")
     saved_scan_id_safe = escape(saved_scan_id or "")
+    output_dir_safe = escape(output_dir or "")
 
     loaded_job_context = services.scan_workspace_job_context_payload(
+        output_dir=Path(output_dir) if output_dir else services.DEFAULT_OUTPUT_DIR,
         tailoring_json_path=tailoring_json or "",
         job_doc_id=job_doc_id or "",
         company=company or "",
@@ -1181,6 +1188,7 @@ def scan_workspace(
             "tailoring_md": tailoring_md or "",
             "tailoring_llm_json": tailoring_llm_json or "",
             "packet_json": packet_json or "",
+            "output_dir": output_dir or "",
         }
     )
     back_href_safe = escape(f"/tailoring-workspace?{back_query}", quote=True)
@@ -1233,6 +1241,7 @@ def scan_workspace(
     data-tailoring-llm-json-path="{tailoring_llm_json_safe}"
     data-packet-json-path="{packet_json_safe}"
     data-saved-scan-id="{saved_scan_id_safe}"
+    data-planning-output-dir="{output_dir_safe}"
     data-scan-initial-mode="{scan_initial_mode_safe}"
     data-scan-mode=""
   >

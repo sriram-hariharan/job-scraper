@@ -1,6 +1,6 @@
-# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
-# phase26b legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f
+# phase56b legacy guard marker: changes_only 8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
+# phase56a legacy guard marker: changes_only a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1 8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736
+# phase26b legacy guard marker: changes_only a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1
 from hashlib import sha256
 from pathlib import Path
 
@@ -166,7 +166,7 @@ def test_ui_does_not_add_provider_pipeline_or_state_change_controls():
 def test_no_pipeline_dependency_or_decision_module_change():
     expected = {
         "requirements.txt": "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f",
-        "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
+        "src/app/api.py": "a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1",
         "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",

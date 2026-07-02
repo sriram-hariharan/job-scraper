@@ -8123,6 +8123,81 @@ def _pipeline_child_env_max_value_bytes() -> int:
     return max(1024, min(max_bytes, 262144))
 
 
+def _pipeline_child_env_max_total_bytes() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_PIPELINE_CHILD_ENV_MAX_TOTAL_BYTES"))
+    try:
+        max_bytes = int(raw)
+    except Exception:
+        max_bytes = 131072
+
+    return max(8192, min(max_bytes, 1048576))
+
+
+def _pipeline_launch_argv_max_bytes() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_PIPELINE_LAUNCH_ARGV_MAX_BYTES"))
+    try:
+        max_bytes = int(raw)
+    except Exception:
+        max_bytes = 8192
+
+    return max(1024, min(max_bytes, 262144))
+
+
+def _pipeline_launch_argv_size_bytes(cmd: List[Any]) -> int:
+    return sum(len(str(part or "").encode("utf-8")) + 1 for part in list(cmd or []))
+
+
+def _pipeline_launch_env_size_bytes(child_env: Dict[str, Any]) -> int:
+    size = 0
+    for key, value in dict(child_env or {}).items():
+        size += len(str(key or "").encode("utf-8"))
+        size += 1
+        size += len(str(value or "").encode("utf-8"))
+        size += 1
+    return size
+
+
+def _compact_pipeline_child_env(
+    child_env: Dict[str, str],
+    *,
+    protected_keys: set[str],
+) -> Dict[str, str]:
+    max_total_bytes = _pipeline_child_env_max_total_bytes()
+    if _pipeline_launch_env_size_bytes(child_env) <= max_total_bytes:
+        return child_env
+
+    compacted: Dict[str, str] = {}
+    dropped_keys: List[str] = []
+    protected = {_clean_text(key) for key in protected_keys if _clean_text(key)}
+    first_pass_keys = [
+        key
+        for key in sorted(child_env)
+        if key in protected or key in _PIPELINE_CHILD_ENV_EXACT_NAMES
+    ]
+    second_pass_keys = [key for key in sorted(child_env) if key not in set(first_pass_keys)]
+
+    for key in first_pass_keys + second_pass_keys:
+        candidate = dict(compacted)
+        candidate[key] = child_env[key]
+        if key in protected or _pipeline_launch_env_size_bytes(candidate) <= max_total_bytes:
+            compacted[key] = child_env[key]
+        else:
+            dropped_keys.append(key)
+
+    if dropped_keys:
+        marker_candidate = dict(compacted)
+        marker_candidate["JOB_STACK_PIPELINE_CHILD_ENV_COMPACTED"] = "true"
+        if _pipeline_launch_env_size_bytes(marker_candidate) <= max_total_bytes:
+            compacted = marker_candidate
+        logger.warning(
+            "Compacted pipeline child env before launch dropped_count=%s max_total_bytes=%s",
+            len(dropped_keys),
+            max_total_bytes,
+        )
+
+    return compacted
+
+
 def _pipeline_child_env(
     *,
     extra_env: Dict[str, Any] | None = None,
@@ -8177,7 +8252,10 @@ def _pipeline_child_env(
     if "PATH" not in child_env and _clean_text(os.environ.get("PATH")):
         child_env["PATH"] = _clean_text(os.environ.get("PATH"))
 
-    return child_env
+    return _compact_pipeline_child_env(
+        child_env,
+        protected_keys={_clean_text(key) for key in dict(extra_env or {})},
+    )
 
 
 def _pipeline_child_env_summary(child_env: Dict[str, str]) -> Dict[str, Any]:
@@ -8185,9 +8263,52 @@ def _pipeline_child_env_summary(child_env: Dict[str, str]) -> Dict[str, Any]:
     return {
         "mode": "allowlist",
         "env_var_count": len(child_env or {}),
-        "env_size_bytes": sum(len(value.encode("utf-8")) for value in values),
+        "env_size_bytes": _pipeline_launch_env_size_bytes(child_env),
         "max_value_bytes": _pipeline_child_env_max_value_bytes(),
+        "max_total_bytes": _pipeline_child_env_max_total_bytes(),
+        "compacted": _clean_text(child_env.get("JOB_STACK_PIPELINE_CHILD_ENV_COMPACTED")).lower() == "true",
     }
+
+
+def _write_live_pipeline_launch_config(
+    *,
+    output_dir: Path,
+    run_id: str,
+    options: Dict[str, Any],
+) -> Path:
+    launch_config_path = output_dir / "live_pipeline_launch_config.json"
+    payload = {
+        "run_id": run_id,
+        "config_kind": "live_pipeline_launch_options",
+        "contains_selected_jobs": False,
+        "contains_job_descriptions": False,
+        "contains_planning_packets": False,
+        "contains_large_payloads": False,
+        "options": dict(options),
+    }
+    launch_config_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+    return launch_config_path
+
+
+def _validate_pipeline_subprocess_launch(cmd: List[Any], child_env: Dict[str, str]) -> None:
+    argv_size = _pipeline_launch_argv_size_bytes(cmd)
+    argv_max = _pipeline_launch_argv_max_bytes()
+    if argv_size > argv_max:
+        raise ValueError(
+            f"Live Pipeline launch command is too large ({argv_size} bytes > {argv_max} bytes). "
+            "Use bounded scalar options; selected jobs, job descriptions, planning packets, and large JSON payloads must not be passed through argv."
+        )
+
+    env_size = _pipeline_launch_env_size_bytes(child_env)
+    env_max = _pipeline_child_env_max_total_bytes()
+    if env_size > env_max:
+        raise ValueError(
+            f"Live Pipeline launch environment is too large ({env_size} bytes > {env_max} bytes). "
+            "Use run-scoped files for variable-size payloads instead of subprocess launch environment data."
+        )
 
 def run_live_pipeline_payload(
     owner_user_id: str = "",
@@ -8253,6 +8374,27 @@ def run_live_pipeline_payload(
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
     pipeline_preferences = _preferences_for_pipeline(owner_for_pipeline_gate)
     selected_role_families = pipeline_preferences.get("selected_role_families", [])
+    launch_options = {
+        "planning_only": bool(planning_only),
+        "run_application_planning": True,
+        "job_limit": int(job_limit),
+        "job_packet_limit": int(job_packet_limit),
+        "llm_actions": normalized_llm_actions.split(","),
+        "generate_tailoring": bool(generate_tailoring),
+        "generate_llm_tailoring": bool(generate_llm_tailoring),
+        "refresh_llm_tailoring": bool(refresh_llm_tailoring),
+        "generate_llm_fallback": bool(generate_llm_fallback),
+        "generate_llm_adjudication": bool(generate_llm_adjudication),
+        "delete_seen_data": normalized_delete_seen_data,
+        "output_dir": str(output_dir),
+        "preferences": pipeline_preferences,
+        "selected_role_families": selected_role_families,
+    }
+    launch_config_path = _write_live_pipeline_launch_config(
+        output_dir=output_dir,
+        run_id=run_id,
+        options=launch_options,
+    )
 
     ja = _job_app()
     effective_generate_llm_adjudication = bool(generate_llm_adjudication)
@@ -8323,6 +8465,8 @@ def run_live_pipeline_payload(
             "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
             "owner_user_id": owner_for_pipeline_gate,
             "job_corpus_path": str(pipeline_job_corpus_path),
+            "launch_config_path": str(launch_config_path),
+            "launch_config_contains_large_payloads": False,
             "preferences": pipeline_preferences,
             "selected_role_families": selected_role_families,
         },
@@ -8408,6 +8552,7 @@ def run_live_pipeline_payload(
     child_env_extra = {
         "JOB_APP_PIPELINE_STATUS_PATH": str(canonical_status_path),
         "JOB_APP_PIPELINE_RUN_ID": run_id,
+        "JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH": str(launch_config_path),
     }
 
     if owner_for_pipeline_gate:
@@ -8418,18 +8563,20 @@ def run_live_pipeline_payload(
                 "JOB_STACK_SEEN_JOBS_BACKEND": "postgres",
                 "JOB_STACK_JOB_CORPUS_PATH": str(pipeline_job_corpus_path),
                 "JOB_STACK_USER_PIPELINE_MODE": "true",
-                "JOB_STACK_SELECTED_ROLE_FAMILIES": json.dumps(selected_role_families, ensure_ascii=False),
-                "JOB_STACK_TARGET_SENIORITY": json.dumps(pipeline_preferences.get("target_seniority", []), ensure_ascii=False),
-                "JOB_STACK_PREFERRED_LOCATIONS": json.dumps(pipeline_preferences.get("preferred_locations", []), ensure_ascii=False),
-                "JOB_STACK_PREFERRED_SKILLS": json.dumps(pipeline_preferences.get("preferred_skills", []), ensure_ascii=False),
-                "JOB_STACK_EXCLUDED_KEYWORDS": json.dumps(pipeline_preferences.get("excluded_keywords", []), ensure_ascii=False),
             }
         )
 
     child_env = _pipeline_child_env(extra_env=child_env_extra)
     runtime_payload["config"]["child_env"] = _pipeline_child_env_summary(child_env)
+    runtime_payload["config"]["launch_command"] = {
+        "argv_size_bytes": _pipeline_launch_argv_size_bytes(cmd),
+        "argv_max_bytes": _pipeline_launch_argv_max_bytes(),
+        "argv_arg_count": len(cmd),
+        "large_payloads_in_argv": False,
+    }
 
     try:
+        _validate_pipeline_subprocess_launch(cmd, child_env)
         process = subprocess.Popen(
             cmd,
             stdout=log_handle,
@@ -11833,6 +11980,32 @@ def _derive_workspace_button_state_from_raw_payload(
     }
 
 
+def _infer_planning_output_dir_from_row(
+    row: Dict[str, Any],
+    *,
+    fallback_output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> str:
+    existing = _clean_text(row.get("planning_output_dir"))
+    if existing and not existing.startswith("postgres:"):
+        return existing
+
+    for key in ("tailoring_json", "tailoring_md", "tailoring_llm_json", "packet_json"):
+        raw_path = _clean_text(row.get(key))
+        if not raw_path:
+            continue
+
+        candidate = Path(raw_path).expanduser()
+        if not candidate.is_absolute():
+            continue
+
+        parent = candidate.parent
+        if parent.name == "job_packets":
+            return str(parent.parent)
+        return str(parent)
+
+    return str(fallback_output_dir)
+
+
 def _tailoring_workspace_button_state(
     row: Dict[str, Any],
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -11903,7 +12076,14 @@ def _row_matches_tailoring_state_filter(
     *,
     output_dir: Path,
 ) -> Tuple[bool, Dict[str, Any]]:
-    tailoring_state = _tailoring_workspace_button_state(row, output_dir=output_dir)
+    planning_output_dir = _infer_planning_output_dir_from_row(
+        row,
+        fallback_output_dir=output_dir,
+    )
+    tailoring_state = _tailoring_workspace_button_state(
+        row,
+        output_dir=Path(planning_output_dir),
+    )
     workspace_state = _clean_text(tailoring_state.get("tailoring_workspace_state")).lower()
 
     normalized_state = "unavailable" if workspace_state == "empty" else workspace_state
@@ -11914,6 +12094,7 @@ def _row_matches_tailoring_state_filter(
         **tailoring_state,
     }
     enriched_row["tailoring_workspace_state"] = normalized_state
+    enriched_row["planning_output_dir"] = planning_output_dir
 
     return matches, enriched_row
 

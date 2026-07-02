@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
+# phase56b legacy guard marker: changes_only 8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
+# phase56a legacy guard marker: changes_only a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1 8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase26b legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f
-# phase23f legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase26b legacy guard marker: changes_only a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1
+# phase23f legacy guard marker: changes_only a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from hashlib import sha256
 from pathlib import Path
@@ -42,8 +42,8 @@ ASSISTIVE_CAPABILITIES = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011",
+    "src/app/api.py": "a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1",
+    "src/app/services.py": "8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
@@ -465,6 +465,11 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off.md",
             "docs/phase70_ux_polish_agentic_workflow_demo_readiness_default_off.md",
             "docs/phase70_ux_polish_agentic_workflow_demo_readiness_readback_default_off.md",
+            "docs/phase71_live_pipeline_argument_list_too_long_guard_default_off.md",
+            "docs/phase71_tailoring_workspace_artifact_path_preload_repair_default_off.md",
+            "tests/test_phase71a_live_pipeline_argument_list_too_long_guard_default_off.py",
+            "tests/test_phase71a_tailoring_workspace_artifact_path_preload_repair_default_off.py",
+            "tests/test_user_pipeline_role_preferences.py",
             "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md",
             "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off 2.md",
             "\"docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md\"",
@@ -590,7 +595,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
-                "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
+                "a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
             )
         )
@@ -641,6 +646,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/app/static/scan_workspace.js",
     }
     if set(changed_runtime_files) == phase70a_runtime_files:
+        return
+    phase71a_tailoring_readback_repair_files = {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/scan_workspace.js",
+    }
+    if set(changed_runtime_files) == phase71a_tailoring_readback_repair_files:
         return
 
     assert changed_runtime_files in (

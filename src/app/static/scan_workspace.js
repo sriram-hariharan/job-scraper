@@ -1683,7 +1683,17 @@ function getScanWorkspaceContext() {
   return {
     tailoringJsonPath: String(root.dataset.tailoringJsonPath || "").trim(),
     resumeName: String(root.dataset.resumeName || "").trim(),
+    planningOutputDir: String(root.dataset.planningOutputDir || "").trim(),
   };
+}
+
+function buildScanWorkspacePlanningEndpoint(path, outputDir = "") {
+  const safeOutputDir = String(outputDir || "").trim();
+  if (!safeOutputDir) return path;
+
+  const params = new URLSearchParams();
+  params.set("output_dir", safeOutputDir);
+  return `${path}?${params.toString()}`;
 }
 
 function getScanWorkspaceHasPreselectedResume() {
@@ -3473,6 +3483,7 @@ function setScanWorkspaceScoreLoading(isLoading) {
 
 async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [], options = {}) {
   const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds, options);
+  const context = getScanWorkspaceContext();
 
   if (!requestBody) {
     const inlinePreview = getScanWorkspaceInlineDocumentPreview();
@@ -3491,11 +3502,17 @@ async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(
-            "/planning/render-workspace-draft-preview",
+            buildScanWorkspacePlanningEndpoint(
+              "/planning/render-workspace-draft-preview",
+              context?.planningOutputDir
+            ),
             requestBody,
             20000
           )
-        : await fetch("/planning/render-workspace-draft-preview", {
+        : await fetch(buildScanWorkspacePlanningEndpoint(
+            "/planning/render-workspace-draft-preview",
+            context?.planningOutputDir
+          ), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
@@ -3526,6 +3543,7 @@ async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [
 
 async function requestScanWorkspaceScorePreview(selectedPatchCandidateIds = []) {
   const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds);
+  const context = getScanWorkspaceContext();
 
   if (!requestBody) {
     return {
@@ -3538,11 +3556,17 @@ async function requestScanWorkspaceScorePreview(selectedPatchCandidateIds = []) 
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(
-            "/planning/preview-workspace-draft",
+            buildScanWorkspacePlanningEndpoint(
+              "/planning/preview-workspace-draft",
+              context?.planningOutputDir
+            ),
             requestBody,
             20000
           )
-        : await fetch("/planning/preview-workspace-draft", {
+        : await fetch(buildScanWorkspacePlanningEndpoint(
+            "/planning/preview-workspace-draft",
+            context?.planningOutputDir
+          ), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
@@ -4137,17 +4161,22 @@ async function loadScanWorkspaceDraftState() {
   renderScanWorkspacePersistenceStatus();
 
   try {
+    const context = getScanWorkspaceContext();
+    const loadUrl = buildScanWorkspacePlanningEndpoint(
+      "/planning/load-workspace-draft",
+      context?.planningOutputDir
+    );
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(
-            "/planning/load-workspace-draft",
+            loadUrl,
             {
               tailoring_json_path: payload.tailoring_json_path,
               selected_resume: payload.selected_resume,
             },
             15000
           )
-        : await fetch("/planning/load-workspace-draft", {
+        : await fetch(loadUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -4242,7 +4271,10 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
   try {
     const saveUrl = payload.saved_scan_id
       ? `/planning/saved-scan/${encodeURIComponent(payload.saved_scan_id)}/state`
-      : "/planning/save-workspace-draft";
+      : buildScanWorkspacePlanningEndpoint(
+          "/planning/save-workspace-draft",
+          getScanWorkspaceContext()?.planningOutputDir
+        );
     const requestPayload = payload.saved_scan_id
       ? {
           selected_patch_candidate_ids: payload.selected_patch_candidate_ids || [],
@@ -4419,7 +4451,10 @@ async function exportScanWorkspaceDraft(format = "pdf") {
       return false;
     }
 
-    const response = await fetch("/planning/export-workspace-draft", {
+    const response = await fetch(buildScanWorkspacePlanningEndpoint(
+      "/planning/export-workspace-draft",
+      getScanWorkspaceContext()?.planningOutputDir
+    ), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

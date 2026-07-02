@@ -3401,9 +3401,13 @@ def planning_select_patches(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.post("/planning/load-workspace-draft")
-def load_workspace_draft(request: PlanningWorkspaceDraftLoadRequest):
+def load_workspace_draft(
+    request: PlanningWorkspaceDraftLoadRequest,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
     try:
         return services.load_tailoring_workspace_draft_payload(
+            output_dir=Path(output_dir),
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
         )
@@ -3412,9 +3416,13 @@ def load_workspace_draft(request: PlanningWorkspaceDraftLoadRequest):
 
 
 @app.post("/planning/save-workspace-draft")
-def save_workspace_draft(request: PlanningWorkspaceDraftSaveRequest):
+def save_workspace_draft(
+    request: PlanningWorkspaceDraftSaveRequest,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
     try:
         return services.save_tailoring_workspace_draft_payload(
+            output_dir=Path(output_dir),
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
             selected_patch_candidate_ids=request.selected_patch_candidate_ids,

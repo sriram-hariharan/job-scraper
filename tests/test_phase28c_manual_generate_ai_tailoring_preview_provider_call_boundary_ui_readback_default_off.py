@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
+# phase56b legacy guard marker: changes_only 8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
+# phase56a legacy guard marker: changes_only a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1 8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -17,8 +17,8 @@ ENDPOINT = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011",
+    "src/app/api.py": "a5c53d82f9bd54c92e3a1415eaca5b24440503b074a2e7df129f9ddf74fc86e1",
+    "src/app/services.py": "8e395e986ed0a2aab8ce2a4db41bc03a89a3fb3f6753f0a2aed1948f83843736",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
@@ -434,6 +434,11 @@ def test_phase28c_changes_only_static_doc_test_and_legacy_guards():
             "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off.md",
             "docs/phase70_ux_polish_agentic_workflow_demo_readiness_default_off.md",
             "docs/phase70_ux_polish_agentic_workflow_demo_readiness_readback_default_off.md",
+            "docs/phase71_live_pipeline_argument_list_too_long_guard_default_off.md",
+            "docs/phase71_tailoring_workspace_artifact_path_preload_repair_default_off.md",
+            "tests/test_phase71a_live_pipeline_argument_list_too_long_guard_default_off.py",
+            "tests/test_phase71a_tailoring_workspace_artifact_path_preload_repair_default_off.py",
+            "tests/test_user_pipeline_role_preferences.py",
             "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md",
             "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off 2.md",
             "\"docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md\"",

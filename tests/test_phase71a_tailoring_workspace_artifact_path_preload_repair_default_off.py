@@ -347,6 +347,94 @@ def test_browse_tailoring_state_filters_separate_unavailable_and_no_safe_rewrite
     assert ready_payload["rows"][0]["tailoring_actionable_replacement_count"] == 1
 
 
+def test_authenticated_browse_tailoring_filter_uses_run_scoped_config_output_dir(
+    monkeypatch, tmp_path
+):
+    output_dir = tmp_path / "pipeline_runs" / "owner-1" / "run-1" / "application_planning"
+    empty_tailoring_artifact = _write_tailoring_artifact(output_dir, suggestions=False)
+    direction_only_llm_artifact = _write_direction_only_tailoring_artifact(
+        output_dir / "direction_only"
+    )
+    ready_artifact = _write_tailoring_artifact(output_dir / "ready", suggestions=True)
+
+    manifest_path = output_dir / "job_packet_manifest.csv"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        "\n".join(
+            [
+                "queue_rank,job_doc_id,job_company,job_title,packet_status,tailoring_json,tailoring_llm_json,packet_json",
+                "1,job-no-artifact,No Artifact Co,Pending Variant,pending_variant_selection,,,",
+                (
+                    "2,job-direction-only,Direction Co,Direction Only,generated,"
+                    f"{empty_tailoring_artifact},{direction_only_llm_artifact},"
+                    f"{output_dir / 'job_packets' / 'direction.json'}"
+                ),
+                (
+                    "3,job-ready,Ready Co,Ready Role,generated,"
+                    f"{ready_artifact},,{output_dir / 'ready' / 'job_packets' / 'ready.json'}"
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_runs_payload(**kwargs):
+        return {
+            "rows": [
+                {
+                    "run_id": "run-1",
+                    "status": "succeeded",
+                    "status_json": {
+                        "config": {
+                            "storage_mode": "run_scoped_scratch",
+                            "job_corpus_path": str(output_dir / "current_run_job_corpus.jsonl"),
+                            "launch_config_path": str(output_dir / "live_pipeline_launch_config.json"),
+                            "status_path": str(output_dir / "live_pipeline_status.json"),
+                            "log_path": str(output_dir / "live_pipeline_run.log"),
+                        }
+                    },
+                }
+            ]
+        }
+
+    def fail_if_postgres_artifacts_are_needed(**kwargs):
+        raise AssertionError("filesystem run-scoped output should be discoverable from run config paths")
+
+    monkeypatch.setattr(services, "get_user_pipeline_runs_postgres_payload", fake_runs_payload)
+    monkeypatch.setattr(
+        services,
+        "get_user_pipeline_artifacts_postgres_payload",
+        fail_if_postgres_artifacts_are_needed,
+    )
+    monkeypatch.setattr(services._job_app(), "_overlay_operator_decisions", lambda rows: rows)
+    monkeypatch.setattr(services, "_overlay_application_actions", lambda rows, owner_user_id="": rows)
+    monkeypatch.setattr(services, "_exclude_applied_rows", lambda rows: rows)
+
+    unavailable_payload = services.browse_payload(
+        owner_user_id="owner-1",
+        tailoring_state=["unavailable"],
+        limit=15,
+    )
+    no_safe_payload = services.browse_payload(
+        owner_user_id="owner-1",
+        tailoring_state=["no_safe_rewrites"],
+        limit=15,
+    )
+    ready_payload = services.browse_payload(
+        owner_user_id="owner-1",
+        tailoring_state=["ready"],
+        limit=15,
+    )
+
+    assert [row["job_doc_id"] for row in unavailable_payload["rows"]] == ["job-no-artifact"]
+    assert [row["job_doc_id"] for row in no_safe_payload["rows"]] == ["job-direction-only"]
+    assert [row["job_doc_id"] for row in ready_payload["rows"]] == ["job-ready"]
+    assert no_safe_payload["rows"][0]["tailoring_workspace_state"] == "no_safe_rewrites"
+    assert no_safe_payload["rows"][0]["tailoring_actionable_replacement_count"] == 0
+    assert ready_payload["rows"][0]["tailoring_workspace_state"] == "ready"
+    assert ready_payload["rows"][0]["tailoring_actionable_replacement_count"] == 1
+
+
 def test_source_resume_preview_uses_resume_resolver_not_planning_artifact_guard(monkeypatch, tmp_path):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)
@@ -768,6 +856,8 @@ def test_planning_table_workspace_button_blocks_rows_without_actionable_content(
     assert 'workspaceState === "no_safe_rewrites"' in planning_js
     assert 'data-value="no_safe_rewrites"' in planning_ui_source
     assert "No safe rewrites" in planning_ui_source
+    assert 'appendMultiValueParams(params, "tailoring_state", tailoringStates)' in planning_js
+    assert 'params.getAll("tailoring_state")' in planning_js
     assert "LLM tailoring generation is off for this row." in planning_js
     assert "data-workspace-blocked-reason" in planning_js
     assert 'const disabledAttr = hasArtifacts && !blockedReason ? "" : "disabled";' in planning_js

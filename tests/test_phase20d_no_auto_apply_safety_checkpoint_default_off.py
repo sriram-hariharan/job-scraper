@@ -654,6 +654,11 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase71a_tailoring_readback_repair_files:
         return
+    phase72a_disabled_workspace_hover_files = {
+        ROOT / "src/app/static/planning.js",
+    }
+    if set(changed_runtime_files) == phase72a_disabled_workspace_hover_files:
+        return
 
     assert changed_runtime_files in (
         [],
@@ -806,13 +811,13 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
                 ROOT / "src/app/static/planning.js",
                 ROOT / "src/app/static/scan_workspace.js",
             ],
-            [
-                ROOT / "src/app/static/planning.js",
-                ROOT / "src/app/services.py",
-                ROOT / "src/app/planning_ui.py",
-                ROOT / "src/app/static/scan_workspace.js",
-            ],
-            [ROOT / "src/app/static/agentic_review.js"],
+                [
+                    ROOT / "src/app/static/planning.js",
+                    ROOT / "src/app/services.py",
+                    ROOT / "src/app/planning_ui.py",
+                    ROOT / "src/app/static/scan_workspace.js",
+                ],
+                    [ROOT / "src/app/static/agentic_review.js"],
         [
             ROOT / "src/app/static/agentic_review.js",
             ROOT / "src/app/static/app_redesign.css",

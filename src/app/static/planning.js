@@ -12042,7 +12042,7 @@ function buildTailoringButtonHtml(row) {
   const blockedReason = hasArtifacts ? getWorkspaceBlockedReason(row) : "";
 
   const label = hasArtifacts ? "Open Workspace" : "Unavailable";
-  const disabledAttr = hasArtifacts ? "" : "disabled";
+  const disabledAttr = hasArtifacts && !blockedReason ? "" : "disabled";
 
   let stateClass = "planning-tailoring-btn--empty";
   let titleText = "No tailoring artifacts available for this row.";
@@ -12104,7 +12104,6 @@ function buildTailoringButtonHtml(row) {
 async function handleTailoringClick(button) {
   const blockedReason = String(button.dataset.workspaceBlockedReason || "").trim();
   if (blockedReason) {
-    showAppError("Workspace unavailable", new Error(blockedReason));
     return;
   }
 
@@ -12604,4 +12603,3 @@ window.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 });
-

@@ -573,7 +573,8 @@ def test_planning_table_workspace_button_blocks_rows_without_actionable_content(
     assert "No safe bullet-level rewrites were found for this row." in planning_js
     assert "LLM tailoring generation is off for this row." in planning_js
     assert "data-workspace-blocked-reason" in planning_js
-    assert 'showAppError("Workspace unavailable", new Error(blockedReason))' in planning_js
+    assert 'const disabledAttr = hasArtifacts && !blockedReason ? "" : "disabled";' in planning_js
+    assert 'showAppError("Workspace unavailable", new Error(blockedReason))' not in planning_js
     assert "actionableCount <= 0" in planning_js
     assert '"review"' in planning_js
     assert '"unavailable"' in planning_js
@@ -587,6 +588,7 @@ def test_planning_table_workspace_button_preserves_eligible_navigation():
     )[0]
 
     assert "button.dataset.workspaceBlockedReason" in handler_source
+    assert 'showAppError("Workspace unavailable"' not in handler_source
     assert "window.location.href = buildTailoringWorkspaceUrl(row);" in handler_source
     assert handler_source.index("button.dataset.workspaceBlockedReason") < handler_source.index(
         "window.location.href = buildTailoringWorkspaceUrl(row);"

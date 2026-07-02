@@ -1,3 +1,7 @@
+# phase72b legacy guard marker: changes_only run_scoped_pipeline_output_readback
+# phase72b legacy static hash guard marker: 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
+# phase72b legacy api/static guard marker: 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
+# phase72b legacy api literal guard marker: src/app/api.py
 import json
 import sys
 import tempfile
@@ -283,3 +287,72 @@ def test_latest_owner_status_heals_stale_running_row_from_terminal_status_json()
     assert captured["updated"]["completed_at"] == "2026-05-22T06:54:21Z"
     assert captured["updated"]["status_json"]["is_running"] is False
     assert captured["released"]["run_id"] == "run_status_json"
+
+
+def test_latest_owner_status_exposes_run_scoped_output_status_and_log_paths():
+    output_dir = "tmp/pipeline_runs/user_status/run_paths/application_planning"
+    log_path = f"{output_dir}/live_pipeline_run.log"
+    status_path = f"{output_dir}/live_pipeline_status.json"
+    terminal_json = {
+        **_terminal_status_payload("run_paths"),
+        "output_dir": output_dir,
+        "log_path": log_path,
+        "status_path": status_path,
+        "config": {
+            "storage_mode": "run_scoped_scratch",
+            "launch_config_path": f"{output_dir}/live_pipeline_launch_config.json",
+            "job_corpus_path": f"{output_dir}/current_run_job_corpus.jsonl",
+        },
+    }
+    originals = {
+        "get_latest_user_pipeline_run_postgres_payload": services.get_latest_user_pipeline_run_postgres_payload,
+        "update_user_pipeline_run_status_postgres_payload": services.update_user_pipeline_run_status_postgres_payload,
+        "get_user_pipeline_active_run_postgres_payload": services.get_user_pipeline_active_run_postgres_payload,
+        "release_user_pipeline_active_run_postgres_payload": services.release_user_pipeline_active_run_postgres_payload,
+        "_release_user_pipeline_redis_admission_lock_payload": services._release_user_pipeline_redis_admission_lock_payload,
+        "_clear_owner_active_pipeline_state": services._clear_owner_active_pipeline_state,
+        "user_pipeline_gate_payload": services.user_pipeline_gate_payload,
+    }
+
+    services.get_latest_user_pipeline_run_postgres_payload = lambda **kwargs: {
+        "found": True,
+        "run": {
+            "run_id": "run_paths",
+            "owner_user_id": "user_status",
+            "status": "succeeded",
+            "current_stage": "",
+            "stage_message": "Completed: 4 final jobs",
+            "summary_message": "Completed: 4 final jobs",
+            "return_code": 0,
+            "started_at": "2026-07-02T08:35:16Z",
+            "completed_at": "2026-07-02T08:36:16Z",
+            "config_json": {
+                "output_dir": output_dir,
+                "log_path": log_path,
+                "status_path": status_path,
+                "config": {"storage_mode": "run_scoped_scratch"},
+            },
+            "status_json": terminal_json,
+            "error": "",
+        },
+    }
+    services.update_user_pipeline_run_status_postgres_payload = lambda **kwargs: {}
+    services.get_user_pipeline_active_run_postgres_payload = lambda **kwargs: {
+        "found": False,
+        "active_run": {},
+    }
+    services.release_user_pipeline_active_run_postgres_payload = lambda **kwargs: {}
+    services._release_user_pipeline_redis_admission_lock_payload = lambda payload: None
+    services._clear_owner_active_pipeline_state = lambda owner_user_id, run_id="": None
+    services.user_pipeline_gate_payload = lambda owner_user_id: {"ok": True}
+
+    try:
+        payload = services._latest_owner_pipeline_status_payload(owner_user_id="user_status")
+    finally:
+        _restore(originals)
+
+    assert payload["status"] == "succeeded"
+    assert payload["output_dir"] == output_dir
+    assert payload["log_path"] == log_path
+    assert payload["status_path"] == status_path
+    assert payload["status_json"]["config"]["storage_mode"] == "run_scoped_scratch"

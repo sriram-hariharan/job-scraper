@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff
+# phase56b legacy guard marker: changes_only 56d8d73b5891c88ba482fe8a28a634010b5664408ddf35aabcbc89c8aee5005f 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 56d8d73b5891c88ba482fe8a28a634010b5664408ddf35aabcbc89c8aee5005f
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
 from hashlib import sha256
@@ -175,7 +175,7 @@ DOC_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/services.py": "e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff",
+    "src/app/services.py": "56d8d73b5891c88ba482fe8a28a634010b5664408ddf35aabcbc89c8aee5005f",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",

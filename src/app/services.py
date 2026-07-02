@@ -6534,6 +6534,8 @@ def _latest_owner_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, An
 
     status = _clean_text(run.get("status")) or "idle"
     running = status in {"queued", "running", "starting"}
+    status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
+    config_json = run.get("config_json") if isinstance(run.get("config_json"), dict) else {}
 
     return {
         "ok": True,
@@ -6550,13 +6552,14 @@ def _latest_owner_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, An
         "finished_at": _clean_text(run.get("completed_at")),
         "return_code": run.get("return_code"),
         "command": [],
-        "output_dir": "",
-        "log_path": "",
-        "status_path": "",
+        "output_dir": _pipeline_run_output_dir_from_record(run),
+        "log_path": _pipeline_run_log_path_from_record(run),
+        "status_path": _pipeline_run_status_path_from_record(run),
         "run_id": _clean_text(run.get("run_id")),
         "child_pid": None,
         "error": _clean_text(run.get("error")),
-        "status_json": run.get("status_json") or {},
+        "status_json": status_json,
+        "config_json": config_json,
     }
 
 
@@ -6656,6 +6659,41 @@ def _persist_user_pipeline_status_snapshot(
 
 def _pipeline_artifact_ingestion_key(*, owner_user_id: str, run_id: str) -> str:
     return f"{_clean_text(owner_user_id)}:{_clean_text(run_id)}"
+
+
+def _pipeline_run_status_config(run: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
+    config_json = run.get("config_json") if isinstance(run.get("config_json"), dict) else {}
+    nested_config = config_json.get("config") if isinstance(config_json.get("config"), dict) else {}
+    status_config = status_json.get("config") if isinstance(status_json.get("config"), dict) else {}
+    return status_json, config_json, nested_config or status_config or {}
+
+
+def _pipeline_run_output_dir_from_record(run: Dict[str, Any]) -> str:
+    status_json, config_json, nested_config = _pipeline_run_status_config(run)
+    return (
+        _clean_text(config_json.get("output_dir"))
+        or _clean_text(status_json.get("output_dir"))
+        or _clean_text(nested_config.get("output_dir"))
+    )
+
+
+def _pipeline_run_log_path_from_record(run: Dict[str, Any]) -> str:
+    status_json, config_json, nested_config = _pipeline_run_status_config(run)
+    return (
+        _clean_text(config_json.get("log_path"))
+        or _clean_text(status_json.get("log_path"))
+        or _clean_text(nested_config.get("log_path"))
+    )
+
+
+def _pipeline_run_status_path_from_record(run: Dict[str, Any]) -> str:
+    status_json, config_json, nested_config = _pipeline_run_status_config(run)
+    return (
+        _clean_text(config_json.get("status_path"))
+        or _clean_text(status_json.get("status_path"))
+        or _clean_text(nested_config.get("status_path"))
+    )
 
 
 def _pipeline_artifact_candidate_paths(output_dir: Path) -> List[Path]:
@@ -7054,6 +7092,7 @@ def _pipeline_scratch_cleanup_payload(
             "attempted": False,
             "skipped": "keep_scratch_enabled",
             "scratch_deleted": False,
+            "scratch_retained": True,
         }
 
     if not bool(dict(artifact_ingestion or {}).get("ok", False)):
@@ -7062,6 +7101,7 @@ def _pipeline_scratch_cleanup_payload(
             "attempted": False,
             "skipped": "artifact_ingestion_not_ok",
             "scratch_deleted": False,
+            "scratch_retained": False,
         }
 
     if not owner or not safe_run_id or not raw_output_dir:
@@ -7070,12 +7110,13 @@ def _pipeline_scratch_cleanup_payload(
             "attempted": False,
             "skipped": "missing_owner_run_or_output_dir",
             "scratch_deleted": False,
+            "scratch_retained": False,
         }
 
     output_path = Path(raw_output_dir).expanduser()
     parts = output_path.parts
 
-    # Only delete the canonical run-scoped scratch shape:
+    # Only recognize the canonical run-scoped scratch shape:
     # tmp/pipeline_runs/<owner_user_id>/<run_id>/application_planning
     if len(parts) < 5:
         return {
@@ -7084,6 +7125,7 @@ def _pipeline_scratch_cleanup_payload(
             "skipped": "unsafe_output_dir_shape",
             "output_dir": str(output_path),
             "scratch_deleted": False,
+            "scratch_retained": False,
         }
 
     if not (
@@ -7099,6 +7141,7 @@ def _pipeline_scratch_cleanup_payload(
             "skipped": "non_canonical_output_dir",
             "output_dir": str(output_path),
             "scratch_deleted": False,
+            "scratch_retained": False,
         }
 
     run_root = output_path.parent
@@ -7110,25 +7153,17 @@ def _pipeline_scratch_cleanup_payload(
             "skipped": "scratch_already_missing",
             "scratch_dir": str(run_root),
             "scratch_deleted": False,
-        }
-
-    try:
-        shutil.rmtree(run_root)
-    except Exception as exc:
-        return {
-            "ok": False,
-            "attempted": True,
-            "scratch_dir": str(run_root),
-            "scratch_deleted": False,
-            "error_type": exc.__class__.__name__,
-            "error": str(exc),
+            "scratch_retained": False,
         }
 
     return {
         "ok": True,
-        "attempted": True,
+        "attempted": False,
         "scratch_dir": str(run_root),
-        "scratch_deleted": True,
+        "output_dir": str(output_path),
+        "skipped": "run_scoped_readback_retained",
+        "scratch_deleted": False,
+        "scratch_retained": True,
     }
 
 
@@ -26503,6 +26538,13 @@ def _latest_user_pipeline_artifact_context(
     if not run_id:
         return {}
 
+    filesystem_context = _latest_user_pipeline_filesystem_context(
+        owner_user_id=owner,
+        run=run,
+    )
+    if filesystem_context:
+        return filesystem_context
+
     artifacts_payload = get_user_pipeline_artifacts_postgres_payload(
         owner_user_id=owner,
         run_id=run_id,
@@ -26547,6 +26589,64 @@ def _latest_user_pipeline_artifact_context(
         "operator_review_rows": _csv_rows_from_text(operator_review_text),
         "agentic_workflow_summary": workflow_summary,
         "agentic_workflow_verification": workflow_verification,
+        "current_run_job_corpus_text": corpus_text,
+        "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
+    }
+
+
+def _read_text_if_file(path: Path) -> str:
+    try:
+        if path.exists() and path.is_file():
+            return path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+    return ""
+
+
+def _latest_user_pipeline_filesystem_context(
+    *,
+    owner_user_id: str = "",
+    run: Dict[str, Any],
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    run_id = _clean_text(run.get("run_id"))
+    output_dir_text = _pipeline_run_output_dir_from_record(run)
+    if not owner or not run_id or not output_dir_text:
+        return {}
+
+    output_dir = Path(output_dir_text).expanduser()
+    if not output_dir.exists() or not output_dir.is_dir():
+        return {}
+
+    best_text = _read_text_if_file(output_dir / "best_resume_variant_by_job.csv")
+    shortlist_text = _read_text_if_file(output_dir / "application_shortlist_by_job.csv")
+    queue_text = _read_text_if_file(output_dir / "application_execution_queue.csv")
+    manifest_text = _read_text_if_file(output_dir / "job_packet_manifest.csv")
+    priority_text = _read_text_if_file(output_dir / "job_prioritization_recommendations.csv")
+    tailoring_decision_text = _read_text_if_file(output_dir / "tailoring_decision_recommendations.csv")
+    operator_review_text = _read_text_if_file(output_dir / "operator_review_recommendations.csv")
+    corpus_text = _read_text_if_file(output_dir / "current_run_job_corpus.jsonl")
+
+    if not any([best_text, queue_text, manifest_text]):
+        return {}
+
+    return {
+        "ok": True,
+        "artifact_source": "filesystem:user_pipeline_run_output",
+        "owner_user_id": owner,
+        "run_id": run_id,
+        "run": run,
+        "output_dir": str(output_dir),
+        "artifacts": [],
+        "best_rows": _csv_rows_from_text(best_text),
+        "shortlist_rows": _csv_rows_from_text(shortlist_text),
+        "queue_rows": _csv_rows_from_text(queue_text),
+        "manifest_rows": _csv_rows_from_text(manifest_text),
+        "job_prioritization_rows": _csv_rows_from_text(priority_text),
+        "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
+        "operator_review_rows": _csv_rows_from_text(operator_review_text),
+        "agentic_workflow_summary": _agentic_workflow_summary_from_dir(output_dir),
+        "agentic_workflow_verification": _agentic_workflow_verification_from_dir(output_dir),
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
     }
@@ -26672,11 +26772,14 @@ def status_payload(
             manifest_rows=manifest_rows,
         )
         job_corpus_rows = int(artifact_context.get("job_corpus_rows", 0) or 0)
-        planning_output_dir_value = (
-            f"postgres:user_pipeline_artifacts/"
-            f"{artifact_context.get('owner_user_id', '')}/"
-            f"{artifact_context.get('run_id', '')}"
-        )
+        if _clean_text(artifact_context.get("output_dir")):
+            planning_output_dir_value = _clean_text(artifact_context.get("output_dir"))
+        else:
+            planning_output_dir_value = (
+                f"postgres:user_pipeline_artifacts/"
+                f"{artifact_context.get('owner_user_id', '')}/"
+                f"{artifact_context.get('run_id', '')}"
+            )
     else:
         best_rows = ja._load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
         shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
@@ -26867,6 +26970,11 @@ def browse_payload(
 
     try:
         artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
+        effective_output_dir = (
+            Path(_clean_text(artifact_context.get("output_dir"))).expanduser()
+            if artifact_context and _clean_text(artifact_context.get("output_dir"))
+            else output_dir
+        )
         if artifact_context:
             job_prioritization_by_key = _job_prioritization_overlay_from_rows(
                 list(artifact_context.get("job_prioritization_rows", []) or [])
@@ -26921,7 +27029,7 @@ def browse_payload(
                 matches, enriched_row = _row_matches_tailoring_state_filter(
                     row,
                     requested_tailoring_states,
-                    output_dir=output_dir,
+                    output_dir=effective_output_dir,
                 )
                 if matches:
                     enriched_selected.append(enriched_row)
@@ -26952,7 +27060,7 @@ def browse_payload(
             _, enriched_row = _row_matches_tailoring_state_filter(
                 row,
                 [],
-                output_dir=output_dir,
+                output_dir=effective_output_dir,
             )
             finalized_page_rows.append(enriched_row)
 

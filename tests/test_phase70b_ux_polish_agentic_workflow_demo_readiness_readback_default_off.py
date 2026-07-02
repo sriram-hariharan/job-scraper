@@ -12,8 +12,8 @@ DOC_PATH = (
 SCAN_WORKSPACE_JS = ROOT / "src/app/static/scan_workspace.js"
 PLANNING_UI = ROOT / "src/app/planning_ui.py"
 PROTECTED_HASHES = {
-    "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011",
+    "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
+    "src/app/services.py": "e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff",
     "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
     "src/matching/dimensions.py": "3ccd5e87b9a8aee7901b3efb5ef7582b0fd652aa498f862d0486fbbd97740b9b",
     "application_execution_" + "queue" + ".py": (

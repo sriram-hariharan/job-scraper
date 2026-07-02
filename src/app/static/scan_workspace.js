@@ -1,3 +1,15 @@
+
+function phase71bDeriveRunScopedPlanningOutputDir(path) {
+  const raw = String(path || "").replace(/\\/g, "/");
+  const marker = "/application_planning/job_packets/";
+  const idx = raw.indexOf(marker);
+  if (idx < 0) {
+    return "";
+  }
+  return raw.slice(0, idx + "/application_planning".length);
+}
+
+
 const SCAN_WORKSPACE_MODES = ["new_scan", "processing", "review", "compare"];
 
 const SCAN_WORKSPACE_PROCESSING_STAGES = [
@@ -1577,7 +1589,7 @@ function renderScanWorkspaceProductionReadinessCheckpoint(readbackPayload = null
 
 function getScanWorkspaceHasTailoringPreviewContext() {
   const context = getScanWorkspaceContext();
-  return Boolean(context?.tailoringJsonPath && context?.resumeName);
+  return Boolean(getScanWorkspaceArtifactKey(context) && context?.resumeName);
 }
 
 function firstNonEmptyScanWorkspaceText(...values) {
@@ -1682,8 +1694,59 @@ function getScanWorkspaceContext() {
 
   return {
     tailoringJsonPath: String(root.dataset.tailoringJsonPath || "").trim(),
+    tailoringJsonKey: String(root.dataset.tailoringJsonKey || "").trim(),
     resumeName: String(root.dataset.resumeName || "").trim(),
+    packetJsonPath: String(root.dataset.packetJsonPath || "").trim(),
+    packetJsonKey: String(root.dataset.packetJsonKey || "").trim(),
+    planningOutputDir: String(root.dataset.planningOutputDir || "").trim(),
   };
+}
+
+function getScanWorkspaceArtifactKey(context) {
+  return String(context?.tailoringJsonKey || context?.tailoringJsonPath || "").trim();
+}
+
+function getScanWorkspaceBasePacketKey(context) {
+  return String(context?.packetJsonKey || context?.packetJsonPath || "").trim();
+}
+
+function isScanWorkspaceOptionalTailoringArtifactPath(value) {
+  const name = String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    .toLowerCase();
+  return name.endsWith("__tailoring.json") || name.endsWith("_tailoring.json");
+}
+
+function normalizeScanWorkspaceResumePreviewName(value) {
+  const safeName = String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    .trim();
+  if (!safeName || safeName.toLowerCase().endsWith(".json") || isScanWorkspaceOptionalTailoringArtifactPath(safeName)) {
+    return "";
+  }
+  return safeName;
+}
+
+function buildScanWorkspacePlanningEndpoint(path, outputDir = "") {
+  const phase71bArtifactPathForOutputDir =
+    typeof safePath !== "undefined" ? safePath :
+    typeof path !== "undefined" ? path :
+    typeof artifactPath !== "undefined" ? artifactPath :
+    typeof tailoringJsonPath !== "undefined" ? tailoringJsonPath :
+    "";
+  const derivedOutputDir = phase71bDeriveRunScopedPlanningOutputDir(phase71bArtifactPathForOutputDir);
+  const safeOutputDir = String(derivedOutputDir || outputDir || "").trim();
+  if (!safeOutputDir) return path;
+
+  const params = new URLSearchParams();
+  params.set("output_dir", safeOutputDir);
+  return `${path}?${params.toString()}`;
 }
 
 function getScanWorkspaceHasPreselectedResume() {
@@ -2226,7 +2289,8 @@ async function handleScanWorkspaceResumeFileSelected() {
 async function buildScanWorkspaceStartScanPayload(draft) {
   const root = getScanWorkspacePageRoot();
   const resumeName = String(draft.savedResumeName || root?.dataset?.resumeName || "").trim();
-  const tailoringJsonPath = String(root?.dataset?.tailoringJsonPath || "").trim();
+  const context = getScanWorkspaceContext();
+  const suggestionArtifactPath = getScanWorkspaceArtifactKey(context);
   const jobDocId = String(root?.dataset?.jobDocId || "").trim();
   const scanId = String(root?.dataset?.rescanScanId || "").trim();
 
@@ -2237,9 +2301,9 @@ async function buildScanWorkspaceStartScanPayload(draft) {
     job_url: draft.jobUrl || "",
     job_doc_id: jobDocId || "",
     job_description_text: draft.jobDescriptionText || "",
+    tailoring_json_path: suggestionArtifactPath || "",
     saved_resume_name: resumeName || "",
     resume_text: "",
-    tailoring_json_path: tailoringJsonPath || "",
     upload_filename: "",
     upload_content_type: "",
     upload_base64: "",
@@ -2916,12 +2980,12 @@ function buildScanWorkspacePersistencePayload() {
     };
   }
 
-  if (!context || !context.tailoringJsonPath || !context.resumeName) {
+  if (!context || !getScanWorkspaceArtifactKey(context) || !context.resumeName) {
     return null;
   }
 
   return {
-    tailoring_json_path: context.tailoringJsonPath,
+    tailoring_json_path: getScanWorkspaceArtifactKey(context),
     selected_resume: context.resumeName,
     selected_patch_candidate_ids: getEffectiveAcceptedCompareCandidateIds(),
     manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
@@ -3139,7 +3203,7 @@ function renderScanWorkspacePersistenceStatus() {
   const rescanBtn = getScanWorkspaceInput("scanWorkspaceRescanBtn");
 
   const context = getScanWorkspaceContext();
-  const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
+  const hasContext = Boolean(getScanWorkspaceArtifactKey(context) && context?.resumeName);
   const savedScanId = String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim();
   const entrySource = String(scanWorkspaceState.preloadPayload?.scan_entry_source || "").trim();
   const isSavedNewScan = Boolean(savedScanId && entrySource === "scan_workspace_new_scan");
@@ -3372,12 +3436,12 @@ function buildScanWorkspaceDocumentPreviewRequest(
   { manualBulletEdits = getScanWorkspaceManualBulletEdits() } = {}
 ) {
   const context = getScanWorkspaceContext();
-  if (!context || !context.tailoringJsonPath || !context.resumeName) {
+  if (!context || !getScanWorkspaceArtifactKey(context) || !context.resumeName) {
     return null;
   }
 
   return {
-    tailoring_json_path: context.tailoringJsonPath,
+    tailoring_json_path: getScanWorkspaceArtifactKey(context),
     selected_resume: context.resumeName,
     selected_patch_candidate_ids: Array.from(
       new Set(
@@ -3473,6 +3537,7 @@ function setScanWorkspaceScoreLoading(isLoading) {
 
 async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [], options = {}) {
   const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds, options);
+  const context = getScanWorkspaceContext();
 
   if (!requestBody) {
     const inlinePreview = getScanWorkspaceInlineDocumentPreview();
@@ -3491,11 +3556,17 @@ async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(
-            "/planning/render-workspace-draft-preview",
+            buildScanWorkspacePlanningEndpoint(
+              "/planning/render-workspace-draft-preview",
+              context?.planningOutputDir
+            ),
             requestBody,
             20000
           )
-        : await fetch("/planning/render-workspace-draft-preview", {
+        : await fetch(buildScanWorkspacePlanningEndpoint(
+            "/planning/render-workspace-draft-preview",
+            context?.planningOutputDir
+          ), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
@@ -3526,6 +3597,7 @@ async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [
 
 async function requestScanWorkspaceScorePreview(selectedPatchCandidateIds = []) {
   const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds);
+  const context = getScanWorkspaceContext();
 
   if (!requestBody) {
     return {
@@ -3538,11 +3610,17 @@ async function requestScanWorkspaceScorePreview(selectedPatchCandidateIds = []) 
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(
-            "/planning/preview-workspace-draft",
+            buildScanWorkspacePlanningEndpoint(
+              "/planning/preview-workspace-draft",
+              context?.planningOutputDir
+            ),
             requestBody,
             20000
           )
-        : await fetch("/planning/preview-workspace-draft", {
+        : await fetch(buildScanWorkspacePlanningEndpoint(
+            "/planning/preview-workspace-draft",
+            context?.planningOutputDir
+          ), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
@@ -4137,21 +4215,26 @@ async function loadScanWorkspaceDraftState() {
   renderScanWorkspacePersistenceStatus();
 
   try {
+    const context = getScanWorkspaceContext();
+    const loadUrl = buildScanWorkspacePlanningEndpoint(
+      "/planning/load-workspace-draft",
+      context?.planningOutputDir
+    );
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(
-            "/planning/load-workspace-draft",
+            loadUrl,
             {
-              tailoring_json_path: payload.tailoring_json_path,
+              tailoring_json_path: payload.tailoring_json_key || payload.tailoring_json_path,
               selected_resume: payload.selected_resume,
             },
             15000
           )
-        : await fetch("/planning/load-workspace-draft", {
+        : await fetch(loadUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              tailoring_json_path: payload.tailoring_json_path,
+              tailoring_json_path: payload.tailoring_json_key || payload.tailoring_json_path,
               selected_resume: payload.selected_resume,
             }),
           }).then(async (res) => {
@@ -4242,7 +4325,10 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
   try {
     const saveUrl = payload.saved_scan_id
       ? `/planning/saved-scan/${encodeURIComponent(payload.saved_scan_id)}/state`
-      : "/planning/save-workspace-draft";
+      : buildScanWorkspacePlanningEndpoint(
+          "/planning/save-workspace-draft",
+          getScanWorkspaceContext()?.planningOutputDir
+        );
     const requestPayload = payload.saved_scan_id
       ? {
           selected_patch_candidate_ids: payload.selected_patch_candidate_ids || [],
@@ -4419,11 +4505,14 @@ async function exportScanWorkspaceDraft(format = "pdf") {
       return false;
     }
 
-    const response = await fetch("/planning/export-workspace-draft", {
+    const response = await fetch(buildScanWorkspacePlanningEndpoint(
+      "/planning/export-workspace-draft",
+      getScanWorkspaceContext()?.planningOutputDir
+    ), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tailoring_json_path: payload.tailoring_json_path,
+        tailoring_json_path: payload.tailoring_json_key || payload.tailoring_json_path,
         selected_resume: payload.selected_resume,
         format: safeFormat,
       }),
@@ -6183,7 +6272,7 @@ function bindScanWorkspacePersistenceControls() {
 
 function maybeWarnBeforeUnload(event) {
   const context = getScanWorkspaceContext();
-  const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
+  const hasContext = Boolean(getScanWorkspaceArtifactKey(context) && context?.resumeName);
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
   const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
@@ -6296,3 +6385,5 @@ window.addEventListener("DOMContentLoaded", () => {
     }),
   };
 });
+
+

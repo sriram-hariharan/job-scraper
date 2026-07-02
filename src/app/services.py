@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 import csv
 import hashlib
@@ -5214,11 +5214,11 @@ def scan_workspace_job_context_payload(
     artifact_path_text = _clean_text(tailoring_json_path)
     if artifact_path_text:
         try:
-            artifact_path = _resolve_planning_artifact_path(
+            loaded = _load_tailoring_artifact_or_packet_fallback(
                 artifact_path_text,
                 output_dir=output_dir,
             )
-            payload_data = json.loads(artifact_path.read_text(encoding="utf-8"))
+            payload_data = dict(loaded.get("payload_data", {}) or {})
             if isinstance(payload_data, dict):
                 job = payload_data.get("job", {}) if isinstance(payload_data.get("job"), dict) else {}
                 job_snapshot = (
@@ -8123,6 +8123,81 @@ def _pipeline_child_env_max_value_bytes() -> int:
     return max(1024, min(max_bytes, 262144))
 
 
+def _pipeline_child_env_max_total_bytes() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_PIPELINE_CHILD_ENV_MAX_TOTAL_BYTES"))
+    try:
+        max_bytes = int(raw)
+    except Exception:
+        max_bytes = 131072
+
+    return max(8192, min(max_bytes, 1048576))
+
+
+def _pipeline_launch_argv_max_bytes() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_PIPELINE_LAUNCH_ARGV_MAX_BYTES"))
+    try:
+        max_bytes = int(raw)
+    except Exception:
+        max_bytes = 8192
+
+    return max(1024, min(max_bytes, 262144))
+
+
+def _pipeline_launch_argv_size_bytes(cmd: List[Any]) -> int:
+    return sum(len(str(part or "").encode("utf-8")) + 1 for part in list(cmd or []))
+
+
+def _pipeline_launch_env_size_bytes(child_env: Dict[str, Any]) -> int:
+    size = 0
+    for key, value in dict(child_env or {}).items():
+        size += len(str(key or "").encode("utf-8"))
+        size += 1
+        size += len(str(value or "").encode("utf-8"))
+        size += 1
+    return size
+
+
+def _compact_pipeline_child_env(
+    child_env: Dict[str, str],
+    *,
+    protected_keys: set[str],
+) -> Dict[str, str]:
+    max_total_bytes = _pipeline_child_env_max_total_bytes()
+    if _pipeline_launch_env_size_bytes(child_env) <= max_total_bytes:
+        return child_env
+
+    compacted: Dict[str, str] = {}
+    dropped_keys: List[str] = []
+    protected = {_clean_text(key) for key in protected_keys if _clean_text(key)}
+    first_pass_keys = [
+        key
+        for key in sorted(child_env)
+        if key in protected or key in _PIPELINE_CHILD_ENV_EXACT_NAMES
+    ]
+    second_pass_keys = [key for key in sorted(child_env) if key not in set(first_pass_keys)]
+
+    for key in first_pass_keys + second_pass_keys:
+        candidate = dict(compacted)
+        candidate[key] = child_env[key]
+        if key in protected or _pipeline_launch_env_size_bytes(candidate) <= max_total_bytes:
+            compacted[key] = child_env[key]
+        else:
+            dropped_keys.append(key)
+
+    if dropped_keys:
+        marker_candidate = dict(compacted)
+        marker_candidate["JOB_STACK_PIPELINE_CHILD_ENV_COMPACTED"] = "true"
+        if _pipeline_launch_env_size_bytes(marker_candidate) <= max_total_bytes:
+            compacted = marker_candidate
+        logger.warning(
+            "Compacted pipeline child env before launch dropped_count=%s max_total_bytes=%s",
+            len(dropped_keys),
+            max_total_bytes,
+        )
+
+    return compacted
+
+
 def _pipeline_child_env(
     *,
     extra_env: Dict[str, Any] | None = None,
@@ -8177,7 +8252,10 @@ def _pipeline_child_env(
     if "PATH" not in child_env and _clean_text(os.environ.get("PATH")):
         child_env["PATH"] = _clean_text(os.environ.get("PATH"))
 
-    return child_env
+    return _compact_pipeline_child_env(
+        child_env,
+        protected_keys={_clean_text(key) for key in dict(extra_env or {})},
+    )
 
 
 def _pipeline_child_env_summary(child_env: Dict[str, str]) -> Dict[str, Any]:
@@ -8185,9 +8263,52 @@ def _pipeline_child_env_summary(child_env: Dict[str, str]) -> Dict[str, Any]:
     return {
         "mode": "allowlist",
         "env_var_count": len(child_env or {}),
-        "env_size_bytes": sum(len(value.encode("utf-8")) for value in values),
+        "env_size_bytes": _pipeline_launch_env_size_bytes(child_env),
         "max_value_bytes": _pipeline_child_env_max_value_bytes(),
+        "max_total_bytes": _pipeline_child_env_max_total_bytes(),
+        "compacted": _clean_text(child_env.get("JOB_STACK_PIPELINE_CHILD_ENV_COMPACTED")).lower() == "true",
     }
+
+
+def _write_live_pipeline_launch_config(
+    *,
+    output_dir: Path,
+    run_id: str,
+    options: Dict[str, Any],
+) -> Path:
+    launch_config_path = output_dir / "live_pipeline_launch_config.json"
+    payload = {
+        "run_id": run_id,
+        "config_kind": "live_pipeline_launch_options",
+        "contains_selected_jobs": False,
+        "contains_job_descriptions": False,
+        "contains_planning_packets": False,
+        "contains_large_payloads": False,
+        "options": dict(options),
+    }
+    launch_config_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+    return launch_config_path
+
+
+def _validate_pipeline_subprocess_launch(cmd: List[Any], child_env: Dict[str, str]) -> None:
+    argv_size = _pipeline_launch_argv_size_bytes(cmd)
+    argv_max = _pipeline_launch_argv_max_bytes()
+    if argv_size > argv_max:
+        raise ValueError(
+            f"Live Pipeline launch command is too large ({argv_size} bytes > {argv_max} bytes). "
+            "Use bounded scalar options; selected jobs, job descriptions, planning packets, and large JSON payloads must not be passed through argv."
+        )
+
+    env_size = _pipeline_launch_env_size_bytes(child_env)
+    env_max = _pipeline_child_env_max_total_bytes()
+    if env_size > env_max:
+        raise ValueError(
+            f"Live Pipeline launch environment is too large ({env_size} bytes > {env_max} bytes). "
+            "Use run-scoped files for variable-size payloads instead of subprocess launch environment data."
+        )
 
 def run_live_pipeline_payload(
     owner_user_id: str = "",
@@ -8253,6 +8374,27 @@ def run_live_pipeline_payload(
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
     pipeline_preferences = _preferences_for_pipeline(owner_for_pipeline_gate)
     selected_role_families = pipeline_preferences.get("selected_role_families", [])
+    launch_options = {
+        "planning_only": bool(planning_only),
+        "run_application_planning": True,
+        "job_limit": int(job_limit),
+        "job_packet_limit": int(job_packet_limit),
+        "llm_actions": normalized_llm_actions.split(","),
+        "generate_tailoring": bool(generate_tailoring),
+        "generate_llm_tailoring": bool(generate_llm_tailoring),
+        "refresh_llm_tailoring": bool(refresh_llm_tailoring),
+        "generate_llm_fallback": bool(generate_llm_fallback),
+        "generate_llm_adjudication": bool(generate_llm_adjudication),
+        "delete_seen_data": normalized_delete_seen_data,
+        "output_dir": str(output_dir),
+        "preferences": pipeline_preferences,
+        "selected_role_families": selected_role_families,
+    }
+    launch_config_path = _write_live_pipeline_launch_config(
+        output_dir=output_dir,
+        run_id=run_id,
+        options=launch_options,
+    )
 
     ja = _job_app()
     effective_generate_llm_adjudication = bool(generate_llm_adjudication)
@@ -8323,6 +8465,8 @@ def run_live_pipeline_payload(
             "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
             "owner_user_id": owner_for_pipeline_gate,
             "job_corpus_path": str(pipeline_job_corpus_path),
+            "launch_config_path": str(launch_config_path),
+            "launch_config_contains_large_payloads": False,
             "preferences": pipeline_preferences,
             "selected_role_families": selected_role_families,
         },
@@ -8408,6 +8552,7 @@ def run_live_pipeline_payload(
     child_env_extra = {
         "JOB_APP_PIPELINE_STATUS_PATH": str(canonical_status_path),
         "JOB_APP_PIPELINE_RUN_ID": run_id,
+        "JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH": str(launch_config_path),
     }
 
     if owner_for_pipeline_gate:
@@ -8418,18 +8563,20 @@ def run_live_pipeline_payload(
                 "JOB_STACK_SEEN_JOBS_BACKEND": "postgres",
                 "JOB_STACK_JOB_CORPUS_PATH": str(pipeline_job_corpus_path),
                 "JOB_STACK_USER_PIPELINE_MODE": "true",
-                "JOB_STACK_SELECTED_ROLE_FAMILIES": json.dumps(selected_role_families, ensure_ascii=False),
-                "JOB_STACK_TARGET_SENIORITY": json.dumps(pipeline_preferences.get("target_seniority", []), ensure_ascii=False),
-                "JOB_STACK_PREFERRED_LOCATIONS": json.dumps(pipeline_preferences.get("preferred_locations", []), ensure_ascii=False),
-                "JOB_STACK_PREFERRED_SKILLS": json.dumps(pipeline_preferences.get("preferred_skills", []), ensure_ascii=False),
-                "JOB_STACK_EXCLUDED_KEYWORDS": json.dumps(pipeline_preferences.get("excluded_keywords", []), ensure_ascii=False),
             }
         )
 
     child_env = _pipeline_child_env(extra_env=child_env_extra)
     runtime_payload["config"]["child_env"] = _pipeline_child_env_summary(child_env)
+    runtime_payload["config"]["launch_command"] = {
+        "argv_size_bytes": _pipeline_launch_argv_size_bytes(cmd),
+        "argv_max_bytes": _pipeline_launch_argv_max_bytes(),
+        "argv_arg_count": len(cmd),
+        "large_payloads_in_argv": False,
+    }
 
     try:
+        _validate_pipeline_subprocess_launch(cmd, child_env)
         process = subprocess.Popen(
             cmd,
             stdout=log_handle,
@@ -11833,6 +11980,32 @@ def _derive_workspace_button_state_from_raw_payload(
     }
 
 
+def _infer_planning_output_dir_from_row(
+    row: Dict[str, Any],
+    *,
+    fallback_output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> str:
+    existing = _clean_text(row.get("planning_output_dir"))
+    if existing and not existing.startswith("postgres:"):
+        return existing
+
+    for key in ("tailoring_json", "tailoring_md", "tailoring_llm_json", "packet_json"):
+        raw_path = _clean_text(row.get(key))
+        if not raw_path:
+            continue
+
+        candidate = Path(raw_path).expanduser()
+        if not candidate.is_absolute():
+            continue
+
+        parent = candidate.parent
+        if parent.name == "job_packets":
+            return str(parent.parent)
+        return str(parent)
+
+    return str(fallback_output_dir)
+
+
 def _tailoring_workspace_button_state(
     row: Dict[str, Any],
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -11903,7 +12076,14 @@ def _row_matches_tailoring_state_filter(
     *,
     output_dir: Path,
 ) -> Tuple[bool, Dict[str, Any]]:
-    tailoring_state = _tailoring_workspace_button_state(row, output_dir=output_dir)
+    planning_output_dir = _infer_planning_output_dir_from_row(
+        row,
+        fallback_output_dir=output_dir,
+    )
+    tailoring_state = _tailoring_workspace_button_state(
+        row,
+        output_dir=Path(planning_output_dir),
+    )
     workspace_state = _clean_text(tailoring_state.get("tailoring_workspace_state")).lower()
 
     normalized_state = "unavailable" if workspace_state == "empty" else workspace_state
@@ -11914,6 +12094,14 @@ def _row_matches_tailoring_state_filter(
         **tailoring_state,
     }
     enriched_row["tailoring_workspace_state"] = normalized_state
+    enriched_row["planning_output_dir"] = planning_output_dir
+    for artifact_field in ("tailoring_json", "tailoring_md", "tailoring_llm_json", "packet_json"):
+        artifact_key = _planning_artifact_key_for_row_path(
+            enriched_row.get(artifact_field),
+            output_dir=Path(planning_output_dir),
+        )
+        if artifact_key:
+            enriched_row[f"{artifact_field}_key"] = artifact_key
 
     return matches, enriched_row
 
@@ -26925,17 +27113,8 @@ def _resolve_planning_artifact_path(
     path: str,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> Path:
+    resolved = _resolve_planning_artifact_candidate_path(path, output_dir=output_dir)
     raw = str(path or "").strip()
-    if not raw:
-        raise ValueError("Artifact path is required.")
-
-    resolved = Path(raw).expanduser().resolve()
-    output_root = Path(output_dir).expanduser().resolve()
-
-    try:
-        resolved.relative_to(output_root)
-    except ValueError as exc:
-        raise ValueError("Artifact path must stay inside the planning output directory.") from exc
 
     if not resolved.exists() or not resolved.is_file():
         raise ValueError(f"Artifact not found: {raw}")
@@ -26946,13 +27125,458 @@ def _resolve_planning_artifact_path(
     return resolved
 
 
+def _resolve_planning_artifact_candidate_path(
+    path: str,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> Path:
+    raw = str(path or "").strip()
+    if not raw:
+        raise ValueError("Artifact path is required.")
+
+    output_root = Path(output_dir).expanduser().resolve()
+    raw_path = Path(raw).expanduser()
+    resolved = (
+        raw_path.resolve()
+        if raw_path.is_absolute()
+        else (output_root / raw_path).resolve()
+    )
+
+    try:
+        resolved.relative_to(output_root)
+    except ValueError as exc:
+        raise ValueError("Artifact path must stay inside the planning output directory.") from exc
+
+    return resolved
+
+
+_OPTIONAL_TAILORING_ARTIFACT_SUFFIXES = ("__tailoring.json", "_tailoring.json")
+
+
+def _is_optional_tailoring_artifact_path(path: Path) -> bool:
+    name = path.name
+    return any(name.endswith(suffix) for suffix in _OPTIONAL_TAILORING_ARTIFACT_SUFFIXES)
+
+
+def _infer_packet_json_path_from_optional_tailoring_artifact(path: Path) -> Path:
+    name = path.name
+    for suffix in _OPTIONAL_TAILORING_ARTIFACT_SUFFIXES:
+        if name.endswith(suffix):
+            return path.with_name(f"{name[:-len(suffix)]}.json")
+    return Path("")
+
+
+def _load_planning_json_object(path: Path) -> Dict[str, Any]:
+    if path.suffix.lower() != ".json":
+        raise ValueError(f"Unsupported artifact type: {path.suffix}")
+    return _load_tailoring_json_artifact(path)
+
+
+def _selected_resume_from_packet_payload(packet_data: Dict[str, Any], selected_resume: str = "") -> str:
+    selection = dict(packet_data.get("selection", {}) or {})
+    resume = dict(packet_data.get("resume", {}) or {})
+    return (
+        _sanitize_optional_resume_filename(selected_resume)
+        or _sanitize_optional_resume_filename(selection.get("selected_resume"))
+        or _sanitize_optional_resume_filename(packet_data.get("selected_resume"))
+        or _sanitize_optional_resume_filename(packet_data.get("resume_name"))
+        or _sanitize_optional_resume_filename(resume.get("name"))
+        or _sanitize_optional_resume_filename(resume.get("filename"))
+    )
+
+
+def _build_missing_tailoring_artifact_payload(
+    *,
+    requested_tailoring_path: Path,
+    packet_path: Path,
+    packet_data: Dict[str, Any],
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    job = dict(
+        packet_data.get("job", {})
+        or packet_data.get("job_snapshot", {})
+        or packet_data.get("job_record", {})
+        or packet_data.get("job_metadata", {})
+        or {}
+    )
+    job_snapshot = dict(
+        packet_data.get("job_snapshot", {})
+        or packet_data.get("job", {})
+        or packet_data.get("job_record", {})
+        or {}
+    )
+    selection = dict(packet_data.get("selection", {}) or {})
+    safe_selected_resume = _selected_resume_from_packet_payload(
+        packet_data,
+        selected_resume=selected_resume,
+    )
+    if safe_selected_resume:
+        selection["selected_resume"] = safe_selected_resume
+
+    reason = "Optional tailoring suggestions were not generated for this planning packet."
+    summary = {
+        "app_ready_count": 0,
+        "direct_apply_optional_count": 0,
+        "ai_optimize_optional_count": 0,
+        "direction_only_count": 0,
+        "missing_optional_tailoring_artifact": True,
+        "no_suggestions_reason": reason,
+    }
+
+    return {
+        "job": job,
+        "job_snapshot": job_snapshot,
+        "selection": selection,
+        "replacement_candidates": [],
+        "app_ready_replacements": [],
+        "direct_apply_optional_replacements": [],
+        "ai_optimize_optional_replacements": [],
+        "direction_only_replacements": [],
+        "top_edit_priorities": [],
+        "edit_cards": [],
+        "material_gaps": [],
+        "keep_as_is": [],
+        "summary": {"suggestion_count": 0, "no_suggestions_reason": reason},
+        "final_replacement_summary": summary,
+        "rewrite_review_summary": {"review_item_count": 0},
+        "rewrite_review_groups": [],
+        "tailoring_artifact_status": "missing_optional",
+        "missing_tailoring_artifact": True,
+        "missing_optional_tailoring_artifact": True,
+        "no_suggestions_reason": reason,
+        "source_packet_json_path": str(packet_path),
+        "requested_tailoring_json_path": str(requested_tailoring_path),
+    }
+
+
+
+
+def _phase71b_optional_tailoring_artifact_fallback_payload(
+    artifact_path: Path,
+    *,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> Optional[Dict[str, Any]]:
+    """Return clean no-suggestions payload when optional __tailoring.json is missing."""
+    try:
+        candidate = Path(artifact_path)
+    except TypeError:
+        return None
+
+    name = candidate.name.lower()
+    if not (name.endswith("__tailoring.json") or name.endswith("_tailoring.json")):
+        return None
+
+    try:
+        packet_path = _infer_packet_json_path_from_optional_tailoring_artifact(candidate)
+    except Exception:
+        packet_path = Path("")
+
+    if not packet_path:
+        return None
+
+    try:
+        resolved_packet = packet_path.expanduser().resolve()
+    except Exception:
+        return None
+
+    candidate_roots = []
+    try:
+        candidate_roots.append(Path(output_dir).expanduser().resolve())
+    except Exception:
+        pass
+
+    try:
+        # For tmp/pipeline_runs/.../application_planning/job_packets/x.json,
+        # the correct guarded planning output root is .../application_planning.
+        if packet_path.parent.name == "job_packets":
+            candidate_roots.append(packet_path.parent.parent.expanduser().resolve())
+    except Exception:
+        pass
+
+    allowed = False
+    for root in candidate_roots:
+        try:
+            resolved_packet.relative_to(root)
+            allowed = True
+            break
+        except Exception:
+            continue
+
+    if not allowed:
+        return None
+
+    if not resolved_packet.exists() or not resolved_packet.is_file():
+        return None
+
+    try:
+        packet_data = _load_planning_json_object(resolved_packet)
+    except Exception:
+        packet_data = {}
+
+    return {
+        "ok": True,
+        "artifact_status": "missing_optional",
+        "missing_tailoring_artifact": True,
+        "no_suggestions": True,
+        "no_suggestions_reason": "Optional tailoring suggestions were not generated for this planning packet.",
+        "artifact_path": str(resolved_packet),
+        "packet_json_path": str(resolved_packet),
+        "suggestion_artifact_path": str(candidate),
+        "payload": packet_data,
+        "replacement_candidates": [],
+        "trusted_suggestions": [],
+        "ai_optimize_suggestions": [],
+        "directional_guidance": [],
+    }
+
+
+
+def _load_tailoring_artifact_or_packet_fallback(
+    tailoring_json_path: str,
+    *,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    artifact_path = _resolve_planning_artifact_candidate_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Workspace loading requires a JSON artifact.")
+
+    if artifact_path.exists() and artifact_path.is_file():
+        payload_data = _load_planning_json_object(artifact_path)
+        if artifact_path.name.endswith("__tailoring.json"):
+            payload_data = _rehydrate_legacy_tailoring_operator_payload(
+                artifact_path,
+                payload_data,
+            )
+        if payload_data.get("replacement_candidates") is not None:
+            payload_data = _apply_saved_patch_selection_overlay(
+                artifact_path,
+                payload_data,
+            )
+        packet_path = _infer_packet_json_path_from_tailoring_artifact(artifact_path)
+        return {
+            "artifact_path": artifact_path,
+            "payload_data": payload_data,
+            "tailoring_artifact_missing": False,
+            "packet_path": packet_path if packet_path and packet_path.exists() else Path(""),
+        }
+
+    if not _is_optional_tailoring_artifact_path(artifact_path):
+        raw = str(tailoring_json_path or "").strip()
+        optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+            artifact_path,
+            output_dir=output_dir,
+        )
+        if optional_fallback is not None:
+            return {
+                "artifact_path": Path(optional_fallback["artifact_path"]),
+                "suggestion_artifact_path": artifact_path,
+                "payload_data": optional_fallback,
+                "tailoring_artifact_missing": True,
+                "packet_path": Path(optional_fallback["packet_json_path"]),
+            }
+        raise ValueError(f"Artifact not found: {raw}")
+
+    packet_path = _infer_packet_json_path_from_optional_tailoring_artifact(artifact_path)
+    if not packet_path:
+        raw = str(tailoring_json_path or "").strip()
+        optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+            artifact_path,
+            output_dir=output_dir,
+        )
+        if optional_fallback is not None:
+            return {
+                "artifact_path": Path(optional_fallback["artifact_path"]),
+                "suggestion_artifact_path": artifact_path,
+                "payload_data": optional_fallback,
+                "tailoring_artifact_missing": True,
+                "packet_path": Path(optional_fallback["packet_json_path"]),
+            }
+        raise ValueError(f"Artifact not found: {raw}")
+
+    output_root = Path(output_dir).expanduser().resolve()
+    try:
+        packet_path.resolve().relative_to(output_root)
+    except ValueError as exc:
+        raise ValueError("Artifact path must stay inside the planning output directory.") from exc
+
+    if not packet_path.exists() or not packet_path.is_file():
+        raw = str(tailoring_json_path or "").strip()
+        optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+            artifact_path,
+            output_dir=output_dir,
+        )
+        if optional_fallback is not None:
+            return {
+                "artifact_path": Path(optional_fallback["artifact_path"]),
+                "suggestion_artifact_path": artifact_path,
+                "payload_data": optional_fallback,
+                "tailoring_artifact_missing": True,
+                "packet_path": Path(optional_fallback["packet_json_path"]),
+            }
+        raise ValueError(f"Artifact not found: {raw}")
+
+    packet_data = _load_planning_json_object(packet_path)
+    payload_data = _build_missing_tailoring_artifact_payload(
+        requested_tailoring_path=artifact_path,
+        packet_path=packet_path,
+        packet_data=packet_data,
+        selected_resume=selected_resume,
+    )
+    return {
+        "artifact_path": packet_path,
+        "suggestion_artifact_path": artifact_path,
+        "payload_data": payload_data,
+        "tailoring_artifact_missing": True,
+        "packet_path": packet_path,
+    }
+
+
+def resolve_resume_preview_name_from_planning_context(
+    *,
+    resume_name: str = "",
+    packet_json_path: str = "",
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> str:
+    raw_resume = _clean_text(resume_name)
+    resume_path = Path(str(raw_resume or "").replace("\\", "/"))
+    resume_basename = resume_path.name
+
+    sentinel_values = {"__resolve_from_packet__", "resolve_from_packet"}
+    if raw_resume and raw_resume not in sentinel_values:
+        if not _is_optional_tailoring_artifact_path(resume_path) and not resume_basename.lower().endswith(".json"):
+            return _sanitize_resume_filename(resume_basename)
+
+    packet_candidates: List[str] = []
+    if _clean_text(packet_json_path):
+        packet_candidates.append(_clean_text(packet_json_path))
+    if raw_resume and _is_optional_tailoring_artifact_path(resume_path):
+        packet_candidates.append(raw_resume)
+
+    for candidate in packet_candidates:
+        try:
+            if _is_optional_tailoring_artifact_path(Path(str(candidate).replace("\\", "/"))):
+                loaded = _load_tailoring_artifact_or_packet_fallback(
+                    candidate,
+                    output_dir=output_dir,
+                )
+                packet_data = dict(loaded.get("payload_data", {}) or {})
+            else:
+                packet_path = _resolve_planning_artifact_path(
+                    candidate,
+                    output_dir=output_dir,
+                )
+                packet_data = _load_planning_json_object(packet_path)
+            resolved = _selected_resume_from_packet_payload(packet_data)
+            if (
+                resolved
+                and not _is_optional_tailoring_artifact_path(Path(resolved))
+                and not resolved.lower().endswith(".json")
+            ):
+                return resolved
+        except Exception:
+            continue
+
+    raise ValueError(
+        "Resume preview requires a trusted resume variant; optional tailoring artifacts cannot be rendered as resumes."
+    )
+
+
+def _planning_artifact_key_for_row_path(
+    path: Any,
+    *,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> str:
+    raw = _clean_text(path)
+    if not raw:
+        return ""
+
+    output_root = Path(output_dir).expanduser().resolve()
+    raw_path = Path(raw).expanduser()
+    try:
+        resolved = (
+            raw_path.resolve()
+            if raw_path.is_absolute()
+            else (output_root / raw_path).resolve()
+        )
+        return resolved.relative_to(output_root).as_posix()
+    except Exception:
+        return ""
+
+
+
+def _phase71b_expired_optional_tailoring_artifact_payload(
+    artifact_path: Path,
+) -> Dict[str, Any]:
+    packet_path = _infer_packet_json_path_from_optional_tailoring_artifact(artifact_path)
+    payload_data = _build_missing_tailoring_artifact_payload(
+        requested_tailoring_path=artifact_path,
+        packet_path=packet_path,
+        packet_data={},
+        selected_resume="",
+    )
+    payload_data["artifact_status"] = "expired_optional_tailoring_artifact"
+    payload_data["tailoring_artifact_missing"] = True
+    payload_data["packet_artifact_missing"] = True
+    payload_data["replacement_candidates"] = []
+    payload_data["suggested_changes"] = []
+    payload_data["suggestions"] = []
+    return {
+        "ok": True,
+        "path": str(artifact_path),
+        "kind": "json",
+        "artifact_status": "expired_optional_tailoring_artifact",
+        "source_packet_json_path": str(packet_path),
+        "data": payload_data,
+    }
+
+
 def planning_artifact_payload(
     path: str,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> Dict[str, Any]:
-    artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
+    fallback: Dict[str, Any] | None = None
+    try:
+        artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
+        if not artifact_path.exists() and _is_optional_tailoring_artifact_path(artifact_path):
+            optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+                artifact_path,
+                output_dir=output_dir,
+            )
+            if optional_fallback is not None:
+                artifact_path = Path(optional_fallback["artifact_path"])
+    except ValueError as exc:
+        message = str(exc)
+        if "Artifact path must stay inside" in message:
+            raise
+
+        try:
+            fallback = _load_tailoring_artifact_or_packet_fallback(
+                path,
+                output_dir=output_dir,
+            )
+        except ValueError:
+            fallback = None
+
+        if fallback is not None:
+            if not bool(fallback.get("tailoring_artifact_missing")):
+                raise
+            artifact_path = Path(fallback["artifact_path"])
+        else:
+            raw_artifact_text = str(path or "").replace("\\", "/")
+            raw_artifact_path = Path(raw_artifact_text)
+            is_run_scoped_expired_optional = (
+                "tmp/pipeline_runs/" in raw_artifact_text
+                and "/application_planning/job_packets/" in raw_artifact_text
+                and _is_optional_tailoring_artifact_path(raw_artifact_path)
+            )
+            if is_run_scoped_expired_optional:
+                return _phase71b_expired_optional_tailoring_artifact_payload(raw_artifact_path)
+            raise
     suffix = artifact_path.suffix.lower()
-    text = artifact_path.read_text(encoding="utf-8")
 
     payload: Dict[str, Any] = {
         "ok": True,
@@ -26961,21 +27585,28 @@ def planning_artifact_payload(
     }
 
     if suffix == ".json":
-        data = json.loads(text)
-        if isinstance(data, dict):
-            if artifact_path.name.endswith("__tailoring.json"):
-                data = _rehydrate_legacy_tailoring_operator_payload(
-                    artifact_path,
-                    data,
-                )
+        if fallback:
+            data = dict(fallback.get("payload_data", {}) or {})
+            payload["artifact_status"] = "missing_optional_tailoring_artifact"
+            payload["source_packet_json_path"] = str(fallback.get("packet_path", "") or "")
+        else:
+            text = artifact_path.read_text(encoding="utf-8")
+            data = json.loads(text)
+            if isinstance(data, dict):
+                if artifact_path.name.endswith("__tailoring.json"):
+                    data = _rehydrate_legacy_tailoring_operator_payload(
+                        artifact_path,
+                        data,
+                    )
 
-            if data.get("replacement_candidates") is not None:
-                data = _apply_saved_patch_selection_overlay(
-                    artifact_path,
-                    data,
-                )
+                if data.get("replacement_candidates") is not None:
+                    data = _apply_saved_patch_selection_overlay(
+                        artifact_path,
+                        data,
+                    )
         payload["data"] = data
     else:
+        text = artifact_path.read_text(encoding="utf-8")
         payload["text"] = text
 
     return payload
@@ -26989,19 +27620,14 @@ def tailoring_scan_preload_payload(
 ) -> Dict[str, Any]:
     from src.tailoring.llm import tailoring_llm_model_config_payload
 
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Scan preload requires a tailoring JSON artifact.")
-
-    artifact_response = planning_artifact_payload(
-        str(artifact_path),
-        output_dir=output_dir,
-    )
-    payload_data = dict(artifact_response.get("data", {}) or {})
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
+    tailoring_artifact_missing = bool(loaded.get("tailoring_artifact_missing"))
 
     if not payload_data:
         raise ValueError("Scan preload could not load tailoring artifact payload.")
@@ -27032,7 +27658,7 @@ def tailoring_scan_preload_payload(
     if not effective_selected_resume:
         raise ValueError("Scan preload requires a selected resume.")
 
-    packet_path = _infer_packet_json_path_from_tailoring_artifact(artifact_path)
+    packet_path = Path(loaded.get("packet_path", "") or "")
 
     trusted_ready = list(payload_data.get("app_ready_replacements", []) or [])
     trusted_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
@@ -27088,12 +27714,34 @@ def tailoring_scan_preload_payload(
 
     return {
         "ok": True,
-        "preload_mode": "tailoring_artifact",
-        "scan_entry_source": "tailoring_suggestions",
+        "preload_mode": (
+            "base_packet_no_suggestions" if tailoring_artifact_missing else "tailoring_artifact"
+        ),
+        "scan_entry_source": (
+            "base_planning_packet" if tailoring_artifact_missing else "tailoring_suggestions"
+        ),
+        "tailoring_artifact_status": (
+            "missing_optional" if tailoring_artifact_missing else "loaded"
+        ),
+        "missing_tailoring_artifact": tailoring_artifact_missing,
+        "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
         "artifact_references": {
             "tailoring_json_path": str(artifact_path),
+            "tailoring_json_key": _planning_artifact_key_for_row_path(
+                artifact_path,
+                output_dir=output_dir,
+            ),
             "packet_json_path": str(packet_path) if packet_path and packet_path.exists() else "",
+            "packet_json_key": (
+                _planning_artifact_key_for_row_path(packet_path, output_dir=output_dir)
+                if packet_path and packet_path.exists()
+                else ""
+            ),
         },
+        "tailoring_json_path": _planning_artifact_key_for_row_path(
+            artifact_path,
+            output_dir=output_dir,
+        ),
         "selected_resume": effective_selected_resume,
         "selected_jd_record": selected_jd_record,
         "job": job,
@@ -27712,27 +28360,14 @@ def load_tailoring_workspace_draft_payload(
     tailoring_json_path: str = "",
     selected_resume: str = "",
 ) -> Dict[str, Any]:
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Workspace draft loading requires a tailoring JSON artifact.")
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
+    tailoring_artifact_missing = bool(loaded.get("tailoring_artifact_missing"))
 
     default_draft = _build_tailoring_workspace_default_draft_payload(
         artifact_path,
@@ -27746,6 +28381,11 @@ def load_tailoring_workspace_draft_payload(
             "ok": True,
             "draft_status": "default",
             "has_saved_draft": False,
+            "tailoring_artifact_status": (
+                "missing_optional" if tailoring_artifact_missing else "loaded"
+            ),
+            "missing_tailoring_artifact": tailoring_artifact_missing,
+            "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
             "draft": default_draft,
         }
 
@@ -27763,6 +28403,11 @@ def load_tailoring_workspace_draft_payload(
             "ok": True,
             "draft_status": "stale_signature",
             "has_saved_draft": False,
+            "tailoring_artifact_status": (
+                "missing_optional" if tailoring_artifact_missing else "loaded"
+            ),
+            "missing_tailoring_artifact": tailoring_artifact_missing,
+            "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
             "draft": stale_draft,
         }
 
@@ -27818,6 +28463,11 @@ def load_tailoring_workspace_draft_payload(
         "ok": True,
         "draft_status": "saved",
         "has_saved_draft": True,
+        "tailoring_artifact_status": (
+            "missing_optional" if tailoring_artifact_missing else "loaded"
+        ),
+        "missing_tailoring_artifact": tailoring_artifact_missing,
+        "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
         "draft": merged,
     }
 
@@ -27834,27 +28484,13 @@ def save_tailoring_workspace_draft_payload(
     personal_details: Any = None,
     note: str = "",
 ) -> Dict[str, Any]:
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Workspace draft saving requires a tailoring JSON artifact.")
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
 
     draft_payload = _build_tailoring_workspace_default_draft_payload(
         artifact_path,
@@ -28359,27 +28995,14 @@ def preview_tailoring_workspace_draft_payload(
     )
     draft = dict(draft_response.get("draft", {}) or {})
 
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Workspace draft preview requires a tailoring JSON artifact.")
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
+    tailoring_artifact_missing = bool(loaded.get("tailoring_artifact_missing"))
 
     valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
 
@@ -28444,6 +29067,50 @@ def preview_tailoring_workspace_draft_payload(
         raise ValueError("Workspace draft preview requires a selected resume.")
 
     manual_edit_count = len(effective_manual_edits)
+
+    if tailoring_artifact_missing and not effective_selected_ids and not manual_edit_count:
+        preview_note = _clean_text(payload_data.get("no_suggestions_reason")) or (
+            "Optional tailoring suggestions were not generated for this planning packet."
+        )
+        return {
+            "ok": True,
+            "preview_status": "no_suggestions",
+            "preview_note": preview_note,
+            "tailoring_json_path": str(artifact_path),
+            "tailoring_artifact_status": "missing_optional",
+            "missing_tailoring_artifact": True,
+            "draft_status": _clean_text(draft_response.get("draft_status")),
+            "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
+            "selected_patch_candidate_ids": [],
+            "manual_bullet_edits": {},
+            "manual_edit_count": 0,
+            "manual_edit_rescore_supported": True,
+            "needs_full_draft_rescore": False,
+            "original_score": None,
+            "projected_score": None,
+            "projected_delta": None,
+            "selected_patch_set_counterfactual_preview": None,
+            "unresolved_manual_edit_keys": [],
+            "rewrite_review_decisions": effective_review_decisions,
+            "rewrite_review_telemetry": effective_review_telemetry,
+            "score_preview": _build_workspace_score_preview_contract(
+                preview_status="no_suggestions",
+                preview_note=preview_note,
+                original_score=None,
+                projected_score=None,
+                projected_delta=None,
+                selected_candidate_ids=[],
+                manual_bullet_edits={},
+                patch_specs=[],
+                unresolved_manual_edit_keys=[],
+            ),
+            "draft_fragments": _build_workspace_draft_fragments_contract(
+                preview_status="no_suggestions",
+                preview_note=preview_note,
+                patch_specs=[],
+                unresolved_manual_edit_keys=[],
+            ),
+        }
 
     try:
         original_resume = _load_resume_evidence_for_workspace_preview(
@@ -32355,23 +33022,13 @@ def _build_tailoring_workspace_export_context(
             raise ValueError("Only a saved tailoring workspace draft can be exported.")
 
     draft = dict(draft_response.get("draft", {}) or {})
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
 
     effective_selected_resume = (
         _sanitize_optional_resume_filename(selected_resume)

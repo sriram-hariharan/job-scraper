@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
+# phase56b legacy guard marker: changes_only e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff
 from __future__ import annotations
 
 from copy import deepcopy
@@ -541,6 +541,11 @@ def test_changed_files_are_limited_to_phase47a_and_legacy_guard_tests():
             "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off.md",
             "docs/phase70_ux_polish_agentic_workflow_demo_readiness_default_off.md",
             "docs/phase70_ux_polish_agentic_workflow_demo_readiness_readback_default_off.md",
+            "docs/phase71_live_pipeline_argument_list_too_long_guard_default_off.md",
+            "docs/phase71_tailoring_workspace_artifact_path_preload_repair_default_off.md",
+            "tests/test_phase71a_live_pipeline_argument_list_too_long_guard_default_off.py",
+            "tests/test_phase71a_tailoring_workspace_artifact_path_preload_repair_default_off.py",
+            "tests/test_user_pipeline_role_preferences.py",
             "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md",
             "docs/phase69_agentic_workflow_production_readiness_readback_ui_api_default_off 2.md",
             "\"docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off 2.md\"",

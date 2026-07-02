@@ -72,7 +72,7 @@ class _FakeJobApp:
         return ["python", "main.py"]
 
 
-def test_selected_role_families_appear_in_pipeline_run_config_and_child_env():
+def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_not_child_env():
     captured = {}
     originals = {
         "user_pipeline_gate_payload": services.user_pipeline_gate_payload,
@@ -152,8 +152,10 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_child_env():
     assert payload["pipeline"]["config"]["selected_role_families"] == ["backend_engineering"]
     assert payload["pipeline"]["config"]["preferences"]["target_seniority"] == ["senior"]
     assert captured["state"]["config"]["selected_role_families"] == ["backend_engineering"]
-    assert json.loads(captured["env"]["JOB_STACK_SELECTED_ROLE_FAMILIES"]) == ["backend_engineering"]
-    assert json.loads(captured["env"]["JOB_STACK_TARGET_SENIORITY"]) == ["senior"]
-    assert json.loads(captured["env"]["JOB_STACK_PREFERRED_LOCATIONS"]) == ["New York"]
-    assert json.loads(captured["env"]["JOB_STACK_PREFERRED_SKILLS"]) == ["Python"]
-    assert json.loads(captured["env"]["JOB_STACK_EXCLUDED_KEYWORDS"]) == ["intern"]
+    assert captured["state"]["config"]["preferences"]["target_seniority"] == ["senior"]
+    assert captured["state"]["config"]["launch_config_path"].endswith("live_pipeline_launch_config.json")
+    assert "JOB_STACK_SELECTED_ROLE_FAMILIES" not in captured["env"]
+    assert "JOB_STACK_TARGET_SENIORITY" not in captured["env"]
+    assert "JOB_STACK_PREFERRED_LOCATIONS" not in captured["env"]
+    assert "JOB_STACK_PREFERRED_SKILLS" not in captured["env"]
+    assert "JOB_STACK_EXCLUDED_KEYWORDS" not in captured["env"]

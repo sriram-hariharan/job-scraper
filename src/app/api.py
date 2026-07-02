@@ -152,6 +152,18 @@ class PlanningExtractResumeUploadRequest(BaseModel):
     content_type: str = ""
     upload_base64: str
 
+
+
+def _phase71b_effective_planning_output_dir(path_value: str, output_dir_value: str) -> str:
+    """Prefer run-scoped application_planning root derived from job packet artifact path."""
+    raw = str(path_value or "").replace("\\", "/")
+    marker = "/application_planning/job_packets/"
+    idx = raw.find(marker)
+    if idx >= 0:
+        return raw[: idx + len("/application_planning")]
+    return str(output_dir_value or "")
+
+
 class PlanningSavedScanStateRequest(BaseModel):
     selected_patch_candidate_ids: list[str] = Field(default_factory=list)
     manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
@@ -3151,7 +3163,7 @@ def planning_artifact(
     try:
         return services.planning_artifact_payload(
             path=path,
-            output_dir=Path(output_dir),
+            output_dir=Path(_phase71b_effective_planning_output_dir(path, output_dir)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -3289,10 +3301,17 @@ def planning_extract_resume_upload(request: PlanningExtractResumeUploadRequest):
 def planning_resume_preview(
     http_request: Request,
     resume_name: str = Query(..., min_length=1),
+    packet_json: str = "",
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
     try:
+        safe_resume_name = services.resolve_resume_preview_name_from_planning_context(
+            resume_name=resume_name,
+            packet_json_path=packet_json,
+            output_dir=Path(output_dir),
+        )
         payload = services.profile_resume_file_payload(
-            resume_name,
+            safe_resume_name,
             owner_user_id=_auth_owner_user_id(http_request),
         )
         return Response(

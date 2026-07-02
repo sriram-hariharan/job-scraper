@@ -9,6 +9,28 @@ from src.app.ui_shell import render_top_shell
 
 router = APIRouter()
 
+_PLANNING_JSON_CONTEXT_SUFFIXES = ("__tailoring.json", "_tailoring.json", ".json")
+
+
+def _resolve_workspace_route_resume_name(
+    resume: str = "",
+    *,
+    packet_json: str = "",
+    tailoring_json: str = "",
+    output_dir: str = "",
+) -> str:
+    raw_name = Path(str(resume or "").replace("\\", "/")).name
+    if raw_name.lower().endswith(_PLANNING_JSON_CONTEXT_SUFFIXES):
+        try:
+            return services.resolve_resume_preview_name_from_planning_context(
+                resume_name=raw_name,
+                packet_json_path=packet_json or tailoring_json or "",
+                output_dir=Path(output_dir) if output_dir else services.DEFAULT_OUTPUT_DIR,
+            )
+        except Exception:
+            return ""
+    return raw_name
+
 
 @router.get("/planning", response_class=HTMLResponse)
 def planning_dashboard() -> str:
@@ -72,6 +94,7 @@ def planning_dashboard() -> str:
                 <span class="multi-select-trigger-label">All</span>
                 <span class="multi-select-trigger-icon">▾</span>
               </button>
+
 
               <div class="multi-select-menu" role="menu" hidden>
                 <button type="button" class="multi-select-option" data-value="strong" aria-checked="false">
@@ -687,7 +710,12 @@ def tailoring_workspace(
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
-    raw_resume_name = resume or ""
+    raw_resume_name = _resolve_workspace_route_resume_name(
+        resume,
+        packet_json=packet_json,
+        tailoring_json=tailoring_json,
+        output_dir=output_dir,
+    )
     resume_safe = escape(raw_resume_name)
     resume_display_safe = escape(
         Path(raw_resume_name).stem.replace("_", " ") if raw_resume_name else "-"
@@ -696,9 +724,11 @@ def tailoring_workspace(
 
     job_doc_id_safe = escape(job_doc_id or "")
     tailoring_json_safe = escape(tailoring_json or "")
+    tailoring_json_key_safe = escape(tailoring_json or "")
     tailoring_md_safe = escape(tailoring_md or "")
     tailoring_llm_json_safe = escape(tailoring_llm_json or "")
     packet_json_safe = escape(packet_json or "")
+    packet_json_key_safe = escape(packet_json or "")
     output_dir_safe = escape(output_dir or "")
 
     scan_query = urlencode(
@@ -740,9 +770,11 @@ def tailoring_workspace(
     data-resume-name="{resume_safe}"
     data-tailoring-status="{status_safe}"
     data-tailoring-json-path="{tailoring_json_safe}"
+    data-tailoring-json-key="{tailoring_json_key_safe}"
     data-tailoring-md-path="{tailoring_md_safe}"
     data-tailoring-llm-json-path="{tailoring_llm_json_safe}"
     data-packet-json-path="{packet_json_safe}"
+    data-packet-json-key="{packet_json_key_safe}"
     data-planning-output-dir="{output_dir_safe}"
   >
     <header class="page-header tailoring-workspace-header">
@@ -1139,7 +1171,12 @@ def scan_workspace(
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
-    raw_resume_name = resume or ""
+    raw_resume_name = _resolve_workspace_route_resume_name(
+        resume,
+        packet_json=packet_json,
+        tailoring_json=tailoring_json,
+        output_dir=output_dir,
+    )
     resume_safe = escape(raw_resume_name)
     resume_display_safe = escape(
         Path(raw_resume_name).stem.replace("_", " ") if raw_resume_name else "-"
@@ -1148,9 +1185,11 @@ def scan_workspace(
 
     job_doc_id_safe = escape(job_doc_id or "")
     tailoring_json_safe = escape(tailoring_json or "")
+    tailoring_json_key_safe = escape(tailoring_json or "")
     tailoring_md_safe = escape(tailoring_md or "")
     tailoring_llm_json_safe = escape(tailoring_llm_json or "")
     packet_json_safe = escape(packet_json or "")
+    packet_json_key_safe = escape(packet_json or "")
     saved_scan_id_safe = escape(saved_scan_id or "")
     output_dir_safe = escape(output_dir or "")
 
@@ -1237,9 +1276,11 @@ def scan_workspace(
     data-resume-name="{resume_safe}"
     data-tailoring-status="{status_safe}"
     data-tailoring-json-path="{tailoring_json_safe}"
+    data-tailoring-json-key="{tailoring_json_key_safe}"
     data-tailoring-md-path="{tailoring_md_safe}"
     data-tailoring-llm-json-path="{tailoring_llm_json_safe}"
     data-packet-json-path="{packet_json_safe}"
+    data-packet-json-key="{packet_json_key_safe}"
     data-saved-scan-id="{saved_scan_id_safe}"
     data-planning-output-dir="{output_dir_safe}"
     data-scan-initial-mode="{scan_initial_mode_safe}"

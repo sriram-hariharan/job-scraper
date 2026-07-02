@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 import csv
 import hashlib
@@ -5214,11 +5214,11 @@ def scan_workspace_job_context_payload(
     artifact_path_text = _clean_text(tailoring_json_path)
     if artifact_path_text:
         try:
-            artifact_path = _resolve_planning_artifact_path(
+            loaded = _load_tailoring_artifact_or_packet_fallback(
                 artifact_path_text,
                 output_dir=output_dir,
             )
-            payload_data = json.loads(artifact_path.read_text(encoding="utf-8"))
+            payload_data = dict(loaded.get("payload_data", {}) or {})
             if isinstance(payload_data, dict):
                 job = payload_data.get("job", {}) if isinstance(payload_data.get("job"), dict) else {}
                 job_snapshot = (
@@ -12095,6 +12095,13 @@ def _row_matches_tailoring_state_filter(
     }
     enriched_row["tailoring_workspace_state"] = normalized_state
     enriched_row["planning_output_dir"] = planning_output_dir
+    for artifact_field in ("tailoring_json", "tailoring_md", "tailoring_llm_json", "packet_json"):
+        artifact_key = _planning_artifact_key_for_row_path(
+            enriched_row.get(artifact_field),
+            output_dir=Path(planning_output_dir),
+        )
+        if artifact_key:
+            enriched_row[f"{artifact_field}_key"] = artifact_key
 
     return matches, enriched_row
 
@@ -27106,17 +27113,8 @@ def _resolve_planning_artifact_path(
     path: str,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> Path:
+    resolved = _resolve_planning_artifact_candidate_path(path, output_dir=output_dir)
     raw = str(path or "").strip()
-    if not raw:
-        raise ValueError("Artifact path is required.")
-
-    resolved = Path(raw).expanduser().resolve()
-    output_root = Path(output_dir).expanduser().resolve()
-
-    try:
-        resolved.relative_to(output_root)
-    except ValueError as exc:
-        raise ValueError("Artifact path must stay inside the planning output directory.") from exc
 
     if not resolved.exists() or not resolved.is_file():
         raise ValueError(f"Artifact not found: {raw}")
@@ -27127,13 +27125,458 @@ def _resolve_planning_artifact_path(
     return resolved
 
 
+def _resolve_planning_artifact_candidate_path(
+    path: str,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> Path:
+    raw = str(path or "").strip()
+    if not raw:
+        raise ValueError("Artifact path is required.")
+
+    output_root = Path(output_dir).expanduser().resolve()
+    raw_path = Path(raw).expanduser()
+    resolved = (
+        raw_path.resolve()
+        if raw_path.is_absolute()
+        else (output_root / raw_path).resolve()
+    )
+
+    try:
+        resolved.relative_to(output_root)
+    except ValueError as exc:
+        raise ValueError("Artifact path must stay inside the planning output directory.") from exc
+
+    return resolved
+
+
+_OPTIONAL_TAILORING_ARTIFACT_SUFFIXES = ("__tailoring.json", "_tailoring.json")
+
+
+def _is_optional_tailoring_artifact_path(path: Path) -> bool:
+    name = path.name
+    return any(name.endswith(suffix) for suffix in _OPTIONAL_TAILORING_ARTIFACT_SUFFIXES)
+
+
+def _infer_packet_json_path_from_optional_tailoring_artifact(path: Path) -> Path:
+    name = path.name
+    for suffix in _OPTIONAL_TAILORING_ARTIFACT_SUFFIXES:
+        if name.endswith(suffix):
+            return path.with_name(f"{name[:-len(suffix)]}.json")
+    return Path("")
+
+
+def _load_planning_json_object(path: Path) -> Dict[str, Any]:
+    if path.suffix.lower() != ".json":
+        raise ValueError(f"Unsupported artifact type: {path.suffix}")
+    return _load_tailoring_json_artifact(path)
+
+
+def _selected_resume_from_packet_payload(packet_data: Dict[str, Any], selected_resume: str = "") -> str:
+    selection = dict(packet_data.get("selection", {}) or {})
+    resume = dict(packet_data.get("resume", {}) or {})
+    return (
+        _sanitize_optional_resume_filename(selected_resume)
+        or _sanitize_optional_resume_filename(selection.get("selected_resume"))
+        or _sanitize_optional_resume_filename(packet_data.get("selected_resume"))
+        or _sanitize_optional_resume_filename(packet_data.get("resume_name"))
+        or _sanitize_optional_resume_filename(resume.get("name"))
+        or _sanitize_optional_resume_filename(resume.get("filename"))
+    )
+
+
+def _build_missing_tailoring_artifact_payload(
+    *,
+    requested_tailoring_path: Path,
+    packet_path: Path,
+    packet_data: Dict[str, Any],
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    job = dict(
+        packet_data.get("job", {})
+        or packet_data.get("job_snapshot", {})
+        or packet_data.get("job_record", {})
+        or packet_data.get("job_metadata", {})
+        or {}
+    )
+    job_snapshot = dict(
+        packet_data.get("job_snapshot", {})
+        or packet_data.get("job", {})
+        or packet_data.get("job_record", {})
+        or {}
+    )
+    selection = dict(packet_data.get("selection", {}) or {})
+    safe_selected_resume = _selected_resume_from_packet_payload(
+        packet_data,
+        selected_resume=selected_resume,
+    )
+    if safe_selected_resume:
+        selection["selected_resume"] = safe_selected_resume
+
+    reason = "Optional tailoring suggestions were not generated for this planning packet."
+    summary = {
+        "app_ready_count": 0,
+        "direct_apply_optional_count": 0,
+        "ai_optimize_optional_count": 0,
+        "direction_only_count": 0,
+        "missing_optional_tailoring_artifact": True,
+        "no_suggestions_reason": reason,
+    }
+
+    return {
+        "job": job,
+        "job_snapshot": job_snapshot,
+        "selection": selection,
+        "replacement_candidates": [],
+        "app_ready_replacements": [],
+        "direct_apply_optional_replacements": [],
+        "ai_optimize_optional_replacements": [],
+        "direction_only_replacements": [],
+        "top_edit_priorities": [],
+        "edit_cards": [],
+        "material_gaps": [],
+        "keep_as_is": [],
+        "summary": {"suggestion_count": 0, "no_suggestions_reason": reason},
+        "final_replacement_summary": summary,
+        "rewrite_review_summary": {"review_item_count": 0},
+        "rewrite_review_groups": [],
+        "tailoring_artifact_status": "missing_optional",
+        "missing_tailoring_artifact": True,
+        "missing_optional_tailoring_artifact": True,
+        "no_suggestions_reason": reason,
+        "source_packet_json_path": str(packet_path),
+        "requested_tailoring_json_path": str(requested_tailoring_path),
+    }
+
+
+
+
+def _phase71b_optional_tailoring_artifact_fallback_payload(
+    artifact_path: Path,
+    *,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> Optional[Dict[str, Any]]:
+    """Return clean no-suggestions payload when optional __tailoring.json is missing."""
+    try:
+        candidate = Path(artifact_path)
+    except TypeError:
+        return None
+
+    name = candidate.name.lower()
+    if not (name.endswith("__tailoring.json") or name.endswith("_tailoring.json")):
+        return None
+
+    try:
+        packet_path = _infer_packet_json_path_from_optional_tailoring_artifact(candidate)
+    except Exception:
+        packet_path = Path("")
+
+    if not packet_path:
+        return None
+
+    try:
+        resolved_packet = packet_path.expanduser().resolve()
+    except Exception:
+        return None
+
+    candidate_roots = []
+    try:
+        candidate_roots.append(Path(output_dir).expanduser().resolve())
+    except Exception:
+        pass
+
+    try:
+        # For tmp/pipeline_runs/.../application_planning/job_packets/x.json,
+        # the correct guarded planning output root is .../application_planning.
+        if packet_path.parent.name == "job_packets":
+            candidate_roots.append(packet_path.parent.parent.expanduser().resolve())
+    except Exception:
+        pass
+
+    allowed = False
+    for root in candidate_roots:
+        try:
+            resolved_packet.relative_to(root)
+            allowed = True
+            break
+        except Exception:
+            continue
+
+    if not allowed:
+        return None
+
+    if not resolved_packet.exists() or not resolved_packet.is_file():
+        return None
+
+    try:
+        packet_data = _load_planning_json_object(resolved_packet)
+    except Exception:
+        packet_data = {}
+
+    return {
+        "ok": True,
+        "artifact_status": "missing_optional",
+        "missing_tailoring_artifact": True,
+        "no_suggestions": True,
+        "no_suggestions_reason": "Optional tailoring suggestions were not generated for this planning packet.",
+        "artifact_path": str(resolved_packet),
+        "packet_json_path": str(resolved_packet),
+        "suggestion_artifact_path": str(candidate),
+        "payload": packet_data,
+        "replacement_candidates": [],
+        "trusted_suggestions": [],
+        "ai_optimize_suggestions": [],
+        "directional_guidance": [],
+    }
+
+
+
+def _load_tailoring_artifact_or_packet_fallback(
+    tailoring_json_path: str,
+    *,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    artifact_path = _resolve_planning_artifact_candidate_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Workspace loading requires a JSON artifact.")
+
+    if artifact_path.exists() and artifact_path.is_file():
+        payload_data = _load_planning_json_object(artifact_path)
+        if artifact_path.name.endswith("__tailoring.json"):
+            payload_data = _rehydrate_legacy_tailoring_operator_payload(
+                artifact_path,
+                payload_data,
+            )
+        if payload_data.get("replacement_candidates") is not None:
+            payload_data = _apply_saved_patch_selection_overlay(
+                artifact_path,
+                payload_data,
+            )
+        packet_path = _infer_packet_json_path_from_tailoring_artifact(artifact_path)
+        return {
+            "artifact_path": artifact_path,
+            "payload_data": payload_data,
+            "tailoring_artifact_missing": False,
+            "packet_path": packet_path if packet_path and packet_path.exists() else Path(""),
+        }
+
+    if not _is_optional_tailoring_artifact_path(artifact_path):
+        raw = str(tailoring_json_path or "").strip()
+        optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+            artifact_path,
+            output_dir=output_dir,
+        )
+        if optional_fallback is not None:
+            return {
+                "artifact_path": Path(optional_fallback["artifact_path"]),
+                "suggestion_artifact_path": artifact_path,
+                "payload_data": optional_fallback,
+                "tailoring_artifact_missing": True,
+                "packet_path": Path(optional_fallback["packet_json_path"]),
+            }
+        raise ValueError(f"Artifact not found: {raw}")
+
+    packet_path = _infer_packet_json_path_from_optional_tailoring_artifact(artifact_path)
+    if not packet_path:
+        raw = str(tailoring_json_path or "").strip()
+        optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+            artifact_path,
+            output_dir=output_dir,
+        )
+        if optional_fallback is not None:
+            return {
+                "artifact_path": Path(optional_fallback["artifact_path"]),
+                "suggestion_artifact_path": artifact_path,
+                "payload_data": optional_fallback,
+                "tailoring_artifact_missing": True,
+                "packet_path": Path(optional_fallback["packet_json_path"]),
+            }
+        raise ValueError(f"Artifact not found: {raw}")
+
+    output_root = Path(output_dir).expanduser().resolve()
+    try:
+        packet_path.resolve().relative_to(output_root)
+    except ValueError as exc:
+        raise ValueError("Artifact path must stay inside the planning output directory.") from exc
+
+    if not packet_path.exists() or not packet_path.is_file():
+        raw = str(tailoring_json_path or "").strip()
+        optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+            artifact_path,
+            output_dir=output_dir,
+        )
+        if optional_fallback is not None:
+            return {
+                "artifact_path": Path(optional_fallback["artifact_path"]),
+                "suggestion_artifact_path": artifact_path,
+                "payload_data": optional_fallback,
+                "tailoring_artifact_missing": True,
+                "packet_path": Path(optional_fallback["packet_json_path"]),
+            }
+        raise ValueError(f"Artifact not found: {raw}")
+
+    packet_data = _load_planning_json_object(packet_path)
+    payload_data = _build_missing_tailoring_artifact_payload(
+        requested_tailoring_path=artifact_path,
+        packet_path=packet_path,
+        packet_data=packet_data,
+        selected_resume=selected_resume,
+    )
+    return {
+        "artifact_path": packet_path,
+        "suggestion_artifact_path": artifact_path,
+        "payload_data": payload_data,
+        "tailoring_artifact_missing": True,
+        "packet_path": packet_path,
+    }
+
+
+def resolve_resume_preview_name_from_planning_context(
+    *,
+    resume_name: str = "",
+    packet_json_path: str = "",
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> str:
+    raw_resume = _clean_text(resume_name)
+    resume_path = Path(str(raw_resume or "").replace("\\", "/"))
+    resume_basename = resume_path.name
+
+    sentinel_values = {"__resolve_from_packet__", "resolve_from_packet"}
+    if raw_resume and raw_resume not in sentinel_values:
+        if not _is_optional_tailoring_artifact_path(resume_path) and not resume_basename.lower().endswith(".json"):
+            return _sanitize_resume_filename(resume_basename)
+
+    packet_candidates: List[str] = []
+    if _clean_text(packet_json_path):
+        packet_candidates.append(_clean_text(packet_json_path))
+    if raw_resume and _is_optional_tailoring_artifact_path(resume_path):
+        packet_candidates.append(raw_resume)
+
+    for candidate in packet_candidates:
+        try:
+            if _is_optional_tailoring_artifact_path(Path(str(candidate).replace("\\", "/"))):
+                loaded = _load_tailoring_artifact_or_packet_fallback(
+                    candidate,
+                    output_dir=output_dir,
+                )
+                packet_data = dict(loaded.get("payload_data", {}) or {})
+            else:
+                packet_path = _resolve_planning_artifact_path(
+                    candidate,
+                    output_dir=output_dir,
+                )
+                packet_data = _load_planning_json_object(packet_path)
+            resolved = _selected_resume_from_packet_payload(packet_data)
+            if (
+                resolved
+                and not _is_optional_tailoring_artifact_path(Path(resolved))
+                and not resolved.lower().endswith(".json")
+            ):
+                return resolved
+        except Exception:
+            continue
+
+    raise ValueError(
+        "Resume preview requires a trusted resume variant; optional tailoring artifacts cannot be rendered as resumes."
+    )
+
+
+def _planning_artifact_key_for_row_path(
+    path: Any,
+    *,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> str:
+    raw = _clean_text(path)
+    if not raw:
+        return ""
+
+    output_root = Path(output_dir).expanduser().resolve()
+    raw_path = Path(raw).expanduser()
+    try:
+        resolved = (
+            raw_path.resolve()
+            if raw_path.is_absolute()
+            else (output_root / raw_path).resolve()
+        )
+        return resolved.relative_to(output_root).as_posix()
+    except Exception:
+        return ""
+
+
+
+def _phase71b_expired_optional_tailoring_artifact_payload(
+    artifact_path: Path,
+) -> Dict[str, Any]:
+    packet_path = _infer_packet_json_path_from_optional_tailoring_artifact(artifact_path)
+    payload_data = _build_missing_tailoring_artifact_payload(
+        requested_tailoring_path=artifact_path,
+        packet_path=packet_path,
+        packet_data={},
+        selected_resume="",
+    )
+    payload_data["artifact_status"] = "expired_optional_tailoring_artifact"
+    payload_data["tailoring_artifact_missing"] = True
+    payload_data["packet_artifact_missing"] = True
+    payload_data["replacement_candidates"] = []
+    payload_data["suggested_changes"] = []
+    payload_data["suggestions"] = []
+    return {
+        "ok": True,
+        "path": str(artifact_path),
+        "kind": "json",
+        "artifact_status": "expired_optional_tailoring_artifact",
+        "source_packet_json_path": str(packet_path),
+        "data": payload_data,
+    }
+
+
 def planning_artifact_payload(
     path: str,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> Dict[str, Any]:
-    artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
+    fallback: Dict[str, Any] | None = None
+    try:
+        artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
+        if not artifact_path.exists() and _is_optional_tailoring_artifact_path(artifact_path):
+            optional_fallback = _phase71b_optional_tailoring_artifact_fallback_payload(
+                artifact_path,
+                output_dir=output_dir,
+            )
+            if optional_fallback is not None:
+                artifact_path = Path(optional_fallback["artifact_path"])
+    except ValueError as exc:
+        message = str(exc)
+        if "Artifact path must stay inside" in message:
+            raise
+
+        try:
+            fallback = _load_tailoring_artifact_or_packet_fallback(
+                path,
+                output_dir=output_dir,
+            )
+        except ValueError:
+            fallback = None
+
+        if fallback is not None:
+            if not bool(fallback.get("tailoring_artifact_missing")):
+                raise
+            artifact_path = Path(fallback["artifact_path"])
+        else:
+            raw_artifact_text = str(path or "").replace("\\", "/")
+            raw_artifact_path = Path(raw_artifact_text)
+            is_run_scoped_expired_optional = (
+                "tmp/pipeline_runs/" in raw_artifact_text
+                and "/application_planning/job_packets/" in raw_artifact_text
+                and _is_optional_tailoring_artifact_path(raw_artifact_path)
+            )
+            if is_run_scoped_expired_optional:
+                return _phase71b_expired_optional_tailoring_artifact_payload(raw_artifact_path)
+            raise
     suffix = artifact_path.suffix.lower()
-    text = artifact_path.read_text(encoding="utf-8")
 
     payload: Dict[str, Any] = {
         "ok": True,
@@ -27142,21 +27585,28 @@ def planning_artifact_payload(
     }
 
     if suffix == ".json":
-        data = json.loads(text)
-        if isinstance(data, dict):
-            if artifact_path.name.endswith("__tailoring.json"):
-                data = _rehydrate_legacy_tailoring_operator_payload(
-                    artifact_path,
-                    data,
-                )
+        if fallback:
+            data = dict(fallback.get("payload_data", {}) or {})
+            payload["artifact_status"] = "missing_optional_tailoring_artifact"
+            payload["source_packet_json_path"] = str(fallback.get("packet_path", "") or "")
+        else:
+            text = artifact_path.read_text(encoding="utf-8")
+            data = json.loads(text)
+            if isinstance(data, dict):
+                if artifact_path.name.endswith("__tailoring.json"):
+                    data = _rehydrate_legacy_tailoring_operator_payload(
+                        artifact_path,
+                        data,
+                    )
 
-            if data.get("replacement_candidates") is not None:
-                data = _apply_saved_patch_selection_overlay(
-                    artifact_path,
-                    data,
-                )
+                if data.get("replacement_candidates") is not None:
+                    data = _apply_saved_patch_selection_overlay(
+                        artifact_path,
+                        data,
+                    )
         payload["data"] = data
     else:
+        text = artifact_path.read_text(encoding="utf-8")
         payload["text"] = text
 
     return payload
@@ -27170,19 +27620,14 @@ def tailoring_scan_preload_payload(
 ) -> Dict[str, Any]:
     from src.tailoring.llm import tailoring_llm_model_config_payload
 
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Scan preload requires a tailoring JSON artifact.")
-
-    artifact_response = planning_artifact_payload(
-        str(artifact_path),
-        output_dir=output_dir,
-    )
-    payload_data = dict(artifact_response.get("data", {}) or {})
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
+    tailoring_artifact_missing = bool(loaded.get("tailoring_artifact_missing"))
 
     if not payload_data:
         raise ValueError("Scan preload could not load tailoring artifact payload.")
@@ -27213,7 +27658,7 @@ def tailoring_scan_preload_payload(
     if not effective_selected_resume:
         raise ValueError("Scan preload requires a selected resume.")
 
-    packet_path = _infer_packet_json_path_from_tailoring_artifact(artifact_path)
+    packet_path = Path(loaded.get("packet_path", "") or "")
 
     trusted_ready = list(payload_data.get("app_ready_replacements", []) or [])
     trusted_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
@@ -27269,12 +27714,34 @@ def tailoring_scan_preload_payload(
 
     return {
         "ok": True,
-        "preload_mode": "tailoring_artifact",
-        "scan_entry_source": "tailoring_suggestions",
+        "preload_mode": (
+            "base_packet_no_suggestions" if tailoring_artifact_missing else "tailoring_artifact"
+        ),
+        "scan_entry_source": (
+            "base_planning_packet" if tailoring_artifact_missing else "tailoring_suggestions"
+        ),
+        "tailoring_artifact_status": (
+            "missing_optional" if tailoring_artifact_missing else "loaded"
+        ),
+        "missing_tailoring_artifact": tailoring_artifact_missing,
+        "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
         "artifact_references": {
             "tailoring_json_path": str(artifact_path),
+            "tailoring_json_key": _planning_artifact_key_for_row_path(
+                artifact_path,
+                output_dir=output_dir,
+            ),
             "packet_json_path": str(packet_path) if packet_path and packet_path.exists() else "",
+            "packet_json_key": (
+                _planning_artifact_key_for_row_path(packet_path, output_dir=output_dir)
+                if packet_path and packet_path.exists()
+                else ""
+            ),
         },
+        "tailoring_json_path": _planning_artifact_key_for_row_path(
+            artifact_path,
+            output_dir=output_dir,
+        ),
         "selected_resume": effective_selected_resume,
         "selected_jd_record": selected_jd_record,
         "job": job,
@@ -27893,27 +28360,14 @@ def load_tailoring_workspace_draft_payload(
     tailoring_json_path: str = "",
     selected_resume: str = "",
 ) -> Dict[str, Any]:
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Workspace draft loading requires a tailoring JSON artifact.")
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
+    tailoring_artifact_missing = bool(loaded.get("tailoring_artifact_missing"))
 
     default_draft = _build_tailoring_workspace_default_draft_payload(
         artifact_path,
@@ -27927,6 +28381,11 @@ def load_tailoring_workspace_draft_payload(
             "ok": True,
             "draft_status": "default",
             "has_saved_draft": False,
+            "tailoring_artifact_status": (
+                "missing_optional" if tailoring_artifact_missing else "loaded"
+            ),
+            "missing_tailoring_artifact": tailoring_artifact_missing,
+            "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
             "draft": default_draft,
         }
 
@@ -27944,6 +28403,11 @@ def load_tailoring_workspace_draft_payload(
             "ok": True,
             "draft_status": "stale_signature",
             "has_saved_draft": False,
+            "tailoring_artifact_status": (
+                "missing_optional" if tailoring_artifact_missing else "loaded"
+            ),
+            "missing_tailoring_artifact": tailoring_artifact_missing,
+            "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
             "draft": stale_draft,
         }
 
@@ -27999,6 +28463,11 @@ def load_tailoring_workspace_draft_payload(
         "ok": True,
         "draft_status": "saved",
         "has_saved_draft": True,
+        "tailoring_artifact_status": (
+            "missing_optional" if tailoring_artifact_missing else "loaded"
+        ),
+        "missing_tailoring_artifact": tailoring_artifact_missing,
+        "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
         "draft": merged,
     }
 
@@ -28015,27 +28484,13 @@ def save_tailoring_workspace_draft_payload(
     personal_details: Any = None,
     note: str = "",
 ) -> Dict[str, Any]:
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Workspace draft saving requires a tailoring JSON artifact.")
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
 
     draft_payload = _build_tailoring_workspace_default_draft_payload(
         artifact_path,
@@ -28540,27 +28995,14 @@ def preview_tailoring_workspace_draft_payload(
     )
     draft = dict(draft_response.get("draft", {}) or {})
 
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    if artifact_path.suffix.lower() != ".json":
-        raise ValueError("Workspace draft preview requires a tailoring JSON artifact.")
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
+    tailoring_artifact_missing = bool(loaded.get("tailoring_artifact_missing"))
 
     valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
 
@@ -28625,6 +29067,50 @@ def preview_tailoring_workspace_draft_payload(
         raise ValueError("Workspace draft preview requires a selected resume.")
 
     manual_edit_count = len(effective_manual_edits)
+
+    if tailoring_artifact_missing and not effective_selected_ids and not manual_edit_count:
+        preview_note = _clean_text(payload_data.get("no_suggestions_reason")) or (
+            "Optional tailoring suggestions were not generated for this planning packet."
+        )
+        return {
+            "ok": True,
+            "preview_status": "no_suggestions",
+            "preview_note": preview_note,
+            "tailoring_json_path": str(artifact_path),
+            "tailoring_artifact_status": "missing_optional",
+            "missing_tailoring_artifact": True,
+            "draft_status": _clean_text(draft_response.get("draft_status")),
+            "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
+            "selected_patch_candidate_ids": [],
+            "manual_bullet_edits": {},
+            "manual_edit_count": 0,
+            "manual_edit_rescore_supported": True,
+            "needs_full_draft_rescore": False,
+            "original_score": None,
+            "projected_score": None,
+            "projected_delta": None,
+            "selected_patch_set_counterfactual_preview": None,
+            "unresolved_manual_edit_keys": [],
+            "rewrite_review_decisions": effective_review_decisions,
+            "rewrite_review_telemetry": effective_review_telemetry,
+            "score_preview": _build_workspace_score_preview_contract(
+                preview_status="no_suggestions",
+                preview_note=preview_note,
+                original_score=None,
+                projected_score=None,
+                projected_delta=None,
+                selected_candidate_ids=[],
+                manual_bullet_edits={},
+                patch_specs=[],
+                unresolved_manual_edit_keys=[],
+            ),
+            "draft_fragments": _build_workspace_draft_fragments_contract(
+                preview_status="no_suggestions",
+                preview_note=preview_note,
+                patch_specs=[],
+                unresolved_manual_edit_keys=[],
+            ),
+        }
 
     try:
         original_resume = _load_resume_evidence_for_workspace_preview(
@@ -32536,23 +33022,13 @@ def _build_tailoring_workspace_export_context(
             raise ValueError("Only a saved tailoring workspace draft can be exported.")
 
     draft = dict(draft_response.get("draft", {}) or {})
-    artifact_path = _resolve_planning_artifact_path(
+    loaded = _load_tailoring_artifact_or_packet_fallback(
         tailoring_json_path,
         output_dir=output_dir,
+        selected_resume=selected_resume,
     )
-
-    payload_data = _load_tailoring_json_artifact(artifact_path)
-    if artifact_path.name.endswith("__tailoring.json"):
-        payload_data = _rehydrate_legacy_tailoring_operator_payload(
-            artifact_path,
-            payload_data,
-        )
-
-    if payload_data.get("replacement_candidates") is not None:
-        payload_data = _apply_saved_patch_selection_overlay(
-            artifact_path,
-            payload_data,
-        )
+    artifact_path = Path(loaded["artifact_path"])
+    payload_data = dict(loaded.get("payload_data", {}) or {})
 
     effective_selected_resume = (
         _sanitize_optional_resume_filename(selected_resume)

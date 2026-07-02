@@ -54,6 +54,50 @@ def _write_tailoring_artifact(output_dir: Path, *, suggestions: bool = True) -> 
     return artifact_path
 
 
+def _write_direction_only_tailoring_artifact(output_dir: Path) -> Path:
+    packet_dir = output_dir / "job_packets"
+    packet_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = packet_dir / "acme__platform_engineer__resume__tailoring.json"
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "job": {
+                    "company": "Acme",
+                    "title": "Platform Engineer",
+                    "description": "Build Python workflow systems.",
+                    "job_doc_id": "job-acme-platform",
+                },
+                "selection": {"selected_resume": "resume.pdf"},
+                "app_ready_replacements": [],
+                "direct_apply_optional_replacements": [],
+                "ai_optimize_optional_replacements": [],
+                "rewrite_directions": [
+                    {
+                        "prefix": "Lead with",
+                        "source": "resume:experience:1",
+                        "direction": "Emphasize workflow automation context.",
+                    }
+                ],
+                "shadow_replacement_candidates": [
+                    {
+                        "candidate_id": "direction-1",
+                        "proposal_status": "direction_only",
+                        "rewrite_direction": "Lead with workflow automation evidence.",
+                    }
+                ],
+                "final_replacement_summary": {
+                    "app_ready_count": 0,
+                    "direct_apply_optional_count": 0,
+                    "ai_optimize_optional_count": 0,
+                    "direction_only_count": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return artifact_path
+
+
 def _write_base_packet(output_dir: Path, *, selected_resume: str = "resume.pdf") -> Path:
     packet_dir = output_dir / "job_packets"
     packet_dir.mkdir(parents=True, exist_ok=True)
@@ -152,6 +196,70 @@ def test_missing_suggestions_are_safe_no_suggestions_state_not_failed_load(tmp_p
     assert row["tailoring_actionable_replacement_count"] == 0
     assert row["planning_output_dir"] == str(output_dir)
     assert row["tailoring_json_key"] == artifact_path.relative_to(output_dir).as_posix()
+
+
+def test_no_artifact_paths_remain_unavailable_tailoring_state(tmp_path):
+    output_dir = tmp_path / "run-scoped" / "application_planning"
+
+    matches, row = services._row_matches_tailoring_state_filter(
+        {
+            "job_doc_id": "job-acme-platform",
+        },
+        ["unavailable"],
+        output_dir=output_dir,
+    )
+
+    assert matches is True
+    assert row["tailoring_workspace_state"] == "unavailable"
+    assert row["tailoring_actionable_replacement_count"] == 0
+    assert row["tailoring_review_replacement_count"] == 0
+
+
+def test_direction_only_artifacts_are_no_safe_rewrites_not_unavailable(tmp_path):
+    output_dir = tmp_path / "run-scoped" / "application_planning"
+    artifact_path = _write_direction_only_tailoring_artifact(output_dir)
+
+    unavailable_matches, unavailable_row = services._row_matches_tailoring_state_filter(
+        {
+            "job_doc_id": "job-acme-platform",
+            "tailoring_json": str(artifact_path),
+        },
+        ["unavailable"],
+        output_dir=output_dir,
+    )
+    no_safe_matches, no_safe_row = services._row_matches_tailoring_state_filter(
+        {
+            "job_doc_id": "job-acme-platform",
+            "tailoring_json": str(artifact_path),
+        },
+        ["no_safe_rewrites"],
+        output_dir=output_dir,
+    )
+
+    assert unavailable_matches is False
+    assert unavailable_row["tailoring_workspace_state"] == "no_safe_rewrites"
+    assert no_safe_matches is True
+    assert no_safe_row["tailoring_workspace_state"] == "no_safe_rewrites"
+    assert no_safe_row["tailoring_actionable_replacement_count"] == 0
+    assert no_safe_row["tailoring_review_replacement_count"] == 1
+
+
+def test_safe_rewrite_artifacts_remain_ready_and_workspace_openable(tmp_path):
+    output_dir = tmp_path / "run-scoped" / "application_planning"
+    artifact_path = _write_tailoring_artifact(output_dir, suggestions=True)
+
+    matches, row = services._row_matches_tailoring_state_filter(
+        {
+            "job_doc_id": "job-acme-platform",
+            "tailoring_json": str(artifact_path),
+        },
+        ["ready"],
+        output_dir=output_dir,
+    )
+
+    assert matches is True
+    assert row["tailoring_workspace_state"] == "ready"
+    assert row["tailoring_actionable_replacement_count"] == 1
 
 
 def test_source_resume_preview_uses_resume_resolver_not_planning_artifact_guard(monkeypatch, tmp_path):
@@ -568,9 +676,13 @@ def test_browser_readback_code_passes_run_scoped_output_dir_to_guarded_endpoints
 
 def test_planning_table_workspace_button_blocks_rows_without_actionable_content():
     planning_js = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    planning_ui_source = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
 
     assert "function getWorkspaceBlockedReason(row)" in planning_js
     assert "No safe bullet-level rewrites were found for this row." in planning_js
+    assert 'workspaceState === "no_safe_rewrites"' in planning_js
+    assert 'data-value="no_safe_rewrites"' in planning_ui_source
+    assert "No safe rewrites" in planning_ui_source
     assert "LLM tailoring generation is off for this row." in planning_js
     assert "data-workspace-blocked-reason" in planning_js
     assert 'const disabledAttr = hasArtifacts && !blockedReason ? "" : "disabled";' in planning_js

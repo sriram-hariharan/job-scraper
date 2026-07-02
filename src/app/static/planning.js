@@ -12001,6 +12001,7 @@ function getTailoringWorkspaceRouteStatusLabel(row) {
 
   if (workspaceState === "ready" || actionableCount > 0) return "Ready suggestions";
   if (workspaceState === "review" || reviewCount > 0) return "Review guidance";
+  if (workspaceState === "no_safe_rewrites") return "No safe rewrites yet";
   if (rawStatus === "failed") return "No safe rewrites yet";
   if (rawStatus) return humanizeUnderscoreLabel(rawStatus);
   return "Suggestions available";
@@ -12055,6 +12056,9 @@ function buildTailoringButtonHtml(row) {
     titleText = reviewCount > 0
       ? `${reviewCount} review-only suggestion${reviewCount === 1 ? "" : "s"} available. No ready replacements yet.`
       : "Review guidance is available, but there are no ready replacements yet.";
+  } else if (hasArtifacts && workspaceState === "no_safe_rewrites") {
+    stateClass = "planning-tailoring-btn--empty";
+    titleText = "No safe bullet-level rewrites were found for this row.";
   } else if (hasArtifacts) {
     stateClass = "planning-tailoring-btn--empty";
     titleText = "Suggestions loaded, but no safe bullet-level rewrites were found.";

@@ -12071,21 +12071,35 @@ def _tailoring_workspace_button_state(
     }
 
     raw_path = _clean_text(row.get("tailoring_json"))
-    if not raw_path:
+    llm_raw_path = _clean_text(row.get("tailoring_llm_json"))
+    if not raw_path and not llm_raw_path:
         return result
 
-    try:
-        artifact_path = _resolve_planning_artifact_path(raw_path, output_dir=output_dir)
-        cache_key = _tailoring_workspace_button_state_cache_key(artifact_path)
-        cached = _TAILORING_WORKSPACE_BUTTON_STATE_CACHE.get(cache_key)
-        if cached is not None:
-            return dict(cached)
-
+    def _state_from_artifact(path_text: str) -> Dict[str, Any]:
+        artifact_path = _resolve_planning_artifact_path(path_text, output_dir=output_dir)
         payload_data = _load_tailoring_json_artifact(artifact_path)
+        return _derive_workspace_button_state_from_raw_payload(payload_data)
 
-        result.update(_derive_workspace_button_state_from_raw_payload(payload_data))
+    try:
+        if raw_path:
+            artifact_path = _resolve_planning_artifact_path(raw_path, output_dir=output_dir)
+            cache_key = _tailoring_workspace_button_state_cache_key(artifact_path)
+            cached = _TAILORING_WORKSPACE_BUTTON_STATE_CACHE.get(cache_key)
+            if cached is not None:
+                result.update(cached)
+            else:
+                result.update(_state_from_artifact(raw_path))
+                _TAILORING_WORKSPACE_BUTTON_STATE_CACHE[cache_key] = dict(result)
 
-        _TAILORING_WORKSPACE_BUTTON_STATE_CACHE[cache_key] = dict(result)
+        if (
+            llm_raw_path
+            and _clean_text(result.get("tailoring_workspace_state")).lower()
+            in {"", "empty", "unavailable"}
+        ):
+            llm_state = _state_from_artifact(llm_raw_path)
+            if _clean_text(llm_state.get("tailoring_workspace_state")).lower() != "empty":
+                result.update(llm_state)
+
     except Exception:
         return result
 

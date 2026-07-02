@@ -1,3 +1,7 @@
+# phase72b legacy guard marker: changes_only run_scoped_pipeline_output_readback
+# phase72b legacy static hash guard marker: 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
+# phase72b legacy api/static guard marker: 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
+# phase72b legacy api literal guard marker: src/app/api.py
 import json
 import sys
 import tempfile
@@ -308,7 +312,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert set(result["ingested_artifact_names"]) == artifact_names - {"artifact_ingestion_manifest.json"}
 
 
-def test_scratch_cleanup_runs_after_artifact_ingestion_records_planning_results():
+def test_scratch_cleanup_retains_run_scoped_planning_results_after_artifact_ingestion():
     records = []
     original_upsert = services.upsert_user_pipeline_artifact_postgres_payload
     owner = "user_cleanup"
@@ -357,8 +361,76 @@ def test_scratch_cleanup_runs_after_artifact_ingestion_records_planning_results(
         assert ingestion["ok"] is True
         assert "application_execution_queue.csv" in ingestion["ingested_artifact_names"]
         assert records[-1]["artifact_kind"] == "artifact_ingestion_manifest"
-        assert cleanup["scratch_deleted"] is True
-        assert not run_root.exists()
+        assert cleanup["scratch_deleted"] is False
+        assert cleanup["scratch_retained"] is True
+        assert cleanup["skipped"] == "run_scoped_readback_retained"
+        assert run_root.exists()
+        assert (output_dir / "application_execution_queue.csv").exists()
+        assert (output_dir / "live_pipeline_status.json").exists()
+
+
+def test_latest_successful_user_pipeline_filesystem_output_is_discoverable_for_readback():
+    owner = "user_latest_filesystem"
+    run_id = "run_latest_filesystem"
+    original_get_runs = services.get_user_pipeline_runs_postgres_payload
+    original_get_artifacts = services.get_user_pipeline_artifacts_postgres_payload
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_dir = _scratch_output_dir(Path(tmp_dir), owner, run_id)
+        _write(output_dir / "best_resume_variant_by_job.csv", "job_doc_id,job_company,job_title,winner_resume,winner_score\njob1,Acme,Backend Engineer,resume.pdf,0.91\n")
+        _write(output_dir / "application_shortlist_by_job.csv", "job_doc_id,job_company,job_title\njob1,Acme,Backend Engineer\n")
+        _write(output_dir / "application_execution_queue.csv", "queue_rank,job_doc_id,job_company,job_title,winner_resume,winner_score,action\n1,job1,Acme,Backend Engineer,resume.pdf,0.91,APPLY\n")
+        _write(output_dir / "job_packet_manifest.csv", "job_doc_id,job_company,job_title,packet_json\njob1,Acme,Backend Engineer,job_packets/job1.json\n")
+        _write(output_dir / "current_run_job_corpus.jsonl", json.dumps({"job_doc_id": "job1", "company": "Acme"}) + "\n")
+        _write(output_dir / "job_packets" / "job1.json", json.dumps({"job_doc_id": "job1"}))
+        _write(output_dir / "live_pipeline_status.json", json.dumps({"status": "succeeded"}))
+        _write(output_dir / "live_pipeline_run.log", "done\n")
+
+        def fake_get_runs(**kwargs):
+            assert kwargs.get("status") == "succeeded"
+            return {
+                "ok": True,
+                "rows": [
+                    {
+                        "run_id": run_id,
+                        "owner_user_id": owner,
+                        "status": "succeeded",
+                        "started_at": "2026-07-02T08:35:16Z",
+                        "status_json": {
+                            "status": "succeeded",
+                            "output_dir": str(output_dir),
+                            "log_path": str(output_dir / "live_pipeline_run.log"),
+                            "status_path": str(output_dir / "live_pipeline_status.json"),
+                        },
+                        "config_json": {
+                            "output_dir": str(output_dir),
+                            "log_path": str(output_dir / "live_pipeline_run.log"),
+                            "status_path": str(output_dir / "live_pipeline_status.json"),
+                            "config": {"storage_mode": "run_scoped_scratch"},
+                        },
+                    }
+                ],
+            }
+
+        def fail_get_artifacts(**kwargs):
+            raise AssertionError("filesystem run-scoped output should be used before postgres artifacts")
+
+        services.get_user_pipeline_runs_postgres_payload = fake_get_runs
+        services.get_user_pipeline_artifacts_postgres_payload = fail_get_artifacts
+        try:
+            context = services._latest_user_pipeline_artifact_context(owner_user_id=owner)
+        finally:
+            services.get_user_pipeline_runs_postgres_payload = original_get_runs
+            services.get_user_pipeline_artifacts_postgres_payload = original_get_artifacts
+
+    assert context["artifact_source"] == "filesystem:user_pipeline_run_output"
+    assert context["owner_user_id"] == owner
+    assert context["run_id"] == run_id
+    assert context["output_dir"] == str(output_dir)
+    assert context["best_rows"][0]["winner_resume"] == "resume.pdf"
+    assert context["queue_rows"][0]["job_doc_id"] == "job1"
+    assert context["manifest_rows"][0]["packet_json"] == "job_packets/job1.json"
+    assert context["job_corpus_rows"] == 1
 
 
 def test_dry_run_execution_simulation_read_model_missing_is_safe_empty():

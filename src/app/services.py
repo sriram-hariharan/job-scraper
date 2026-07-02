@@ -6671,6 +6671,24 @@ def _pipeline_run_status_config(run: Dict[str, Any]) -> tuple[Dict[str, Any], Di
 
 def _pipeline_run_output_dir_from_record(run: Dict[str, Any]) -> str:
     status_json, config_json, nested_config = _pipeline_run_status_config(run)
+    explicit_output_dir = (
+        _clean_text(config_json.get("output_dir"))
+        or _clean_text(status_json.get("output_dir"))
+        or _clean_text(nested_config.get("output_dir"))
+    )
+    if explicit_output_dir:
+        return explicit_output_dir
+
+    for config in (config_json, status_json, nested_config):
+        for key in ("job_corpus_path", "launch_config_path", "status_path", "log_path"):
+            path_text = _clean_text(config.get(key)) if isinstance(config, dict) else ""
+            if not path_text:
+                continue
+            path = Path(path_text).expanduser()
+            parent = path.parent
+            if parent.name == "application_planning":
+                return str(parent)
+
     return (
         _clean_text(config_json.get("output_dir"))
         or _clean_text(status_json.get("output_dir"))

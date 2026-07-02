@@ -262,6 +262,91 @@ def test_safe_rewrite_artifacts_remain_ready_and_workspace_openable(tmp_path):
     assert row["tailoring_actionable_replacement_count"] == 1
 
 
+def test_browse_tailoring_state_filters_separate_unavailable_and_no_safe_rewrites(
+    monkeypatch, tmp_path
+):
+    output_dir = tmp_path / "run-scoped" / "application_planning"
+    empty_tailoring_artifact = _write_tailoring_artifact(output_dir, suggestions=False)
+    direction_only_llm_artifact = _write_direction_only_tailoring_artifact(
+        output_dir / "llm_direction_only"
+    )
+    ready_artifact = _write_tailoring_artifact(output_dir / "ready", suggestions=True)
+
+    manifest_rows = [
+        {
+            "queue_rank": "1",
+            "job_doc_id": "job-no-artifact",
+            "job_company": "No Artifact Co",
+            "job_title": "Pending Variant",
+            "packet_status": "pending_variant_selection",
+        },
+        {
+            "queue_rank": "2",
+            "job_doc_id": "job-direction-only",
+            "job_company": "Direction Co",
+            "job_title": "Direction Only",
+            "packet_status": "generated",
+            "tailoring_json": str(empty_tailoring_artifact),
+            "tailoring_llm_json": str(direction_only_llm_artifact),
+            "packet_json": str(output_dir / "job_packets" / "direction.json"),
+        },
+        {
+            "queue_rank": "3",
+            "job_doc_id": "job-ready",
+            "job_company": "Ready Co",
+            "job_title": "Ready Role",
+            "packet_status": "generated",
+            "tailoring_json": str(ready_artifact),
+            "packet_json": str(output_dir / "ready" / "job_packets" / "ready.json"),
+        },
+    ]
+
+    monkeypatch.setattr(
+        services,
+        "_latest_user_pipeline_artifact_context",
+        lambda owner_user_id="": {
+            "output_dir": str(output_dir),
+            "best_rows": [],
+            "queue_rows": [],
+            "manifest_rows": manifest_rows,
+            "job_prioritization_rows": [],
+            "tailoring_decision_rows": [],
+            "operator_review_rows": [],
+            "current_run_job_corpus_text": "",
+        },
+    )
+    monkeypatch.setattr(services._job_app(), "_overlay_operator_decisions", lambda rows: rows)
+    monkeypatch.setattr(services, "_overlay_application_actions", lambda rows, owner_user_id="": rows)
+    monkeypatch.setattr(services, "_exclude_applied_rows", lambda rows: rows)
+
+    unavailable_payload = services.browse_payload(
+        output_dir=output_dir,
+        tailoring_state=["unavailable"],
+        limit=15,
+    )
+    no_safe_payload = services.browse_payload(
+        output_dir=output_dir,
+        tailoring_state=["no_safe_rewrites"],
+        limit=15,
+    )
+    ready_payload = services.browse_payload(
+        output_dir=output_dir,
+        tailoring_state=["ready"],
+        limit=15,
+    )
+
+    assert [row["job_doc_id"] for row in unavailable_payload["rows"]] == ["job-no-artifact"]
+    assert unavailable_payload["rows"][0]["tailoring_workspace_state"] == "unavailable"
+
+    assert [row["job_doc_id"] for row in no_safe_payload["rows"]] == ["job-direction-only"]
+    assert no_safe_payload["rows"][0]["tailoring_workspace_state"] == "no_safe_rewrites"
+    assert no_safe_payload["rows"][0]["tailoring_actionable_replacement_count"] == 0
+
+    assert [row["job_doc_id"] for row in ready_payload["rows"]] == ["job-ready"]
+    assert ready_payload["rows"][0]["tailoring_workspace_state"] == "ready"
+    assert ready_payload["rows"][0]["tailoring_actionable_replacement_count"] == 1
+
+
 def test_source_resume_preview_uses_resume_resolver_not_planning_artifact_guard(monkeypatch, tmp_path):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)

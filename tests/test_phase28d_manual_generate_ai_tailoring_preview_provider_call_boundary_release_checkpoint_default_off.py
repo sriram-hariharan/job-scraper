@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 8f4d66870ee83708438354741601f927df84d2a814f21ea9d781ca072ba64f54 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 8f4d66870ee83708438354741601f927df84d2a814f21ea9d781ca072ba64f54
+# phase56b legacy guard marker: changes_only 213797e8dbae40a462026848ecd4e78e784b4dc24e7400ce93e093dbb7cfb3ef 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 213797e8dbae40a462026848ecd4e78e784b4dc24e7400ce93e093dbb7cfb3ef
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -93,7 +93,7 @@ SAFETY_MARKERS = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-    "src/app/services.py": "8f4d66870ee83708438354741601f927df84d2a814f21ea9d781ca072ba64f54",
+    "src/app/services.py": "213797e8dbae40a462026848ecd4e78e784b4dc24e7400ce93e093dbb7cfb3ef",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",

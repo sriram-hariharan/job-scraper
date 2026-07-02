@@ -2155,12 +2155,49 @@ function getResumeChoiceModal() {
 }
 
 function normalizeResumeName(value) {
-  return String(value || "").trim();
+  return String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    .trim();
 }
 
-function buildResumePdfFileUrl(resumeName) {
+function isOptionalTailoringArtifactPath(value) {
+  const name = String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    .toLowerCase();
+  return name.endsWith("__tailoring.json") || name.endsWith("_tailoring.json");
+}
+
+function normalizeResumePreviewName(value) {
+  const safeName = normalizeResumeName(value);
+  if (!safeName || safeName.toLowerCase().endsWith(".json") || isOptionalTailoringArtifactPath(safeName)) {
+    return "";
+  }
+  return safeName;
+}
+
+function buildResumePdfFileUrl(resumeName, context = null) {
+  const safeName = normalizeResumePreviewName(resumeName);
+  const packetKey =
+    String(context?.packetJsonKey || context?.packetJsonPath || "").trim();
   const params = new URLSearchParams();
-  params.set("resume_name", resumeName);
+  params.set("resume_name", safeName || "__resolve_from_packet__");
+
+  // Packet context is only required when the resume must be resolved from the packet.
+  // If the selected resume PDF name is already known, stale/expired packet_json must not block preview rendering.
+  if (!safeName && packetKey) {
+    params.set("packet_json", packetKey);
+    const derivedOutputDir =
+      phase71bDeriveRunScopedPlanningOutputDir(packetKey) ||
+      String(context?.planningOutputDir || "").trim();
+    if (derivedOutputDir) params.set("output_dir", derivedOutputDir);
+  }
+
   return `/planning/resume-preview?${params.toString()}`;
 }
 
@@ -3027,20 +3064,21 @@ async function renderTailoringWorkspacePdfPages() {
 }
 
 async function setTailoringWorkspacePreview(resumeName) {
-  const safeName = normalizeResumeName(resumeName);
+  const context = getTailoringWorkspaceContext() || getScanWorkspaceContext();
+  const safeName = normalizeResumePreviewName(resumeName || context?.resumeName || "");
   const nameEl = qs("tailoringWorkspacePreviewName");
 
   tailoringWorkspacePdfState.resumeName = safeName;
   syncTailoringWorkspacePreviewName();
 
-  if (!safeName) {
+  if (!safeName && !getTailoringWorkspaceBasePacketKey(context)) {
     await clearTailoringWorkspacePdfView("No resume selected for this workspace row.");
     return;
   }
 
   try {
     const pdfjsLib = await getTailoringWorkspacePdfJs();
-    const pdfUrl = buildResumePdfFileUrl(safeName);
+    const pdfUrl = buildResumePdfFileUrl(safeName, context);
     const loadToken = ++tailoringWorkspacePdfState.renderToken;
 
     const empty = qs("tailoringWorkspacePreviewEmpty");
@@ -4351,16 +4389,53 @@ function openTailoringModal(row) {
   getTailoringModal().classList.remove("hidden");
 }
 
-function buildArtifactUrl(path) {
+function buildPlanningEndpoint(path, outputDir = "") {
+  const phase71bArtifactPathForOutputDir =
+    typeof safePath !== "undefined" ? safePath :
+    typeof path !== "undefined" ? path :
+    typeof artifactPath !== "undefined" ? artifactPath :
+    typeof tailoringJsonPath !== "undefined" ? tailoringJsonPath :
+    "";
+  const derivedOutputDir = phase71bDeriveRunScopedPlanningOutputDir(phase71bArtifactPathForOutputDir);
+  const safeOutputDir = String(derivedOutputDir || outputDir || "").trim();
+  if (!safeOutputDir) return path;
+
+  const params = new URLSearchParams();
+  params.set("output_dir", safeOutputDir);
+  return `${path}?${params.toString()}`;
+}
+
+
+function phase71bDeriveRunScopedPlanningOutputDir(path) {
+  const raw = String(path || "").replace(/\\/g, "/");
+  const marker = "/application_planning/job_packets/";
+  const idx = raw.indexOf(marker);
+  if (idx < 0) {
+    return "";
+  }
+  return raw.slice(0, idx + "/application_planning".length);
+}
+
+
+function buildArtifactUrl(path, outputDir = "") {
   const params = new URLSearchParams();
   params.set("path", path);
+  const phase71bArtifactPathForOutputDir =
+    typeof safePath !== "undefined" ? safePath :
+    typeof path !== "undefined" ? path :
+    typeof artifactPath !== "undefined" ? artifactPath :
+    typeof tailoringJsonPath !== "undefined" ? tailoringJsonPath :
+    "";
+  const derivedOutputDir = phase71bDeriveRunScopedPlanningOutputDir(phase71bArtifactPathForOutputDir);
+  const safeOutputDir = String(derivedOutputDir || outputDir || "").trim();
+  if (safeOutputDir) params.set("output_dir", safeOutputDir);
   return `/planning-artifact?${params.toString()}`;
 }
 
-async function loadArtifact(path) {
+async function loadArtifact(path, outputDir = "") {
   const raw = String(path || "").trim();
   if (!raw || raw === ".") return null;
-  return fetchJson(buildArtifactUrl(raw));
+  return fetchJson(buildArtifactUrl(raw, outputDir));
 }
 
 function formatMarkdownInline(text) {
@@ -4760,6 +4835,7 @@ function getScanWorkspaceContext() {
   return {
     jobDocId: String(page.dataset.jobDocId || "").trim(),
     tailoringJsonPath: String(page.dataset.tailoringJsonPath || "").trim(),
+    tailoringJsonKey: String(page.dataset.tailoringJsonKey || "").trim(),
     resumeName: String(page.dataset.resumeName || "").trim(),
     company: String(page.dataset.jobCompany || "").trim(),
     title: String(page.dataset.jobTitle || "").trim(),
@@ -4767,6 +4843,8 @@ function getScanWorkspaceContext() {
     tailoringMdPath: String(page.dataset.tailoringMdPath || "").trim(),
     tailoringLlmJsonPath: String(page.dataset.tailoringLlmJsonPath || "").trim(),
     packetJsonPath: String(page.dataset.packetJsonPath || "").trim(),
+    packetJsonKey: String(page.dataset.packetJsonKey || "").trim(),
+    planningOutputDir: String(page.dataset.planningOutputDir || "").trim(),
   };
 }
 
@@ -4777,17 +4855,36 @@ function getTailoringWorkspaceContext() {
   return {
     jobDocId: String(page.dataset.jobDocId || "").trim(),
     tailoringJsonPath: String(page.dataset.tailoringJsonPath || "").trim(),
+    tailoringJsonKey: String(page.dataset.tailoringJsonKey || "").trim(),
     resumeName: String(page.dataset.resumeName || "").trim(),
+    packetJsonKey: String(page.dataset.packetJsonKey || "").trim(),
+    planningOutputDir: String(page.dataset.planningOutputDir || "").trim(),
   };
+}
+
+function getTailoringWorkspaceSuggestionArtifactKey(context) {
+  return String(context?.tailoringJsonKey || context?.tailoringJsonPath || "").trim();
+}
+
+function getTailoringWorkspaceBasePacketKey(context) {
+  return String(context?.packetJsonKey || context?.packetJsonPath || "").trim();
+}
+
+function getTailoringWorkspaceArtifactKey(context) {
+  return getTailoringWorkspaceSuggestionArtifactKey(context);
+}
+
+function getTailoringWorkspaceResumePreviewName(context, fallback = "") {
+  return normalizeResumePreviewName(context?.resumeName || fallback);
 }
 
 async function loadTailoringWorkspaceDraft() {
   const context = getTailoringWorkspaceContext();
-  if (!context || !context.tailoringJsonPath) return null;
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) return null;
 
-  return postJson("/planning/load-workspace-draft", {
-    tailoring_json_path: context.tailoringJsonPath,
-    selected_resume: context.resumeName,
+  return postJson(buildPlanningEndpoint("/planning/load-workspace-draft", context.planningOutputDir), {
+    tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+    selected_resume: getTailoringWorkspaceResumePreviewName(context),
   });
 }
 
@@ -4795,13 +4892,15 @@ function buildTailoringWorkspaceDocumentPreviewRequest() {
   const context = getTailoringWorkspaceContext();
   const payload = getTailoringWorkspacePayload();
 
-  if (!context || !context.tailoringJsonPath) {
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) {
     return null;
   }
 
   return {
-    tailoring_json_path: context.tailoringJsonPath,
-    selected_resume: context.resumeName,
+    tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+    base_packet_path: getTailoringWorkspaceBasePacketKey(context),
+    suggestion_artifact_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+    selected_resume: getTailoringWorkspaceResumePreviewName(context),
     selected_patch_candidate_ids: getTailoringWorkspaceSelectedCandidateIds(),
     manual_bullet_edits: normalizeTailoringWorkspaceManualBulletEdits(
       tailoringWorkspaceState.manualBulletEdits || {},
@@ -4824,7 +4923,7 @@ async function fetchTailoringWorkspaceDocumentPreview() {
 
   try {
     const response = await postJsonWithTimeout(
-      "/planning/render-workspace-draft-preview",
+      buildPlanningEndpoint("/planning/render-workspace-draft-preview", getTailoringWorkspaceContext()?.planningOutputDir),
       requestBody,
       20000
     );
@@ -7755,20 +7854,23 @@ async function handleTailoringWorkspaceExportSelection(format) {
     return;
   }
 
-  if (!context || !context.tailoringJsonPath || !context.resumeName) {
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context) || !getTailoringWorkspaceResumePreviewName(context)) {
     showAppError("Export unavailable", new Error("Missing tailoring workspace context."));
     return;
   }
 
   try {
-    const response = await fetch("/planning/export-workspace-draft", {
+    const response = await fetch(buildPlanningEndpoint(
+      "/planning/export-workspace-draft",
+      context.planningOutputDir
+    ), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        tailoring_json_path: context.tailoringJsonPath,
-        selected_resume: context.resumeName,
+        tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+        selected_resume: getTailoringWorkspaceResumePreviewName(context),
         format: normalizedFormat,
       }),
     });
@@ -7905,7 +8007,7 @@ async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
   const reviewDecisions = getTailoringWorkspaceCurrentReviewDecisionMap();
   const hasManualEdits = Object.keys(manualEdits).length > 0;
 
-  if (!context || !context.tailoringJsonPath) return;
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) return;
   if (!selectedIds.length && !hasManualEdits) return;
 
   tailoringWorkspaceState.activeInlineScoreKey = String(
@@ -7917,9 +8019,9 @@ async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
   updateTailoringWorkspaceSelectionActionBar();
 
   try {
-    const response = await postJson("/planning/preview-workspace-draft", {
-      tailoring_json_path: context.tailoringJsonPath,
-      selected_resume: context.resumeName,
+    const response = await postJson(buildPlanningEndpoint("/planning/preview-workspace-draft", context.planningOutputDir), {
+      tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+      selected_resume: getTailoringWorkspaceResumePreviewName(context),
       selected_patch_candidate_ids: selectedIds,
       manual_bullet_edits: manualEdits,
       rewrite_review_decisions: reviewDecisions,
@@ -7967,16 +8069,16 @@ async function saveTailoringWorkspaceSelection() {
   const context = getTailoringWorkspaceContext();
   const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
 
-  if (!context || !context.tailoringJsonPath) return;
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) return;
 
   tailoringWorkspaceState.isSaving = true;
   refreshTailoringWorkspaceInlineScoreControls();
   updateTailoringWorkspaceSelectionActionBar();
 
   try {
-    const response = await postJson("/planning/save-workspace-draft", {
-      tailoring_json_path: context.tailoringJsonPath,
-      selected_resume: context.resumeName,
+    const response = await postJson(buildPlanningEndpoint("/planning/save-workspace-draft", context.planningOutputDir), {
+      tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+      selected_resume: getTailoringWorkspaceResumePreviewName(context),
       selected_patch_candidate_ids: selectedIds,
       manual_bullet_edits: normalizeTailoringWorkspaceManualBulletEdits(
         tailoringWorkspaceState.manualBulletEdits || {},
@@ -8999,7 +9101,11 @@ async function initTailoringWorkspacePage() {
       meta.textContent = "Loading action-first suggestion set...";
     }
 
-    const tailoringJsonArtifact = await loadArtifact(tailoringJsonPath);
+    const context = getTailoringWorkspaceContext();
+    const tailoringJsonArtifact = await loadArtifact(
+      getTailoringWorkspaceSuggestionArtifactKey(context) || tailoringJsonPath,
+      context?.planningOutputDir
+    );
 
     let draftResponse = null;
     try {
@@ -9050,24 +9156,31 @@ function buildScanWorkspaceBackToTailoringUrl() {
   const params = new URLSearchParams();
   params.set("company", context.company || "");
   params.set("title", context.title || "");
-  params.set("resume", context.resumeName || "");
+  params.set("resume", normalizeResumePreviewName(context.resumeName) || "");
   params.set("status", context.status || "");
   if (context.jobDocId) params.set("job_doc_id", context.jobDocId);
-  if (context.tailoringJsonPath) params.set("tailoring_json", context.tailoringJsonPath);
+  if (getTailoringWorkspaceSuggestionArtifactKey(context)) {
+    params.set("tailoring_json", getTailoringWorkspaceSuggestionArtifactKey(context));
+  }
   if (context.tailoringMdPath) params.set("tailoring_md", context.tailoringMdPath);
   if (context.tailoringLlmJsonPath) params.set("tailoring_llm_json", context.tailoringLlmJsonPath);
-  if (context.packetJsonPath) params.set("packet_json", context.packetJsonPath);
+  if (context.packetJsonKey || context.packetJsonPath) {
+    params.set("packet_json", context.packetJsonKey || context.packetJsonPath);
+  }
+  if (context.planningOutputDir) params.set("output_dir", context.planningOutputDir);
 
   return `/tailoring-workspace?${params.toString()}`;
 }
 
 async function loadScanWorkspacePreload() {
   const context = getScanWorkspaceContext();
-  if (!context || !context.tailoringJsonPath) return null;
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) return null;
 
-  return postJson("/planning/scan-preload", {
-    tailoring_json_path: context.tailoringJsonPath,
-    selected_resume: context.resumeName,
+  return postJson(buildPlanningEndpoint("/planning/scan-preload", context.planningOutputDir), {
+    tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+    base_packet_path: getTailoringWorkspaceBasePacketKey(context),
+    suggestion_artifact_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+    selected_resume: getTailoringWorkspaceResumePreviewName(context),
   });
 }
 
@@ -9254,7 +9367,8 @@ async function applyScanWorkspaceFitPageScale({ rerender = true } = {}) {
 }
 
 async function setScanWorkspaceResumePreview(resumeName) {
-  const safeName = normalizeResumeName(resumeName || "");
+  const context = getScanWorkspaceContext();
+  const safeName = normalizeResumePreviewName(resumeName || context?.resumeName || "");
   const nameEl = qs("scanWorkspacePreviewName");
 
   scanWorkspacePdfState.resumeName = safeName;
@@ -9262,14 +9376,14 @@ async function setScanWorkspaceResumePreview(resumeName) {
     nameEl.textContent = humanizeResumeDisplayName(safeName || "");
   }
 
-  if (!safeName) {
+  if (!safeName && !getTailoringWorkspaceBasePacketKey(context)) {
     await clearScanWorkspacePdfView("No resume selected for this scan.");
     return;
   }
 
   try {
     const pdfjsLib = await getScanWorkspacePdfJs();
-    const pdfUrl = buildResumePdfFileUrl(safeName);
+    const pdfUrl = buildResumePdfFileUrl(safeName, context);
     const loadToken = ++scanWorkspacePdfState.renderToken;
 
     const empty = qs("scanWorkspacePreviewEmpty");
@@ -11431,7 +11545,7 @@ function renderScanWorkspaceView() {
 
 async function previewScanWorkspaceState() {
   const context = getScanWorkspaceContext();
-  if (!context || !context.tailoringJsonPath) return;
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) return;
 
   const selectedIds = getScanWorkspaceSelectedCandidateIds();
   const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
@@ -11441,9 +11555,9 @@ async function previewScanWorkspaceState() {
   updateScanWorkspaceActionBar();
 
   try {
-    const response = await postJson("/planning/preview-workspace-draft", {
-      tailoring_json_path: context.tailoringJsonPath,
-      selected_resume: context.resumeName,
+    const response = await postJson(buildPlanningEndpoint("/planning/preview-workspace-draft", context.planningOutputDir), {
+      tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+      selected_resume: getTailoringWorkspaceResumePreviewName(context),
       selected_patch_candidate_ids: selectedIds,
       manual_bullet_edits: {},
       rewrite_review_decisions: reviewDecisionMap,
@@ -11473,15 +11587,15 @@ async function previewScanWorkspaceState() {
 
 async function saveScanWorkspaceState() {
   const context = getScanWorkspaceContext();
-  if (!context || !context.tailoringJsonPath) return;
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) return;
 
   scanWorkspaceState.isSaving = true;
   updateScanWorkspaceActionBar();
 
   try {
-    const response = await postJson("/planning/save-workspace-draft", {
-      tailoring_json_path: context.tailoringJsonPath,
-      selected_resume: context.resumeName,
+    const response = await postJson(buildPlanningEndpoint("/planning/save-workspace-draft", context.planningOutputDir), {
+      tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
+      selected_resume: getTailoringWorkspaceResumePreviewName(context),
       selected_patch_candidate_ids: getScanWorkspaceSelectedCandidateIds(),
       manual_bullet_edits: {},
       rewrite_review_decisions: getScanWorkspaceCurrentReviewDecisionMap(),
@@ -11757,7 +11871,7 @@ async function initScanWorkspacePage() {
   bindScanWorkspaceHandlers();
   bindScanWorkspacePreviewControls();
 
-  if (!context || !context.tailoringJsonPath) {
+  if (!context || !getTailoringWorkspaceSuggestionArtifactKey(context)) {
     if (meta) {
       meta.textContent = "No tailoring artifact was provided for this scan route.";
     }
@@ -11861,8 +11975,8 @@ function buildTailoringWorkspaceUrl(row) {
   const params = new URLSearchParams();
 
   const selectedResume =
-    normalizeResumeName(row.operator_selected_resume) ||
-    normalizeResumeName(row.winner_resume);
+    normalizeResumePreviewName(row.operator_selected_resume) ||
+    normalizeResumePreviewName(row.winner_resume);
 
   params.set("company", row.job_company || "");
   params.set("title", row.job_title || "");
@@ -11870,10 +11984,11 @@ function buildTailoringWorkspaceUrl(row) {
   params.set("status", getTailoringWorkspaceRouteStatusLabel(row));
 
   if (row.job_doc_id) params.set("job_doc_id", row.job_doc_id);
-  if (row.tailoring_json) params.set("tailoring_json", row.tailoring_json);
+  if (row.tailoring_json_key || row.tailoring_json) params.set("tailoring_json", row.tailoring_json_key || row.tailoring_json);
   if (row.tailoring_md) params.set("tailoring_md", row.tailoring_md);
   if (row.tailoring_llm_json) params.set("tailoring_llm_json", row.tailoring_llm_json);
-  if (row.packet_json) params.set("packet_json", row.packet_json);
+  if (row.packet_json_key || row.packet_json) params.set("packet_json", row.packet_json_key || row.packet_json);
+  if (row.planning_output_dir) params.set("output_dir", row.planning_output_dir);
 
   return `/tailoring-workspace?${params.toString()}`;
 }
@@ -11891,6 +12006,31 @@ function getTailoringWorkspaceRouteStatusLabel(row) {
   return "Suggestions available";
 }
 
+function getWorkspaceBlockedReason(row) {
+  const llmStatus = String(row?.llm_tailoring_status || "").trim().toLowerCase();
+  const workspaceState = String(row?.tailoring_workspace_state || "").trim().toLowerCase();
+  const actionableCount = Number(row?.tailoring_actionable_replacement_count || 0);
+  const statusText = [
+    row?.tailoring_status,
+    row?.llm_tailoring_status,
+    row?.tailoring_workspace_state,
+  ].map((value) => String(value || "").trim().toLowerCase()).join(" ");
+
+  if (["disabled", "off", "false", "not_enabled"].includes(llmStatus) || /generation\s+is\s+off|llm.*\boff\b|disabled/.test(statusText)) {
+    return "LLM tailoring generation is off for this row.";
+  }
+
+  if (
+    actionableCount <= 0 ||
+    ["empty", "unavailable", "review", "no_safe_rewrites"].includes(workspaceState) ||
+    /no safe rewrites|no safe bullet-level rewrites|no safe rewrite candidates/.test(statusText)
+  ) {
+    return "No safe bullet-level rewrites were found for this row.";
+  }
+
+  return "";
+}
+
 function buildTailoringButtonHtml(row) {
   const hasArtifacts = Boolean(
     row.tailoring_json || row.tailoring_md || row.tailoring_llm_json || row.packet_json
@@ -11899,9 +12039,10 @@ function buildTailoringButtonHtml(row) {
   const workspaceState = String(row.tailoring_workspace_state || "empty").trim().toLowerCase();
   const actionableCount = Number(row.tailoring_actionable_replacement_count || 0);
   const reviewCount = Number(row.tailoring_review_replacement_count || 0);
+  const blockedReason = hasArtifacts ? getWorkspaceBlockedReason(row) : "";
 
   const label = hasArtifacts ? "Open Workspace" : "Unavailable";
-  const disabledAttr = hasArtifacts ? "" : "disabled";
+  const disabledAttr = hasArtifacts && !blockedReason ? "" : "disabled";
 
   let stateClass = "planning-tailoring-btn--empty";
   let titleText = "No tailoring artifacts available for this row.";
@@ -11919,8 +12060,16 @@ function buildTailoringButtonHtml(row) {
     titleText = "Suggestions loaded, but no safe bullet-level rewrites were found.";
   }
 
+  if (blockedReason) {
+    stateClass = "planning-tailoring-btn--empty";
+    titleText = blockedReason;
+  }
+
   const buttonClass = `ghost-btn planning-tailoring-btn ${stateClass}`.trim();
   const titleAttr = `title="${escapeHtml(titleText)}"`;
+  const blockedAttr = blockedReason
+    ? `data-workspace-blocked-reason="${escapeHtml(blockedReason)}" aria-disabled="true"`
+    : "";
 
   return `
     <button
@@ -11928,6 +12077,7 @@ function buildTailoringButtonHtml(row) {
       class="${buttonClass}"
       ${disabledAttr}
       ${titleAttr}
+      ${blockedAttr}
       data-view-tailoring="true"
       data-job-doc-id="${escapeHtml(row.job_doc_id || "")}"
       data-job-company="${escapeHtml(row.job_company || "")}"
@@ -11936,9 +12086,12 @@ function buildTailoringButtonHtml(row) {
       data-operator-selected-resume="${escapeHtml(row.operator_selected_resume || "")}"
       data-llm-tailoring-status="${escapeHtml(row.llm_tailoring_status || "")}"
       data-tailoring-json="${escapeHtml(row.tailoring_json || "")}"
+      data-tailoring-json-key="${escapeHtml(row.tailoring_json_key || "")}"
       data-tailoring-md="${escapeHtml(row.tailoring_md || "")}"
       data-tailoring-llm-json="${escapeHtml(row.tailoring_llm_json || "")}"
       data-packet-json="${escapeHtml(row.packet_json || "")}"
+      data-packet-json-key="${escapeHtml(row.packet_json_key || "")}"
+      data-planning-output-dir="${escapeHtml(row.planning_output_dir || "")}"
       data-tailoring-workspace-state="${escapeHtml(row.tailoring_workspace_state || "")}"
       data-tailoring-actionable-replacement-count="${escapeHtml(row.tailoring_actionable_replacement_count || "")}"
       data-tailoring-review-replacement-count="${escapeHtml(row.tailoring_review_replacement_count || "")}"
@@ -11949,6 +12102,11 @@ function buildTailoringButtonHtml(row) {
 }
 
 async function handleTailoringClick(button) {
+  const blockedReason = String(button.dataset.workspaceBlockedReason || "").trim();
+  if (blockedReason) {
+    return;
+  }
+
   const row = {
     job_doc_id: button.dataset.jobDocId || "",
     job_company: button.dataset.jobCompany || "",
@@ -11957,9 +12115,12 @@ async function handleTailoringClick(button) {
     operator_selected_resume: button.dataset.operatorSelectedResume || "",
     llm_tailoring_status: button.dataset.llmTailoringStatus || "",
     tailoring_json: button.dataset.tailoringJson || "",
+    tailoring_json_key: button.dataset.tailoringJsonKey || "",
     tailoring_md: button.dataset.tailoringMd || "",
     tailoring_llm_json: button.dataset.tailoringLlmJson || "",
     packet_json: button.dataset.packetJson || "",
+    packet_json_key: button.dataset.packetJsonKey || "",
+    planning_output_dir: button.dataset.planningOutputDir || "",
     tailoring_workspace_state: button.dataset.tailoringWorkspaceState || "",
     tailoring_actionable_replacement_count: button.dataset.tailoringActionableReplacementCount || "",
     tailoring_review_replacement_count: button.dataset.tailoringReviewReplacementCount || "",

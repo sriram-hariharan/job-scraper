@@ -514,6 +514,7 @@ def test_changed_files_are_limited_to_phase43b_and_legacy_guards():
         "src/app/static/planning.js",
         "src/app/static/scan_workspace.js",
         "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.md",
+            "docs/phase71_tailoring_workspace_artifact_path_preload_repair_default_off.md",
         "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
         "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
         "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",

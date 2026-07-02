@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011 afa591f124c8ca8a0a3f3275143643907326fe5510a99f30029e95386e05a556
-# phase56a legacy guard marker: changes_only f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f 0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011
+# phase56b legacy guard marker: changes_only e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff
 from __future__ import annotations
 
 from copy import deepcopy
@@ -207,8 +207,8 @@ PROTECTED_HASHES = {
     "src/agents/controlled_agent_router_workflow_state_adapter_readonly.py": "4f01b4e58c8e517ec633331da44341ee5596d486ae7d40d38fdca4666d6fa47e",
     "src/agents/controlled_agent_router_readonly.py": "c1cac3d8d1858b5143d0c3ca0082f3b908410020a0e4220c1dea9531cbf3655d",
     "run_controlled_agent_router_planning_artifact_dry_run.py": "1e49a69da5b306272319f2bef5e7162467f294aff4cbe37e8167125a56777dc4",
-    "src/app/api.py": "f9137ef3f8d1cc27fe08f3a592f1cff977a124cb6132a91394ee8350674bea6f",
-    "src/app/services.py": "0631df36d23740a835c22bcb2b9bf4ad682279f76794273889006cad9c4ec011",
+    "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
+    "src/app/services.py": "e86d8305951082be83084c3c4533c70bcd0ea8121da2a6564d862b7eb7b1fbff",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
@@ -583,6 +583,7 @@ def test_changed_files_are_limited_to_phase35b_surface_and_legacy_guards():
         "src/app/static/planning.js",
         "src/app/static/scan_workspace.js",
         "docs/phase55_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.md",
+            "docs/phase71_tailoring_workspace_artifact_path_preload_repair_default_off.md",
         "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
         "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
 

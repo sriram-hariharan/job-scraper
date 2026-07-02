@@ -11918,9 +11918,21 @@ def _derive_workspace_button_state_from_raw_payload(
     direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
     ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
     direction_only = list(payload_data.get("direction_only_replacements", []) or [])
+    rewrite_directions = list(payload_data.get("rewrite_directions", []) or [])
+    shadow_replacement_candidates = list(
+        payload_data.get("shadow_replacement_candidates", []) or []
+    )
     final_replacement_decisions = list(payload_data.get("final_replacement_decisions", []) or [])
     anchor_cards = list(payload_data.get("anchor_cards", []) or [])
     top_anchor_priorities = list(payload_data.get("top_anchor_priorities", []) or [])
+    direction_only_shadow_count = sum(
+        1
+        for candidate in shadow_replacement_candidates
+        if _clean_text(
+            candidate.get("proposal_status") if isinstance(candidate, dict) else ""
+        ).lower()
+        == "direction_only"
+    )
 
     # Fast modern path: use explicit operator payload lanes if they already exist.
     if any(
@@ -11929,6 +11941,8 @@ def _derive_workspace_button_state_from_raw_payload(
             direct_apply_optional,
             ai_optimize_optional,
             direction_only,
+            rewrite_directions,
+            shadow_replacement_candidates,
             final_replacement_decisions,
             anchor_cards,
             top_anchor_priorities,
@@ -11936,7 +11950,7 @@ def _derive_workspace_button_state_from_raw_payload(
     ):
         ready_count = len(app_ready)
         actionable_count = len(app_ready) + len(direct_apply_optional) + len(ai_optimize_optional)
-        review_count = len(direction_only)
+        review_count = max(len(direction_only), len(rewrite_directions), direction_only_shadow_count)
         anchor_count = len(anchor_cards) or len(top_anchor_priorities)
 
         has_replacement_plan = bool(
@@ -11945,13 +11959,15 @@ def _derive_workspace_button_state_from_raw_payload(
             or direct_apply_optional
             or ai_optimize_optional
             or direction_only
+            or rewrite_directions
+            or shadow_replacement_candidates
         )
         has_anchor_evidence = bool(anchor_cards or top_anchor_priorities)
 
         if actionable_count > 0:
             workspace_state = "ready"
         elif review_count > 0 or has_replacement_plan or has_anchor_evidence:
-            workspace_state = "review"
+            workspace_state = "no_safe_rewrites"
         else:
             workspace_state = "empty"
 
@@ -12093,7 +12109,10 @@ def _normalize_tailoring_state_filter_values(value: Any) -> List[str]:
         if text == "empty":
             text = "unavailable"
 
-        if text not in {"ready", "review", "unavailable"}:
+        if text in {"direction_only", "no_safe_rewrite", "no_safe_rewrites"}:
+            text = "no_safe_rewrites"
+
+        if text not in {"ready", "review", "unavailable", "no_safe_rewrites"}:
             continue
 
         if text in seen:

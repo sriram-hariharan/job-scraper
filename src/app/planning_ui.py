@@ -138,6 +138,10 @@ def planning_dashboard() -> str:
                   <span class="multi-select-option-check">✓</span>
                   <span class="multi-select-option-label">Review</span>
                 </button>
+                <button type="button" class="multi-select-option" data-value="no_safe_rewrites" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">No safe rewrites</span>
+                </button>
                 <button type="button" class="multi-select-option" data-value="unavailable" aria-checked="false">
                   <span class="multi-select-option-check">✓</span>
                   <span class="multi-select-option-label">Unavailable</span>

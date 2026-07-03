@@ -569,6 +569,103 @@ def _live_patch_response(*, patch_text=None, source_bullet_id="bullet_sql", sour
     }
 
 
+def _live_patch_packet():
+    return {
+        "job": {"company": "ExampleCo", "title": "Analytics Engineer"},
+        "selection": {"selected_resume": "resume.pdf", "selected_score": 0.81},
+        "summary": {
+            "matched_required": ["SQL", "reporting"],
+            "missing_required": [],
+            "missing_preferred": [],
+        },
+        "guardrail": "Only use supported resume evidence.",
+    }
+
+
+def _live_patch_prompt_payload():
+    payload = _live_patch_payload()
+    packet = _live_patch_packet()
+    payload["live_rewrite_prompt"] = tailoring_llm._build_live_rewrite_prompt(packet, payload)
+    return packet, payload
+
+
+def test_live_rewrite_prompt_default_stays_direction_only_contract():
+    packet, payload = _live_patch_prompt_payload()
+    prompt = payload["live_rewrite_prompt"]
+
+    assert "one top-level key: rewrite_directions" in prompt
+    assert "Output key: rewrite_directions" in prompt
+    assert "concrete_replacement_candidates" not in prompt
+    assert "Concrete candidate source table" not in prompt
+    assert "source_bullet_id:" not in prompt
+    assert "source_entry_id:" not in prompt
+
+
+def test_enabled_live_rewrite_prompt_is_concrete_candidate_aware():
+    packet, payload = _live_patch_prompt_payload()
+    prompt = tailoring_llm._build_live_concrete_rewrite_prompt(packet, payload)
+
+    assert "one top-level key: rewrite_directions" not in prompt
+    assert "Output key: rewrite_directions" not in prompt
+    assert "Required top-level JSON keys:" in prompt
+    assert "rewrite_directions" in prompt
+    assert "concrete_replacement_candidates" in prompt
+    assert "Concrete candidate source table:" in prompt
+    assert "source_bullet_id: bullet_sql" in prompt
+    assert "source_entry_id: entry_sql" in prompt
+    assert "Concrete candidate object schema:" in prompt
+    assert "operation_type: rewrite" in prompt
+    assert "proposal_status: patch_ready" in prompt
+    assert "patch_text: a complete replacement resume bullet, not an instruction." in prompt
+    assert "Compact safe example - do NOT copy this example into output:" in prompt
+    assert "Do NOT invent tools, methods, metrics, skills, domains, employers" in prompt
+    assert "Do NOT inflate credentials" in prompt
+    assert "unsupported_risk_signals: []" in prompt
+
+
+def test_enabled_live_llm_tailoring_parses_groq_json_object_concrete_candidates(monkeypatch, tmp_path):
+    packet, payload = _live_patch_prompt_payload()
+    captured = {}
+
+    def fake_chat_completion(**kwargs):
+        captured["response_schema"] = kwargs.get("response_schema")
+        captured["messages"] = kwargs.get("messages")
+        return {
+            "content": tailoring_llm.json.dumps(_live_patch_response()),
+            "provider": "groq",
+            "model": "llama-3.3-70b-versatile",
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        fake_chat_completion,
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(tmp_path / "tailoring_llm.json"),
+        refresh_llm_cache=True,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+    user_prompt = captured["messages"][1]["content"]
+    assert captured["response_schema"] == tailoring_llm.LIVE_REWRITE_WITH_CONCRETE_PATCH_RESPONSE_SCHEMA
+    assert "one top-level key: rewrite_directions" not in user_prompt
+    assert "concrete_replacement_candidates" in user_prompt
+    assert "source_bullet_id: bullet_sql" in user_prompt
+    assert result["parse_ok"] is True
+    assert result["concrete_replacement_candidates_requested"] is True
+    assert result["raw_response"].startswith("{")
+    candidate = result["parsed"]["concrete_replacement_candidates"][0]
+    assert candidate["source_bullet_id"] == "bullet_sql"
+    assert candidate["proposal_status"] == "patch_ready"
+    assert candidate["patch_text"] == "Built SQL reporting dashboards for weekly stakeholder reporting."
+    assert result["parsed"]["invalid_concrete_replacement_candidates"] == []
+
+
 def test_live_concrete_patch_contract_default_off_ignores_patch_candidates():
     parsed = tailoring_llm._validate_live_llm_parsed_contract(
         _live_patch_response(),

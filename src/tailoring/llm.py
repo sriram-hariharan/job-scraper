@@ -1299,6 +1299,7 @@ def _empty_live_llm_parsed() -> Dict[str, Any]:
         "concrete_replacement_candidates_requested": False,
         "concrete_replacement_candidates": [],
         "invalid_concrete_replacement_candidates": [],
+        "invalid_rewrite_directions": [],
     }
 
 def _build_live_source_alias_map(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -1964,14 +1965,23 @@ def _validate_live_llm_parsed_contract(
     directions = parsed.get("rewrite_directions", [])
     if not isinstance(directions, list):
         raise ValueError("live_llm_contract_rewrite_directions_not_list")
-    if not directions:
+    if not directions and not enable_safe_app_ready_rewrite_promotion:
         raise ValueError("live_llm_contract_empty_rewrite_directions")
 
     anchors = list(((payload.get("evidence_layers", {}) or {}).get("anchors", []) or []))[:4]
     available_source_labels = _live_available_source_labels(payload)
     alias_map = _build_live_source_alias_map(payload)
+    valid_concrete: List[Dict[str, Any]] = []
+    invalid_concrete: List[Dict[str, Any]] = []
+    if enable_safe_app_ready_rewrite_promotion:
+        valid_concrete, invalid_concrete = _normalize_live_concrete_replacement_candidates(
+            parsed,
+            payload,
+            enable_safe_app_ready_rewrite_promotion=True,
+        )
 
     validated: List[Dict[str, str]] = []
+    invalid_rewrite_directions: List[Dict[str, Any]] = []
     lead_support_count = 0
     gap_direction_count = 0
     lead_support_sources: List[str] = []
@@ -2011,6 +2021,18 @@ def _validate_live_llm_parsed_contract(
 
             direction_word_count = len(re.findall(r"\b[\w.+/\-]+\b", direction))
             if direction_word_count < 5:
+                if enable_safe_app_ready_rewrite_promotion:
+                    invalid_rewrite_directions.append(
+                        {
+                            "direction_index": idx,
+                            "validation_status": "rejected",
+                            "validation_reason": f"too_short:{direction_word_count}",
+                            "prefix": prefix,
+                            "source": source,
+                            "direction": direction,
+                        }
+                    )
+                    continue
                 raise ValueError(
                     f"live_llm_contract_direction_{idx}_too_short:{direction_word_count}"
                 )
@@ -2041,7 +2063,14 @@ def _validate_live_llm_parsed_contract(
             }
         )
 
-    if anchors:
+    if (
+        enable_safe_app_ready_rewrite_promotion
+        and not validated
+        and not valid_concrete
+    ):
+        raise ValueError("live_llm_contract_no_valid_rewrite_or_concrete_candidate")
+
+    if anchors and not enable_safe_app_ready_rewrite_promotion:
         if len(validated) < 3:
             raise ValueError("live_llm_contract_anchor_case_requires_3_directions")
 
@@ -2072,13 +2101,9 @@ def _validate_live_llm_parsed_contract(
         "rewrite_directions": validated,
     }
     if enable_safe_app_ready_rewrite_promotion:
-        valid_concrete, invalid_concrete = _normalize_live_concrete_replacement_candidates(
-            parsed,
-            payload,
-            enable_safe_app_ready_rewrite_promotion=True,
-        )
         validated_payload["concrete_replacement_candidates"] = valid_concrete
         validated_payload["invalid_concrete_replacement_candidates"] = invalid_concrete
+        validated_payload["invalid_rewrite_directions"] = invalid_rewrite_directions
         validated_payload["concrete_replacement_candidates_requested"] = True
     else:
         validated_payload["concrete_replacement_candidates_requested"] = False
@@ -2130,6 +2155,9 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
     invalid_concrete_replacement_candidates = list(
         parsed.get("invalid_concrete_replacement_candidates", []) or []
     )
+    invalid_rewrite_directions = list(
+        parsed.get("invalid_rewrite_directions", []) or []
+    )
     concrete_requested = bool(
         parsed.get("concrete_replacement_candidates_requested", False)
     )
@@ -2144,6 +2172,7 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "concrete_replacement_candidates_requested": concrete_requested,
         "concrete_replacement_candidates": concrete_replacement_candidates,
         "invalid_concrete_replacement_candidates": invalid_concrete_replacement_candidates,
+        "invalid_rewrite_directions": invalid_rewrite_directions,
     }
 
 def _stamp_patch_refinement_baseline(candidate: Dict[str, Any]) -> Dict[str, Any]:

@@ -12021,9 +12021,13 @@ function getWorkspaceBlockedReason(row) {
     return "LLM tailoring generation is off for this row.";
   }
 
+  if (workspaceState === "no_safe_rewrites") {
+    return "";
+  }
+
   if (
     actionableCount <= 0 ||
-    ["empty", "unavailable", "review", "no_safe_rewrites"].includes(workspaceState) ||
+    ["empty", "unavailable", "review"].includes(workspaceState) ||
     /no safe rewrites|no safe bullet-level rewrites|no safe rewrite candidates/.test(statusText)
   ) {
     return "No safe bullet-level rewrites were found for this row.";
@@ -12057,8 +12061,8 @@ function buildTailoringButtonHtml(row) {
       ? `${reviewCount} review-only suggestion${reviewCount === 1 ? "" : "s"} available. No ready replacements yet.`
       : "Review guidance is available, but there are no ready replacements yet.";
   } else if (hasArtifacts && workspaceState === "no_safe_rewrites") {
-    stateClass = "planning-tailoring-btn--empty";
-    titleText = "No safe bullet-level rewrites were found for this row.";
+    stateClass = "planning-tailoring-btn--review";
+    titleText = "Review-only guidance is available. No app-ready replacement is available yet.";
   } else if (hasArtifacts) {
     stateClass = "planning-tailoring-btn--empty";
     titleText = "Suggestions loaded, but no safe bullet-level rewrites were found.";

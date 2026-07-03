@@ -1121,9 +1121,12 @@ def test_browser_readback_code_passes_run_scoped_output_dir_to_guarded_endpoints
     assert "tailoring_json_path: suggestionArtifactPath" in scan_workspace_js
 
 
-def test_planning_table_workspace_button_blocks_rows_without_actionable_content():
+def test_planning_table_workspace_button_allows_review_only_no_safe_rewrite_artifacts():
     planning_js = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     planning_ui_source = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    blocked_source = planning_js.split("function getWorkspaceBlockedReason(row)", 1)[1].split(
+        "function buildTailoringButtonHtml", 1
+    )[0]
 
     assert "function getWorkspaceBlockedReason(row)" in planning_js
     assert "No safe bullet-level rewrites were found for this row." in planning_js
@@ -1140,6 +1143,16 @@ def test_planning_table_workspace_button_blocks_rows_without_actionable_content(
     assert '"review"' in planning_js
     assert '"unavailable"' in planning_js
     assert '"disabled"' in planning_js
+    assert 'if (workspaceState === "no_safe_rewrites")' in blocked_source
+    assert 'if (workspaceState === "no_safe_rewrites") {\n    return "";' in blocked_source
+    assert '"no_safe_rewrites"].includes(workspaceState)' not in blocked_source
+    assert "Review-only guidance is available. No app-ready replacement is available yet." in planning_js
+    no_safe_render_source = planning_js.split('workspaceState === "no_safe_rewrites"', 2)[2].split(
+        "} else if (hasArtifacts)",
+        1,
+    )[0]
+    assert 'stateClass = "planning-tailoring-btn--review";' in no_safe_render_source
+    assert "data-workspace-blocked-reason" in planning_js
 
 
 def test_planning_table_workspace_button_preserves_eligible_navigation():

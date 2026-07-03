@@ -288,6 +288,10 @@ def test_protected_backend_and_helper_files_are_unchanged():
 
 def test_phase22e_changes_only_static_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
+        "generate_tailoring_suggestions.py",
+        "src/tailoring/rendering.py",
+        "tests/test_score_first_scan.py",
+
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off 2.py",
     }

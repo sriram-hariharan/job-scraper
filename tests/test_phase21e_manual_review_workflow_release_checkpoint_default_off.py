@@ -113,6 +113,10 @@ def test_phase21e_changes_only_docs_tests_and_legacy_guards():
         text=True,
     ).splitlines()
     changed = set(tracked + untracked) - {
+        "generate_tailoring_suggestions.py",
+        "src/tailoring/rendering.py",
+        "tests/test_score_first_scan.py",
+
         "docs/core_agent_automation_mutation_inventory.md",
         "docs/phase22_core_agent_automation_mutation_inventory.md",
         "src/agents/core_agent_evidence_materialization_preview.py",

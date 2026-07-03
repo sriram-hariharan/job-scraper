@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -131,6 +132,14 @@ def main() -> None:
         help="Ignore any existing live LLM cache and regenerate the LLM tailoring output.",
     )
     parser.add_argument(
+        "--enable-safe-app-ready-rewrite-promotion",
+        action="store_true",
+        help=(
+            "Default-off: allow strictly validated safe app-ready rewrite promotion "
+            "through existing replacement-selector gates."
+        ),
+    )
+    parser.add_argument(
         "--training-log-jsonl",
         default="",
         help="Optional path to append one structured tailoring training-log JSONL row per run.",
@@ -141,7 +150,17 @@ def main() -> None:
     
     packet = _load_packet(Path(args.packet_json))
     payload = _build_payload(packet, include_llm_prompts=args.use_llm)
-    final_payload = _build_operator_markdown_payload(payload, None)
+    enable_safe_app_ready_rewrite_promotion = bool(
+        args.enable_safe_app_ready_rewrite_promotion
+        or os.getenv("APPLYLENS_SAFE_APP_READY_REWRITE_PROMOTION_ENABLED", "false").strip().lower()
+        == "true"
+    )
+
+    final_payload = _build_operator_markdown_payload(
+        payload,
+        None,
+        enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+    )
     markdown = _markdown_from_payload(final_payload)
 
     print("=" * 100)
@@ -260,7 +279,11 @@ def main() -> None:
             )
             print(f"LLM JSON written: {output_llm_json_path}")
         
-        final_payload = _build_operator_markdown_payload(payload, llm_output)
+        final_payload = _build_operator_markdown_payload(
+            payload,
+            llm_output,
+            enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+        )
         markdown = _markdown_from_payload(final_payload)
 
         print()

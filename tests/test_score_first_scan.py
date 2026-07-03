@@ -29,6 +29,7 @@ from src.storage.saved_scans.store import (
     saved_scans_contract_health_payload,
 )
 from src.tailoring.replacement_selector import build_final_replacement_plan
+from src.tailoring import rendering as tailoring_rendering
 from src.tailoring.score_utils import score_delta_to_points, score_to_points
 
 
@@ -333,6 +334,170 @@ def test_selector_demotes_negative_or_neutral_candidates_from_direct_replacement
     assert {row["score_gate"] for row in plan["direction_only_replacements"]} == {
         "score_neutral_guidance"
     }
+
+
+def _direction_only_diagnosis():
+    return {
+        "diagnosis_action": "rewrite",
+        "bullet_id": "bullet_1",
+        "section": "Experience",
+        "source": "Data Analyst",
+        "original_text": "Built reporting dashboards using SQL.",
+        "current_evidence": "Built reporting dashboards using SQL.",
+    }
+
+
+def _direction_only_candidate():
+    return {
+        "candidate_id": "direction_only_1",
+        "source_bullet_id": "bullet_1",
+        "operation_type": "rewrite",
+        "proposal_status": "direction_only",
+        "patch_text": "",
+        "original_text": "Built reporting dashboards using SQL.",
+        "current_evidence": "Built reporting dashboards using SQL.",
+        "rewrite_instruction": "Lead with SQL reporting.",
+        "materiality_validation_status": None,
+        "projected_overall_delta": None,
+        "confidence": "high",
+        "unsupported_risk_signals": [],
+        "adjacent_risk_signals": [],
+        "direction_only_reason": "deterministic_patch_not_available",
+        "supported_jd_signals": ["SQL", "reporting"],
+        "evidence_type": "direct_overlap",
+        "claim_safety": "safe_strengthen",
+    }
+
+
+def test_safe_app_ready_rewrite_promotion_default_off_keeps_direction_only(monkeypatch):
+    called = {"promotion": 0}
+
+    def fake_promote(payload, candidate):
+        called["promotion"] += 1
+        promoted = dict(candidate)
+        promoted.update(
+            {
+                "proposal_status": "patch_ready",
+                "patch_text": "Built SQL reporting dashboards for weekly stakeholder reporting.",
+                "materiality_validation_status": "material_candidate",
+                "projected_overall_delta": 0.04,
+            }
+        )
+        return promoted
+
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_diagnosis_to_replacement_candidate",
+        lambda payload, diagnosis, index: _direction_only_candidate(),
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_merge_anchor_candidates_for_diagnosis",
+        lambda diagnosis, candidates: [],
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_suppress_anchor_candidates_for_diagnosis",
+        lambda diagnosis, candidates: [],
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_materiality_validate_rewrite_candidate",
+        lambda payload, candidate, context: candidate,
+    )
+    monkeypatch.setattr(
+        "src.tailoring.llm._maybe_promote_multisignal_directional_candidate",
+        fake_promote,
+    )
+
+    candidates = tailoring_rendering._build_replacement_candidates(
+        {},
+        [_direction_only_diagnosis()],
+        enable_safe_app_ready_rewrite_promotion=False,
+    )
+    plan = build_final_replacement_plan(candidates, [])
+
+    assert called["promotion"] == 0
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert len(plan["direction_only_replacements"]) == 1
+
+
+def test_safe_app_ready_rewrite_promotion_flag_allows_existing_selector_lane(monkeypatch):
+    def fake_promote(payload, candidate):
+        promoted = dict(candidate)
+        promoted.update(
+            {
+                "proposal_status": "patch_ready",
+                "proposal_type": "patch_ready_rewrite",
+                "patch_ready": True,
+                "patch_text": "Built SQL reporting dashboards for weekly stakeholder reporting.",
+                "materiality_validation_status": "material_candidate",
+                "projected_overall_delta": 0.04,
+                "projected_dimension_deltas": {"required_skills_alignment": 0.04},
+            }
+        )
+        return promoted
+
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_diagnosis_to_replacement_candidate",
+        lambda payload, diagnosis, index: _direction_only_candidate(),
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_merge_anchor_candidates_for_diagnosis",
+        lambda diagnosis, candidates: [],
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_suppress_anchor_candidates_for_diagnosis",
+        lambda diagnosis, candidates: [],
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_materiality_validate_rewrite_candidate",
+        lambda payload, candidate, context: candidate,
+    )
+    monkeypatch.setattr(
+        "src.tailoring.llm._maybe_promote_multisignal_directional_candidate",
+        fake_promote,
+    )
+
+    candidates = tailoring_rendering._build_replacement_candidates(
+        {},
+        [_direction_only_diagnosis()],
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+    plan = build_final_replacement_plan(candidates, [])
+
+    assert plan["app_ready_replacements"][0]["replacement_candidate_id"] == "direction_only_1"
+    assert plan["app_ready_replacements"][0]["score_gate"] == "direct_replacement"
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"] == []
+
+
+def test_instruction_looking_patch_text_remains_non_actionable():
+    plan = build_final_replacement_plan(
+        [
+            _candidate(
+                "instruction_like",
+                delta=0.05,
+                patch_text=(
+                    "Lead with SQL reporting in this opening clause, then keep "
+                    "the remaining context only if truthful."
+                ),
+            )
+        ],
+        [],
+    )
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"][0]["score_gate"] == "direct_replacement"
 
 
 def test_scan_issue_contract_marks_direct_guidance_and_hidden_score_gate_items():

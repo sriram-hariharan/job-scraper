@@ -361,6 +361,9 @@ def test_protected_backend_and_helper_files_are_unchanged():
 def test_phase23f_changes_only_static_docs_tests_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+        "generate_tailoring_suggestions.py",
+        "src/tailoring/rendering.py",
+        "tests/test_score_first_scan.py",
         "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.md",
         "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",

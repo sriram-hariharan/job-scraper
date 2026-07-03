@@ -196,7 +196,7 @@ PROTECTED_HASHES = {
     "src/agents/jd_evidence_score_impact_review_queue_builder_default_off.py": "c3080e881850ec75472e1e57727829db2866236139a84cc29a3ecd2ebe7ef6df",
     "run_jd_evidence_score_impact_review_queue_builder_dry_run.py": "77e2e06b1c99433f832c6b3a238f26c662ae8a382874500f33087aed8fdcdfab",
     "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
-    "generate_tailoring_suggestions.py": "a5e3dda138232fadc6d69bd9f2468459ce2759d961687bf1fa9ee9970c5490c2",
+    "generate_tailoring_suggestions.py": "559a66a7c7a1963d322a1e7b3f0fd3ede1ea161a9be2d176dcce0ef1016ea9ff",
     "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "application_execution_queue.py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
@@ -488,6 +488,9 @@ def test_protected_runtime_hashes_unchanged():
 
 def test_changed_files_are_limited_to_phase42b_and_legacy_guards():
     allowed = {
+        "generate_tailoring_suggestions.py",
+        "src/tailoring/rendering.py",
+        "tests/test_score_first_scan.py",
         "run_exact_resume_change_set_proposal_builder_dry_run.py",
         "docs/phase42_exact_resume_change_set_proposal_builder_dry_run_command_default_off.md",
         "docs/phase50_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.md",

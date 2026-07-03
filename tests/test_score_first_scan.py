@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 sys.modules.setdefault("pycountry", types.SimpleNamespace(countries=[]))
 
 from src.app.services import (
@@ -569,6 +571,23 @@ def _live_patch_response(*, patch_text=None, source_bullet_id="bullet_sql", sour
     }
 
 
+def _live_patch_response_with_short_directions(**kwargs):
+    response = _live_patch_response(**kwargs)
+    response["rewrite_directions"] = [
+        {
+            "prefix": "Lead with",
+            "source": "Data Analyst @ ExampleCo",
+            "direction": "sql reporting",
+        },
+        {
+            "prefix": "Support with",
+            "source": "Data Analyst @ ExampleCo",
+            "direction": "weekly context",
+        },
+    ]
+    return response
+
+
 def _live_patch_packet():
     return {
         "job": {"company": "ExampleCo", "title": "Analytics Engineer"},
@@ -664,6 +683,84 @@ def test_enabled_live_llm_tailoring_parses_groq_json_object_concrete_candidates(
     assert candidate["proposal_status"] == "patch_ready"
     assert candidate["patch_text"] == "Built SQL reporting dashboards for weekly stakeholder reporting."
     assert result["parsed"]["invalid_concrete_replacement_candidates"] == []
+
+
+def test_enabled_live_llm_tailoring_keeps_valid_concrete_candidate_when_directions_are_short(monkeypatch, tmp_path):
+    packet, payload = _live_patch_prompt_payload()
+
+    def fake_chat_completion(**kwargs):
+        return {
+            "content": tailoring_llm.json.dumps(_live_patch_response_with_short_directions()),
+            "provider": "groq",
+            "model": "llama-3.3-70b-versatile",
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        fake_chat_completion,
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(tmp_path / "tailoring_llm.json"),
+        refresh_llm_cache=True,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+    assert result["parse_ok"] is True
+    assert result["parsed"]["rewrite_directions"] == []
+    assert result["parsed"]["concrete_replacement_candidates"][0]["source_bullet_id"] == "bullet_sql"
+    assert [
+        row["validation_reason"]
+        for row in result["parsed"]["invalid_rewrite_directions"]
+    ] == ["too_short:2", "too_short:2"]
+    assert result["parsed"]["invalid_concrete_replacement_candidates"] == []
+
+
+def test_enabled_live_llm_tailoring_short_directions_without_valid_concrete_still_fails(monkeypatch, tmp_path):
+    packet, payload = _live_patch_prompt_payload()
+
+    def fake_chat_completion(**kwargs):
+        return {
+            "content": tailoring_llm.json.dumps(
+                _live_patch_response_with_short_directions(
+                    patch_text="Lead with SQL reporting in the opening clause.",
+                )
+            ),
+            "provider": "groq",
+            "model": "llama-3.3-70b-versatile",
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        fake_chat_completion,
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(tmp_path / "tailoring_llm.json"),
+        refresh_llm_cache=True,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+    assert result["parse_ok"] is False
+    assert "live_llm_contract_no_valid_rewrite_or_concrete_candidate" in result["parse_error"]
+    assert result["parsed"]["concrete_replacement_candidates"] == []
+
+
+def test_live_concrete_patch_contract_default_off_still_rejects_short_direction():
+    with pytest.raises(ValueError, match="live_llm_contract_direction_1_too_short"):
+        tailoring_llm._validate_live_llm_parsed_contract(
+            _live_patch_response_with_short_directions(),
+            _live_patch_payload(),
+            enable_safe_app_ready_rewrite_promotion=False,
+        )
 
 
 def test_live_concrete_patch_contract_default_off_ignores_patch_candidates():

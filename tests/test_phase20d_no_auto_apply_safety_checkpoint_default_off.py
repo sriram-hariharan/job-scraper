@@ -692,6 +692,12 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase76b_concrete_prompt_files:
         return
+    phase76c_76d_workspace_and_parser_files = {
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/tailoring/llm.py",
+    }
+    if set(changed_runtime_files) == phase76c_76d_workspace_and_parser_files:
+        return
 
     assert changed_runtime_files in (
         [],

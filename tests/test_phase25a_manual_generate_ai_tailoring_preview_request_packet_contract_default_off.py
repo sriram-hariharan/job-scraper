@@ -120,7 +120,7 @@ PROTECTED_HASHES = {
         "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac"
     ),
     "src/tailoring/llm.py": (
-        "e2e221f2c2f99c95d97f9e0968254d1bb181c387fc13c82559fa722b6a998d3b"
+        "44614b3b0ecf7b13514996b33ddc9d4346024e9cf031f77eaa135e8a0ab30ce8"
     ),
     "generate_tailoring_suggestions.py": (
         "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28"

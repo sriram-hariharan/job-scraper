@@ -6401,6 +6401,43 @@ def _has_concrete_keep_anchor(candidate: Dict[str, Any]) -> bool:
 
     return True
 
+
+def _live_concrete_replacement_candidates_from_llm_output(
+    llm_output: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not isinstance(llm_output, dict):
+        return []
+    parsed = llm_output.get("parsed", {}) or {}
+    if not isinstance(parsed, dict):
+        return []
+    if not bool(parsed.get("concrete_replacement_candidates_requested", False)):
+        return []
+
+    candidates: List[Dict[str, Any]] = []
+    for row in list(parsed.get("concrete_replacement_candidates", []) or []):
+        if not isinstance(row, dict):
+            continue
+        candidate = dict(row)
+        if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+            continue
+        if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
+            continue
+        patch_text = str(candidate.get("patch_text", "") or "").strip()
+        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        if not patch_text or not source_bullet_id:
+            continue
+        if _looks_like_directional_instruction_text(patch_text):
+            continue
+        if list(candidate.get("unsupported_risk_signals", []) or []):
+            continue
+        candidate.setdefault("patch_generation_method", "live_llm_concrete_patch_candidate")
+        candidate.setdefault("proposal_type", "patch_ready_rewrite")
+        candidate.setdefault("patch_ready", True)
+        candidate.setdefault("llm_refinement_used", True)
+        candidates.append(candidate)
+    return candidates
+
+
 def _build_replacement_candidates(
     payload: Dict[str, Any],
     bullet_diagnoses: List[Dict[str, Any]],
@@ -6519,6 +6556,27 @@ def _build_replacement_candidates(
 
         if len(candidates) >= limit:
             break
+
+    if enable_safe_app_ready_rewrite_promotion:
+        for candidate in _live_concrete_replacement_candidates_from_llm_output(llm_output):
+            candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+            source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+            patch_text = str(candidate.get("patch_text", "") or "").strip()
+            key = ("live_concrete", source_bullet_id, patch_text)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            candidate = _materiality_validate_rewrite_candidate(
+                payload,
+                candidate,
+                counterfactual_context,
+            )
+            if candidate_id:
+                candidate["candidate_id"] = candidate_id
+            candidates.append(candidate)
+            if len(candidates) >= limit:
+                break
 
     # Pass 2: reorder companions only when the bullet does not already have a
     # grounded patch-ready rewrite. Otherwise reorder is just duplicate noise.

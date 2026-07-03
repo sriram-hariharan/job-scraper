@@ -225,6 +225,7 @@ def main() -> None:
             payload=payload,
             output_llm_json=args.output_llm_json or "",
             refresh_llm_cache=args.refresh_llm_cache,
+            enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
         )
 
         print("-" * 100)

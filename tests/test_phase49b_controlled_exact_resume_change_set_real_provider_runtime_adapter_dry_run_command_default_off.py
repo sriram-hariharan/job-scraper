@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668
+# phase56b legacy guard marker: changes_only f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8
 from __future__ import annotations
 
 from hashlib import sha256
@@ -21,8 +21,8 @@ DOC_PATH = (
 
 PROTECTED_HASHES = {
     "src/agents/controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py": "7e3cea001fb2ded35c1d998e22d156568492a4b76804a76d4142a329d18c5c97",
-    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
-    "generate_tailoring_suggestions.py": "559a66a7c7a1963d322a1e7b3f0fd3ede1ea161a9be2d176dcce0ef1016ea9ff",
+    "src/tailoring/llm.py": "e2e221f2c2f99c95d97f9e0968254d1bb181c387fc13c82559fa722b6a998d3b",
+    "generate_tailoring_suggestions.py": "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28",
     "src/agents/controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py": "cfeff0858be6f9177956a1e4b76af6d3ada1775f2833b7a1a1575a1f17aae03a",
     "run_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run.py": "07497f149c37d7e43068299c439f3dac29cd172cf95ec73c7bdb070f816fc32d",
     "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py": "413ace0d64f8c1bd62726cf7ae32bc4fc8e4b88eca82826492362d9842f569ef",
@@ -536,6 +536,7 @@ def test_changed_files_limited_to_phase49b_surface_and_legacy_guards():
     import subprocess
 
     allowed = {
+        "src/tailoring/llm.py",
         "generate_tailoring_suggestions.py",
         "src/tailoring/rendering.py",
         "tests/test_score_first_scan.py",

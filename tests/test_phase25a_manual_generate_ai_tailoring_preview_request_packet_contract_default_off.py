@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668
+# phase56b legacy guard marker: changes_only f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
 from __future__ import annotations
@@ -90,7 +90,7 @@ PROTECTED_HASHES = {
         "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"
     ),
     "src/app/services.py": (
-        "4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668"
+        "f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8"
     ),
     "src/app/static/agentic_review.js": (
         "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"
@@ -120,10 +120,10 @@ PROTECTED_HASHES = {
         "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac"
     ),
     "src/tailoring/llm.py": (
-        "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28"
+        "e2e221f2c2f99c95d97f9e0968254d1bb181c387fc13c82559fa722b6a998d3b"
     ),
     "generate_tailoring_suggestions.py": (
-        "559a66a7c7a1963d322a1e7b3f0fd3ede1ea161a9be2d176dcce0ef1016ea9ff"
+        "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28"
     ),
     "application_execution_queue.py": (
         "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
@@ -390,6 +390,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         if line and line[:2].strip()
     }
     allowed = {
+        "src/tailoring/llm.py",
         "generate_tailoring_suggestions.py",
         "src/tailoring/rendering.py",
         "tests/test_score_first_scan.py",

@@ -30,6 +30,7 @@ from src.storage.saved_scans.store import (
 )
 from src.tailoring.replacement_selector import build_final_replacement_plan
 from src.tailoring import rendering as tailoring_rendering
+from src.tailoring import llm as tailoring_llm
 from src.tailoring.score_utils import score_delta_to_points, score_to_points
 
 
@@ -498,6 +499,191 @@ def test_instruction_looking_patch_text_remains_non_actionable():
     assert plan["direct_apply_optional_replacements"] == []
     assert plan["ai_optimize_optional_replacements"] == []
     assert plan["direction_only_replacements"][0]["score_gate"] == "direct_replacement"
+
+
+def _live_patch_payload(*, duplicate_source=False):
+    anchor = {
+        "source_bullet_id": "bullet_sql",
+        "source_entry_id": "entry_sql",
+        "section": "Experience",
+        "source": "Data Analyst @ ExampleCo",
+        "text": "Built SQL reporting dashboards for weekly stakeholder reporting.",
+        "parent_bullet": "Built SQL reporting dashboards for weekly stakeholder reporting.",
+        "overlaps": ["SQL", "reporting"],
+        "supported_terms": ["SQL", "reporting"],
+    }
+    anchors = [anchor]
+    if duplicate_source:
+        anchors.append({**anchor, "source_bullet_id": "bullet_sql_duplicate"})
+    return {
+        "job": {"company": "ExampleCo", "title": "Analytics Engineer"},
+        "summary": {
+            "matched_required": ["SQL", "reporting"],
+            "matched_preferred": [],
+            "matched_terms": ["SQL", "reporting"],
+        },
+        "evidence_layers": {
+            "anchors": anchors,
+            "supports": [],
+            "context": [],
+        },
+        "edit_cards": [],
+    }
+
+
+def _live_patch_response(*, patch_text=None, source_bullet_id="bullet_sql", source="Data Analyst @ ExampleCo", unsupported=None):
+    return {
+        "rewrite_directions": [
+            {
+                "prefix": "Lead with",
+                "source": "Data Analyst @ ExampleCo",
+                "direction": "sql reporting dashboards in opening clause",
+            },
+            {
+                "prefix": "Support with",
+                "source": "Data Analyst @ ExampleCo",
+                "direction": "weekly stakeholder reporting context remains explicit",
+            },
+            {
+                "prefix": "Keep gap explicit",
+                "source": "",
+                "direction": "unsupported certifications not present in evidence",
+            },
+        ],
+        "concrete_replacement_candidates": [
+            {
+                "source_bullet_id": source_bullet_id,
+                "source_entry_id": "entry_sql",
+                "section": "Experience",
+                "source": source,
+                "original_text": "Built SQL reporting dashboards for weekly stakeholder reporting.",
+                "operation_type": "rewrite",
+                "proposal_status": "patch_ready",
+                "patch_text": patch_text or "Built SQL reporting dashboards for weekly stakeholder reporting.",
+                "why_this_improves_match": "Keeps SQL and reporting visible.",
+                "unsupported_risk_signals": list(unsupported or []),
+                "adjacent_risk_signals": [],
+                "confidence": "high",
+            }
+        ],
+    }
+
+
+def test_live_concrete_patch_contract_default_off_ignores_patch_candidates():
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _live_patch_response(),
+        _live_patch_payload(),
+        enable_safe_app_ready_rewrite_promotion=False,
+    )
+    normalized = tailoring_llm._normalize_live_llm_parsed(parsed)
+
+    assert normalized["concrete_replacement_candidates_requested"] is False
+    assert normalized["concrete_replacement_candidates"] == []
+
+
+def test_live_concrete_patch_contract_enabled_accepts_safe_patch_candidate():
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _live_patch_response(),
+        _live_patch_payload(),
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+    normalized = tailoring_llm._normalize_live_llm_parsed(parsed)
+
+    assert normalized["concrete_replacement_candidates_requested"] is True
+    assert normalized["invalid_concrete_replacement_candidates"] == []
+    candidate = normalized["concrete_replacement_candidates"][0]
+    assert candidate["proposal_status"] == "patch_ready"
+    assert candidate["patch_text"] == "Built SQL reporting dashboards for weekly stakeholder reporting."
+
+
+def test_live_concrete_patch_contract_rejects_instruction_and_unsupported_patch_text():
+    instruction_parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _live_patch_response(
+            patch_text="Lead with SQL reporting in the opening clause.",
+        ),
+        _live_patch_payload(),
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+    unsupported_parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _live_patch_response(
+            patch_text="Built Snowflake reporting dashboards for weekly stakeholder reporting.",
+            unsupported=["Snowflake"],
+        ),
+        _live_patch_payload(),
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+    assert instruction_parsed["concrete_replacement_candidates"] == []
+    assert instruction_parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"] == (
+        "instructional_patch_text_not_literal_bullet"
+    )
+    assert unsupported_parsed["concrete_replacement_candidates"] == []
+    assert unsupported_parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"] == (
+        "unsupported_risk_signals_present"
+    )
+
+
+def test_live_concrete_patch_contract_rejects_missing_and_ambiguous_source_bullets():
+    missing = tailoring_llm._validate_live_llm_parsed_contract(
+        _live_patch_response(source_bullet_id="missing"),
+        _live_patch_payload(),
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+    ambiguous = tailoring_llm._validate_live_llm_parsed_contract(
+        _live_patch_response(source_bullet_id="", source="Data Analyst @ ExampleCo"),
+        _live_patch_payload(duplicate_source=True),
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+    assert missing["concrete_replacement_candidates"] == []
+    assert missing["invalid_concrete_replacement_candidates"][0]["validation_reason"] == (
+        "source_bullet_not_found"
+    )
+    assert ambiguous["concrete_replacement_candidates"] == []
+    assert ambiguous["invalid_concrete_replacement_candidates"][0]["validation_reason"] == (
+        "ambiguous_source_bullet"
+    )
+
+
+def test_enabled_live_concrete_patch_can_reach_existing_selector_lane(monkeypatch):
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _live_patch_response(),
+        _live_patch_payload(),
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+    normalized = tailoring_llm._normalize_live_llm_parsed(parsed)
+    llm_output = {"parsed": normalized}
+
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_materiality_validate_rewrite_candidate",
+        lambda payload, candidate, context: {
+            **candidate,
+            "materiality_validation_status": "material_candidate",
+            "projected_overall_delta": 0.05,
+            "projected_dimension_deltas": {"required_skills_alignment": 0.05},
+        },
+    )
+
+    candidates = tailoring_rendering._build_replacement_candidates(
+        _live_patch_payload(),
+        [],
+        llm_output=llm_output,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+    plan = build_final_replacement_plan(candidates, [])
+
+    assert any(row["candidate_id"] == "live_concrete_candidate:1" for row in candidates)
+    actionable = (
+        plan["app_ready_replacements"]
+        + plan["direct_apply_optional_replacements"]
+        + plan["ai_optimize_optional_replacements"]
+    )
+    assert actionable[0]["replacement_candidate_id"] == "live_concrete_candidate:1"
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["app_ready_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"]
+    assert plan["direction_only_replacements"] == []
 
 
 def test_scan_issue_contract_marks_direct_guidance_and_hidden_score_gate_items():

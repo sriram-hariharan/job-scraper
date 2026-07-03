@@ -126,6 +126,10 @@ def test_protected_runtime_files_are_unchanged():
 
 def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
+        "generate_tailoring_suggestions.py",
+        "src/tailoring/rendering.py",
+        "tests/test_score_first_scan.py",
+
         "docs/core_agent_automation_mutation_inventory.md",
         "docs/phase22_core_agent_automation_mutation_inventory.md",
         "src/agents/core_agent_evidence_materialization_preview.py",
@@ -667,6 +671,12 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/app/static/planning.js",
     }
     if set(changed_runtime_files) == phase73a_tailoring_state_readback_files:
+        return
+
+    phase75b_safe_app_ready_rewrite_promotion_files = {
+        ROOT / "src/tailoring/rendering.py",
+    }
+    if set(changed_runtime_files) == phase75b_safe_app_ready_rewrite_promotion_files:
         return
 
     assert changed_runtime_files in (

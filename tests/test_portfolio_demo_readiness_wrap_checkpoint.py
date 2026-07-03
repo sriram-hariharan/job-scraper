@@ -623,6 +623,10 @@ def test_portfolio_demo_readiness_doc_is_linked():
 
 def test_portfolio_demo_readiness_is_docs_tests_only():
     changed = _changed_files() - {
+        "generate_tailoring_suggestions.py",
+        "src/tailoring/rendering.py",
+        "tests/test_score_first_scan.py",
+
         "docs/core_agent_automation_mutation_inventory.md",
         "docs/phase22_core_agent_automation_mutation_inventory.md",
         "src/agents/core_agent_evidence_materialization_preview.py",

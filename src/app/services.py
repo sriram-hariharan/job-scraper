@@ -27311,11 +27311,22 @@ def _resolve_planning_artifact_candidate_path(
 
     output_root = Path(output_dir).expanduser().resolve()
     raw_path = Path(raw).expanduser()
-    resolved = (
-        raw_path.resolve()
-        if raw_path.is_absolute()
-        else (output_root / raw_path).resolve()
-    )
+    if raw_path.is_absolute():
+        resolved = raw_path.resolve()
+    else:
+        output_relative = (output_root / raw_path).resolve()
+        cwd_relative = (Path.cwd() / raw_path).resolve()
+        try:
+            cwd_relative.relative_to(output_root)
+            cwd_relative_is_guarded = True
+        except ValueError:
+            cwd_relative_is_guarded = False
+
+        resolved = (
+            cwd_relative
+            if cwd_relative_is_guarded and cwd_relative.exists()
+            else output_relative
+        )
 
     try:
         resolved.relative_to(output_root)

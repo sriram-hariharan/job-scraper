@@ -147,6 +147,34 @@ def test_run_scoped_tailoring_artifact_loads_without_relaxing_path_guard(tmp_pat
         )
 
 
+def test_repo_relative_run_scoped_artifact_path_resolves_inside_output_guard(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.chdir(tmp_path)
+    output_dir = Path("tmp/pipeline_runs/owner-1/run-1/application_planning")
+    artifact_path = output_dir / "job_packets" / "sample__tailoring_llm.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(json.dumps({"parse_ok": True, "parsed": {}}), encoding="utf-8")
+
+    resolved = services._resolve_planning_artifact_path(
+        str(artifact_path),
+        output_dir=output_dir,
+    )
+
+    assert resolved == artifact_path.resolve()
+    assert resolved.relative_to(output_dir.resolve())
+
+    outside_artifact = Path("tmp/pipeline_runs/owner-1/other-run/application_planning/job_packets/outside.json")
+    outside_artifact.parent.mkdir(parents=True, exist_ok=True)
+    outside_artifact.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="Artifact"):
+        services._resolve_planning_artifact_path(
+            str(outside_artifact),
+            output_dir=output_dir,
+        )
+
+
 def test_tailoring_workspace_draft_and_scan_preload_use_same_run_scoped_output_dir(tmp_path):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)
@@ -531,6 +559,126 @@ def test_actual_browse_route_classifies_runtime_tailoring_states_after_enrichmen
         row["job_doc_id"]: row["tailoring_workspace_state"]
         for row in no_filter_payload["rows"]
     }
+    assert state_by_job["job-no-artifact"] == "unavailable"
+    assert state_by_job["job-direction-only"] == "no_safe_rewrites"
+    assert state_by_job["job-ready"] == "ready"
+
+    no_safe_payload = client.get(
+        "/browse",
+        params={"tailoring_state": "no_safe_rewrites", "limit": 15, "page": 1},
+    ).json()
+    unavailable_payload = client.get(
+        "/browse",
+        params={"tailoring_state": "unavailable", "limit": 15, "page": 1},
+    ).json()
+    ready_payload = client.get(
+        "/browse",
+        params={"tailoring_state": "ready", "limit": 15, "page": 1},
+    ).json()
+
+    assert [row["job_doc_id"] for row in no_safe_payload["rows"]] == ["job-direction-only"]
+    assert no_safe_payload["rows"][0]["tailoring_workspace_state"] == "no_safe_rewrites"
+    assert no_safe_payload["rows"][0]["tailoring_actionable_replacement_count"] == 0
+
+    assert [row["job_doc_id"] for row in unavailable_payload["rows"]] == ["job-no-artifact"]
+    assert unavailable_payload["total_count"] == 1
+    assert unavailable_payload["total_count"] != no_filter_payload["total_count"]
+
+    assert [row["job_doc_id"] for row in ready_payload["rows"]] == ["job-ready"]
+    assert ready_payload["rows"][0]["tailoring_workspace_state"] == "ready"
+    assert ready_payload["rows"][0]["tailoring_actionable_replacement_count"] == 1
+
+
+def test_actual_browse_route_resolves_repo_relative_run_scoped_manifest_paths(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.chdir(tmp_path)
+    output_dir = Path("tmp/pipeline_runs/owner-1/run-1/application_planning")
+    empty_tailoring_artifact = _write_tailoring_artifact(output_dir, suggestions=False)
+    ready_artifact = _write_tailoring_artifact(output_dir / "ready", suggestions=True)
+    llm_dir = output_dir / "job_packets"
+    llm_dir.mkdir(parents=True, exist_ok=True)
+    direction_only_llm_artifact = llm_dir / "direction_only__tailoring_llm.json"
+    direction_only_llm_artifact.write_text(
+        json.dumps(
+            {
+                "parse_ok": True,
+                "parsed": {
+                    "rewrite_directions": [
+                        "Lead with workflow automation evidence while preserving scope."
+                    ],
+                },
+                "shadow_replacement_candidates": [
+                    {
+                        "candidate_id": "direction-1",
+                        "proposal_status": "direction_only",
+                        "rewrite_direction": "Lead with workflow automation evidence.",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest_path = output_dir / "job_packet_manifest.csv"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        "\n".join(
+            [
+                "queue_rank,job_doc_id,job_company,job_title,packet_status,llm_tailoring_status,packet_json,tailoring_json,tailoring_md,tailoring_llm_json",
+                "1,job-no-artifact,No Artifact Co,Pending Variant,pending_variant_selection,,,,,",
+                (
+                    "2,job-direction-only,Direction Co,Direction Only,generated,generated,"
+                    f"{output_dir / 'job_packets' / 'direction.json'},"
+                    f"{empty_tailoring_artifact},"
+                    f"{output_dir / 'job_packets' / 'direction.md'},"
+                    f"{direction_only_llm_artifact}"
+                ),
+                (
+                    "3,job-ready,Ready Co,Ready Role,generated,generated,"
+                    f"{output_dir / 'ready' / 'job_packets' / 'ready.json'},"
+                    f"{ready_artifact},"
+                    f"{output_dir / 'ready' / 'job_packets' / 'ready.md'},"
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_runs_payload(**kwargs):
+        return {
+            "rows": [
+                {
+                    "run_id": "run-1",
+                    "status": "succeeded",
+                    "status_json": {
+                        "config": {
+                            "storage_mode": "run_scoped_scratch",
+                            "job_corpus_path": str(output_dir / "current_run_job_corpus.jsonl"),
+                            "launch_config_path": str(output_dir / "live_pipeline_launch_config.json"),
+                            "status_path": str(output_dir / "live_pipeline_status.json"),
+                            "log_path": str(output_dir / "live_pipeline_run.log"),
+                        }
+                    },
+                }
+            ]
+        }
+
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    monkeypatch.setattr(api, "_auth_owner_user_id", lambda request: "owner-1")
+    monkeypatch.setattr(services, "get_user_pipeline_runs_postgres_payload", fake_runs_payload)
+    monkeypatch.setattr(services._job_app(), "_overlay_operator_decisions", lambda rows: rows)
+    monkeypatch.setattr(services, "_overlay_application_actions", lambda rows, owner_user_id="": rows)
+    monkeypatch.setattr(services, "_exclude_applied_rows", lambda rows: rows)
+    client = TestClient(api.app)
+
+    no_filter_payload = client.get("/browse", params={"limit": 15, "page": 1}).json()
+    state_by_job = {
+        row["job_doc_id"]: row["tailoring_workspace_state"]
+        for row in no_filter_payload["rows"]
+    }
+
     assert state_by_job["job-no-artifact"] == "unavailable"
     assert state_by_job["job-direction-only"] == "no_safe_rewrites"
     assert state_by_job["job-ready"] == "ready"

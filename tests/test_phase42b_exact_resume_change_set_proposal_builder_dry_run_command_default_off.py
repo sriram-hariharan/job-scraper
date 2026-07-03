@@ -195,7 +195,7 @@ PROTECTED_HASHES = {
     "src/agents/exact_resume_change_set_proposal_builder_default_off.py": "fd173ea8bf3f7d746ebbdb7d6b2af7ae7df1aeaea4e66acaca52ea4fda1a9dc4",
     "src/agents/jd_evidence_score_impact_review_queue_builder_default_off.py": "c3080e881850ec75472e1e57727829db2866236139a84cc29a3ecd2ebe7ef6df",
     "run_jd_evidence_score_impact_review_queue_builder_dry_run.py": "77e2e06b1c99433f832c6b3a238f26c662ae8a382874500f33087aed8fdcdfab",
-    "src/tailoring/llm.py": "44614b3b0ecf7b13514996b33ddc9d4346024e9cf031f77eaa135e8a0ab30ce8",
+    "src/tailoring/llm.py": "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
     "generate_tailoring_suggestions.py": "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28",
     "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",

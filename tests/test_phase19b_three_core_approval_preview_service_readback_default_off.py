@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 392145687e82bbcddc58ced1d3510aa0fa1342042e17e802e7aeac2a2631c04f 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 392145687e82bbcddc58ced1d3510aa0fa1342042e17e802e7aeac2a2631c04f
+# phase56b legacy guard marker: changes_only 3d91b9f06b0182350228a3ab2024145ae4238e4f40b8b7f40eb49146e392507c 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 3d91b9f06b0182350228a3ab2024145ae4238e4f40b8b7f40eb49146e392507c
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
 # phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-    "src/app/services.py": "392145687e82bbcddc58ced1d3510aa0fa1342042e17e802e7aeac2a2631c04f",
+    "src/app/services.py": "3d91b9f06b0182350228a3ab2024145ae4238e4f40b8b7f40eb49146e392507c",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",

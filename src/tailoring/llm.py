@@ -109,6 +109,64 @@ LIVE_REWRITE_RESPONSE_SCHEMA = {
     "required": ["rewrite_directions"],
 }
 
+LIVE_REWRITE_WITH_CONCRETE_PATCH_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        **LIVE_REWRITE_RESPONSE_SCHEMA["properties"],
+        "concrete_replacement_candidates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "source_bullet_id": {"type": "string"},
+                    "source_entry_id": {"type": "string"},
+                    "section": {"type": "string"},
+                    "source": {"type": "string"},
+                    "original_text": {"type": "string"},
+                    "operation_type": {"type": "string"},
+                    "proposal_status": {"type": "string"},
+                    "patch_text": {"type": "string"},
+                    "why_this_improves_match": {"type": "string"},
+                    "unsupported_risk_signals": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "adjacent_risk_signals": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "confidence": {"type": "string"},
+                },
+                "required": [
+                    "source_bullet_id",
+                    "source_entry_id",
+                    "section",
+                    "source",
+                    "original_text",
+                    "operation_type",
+                    "proposal_status",
+                    "patch_text",
+                    "why_this_improves_match",
+                    "unsupported_risk_signals",
+                    "adjacent_risk_signals",
+                    "confidence",
+                ],
+            },
+        },
+    },
+    "required": ["rewrite_directions", "concrete_replacement_candidates"],
+}
+
+
+def _live_rewrite_response_schema(
+    enable_safe_app_ready_rewrite_promotion: bool,
+) -> Dict[str, Any]:
+    if enable_safe_app_ready_rewrite_promotion:
+        return LIVE_REWRITE_WITH_CONCRETE_PATCH_RESPONSE_SCHEMA
+    return LIVE_REWRITE_RESPONSE_SCHEMA
+
 PATCH_REFINEMENT_PROVIDER = os.getenv(
     "PATCH_REFINEMENT_PROVIDER",
     "groq",
@@ -1059,6 +1117,9 @@ def _empty_live_llm_parsed() -> Dict[str, Any]:
         "tailoring_actions": [],
         "do_not_claim": [],
         "rewrite_directions": [],
+        "concrete_replacement_candidates_requested": False,
+        "concrete_replacement_candidates": [],
+        "invalid_concrete_replacement_candidates": [],
     }
 
 def _build_live_source_alias_map(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -1367,6 +1428,258 @@ def _build_live_shadow_replacement_plan(
     }
 
 
+def _live_evidence_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    evidence_layers = payload.get("evidence_layers", {}) or {}
+    rows: List[Dict[str, Any]] = []
+    for key in ("anchors", "supports", "context"):
+        for row in list(evidence_layers.get(key, []) or []):
+            if isinstance(row, dict):
+                rows.append(row)
+    return rows
+
+
+def _row_bullet_id(row: Dict[str, Any]) -> str:
+    return (
+        _text(row.get("source_bullet_id", ""))
+        or _text(row.get("bullet_id", ""))
+        or _text(row.get("source_entry_id", ""))
+        or _text(row.get("entry_id", ""))
+    )
+
+
+def _resolve_live_concrete_source_row(
+    candidate: Dict[str, Any],
+    payload: Dict[str, Any],
+) -> Tuple[Optional[Dict[str, Any]], str]:
+    rows = _live_evidence_rows(payload)
+    source_bullet_id = _text(candidate.get("source_bullet_id", ""))
+    source_entry_id = _text(candidate.get("source_entry_id", ""))
+    source = _text(candidate.get("source", "")).rstrip(".")
+    alias_map = _build_live_source_alias_map(payload)
+    canonical_source = (
+        alias_map.get(source)
+        or alias_map.get(_cleanup_live_source_label(source))
+        or _cleanup_live_source_label(source)
+    )
+
+    matches: List[Dict[str, Any]] = []
+    if source_bullet_id:
+        matches = [row for row in rows if _row_bullet_id(row) == source_bullet_id]
+    elif source_entry_id:
+        matches = [
+            row for row in rows
+            if (
+                _text(row.get("source_entry_id", ""))
+                or _text(row.get("entry_id", ""))
+            ) == source_entry_id
+        ]
+    elif source:
+        matches = [
+            row for row in rows
+            if (
+                _cleanup_live_source_label(_display_row_source(row)) == canonical_source
+                or _text(_display_row_source(row)).rstrip(".") == source
+            )
+        ]
+
+    if not matches:
+        return None, "source_bullet_not_found"
+    if len(matches) > 1:
+        return None, "ambiguous_source_bullet"
+    return matches[0], ""
+
+
+def _looks_like_live_directional_instruction_text(text: str) -> bool:
+    normalized = " ".join(str(text or "").split()).strip().lower()
+    if not normalized:
+        return False
+    instruction_prefixes = (
+        "lead with ",
+        "support with ",
+        "keep this bullet",
+        "move this bullet",
+        "do not rewrite ",
+        "review this bullet",
+        "treat this as ",
+        "if space is tight, ",
+        "replace the original bullet with ",
+        "only merge if ",
+        "keep gap explicit ",
+    )
+    return normalized.startswith(instruction_prefixes)
+
+
+def _obvious_unbacked_patch_tokens(
+    patch_text: str,
+    row: Dict[str, Any],
+    payload: Dict[str, Any],
+) -> List[str]:
+    evidence_text = " ".join(
+        str(value or "")
+        for value in (
+            row.get("text", ""),
+            row.get("parent_bullet", ""),
+            row.get("overlaps", ""),
+            row.get("supported_terms", ""),
+            row.get("semantic_terms", ""),
+            payload.get("job", {}).get("title", ""),
+            payload.get("job", {}).get("company", ""),
+            payload.get("summary", {}).get("matched_required", ""),
+            payload.get("summary", {}).get("matched_preferred", ""),
+            payload.get("summary", {}).get("matched_terms", ""),
+        )
+    ).lower()
+    evidence_tokens = set(re.findall(r"[A-Za-z][A-Za-z0-9+#./-]{2,}", evidence_text))
+    patch_tokens = re.findall(r"\b[A-Z][A-Za-z0-9+#./-]{2,}\b|\b[A-Z]{2,}\b", patch_text)
+    allowed_common = {
+        "Built", "Led", "Managed", "Created", "Developed", "Delivered",
+        "Improved", "Supported", "Drove", "Designed", "Implemented",
+        "Analyzed", "Used", "Using", "Partnered", "Collaborated",
+    }
+    unbacked = []
+    for token in patch_tokens:
+        if token in allowed_common:
+            continue
+        if token.lower() not in evidence_tokens:
+            unbacked.append(token)
+    return _unique_preserve_order(unbacked)[:8]
+
+
+def _normalize_live_concrete_replacement_candidates(
+    parsed: Dict[str, Any],
+    payload: Dict[str, Any],
+    *,
+    enable_safe_app_ready_rewrite_promotion: bool,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    if not enable_safe_app_ready_rewrite_promotion:
+        return [], []
+
+    raw_candidates = parsed.get("concrete_replacement_candidates", []) or []
+    if not isinstance(raw_candidates, list):
+        return [], [
+            {
+                "candidate_id": "live_concrete_candidate:invalid_contract",
+                "validation_status": "rejected",
+                "validation_reason": "concrete_replacement_candidates_not_list",
+            }
+        ]
+
+    valid: List[Dict[str, Any]] = []
+    invalid: List[Dict[str, Any]] = []
+    seen_bullets = set()
+
+    for idx, item in enumerate(raw_candidates, start=1):
+        if not isinstance(item, dict):
+            invalid.append(
+                {
+                    "candidate_id": f"live_concrete_candidate:{idx}",
+                    "validation_status": "rejected",
+                    "validation_reason": "candidate_not_object",
+                }
+            )
+            continue
+
+        candidate_id = f"live_concrete_candidate:{idx}"
+        patch_text = _text(item.get("patch_text", ""))
+        operation_type = _text(item.get("operation_type", ""))
+        proposal_status = _text(item.get("proposal_status", ""))
+        unsupported = [
+            _text(value)
+            for value in list(item.get("unsupported_risk_signals", []) or [])
+            if _text(value)
+        ]
+
+        row, source_error = _resolve_live_concrete_source_row(item, payload)
+        reason = ""
+        if operation_type != "rewrite":
+            reason = "unsupported_operation_type"
+        elif proposal_status != "patch_ready":
+            reason = "not_patch_ready"
+        elif not patch_text:
+            reason = "missing_patch_text"
+        elif _looks_like_live_directional_instruction_text(patch_text):
+            reason = "instructional_patch_text_not_literal_bullet"
+        elif unsupported:
+            reason = "unsupported_risk_signals_present"
+        elif row is None:
+            reason = source_error or "source_bullet_not_found"
+        else:
+            source_bullet_id = _row_bullet_id(row)
+            if not source_bullet_id:
+                reason = "missing_source_bullet_id"
+            elif source_bullet_id in seen_bullets:
+                reason = "duplicate_source_bullet"
+            else:
+                unbacked_tokens = _obvious_unbacked_patch_tokens(patch_text, row, payload)
+                if unbacked_tokens:
+                    reason = "obvious_unbacked_patch_tokens:" + ",".join(unbacked_tokens)
+
+        if reason:
+            invalid.append(
+                {
+                    "candidate_id": candidate_id,
+                    "validation_status": "rejected",
+                    "validation_reason": reason,
+                    "source_bullet_id": _text(item.get("source_bullet_id", "")),
+                    "source_entry_id": _text(item.get("source_entry_id", "")),
+                    "source": _text(item.get("source", "")),
+                    "patch_text": patch_text,
+                }
+            )
+            continue
+
+        assert row is not None
+        source_entry_id = (
+            _text(row.get("source_entry_id", ""))
+            or _text(row.get("entry_id", ""))
+            or _text(item.get("source_entry_id", ""))
+        )
+        source_bullet_id = _row_bullet_id(row)
+        seen_bullets.add(source_bullet_id)
+        original_text = (
+            _text(row.get("parent_bullet", ""))
+            or _text(row.get("text", ""))
+            or _text(item.get("original_text", ""))
+        )
+        source_label = _text(item.get("source", "")) or _display_row_source(row)
+
+        valid.append(
+            {
+                "candidate_id": candidate_id,
+                "operation_type": "rewrite",
+                "proposal_status": "patch_ready",
+                "proposal_type": "patch_ready_rewrite",
+                "patch_ready": True,
+                "source_bullet_id": source_bullet_id,
+                "source_entry_id": source_entry_id,
+                "section": _text(item.get("section", "")) or _text(row.get("section", "")),
+                "source": source_label,
+                "original_text": original_text,
+                "current_evidence": original_text,
+                "parent_bullet": _text(row.get("parent_bullet", "")) or original_text,
+                "proposed_text": patch_text,
+                "patch_text": patch_text,
+                "rewrite_instruction": "",
+                "why_this_improves_match": _text(item.get("why_this_improves_match", "")),
+                "patch_generation_method": "live_llm_concrete_patch_candidate",
+                "materiality_validation_status": "",
+                "projected_overall_delta": None,
+                "confidence": _text(item.get("confidence", "")) or "medium",
+                "adjacent_risk_signals": [
+                    _text(value)
+                    for value in list(item.get("adjacent_risk_signals", []) or [])
+                    if _text(value)
+                ],
+                "unsupported_risk_signals": [],
+                "likely_impacted_dimensions": [],
+                "llm_refinement_used": True,
+                "live_concrete_candidate_validation_status": "accepted_for_materiality_gate",
+            }
+        )
+
+    return valid, invalid
+
+
 def _canonicalize_live_direction_objects(
     directions: List[Dict[str, Any]],
     payload: Dict[str, Any],
@@ -1463,6 +1776,8 @@ def _coerce_live_rewrite_direction(item: Any) -> str:
 def _validate_live_llm_parsed_contract(
     parsed: Dict[str, Any],
     payload: Dict[str, Any],
+    *,
+    enable_safe_app_ready_rewrite_promotion: bool = False,
 ) -> Dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("live_llm_contract_not_object")
@@ -1574,9 +1889,21 @@ def _validate_live_llm_parsed_contract(
                     + ",".join(sorted(dominant_sources))
                 )
 
-    return {
+    validated_payload: Dict[str, Any] = {
         "rewrite_directions": validated,
     }
+    if enable_safe_app_ready_rewrite_promotion:
+        valid_concrete, invalid_concrete = _normalize_live_concrete_replacement_candidates(
+            parsed,
+            payload,
+            enable_safe_app_ready_rewrite_promotion=True,
+        )
+        validated_payload["concrete_replacement_candidates"] = valid_concrete
+        validated_payload["invalid_concrete_replacement_candidates"] = invalid_concrete
+        validated_payload["concrete_replacement_candidates_requested"] = True
+    else:
+        validated_payload["concrete_replacement_candidates_requested"] = False
+    return validated_payload
 
 def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
     raw_rewrite_directions = parsed.get("rewrite_directions", []) or []
@@ -1618,6 +1945,16 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
         if item
     ]
 
+    concrete_replacement_candidates = list(
+        parsed.get("concrete_replacement_candidates", []) or []
+    )
+    invalid_concrete_replacement_candidates = list(
+        parsed.get("invalid_concrete_replacement_candidates", []) or []
+    )
+    concrete_requested = bool(
+        parsed.get("concrete_replacement_candidates_requested", False)
+    )
+
     return {
         "recruiter_summary": str(parsed.get("recruiter_summary", "")).strip(),
         "keep_emphasize": _normalize_string_list(parsed.get("keep_emphasize", [])),
@@ -1625,6 +1962,9 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "do_not_claim": _normalize_string_list(parsed.get("do_not_claim", [])),
         "rewrite_directions": normalized_rewrite_directions,
         "rewrite_directions_structured": structured_rewrite_directions,
+        "concrete_replacement_candidates_requested": concrete_requested,
+        "concrete_replacement_candidates": concrete_replacement_candidates,
+        "invalid_concrete_replacement_candidates": invalid_concrete_replacement_candidates,
     }
 
 def _stamp_patch_refinement_baseline(candidate: Dict[str, Any]) -> Dict[str, Any]:
@@ -3289,7 +3629,11 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, Any]:
+def _compute_live_llm_cache_meta(
+    packet: Dict[str, Any],
+    *,
+    enable_safe_app_ready_rewrite_promotion: bool = False,
+) -> Dict[str, Any]:
     packet_sha256 = _sha256_text(_canonical_json(packet))
 
     job_doc_id = str(
@@ -3316,6 +3660,9 @@ def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, Any]:
             "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
             "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
             "prompt_version": LLM_TAILOR_PROMPT_VERSION,
+            "safe_app_ready_rewrite_promotion_enabled": bool(
+                enable_safe_app_ready_rewrite_promotion
+            ),
         }
     )
 
@@ -3330,6 +3677,9 @@ def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, Any]:
         "fallback_enabled": TAILOR_LLM_FALLBACK_ENABLED,
         "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
         "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+        "safe_app_ready_rewrite_promotion_enabled": bool(
+            enable_safe_app_ready_rewrite_promotion
+        ),
     }
 
 
@@ -3379,6 +3729,12 @@ def _load_live_llm_cache(
     if cached.get("prompt_version") != LLM_TAILOR_PROMPT_VERSION:
         return None
 
+    if cached.get("safe_app_ready_rewrite_promotion_enabled") != expected_meta.get(
+        "safe_app_ready_rewrite_promotion_enabled",
+        False,
+    ):
+        return None
+
     cached["cache_hit"] = True
     return cached
 
@@ -3403,8 +3759,12 @@ def _run_live_llm_tailoring(
     payload: Dict[str, Any],
     output_llm_json: str = "",
     refresh_llm_cache: bool = False,
+    enable_safe_app_ready_rewrite_promotion: bool = False,
 ) -> Dict[str, Any]:
-    cache_meta = _compute_live_llm_cache_meta(packet)
+    cache_meta = _compute_live_llm_cache_meta(
+        packet,
+        enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+    )
 
     if not refresh_llm_cache:
         cached_result = _load_live_llm_cache(
@@ -3415,6 +3775,19 @@ def _run_live_llm_tailoring(
             return cached_result
 
     prompt = payload["live_rewrite_prompt"]
+    if enable_safe_app_ready_rewrite_promotion:
+        prompt = (
+            f"{prompt}\n\n"
+            "Optional concrete replacement candidates:\n"
+            "- Also return concrete_replacement_candidates as an array. Use [] if no safe concrete patch is possible.\n"
+            "- Each concrete candidate must be a complete replacement resume bullet, not an instruction.\n"
+            "- Set operation_type to rewrite.\n"
+            "- Set proposal_status to patch_ready only when patch_text is a literal complete replacement bullet.\n"
+            "- Copy source_bullet_id, source_entry_id, section, source, and original_text from the evidence source when available.\n"
+            "- Do NOT invent tools, metrics, employers, domains, responsibilities, credentials, outcomes, or unsupported claims.\n"
+            "- Preserve original factual claims unless the fact is present in source evidence.\n"
+            "- If a concrete patch would require unsupported facts, omit it and keep direction-only guidance.\n"
+        )
 
 #     primary_system_prompt = """
 # You generate evidence-anchored resume tailoring JSON.
@@ -3456,6 +3829,27 @@ You MUST obey these rules:
 16. Lead with / Support with direction fragments must be at least 5 words and materially specific.
 17. Avoid ultra-short fragments like "excel reporting" or "sql visibility".
 """
+    if enable_safe_app_ready_rewrite_promotion:
+        primary_system_prompt = """
+You generate evidence-anchored resume rewrite directions and optional concrete replacement bullets.
+
+You MUST obey these rules:
+1. Return ONLY JSON with top-level keys: rewrite_directions and concrete_replacement_candidates.
+2. Use ONLY the supplied evidence.
+3. Do NOT invent tools, methods, metrics, skills, domains, employers, responsibilities, credentials, or outcomes.
+4. Direct-overlap bullets are the only primary anchors.
+5. Semantic-similarity bullets are support only.
+6. Same-role or adjacent-context bullets are lowest-priority support only.
+7. If anchor bullets exist, return at least 3 rewrite_directions.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
+9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
+10. Every Lead with / Support with item must reference a specific source entry.
+11. concrete_replacement_candidates is optional evidence-backed patch text; return [] when no safe concrete patch exists.
+12. A concrete candidate patch_text must be a complete replacement bullet, not an instruction.
+13. Do not put rewrite directions, writing advice, or "Lead with..." text into patch_text.
+14. Preserve original factual claims unless a changed fact is present in source evidence.
+15. If unsupported_risk_signals would be non-empty, omit the concrete candidate and keep direction-only guidance.
+"""
 
 #     retry_system_prompt = """
 # You are returning JSON for a strict Python parser.
@@ -3493,6 +3887,22 @@ You MUST obey these rules:
 12. Do not concentrate 3 or more Lead with / Support with items on the same source label.
 13. Use ONLY the supplied evidence. Do NOT invent anything.
 """
+    if enable_safe_app_ready_rewrite_promotion:
+        retry_system_prompt = """
+You are returning JSON for a strict Python parser.
+
+You MUST obey these rules:
+1. Return ONLY valid JSON.
+2. Do NOT return markdown, code fences, commentary, or explanatory text.
+3. Keep the entire JSON on a single line.
+4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
+5. Use empty arrays instead of null.
+6. Output ONLY top-level keys: rewrite_directions and concrete_replacement_candidates.
+7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
+8. concrete_replacement_candidates may be [].
+9. concrete patch_text must be a complete replacement bullet, not an instruction.
+10. Use ONLY the supplied evidence. Do NOT invent tools, metrics, domains, employers, responsibilities, outcomes, or unsupported claims.
+"""
 
     fallback_attempted = bool(
         TAILOR_LLM_FALLBACK_ENABLED
@@ -3509,7 +3919,9 @@ You MUST obey these rules:
             temperature=LLM_TAILOR_TEMPERATURE,
             max_tokens=LLM_TAILOR_MAX_TOKENS,
             response_mime_type="application/json",
-            response_schema=LIVE_REWRITE_RESPONSE_SCHEMA,
+            response_schema=_live_rewrite_response_schema(
+                enable_safe_app_ready_rewrite_promotion
+            ),
             return_parsed=True,
             thinking_budget=0,
             fallback_enabled=TAILOR_LLM_FALLBACK_ENABLED,
@@ -3560,7 +3972,11 @@ You MUST obey these rules:
         value = llm_result.get("content")
 
         if isinstance(value, dict):
-            parsed = _validate_live_llm_parsed_contract(value, payload)
+            parsed = _validate_live_llm_parsed_contract(
+                value,
+                payload,
+                enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+            )
             parsed["rewrite_directions"] = _canonicalize_live_direction_objects(
                 parsed.get("rewrite_directions", []),
                 payload,
@@ -3584,6 +4000,9 @@ You MUST obey these rules:
                     "raw_response": raw_response,
                     "retry_raw_response": retry_raw_response,
                     "parsed": normalized,
+                    "concrete_replacement_candidates_requested": bool(
+                        enable_safe_app_ready_rewrite_promotion
+                    ),
                     **shadow_payload,
                 },
                 cache_meta,
@@ -3592,7 +4011,11 @@ You MUST obey these rules:
 
         raw = _raw_text(value)
         parsed = _extract_json_from_llm_response(raw)
-        parsed = _validate_live_llm_parsed_contract(parsed, payload)
+        parsed = _validate_live_llm_parsed_contract(
+            parsed,
+            payload,
+            enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+        )
         parsed["rewrite_directions"] = _canonicalize_live_direction_objects(
             parsed.get("rewrite_directions", []),
             payload,
@@ -3616,6 +4039,9 @@ You MUST obey these rules:
                 "raw_response": raw_response,
                 "retry_raw_response": retry_raw_response,
                 "parsed": normalized,
+                "concrete_replacement_candidates_requested": bool(
+                    enable_safe_app_ready_rewrite_promotion
+                ),
                 **shadow_payload,
             },
             cache_meta,

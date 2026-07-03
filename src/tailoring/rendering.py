@@ -6406,6 +6406,7 @@ def _build_replacement_candidates(
     bullet_diagnoses: List[Dict[str, Any]],
     llm_output: Optional[Dict[str, Any]] = None,
     limit: int = 12,
+    enable_safe_app_ready_rewrite_promotion: bool = False,
 ) -> List[Dict[str, Any]]:
     candidates: List[Dict[str, Any]] = []
     seen_keys = set()
@@ -6453,11 +6454,12 @@ def _build_replacement_candidates(
                 else:
                     candidate = _diagnosis_to_replacement_candidate(payload, diagnosis, index)
 
-                    from src.tailoring.llm import _maybe_promote_multisignal_directional_candidate
-                    candidate = _maybe_promote_multisignal_directional_candidate(
-                        payload,
-                        candidate,
-                    )
+                    if enable_safe_app_ready_rewrite_promotion:
+                        from src.tailoring.llm import _maybe_promote_multisignal_directional_candidate
+                        candidate = _maybe_promote_multisignal_directional_candidate(
+                            payload,
+                            candidate,
+                        )
 
                     candidate = _materiality_validate_rewrite_candidate(
                         payload,
@@ -6720,6 +6722,8 @@ def _apply_rewrite_review_state_to_edit_cards(
 def _build_operator_markdown_payload(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
+    *,
+    enable_safe_app_ready_rewrite_promotion: bool = False,
 ) -> Dict[str, Any]:
     operator_payload = dict(payload)
 
@@ -6772,6 +6776,7 @@ def _build_operator_markdown_payload(
         operator_payload,
         bullet_diagnoses,
         llm_output=llm_output,
+        enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
     )
     operator_payload["replacement_candidates"] = _apply_single_candidate_counterfactuals(
         operator_payload,

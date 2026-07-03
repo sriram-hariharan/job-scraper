@@ -11932,17 +11932,34 @@ def _derive_workspace_button_state_from_raw_payload(
         except (TypeError, ValueError):
             return 0
 
+    parsed_payload = payload_data.get("parsed")
+    evidence_payloads = [payload_data]
+    if isinstance(parsed_payload, dict):
+        evidence_payloads.append(parsed_payload)
+
+    def _first_list(key: str) -> List[Any]:
+        for payload in evidence_payloads:
+            value = payload.get(key)
+            if isinstance(value, list):
+                return list(value)
+        return []
+
+    def _first_dict(key: str) -> Dict[str, Any]:
+        for payload in evidence_payloads:
+            value = payload.get(key)
+            if isinstance(value, dict):
+                return dict(value)
+        return {}
+
     app_ready = list(payload_data.get("app_ready_replacements", []) or [])
     direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
     ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
-    direction_only = list(payload_data.get("direction_only_replacements", []) or [])
-    rewrite_directions = list(payload_data.get("rewrite_directions", []) or [])
-    shadow_replacement_candidates = list(
-        payload_data.get("shadow_replacement_candidates", []) or []
-    )
-    final_replacement_decisions = list(payload_data.get("final_replacement_decisions", []) or [])
-    anchor_cards = list(payload_data.get("anchor_cards", []) or [])
-    top_anchor_priorities = list(payload_data.get("top_anchor_priorities", []) or [])
+    direction_only = _first_list("direction_only_replacements")
+    rewrite_directions = _first_list("rewrite_directions")
+    shadow_replacement_candidates = _first_list("shadow_replacement_candidates")
+    final_replacement_decisions = _first_list("final_replacement_decisions")
+    anchor_cards = _first_list("anchor_cards")
+    top_anchor_priorities = _first_list("top_anchor_priorities")
     direction_only_shadow_count = sum(
         1
         for candidate in shadow_replacement_candidates
@@ -12000,7 +12017,7 @@ def _derive_workspace_button_state_from_raw_payload(
 
     # Cheap strict fallback for legacy artifacts:
     # only trust explicit summary counts for ready/actionable; otherwise degrade to review.
-    final_replacement_summary = dict(payload_data.get("final_replacement_summary", {}) or {})
+    final_replacement_summary = _first_dict("final_replacement_summary")
 
     ready_count = max(
         _as_int(final_replacement_summary.get("app_ready_count")),

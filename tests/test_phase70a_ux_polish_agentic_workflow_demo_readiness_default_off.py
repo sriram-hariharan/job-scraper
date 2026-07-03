@@ -10,7 +10,7 @@ SCAN_WORKSPACE_JS = ROOT / "src/app/static/scan_workspace.js"
 PLANNING_UI = ROOT / "src/app/planning_ui.py"
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-    "src/app/services.py": "3d91b9f06b0182350228a3ab2024145ae4238e4f40b8b7f40eb49146e392507c",
+    "src/app/services.py": "4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668",
     "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
     "src/matching/dimensions.py": "3ccd5e87b9a8aee7901b3efb5ef7582b0fd652aa498f862d0486fbbd97740b9b",
     "application_execution_" + "queue" + ".py": (

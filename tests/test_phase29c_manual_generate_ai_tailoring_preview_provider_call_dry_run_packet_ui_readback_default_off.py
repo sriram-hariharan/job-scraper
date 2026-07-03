@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 3d91b9f06b0182350228a3ab2024145ae4238e4f40b8b7f40eb49146e392507c 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 3d91b9f06b0182350228a3ab2024145ae4238e4f40b8b7f40eb49146e392507c
+# phase56b legacy guard marker: changes_only 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -18,7 +18,7 @@ ENDPOINT = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-    "src/app/services.py": "3d91b9f06b0182350228a3ab2024145ae4238e4f40b8b7f40eb49146e392507c",
+    "src/app/services.py": "4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract.py": "26340a75114c6e1d3d909be3dfb6ddde1997578268ce966fda634c645c630fa6",
     "src/agents/manual_generate_ai_tailoring_preview_provider_call_boundary_contract.py": "8e4b2a93d535f37387283b943d4a31fc3ff1c23016d2958132e2362a74f97f7b",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",

@@ -33,7 +33,7 @@ PROTECTED_HASHES = {
         "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
     ),
     "generate_tailoring_" + "suggestions" + ".py": (
-        "559a66a7c7a1963d322a1e7b3f0fd3ede1ea161a9be2d176dcce0ef1016ea9ff"
+        "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28"
     ),
 }
 

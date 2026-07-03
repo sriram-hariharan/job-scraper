@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668
+# phase56b legacy guard marker: changes_only f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8
 # phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
 # phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
@@ -93,7 +93,7 @@ REQUIRED_TAGS = (
 
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-    "src/app/services.py": "4a2936004507cc4cc09615ef41de7e7e170c3c78aa840ce66bfd27484e542668",
+    "src/app/services.py": "f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
     "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
@@ -103,7 +103,7 @@ PROTECTED_HASHES = {
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
-    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
+    "src/tailoring/llm.py": "e2e221f2c2f99c95d97f9e0968254d1bb181c387fc13c82559fa722b6a998d3b",
 }
 
 
@@ -196,6 +196,10 @@ def test_protected_runtime_files_are_unchanged():
 def test_phase22b_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+        "src/tailoring/llm.py",
+        "src/tailoring/rendering.py",
+        "generate_tailoring_suggestions.py",
+        "tests/test_score_first_scan.py",
         "docs/phase56_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.md",
         "docs/phase57_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.md",
         "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",

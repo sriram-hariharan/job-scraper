@@ -12749,6 +12749,14 @@ def regenerate_selected_resume_tailoring_payload(
         )
         if refresh_llm_tailoring:
             tailoring_cmd.append("--refresh-llm-cache")
+        if (
+            os.getenv(
+                "APPLYLENS_SAFE_APP_READY_REWRITE_PROMOTION_ENABLED",
+                "false",
+            ).strip().lower()
+            == "true"
+        ):
+            tailoring_cmd.append("--enable-safe-app-ready-rewrite-promotion")
 
     _run_checked_cmd(tailoring_cmd)
 

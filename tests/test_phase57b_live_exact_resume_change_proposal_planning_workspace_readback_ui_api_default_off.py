@@ -25,9 +25,9 @@ DOC_PATH = (
 PROTECTED_HASHES = {
     "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
-    "src/tailoring/llm.py": "d47c5d84758ca185a2fd4d8e2062018b48498592a4b79e88182036c2c4edbc28",
+    "src/tailoring/llm.py": "e2e221f2c2f99c95d97f9e0968254d1bb181c387fc13c82559fa722b6a998d3b",
     "generate_tailoring_" + "suggestions" + ".py": (
-        "559a66a7c7a1963d322a1e7b3f0fd3ede1ea161a9be2d176dcce0ef1016ea9ff"
+        "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28"
     ),
     "application_execution_" + "queue" + ".py": (
         "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"

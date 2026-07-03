@@ -794,6 +794,185 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     return "\n".join(lines)
 
 
+def _live_concrete_candidate_source_rows(
+    payload: Dict[str, Any],
+    *,
+    limit: int = 6,
+) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    seen_bullet_ids = set()
+
+    for row in _live_evidence_rows(payload):
+        source_bullet_id = _row_bullet_id(row)
+        source_entry_id = (
+            _text(row.get("source_entry_id", ""))
+            or _text(row.get("entry_id", ""))
+            or source_bullet_id
+        )
+        original_text = _text(row.get("parent_bullet", "")) or _text(row.get("text", ""))
+        if not source_bullet_id or not source_entry_id or not original_text:
+            continue
+        if source_bullet_id in seen_bullet_ids:
+            continue
+        seen_bullet_ids.add(source_bullet_id)
+        rows.append(
+            {
+                "source_bullet_id": source_bullet_id,
+                "source_entry_id": source_entry_id,
+                "section": _text(row.get("section", "")),
+                "source": _display_row_source(row),
+                "original_text": original_text,
+            }
+        )
+        if len(rows) >= limit:
+            break
+
+    return rows
+
+
+def _build_live_concrete_rewrite_prompt(
+    packet: Dict[str, Any],
+    payload: Dict[str, Any],
+) -> str:
+    job = packet.get("job", {})
+    selection = packet.get("selection", {})
+    summary = packet.get("summary", {})
+    evidence_layers = payload.get("evidence_layers", {}) or {}
+    anchors = evidence_layers.get("anchors", [])[:4]
+    supports = evidence_layers.get("supports", [])[:4]
+    context = evidence_layers.get("context", [])[:4]
+    tailoring_plan = payload.get("tailoring_plan", {}) or _build_tailoring_plan(packet)
+    source_rows = _live_concrete_candidate_source_rows(payload)
+
+    lines: List[str] = []
+
+    lines.append("Return ONLY valid JSON.")
+    lines.append("")
+    lines.append("Goal:")
+    lines.append("Produce evidence-anchored rewrite directions and conservative concrete replacement bullet candidates for ONE selected resume variant.")
+    lines.append("")
+    lines.append("Required top-level JSON keys:")
+    lines.append("- rewrite_directions")
+    lines.append("- concrete_replacement_candidates")
+    lines.append("")
+    lines.append("Optional top-level JSON keys allowed:")
+    lines.append("- keep_emphasize")
+    lines.append("- do_not_claim")
+    lines.append("- recruiter_summary")
+    lines.append("")
+    lines.append("Hard safety rules:")
+    lines.append("1. Use ONLY the evidence below.")
+    lines.append("2. Do NOT invent tools, methods, metrics, skills, domains, employers, responsibilities, credentials, outcomes, or unsupported claims.")
+    lines.append("3. Do NOT inflate credentials or change facts that are not present in the source bullet/evidence.")
+    lines.append("4. Direct-overlap bullets are the only primary anchors.")
+    lines.append("5. Semantic-similarity bullets are support only.")
+    lines.append("6. Same-role context bullets are lowest-priority support only.")
+    lines.append("7. Direction-only guidance is allowed, but it is non-actionable.")
+    lines.append("8. If no safe literal replacement bullet can be written from the original_text, return concrete_replacement_candidates: [].")
+    lines.append("9. When original_text already supports a safe concrete wording improvement, return up to 2 conservative concrete_replacement_candidates.")
+    lines.append("")
+    lines.append("Job:")
+    lines.append(f"- Company: {job.get('company', '')}")
+    lines.append(f"- Title: {job.get('title', '')}")
+    lines.append("")
+    lines.append("Selected resume:")
+    lines.append(f"- Resume: {selection.get('selected_resume', '')}")
+    lines.append(f"- Score: {selection.get('selected_score', '')}")
+    lines.append("")
+    lines.append("Matched / missing skills:")
+    lines.append(f"- Matched required: {summary.get('matched_required', [])}")
+    lines.append(f"- Missing required: {summary.get('missing_required', [])}")
+    lines.append(f"- Missing preferred: {summary.get('missing_preferred', [])}")
+    lines.append("")
+    lines.extend(_support_tier_prompt_lines(packet))
+    lines.extend(_facet_prompt_lines(packet))
+    lines.extend(_tailoring_plan_prompt_lines(tailoring_plan))
+
+    lines.append("Primary anchor evidence units:")
+    for idx, row in enumerate(anchors, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | supports={row.get('overlaps', [])}"
+        )
+        lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
+        if row.get("parent_bullet"):
+            lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
+    if not anchors:
+        lines.append("- none")
+    lines.append("")
+
+    lines.append("Secondary supporting evidence units:")
+    for idx, row in enumerate(supports, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | type={row.get('evidence_type', '')}"
+        )
+        if row.get("semantic_score") is not None:
+            lines.append(f"   semantic_score={row.get('semantic_score')}")
+        lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
+        if row.get("parent_bullet"):
+            lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
+    if not supports:
+        lines.append("- none")
+    lines.append("")
+
+    lines.append("Same-role context evidence units:")
+    for idx, row in enumerate(context, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | type={row.get('evidence_type', '')}"
+        )
+        lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
+        if row.get("parent_bullet"):
+            lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
+    if not context:
+        lines.append("- none")
+    lines.append("")
+
+    lines.append("Concrete candidate source table:")
+    if source_rows:
+        for idx, row in enumerate(source_rows, 1):
+            lines.append(f"{idx}. source_bullet_id: {row['source_bullet_id']}")
+            lines.append(f"   source_entry_id: {row['source_entry_id']}")
+            lines.append(f"   section: {row['section']}")
+            lines.append(f"   source: {row['source']}")
+            lines.append(f"   original_text: {_short_bullet(row['original_text'], 320)}")
+    else:
+        lines.append("- none")
+    lines.append("")
+
+    lines.append("Concrete candidate object schema:")
+    lines.append("- source_bullet_id: copy exactly from Concrete candidate source table.")
+    lines.append("- source_entry_id: copy exactly from Concrete candidate source table.")
+    lines.append("- section: copy from the selected source row.")
+    lines.append("- source: copy from the selected source row.")
+    lines.append("- original_text: copy the selected source row original_text.")
+    lines.append("- operation_type: rewrite")
+    lines.append("- proposal_status: patch_ready only when patch_text is a literal complete replacement bullet.")
+    lines.append("- patch_text: a complete replacement resume bullet, not an instruction.")
+    lines.append("- why_this_improves_match: concise evidence-grounded reason.")
+    lines.append("- unsupported_risk_signals: [] when safe; otherwise omit the candidate.")
+    lines.append("- adjacent_risk_signals: [] or concise nearby risk notes.")
+    lines.append("- confidence: high, medium, or low.")
+    lines.append("")
+
+    lines.append("Compact safe example - do NOT copy this example into output:")
+    lines.append("{\"source_bullet_id\":\"example_bullet_id\",\"source_entry_id\":\"example_entry_id\",\"section\":\"experience\",\"source\":\"Example Role @ ExampleCo\",\"original_text\":\"Built SQL reporting dashboards for weekly stakeholder reporting.\",\"operation_type\":\"rewrite\",\"proposal_status\":\"patch_ready\",\"patch_text\":\"Built SQL reporting dashboards for weekly stakeholder reporting.\",\"why_this_improves_match\":\"Preserves the same factual SQL reporting claim while making the job-relevant signal explicit.\",\"unsupported_risk_signals\":[],\"adjacent_risk_signals\":[],\"confidence\":\"medium\"}")
+    lines.append("")
+
+    lines.append("Output requirements:")
+    lines.append("- Return JSON only.")
+    lines.append('- rewrite_directions items must be objects with exactly these keys: {"prefix": "...", "source": "...", "direction": "..."}')
+    lines.append('- Allowed rewrite_directions prefix values only: "Lead with", "Support with", "Keep gap explicit", "Do not add".')
+    lines.append('- For "Lead with" and "Support with", source is REQUIRED and must be the exact source label copied from the evidence.')
+    lines.append('- Direction fragments must be short edit-instruction fragments, not full rewritten bullets.')
+    lines.append("- concrete_replacement_candidates must be an array.")
+    lines.append("- Concrete patch_text must preserve original factual claims unless the changed fact is present in source evidence.")
+    lines.append("- If a concrete patch would require invented or unsupported facts, return direction-only guidance and leave concrete_replacement_candidates empty.")
+    lines.append("")
+    lines.append("Guardrail:")
+    lines.append(str(packet.get("guardrail", "")))
+
+    return "\n".join(lines)
+
+
 def _escape_control_chars_inside_json_strings(text: str) -> str:
     chars: List[str] = []
     in_string = False
@@ -3776,18 +3955,7 @@ def _run_live_llm_tailoring(
 
     prompt = payload["live_rewrite_prompt"]
     if enable_safe_app_ready_rewrite_promotion:
-        prompt = (
-            f"{prompt}\n\n"
-            "Optional concrete replacement candidates:\n"
-            "- Also return concrete_replacement_candidates as an array. Use [] if no safe concrete patch is possible.\n"
-            "- Each concrete candidate must be a complete replacement resume bullet, not an instruction.\n"
-            "- Set operation_type to rewrite.\n"
-            "- Set proposal_status to patch_ready only when patch_text is a literal complete replacement bullet.\n"
-            "- Copy source_bullet_id, source_entry_id, section, source, and original_text from the evidence source when available.\n"
-            "- Do NOT invent tools, metrics, employers, domains, responsibilities, credentials, outcomes, or unsupported claims.\n"
-            "- Preserve original factual claims unless the fact is present in source evidence.\n"
-            "- If a concrete patch would require unsupported facts, omit it and keep direction-only guidance.\n"
-        )
+        prompt = _build_live_concrete_rewrite_prompt(packet, payload)
 
 #     primary_system_prompt = """
 # You generate evidence-anchored resume tailoring JSON.

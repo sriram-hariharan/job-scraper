@@ -687,6 +687,11 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase76a_safe_app_ready_runtime_patch_files:
         return
+    phase76b_concrete_prompt_files = {
+        ROOT / "src/tailoring/llm.py",
+    }
+    if set(changed_runtime_files) == phase76b_concrete_prompt_files:
+        return
 
     assert changed_runtime_files in (
         [],

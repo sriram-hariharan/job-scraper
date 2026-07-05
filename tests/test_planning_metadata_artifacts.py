@@ -1,10 +1,12 @@
 import csv
 import sys
 import tempfile
+from types import SimpleNamespace
 from pathlib import Path
 
 import application_execution_queue
 import application_shortlist_from_batch_selector
+import main as job_pipeline_main
 import run_application_planning
 
 
@@ -417,3 +419,65 @@ def test_selected_rows_includes_only_safe_skip_rows_when_explicitly_requested():
         "packet_resume": "resume.pdf",
         "packet_resume_source": "deterministic_winner",
     }
+
+
+def _application_planning_args(**overrides):
+    values = {
+        "application_planning_job_limit": 50,
+        "application_planning_job_packet_limit": 0,
+        "application_planning_output_dir": "outputs/application_planning",
+        "application_planning_llm_actions": "APPLY,APPLY_REVIEW_VARIANTS",
+        "application_planning_generate_tailoring": False,
+        "application_planning_generate_llm_tailoring": False,
+        "application_planning_refresh_llm_tailoring": False,
+        "application_planning_generate_llm_fallback": False,
+        "application_planning_generate_llm_adjudication": False,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def test_live_application_planning_command_passes_llm_actions_to_include_actions(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        job_pipeline_main,
+        "_run_cmd",
+        lambda cmd: captured.setdefault("cmd", list(cmd)),
+    )
+
+    job_pipeline_main._run_application_planning(
+        _application_planning_args(
+            application_planning_llm_actions="APPLY,APPLY_REVIEW_VARIANTS,MAYBE_TAILOR,SKIP_FOR_NOW",
+            application_planning_generate_tailoring=True,
+            application_planning_generate_llm_tailoring=True,
+        ),
+        job_corpus_path="tmp/current_run_job_corpus.jsonl",
+    )
+
+    cmd = captured["cmd"]
+    assert cmd[cmd.index("--include-actions") + 1] == (
+        "APPLY,APPLY_REVIEW_VARIANTS,MAYBE_TAILOR,SKIP_FOR_NOW"
+    )
+    assert cmd[cmd.index("--llm-tailoring-actions") + 1] == (
+        "APPLY,APPLY_REVIEW_VARIANTS,MAYBE_TAILOR,SKIP_FOR_NOW"
+    )
+    assert "--generate-tailoring" in cmd
+    assert "--generate-llm-tailoring" in cmd
+
+
+def test_live_application_planning_command_preserves_default_action_scope(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        job_pipeline_main,
+        "_run_cmd",
+        lambda cmd: captured.setdefault("cmd", list(cmd)),
+    )
+
+    job_pipeline_main._run_application_planning(
+        _application_planning_args(),
+        job_corpus_path="tmp/current_run_job_corpus.jsonl",
+    )
+
+    cmd = captured["cmd"]
+    assert cmd[cmd.index("--include-actions") + 1] == "APPLY,APPLY_REVIEW_VARIANTS"
+    assert cmd[cmd.index("--llm-tailoring-actions") + 1] == "APPLY,APPLY_REVIEW_VARIANTS"

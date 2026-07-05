@@ -184,7 +184,7 @@ DOC_MARKERS = (
 PROTECTED_HASHES = {
     "src/app/services.py": "f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
-    "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
+    "src/app/static/app_redesign.css": "b02ff695ca630345cbf5452165b1f3edfca9630ff7269eca4f50c9dadd704ed2",
     "src/agents/manual_generate_ai_tailoring_preview_provider_request_envelope_contract.py": "e1c9f6f55b7d8a8c0171b52d7e891d531aae0ad3384eb74d686f50ba4e59533f",
     "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py": "2fdc984c5ee395d43e71fd2ce991b9575316f8714188cc16a13c97c73074996f",
     "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py": "4e0dcc111f114551b0ce1c88f8d57618546306c4bcce8ac2d6df86b44cbfa60d",

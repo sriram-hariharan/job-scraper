@@ -366,11 +366,15 @@ function getSortIndicator(sortState, key) {
 
 function buildResizableHeaderInnerHtml(label, key, { sortable = true } = {}) {
   const safeLabel = escapeHtml(label || "");
+  const packetInfoHtml = key === "packet_status"
+    ? `<span class="packet-info-icon" title="${escapeHtml(PACKET_HELP_TEXT)}" aria-label="${escapeHtml(PACKET_HELP_TEXT)}">ⓘ</span>`
+    : "";
 
   if (!sortable) {
     return `
       <div class="resizable-col-content">
         <span class="resizable-col-label">${safeLabel}</span>
+        ${packetInfoHtml}
       </div>
       <span class="col-resize-handle" data-resize-key="${escapeHtml(key || "")}"></span>
     `;
@@ -387,6 +391,7 @@ function buildResizableHeaderInnerHtml(label, key, { sortable = true } = {}) {
         <span class="sort-header-label resizable-col-label">${safeLabel}</span>
         <span class="sort-header-indicator">↕</span>
       </button>
+      ${packetInfoHtml}
     </div>
     <span class="col-resize-handle" data-resize-key="${escapeHtml(key || "")}"></span>
   `;
@@ -707,12 +712,80 @@ function buildDateTimeCellHtml(value) {
 function formatAdvisoryPriorityLabel(value) {
   const normalized = String(value || "").trim().toLowerCase();
   return {
-    apply_now: "Apply now",
+    apply_now: "Ready for review",
     tailor_first: "Tailor first",
     manual_review: "Manual review",
-    skip_for_now: "Skip for now",
+    skip_for_now: "Review later",
     watch_source: "Watch source",
   }[normalized] || "";
+}
+
+function formatQueueActionLabel(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return {
+    APPLY: "Ready for review",
+    APPLY_REVIEW_VARIANTS: "Review resume choice",
+    MAYBE_TAILOR: "Tailor first",
+    SKIP_FOR_NOW: "Review later",
+  }[normalized] || String(value || "").trim();
+}
+
+function formatPacketStatusLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(normalized)) return "Packet ready";
+  if (["false", "0", "no", "n", "off"].includes(normalized)) return "No packet";
+  return "";
+}
+
+function formatDiagnosticReasonLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    no_deterministic_winner: "No clear resume match",
+    borderline_deterministic_score: "Borderline match",
+    tailoring_signal: "Tailoring may improve fit",
+    tailoring_likely_worthwhile: "Tailoring may improve fit",
+    packet_generation_blocked: "Packet unavailable",
+    deterministic_equivalent_variants: "Close resume match",
+    fallback_only_no_deterministic_match: "No credible resume match",
+  }[normalized] || String(value || "").replaceAll("_", " ");
+}
+
+function formatOperatorDecisionLabel(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return {
+    SELECT_RESUME: "Choose resume",
+    MAYBE_TAILOR: "Tailor first",
+    SKIP_FOR_NOW: "Review later",
+    APPLY: "Ready for review",
+    APPLY_REVIEW_VARIANTS: "Review resume choice",
+  }[normalized] || String(value || "").replaceAll("_", " ");
+}
+
+function buildPacketStatusChipHtml(row) {
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const label = formatPacketStatusLabel(packetAllowed);
+  if (!label) return "";
+  const modifier = label === "Packet ready" ? "ready" : "blocked";
+  return `<span class="queue-packet-pill queue-packet-pill--${modifier}">${escapeHtml(label)}</span>`;
+}
+
+function buildRecommendationDetailsHtml(items) {
+  const rows = (items || [])
+    .filter((item) => item && String(item.value || "").trim())
+    .map((item) => `
+      <div class="queue-recommendation-detail-row">
+        <dt>${escapeHtml(item.label)}</dt>
+        <dd>${escapeHtml(item.value)}</dd>
+      </div>
+    `)
+    .join("");
+  if (!rows) return "";
+  return `
+    <details class="queue-recommendation-details">
+      <summary>Why?</summary>
+      <dl>${rows}</dl>
+    </details>
+  `;
 }
 
 function buildAdvisoryPriorityHtml(row) {
@@ -725,17 +798,17 @@ function buildAdvisoryPriorityHtml(row) {
   const packetAllowed = String(row?.packet_generation_allowed || "").trim();
   const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
   const details = [
-    existingAction ? `Action: ${existingAction}` : "",
-    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
-    packetAllowed ? `Packet: ${packetAllowed}` : "",
-    packetBlockReason ? `Block: ${packetBlockReason}` : "",
-  ].filter(Boolean);
+    { label: "Raw action", value: existingAction },
+    { label: "Reason", value: reasonCodes.split("|").filter(Boolean).map(formatDiagnosticReasonLabel).join(", ") },
+    { label: "Raw reason codes", value: reasonCodes.replaceAll("|", ", ") },
+    { label: "Raw packet flag", value: packetAllowed },
+    { label: "Raw block reason", value: packetBlockReason },
+  ];
 
   return `
     <div class="queue-advisory-priority planning-advisory-priority">
-      <span class="queue-advisory-kicker">Advisory</span>
       <span class="queue-advisory-pill queue-advisory-pill--${escapeHtml(priority)}">${escapeHtml(label)}</span>
-      ${details.length ? `<div class="queue-advisory-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+      ${buildRecommendationDetailsHtml(details)}
     </div>
   `;
 }
@@ -763,19 +836,19 @@ function buildTailoringDecisionHtml(row) {
   const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
   const criticDecision = String(row?.critic_decision || "").trim();
   const details = [
-    existingAction ? `Action: ${existingAction}` : "",
-    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
-    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
-    packetAllowed ? `Packet: ${packetAllowed}` : "",
-    packetBlockReason ? `Block: ${packetBlockReason}` : "",
-    criticDecision ? `Critic: ${criticDecision}` : "",
-  ].filter(Boolean);
+    { label: "Raw action", value: existingAction },
+    { label: "Advisory priority", value: formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority },
+    { label: "Reason", value: reasonCodes.split("|").filter(Boolean).map(formatDiagnosticReasonLabel).join(", ") },
+    { label: "Raw reason codes", value: reasonCodes.replaceAll("|", ", ") },
+    { label: "Raw packet flag", value: packetAllowed },
+    { label: "Raw block reason", value: packetBlockReason },
+    { label: "Critic", value: criticDecision },
+  ];
 
   return `
     <div class="queue-tailoring-decision planning-tailoring-decision">
-      <span class="queue-tailoring-kicker">Tailoring advisory</span>
       <span class="queue-tailoring-pill queue-tailoring-pill--${escapeHtml(decision)}">${escapeHtml(label)}</span>
-      ${details.length ? `<div class="queue-tailoring-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+      ${buildRecommendationDetailsHtml(details)}
     </div>
   `;
 }
@@ -783,10 +856,10 @@ function buildTailoringDecisionHtml(row) {
 function formatOperatorReviewLaneLabel(value) {
   const normalized = String(value || "").trim().toLowerCase();
   return {
-    ready_to_apply: "Ready to apply",
+    ready_to_apply: "Ready for review",
     tailor_then_apply: "Tailor then apply",
-    review_before_action: "Review before action",
-    hold_or_skip: "Hold / skip",
+    review_before_action: "Review first",
+    hold_or_skip: "Skip for now",
     source_watch: "Source watch",
   }[normalized] || "";
 }
@@ -804,20 +877,20 @@ function buildOperatorReviewHtml(row) {
   const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
   const criticDecision = String(row?.critic_decision || "").trim();
   const details = [
-    existingAction ? `Action: ${existingAction}` : "",
-    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
-    tailoringDecision ? `Tailoring: ${formatTailoringDecisionLabel(tailoringDecision) || tailoringDecision}` : "",
-    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
-    packetAllowed ? `Packet: ${packetAllowed}` : "",
-    packetBlockReason ? `Block: ${packetBlockReason}` : "",
-    criticDecision ? `Critic: ${criticDecision}` : "",
-  ].filter(Boolean);
+    { label: "Raw action", value: existingAction },
+    { label: "Advisory priority", value: formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority },
+    { label: "Tailoring", value: formatTailoringDecisionLabel(tailoringDecision) || tailoringDecision },
+    { label: "Reason", value: reasonCodes.split("|").filter(Boolean).map(formatDiagnosticReasonLabel).join(", ") },
+    { label: "Raw reason codes", value: reasonCodes.replaceAll("|", ", ") },
+    { label: "Raw packet flag", value: packetAllowed },
+    { label: "Raw block reason", value: packetBlockReason },
+    { label: "Critic", value: criticDecision },
+  ];
 
   return `
     <div class="queue-operator-review planning-operator-review">
-      <span class="queue-operator-kicker">Operator review</span>
       <span class="queue-operator-pill queue-operator-pill--${escapeHtml(lane)}">${escapeHtml(label)}</span>
-      ${details.length ? `<div class="queue-operator-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+      ${buildRecommendationDetailsHtml(details)}
     </div>
   `;
 }
@@ -868,9 +941,9 @@ function renderAgenticWorkflowSummaryPanel(workflowSummary = {}) {
     <div class="agentic-workflow-grid">
       ${renderWorkflowSummaryMetric("Queue jobs", summary.total_queue_jobs)}
       ${renderWorkflowSummaryMetric("Packet jobs", summary.total_packet_jobs)}
-      ${renderWorkflowSummaryMetric("Ready to apply", summary.ready_to_apply_count)}
+      ${renderWorkflowSummaryMetric("Ready for review", summary.ready_to_apply_count)}
       ${renderWorkflowSummaryMetric("Tailor then apply", summary.tailor_then_apply_count)}
-      ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count)}
+      ${renderWorkflowSummaryMetric("Skip for now", summary.hold_or_skip_count)}
       ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count)}
       ${renderWorkflowSummaryMetric("Fallback only", summary.fallback_only_count)}
       ${renderWorkflowSummaryMetric("Packet blocked", summary.packet_blocked_count)}
@@ -1478,42 +1551,16 @@ function planningUndecidedOnlyEnabled() {
 
 const PLANNING_SORT_COLUMNS = [
   { key: "queue_rank", label: "Rank", type: "number" },
-  { key: "action", label: "Action", type: "text" },
-  { key: "job_company", label: "Company", type: "text" },
-  { key: "job_title", label: "Title", type: "text" },
-  { key: "posted_at", label: "Posted At", type: "date" },
-  { key: "winner_resume", label: "Winner", type: "text" },
-  { key: "winner_score", label: "Score", type: "number" },
-  { key: "runner_up_resume", label: "Backup", type: "text" },
-  { key: "runner_up_score", label: "Backup Score", type: "number" },
-  { key: "score_gap", label: "Gap", type: "number" },
-  { key: "winner_bucket", label: "Strength", type: "text" },
-  {
-    key: "review_state",
-    label: "Review",
-    type: "text",
-    getValue: (row) => deriveReviewStateLabel(row),
-  },
-  { key: "missing_requirement_count", label: "Missing", type: "number" },
-  { key: "llm_fallback_best_resume", label: "Fallback Resume", type: "text" },
-  {
-    key: "llm_fallback_status",
-    label: "Fallback",
-    type: "text",
-    getValue: (row) => humanizeFallbackStatus(row.llm_fallback_status),
-  },
-  {
-    key: "llm_adjudication_resume",
-    label: "LLM Review Hint",
-    type: "text",
-    getValue: (row) => String(row.llm_adjudication_resume || "").trim(),
-  },
-  { key: "operator_decision", label: "Decision", type: "text" },
-  { key: "operator_selected_resume", label: "Selected", type: "text" },
-  { key: "queue_priority_reason", label: "Why", type: "text" },
-  { key: "tailoring", label: "Tailor", sortable: false },
-  { key: "apply", label: "Apply", sortable: false },
+  { key: "job_title", label: "Job title", type: "text", getValue: (row) => row.job_title || "" },
+  { key: "posted_at", label: "Posted at", type: "date", getValue: (row) => row.posted_at || "" },
+  { key: "recommendation", label: "Recommendation", type: "text", getValue: (row) => formatQueueActionLabel(row.action) },
+  { key: "packet_status", label: "Packet / Workspace", type: "text", getValue: (row) => `${formatPacketStatusLabel(row.packet_generation_allowed)} ${row.tailoring_workspace_state || ""}` },
+  { key: "winner_score", label: "Match", type: "number" },
+  { key: "selected_resume", label: "Selected Resume", type: "text", getValue: (row) => row.operator_selected_resume || row.winner_resume || "" },
+  { key: "review", label: "Review", sortable: false },
 ];
+
+const PACKET_HELP_TEXT = "A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.";
 
 function getAppErrorModal() {
   return qs("appErrorModal");
@@ -2102,7 +2149,7 @@ function buildApplicationPayloadFromRow(row) {
 
 function buildApplicationButtonHtml(row) {
   const isApplied = Boolean(row.is_applied);
-  const label = escapeHtml(row.application_label || (isApplied ? "Applied" : "Apply"));
+  const label = escapeHtml(row.application_label || (isApplied ? "Reviewed" : "Review job"));
   const buttonClass = isApplied ? "job-apply-btn applied-btn" : "job-apply-btn apply-btn";
   const disabledAttr = isApplied ? "disabled" : "";
 
@@ -12184,6 +12231,70 @@ async function handleApplyClick(button) {
   }
 }
 
+function buildPlanningJobSummaryHtml(row) {
+  const title = escapeHtml(row.job_title || "");
+  const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
+  const titleHtml = jobUrl
+    ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
+    : title;
+  const company = escapeHtml(row.job_company || "");
+  const location = escapeHtml(row.job_location || "");
+
+  return `
+    <div class="queue-job-summary">
+      <div class="queue-simple-company">${company || "-"}</div>
+      <div class="queue-simple-title">${titleHtml}</div>
+      ${location ? `<div class="queue-job-location">${location}</div>` : ""}
+    </div>
+  `;
+}
+
+function buildPlanningRecommendationCellHtml(row) {
+  const action = escapeHtml(formatQueueActionLabel(row.action) || "-");
+  const details = buildRecommendationDetailsHtml([
+    { label: "Runner-up resume", value: row.runner_up_resume || "" },
+    { label: "Runner-up score", value: row.runner_up_score || "" },
+    { label: "Score gap", value: row.score_gap || "" },
+    { label: "Match strength", value: row.winner_bucket || "" },
+    { label: "Review state", value: deriveReviewStateLabel(row) },
+    { label: "Missing requirements", value: row.missing_requirement_count || "" },
+    { label: "Fallback resume", value: row.llm_fallback_best_resume || "" },
+    { label: "Fallback status", value: humanizeFallbackStatus(row.llm_fallback_status || "") },
+    { label: "LLM review hint", value: row.llm_adjudication_resume || "" },
+    { label: "Next step", value: formatOperatorDecisionLabel(row.operator_decision) || row.operator_decision || "" },
+    { label: "Raw operator decision", value: row.operator_decision || "" },
+    { label: "Priority reason", value: buildPlanningPriorityReason(row) },
+  ]);
+
+  return `
+    <div class="queue-recommendation-summary">
+      <span class="pill">${action}</span>
+      ${details}
+    </div>
+  `;
+}
+
+function buildPlanningPacketWorkspaceStatusHtml(row) {
+  const workspaceState = String(row.tailoring_workspace_state || "").trim();
+  const workspaceLabel = workspaceState
+    ? humanizeUnderscoreLabel(workspaceState)
+    : "Workspace pending";
+  return `
+    <div class="queue-status-stack">
+      ${buildPacketStatusChipHtml(row) || ""}
+      <span class="queue-workspace-pill">${escapeHtml(workspaceLabel)}</span>
+    </div>
+  `;
+}
+
+function buildPlanningSelectedResumeHtml(row) {
+  return buildCompactTextHtml(row.operator_selected_resume || row.winner_resume, {
+    emptyLabel: "-",
+    truncate: false,
+    wrap: true,
+  });
+}
+
 function renderPlanningRows(rows, metaLabel) {
   planningTableState.rows = Array.isArray(rows) ? rows.slice() : [];
   planningTableState.metaLabel = metaLabel;
@@ -12194,7 +12305,7 @@ function renderPlanningRows(rows, metaLabel) {
   if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="21" class="empty-state">No rows found.</td>
+        <td colspan="8" class="empty-state">No rows found.</td>
       </tr>
     `;
     qs("planningTableMeta").textContent = planningTableState.metaLabel;
@@ -12206,37 +12317,16 @@ function renderPlanningRows(rows, metaLabel) {
   }
 
   tbody.innerHTML = displayRows.map((row) => {
-    const title = escapeHtml(row.job_title || "");
-    const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
-    const titleHtml = jobUrl
-      ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
-      : title;
-
     return `
       <tr>
         <td>${escapeHtml(row.queue_rank || "")}</td>
-        <td><span class="pill">${escapeHtml(row.action || "")}</span>${buildAdvisoryPriorityHtml(row)}${buildTailoringDecisionHtml(row)}${buildOperatorReviewHtml(row)}</td>
-        <td>${escapeHtml(row.job_company || "")}</td>
-        <td class="title-cell">
-          <div>${titleHtml}</div>
-        </td>
+        <td class="title-cell">${buildPlanningJobSummaryHtml(row)}</td>
         <td>${buildDateTimeCellHtml(row.posted_at)}</td>
-        <td>${buildCompactTextHtml(row.winner_resume, { truncate: false, wrap:true })}</td>
+        <td>${buildPlanningRecommendationCellHtml(row)}</td>
+        <td>${buildPlanningPacketWorkspaceStatusHtml(row)}</td>
         <td>${escapeHtml(formatScore100(row.winner_score))}</td>
-        <td>${buildCompactTextHtml(row.runner_up_resume, { truncate: false, wrap:true })}</td>
-        <td>${escapeHtml(formatScore100(row.runner_up_score))}</td>
-        <td>${escapeHtml(formatScore100(row.score_gap))}</td>
-        <td>${buildMatchStrengthHtml(row)}</td>
-        <td>${buildReviewStateHtml(row)}</td>
-        <td>${escapeHtml(row.missing_requirement_count || "")}</td>
-        <td>${buildFallbackResumeHtml(row)}</td>
-        <td>${escapeHtml(humanizeFallbackStatus(row.llm_fallback_status || ""))}</td>
-        <td>${buildAdjudicationHintHtml(row)}</td>
-        <td>${buildOperatorDecisionCellHtml(row)}</td>
-        <td>${buildCompactTextHtml(row.operator_selected_resume, { emptyLabel: "-", truncate: false, wrap: true })}</td>
-        <td class="reason-cell">${buildReasonHtml(buildPlanningPriorityReason(row))}</td>
-        <td>${buildTailoringButtonHtml(row)}</td>
-        <td class="apply-cell sticky-apply-col">${buildApplicationButtonHtml(row)}</td>
+        <td>${buildPlanningSelectedResumeHtml(row)}</td>
+        <td class="apply-cell sticky-apply-col">${buildTailoringButtonHtml(row)}</td>
       </tr>
     `;
   }).join("");

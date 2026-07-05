@@ -101,21 +101,35 @@ const COUNT_LABELS = {
 };
 
 const QUEUE_SORT_COLUMNS = [
-  { key: "queue_rank", label: "Queue Rank", type: "number" },
-  { key: "action", label: "Action", type: "text" },
-  { key: "job_company", label: "Company", type: "text" },
-  { key: "job_title", label: "Title", type: "text" },
-  { key: "posted_at", label: "Posted At", type: "date" },
-  { key: "winner_resume", label: "Winner Resume", type: "text" },
-  { key: "winner_score", label: "Winner Score", type: "number" },
-  { key: "runner_up_resume", label: "Runner-Up Resume", type: "text" },
-  { key: "score_gap", label: "Score Gap", type: "number" },
-  { key: "missing_requirement_count", label: "Missing Req Count", type: "number" },
-  { key: "operator_decision", label: "Operator Decision", type: "text" },
-  { key: "operator_selected_resume", label: "Selected Resume", type: "text" },
-  { key: "queue_priority_reason", label: "Priority Reason", type: "text" },
-  { key: "apply", label: "Apply", sortable: false },
+  { key: "queue_rank", label: "Rank", type: "number" },
+  { key: "job_title", label: "Job title", type: "text", getValue: (row) => row.job_title || "" },
+  { key: "job_company", label: "Company", type: "text", getValue: (row) => row.job_company || "" },
+  { key: "job_location", label: "Location", type: "text", getValue: (row) => row.job_location || "" },
+  { key: "posted_at", label: "Posted at", type: "date", getValue: (row) => row.posted_at || "" },
+  { key: "recommendation", label: "Recommendation", type: "text", getValue: (row) => formatQueueActionLabel(row.action) },
+  { key: "packet_status", label: "Packet", type: "text", getValue: (row) => formatPacketStatusLabel(row.packet_generation_allowed) },
+  { key: "winner_score", label: "Match", type: "number" },
+  { key: "selected_resume", label: "Selected Resume", type: "text", getValue: (row) => row.operator_selected_resume || row.winner_resume || "" },
+  { key: "runner_up_resume", label: "Runner-up resume", type: "text", getValue: (row) => row.runner_up_resume || "" },
+  { key: "score_gap", label: "Score gap", type: "number" },
+  { key: "missing_requirement_count", label: "Missing req count", type: "number" },
+  { key: "next_step", label: "Next step", type: "text", getValue: (row) => formatOperatorDecisionLabel(row.operator_decision) || formatOperatorReviewLaneLabel(row.operator_review_lane) || "" },
+  { key: "queue_priority_reason", label: "Priority reason", type: "text", getValue: (row) => formatDiagnosticReasonLabel(row.queue_priority_reason) },
+  { key: "apply", label: "Review", sortable: false },
 ];
+
+const SIMPLE_QUEUE_SORT_COLUMNS = [
+  { key: "queue_rank", label: "Rank", type: "number" },
+  { key: "job_title", label: "Job title/company", type: "text", getValue: (row) => `${row.job_title || ""} ${row.job_company || ""}` },
+  { key: "posted_at", label: "Posted at", type: "date", getValue: (row) => row.posted_at || "" },
+  { key: "recommendation", label: "Recommendation", type: "text", getValue: (row) => formatQueueActionLabel(row.action) },
+  { key: "packet_status", label: "Packet", type: "text", getValue: (row) => formatPacketStatusLabel(row.packet_generation_allowed) },
+  { key: "winner_score", label: "Match", type: "number" },
+  { key: "selected_resume", label: "Selected Resume", type: "text", getValue: (row) => row.operator_selected_resume || row.winner_resume || "" },
+  { key: "apply", label: "Review", sortable: false },
+];
+
+const PACKET_HELP_TEXT = "A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.";
 
 const PIPELINE_PRESETS = {
   full: {
@@ -421,11 +435,15 @@ function getSortIndicator(sortState, key) {
 
 function buildResizableHeaderInnerHtml(label, key, { sortable = true } = {}) {
   const safeLabel = escapeHtml(label || "");
+  const packetInfoHtml = key === "packet_status"
+    ? `<span class="packet-info-icon" title="${escapeHtml(PACKET_HELP_TEXT)}" aria-label="${escapeHtml(PACKET_HELP_TEXT)}">ⓘ</span>`
+    : "";
 
   if (!sortable) {
     return `
       <div class="resizable-col-content">
         <span class="resizable-col-label">${safeLabel}</span>
+        ${packetInfoHtml}
       </div>
       <span class="col-resize-handle" data-resize-key="${escapeHtml(key || "")}"></span>
     `;
@@ -442,6 +460,7 @@ function buildResizableHeaderInnerHtml(label, key, { sortable = true } = {}) {
         <span class="sort-header-label resizable-col-label">${safeLabel}</span>
         <span class="sort-header-indicator">↕</span>
       </button>
+      ${packetInfoHtml}
     </div>
     <span class="col-resize-handle" data-resize-key="${escapeHtml(key || "")}"></span>
   `;
@@ -720,57 +739,58 @@ function renderQueueHeaders() {
   if (!table || !colgroup || !headerRow) return;
 
   if (state.executiveViewMode === "simple") {
-    colgroup.innerHTML = `
-      <col data-col-key="queue_rank" style="width: 110px;" />
-      <col data-col-key="job" style="width: 320px;" />
-      <col data-col-key="resume_options" style="width: 320px;" />
-      <col class="table-static-col" data-static-col-key="apply" style="width: 140px;" />
-    `;
-
-    headerRow.innerHTML = `
-      <th data-col-key="queue_rank">
-        <div class="resizable-col-content">
-          <span class="resizable-col-label">Queue Rank</span>
-        </div>
-        <span class="col-resize-handle" data-resize-key="queue_rank"></span>
-      </th>
-      <th data-col-key="job">
-        <div class="resizable-col-content">
-          <span class="resizable-col-label">Job</span>
-        </div>
-        <span class="col-resize-handle" data-resize-key="job"></span>
-      </th>
-      <th data-col-key="resume_options">
-        <div class="resizable-col-content">
-          <span class="resizable-col-label">Resume Options</span>
-        </div>
-        <span class="col-resize-handle" data-resize-key="resume_options"></span>
-      </th>
-      <th class="sticky-apply-col apply-col-fixed">
-        <div class="resizable-col-content">
-          <span class="resizable-col-label">Apply</span>
-        </div>
-      </th>
-    `;
-
+    const simpleWidths = {
+      queue_rank: 110,
+      job_title: 320,
+      posted_at: 150,
+      recommendation: 240,
+      packet_status: 150,
+      winner_score: 120,
+      selected_resume: 240,
+      apply: 140,
+    };
+    colgroup.innerHTML = SIMPLE_QUEUE_SORT_COLUMNS.map((column) => {
+      if (column.key === "apply") {
+        return `<col class="table-static-col" data-static-col-key="apply" style="width: ${simpleWidths.apply}px;" />`;
+      }
+      return `<col data-col-key="${escapeHtml(column.key)}" style="width: ${simpleWidths[column.key] || 180}px;" />`;
+    }).join("");
+    headerRow.innerHTML = SIMPLE_QUEUE_SORT_COLUMNS.map((column) => {
+      if (column.key === "apply") {
+        return `
+          <th class="sticky-apply-col apply-col-fixed">
+            <div class="resizable-col-content">
+              <span class="resizable-col-label">${escapeHtml(column.label)}</span>
+            </div>
+          </th>
+        `;
+      }
+      return `
+        <th data-col-key="${escapeHtml(column.key)}">
+          ${buildResizableHeaderInnerHtml(column.label, column.key, { sortable: column.sortable !== false })}
+        </th>
+      `;
+    }).join("");
+    renderSortableHeaders("queueTable", SIMPLE_QUEUE_SORT_COLUMNS, queueTableState.sort);
     initResizableTableColumns("queueTable", "queueTableColumnWidths");
     return;
   }
 
   const detailedWidths = {
     queue_rank: 110,
-    action: 120,
-    job_company: 180,
     job_title: 260,
-    posted_at: 160,
-    winner_resume: 220,
+    job_company: 180,
+    job_location: 170,
+    posted_at: 150,
+    recommendation: 240,
+    packet_status: 150,
     winner_score: 120,
+    selected_resume: 240,
     runner_up_resume: 220,
-    score_gap: 120,
-    missing_requirement_count: 150,
-    operator_decision: 170,
-    operator_selected_resume: 220,
-    queue_priority_reason: 260,
+    score_gap: 110,
+    missing_requirement_count: 140,
+    next_step: 170,
+    queue_priority_reason: 190,
     apply: 140,
   };
 
@@ -913,14 +933,14 @@ function buildPostedAtCellHtml(row) {
   return "-";
 }
 
-function buildJobTitleCellHtml(row, { simple = false } = {}) {
+function buildJobTitleCellHtml(row, { simple = false, includeLocation = true } = {}) {
   const title = escapeHtml(row.job_title || "");
   const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
   const location = escapeHtml(row.job_location || "");
   const titleHtml = jobUrl
     ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
     : title;
-  const locationHtml = location
+  const locationHtml = includeLocation && location
     ? `<div class="${simple ? "queue-simple-location" : "queue-job-location"}">${location}</div>`
     : "";
 
@@ -930,12 +950,80 @@ function buildJobTitleCellHtml(row, { simple = false } = {}) {
 function formatAdvisoryPriorityLabel(value) {
   const normalized = String(value || "").trim().toLowerCase();
   return {
-    apply_now: "Apply now",
+    apply_now: "Ready for review",
     tailor_first: "Tailor first",
     manual_review: "Manual review",
-    skip_for_now: "Skip for now",
+    skip_for_now: "Review later",
     watch_source: "Watch source",
   }[normalized] || "";
+}
+
+function formatQueueActionLabel(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return {
+    APPLY: "Ready for review",
+    APPLY_REVIEW_VARIANTS: "Review resume choice",
+    MAYBE_TAILOR: "Tailor first",
+    SKIP_FOR_NOW: "Review later",
+  }[normalized] || String(value || "").trim();
+}
+
+function formatPacketStatusLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(normalized)) return "Packet ready";
+  if (["false", "0", "no", "n", "off"].includes(normalized)) return "No packet";
+  return "";
+}
+
+function formatDiagnosticReasonLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    no_deterministic_winner: "No clear resume match",
+    borderline_deterministic_score: "Borderline match",
+    tailoring_signal: "Tailoring may improve fit",
+    tailoring_likely_worthwhile: "Tailoring may improve fit",
+    packet_generation_blocked: "Packet unavailable",
+    deterministic_equivalent_variants: "Close resume match",
+    fallback_only_no_deterministic_match: "No credible resume match",
+  }[normalized] || String(value || "").replaceAll("_", " ");
+}
+
+function formatOperatorDecisionLabel(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return {
+    SELECT_RESUME: "Choose resume",
+    MAYBE_TAILOR: "Tailor first",
+    SKIP_FOR_NOW: "Review later",
+    APPLY: "Ready for review",
+    APPLY_REVIEW_VARIANTS: "Review resume choice",
+  }[normalized] || String(value || "").replaceAll("_", " ");
+}
+
+function buildPacketStatusChipHtml(row) {
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const label = formatPacketStatusLabel(packetAllowed);
+  if (!label) return "";
+  const modifier = label === "Packet ready" ? "ready" : "blocked";
+  return `<span class="queue-packet-pill queue-packet-pill--${modifier}">${escapeHtml(label)}</span>`;
+}
+
+function buildRecommendationDetailsHtml(items) {
+  const rows = (items || [])
+    .filter((item) => item && String(item.value || "").trim())
+    .map((item) => `
+      <div class="queue-recommendation-detail-row">
+        <dt>${escapeHtml(item.label)}</dt>
+        <dd>${escapeHtml(item.value)}</dd>
+      </div>
+    `)
+    .join("");
+  if (!rows) return "";
+  return `
+    <details class="queue-recommendation-details">
+      <summary>Why?</summary>
+      <dl>${rows}</dl>
+    </details>
+  `;
 }
 
 function buildAdvisoryPriorityHtml(row, { simple = false } = {}) {
@@ -948,17 +1036,17 @@ function buildAdvisoryPriorityHtml(row, { simple = false } = {}) {
   const packetAllowed = String(row?.packet_generation_allowed || "").trim();
   const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
   const details = [
-    existingAction ? `Action: ${existingAction}` : "",
-    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
-    packetAllowed ? `Packet: ${packetAllowed}` : "",
-    packetBlockReason ? `Block: ${packetBlockReason}` : "",
-  ].filter(Boolean);
+    { label: "Raw action", value: existingAction },
+    { label: "Reason", value: reasonCodes.split("|").filter(Boolean).map(formatDiagnosticReasonLabel).join(", ") },
+    { label: "Raw reason codes", value: reasonCodes.replaceAll("|", ", ") },
+    { label: "Raw packet flag", value: packetAllowed },
+    { label: "Raw block reason", value: packetBlockReason },
+  ];
 
   return `
     <div class="${simple ? "queue-advisory-priority queue-advisory-priority--simple" : "queue-advisory-priority"}">
-      <span class="queue-advisory-kicker">Advisory</span>
       <span class="queue-advisory-pill queue-advisory-pill--${escapeHtml(priority)}">${escapeHtml(label)}</span>
-      ${details.length ? `<div class="queue-advisory-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+      ${buildRecommendationDetailsHtml(details)}
     </div>
   `;
 }
@@ -986,19 +1074,19 @@ function buildTailoringDecisionHtml(row, { simple = false } = {}) {
   const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
   const criticDecision = String(row?.critic_decision || "").trim();
   const details = [
-    existingAction ? `Action: ${existingAction}` : "",
-    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
-    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
-    packetAllowed ? `Packet: ${packetAllowed}` : "",
-    packetBlockReason ? `Block: ${packetBlockReason}` : "",
-    criticDecision ? `Critic: ${criticDecision}` : "",
-  ].filter(Boolean);
+    { label: "Raw action", value: existingAction },
+    { label: "Advisory priority", value: formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority },
+    { label: "Reason", value: reasonCodes.split("|").filter(Boolean).map(formatDiagnosticReasonLabel).join(", ") },
+    { label: "Raw reason codes", value: reasonCodes.replaceAll("|", ", ") },
+    { label: "Raw packet flag", value: packetAllowed },
+    { label: "Raw block reason", value: packetBlockReason },
+    { label: "Critic", value: criticDecision },
+  ];
 
   return `
     <div class="${simple ? "queue-tailoring-decision queue-tailoring-decision--simple" : "queue-tailoring-decision"}">
-      <span class="queue-tailoring-kicker">Tailoring advisory</span>
       <span class="queue-tailoring-pill queue-tailoring-pill--${escapeHtml(decision)}">${escapeHtml(label)}</span>
-      ${details.length ? `<div class="queue-tailoring-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+      ${buildRecommendationDetailsHtml(details)}
     </div>
   `;
 }
@@ -1006,10 +1094,10 @@ function buildTailoringDecisionHtml(row, { simple = false } = {}) {
 function formatOperatorReviewLaneLabel(value) {
   const normalized = String(value || "").trim().toLowerCase();
   return {
-    ready_to_apply: "Ready to apply",
+    ready_to_apply: "Ready for review",
     tailor_then_apply: "Tailor then apply",
-    review_before_action: "Review before action",
-    hold_or_skip: "Hold / skip",
+    review_before_action: "Review first",
+    hold_or_skip: "Skip for now",
     source_watch: "Source watch",
   }[normalized] || "";
 }
@@ -1027,20 +1115,20 @@ function buildOperatorReviewHtml(row, { simple = false } = {}) {
   const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
   const criticDecision = String(row?.critic_decision || "").trim();
   const details = [
-    existingAction ? `Action: ${existingAction}` : "",
-    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
-    tailoringDecision ? `Tailoring: ${formatTailoringDecisionLabel(tailoringDecision) || tailoringDecision}` : "",
-    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
-    packetAllowed ? `Packet: ${packetAllowed}` : "",
-    packetBlockReason ? `Block: ${packetBlockReason}` : "",
-    criticDecision ? `Critic: ${criticDecision}` : "",
-  ].filter(Boolean);
+    { label: "Raw action", value: existingAction },
+    { label: "Advisory priority", value: formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority },
+    { label: "Tailoring", value: formatTailoringDecisionLabel(tailoringDecision) || tailoringDecision },
+    { label: "Reason", value: reasonCodes.split("|").filter(Boolean).map(formatDiagnosticReasonLabel).join(", ") },
+    { label: "Raw reason codes", value: reasonCodes.replaceAll("|", ", ") },
+    { label: "Raw packet flag", value: packetAllowed },
+    { label: "Raw block reason", value: packetBlockReason },
+    { label: "Critic", value: criticDecision },
+  ];
 
   return `
     <div class="${simple ? "queue-operator-review queue-operator-review--simple" : "queue-operator-review"}">
-      <span class="queue-operator-kicker">Operator review</span>
       <span class="queue-operator-pill queue-operator-pill--${escapeHtml(lane)}">${escapeHtml(label)}</span>
-      ${details.length ? `<div class="queue-operator-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+      ${buildRecommendationDetailsHtml(details)}
     </div>
   `;
 }
@@ -1266,9 +1354,9 @@ function renderAgenticWorkflowSummaryPanel(workflowSummary = {}) {
     <div class="agentic-workflow-grid">
       ${renderWorkflowSummaryMetric("Queue jobs", summary.total_queue_jobs)}
       ${renderWorkflowSummaryMetric("Packet jobs", summary.total_packet_jobs)}
-      ${renderWorkflowSummaryMetric("Ready to apply", summary.ready_to_apply_count)}
+      ${renderWorkflowSummaryMetric("Ready for review", summary.ready_to_apply_count)}
       ${renderWorkflowSummaryMetric("Tailor then apply", summary.tailor_then_apply_count)}
-      ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count)}
+      ${renderWorkflowSummaryMetric("Skip for now", summary.hold_or_skip_count)}
       ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count)}
       ${renderWorkflowSummaryMetric("Fallback only", summary.fallback_only_count)}
       ${renderWorkflowSummaryMetric("Packet blocked", summary.packet_blocked_count)}
@@ -2073,7 +2161,7 @@ function clearPendingApplication() {
 
 function buildApplicationButtonHtml(row) {
   const isApplied = Boolean(row.is_applied);
-  const label = escapeHtml(row.application_label || (isApplied ? "Applied" : "Apply"));
+  const label = escapeHtml(row.application_label || (isApplied ? "Reviewed" : "Review job"));
   const buttonClass = isApplied ? "job-apply-btn applied-btn" : "job-apply-btn apply-btn";
   const disabledAttr = isApplied ? "disabled" : "";
 
@@ -2093,36 +2181,75 @@ function buildApplicationButtonHtml(row) {
   `;
 }
 
+function buildQueueJobSummaryHtml(row, { simple = false } = {}) {
+  const company = escapeHtml(row.job_company || "");
+  return `
+    <div class="${simple ? "queue-simple-job-cell" : "queue-job-summary"}">
+      <div class="queue-simple-company">${company || "-"}</div>
+      <div class="queue-simple-title">${buildJobTitleCellHtml(row, { simple })}</div>
+    </div>
+  `;
+}
+
+function buildQueueRecommendationCellHtml(row) {
+  const action = escapeHtml(formatQueueActionLabel(row.action) || "-");
+  const advisoryReasons = String(row?.advisory_reason_codes || "")
+    .split("|")
+    .filter(Boolean)
+    .map(formatDiagnosticReasonLabel)
+    .join(", ");
+  const tailoringReasons = String(row?.tailoring_reason_codes || "")
+    .split("|")
+    .filter(Boolean)
+    .map(formatDiagnosticReasonLabel)
+    .join(", ");
+  const operatorReasons = String(row?.operator_review_reason_codes || "")
+    .split("|")
+    .filter(Boolean)
+    .map(formatDiagnosticReasonLabel)
+    .join(", ");
+  const details = buildRecommendationDetailsHtml([
+    { label: "Recommendation", value: formatQueueActionLabel(row.action) },
+    { label: "Tailoring note", value: formatTailoringDecisionLabel(row.tailoring_decision) },
+    { label: "Review lane", value: formatOperatorReviewLaneLabel(row.operator_review_lane) },
+    { label: "Why", value: advisoryReasons || tailoringReasons || operatorReasons },
+    { label: "Advanced/debug codes", value: [row.action, row.advisory_reason_codes, row.tailoring_reason_codes, row.operator_review_reason_codes].filter(Boolean).join(" · ") },
+  ]);
+  return `
+    <div class="queue-recommendation-summary">
+      <span class="pill">${action}</span>
+      ${details}
+    </div>
+  `;
+}
+
+function buildSelectedResumeHtml(row) {
+  return buildResumeCellHtml(row.operator_selected_resume || row.winner_resume, {
+    emptyLabel: "-",
+    wrap: true,
+  });
+}
+
 function buildQueueRowDetailedHtml(row) {
   const queueRank = escapeHtml(row.queue_rank || "");
-  const action = escapeHtml(row.action || "");
-  const company = escapeHtml(row.job_company || "");
-  const titleHtml = buildJobTitleCellHtml(row);
   const applyButtonHtml = buildApplicationButtonHtml(row);
-  const winnerResume = escapeHtml(row.winner_resume || "");
-  const winnerScore = escapeHtml(row.winner_score || "");
-  const runnerUpResume = escapeHtml(row.runner_up_resume || "");
-  const scoreGap = escapeHtml(row.score_gap || "");
-  const missingRequirementCount = escapeHtml(row.missing_requirement_count || "");
-  const operatorDecision = escapeHtml(row.operator_decision || "");
-  const operatorSelectedResume = escapeHtml(row.operator_selected_resume || "");
-  const reason = escapeHtml(row.queue_priority_reason || "");
 
   return `
     <tr>
       <td>${queueRank}</td>
-      <td><span class="pill">${action || "-"}</span>${buildAdvisoryPriorityHtml(row)}${buildTailoringDecisionHtml(row)}${buildOperatorReviewHtml(row)}</td>
-      <td>${company}</td>
-      <td class="title-cell">${titleHtml}</td>
+      <td class="title-cell">${buildJobTitleCellHtml(row, { includeLocation: false })}</td>
+      <td>${escapeHtml(row.job_company || "-")}</td>
+      <td>${escapeHtml(row.job_location || "-")}</td>
       <td>${buildPostedAtCellHtml(row)}</td>
-      <td>${buildResumeCellHtml(row.winner_resume, { emptyLabel: "-", wrap: true })}</td>
+      <td>${buildQueueRecommendationCellHtml(row)}</td>
+      <td>${buildPacketStatusChipHtml(row) || "-"}</td>
       <td>${escapeHtml(formatScore100(row.winner_score))}</td>
-      <td>${buildResumeCellHtml(row.runner_up_resume, { emptyLabel: "-", wrap: true })}</td>
-      <td>${escapeHtml(formatScore100(row.score_gap))}</td>
-      <td>${missingRequirementCount}</td>
-      <td>${operatorDecision || "-"}</td>
-      <td>${buildResumeCellHtml(row.operator_selected_resume, { emptyLabel: "-", wrap: true })}</td>
-      <td class="reason-cell">${reason}</td>
+      <td>${buildSelectedResumeHtml(row)}</td>
+      <td>${buildResumeCellHtml(row.runner_up_resume || "-", { emptyLabel: "-", wrap: true })}</td>
+      <td>${escapeHtml(row.score_gap || "-")}</td>
+      <td>${escapeHtml(row.missing_requirement_count || "-")}</td>
+      <td>${escapeHtml(formatOperatorDecisionLabel(row.operator_decision) || formatOperatorReviewLaneLabel(row.operator_review_lane) || "-")}</td>
+      <td>${escapeHtml(formatDiagnosticReasonLabel(row.queue_priority_reason) || "-")}</td>
       <td class="apply-cell sticky-apply-col">${applyButtonHtml}</td>
     </tr>
   `;
@@ -2130,29 +2257,19 @@ function buildQueueRowDetailedHtml(row) {
 
 function buildQueueRowSimpleHtml(row) {
   const queueRank = escapeHtml(row.queue_rank || "");
-  const action = escapeHtml(row.action || "");
-  const company = escapeHtml(row.job_company || "");
-  const postedAt = buildPostedAtCellHtml(row);
-  const titleHtml = buildJobTitleCellHtml(row, { simple: true });
-
   const applyButtonHtml = buildApplicationButtonHtml(row);
 
   return `
     <tr>
       <td>${queueRank}</td>
       <td class="title-cell queue-simple-job-cell">
-        <div class="queue-simple-company">${company || "-"}</div>
-        <div class="queue-simple-title">${titleHtml}</div>
-        <div class="queue-simple-posted">Posted: ${postedAt}</div>
-        <div class="queue-simple-action">${action || "-"}</div>
-        ${buildAdvisoryPriorityHtml(row, { simple: true })}
-        ${buildTailoringDecisionHtml(row, { simple: true })}
-        ${buildOperatorReviewHtml(row, { simple: true })}
+        ${buildQueueJobSummaryHtml(row, { simple: true })}
       </td>
-      <td>
-        ${buildResumeOptionHtml("Best", row.winner_resume || "", row.winner_score || "")}
-        ${buildResumeOptionHtml("Backup", row.runner_up_resume || "", row.runner_up_score || "")}
-      </td>
+      <td>${buildPostedAtCellHtml(row)}</td>
+      <td>${buildQueueRecommendationCellHtml(row)}</td>
+      <td>${buildPacketStatusChipHtml(row) || "-"}</td>
+      <td>${escapeHtml(formatScore100(row.winner_score))}</td>
+      <td>${buildSelectedResumeHtml(row)}</td>
       <td class="apply-cell sticky-apply-col">${applyButtonHtml}</td>
     </tr>
   `;
@@ -2268,7 +2385,7 @@ function renderQueueRows(rows, metaLabel) {
   renderQueueHeaders();
 
   if (!displayRows.length) {
-    const colspan = state.executiveViewMode === "simple" ? 4 : 14;
+    const colspan = state.executiveViewMode === "simple" ? 8 : 15;
     tbody.innerHTML = `
       <tr>
         <td colspan="${colspan}" class="empty-state">No rows found.</td>

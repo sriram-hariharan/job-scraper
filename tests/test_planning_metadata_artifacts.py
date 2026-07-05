@@ -335,3 +335,85 @@ def test_packet_selection_blocks_fallback_only_and_low_confidence_rows():
         "packet_resume": "SWATIKA_test_1.pdf",
         "packet_resume_source": "deterministic_winner",
     }
+
+
+def _packet_selection_row(
+    *,
+    action: str,
+    job_doc_id: str,
+    winner_score: str = "0.720000",
+    winner_resume: str = "resume.pdf",
+    fallback_only_no_deterministic_match: str = "false",
+    packet_generation_allowed: str = "true",
+) -> dict:
+    return {
+        "job_doc_id": job_doc_id,
+        "action": action,
+        "winner_resume": winner_resume,
+        "winner_score": winner_score,
+        "resolved_resume": winner_resume,
+        "resolved_resume_source": "deterministic_winner" if winner_resume else "",
+        "resolved_selection_status": "resolved" if winner_resume else "",
+        "variant_review_required": "false",
+        "selection_signal": "deterministic_winner" if winner_resume else "no_credible_match",
+        "fallback_only_no_deterministic_match": fallback_only_no_deterministic_match,
+        "packet_generation_allowed": packet_generation_allowed,
+    }
+
+
+def test_selected_rows_preserves_default_skip_exclusion_when_not_requested():
+    rows = [
+        _packet_selection_row(action="APPLY", job_doc_id="apply"),
+        _packet_selection_row(action="MAYBE_TAILOR", job_doc_id="maybe"),
+        _packet_selection_row(action="SKIP_FOR_NOW", job_doc_id="safe_skip"),
+    ]
+
+    selected = run_application_planning._selected_rows(
+        rows,
+        include_actions={"APPLY", "MAYBE_TAILOR"},
+        packet_limit=0,
+    )
+
+    assert [row["job_doc_id"] for row in selected] == ["apply", "maybe"]
+
+
+def test_selected_rows_includes_only_safe_skip_rows_when_explicitly_requested():
+    rows = [
+        _packet_selection_row(action="APPLY", job_doc_id="apply"),
+        _packet_selection_row(action="MAYBE_TAILOR", job_doc_id="maybe"),
+        _packet_selection_row(action="SKIP_FOR_NOW", job_doc_id="safe_skip", winner_score="0.500000"),
+        _packet_selection_row(
+            action="SKIP_FOR_NOW",
+            job_doc_id="fallback_skip",
+            winner_score="0.000000",
+            winner_resume="",
+            fallback_only_no_deterministic_match="true",
+            packet_generation_allowed="false",
+        ),
+        _packet_selection_row(
+            action="SKIP_FOR_NOW",
+            job_doc_id="packet_blocked_skip",
+            winner_score="0.720000",
+            packet_generation_allowed="false",
+        ),
+        _packet_selection_row(
+            action="SKIP_FOR_NOW",
+            job_doc_id="low_score_skip",
+            winner_score="0.490000",
+            packet_generation_allowed="false",
+        ),
+    ]
+
+    selected = run_application_planning._selected_rows(
+        rows,
+        include_actions={"APPLY", "MAYBE_TAILOR", "SKIP_FOR_NOW"},
+        packet_limit=0,
+    )
+
+    assert [row["job_doc_id"] for row in selected] == ["apply", "maybe", "safe_skip"]
+    assert selected[-1]["action"] == "SKIP_FOR_NOW"
+    assert run_application_planning._resolve_packet_resume_selection(selected[-1]) == {
+        "packet_status": "generated",
+        "packet_resume": "resume.pdf",
+        "packet_resume_source": "deterministic_winner",
+    }

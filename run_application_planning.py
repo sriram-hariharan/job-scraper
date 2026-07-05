@@ -125,7 +125,21 @@ def _selected_rows(
     include_actions: Set[str],
     packet_limit: int,
 ) -> List[dict]:
-    filtered = [row for row in rows if row.get("action", "") in include_actions]
+    filtered = []
+    for row in rows:
+        action = row.get("action", "")
+        if action not in include_actions:
+            continue
+        if action == "SKIP_FOR_NOW":
+            credibility = compute_resume_selection_credibility(row)
+            explicit_packet_allowed = str(
+                row.get("packet_generation_allowed", "") or ""
+            ).strip()
+            if explicit_packet_allowed and not parse_credibility_bool(explicit_packet_allowed):
+                continue
+            if not parse_credibility_bool(credibility["packet_generation_allowed"]):
+                continue
+        filtered.append(row)
 
     if packet_limit > 0:
         filtered = filtered[:packet_limit]

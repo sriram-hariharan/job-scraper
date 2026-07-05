@@ -429,6 +429,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "src/tailoring/llm.py",
         "src/tailoring/rendering.py",
         "generate_tailoring_suggestions.py",
+        "main.py",
         "run_application_planning.py",
         "tests/test_score_first_scan.py",
         "tests/test_planning_metadata_artifacts.py",

@@ -26,20 +26,6 @@ def executive_dashboard() -> str:
           <div class="page-header-main">
             <div class="executive-title-row">
               <h1>Executive Queue</h1>
-
-              <div class="executive-view-mode-row">
-                <span class="executive-view-mode-label">View Mode</span>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Executive view mode">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="executiveViewMode" value="detailed" checked />
-                    <span>Detailed</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="executiveViewMode" value="simple" />
-                    <span>Simple</span>
-                  </label>
-                </div>
-              </div>
             </div>
 
             <p class="subtext">High-signal operator dashboard for direct apply and review decisions.</p>
@@ -56,11 +42,11 @@ def executive_dashboard() -> str:
         <div class="stat-value" id="statQueueRows">-</div>
       </section>
       <section class="card stat-card">
-        <div class="stat-label">Operator Decisions</div>
+        <div class="stat-label">Next Steps</div>
         <div class="stat-value" id="statDecisionRows">-</div>
       </section>
       <section class="card stat-card">
-        <div class="stat-label">Undecided Apply Review</div>
+        <div class="stat-label">Undecided Job Reviews</div>
         <div class="stat-value" id="statUndecidedApplyReview">-</div>
       </section>
       <section class="card stat-card">
@@ -83,19 +69,19 @@ def executive_dashboard() -> str:
               <div class="multi-select-menu" role="menu" hidden>
                 <button type="button" class="multi-select-option" data-value="APPLY" aria-checked="false">
                   <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">APPLY</span>
+                  <span class="multi-select-option-label">Ready for review</span>
                 </button>
                 <button type="button" class="multi-select-option" data-value="APPLY_REVIEW_VARIANTS" aria-checked="false">
                   <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">APPLY_REVIEW_VARIANTS</span>
+                  <span class="multi-select-option-label">Review resume choice</span>
                 </button>
                 <button type="button" class="multi-select-option" data-value="MAYBE_TAILOR" aria-checked="false">
                   <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">MAYBE_TAILOR</span>
+                  <span class="multi-select-option-label">Tailor first</span>
                 </button>
                 <button type="button" class="multi-select-option" data-value="SKIP_FOR_NOW" aria-checked="false">
                   <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">SKIP_FOR_NOW</span>
+                  <span class="multi-select-option-label">Review later</span>
                 </button>
               </div>
             </div>
@@ -141,6 +127,19 @@ def executive_dashboard() -> str:
       <div class="section-header application-table-header">
         <h2>Queue Table</h2>
         <div class="application-table-header-right">
+          <div class="executive-view-mode-row executive-view-mode-row--table">
+            <span class="executive-view-mode-label">View mode</span>
+            <div class="binary-toggle binary-toggle--compact binary-toggle--small" role="radiogroup" aria-label="Executive view mode">
+              <label class="binary-toggle-option">
+                <input type="radio" name="executiveViewMode" value="detailed" checked />
+                <span>Detailed</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="executiveViewMode" value="simple" />
+                <span>Simple</span>
+              </label>
+            </div>
+          </div>
           <div class="subtext" id="tableMeta">Loading...</div>
           <div class="application-pagination-inline" id="queuePaginationInline">
             <div class="application-pagination-meta" id="queuePaginationMeta">Loading...</div>
@@ -153,18 +152,19 @@ def executive_dashboard() -> str:
         <table id="queueTable" class="resizable-table">
           <colgroup id="queueTableColgroup">
             <col data-col-key="queue_rank" style="width: 110px;" />
-            <col data-col-key="action" style="width: 120px;" />
-            <col data-col-key="job_company" style="width: 180px;" />
             <col data-col-key="job_title" style="width: 260px;" />
-            <col data-col-key="posted_at" style="width: 160px;" />
-            <col data-col-key="winner_resume" style="width: 220px;" />
+            <col data-col-key="job_company" style="width: 180px;" />
+            <col data-col-key="job_location" style="width: 170px;" />
+            <col data-col-key="posted_at" style="width: 150px;" />
+            <col data-col-key="recommendation" style="width: 240px;" />
+            <col data-col-key="packet_status" style="width: 150px;" />
             <col data-col-key="winner_score" style="width: 120px;" />
+            <col data-col-key="selected_resume" style="width: 240px;" />
             <col data-col-key="runner_up_resume" style="width: 220px;" />
-            <col data-col-key="score_gap" style="width: 120px;" />
-            <col data-col-key="missing_requirement_count" style="width: 150px;" />
-            <col data-col-key="operator_decision" style="width: 170px;" />
-            <col data-col-key="operator_selected_resume" style="width: 220px;" />
-            <col data-col-key="queue_priority_reason" style="width: 260px;" />
+            <col data-col-key="score_gap" style="width: 110px;" />
+            <col data-col-key="missing_requirement_count" style="width: 140px;" />
+            <col data-col-key="next_step" style="width: 170px;" />
+            <col data-col-key="queue_priority_reason" style="width: 190px;" />
             <col class="table-static-col" data-static-col-key="apply" style="width: 140px;" />
           </colgroup>
 
@@ -172,15 +172,15 @@ def executive_dashboard() -> str:
             <tr id="queueTableHeaderRow">
               <th data-col-key="queue_rank">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Queue Rank</span>
+                  <span class="resizable-col-label">Rank</span>
                 </div>
                 <span class="col-resize-handle" data-resize-key="queue_rank"></span>
               </th>
-              <th data-col-key="action">
+              <th data-col-key="job_title">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Action</span>
+                  <span class="resizable-col-label">Job title</span>
                 </div>
-                <span class="col-resize-handle" data-resize-key="action"></span>
+                <span class="col-resize-handle" data-resize-key="job_title"></span>
               </th>
               <th data-col-key="job_company">
                 <div class="resizable-col-content">
@@ -188,69 +188,76 @@ def executive_dashboard() -> str:
                 </div>
                 <span class="col-resize-handle" data-resize-key="job_company"></span>
               </th>
-              <th data-col-key="job_title">
+              <th data-col-key="job_location">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Title</span>
+                  <span class="resizable-col-label">Location</span>
                 </div>
-                <span class="col-resize-handle" data-resize-key="job_title"></span>
+                <span class="col-resize-handle" data-resize-key="job_location"></span>
               </th>
               <th data-col-key="posted_at">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Posted At</span>
+                  <span class="resizable-col-label">Posted at</span>
                 </div>
                 <span class="col-resize-handle" data-resize-key="posted_at"></span>
               </th>
-              <th data-col-key="winner_resume">
+              <th data-col-key="recommendation">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Winner Resume</span>
+                  <span class="resizable-col-label">Recommendation</span>
                 </div>
-                <span class="col-resize-handle" data-resize-key="winner_resume"></span>
+                <span class="col-resize-handle" data-resize-key="recommendation"></span>
+              </th>
+              <th data-col-key="packet_status">
+                <div class="resizable-col-content">
+                  <span class="resizable-col-label">Packet</span>
+                  <span class="packet-info-icon" title="A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job." aria-label="A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.">ⓘ</span>
+                </div>
+                <span class="col-resize-handle" data-resize-key="packet_status"></span>
               </th>
               <th data-col-key="winner_score">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Winner Score</span>
+                  <span class="resizable-col-label">Match</span>
                 </div>
                 <span class="col-resize-handle" data-resize-key="winner_score"></span>
               </th>
+              <th data-col-key="selected_resume">
+                <div class="resizable-col-content">
+                  <span class="resizable-col-label">Selected Resume</span>
+                </div>
+                <span class="col-resize-handle" data-resize-key="selected_resume"></span>
+              </th>
               <th data-col-key="runner_up_resume">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Runner-Up Resume</span>
+                  <span class="resizable-col-label">Runner-up resume</span>
                 </div>
                 <span class="col-resize-handle" data-resize-key="runner_up_resume"></span>
               </th>
               <th data-col-key="score_gap">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Score Gap</span>
+                  <span class="resizable-col-label">Score gap</span>
                 </div>
                 <span class="col-resize-handle" data-resize-key="score_gap"></span>
               </th>
               <th data-col-key="missing_requirement_count">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Missing Req Count</span>
+                  <span class="resizable-col-label">Missing req count</span>
                 </div>
                 <span class="col-resize-handle" data-resize-key="missing_requirement_count"></span>
               </th>
-              <th data-col-key="operator_decision">
+              <th data-col-key="next_step">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Operator Decision</span>
+                  <span class="resizable-col-label">Next step</span>
                 </div>
-                <span class="col-resize-handle" data-resize-key="operator_decision"></span>
-              </th>
-              <th data-col-key="operator_selected_resume">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Selected Resume</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="operator_selected_resume"></span>
+                <span class="col-resize-handle" data-resize-key="next_step"></span>
               </th>
               <th data-col-key="queue_priority_reason">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Priority Reason</span>
+                  <span class="resizable-col-label">Priority reason</span>
                 </div>
                 <span class="col-resize-handle" data-resize-key="queue_priority_reason"></span>
               </th>
               <th class="sticky-apply-col apply-col-fixed">
                 <div class="resizable-col-content">
-                  <span class="resizable-col-label">Apply</span>
+                  <span class="resizable-col-label">Review</span>
                 </div>
               </th>
             </tr>

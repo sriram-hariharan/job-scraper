@@ -210,7 +210,7 @@ DOC_MARKERS = (
 PROTECTED_HASHES = {
     "src/app/services.py": "f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
-    "src/app/static/app_redesign.css": "62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c",
+    "src/app/static/app_redesign.css": "b02ff695ca630345cbf5452165b1f3edfca9630ff7269eca4f50c9dadd704ed2",
     "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py": "715ef0c6af0c40b5029b05144346d89fe91e99a4b0e2d53743c7058d646f35d7",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py": "2b31a53bd2cb8f8c4aa8359d5fcbcd246cd9618e65228b38675d7bd2af9470a4",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",

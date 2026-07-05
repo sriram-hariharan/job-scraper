@@ -173,6 +173,8 @@ def _run_application_planning(args, job_corpus_path=None):
         str(args.application_planning_job_packet_limit),
         "--output-dir",
         args.application_planning_output_dir,
+        "--include-actions",
+        args.application_planning_llm_actions,
         "--llm-tailoring-actions",
         args.application_planning_llm_actions,
     ]

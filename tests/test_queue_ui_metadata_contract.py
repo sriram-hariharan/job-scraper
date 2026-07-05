@@ -36,17 +36,152 @@ def test_queue_ui_renders_job_prioritization_advisory_separately():
         assert "buildAdvisoryPriorityHtml" in source
         assert "advisory_priority" in source
         assert "existing_action" in source
-        assert "Apply now" in source
-        assert "Skip for now" in source
+        assert "Ready for review" in source
+        assert "Review later" in source
         assert "Watch source" in source
-        assert "Advisory" in source
+        assert "<summary>Why?</summary>" in source
+        assert "Raw action" in source
+        assert "No clear resume match" in source
+        assert "Borderline match" in source
+        assert "Tailoring may improve fit" in source
+        assert "Packet unavailable" in source
+        assert "queue-advisory-kicker" not in source
         assert "row.action" in source
 
     assert ".queue-advisory-priority" in css
     assert ".queue-advisory-pill--skip_for_now" in css
     assert ".queue-advisory-pill--watch_source" in css
+    assert ".queue-recommendation-details" in css
+    assert ".queue-packet-pill--ready" in css
+    assert ".queue-packet-pill--blocked" in css
     assert "job_prioritization_recommendations.csv" in services_source
     assert "JOB_PRIORITIZATION_OVERLAY_FIELDS" in services_source
+
+
+def test_queue_ui_uses_compact_decision_chips_and_details():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source):
+        assert "formatQueueActionLabel" in source
+        assert "Ready for review" in source
+        assert "Review resume choice" in source
+        assert "Tailor first" in source
+        assert "Review later" in source
+        assert "buildPacketStatusChipHtml" in source
+        assert "Packet ready" in source
+        assert "No packet" in source
+        assert "queue-recommendation-details" in source
+        assert "<summary>Why?</summary>" in source
+        assert "Action: ${" not in source
+        assert "Packet: ${" not in source
+        assert "Block: ${" not in source
+
+    assert "flex-direction: row" in css
+    assert ".queue-packet-pill" in css
+    assert ".queue-recommendation-detail-row" in css
+
+
+def test_queue_ui_uses_simplified_job_seeker_columns():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source):
+        assert 'label: "Rank"' in source
+        assert 'label: "Job title"' in source
+        assert 'label: "Posted at"' in source
+        assert 'label: "Recommendation"' in source
+        assert 'label: "Match"' in source
+        assert 'label: "Selected Resume"' in source
+        assert 'label: "Review"' in source
+        assert "Review job" in source
+        assert "Review later" in source
+        assert "Choose resume" in source
+        assert "Close resume match" in source
+        assert "No clear resume match" in source or "No resume match" in source
+        assert "Runner-up resume" in source
+        assert "Score gap" in source
+        assert "Missing req count" in source or "Missing requirements" in source
+        assert "Next step" in source
+        assert "Priority reason" in source
+        assert "A packet is a review bundle for this job." in source
+
+    for markup in (app_markup, planning_markup):
+        assert "Recommendation" in markup
+        assert "Posted at" in markup
+        assert "Selected Resume" in markup
+        assert "Review" in markup
+        assert ">Apply<" not in markup
+
+    assert ".queue-job-summary" in css
+    assert ".queue-status-stack" in css
+    assert ".queue-workspace-pill" in css
+
+
+def test_phase77b_executive_detail_and_packet_help_contract():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+
+    assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
+    assert 'key: "runner_up_resume", label: "Runner-up resume"' in app_source
+    assert 'key: "score_gap", label: "Score gap"' in app_source
+    assert 'key: "missing_requirement_count", label: "Missing req count"' in app_source
+    assert 'key: "next_step", label: "Next step"' in app_source
+    assert 'key: "queue_priority_reason", label: "Priority reason"' in app_source
+    assert 'data-col-key="runner_up_resume"' in app_markup
+    assert 'data-col-key="score_gap"' in app_markup
+    assert 'data-col-key="missing_requirement_count"' in app_markup
+    assert 'data-col-key="next_step"' in app_markup
+    assert 'data-col-key="queue_priority_reason"' in app_markup
+
+    for source in (app_source, planning_source, app_markup, planning_markup):
+        assert "A packet is a review bundle for this job." in source
+        assert "It does not apply to the job." in source
+
+    assert "executive-view-mode-row--table" in app_markup
+    queue_header_index = app_markup.index("<h2>Queue Table</h2>")
+    toggle_index = app_markup.index("executive-view-mode-row--table")
+    controls_start = app_markup.index('<section class="card controls-card">')
+    controls_end = app_markup.index('<div class="subtext pipeline-run-meta"')
+    assert toggle_index > queue_header_index
+    assert "executive-view-mode-row--table" not in app_markup[controls_start:controls_end]
+
+
+def test_phase77b_recommendation_has_single_why_control_per_cell():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source):
+        assert "buildQueueRecommendationCellHtml" in source or "buildPlanningRecommendationCellHtml" in source
+        assert "${buildAdvisoryPriorityHtml(row)}" not in source
+        assert "${buildTailoringDecisionHtml(row)}" not in source
+        assert "${buildOperatorReviewHtml(row)}" not in source
+        assert "<summary>Why?</summary>" in source
+
+
+def test_phase77c_table_polish_contract():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    assert "binary-toggle--small" in app_markup
+    assert "executive-view-mode-row--table" in app_markup
+    assert "Posted:" not in app_source
+    assert "Posted:" not in planning_source
+    assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
+    assert 'key: "posted_at", label: "Posted at", type: "date"' in planning_source
+    assert "grid-template-columns: minmax(0, 1fr) auto" in css
+    assert "justify-self: end" in css
+    assert "body .multi-select-trigger-icon" in css
+    assert "border-radius: 0 !important" in css
+    assert ".table-wrap thead .sort-header-btn" in css
 
 
 def test_queue_ui_renders_tailoring_decision_advisory_separately():
@@ -62,7 +197,8 @@ def test_queue_ui_renders_tailoring_decision_advisory_separately():
         assert "No tailoring needed" in source
         assert "Tailor before apply" in source
         assert "Do not tailor" in source
-        assert "Tailoring advisory" in source
+        assert "<summary>Why?</summary>" in source
+        assert "queue-tailoring-kicker" not in source
         assert "row.action" in source
 
     assert ".queue-tailoring-decision" in css
@@ -82,9 +218,10 @@ def test_queue_ui_renders_operator_review_advisory_separately():
         assert "buildOperatorReviewHtml" in source
         assert "operator_review_lane" in source
         assert "operator_review_reason_codes" in source
-        assert "Ready to apply" in source
-        assert "Hold / skip" in source
-        assert "Operator review" in source
+        assert "Ready for review" in source
+        assert "Skip for now" in source
+        assert "<summary>Why?</summary>" in source
+        assert "queue-operator-kicker" not in source
         assert "row.action" in source
 
     assert ".queue-operator-review" in css

@@ -1,8 +1,8 @@
-# phase56b legacy guard marker: changes_only f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8
-# phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 609f571f3c3df66984ed6b918d7f429b712c3469c0523154e39ffda9c880199c
+# phase56b legacy guard marker: changes_only e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c
+# phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
-# phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 609f571f3c3df66984ed6b918d7f429b712c3469c0523154e39ffda9c880199c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from pathlib import Path
 import subprocess
@@ -228,6 +228,9 @@ ALLOWED_CHANGED = {
     "src/app/ui.py",
     "src/app/static/app.js",
     "src/app/static/planning.js",
+    "src/app/static/scan_workspace.css",
+            "src/app/static/scan_workspace_review.css",
+            "src/app/static/styles.css",
     "tests/test_queue_ui_metadata_contract.py",
     "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
     "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
@@ -648,6 +651,9 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/app/ui.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",
+        "src/app/static/scan_workspace.css",
+            "src/app/static/scan_workspace_review.css",
+            "src/app/static/styles.css",
         "tests/test_queue_ui_metadata_contract.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
@@ -986,7 +992,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7",
-                "609f571f3c3df66984ed6b918d7f429b712c3469c0523154e39ffda9c880199c",
+                "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
             )
         )

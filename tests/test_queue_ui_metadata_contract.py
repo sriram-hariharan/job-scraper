@@ -52,7 +52,8 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
 
     primary_selector = (
         "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn)"
-        ":not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn)"
+        ":not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab)"
+        ":not(.sort-header-btn):not(.scheduler-tab-btn)"
         ":not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn)"
         ":not(.app-shell-menu-btn):not(.multi-select-trigger)"
     )
@@ -329,7 +330,7 @@ def test_phase77d_stateful_table_header_and_review_styling_contract():
     assert ".review-action-button--disabled" in css
     assert 'html[data-theme="dark"] .recommendation-chip--tailor' in css
     assert 'html[data-theme="dark"] .review-action-button--available' in css
-    assert "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn)" in css
+    assert "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn)" in css
     assert css.count(".recommendation-chip--tailor") == 3
     assert css.count(".review-action-button--available") == 4
     assert 'data-view-tailoring="true"' in planning_source

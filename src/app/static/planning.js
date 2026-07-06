@@ -9540,15 +9540,23 @@ function normalizeScanWorkspacePersonalDetails(value) {
   return normalized;
 }
 
+function mergeScanWorkspacePersonalDetails(baseDetails = {}, overrideDetails = {}) {
+  const base = normalizeScanWorkspacePersonalDetails(baseDetails);
+  const override = normalizeScanWorkspacePersonalDetails(overrideDetails);
+  const merged = { ...base };
+  SCAN_WORKSPACE_PERSONAL_DETAIL_FIELDS.forEach((field) => {
+    if (override[field]) merged[field] = override[field];
+  });
+  return normalizeScanWorkspacePersonalDetails(merged);
+}
+
 function getScanWorkspacePersonalDetailsFromPreload(payload = getScanWorkspacePayload()) {
   const envelope = payload?.personal_details && typeof payload.personal_details === "object"
     ? payload.personal_details
     : {};
-  return normalizeScanWorkspacePersonalDetails(
-    envelope.current && typeof envelope.current === "object"
-      ? envelope.current
-      : envelope
-  );
+  const extracted = envelope.extracted && typeof envelope.extracted === "object" ? envelope.extracted : {};
+  const current = envelope.current && typeof envelope.current === "object" ? envelope.current : envelope;
+  return mergeScanWorkspacePersonalDetails(extracted, current);
 }
 
 function getScanWorkspacePersonalDetailsForSave() {
@@ -9817,19 +9825,8 @@ function updateScanWorkspaceContextLine(payload = getScanWorkspacePayload()) {
 
 function updateScanWorkspaceMeta() {
   const meta = qs("scanWorkspaceMeta");
-  const context = getScanWorkspaceContext();
-  const payload = getScanWorkspacePayload();
-
   if (!meta) return;
-
-  const displayName = humanizeResumeDisplayName(
-    context?.resumeName ||
-    payload?.resume_name ||
-    payload?.selected_resume ||
-    payload?.selection?.selected_resume ||
-    ""
-  );
-  meta.textContent = displayName || "Preloaded resume";
+  meta.textContent = "";
 }
 
 function updateScanWorkspaceActionBar() {
@@ -11985,13 +11982,11 @@ async function initScanWorkspacePage() {
     scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(
       savedDraft.excluded_scan_issue_ids || []
     );
-    const savedPersonalDetails = normalizeScanWorkspacePersonalDetails(
-      savedDraft.personal_details || {}
-    );
-    scanWorkspaceState.personalDetails = normalizeScanWorkspacePersonalDetails(
-      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
-        ? savedPersonalDetails
-        : getScanWorkspacePersonalDetailsFromPreload(payload)
+    const savedPersonalDetails = normalizeScanWorkspacePersonalDetails(savedDraft.personal_details || {});
+    const sourcePersonalDetails = getScanWorkspacePersonalDetailsFromPreload(payload);
+    scanWorkspaceState.personalDetails = mergeScanWorkspacePersonalDetails(
+      sourcePersonalDetails,
+      savedPersonalDetails
     );
     scanWorkspaceState.suggestionDecisionOverrides = {};
     scanWorkspaceState.previewPayload = null;
@@ -12721,3 +12716,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 });
+
+
+/*
+ * Phase 78B local repair: LinkedIn contact hydration backfill.
+ *
+ * This does not fabricate a LinkedIn URL and does not hardcode user data.
+ * It only propagates an existing linkedin.com URL from loaded scan/workspace
+ * payloads, script JSON, local/session storage, or visible source text into
+ * the LinkedIn edit field and resume preview contact row when the normal
+ * hydration path left LinkedIn empty.
+ */

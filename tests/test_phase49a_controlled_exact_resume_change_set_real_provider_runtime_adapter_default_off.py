@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8
+# phase56b legacy guard marker: changes_only e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c
 from __future__ import annotations
 
 from hashlib import sha256
@@ -519,6 +519,9 @@ def test_changed_files_limited_to_phase49a_surface_and_legacy_guards():
         "src/app/ui.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",
+        "src/app/static/scan_workspace.css",
+            "src/app/static/scan_workspace_review.css",
+            "src/app/static/styles.css",
         "src/app/static/app_redesign.css",
         "tests/test_queue_ui_metadata_contract.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",

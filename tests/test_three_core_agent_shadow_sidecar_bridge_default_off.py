@@ -273,6 +273,12 @@ def test_bridge_does_not_change_unapproved_api_service_or_static_files():
         "src/app/services.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "src/app/ui.py",
+        "src/app/static/app.js",
+        "src/app/static/planning.js",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "src/app/static/planning.js",
         "src/app/static/scan_workspace.js",
     }

@@ -125,8 +125,8 @@ def executive_dashboard() -> str:
 
     <section class="card table-card">
       <div class="section-header application-table-header">
-        <h2>Queue Table</h2>
-        <div class="application-table-header-right">
+        <div class="application-table-title-row">
+          <h2>Queue Table</h2>
           <div class="executive-view-mode-row executive-view-mode-row--table">
             <span class="executive-view-mode-label">View mode</span>
             <div class="binary-toggle binary-toggle--compact binary-toggle--small" role="radiogroup" aria-label="Executive view mode">
@@ -140,6 +140,8 @@ def executive_dashboard() -> str:
               </label>
             </div>
           </div>
+        </div>
+        <div class="application-table-header-right">
           <div class="subtext" id="tableMeta">Loading...</div>
           <div class="application-pagination-inline" id="queuePaginationInline">
             <div class="application-pagination-meta" id="queuePaginationMeta">Loading...</div>
@@ -714,16 +716,16 @@ def scheduler_dashboard() -> str:
     <section class="card table-card scheduler-table-card">
       <div class="scheduler-table-tabs">
         <div class="scheduler-tab-row" role="tablist" aria-label="Scheduler views">
-          <button type="button" class="ghost-btn scheduler-tab-btn active" data-tab="contract" role="tab" aria-selected="true">
+          <button type="button" class="scheduler-tab-btn active" data-tab="contract" role="tab" aria-selected="true">
             Contract Health
           </button>
-          <button type="button" class="ghost-btn scheduler-tab-btn" data-tab="jsonl" role="tab" aria-selected="false">
+          <button type="button" class="scheduler-tab-btn" data-tab="jsonl" role="tab" aria-selected="false">
             JSONL Rows
           </button>
-          <button type="button" class="ghost-btn scheduler-tab-btn" data-tab="postgres" role="tab" aria-selected="false">
+          <button type="button" class="scheduler-tab-btn" data-tab="postgres" role="tab" aria-selected="false">
             Postgres Rows
           </button>
-          <button type="button" class="ghost-btn scheduler-tab-btn" data-tab="latest" role="tab" aria-selected="false">
+          <button type="button" class="scheduler-tab-btn" data-tab="latest" role="tab" aria-selected="false">
             Latest Runs by Job
           </button>
         </div>

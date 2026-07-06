@@ -1485,10 +1485,6 @@ def scan_workspace(
                   {company_safe} / {title_safe}
                 </div>
 
-                <div class="subtext" id="scanWorkspaceMeta">
-                  {resume_display_safe}
-                </div>
-
                 <div class="scan-workspace-review-inline-metrics" id="scanWorkspaceScoreMetrics">
                   <span class="scan-workspace-review-inline-metric">
                     <span class="scan-workspace-review-inline-metric-label">Trusted</span>
@@ -1506,111 +1502,6 @@ def scan_workspace(
                   </span>
                 </div>
 
-                <div
-                  class="subtext scan-workspace-jd-llm-readback"
-                  id="scanWorkspaceJdLlmReadback"
-                  aria-live="polite"
-                >
-                  Live JD LLM: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-tailoring-llm-readback"
-                  id="scanWorkspaceTailoringLlmReadback"
-                  aria-live="polite"
-                >
-                  Live tailoring LLM: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-exact-change-llm-readback"
-                  id="scanWorkspaceExactChangeLlmReadback"
-                  aria-live="polite"
-                >
-                  Live exact change LLM: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-manual-exact-change-acceptance-readback"
-                  id="scanWorkspaceManualExactChangeAcceptanceReadback"
-                  aria-live="polite"
-                >
-                  Manual exact change acceptance: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-guarded-resume-copy-artifact-readback"
-                  id="scanWorkspaceGuardedResumeCopyArtifactReadback"
-                  aria-live="polite"
-                >
-                  Guarded resume copy artifact: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-guarded-resume-copy-artifact-verification-readback"
-                  id="scanWorkspaceGuardedResumeCopyArtifactVerificationReadback"
-                  aria-live="polite"
-                >
-                  Guarded artifact verification: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-verified-artifact-operator-review-packet-readback"
-                  id="scanWorkspaceVerifiedArtifactOperatorReviewPacketReadback"
-                  aria-live="polite"
-                >
-                  Verified artifact operator review packet: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-verified-artifact-operator-decision-readback"
-                  id="scanWorkspaceVerifiedArtifactOperatorDecisionReadback"
-                  aria-live="polite"
-                >
-                  Verified artifact operator decision: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-application-readiness-packet-readback"
-                  id="scanWorkspaceApplicationReadinessPacketReadback"
-                  aria-live="polite"
-                >
-                  Application readiness packet: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-manual-application-handoff-packet-readback"
-                  id="scanWorkspaceManualApplicationHandoffPacketReadback"
-                  aria-live="polite"
-                >
-                  Manual application handoff packet: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-handoff-audit-trail-readback"
-                  id="scanWorkspaceHandoffAuditTrailReadback"
-                  aria-live="polite"
-                >
-                  Handoff audit trail: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-safety-boundary-summary-readback"
-                  id="scanWorkspaceSafetyBoundarySummaryReadback"
-                  aria-live="polite"
-                >
-                  Safety boundary summary: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-workflow-readiness-checkpoint-readback"
-                  id="scanWorkspaceWorkflowReadinessCheckpointReadback"
-                  aria-live="polite"
-                >
-                  Workflow readiness checkpoint: default-off
-                </div>
-                <div
-                  class="subtext scan-workspace-agentic-workflow-integration-readback"
-                  id="scanWorkspaceAgenticWorkflowIntegrationReadback"
-                  aria-live="polite"
-                >
-                  Agentic workflow demo readiness: waiting for existing scan/evaluation readback
-                </div>
-                <div
-                  class="subtext scan-workspace-production-readiness-checkpoint-readback"
-                  id="scanWorkspaceProductionReadinessCheckpointReadback"
-                  aria-live="polite"
-                >
-                  Demo readiness: backend checkpoint readback waiting for existing data
-                </div>
               </div>
             </div>
           </div>
@@ -1636,7 +1527,7 @@ def scan_workspace(
                   data-scan-selected-tab="trusted"
                   id="scanWorkspaceTrustedTab"
                 >
-                  Trusted
+                  Skills
                 </button>
 
                 <button
@@ -1645,7 +1536,7 @@ def scan_workspace(
                   data-scan-selected-tab="ai_optimize"
                   id="scanWorkspaceAiTab"
                 >
-                  AI Suggestions
+                  Searchability
                 </button>
 
                 <button
@@ -1663,7 +1554,7 @@ def scan_workspace(
                   data-scan-selected-tab="guidance"
                   id="scanWorkspaceGuidanceTab"
                 >
-                  Guidance
+                  Recruiter Tips
                 </button>
               </div>
             </div>
@@ -1816,21 +1707,49 @@ def scan_workspace(
                 </div>
               </div>
 
-              <button
-                type="button"
-                class="ghost-btn btn-sm scan-workspace-toolbar-btn"
-                data-scan-switch-mode="compare"
+              <span
+                class="scan-workspace-disabled-action-wrap"
+                data-scan-disabled-help="No changes made"
+                title="No changes made"
               >
-                Compare
-              </button>
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                  data-scan-switch-mode="compare"
+                  id="scanWorkspaceCompareBtn"
+                  aria-disabled="true"
+                  disabled
+                  title="No changes made"
+                >
+                  Compare
+                </button>
+              </span>
 
-              <button
-                type="button"
-                class="btn-sm scan-workspace-toolbar-btn scan-workspace-continue-btn"
-                id="scanWorkspaceSaveBtn"
+              <span
+                class="scan-workspace-disabled-action-wrap"
+                data-scan-disabled-help="No changes made"
+                title="No changes made"
               >
-                Continue
-              </button>
+                <button
+                  type="button"
+                  class="btn-sm scan-workspace-toolbar-btn scan-workspace-continue-btn"
+                  id="scanWorkspaceSaveBtn"
+                  aria-disabled="true"
+                  disabled
+                  title="No changes made"
+                >
+                  Continue
+                </button>
+              </span>
+              <details
+                class="scan-workspace-advanced-diagnostics"
+                id="scanWorkspaceAdvancedDiagnostics"
+              >
+                <summary>Advanced diagnostics</summary>
+                <p class="subtext scan-workspace-advanced-diagnostics-help">
+                  Internal workflow controls and readbacks for debugging. These do not apply to jobs automatically.
+                </p>
+                <div class="scan-workspace-advanced-diagnostics-grid">
               <label
                 class="subtext scan-workspace-live-tailoring-toggle"
                 for="scanWorkspaceLiveTailoringSuggestionToggle"
@@ -2122,6 +2041,118 @@ def scan_workspace(
                 placeholder="Verified artifact ID"
                 aria-label="Workflow readiness verified artifact ID"
               />
+                </div>
+                <div
+                  class="scan-workspace-advanced-readbacks"
+                  aria-label="Advanced diagnostic readbacks"
+                >
+                  <div
+                    class="subtext scan-workspace-jd-llm-readback"
+                    id="scanWorkspaceJdLlmReadback"
+                    aria-live="polite"
+                  >
+                    Live JD LLM: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-tailoring-llm-readback"
+                    id="scanWorkspaceTailoringLlmReadback"
+                    aria-live="polite"
+                  >
+                    Live tailoring LLM: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-exact-change-llm-readback"
+                    id="scanWorkspaceExactChangeLlmReadback"
+                    aria-live="polite"
+                  >
+                    Live exact change LLM: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-manual-exact-change-acceptance-readback"
+                    id="scanWorkspaceManualExactChangeAcceptanceReadback"
+                    aria-live="polite"
+                  >
+                    Manual exact change acceptance: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-guarded-resume-copy-artifact-readback"
+                    id="scanWorkspaceGuardedResumeCopyArtifactReadback"
+                    aria-live="polite"
+                  >
+                    Guarded resume copy artifact: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-guarded-resume-copy-artifact-verification-readback"
+                    id="scanWorkspaceGuardedResumeCopyArtifactVerificationReadback"
+                    aria-live="polite"
+                  >
+                    Guarded artifact verification: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-verified-artifact-operator-review-packet-readback"
+                    id="scanWorkspaceVerifiedArtifactOperatorReviewPacketReadback"
+                    aria-live="polite"
+                  >
+                    Verified artifact operator review packet: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-verified-artifact-operator-decision-readback"
+                    id="scanWorkspaceVerifiedArtifactOperatorDecisionReadback"
+                    aria-live="polite"
+                  >
+                    Verified artifact operator decision: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-application-readiness-packet-readback"
+                    id="scanWorkspaceApplicationReadinessPacketReadback"
+                    aria-live="polite"
+                  >
+                    Application readiness packet: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-manual-application-handoff-packet-readback"
+                    id="scanWorkspaceManualApplicationHandoffPacketReadback"
+                    aria-live="polite"
+                  >
+                    Manual application handoff packet: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-handoff-audit-trail-readback"
+                    id="scanWorkspaceHandoffAuditTrailReadback"
+                    aria-live="polite"
+                  >
+                    Handoff audit trail: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-safety-boundary-summary-readback"
+                    id="scanWorkspaceSafetyBoundarySummaryReadback"
+                    aria-live="polite"
+                  >
+                    Safety boundary summary: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-workflow-readiness-checkpoint-readback"
+                    id="scanWorkspaceWorkflowReadinessCheckpointReadback"
+                    aria-live="polite"
+                  >
+                    Workflow readiness checkpoint: default-off
+                  </div>
+                  <div
+                    class="subtext scan-workspace-agentic-workflow-integration-readback"
+                    id="scanWorkspaceAgenticWorkflowIntegrationReadback"
+                    aria-live="polite"
+                  >
+                    Agentic workflow demo readiness: waiting for existing scan/evaluation readback
+                  </div>
+                  <div
+                    class="subtext scan-workspace-production-readiness-checkpoint-readback"
+                    id="scanWorkspaceProductionReadinessCheckpointReadback"
+                    aria-live="polite"
+                  >
+                    Demo readiness: backend checkpoint readback waiting for existing data
+                  </div>
+                </div>
+              </details>
               </div>
             </div>
 

@@ -232,6 +232,29 @@
   text-decoration: underline;
 }
 
+.tailoring-scan-back-btn {
+  border: 1px solid rgba(124, 156, 255, 0.28);
+  background: rgba(124, 156, 255, 0.08);
+  color: var(--scan-text, #e5edff);
+  box-shadow: none;
+}
+
+.tailoring-scan-back-btn:hover {
+  border-color: rgba(124, 156, 255, 0.42);
+  background: rgba(124, 156, 255, 0.14);
+}
+
+html[data-theme="light"] .tailoring-scan-back-btn {
+  border-color: #cbd8e8;
+  background: #f8fbff;
+  color: #174079;
+}
+
+html[data-theme="light"] .tailoring-scan-back-btn:hover {
+  border-color: #93b4e8;
+  background: #e8f1ff;
+}
+
 .scan-workspace-intake-actions {
   display: flex;
   align-items: center;
@@ -2653,6 +2676,58 @@
 
 .scan-workspace-review-main-actions {
   gap: 10px;
+}
+
+.scan-workspace-advanced-diagnostics {
+  flex: 1 1 100%;
+  width: 100%;
+  margin-top: 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding-top: 8px;
+}
+
+.scan-workspace-advanced-diagnostics > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-muted, #aebbd8);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.scan-workspace-advanced-diagnostics > summary:hover {
+  color: var(--text-primary, #f7faff);
+}
+
+.scan-workspace-advanced-diagnostics-help {
+  max-width: 720px;
+  margin: 8px 0 10px;
+}
+
+.scan-workspace-advanced-diagnostics-grid,
+.scan-workspace-advanced-readbacks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.scan-workspace-advanced-diagnostics-grid {
+  margin-bottom: 10px;
+}
+
+.scan-workspace-advanced-diagnostics-grid input[type="text"],
+.scan-workspace-advanced-diagnostics-grid select {
+  width: 100%;
+  min-width: 0;
+}
+
+.scan-workspace-advanced-readbacks {
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .scan-workspace-toolbar-btn,
@@ -5418,15 +5493,17 @@ html[data-theme="light"] .scan-workspace-score-circle {
 .scan-workspace-review-tab.is-active,
 .scan-workspace-tab-btn.active {
   opacity: 1;
-  background: #ffffff !important;
-  color: #0f172a !important;
-  box-shadow: 0 12px 26px rgba(124, 156, 255, 0.22) !important;
+  border-color: rgba(124, 156, 255, 0.42) !important;
+  background: rgba(124, 156, 255, 0.14) !important;
+  color: var(--scan-text) !important;
+  box-shadow: none !important;
 }
 
 html[data-theme="light"] .scan-workspace-review-tab.is-active,
 html[data-theme="light"] .scan-workspace-tab-btn.active {
-  background: linear-gradient(135deg, #2563eb, #06b6d4) !important;
-  color: #ffffff !important;
+  border-color: #93b4e8 !important;
+  background: #e8f1ff !important;
+  color: #174079 !important;
 }
 
 .scan-workspace-review-actions--rail {
@@ -5500,6 +5577,17 @@ html[data-theme="light"] .scan-workspace-tab-btn.active {
 .scan-workspace-review-main-actions {
   gap: 10px !important;
   align-items: center;
+}
+
+.scan-workspace-disabled-action-wrap {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+}
+
+.scan-workspace-disabled-action-wrap:focus-visible {
+  outline: 2px solid rgba(124, 156, 255, 0.58);
+  outline-offset: 3px;
 }
 
 .scan-workspace-review-main-actions .btn-sm,
@@ -6524,8 +6612,8 @@ html[data-theme="light"] .scan-workspace-tab-btn {
 
 html[data-theme="light"] .scan-workspace-tab-btn.active {
   border-color: var(--scan-ui-blue) !important;
-  background: var(--scan-ui-blue) !important;
-  color: #ffffff !important;
+  background: #e8f1ff !important;
+  color: #174079 !important;
   box-shadow: none !important;
 }
 
@@ -6638,8 +6726,9 @@ html[data-theme="light"] .scan-workspace-surface-tab {
 }
 
 html[data-theme="light"] .scan-workspace-surface-tab.is-active {
-  background: var(--scan-ui-blue) !important;
-  color: #ffffff !important;
+  border-color: #93b4e8 !important;
+  background: #e8f1ff !important;
+  color: #174079 !important;
 }
 
 html[data-theme="light"] .scan-workspace-surface-tab::after {
@@ -6757,9 +6846,9 @@ html[data-theme="light"] .scan-workspace-tab-btn {
 }
 
 html[data-theme="light"] .scan-workspace-tab-btn.active {
-  border-color: #2563eb !important;
-  background: #2563eb !important;
-  color: #ffffff !important;
+  border-color: #93b4e8 !important;
+  background: #e8f1ff !important;
+  color: #174079 !important;
 }
 
 html[data-theme="light"] #scanWorkspaceInteractiveSummary,
@@ -6936,8 +7025,8 @@ html[data-theme="light"] .scan-workspace-surface-tab {
 
 html[data-theme="light"] .scan-workspace-surface-tab.is-active {
   border-color: #2563eb !important;
-  background: #2563eb !important;
-  color: #ffffff !important;
+  background: #e8f1ff !important;
+  color: #174079 !important;
 }
 
 html[data-theme="light"] .scan-workspace-workflow-step {

@@ -2514,14 +2514,14 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   scanWorkspaceState.excludedScanIssueIds = typeof normalizeScanWorkspaceExcludedIssueIds === "function"
     ? normalizeScanWorkspaceExcludedIssueIds(savedDraft.excluded_scan_issue_ids || [])
     : [];
-  scanWorkspaceState.personalDetails = typeof normalizeScanWorkspacePersonalDetails === "function"
-    ? normalizeScanWorkspacePersonalDetails(
-        savedDraft.personal_details ||
-        payload?.personal_details?.current ||
-        payload?.personal_details?.extracted ||
-        {}
-      )
-    : {};
+  const sourcePersonalDetails = getSourceScanWorkspacePersonalDetails();
+  const savedPersonalDetails = normalizeScanWorkspacePersistencePersonalDetails(
+    savedDraft.personal_details || {}
+  );
+  scanWorkspaceState.personalDetails = mergeScanWorkspacePersonalDetails(
+    sourcePersonalDetails,
+    savedPersonalDetails
+  );
   scanWorkspaceState.suggestionDecisionOverrides = {};
   scanWorkspaceState.previewPayload = null;
   scanWorkspaceState.selectedTab = "personal_details";
@@ -3012,24 +3012,70 @@ function normalizeScanWorkspacePersistencePersonalDetails(value) {
 }
 
 function getCurrentScanWorkspacePersonalDetails() {
-  if (typeof getScanWorkspacePersonalDetailsForSave === "function") {
-    return getScanWorkspacePersonalDetailsForSave();
-  }
+  const rawDetails = typeof getScanWorkspacePersonalDetailsForSave === "function"
+    ? getScanWorkspacePersonalDetailsForSave()
+    : getSavedScanWorkspacePersonalDetails();
 
-  return getSavedScanWorkspacePersonalDetails();
+  const normalizedDetails = normalizeScanWorkspacePersistencePersonalDetails(rawDetails);
+  normalizedDetails.linkedin = normalizeValidScanWorkspaceLinkedInProfileUrl(normalizedDetails.linkedin);
+  normalizedDetails.github = normalizeValidScanWorkspaceGitHubProfileUrl(normalizedDetails.github);
+  return normalizedDetails;
 }
+
+
+
+
 
 function getSavedScanWorkspacePersonalDetails() {
   const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
   return normalizeScanWorkspacePersistencePersonalDetails(draft.personal_details || {});
 }
 
-function getEffectiveScanWorkspacePersonalDetails() {
-  if (typeof getCurrentScanWorkspacePersonalDetails === "function") {
-    return normalizeScanWorkspacePersistencePersonalDetails(getCurrentScanWorkspacePersonalDetails());
-  }
-  return getSavedScanWorkspacePersonalDetails();
+function getSourceScanWorkspacePersonalDetails() {
+  const details = scanWorkspaceState.preloadPayload?.personal_details;
+  const envelope = details && typeof details === "object" ? details : {};
+  const current = envelope.current && typeof envelope.current === "object"
+    ? envelope.current
+    : {};
+  const extracted = envelope.extracted && typeof envelope.extracted === "object"
+    ? envelope.extracted
+    : {};
+  return mergeScanWorkspacePersonalDetails(extracted, current);
 }
+
+function mergeScanWorkspacePersonalDetails(baseDetails = {}, overrideDetails = {}) {
+  const base = normalizeScanWorkspacePersistencePersonalDetails(baseDetails);
+  const override = normalizeScanWorkspacePersistencePersonalDetails(overrideDetails);
+  const merged = { ...base };
+  Object.entries(override).forEach(([field, value]) => {
+    if (String(value || "").trim()) merged[field] = value;
+  });
+  return normalizeScanWorkspacePersistencePersonalDetails(merged);
+}
+
+function getEffectiveScanWorkspacePersonalDetails() {
+  const source = getSourceScanWorkspacePersonalDetails();
+  const current = typeof getCurrentScanWorkspacePersonalDetails === "function"
+    ? normalizeScanWorkspacePersistencePersonalDetails(getCurrentScanWorkspacePersonalDetails())
+    : getSavedScanWorkspacePersonalDetails();
+
+  const merged = mergeScanWorkspacePersonalDetails(source, current);
+
+  /*
+   * Link fields are editable. Empty/invalid current values must clear preview
+   * labels instead of being repopulated from source metadata.
+   */
+  ["linkedin", "github"].forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(current, field)) {
+      merged[field] = String(current[field] || "").trim();
+    }
+  });
+
+  return normalizeScanWorkspacePersistencePersonalDetails(merged);
+}
+
+
+
 
 function hasScanWorkspacePersonalDetailsValue(details) {
   return Object.values(normalizeScanWorkspacePersistencePersonalDetails(details)).some(Boolean);
@@ -3199,6 +3245,7 @@ function applySavedDraftStateToScanMarkers() {
 function renderScanWorkspacePersistenceStatus() {
   const statusNode = getScanWorkspaceInput("scanWorkspacePersistStatus");
   const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
+  const compareBtn = getScanWorkspaceInput("scanWorkspaceCompareBtn");
   const exportBtn = getScanWorkspaceInput("scanWorkspaceExportBtn");
   const rescanBtn = getScanWorkspaceInput("scanWorkspaceRescanBtn");
 
@@ -3211,6 +3258,23 @@ function renderScanWorkspacePersistenceStatus() {
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
   const canPersist = hasContext || isSavedNewScan;
   const isDirty = Boolean(canPersist && currentSignature !== savedSignature);
+  const noChangesLabel = "No changes made";
+  const syncDisabledHelp = (button, disabled, enabledLabel) => {
+    if (!button) return;
+    const wrapper = button.closest(".scan-workspace-disabled-action-wrap");
+    button.setAttribute("aria-disabled", disabled ? "true" : "false");
+    button.title = disabled ? noChangesLabel : enabledLabel;
+    button.dataset.disabledReason = disabled ? noChangesLabel : "";
+    if (wrapper) {
+      wrapper.title = disabled ? noChangesLabel : "";
+      wrapper.setAttribute("aria-label", disabled ? noChangesLabel : enabledLabel);
+      if (disabled) {
+        wrapper.setAttribute("tabindex", "0");
+      } else {
+        wrapper.removeAttribute("tabindex");
+      }
+    }
+  };
 
   if (statusNode) {
     statusNode.classList.remove("is-warning", "is-success", "is-danger");
@@ -3246,12 +3310,23 @@ function renderScanWorkspacePersistenceStatus() {
     }
   }
 
-  if (saveBtn) {
-    saveBtn.disabled =
-      !canPersist ||
+  if (compareBtn) {
+    compareBtn.disabled =
+      !isDirty ||
       scanWorkspacePersistenceState.isLoading ||
       scanWorkspacePersistenceState.isSaving ||
       scanWorkspacePersistenceState.isExporting;
+    syncDisabledHelp(compareBtn, compareBtn.disabled, "Compare draft changes");
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled =
+      !canPersist ||
+      !isDirty ||
+      scanWorkspacePersistenceState.isLoading ||
+      scanWorkspacePersistenceState.isSaving ||
+      scanWorkspacePersistenceState.isExporting;
+    syncDisabledHelp(saveBtn, saveBtn.disabled, "Continue");
     saveBtn.textContent = scanWorkspacePersistenceState.isSaving
       ? "Saving..."
       : "Continue";
@@ -3406,10 +3481,9 @@ function getScanWorkspaceUnresolvedGuidanceCount() {
 }
 
 function hasScanWorkspaceCurrentDraftChanges() {
-  return (
-    getEffectiveAcceptedCompareCandidateIds().length > 0 ||
-    Object.keys(getScanWorkspaceManualBulletEdits()).length > 0
-  );
+  const currentSignature = getCurrentScanWorkspacePersistenceSignature();
+  const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
+  return Boolean(currentSignature && currentSignature !== savedSignature);
 }
 
 function getScanWorkspaceDraftPreviewSignature(selectedPatchCandidateIds = getEffectiveAcceptedCompareCandidateIds()) {
@@ -3774,7 +3848,7 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
   return `
     <div class="${extraClasses}" style="margin-top:${gapBefore}px;">
           <div class="tailoring-workspace-doc-line-copy" style="padding-left:${indent}px;">
-            <span class="scan-workspace-preview-line-text">${scanWorkspaceEscapeHtml(rawText)}</span>
+            <span class="scan-workspace-preview-line-text">${renderScanWorkspaceLinkedText(rawText, row?.link_items || [])}</span>
           </div>
       ${isHeading ? `<div class="tailoring-workspace-doc-section-rule"></div>` : ""}
     </div>
@@ -3784,21 +3858,161 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
 function buildScanWorkspacePersonalDetailsContactLine(details) {
   const safeDetails = normalizeScanWorkspacePersistencePersonalDetails(details);
   const location = [safeDetails.city, safeDetails.state].filter(Boolean).join(", ");
+  const validLinkedIn = normalizeValidScanWorkspaceLinkedInProfileUrl(safeDetails.linkedin);
+  const validGitHub = normalizeValidScanWorkspaceGitHubProfileUrl(safeDetails.github);
+
   return [
     location,
     safeDetails.contact,
     safeDetails.email,
-    safeDetails.linkedin ? "LinkedIn" : "",
-    safeDetails.github ? "GitHub" : "",
+    validLinkedIn ? "LinkedIn" : "",
+    validGitHub ? "GitHub" : "",
   ].filter(Boolean).join(" | ");
 }
 
+
+
+function isValidScanWorkspaceLinkedInProfileUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  const protocol = url.protocol.toLowerCase();
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  const pathname = url.pathname.replace(/\/+$/g, "");
+
+  if (protocol !== "https:" && protocol !== "http:") return false;
+  if (host !== "linkedin.com") return false;
+
+  /*
+   * Require a real personal profile path.
+   * Examples allowed:
+   *   https://www.linkedin.com/in/sriram-hariharan-neelakantan/
+   *   https://linkedin.com/in/sriram-hariharan-neelakantan
+   *
+   * Examples rejected:
+   *   https://www.linkedin.com/
+   *   https://www.linkedin.com/in/
+   *   linkedin
+   */
+  return /^\/in\/[A-Za-z0-9][A-Za-z0-9._%-]+$/.test(pathname);
+}
+
+function normalizeValidScanWorkspaceLinkedInProfileUrl(value) {
+  const raw = String(value || "").trim();
+  if (!isValidScanWorkspaceLinkedInProfileUrl(raw)) return "";
+
+  try {
+    const url = new URL(raw);
+    url.protocol = "https:";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function getScanWorkspaceLinkedInValidationMessage(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return isValidScanWorkspaceLinkedInProfileUrl(raw) ? "" : "Invalid LinkedIn link";
+}
+
+
+function isValidScanWorkspaceGitHubProfileUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  const protocol = url.protocol.toLowerCase();
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  const pathname = url.pathname.replace(/\/+$/g, "");
+
+  if (protocol !== "https:" && protocol !== "http:") return false;
+  if (host !== "github.com") return false;
+
+  return /^\/[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(pathname);
+}
+
+function normalizeValidScanWorkspaceGitHubProfileUrl(value) {
+  const raw = String(value || "").trim();
+  if (!isValidScanWorkspaceGitHubProfileUrl(raw)) return "";
+
+  try {
+    const url = new URL(raw);
+    url.protocol = "https:";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function buildScanWorkspacePersonalDetailsLinkItems(details) {
-  const safeDetails = normalizeScanWorkspacePersistencePersonalDetails(details);
+  const safeDetails = details && typeof details === "object" ? details : {};
+  const validLinkedIn = normalizeValidScanWorkspaceLinkedInProfileUrl(safeDetails.linkedin);
+  const validGitHub = normalizeValidScanWorkspaceGitHubProfileUrl(safeDetails.github);
+
   return [
-    safeDetails.linkedin ? { label: "LinkedIn", uri: safeDetails.linkedin } : null,
-    safeDetails.github ? { label: "GitHub", uri: safeDetails.github } : null,
+    validLinkedIn ? { label: "LinkedIn", uri: validLinkedIn } : null,
+    validGitHub ? { label: "GitHub", uri: validGitHub } : null,
   ].filter(Boolean);
+}
+
+
+
+
+function renderScanWorkspaceLinkedText(text, linkItems = []) {
+  if (typeof renderTailoringWorkspaceLinkedText === "function") {
+    return renderTailoringWorkspaceLinkedText(text, linkItems);
+  }
+
+  const rawText = String(text || "");
+  const links = (Array.isArray(linkItems) ? linkItems : [])
+    .map((item) => ({
+      label: String(item?.label || "").trim(),
+      uri: String(item?.uri || "").trim(),
+    }))
+    .filter((item) => item.label && item.uri)
+    .map((item) => ({
+      ...item,
+      pos: rawText.indexOf(item.label),
+    }))
+    .filter((item) => item.pos >= 0)
+    .sort((left, right) => left.pos - right.pos);
+
+  if (!links.length) return scanWorkspaceEscapeHtml(rawText);
+
+  let html = "";
+  let lastEnd = 0;
+  links.forEach((item) => {
+    if (item.pos < lastEnd) return;
+    html += scanWorkspaceEscapeHtml(rawText.slice(lastEnd, item.pos));
+    html += `
+      <a
+        class="tailoring-workspace-doc-link"
+        href="${scanWorkspaceEscapeHtml(item.uri)}"
+        title="${scanWorkspaceEscapeHtml(item.uri)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >${scanWorkspaceEscapeHtml(item.label)}</a>
+    `;
+    lastEnd = item.pos + item.label.length;
+  });
+  html += scanWorkspaceEscapeHtml(rawText.slice(lastEnd));
+  return html;
 }
 
 function applySavedScanWorkspacePersonalDetailsToRows(rows) {
@@ -3810,11 +4024,25 @@ function applySavedScanWorkspacePersonalDetailsToRows(rows) {
   const nextRows = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
   const name = savedDetails.name;
   const contactLine = buildScanWorkspacePersonalDetailsContactLine(savedDetails);
+  const contactLinkItems = buildScanWorkspacePersonalDetailsLinkItems(savedDetails);
   let patchedName = false;
   let patchedContact = false;
 
-  return nextRows.map((row) => {
+  const isHeaderContactCandidate = (row, index) => {
     const role = String(row?.presentation_role || "").trim();
+    const text = String(row?.display_text || row?.text || "");
+    if (role === "header_contact") return true;
+    if (patchedContact || index > 8) return false;
+    return (
+      /@/.test(text) ||
+      /\+?\s*\(?\d{3}\)?[\s.-]?\d{3}/.test(text) ||
+      /linkedin|github/i.test(text)
+    );
+  };
+
+  return nextRows.map((row, index) => {
+    const role = String(row?.presentation_role || "").trim();
+
     if (!patchedName && name && role === "header_name") {
       patchedName = true;
       return {
@@ -3826,7 +4054,7 @@ function applySavedScanWorkspacePersonalDetailsToRows(rows) {
       };
     }
 
-    if (!patchedContact && contactLine && role === "header_contact") {
+    if (!patchedContact && contactLine && isHeaderContactCandidate(row, index)) {
       patchedContact = true;
       return {
         ...row,
@@ -3834,13 +4062,14 @@ function applySavedScanWorkspacePersonalDetailsToRows(rows) {
         display_text: contactLine,
         patched: true,
         patch_source: "personal_details",
-        link_items: buildScanWorkspacePersonalDetailsLinkItems(savedDetails),
+        link_items: contactLinkItems,
       };
     }
 
     return row;
   });
 }
+
 
 function normalizeScanWorkspacePreviewPages(preview) {
   const pages = Array.isArray(preview?.pages) ? preview.pages : [];
@@ -6386,4 +6615,14 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 });
 
+
+/*
+ * Phase 78B local repair: LinkedIn contact hydration backfill.
+ *
+ * This does not fabricate a LinkedIn URL and does not hardcode user data.
+ * It only propagates an existing linkedin.com URL from loaded scan/workspace
+ * payloads, script JSON, local/session storage, or visible source text into
+ * the LinkedIn edit field and resume preview contact row when the normal
+ * hydration path left LinkedIn empty.
+ */
 

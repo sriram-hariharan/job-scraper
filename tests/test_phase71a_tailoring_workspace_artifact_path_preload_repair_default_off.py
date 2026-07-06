@@ -1,6 +1,7 @@
 import json
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -198,6 +199,63 @@ def test_tailoring_workspace_draft_and_scan_preload_use_same_run_scoped_output_d
     assert preload["job"]["company"] == "Acme"
     assert preload["tailoring_json_path"] == artifact_key
     assert preload["artifact_references"]["tailoring_json_key"] == artifact_key
+
+
+def test_ai_optimize_preload_merges_saved_github_with_extracted_linkedin(monkeypatch, tmp_path):
+    output_dir = tmp_path / "run-scoped" / "application_planning"
+    artifact_path = _write_tailoring_artifact(output_dir)
+    artifact_key = artifact_path.relative_to(output_dir).as_posix()
+
+    services.save_tailoring_workspace_draft_payload(
+        output_dir=output_dir,
+        tailoring_json_path=artifact_key,
+        selected_resume="resume.pdf",
+        personal_details={
+            "name": "Alex Rivera",
+            "email": "alex@example.com",
+            "linkedin": "",
+            "github": "github.com/alexrivera",
+        },
+    )
+    monkeypatch.setattr(
+        services,
+        "preview_tailoring_workspace_draft_payload",
+        lambda *args, **kwargs: {
+            "preview_status": "ok",
+            "preview_note": "",
+            "original_score": 72,
+            "projected_score": 72,
+            "projected_delta": 0,
+            "score_preview": {},
+        },
+    )
+    monkeypatch.setattr(
+        services,
+        "_load_resume_evidence_for_workspace_preview",
+        lambda *args, **kwargs: SimpleNamespace(
+            document=SimpleNamespace(
+                resume_name="resume.pdf",
+                raw_text=(
+                    "Alex Rivera\n"
+                    "Harrison, NJ | +1 (555) 123-4567 | alex@example.com | "
+                    "linkedin.com/in/alexrivera | github.com/sourceprofile"
+                ),
+                normalized_text="",
+            )
+        ),
+    )
+
+    preload = services.tailoring_scan_preload_payload(
+        output_dir=output_dir,
+        tailoring_json_path=artifact_key,
+        selected_resume="resume.pdf",
+    )
+
+    assert preload["personal_details"]["extracted"]["linkedin"] == "https://linkedin.com/in/alexrivera"
+    assert preload["personal_details"]["saved"]["github"] == "https://github.com/alexrivera"
+    assert preload["personal_details"]["current"]["linkedin"] == "https://linkedin.com/in/alexrivera"
+    assert preload["personal_details"]["current"]["github"] == "https://github.com/alexrivera"
+    assert preload["draft"]["personal_details"]["linkedin"] == ""
 
 
 def test_missing_suggestions_are_safe_no_suggestions_state_not_failed_load(tmp_path):
@@ -760,6 +818,76 @@ def test_source_resume_preview_uses_resume_resolver_not_planning_artifact_guard(
     assert payload["preview_status"] == "rendered"
     assert resolver_calls == [("resume.pdf", "owner-1")]
     assert source_resume_path.parent != output_dir
+
+
+def test_rendered_workspace_preview_applies_source_resume_linkedin_and_github(monkeypatch, tmp_path):
+    output_dir = tmp_path / "run-scoped" / "application_planning"
+    artifact_path = _write_tailoring_artifact(output_dir)
+    artifact_key = artifact_path.relative_to(output_dir).as_posix()
+    source_resume_path = tmp_path / "profile_resume_library" / "resume.pdf"
+    source_resume_path.parent.mkdir(parents=True)
+    source_resume_path.write_bytes(b"%PDF-1.4\n%test\n")
+
+    monkeypatch.setattr(
+        services,
+        "planning_resume_preview_path",
+        lambda resume_name, *, owner_user_id="": source_resume_path,
+    )
+
+    monkeypatch.setattr(
+        services,
+        "_extract_resume_pdf_paragraph_pages_for_export",
+        lambda path: [
+            {
+                "page_number": 1,
+                "width": 612,
+                "height": 792,
+                "blocks": [
+                    {
+                        "paragraphs": [
+                            {
+                                "text": "Alex Rivera",
+                                "alignment": "center",
+                                "gap_before": 0,
+                                "left_indent_pt": 0,
+                                "is_bullet": False,
+                            },
+                            {
+                                "text": "Harrison, NJ | +1 (555) 123-4567 | alex@example.com | linkedin.com/in/alexrivera | github.com/alexrivera",
+                                "alignment": "center",
+                                "gap_before": 1,
+                                "left_indent_pt": 0,
+                                "is_bullet": False,
+                            },
+                            {
+                                "text": "Built Python services.",
+                                "alignment": "left",
+                                "gap_before": 8,
+                                "left_indent_pt": 0,
+                                "is_bullet": True,
+                            },
+                        ]
+                    }
+                ],
+            }
+        ],
+    )
+
+    payload = services.render_tailoring_workspace_draft_preview_payload(
+        output_dir=output_dir,
+        tailoring_json_path=artifact_key,
+        selected_resume="resume.pdf",
+        owner_user_id="owner-1",
+    )
+
+    rows = payload["pages"][0]["rows"]
+    contact_rows = [row for row in rows if "LinkedIn" in row.get("text", "")]
+
+    assert contact_rows
+    contact = contact_rows[0]
+    assert "GitHub" in contact["text"]
+    assert {"label": "LinkedIn", "uri": "https://linkedin.com/in/alexrivera"} in contact["link_items"]
+    assert {"label": "GitHub", "uri": "https://github.com/alexrivera"} in contact["link_items"]
 
 
 def test_missing_optional_tailoring_artifact_returns_no_suggestions_not_http_400(tmp_path):

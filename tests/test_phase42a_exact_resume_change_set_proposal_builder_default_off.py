@@ -585,6 +585,13 @@ def test_protected_runtime_hashes_unchanged():
 
 def test_changed_files_are_limited_to_phase42a_and_legacy_guards():
     allowed = {
+        "src/app/ui.py",
+        "src/app/static/app.js",
+        "src/app/static/planning.js",
+        "src/app/static/app_redesign.css",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "src/tailoring/llm.py",
         "generate_tailoring_suggestions.py",
         "src/tailoring/rendering.py",

@@ -1,8 +1,8 @@
 # phase56b legacy guard marker: changes_only f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
 # phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8
-# phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b b02ff695ca630345cbf5452165b1f3edfca9630ff7269eca4f50c9dadd704ed2
+# phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 609f571f3c3df66984ed6b918d7f429b712c3469c0523154e39ffda9c880199c
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
-# phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab b02ff695ca630345cbf5452165b1f3edfca9630ff7269eca4f50c9dadd704ed2 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 609f571f3c3df66984ed6b918d7f429b712c3469c0523154e39ffda9c880199c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 from hashlib import sha256
 from pathlib import Path
@@ -95,7 +95,7 @@ PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
     "src/app/services.py": "f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
-    "src/app/static/app_redesign.css": "b02ff695ca630345cbf5452165b1f3edfca9630ff7269eca4f50c9dadd704ed2",
+    "src/app/static/app_redesign.css": "609f571f3c3df66984ed6b918d7f429b712c3469c0523154e39ffda9c880199c",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/agents/three_core_agent_workflow_readiness.py": "ede602b8944fb8a7749c2d5738c7c7e56e19429d15d74e65272325537d596cef",
@@ -350,6 +350,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "docs/phase22_core_agent_evidence_materialization_api_readback.md",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "src/app/ui.py",
+        "src/app/static/app.js",
+        "src/app/static/planning.js",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "docs/phase22_core_agent_evidence_materialization_api_readback 2.md",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
@@ -376,6 +382,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "src/app/ui.py",
+        "src/app/static/app.js",
+        "src/app/static/planning.js",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_ui_readback.md",
         "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
         "docs/phase24_manual_generate_ai_tailoring_preview_release_checkpoint.md",
@@ -387,6 +399,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_ui_readback.md",
             "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
             "docs/phase25_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint.md",
@@ -399,6 +417,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback.md",
             "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
             "docs/phase26_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint.md",
@@ -411,6 +435,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase27b_manual_generate_ai_tailoring_preview_provider_request_envelope_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback.md",
             "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
             "docs/phase27_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint.md",
@@ -423,6 +453,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback.md",
             "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
             "docs/phase28_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback 2.md",
@@ -437,6 +473,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback.md",
             "tests/test_phase29c_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback_default_off.py",
             "docs/phase29_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint.md",
@@ -449,6 +491,12 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
                 "src/app/static/agentic_review.js",
                 "src/app/static/app_redesign.css",
+                "src/app/ui.py",
+                "src/app/static/app.js",
+                "src/app/static/planning.js",
+                "tests/test_queue_ui_metadata_contract.py",
+                "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+                "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
                 "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback.md",
                 "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
                     "docs/phase30_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint.md",
@@ -642,7 +690,7 @@ def test_phase22b_changes_only_docs_tests_and_legacy_guards():
             in path.read_text(encoding="utf-8")
             or "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab"
             in path.read_text(encoding="utf-8")
-            or "b02ff695ca630345cbf5452165b1f3edfca9630ff7269eca4f50c9dadd704ed2"
+            or "609f571f3c3df66984ed6b918d7f429b712c3469c0523154e39ffda9c880199c"
             in path.read_text(encoding="utf-8")
         )
     }

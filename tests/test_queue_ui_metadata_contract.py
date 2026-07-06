@@ -3,6 +3,88 @@ from pathlib import Path
 from src.app import services
 
 
+def _css_block(css: str, selector: str) -> str:
+    start = css.index(selector)
+    end = css.index("}", start) + 1
+    return css[start:end]
+
+
+def test_phase77f_css_load_order_and_canonical_cascade_contract():
+    executive_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    for markup in (executive_markup, planning_markup):
+        styles_index = markup.index("/static/styles.css")
+        redesign_index = markup.index("/static/app_redesign.css")
+    assert styles_index < redesign_index
+
+    assert css.count("body .scheduler-page .scheduler-tab-btn {") == 1
+    assert css.count("\nbody .scheduler-page .scheduler-table-tabs,") == 1
+    assert "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab]" in css
+    assert "#queueTable thead th button.sort-header-btn[data-sort-key]" in css
+    assert "html[data-theme=\"light\"] .pill.recommendation-chip.recommendation-chip--tailor" in css
+    assert "html[data-theme=\"light\"] .pill.recommendation-chip.recommendation-chip--later" in css
+    assert "html[data-theme=\"light\"] .job-apply-btn.review-action-button.review-action-button--available" in css
+    assert ".executive-view-mode-row--table .binary-toggle--small .binary-toggle-option span" in css
+
+
+def test_phase77g_app_chrome_utility_buttons_are_secondary():
+    shell_source = Path("src/app/ui_shell.py").read_text(encoding="utf-8")
+    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    for class_name in (
+        "notification-btn",
+        "theme-toggle-btn",
+        "profile-avatar-btn",
+        "app-shell-menu-btn",
+        "app-shell-primary-link",
+    ):
+        assert class_name in shell_source
+
+    assert "New Scan" in shell_source
+    assert "Run Live Pipeline" in app_markup
+    assert "Refresh Status" in app_markup
+    assert "multi-select-trigger-icon" in app_markup
+    assert "multi-select-trigger-icon" in planning_markup
+
+    primary_selector = (
+        "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn)"
+        ":not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn)"
+        ":not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn)"
+        ":not(.app-shell-menu-btn):not(.multi-select-trigger)"
+    )
+    assert primary_selector in css
+    assert f"{primary_selector},\n.app-shell-primary-link" in css
+    assert "background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important" in css
+
+    utility_css = css[
+        css.index(".notification-btn,\n.theme-toggle-btn,\n.app-shell-top-right .profile-avatar-btn {"):
+        css.index(".theme-toggle-btn,\n.app-shell-primary-link {")
+    ]
+    for forbidden in (
+        "linear-gradient(135deg, var(--app-primary), var(--app-violet))",
+        "rgba(37, 99, 235, 0.9)",
+    ):
+        assert forbidden not in utility_css
+    assert "rgba(15, 23, 42, 0.64)" in utility_css
+    assert "rgba(241, 245, 249, 0.92)" in utility_css
+    assert ".theme-toggle-btn[aria-pressed=\"true\"] .theme-toggle-track" in utility_css
+    assert "background: rgba(96, 165, 250, 0.24) !important" in utility_css
+
+    menu_css = _css_block(css, ".app-shell-menu-btn {")
+    assert "rgba(15, 23, 42, 0.64)" in menu_css
+    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in menu_css
+    assert "background: rgba(255, 255, 255, 0.78) !important" in css
+
+    assert "body .multi-select-trigger {" in css
+    caret_css = _css_block(css, "body .multi-select-trigger-icon {")
+    assert "place-items: center !important" in caret_css
+    assert "width: 24px !important" in caret_css
+
+
 def test_queue_ui_renders_job_location_below_title():
     source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
@@ -172,16 +254,211 @@ def test_phase77c_table_polish_contract():
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
     assert "binary-toggle--small" in app_markup
+    assert "application-table-title-row" in app_markup
     assert "executive-view-mode-row--table" in app_markup
+    title_row_index = app_markup.index("application-table-title-row")
+    toggle_index = app_markup.index("executive-view-mode-row--table")
+    header_right_index = app_markup.index("application-table-header-right")
+    assert title_row_index < toggle_index < header_right_index
     assert "Posted:" not in app_source
     assert "Posted:" not in planning_source
     assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
     assert 'key: "posted_at", label: "Posted at", type: "date"' in planning_source
     assert "grid-template-columns: minmax(0, 1fr) auto" in css
-    assert "justify-self: end" in css
+    assert ".application-table-title-row" in css
     assert "body .multi-select-trigger-icon" in css
     assert "border-radius: 0 !important" in css
+    assert "appearance: none !important" in css
+    assert "background-image: none !important" in css
     assert ".table-wrap thead .sort-header-btn" in css
+    assert 'class="sort-header-btn"' in app_source
+    assert '<span class="sort-header-indicator">↕</span>' in app_source
+    actual_sort_css = css[
+        css.index(".table-wrap thead .sort-header-btn,"):
+        css.index(".table-wrap thead .sort-header-btn::before,")
+    ]
+    for boxed_property in (
+        "padding: 8px",
+        "border-radius: 9px",
+        "border-radius: 999px",
+        "box-shadow: var(--app-shadow-sm)",
+        "background: linear-gradient(135deg, var(--app-primary), var(--app-violet))",
+    ):
+        assert boxed_property not in actual_sort_css
+    assert "background: transparent !important" in actual_sort_css
+    assert "border-radius: 0 !important" in actual_sort_css
+    id_sort_css = _css_block(css, "#queueTable thead th button.sort-header-btn[data-sort-key],")
+    assert "border: 0 !important" in id_sort_css
+    assert "border-radius: 0 !important" in id_sort_css
+    assert "background: transparent !important" in id_sort_css
+    assert "background-image: none !important" in id_sort_css
+
+
+def test_phase77d_stateful_table_header_and_review_styling_contract():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source):
+        assert "getRecommendationTone" in source
+        assert "recommendation-chip recommendation-chip--${tone}" in source
+        assert "review-action-button--available" in source
+        assert "review-action-button--disabled" in source
+
+    assert ".recommendation-chip--tailor" in css
+    assert ".recommendation-chip--later" in css
+    assert ".recommendation-chip--ready" in css
+    assert ".recommendation-chip--choice" in css
+    assert ".recommendation-chip--unavailable" in css
+    assert "background: #ddd6fe !important" in css
+    assert "background: #fcd34d !important" in css
+    tailor_css = _css_block(css, ".recommendation-chip--tailor,")
+    later_css = _css_block(css, ".recommendation-chip--later,")
+    for block in (tailor_css, later_css):
+        assert "rgba(255, 255, 255" not in block
+        assert "transparent" not in block
+    assert "background: #ddd6fe !important" in tailor_css
+    assert "background: #fcd34d !important" in later_css
+    recommendation_css = css[
+        css.index(".recommendation-chip {"):
+        css.index(".queue-workspace-pill")
+    ]
+    assert "background: rgba(124, 58, 237" not in recommendation_css
+    assert "background: rgba(245, 158, 11, 0.16)" not in recommendation_css
+    assert ".review-action-button--available" in css
+    assert ".review-action-button--disabled" in css
+    assert 'html[data-theme="dark"] .recommendation-chip--tailor' in css
+    assert 'html[data-theme="dark"] .review-action-button--available' in css
+    assert "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn)" in css
+    assert css.count(".recommendation-chip--tailor") == 3
+    assert css.count(".review-action-button--available") == 4
+    assert 'data-view-tailoring="true"' in planning_source
+    assert "handleTailoringClick(button)" in planning_source
+    assert 'stateClass = "planning-tailoring-btn--review";' in planning_source
+    assert "reviewActionStateClass = \"review-action-button--available\";" in planning_source
+
+
+def test_phase77e_scheduler_tabs_are_underline_style():
+    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    assert "Contract Health" in app_markup
+    assert "JSONL Rows" in app_markup
+    assert "Postgres Rows" in app_markup
+    assert "Latest Runs by Job" in app_markup
+    scheduler_section = app_markup[
+        app_markup.index('<div class="scheduler-table-tabs">'):
+        app_markup.index('<div class="scheduler-table-header">')
+    ]
+    assert "scheduler-tab-btn" in scheduler_section
+    assert "ghost-btn scheduler-tab-btn" not in scheduler_section
+    assert "body .scheduler-page .scheduler-tab-btn::after" in css
+    assert "body .scheduler-page .scheduler-tab-btn.active::after" in css
+    assert "html[data-theme=\"light\"] body .scheduler-page .scheduler-table-tabs" in css
+    assert "background: transparent !important" in css
+    scheduler_css = css[
+        css.index("body .scheduler-page .scheduler-table-tabs,"):
+        css.index("/* ui_redesign_v25: remove remaining tab button chrome on concrete pages. */")
+    ]
+    for boxed_property in (
+        "border-radius: 12px",
+        "background: #e0f2fe",
+        "background: linear-gradient(135deg, var(--app-primary), var(--app-violet))",
+        "box-shadow: var(--app-shadow-sm)",
+    ):
+        assert boxed_property not in scheduler_css
+    assert "border-radius: 0 !important" in scheduler_css
+    assert "background-color: transparent !important" in scheduler_css
+    assert "background-image: none !important" in scheduler_css
+    assert "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab]" in scheduler_css
+    concrete_state_selector = (
+        "body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > "
+        "button.scheduler-tab-btn[data-tab][role=\"tab\"].active"
+    )
+    assert concrete_state_selector in scheduler_css
+    concrete_tab_css = _css_block(
+        css, "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab],"
+    )
+    active_tab_css = _css_block(
+        css, "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].active,"
+    )
+    for block in (concrete_tab_css, active_tab_css):
+        assert "border: 0 !important" in block
+        assert "border-width: 0 !important" in block
+        assert "border-style: none !important" in block
+        assert "border-color: transparent !important" in block
+        assert "border-radius: 0 !important" in block
+        assert "background: transparent !important" in block
+        assert "background-color: transparent !important" in block
+        assert "background-image: none !important" in block
+        assert "box-shadow: none !important" in block
+        assert "background: var(--app-panel)" not in block
+        assert "background: #ffffff" not in block
+        assert "border: 1px solid" not in block
+        assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in block
+    assert "button.scheduler-tab-btn[data-tab].active::after" in scheduler_css
+    assert "background: linear-gradient(90deg, #2563eb, #06b6d4) !important" in scheduler_css
+
+
+def test_phase77h_dark_tabs_keep_underline_style_with_readable_text():
+    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    scheduler_section = app_markup[
+        app_markup.index('<div class="scheduler-table-tabs">'):
+        app_markup.index('<div class="scheduler-table-header">')
+    ]
+    assert 'class="scheduler-tab-btn active"' in scheduler_section
+    assert 'class="scheduler-tab-btn"' in scheduler_section
+    assert 'data-tab="contract"' in scheduler_section
+    assert 'role="tab"' in scheduler_section
+
+    dark_tab_css = css[
+        css.index('html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs,'):
+        css.index('html[data-theme="dark"] body .scheduler-page .scheduler-table-header h2,')
+    ]
+
+    assert 'html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn' in dark_tab_css
+    assert (
+        'html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs '
+        '.scheduler-tab-row button.scheduler-tab-btn'
+    ) in dark_tab_css
+    assert (
+        'html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs '
+        '.scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"]'
+    ) in dark_tab_css
+    assert (
+        'html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs '
+        '.scheduler-tab-row button.scheduler-tab-btn.active'
+    ) in dark_tab_css
+    assert (
+        'html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs '
+        '.scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].active'
+    ) in dark_tab_css
+    assert 'html[data-theme="dark"] body #applicationViewRoot .application-tab' in dark_tab_css
+    assert 'html[data-theme="dark"] body #applicationViewRoot .application-tab:not(.active)' in dark_tab_css
+    assert 'html[data-theme="dark"] body #applicationViewRoot .application-tab.active' in dark_tab_css
+    assert "color: #cbd5e1 !important" in dark_tab_css
+    assert "color: #f8fafc !important" in dark_tab_css
+    assert "color: #ffffff !important" in dark_tab_css
+    assert "background: linear-gradient(90deg, #60a5fa, #22d3ee) !important" in dark_tab_css
+
+    for block in (
+        _css_block(css, 'html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn,'),
+        _css_block(css, 'html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.active,'),
+    ):
+        assert "background: transparent !important" in block
+        assert "background-color: transparent !important" in block
+        assert "background-image: none !important" in block
+        assert "border: 0 !important" in block
+        assert "border-width: 0 !important" in block
+        assert "border-style: none !important" in block
+        assert "border-radius: 0 !important" in block
+        assert "box-shadow: none !important" in block
+        assert "background: var(--app-panel)" not in block
+        assert "border: 1px solid" not in block
+        assert "border-radius: 12px" not in block
+        assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in block
 
 
 def test_queue_ui_renders_tailoring_decision_advisory_separately():

@@ -761,6 +761,17 @@ function formatOperatorDecisionLabel(value) {
   }[normalized] || String(value || "").replaceAll("_", " ");
 }
 
+function getRecommendationTone(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return {
+    APPLY: "ready",
+    APPLY_REVIEW_VARIANTS: "choice",
+    SELECT_RESUME: "choice",
+    MAYBE_TAILOR: "tailor",
+    SKIP_FOR_NOW: "later",
+  }[normalized] || "unavailable";
+}
+
 function buildPacketStatusChipHtml(row) {
   const packetAllowed = String(row?.packet_generation_allowed || "").trim();
   const label = formatPacketStatusLabel(packetAllowed);
@@ -2150,7 +2161,9 @@ function buildApplicationPayloadFromRow(row) {
 function buildApplicationButtonHtml(row) {
   const isApplied = Boolean(row.is_applied);
   const label = escapeHtml(row.application_label || (isApplied ? "Reviewed" : "Review job"));
-  const buttonClass = isApplied ? "job-apply-btn applied-btn" : "job-apply-btn apply-btn";
+  const buttonClass = isApplied
+    ? "job-apply-btn review-action-button review-action-button--disabled applied-btn"
+    : "job-apply-btn review-action-button review-action-button--available apply-btn";
   const disabledAttr = isApplied ? "disabled" : "";
 
   return `
@@ -12097,30 +12110,36 @@ function buildTailoringButtonHtml(row) {
   const disabledAttr = hasArtifacts && !blockedReason ? "" : "disabled";
 
   let stateClass = "planning-tailoring-btn--empty";
+  let reviewActionStateClass = "review-action-button--disabled";
   let titleText = "No tailoring artifacts available for this row.";
 
   if (hasArtifacts && workspaceState === "ready") {
     stateClass = "planning-tailoring-btn--ready";
+    reviewActionStateClass = "review-action-button--available";
     titleText = `${actionableCount} actionable suggestion${actionableCount === 1 ? "" : "s"} available.`;
   } else if (hasArtifacts && workspaceState === "review") {
     stateClass = "planning-tailoring-btn--review";
+    reviewActionStateClass = "review-action-button--available";
     titleText = reviewCount > 0
       ? `${reviewCount} review-only suggestion${reviewCount === 1 ? "" : "s"} available. No ready replacements yet.`
       : "Review guidance is available, but there are no ready replacements yet.";
   } else if (hasArtifacts && workspaceState === "no_safe_rewrites") {
     stateClass = "planning-tailoring-btn--review";
+    reviewActionStateClass = "review-action-button--available";
     titleText = "Review-only guidance is available. No app-ready replacement is available yet.";
   } else if (hasArtifacts) {
     stateClass = "planning-tailoring-btn--empty";
+    reviewActionStateClass = "review-action-button--disabled";
     titleText = "Suggestions loaded, but no safe bullet-level rewrites were found.";
   }
 
   if (blockedReason) {
     stateClass = "planning-tailoring-btn--empty";
+    reviewActionStateClass = "review-action-button--disabled";
     titleText = blockedReason;
   }
 
-  const buttonClass = `ghost-btn planning-tailoring-btn ${stateClass}`.trim();
+  const buttonClass = `ghost-btn planning-tailoring-btn review-action-button ${stateClass} ${reviewActionStateClass}`.trim();
   const titleAttr = `title="${escapeHtml(titleText)}"`;
   const blockedAttr = blockedReason
     ? `data-workspace-blocked-reason="${escapeHtml(blockedReason)}" aria-disabled="true"`
@@ -12251,6 +12270,7 @@ function buildPlanningJobSummaryHtml(row) {
 
 function buildPlanningRecommendationCellHtml(row) {
   const action = escapeHtml(formatQueueActionLabel(row.action) || "-");
+  const tone = escapeHtml(getRecommendationTone(row.action));
   const details = buildRecommendationDetailsHtml([
     { label: "Runner-up resume", value: row.runner_up_resume || "" },
     { label: "Runner-up score", value: row.runner_up_score || "" },
@@ -12268,7 +12288,7 @@ function buildPlanningRecommendationCellHtml(row) {
 
   return `
     <div class="queue-recommendation-summary">
-      <span class="pill">${action}</span>
+      <span class="pill recommendation-chip recommendation-chip--${tone}">${action}</span>
       ${details}
     </div>
   `;

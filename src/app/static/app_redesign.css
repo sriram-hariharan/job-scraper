@@ -185,7 +185,7 @@ html[data-theme="light"] .notification-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -208,7 +208,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
   color: #ffffff !important;
@@ -227,7 +227,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .job-apply-btn:not(:disabled):hover,
 .apply-btn:not(:disabled):hover,
@@ -237,7 +237,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: var(--app-shadow-sm) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):disabled,
 [aria-disabled="true"] {
   cursor: not-allowed !important;
   opacity: 0.58 !important;
@@ -516,6 +516,93 @@ html[data-theme="light"] .app-shell-top-right {
   height: 48px !important;
   padding: 0 !important;
   border-radius: var(--app-radius-pill) !important;
+}
+
+.notification-btn,
+.theme-toggle-btn,
+.app-shell-top-right .profile-avatar-btn {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(15, 23, 42, 0.64) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 24px rgba(2, 8, 23, 0.22) !important;
+  backdrop-filter: blur(14px);
+}
+
+.notification-btn:hover,
+.notification-btn:focus-visible,
+.notification-btn[aria-expanded="true"],
+.theme-toggle-btn:hover,
+.theme-toggle-btn:focus-visible,
+.app-shell-top-right .profile-avatar-btn:hover,
+.app-shell-top-right .profile-avatar-btn:focus-visible,
+.app-shell-top-right .profile-avatar-btn[aria-expanded="true"] {
+  border-color: rgba(96, 165, 250, 0.52) !important;
+  background:
+    linear-gradient(180deg, rgba(96, 165, 250, 0.16), rgba(15, 23, 42, 0.68)),
+    rgba(15, 23, 42, 0.72) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16) !important;
+  transform: none !important;
+}
+
+html[data-theme="light"] .notification-btn,
+html[data-theme="light"] .theme-toggle-btn,
+html[data-theme="light"] .app-shell-top-right .profile-avatar-btn {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92)),
+    #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .notification-btn:hover,
+html[data-theme="light"] .notification-btn:focus-visible,
+html[data-theme="light"] .notification-btn[aria-expanded="true"],
+html[data-theme="light"] .theme-toggle-btn:hover,
+html[data-theme="light"] .theme-toggle-btn:focus-visible,
+html[data-theme="light"] .app-shell-top-right .profile-avatar-btn:hover,
+html[data-theme="light"] .app-shell-top-right .profile-avatar-btn:focus-visible,
+html[data-theme="light"] .app-shell-top-right .profile-avatar-btn[aria-expanded="true"] {
+  border-color: rgba(37, 99, 235, 0.32) !important;
+  background:
+    linear-gradient(180deg, rgba(239, 246, 255, 0.98), rgba(248, 250, 252, 0.98)),
+    #ffffff !important;
+  color: #1d4ed8 !important;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12) !important;
+}
+
+.theme-toggle-track {
+  width: 40px !important;
+  height: 22px !important;
+  border: 1px solid rgba(148, 163, 184, 0.32) !important;
+  border-radius: var(--app-radius-pill) !important;
+  background: rgba(148, 163, 184, 0.18) !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.18) !important;
+}
+
+.theme-toggle-knob {
+  width: 16px !important;
+  height: 16px !important;
+  background: #ffffff !important;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.22) !important;
+}
+
+.theme-toggle-btn[aria-pressed="true"] .theme-toggle-track {
+  border-color: rgba(96, 165, 250, 0.42) !important;
+  background: rgba(96, 165, 250, 0.24) !important;
+}
+
+html[data-theme="light"] .theme-toggle-track {
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  background: rgba(226, 232, 240, 0.86) !important;
+}
+
+html[data-theme="light"] .theme-toggle-btn[aria-pressed="true"] .theme-toggle-track {
+  border-color: rgba(37, 99, 235, 0.34) !important;
+  background: rgba(219, 234, 254, 0.96) !important;
 }
 
 .theme-toggle-btn,
@@ -876,18 +963,30 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
   gap: 10px !important;
 }
 
+.application-table-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.application-table-title-row h2 {
+  margin: 0;
+}
+
 .executive-view-mode-row--table {
-  display: inline-grid;
-  gap: 4px;
-  justify-items: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   align-self: center;
 }
 
 .executive-view-mode-label {
   color: var(--app-muted);
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 900;
-  letter-spacing: 0.035em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
@@ -899,13 +998,26 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
 }
 
 .binary-toggle--small {
-  padding: 3px !important;
-  border-radius: 12px !important;
+  padding: 1px !important;
+  border-radius: 9px !important;
 }
 
 .binary-toggle--small .binary-toggle-option span {
-  padding: 5px 8px !important;
-  font-size: 11px !important;
+  min-width: 0 !important;
+  padding: 3px 6px !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+}
+
+.executive-view-mode-row--table .binary-toggle--small {
+  min-height: 0 !important;
+  padding: 1px !important;
+}
+
+.executive-view-mode-row--table .binary-toggle--small .binary-toggle-option span {
+  min-width: 0 !important;
+  padding: 3px 6px !important;
+  font-size: 10px !important;
   line-height: 1 !important;
 }
 
@@ -1014,8 +1126,12 @@ th .sort-header-label {
   outline: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   box-shadow: none !important;
   padding: 0 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
 }
 
 .resizable-col-label,
@@ -1239,7 +1355,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   display: grid !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):focus-visible,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):focus-visible,
 .ghost-btn:focus-visible,
 .app-shell-primary-link:focus-visible,
 .app-shell-nav-link:focus-visible,
@@ -1387,7 +1503,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -1425,69 +1541,15 @@ html[data-theme="light"] body .scheduler-page .scheduler-table-card {
 }
 
 html[data-theme="light"] body .scheduler-page .scheduler-table-tabs {
-  border-color: #bae6fd !important;
-  background: #e0f2fe !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 /* Scheduler ops terminal overrides: underline tabs, table refresh, solid status. */
 body .scheduler-page .page-header {
   display: block !important;
   padding-right: 0 !important;
-}
-
-body .scheduler-page .scheduler-table-tabs,
-body .scheduler-page .scheduler-tab-row {
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-body .scheduler-page .scheduler-tab-row {
-  display: inline-flex !important;
-  gap: 24px !important;
-}
-
-body .scheduler-page .scheduler-tab-btn {
-  position: relative !important;
-  min-height: 44px !important;
-  padding: 0 2px 10px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: #475569 !important;
-  box-shadow: none !important;
-  font-size: 15px !important;
-  font-weight: 900 !important;
-}
-
-body .scheduler-page .scheduler-tab-btn::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;
-}
-
-body .scheduler-page .scheduler-tab-btn:hover {
-  color: #1d4ed8 !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-body .scheduler-page .scheduler-tab-btn.active,
-body .scheduler-page .scheduler-tab-btn.is-active {
-  background: transparent !important;
-  color: #0f172a !important;
-  box-shadow: none !important;
-}
-
-body .scheduler-page .scheduler-tab-btn.active::after,
-body .scheduler-page .scheduler-tab-btn.is-active::after {
-  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
 }
 
 body .scheduler-page .scheduler-table-header {
@@ -1530,64 +1592,6 @@ body .scheduler-page .scheduler-run-badge--muted {
 body .scheduler-page .page-header {
   display: block !important;
   padding-right: 0 !important;
-}
-
-body .scheduler-page .scheduler-table-tabs {
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-body .scheduler-page .scheduler-tab-row {
-  display: inline-flex !important;
-  gap: 24px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-body .scheduler-page .scheduler-tab-btn {
-  position: relative !important;
-  min-height: 44px !important;
-  padding: 0 2px 10px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: #475569 !important;
-  box-shadow: none !important;
-  font-size: 15px !important;
-  font-weight: 900 !important;
-}
-
-body .scheduler-page .scheduler-tab-btn::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;
-}
-
-body .scheduler-page .scheduler-tab-btn:hover {
-  color: #1d4ed8 !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-body .scheduler-page .scheduler-tab-btn.active,
-body .scheduler-page .scheduler-tab-btn.is-active {
-  background: transparent !important;
-  color: #0f172a !important;
-  box-shadow: none !important;
-}
-
-body .scheduler-page .scheduler-tab-btn.active::after,
-body .scheduler-page .scheduler-tab-btn.is-active::after {
-  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
 }
 
 body .scheduler-page .scheduler-table-header {
@@ -1817,61 +1821,6 @@ body .application-tab.active::after {
 body .scheduler-page .page-header {
   display: block !important;
   padding-right: 0 !important;
-}
-
-body .scheduler-page .scheduler-table-tabs,
-body .scheduler-page .scheduler-tab-row {
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-body .scheduler-page .scheduler-tab-row {
-  display: inline-flex !important;
-  gap: 24px !important;
-}
-
-body .scheduler-page .scheduler-tab-btn {
-  position: relative !important;
-  min-height: 44px !important;
-  padding: 0 2px 10px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: #475569 !important;
-  box-shadow: none !important;
-  font-size: 15px !important;
-  font-weight: 900 !important;
-}
-
-body .scheduler-page .scheduler-tab-btn::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;
-}
-
-body .scheduler-page .scheduler-tab-btn:hover {
-  color: #1d4ed8 !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-body .scheduler-page .scheduler-tab-btn.active,
-body .scheduler-page .scheduler-tab-btn.is-active {
-  background: transparent !important;
-  color: #0f172a !important;
-  box-shadow: none !important;
-}
-
-body .scheduler-page .scheduler-tab-btn.active::after,
-body .scheduler-page .scheduler-tab-btn.is-active::after {
-  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
 }
 
 body .scheduler-page .scheduler-table-header {
@@ -2524,6 +2473,52 @@ html[data-theme="dark"] .queue-tailoring-pill--do_not_tailor {
   gap: 4px;
 }
 
+.recommendation-chip,
+html[data-theme="light"] .pill.recommendation-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  padding: 4px 8px !important;
+  border: 1px solid var(--app-border-2) !important;
+  border-radius: 999px !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.01em;
+  line-height: 1.15 !important;
+  white-space: nowrap !important;
+  box-shadow: none !important;
+}
+
+.recommendation-chip--ready,
+html[data-theme="light"] .pill.recommendation-chip.recommendation-chip--ready {
+  border-color: #10b981 !important;
+  background: #a7f3d0 !important;
+  color: #064e3b !important;
+}
+
+.recommendation-chip--tailor,
+html[data-theme="light"] .pill.recommendation-chip.recommendation-chip--tailor {
+  border-color: #8b5cf6 !important;
+  background: #ddd6fe !important;
+  color: #4c1d95 !important;
+}
+
+.recommendation-chip--later,
+.recommendation-chip--choice,
+html[data-theme="light"] .pill.recommendation-chip.recommendation-chip--later,
+html[data-theme="light"] .pill.recommendation-chip.recommendation-chip--choice {
+  border-color: #d97706 !important;
+  background: #fcd34d !important;
+  color: #78350f !important;
+}
+
+.recommendation-chip--unavailable,
+html[data-theme="light"] .pill.recommendation-chip.recommendation-chip--unavailable {
+  border-color: #94a3b8 !important;
+  background: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
 .queue-workspace-pill {
   display: inline-flex;
   align-items: center;
@@ -2542,6 +2537,67 @@ html[data-theme="dark"] .queue-tailoring-pill--do_not_tailor {
 
 html[data-theme="dark"] .queue-workspace-pill {
   color: #ddd6fe;
+}
+
+.review-action-button {
+  border-width: 1px !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+}
+
+.review-action-button--available,
+html[data-theme="light"] .job-apply-btn.review-action-button.review-action-button--available,
+html[data-theme="light"] .planning-tailoring-btn.review-action-button.review-action-button--available {
+  border-color: rgba(37, 99, 235, 0.42) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(79, 70, 229, 0.9)) !important;
+  color: #ffffff !important;
+}
+
+.review-action-button--disabled,
+.review-action-button:disabled,
+.review-action-button[aria-disabled="true"],
+html[data-theme="light"] .job-apply-btn.review-action-button.review-action-button--disabled,
+html[data-theme="light"] .job-apply-btn.review-action-button:disabled,
+html[data-theme="light"] .planning-tailoring-btn.review-action-button.review-action-button--disabled,
+html[data-theme="light"] .planning-tailoring-btn.review-action-button:disabled,
+html[data-theme="light"] .planning-tailoring-btn.review-action-button[aria-disabled="true"] {
+  border-color: rgba(148, 163, 184, 0.38) !important;
+  background: rgba(148, 163, 184, 0.16) !important;
+  color: var(--app-muted) !important;
+}
+
+html[data-theme="dark"] .recommendation-chip--ready {
+  border-color: rgba(52, 211, 153, 0.42) !important;
+  background: rgba(6, 95, 70, 0.56) !important;
+  color: #bbf7d0 !important;
+}
+
+html[data-theme="dark"] .recommendation-chip--tailor {
+  border-color: rgba(167, 139, 250, 0.46) !important;
+  background: rgba(76, 29, 149, 0.56) !important;
+  color: #ddd6fe !important;
+}
+
+html[data-theme="dark"] .recommendation-chip--later,
+html[data-theme="dark"] .recommendation-chip--choice {
+  border-color: rgba(251, 191, 36, 0.46) !important;
+  background: rgba(120, 53, 15, 0.6) !important;
+  color: #fde68a !important;
+}
+
+html[data-theme="dark"] .recommendation-chip--unavailable,
+html[data-theme="dark"] .review-action-button--disabled,
+html[data-theme="dark"] .review-action-button:disabled,
+html[data-theme="dark"] .review-action-button[aria-disabled="true"] {
+  border-color: rgba(100, 116, 139, 0.52) !important;
+  background: rgba(30, 41, 59, 0.82) !important;
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .review-action-button--available {
+  border-color: rgba(129, 140, 248, 0.52) !important;
+  background: linear-gradient(135deg, rgba(49, 46, 129, 0.98), rgba(30, 64, 175, 0.94)) !important;
+  color: #eef2ff !important;
 }
 
 html[data-theme="dark"] .queue-operator-pill--ready_to_apply {
@@ -2994,6 +3050,11 @@ html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-link[aria-curre
 .table-wrap thead th .sort-header-btn,
 .saved-scans-table-wrap thead .sort-header-btn,
 .scheduler-attached-table-wrap thead .sort-header-btn,
+#queueTable thead th button.sort-header-btn[data-sort-key],
+#planningTable thead th button.sort-header-btn[data-sort-key],
+#decisionsTable thead th button.sort-header-btn[data-sort-key],
+#applicationTable thead th button.sort-header-btn[data-sort-key],
+#schedulerTable thead th button.sort-header-btn[data-sort-key],
 .table-wrap thead .resizable-col-content,
 .table-wrap thead th .resizable-col-content,
 .saved-scans-table-wrap thead .resizable-col-content,
@@ -3011,8 +3072,12 @@ html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-link[aria-curre
   border-radius: 0 !important;
   outline: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   box-shadow: none !important;
   color: inherit !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
 }
 
 .table-wrap thead .sort-header-btn::before,
@@ -3168,24 +3233,22 @@ html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-link[aria-curre
   min-width: 42px !important;
   min-height: 42px !important;
   padding: 9px !important;
-  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
   border-radius: 14px !important;
   background:
-    linear-gradient(145deg, rgba(30, 41, 59, 0.82), rgba(15, 23, 42, 0.68)) !important;
-  box-shadow:
-    0 14px 28px rgba(2, 8, 23, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(15, 23, 42, 0.64) !important;
+  box-shadow: 0 10px 24px rgba(2, 8, 23, 0.2) !important;
   backdrop-filter: blur(14px) !important;
 }
 
 .app-shell-menu-btn:hover,
 .app-shell-menu-btn:focus-visible {
-  border-color: rgba(125, 170, 255, 0.48) !important;
+  border-color: rgba(96, 165, 250, 0.52) !important;
   background:
-    linear-gradient(145deg, rgba(37, 99, 235, 0.34), rgba(15, 23, 42, 0.86)) !important;
-  box-shadow:
-    0 20px 40px rgba(37, 99, 235, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+    linear-gradient(180deg, rgba(96, 165, 250, 0.16), rgba(15, 23, 42, 0.68)),
+    rgba(15, 23, 42, 0.72) !important;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16) !important;
 }
 
 .app-shell-menu-btn-line {
@@ -3509,6 +3572,11 @@ label,
 .table-wrap thead th .sort-header-btn,
 .saved-scans-table-wrap thead .sort-header-btn,
 .scheduler-attached-table-wrap thead .sort-header-btn,
+#queueTable thead th button.sort-header-btn[data-sort-key],
+#planningTable thead th button.sort-header-btn[data-sort-key],
+#decisionsTable thead th button.sort-header-btn[data-sort-key],
+#applicationTable thead th button.sort-header-btn[data-sort-key],
+#schedulerTable thead th button.sort-header-btn[data-sort-key],
 .table-wrap thead .resizable-col-content,
 .table-wrap thead th .resizable-col-content,
 .saved-scans-table-wrap thead .resizable-col-content,
@@ -3683,6 +3751,11 @@ html[data-theme="dark"] .stats-grid .stat-card .stat-value {
 .table-wrap thead th .sort-header-btn,
 .saved-scans-table-wrap thead .sort-header-btn,
 .scheduler-attached-table-wrap thead .sort-header-btn,
+#queueTable thead th button.sort-header-btn[data-sort-key],
+#planningTable thead th button.sort-header-btn[data-sort-key],
+#decisionsTable thead th button.sort-header-btn[data-sort-key],
+#applicationTable thead th button.sort-header-btn[data-sort-key],
+#schedulerTable thead th button.sort-header-btn[data-sort-key],
 .table-wrap thead .resizable-col-content,
 .table-wrap thead th .resizable-col-content,
 .saved-scans-table-wrap thead .resizable-col-content,
@@ -3694,7 +3767,11 @@ html[data-theme="dark"] .stats-grid .stat-card .stat-value {
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   box-shadow: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
 }
 
 .table-wrap thead .sort-header-label,
@@ -3882,7 +3959,7 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -3916,8 +3993,9 @@ body .scheduler-page #refreshSchedulerSummaryBtn {
 }
 
 html[data-theme="light"] body .scheduler-page .scheduler-table-tabs {
-  border-color: #bae6fd !important;
-  background: #e0f2fe !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 /* ui_redesign_v24_eof: final tab/dropdown override. */
 body .multi-select-menu {
@@ -3996,7 +4074,8 @@ body .multi-select-option-label {
 
 body .application-tabs,
 body .scheduler-page .scheduler-table-tabs,
-body .scheduler-tab-row {
+body .scheduler-page .scheduler-tab-row,
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row {
   display: inline-flex !important;
   align-items: flex-end !important;
   gap: 22px !important;
@@ -4005,30 +4084,52 @@ body .scheduler-tab-row {
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
+  border-color: transparent !important;
   border-radius: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   box-shadow: none !important;
 }
 
+body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab],
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"],
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"]:hover,
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"]:focus-visible,
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].active,
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].is-active,
 body .application-tab,
 body .scheduler-page .scheduler-table-tab,
-body .scheduler-tab {
+body .scheduler-page .scheduler-tab-btn {
+  appearance: none !important;
+  -webkit-appearance: none !important;
   position: relative !important;
-  min-height: 44px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
   padding: 0 2px 10px !important;
   border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
   border-radius: 0 !important;
+  outline: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  background-clip: border-box !important;
   color: #475569 !important;
   box-shadow: none !important;
-  font-size: 15px !important;
+  font-size: 14px !important;
   font-weight: 900 !important;
   line-height: 1.2 !important;
+  text-decoration: none !important;
+  transform: none !important;
 }
 
+body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab]::after,
 body .application-tab::after,
 body .scheduler-page .scheduler-table-tab::after,
-body .scheduler-tab::after {
+body .scheduler-page .scheduler-tab-btn::after {
   content: "" !important;
   position: absolute !important;
   right: 0 !important;
@@ -4039,17 +4140,32 @@ body .scheduler-tab::after {
   background: transparent !important;
 }
 
+body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].active,
+body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].is-active,
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].active,
+body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].is-active,
 body .application-tab.active,
 body .scheduler-page .scheduler-table-tab.is-active,
-body .scheduler-tab.is-active {
+body .scheduler-page .scheduler-tab-btn.active,
+body .scheduler-page .scheduler-tab-btn.is-active {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   color: #0f172a !important;
   box-shadow: none !important;
 }
 
+body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].active::after,
+body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].is-active::after,
 body .application-tab.active::after,
 body .scheduler-page .scheduler-table-tab.is-active::after,
-body .scheduler-tab.is-active::after {
+body .scheduler-page .scheduler-tab-btn.active::after,
+body .scheduler-page .scheduler-tab-btn.is-active::after {
   background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
 }
 
@@ -4164,30 +4280,66 @@ html[data-theme="dark"] body .scheduler-page .scheduler-table-card {
 }
 
 html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs,
-html[data-theme="dark"] body .scheduler-page .scheduler-tab-row {
+html[data-theme="dark"] body .scheduler-page .scheduler-tab-row,
+html[data-theme="dark"] body #applicationViewRoot .application-tabs {
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
 }
 
-html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn {
+html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab],
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row button.scheduler-tab-btn,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"],
+html[data-theme="dark"] body #applicationViewRoot .application-tab,
+html[data-theme="dark"] body #applicationViewRoot .application-tab:not(.active) {
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   border: 0 !important;
-  color: #94a3b8 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  color: #cbd5e1 !important;
   box-shadow: none !important;
 }
 
-html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn:hover {
-  color: #dbeafe !important;
-}
-
-html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.active,
-html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.is-active {
+html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn:hover,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row button.scheduler-tab-btn:hover,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"]:hover,
+html[data-theme="dark"] body #applicationViewRoot .application-tab:hover {
   color: #f8fafc !important;
 }
 
+html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.active,
+html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.is-active,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].active,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].is-active,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row button.scheduler-tab-btn.active,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row button.scheduler-tab-btn.is-active,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].active,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].is-active,
+html[data-theme="dark"] body #applicationViewRoot .application-tab.active {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
 html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.active::after,
-html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.is-active::after {
+html[data-theme="dark"] body .scheduler-page .scheduler-tab-btn.is-active::after,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row button.scheduler-tab-btn.active::after,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row button.scheduler-tab-btn.is-active::after,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].active::after,
+html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > button.scheduler-tab-btn[data-tab][role="tab"].is-active::after,
+html[data-theme="dark"] body #applicationViewRoot .application-tab.active::after {
   background: linear-gradient(90deg, #60a5fa, #22d3ee) !important;
 }
 

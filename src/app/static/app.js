@@ -999,6 +999,17 @@ function formatOperatorDecisionLabel(value) {
   }[normalized] || String(value || "").replaceAll("_", " ");
 }
 
+function getRecommendationTone(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return {
+    APPLY: "ready",
+    APPLY_REVIEW_VARIANTS: "choice",
+    SELECT_RESUME: "choice",
+    MAYBE_TAILOR: "tailor",
+    SKIP_FOR_NOW: "later",
+  }[normalized] || "unavailable";
+}
+
 function buildPacketStatusChipHtml(row) {
   const packetAllowed = String(row?.packet_generation_allowed || "").trim();
   const label = formatPacketStatusLabel(packetAllowed);
@@ -2162,7 +2173,9 @@ function clearPendingApplication() {
 function buildApplicationButtonHtml(row) {
   const isApplied = Boolean(row.is_applied);
   const label = escapeHtml(row.application_label || (isApplied ? "Reviewed" : "Review job"));
-  const buttonClass = isApplied ? "job-apply-btn applied-btn" : "job-apply-btn apply-btn";
+  const buttonClass = isApplied
+    ? "job-apply-btn review-action-button review-action-button--disabled applied-btn"
+    : "job-apply-btn review-action-button review-action-button--available apply-btn";
   const disabledAttr = isApplied ? "disabled" : "";
 
   return `
@@ -2193,6 +2206,7 @@ function buildQueueJobSummaryHtml(row, { simple = false } = {}) {
 
 function buildQueueRecommendationCellHtml(row) {
   const action = escapeHtml(formatQueueActionLabel(row.action) || "-");
+  const tone = escapeHtml(getRecommendationTone(row.action));
   const advisoryReasons = String(row?.advisory_reason_codes || "")
     .split("|")
     .filter(Boolean)
@@ -2217,7 +2231,7 @@ function buildQueueRecommendationCellHtml(row) {
   ]);
   return `
     <div class="queue-recommendation-summary">
-      <span class="pill">${action}</span>
+      <span class="pill recommendation-chip recommendation-chip--${tone}">${action}</span>
       ${details}
     </div>
   `;

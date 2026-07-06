@@ -1459,7 +1459,7 @@ Python, SQL
     assert details["state"] == "NJ"
     assert details["contact"] == "+1 (555) 123-4567"
     assert details["email"] == "alex@example.com"
-    assert details["linkedin"] == "linkedin.com/in/alexrivera"
+    assert details["linkedin"] == "https://linkedin.com/in/alexrivera"
 
 
 def test_workspace_draft_persists_personal_details():

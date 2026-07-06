@@ -9932,6 +9932,18 @@ def _normalize_workspace_personal_details(value: Any) -> Dict[str, str]:
     return normalized
 
 
+def _merge_workspace_personal_details(
+    base_details: Any,
+    override_details: Any,
+) -> Dict[str, str]:
+    merged = _normalize_workspace_personal_details(base_details)
+    override = _normalize_workspace_personal_details(override_details)
+    for field, value in override.items():
+        if _clean_text(value):
+            merged[field] = value
+    return _normalize_workspace_personal_details(merged)
+
+
 def _extract_resume_personal_details(
     resume_evidence: Any,
     *,
@@ -9961,7 +9973,7 @@ def _extract_resume_personal_details(
 
     raw_text = _scan_resume_document_text(resume_evidence)
     if not raw_text:
-        return details
+        return _normalize_workspace_personal_details(details)
 
     lines = [_clean_text(line) for line in raw_text.splitlines()]
     lines = [line for line in lines if line]
@@ -10040,7 +10052,7 @@ def _extract_resume_personal_details(
             details["state"] = state
             break
 
-    return details
+    return _normalize_workspace_personal_details(details)
 
 
 def _workspace_personal_details_contact_text(details: Dict[str, str]) -> str:
@@ -27880,9 +27892,9 @@ def tailoring_scan_preload_payload(
     saved_personal_details = _normalize_workspace_personal_details(
         draft.get("personal_details", {})
     )
-    has_saved_personal_details = any(saved_personal_details.values())
-    current_personal_details = (
-        saved_personal_details if has_saved_personal_details else extracted_personal_details
+    current_personal_details = _merge_workspace_personal_details(
+        extracted_personal_details,
+        saved_personal_details,
     )
 
     scan_issue_contract = _build_tailoring_scan_issue_contract(
@@ -28549,6 +28561,115 @@ def _build_tailoring_workspace_default_draft_payload(
     }
 
 
+
+def _phase78b_workspace_resume_pdf_contact_links(
+    selected_resume: str,
+) -> Dict[str, str]:
+    """Extract contact profile links from the selected resume PDF.
+
+    This is intentionally narrow:
+    - reads only the selected resume PDF
+    - does not hardcode any user URL
+    - does not fabricate missing links
+    - uses existing PDF header-link extraction first
+    - falls back to raw PDF URI byte search because some links are annotations
+    """
+
+    raw_selected = _clean_text(selected_resume)
+    if not raw_selected:
+        return {}
+
+    selected_path = Path(raw_selected)
+    candidate_paths: List[Path] = []
+
+    if selected_path.is_absolute() or selected_path.parent != Path("."):
+        candidate_paths.append(selected_path)
+
+    candidate_paths.extend([
+        Path("data/profile_resumes") / selected_path.name,
+        Path.cwd() / "data/profile_resumes" / selected_path.name,
+    ])
+
+    seen_paths: set[Path] = set()
+    links: Dict[str, str] = {}
+
+    def _remember(uri: str) -> None:
+        safe_uri = _clean_text(uri)
+        lower_uri = safe_uri.lower()
+        if not safe_uri:
+            return
+        if "linkedin.com/" in lower_uri and not links.get("linkedin"):
+            links["linkedin"] = safe_uri
+        if "github.com/" in lower_uri and not links.get("github"):
+            links["github"] = safe_uri
+
+    for candidate in candidate_paths:
+        if candidate in seen_paths:
+            continue
+        seen_paths.add(candidate)
+
+        try:
+            if not candidate.exists() or candidate.suffix.lower() != ".pdf":
+                continue
+        except OSError:
+            continue
+
+        try:
+            for link_item in _workspace_export_extract_pdf_header_link_items(candidate):
+                _remember(str(link_item.get("uri", "") or ""))
+        except Exception:
+            pass
+
+        if links.get("linkedin") and links.get("github"):
+            break
+
+        try:
+            raw_bytes = candidate.read_bytes()
+        except Exception:
+            raw_bytes = b""
+
+        if raw_bytes:
+            for match in re.findall(
+                rb"(?:https?://)?(?:www\.)?(?:linkedin|github)\.com/[A-Za-z0-9._%/\-]+",
+                raw_bytes,
+                flags=re.IGNORECASE,
+            ):
+                _remember(match.decode("utf-8", errors="ignore"))
+
+        if links.get("linkedin") and links.get("github"):
+            break
+
+    return links
+
+
+def _phase78b_backfill_workspace_personal_details_from_selected_resume(
+    draft: Dict[str, Any],
+    *,
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    """Fill missing LinkedIn/GitHub from selected resume PDF links.
+
+    Does not overwrite user-entered or saved non-empty values.
+    """
+
+    if not isinstance(draft, dict):
+        return draft
+
+    details = _normalize_workspace_personal_details(
+        draft.get("personal_details", {}) or {}
+    )
+    selected = _clean_text(selected_resume) or _clean_text(draft.get("selected_resume"))
+
+    if selected and (not details.get("linkedin") or not details.get("github")):
+        pdf_links = _phase78b_workspace_resume_pdf_contact_links(selected)
+        if not details.get("linkedin") and pdf_links.get("linkedin"):
+            details["linkedin"] = pdf_links["linkedin"]
+        if not details.get("github") and pdf_links.get("github"):
+            details["github"] = pdf_links["github"]
+
+    draft["personal_details"] = details
+    return draft
+
 def load_tailoring_workspace_draft_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     *,
@@ -28581,7 +28702,10 @@ def load_tailoring_workspace_draft_payload(
             ),
             "missing_tailoring_artifact": tailoring_artifact_missing,
             "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
-            "draft": default_draft,
+            "draft": _phase78b_backfill_workspace_personal_details_from_selected_resume(
+                default_draft,
+                selected_resume=selected_resume,
+            ),
         }
 
     saved_data = _load_tailoring_json_artifact(draft_path)
@@ -28603,7 +28727,10 @@ def load_tailoring_workspace_draft_payload(
             ),
             "missing_tailoring_artifact": tailoring_artifact_missing,
             "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
-            "draft": stale_draft,
+            "draft": _phase78b_backfill_workspace_personal_details_from_selected_resume(
+                stale_draft,
+                selected_resume=selected_resume,
+            ),
         }
 
     valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
@@ -28663,7 +28790,10 @@ def load_tailoring_workspace_draft_payload(
         ),
         "missing_tailoring_artifact": tailoring_artifact_missing,
         "no_suggestions_reason": _clean_text(payload_data.get("no_suggestions_reason")),
-        "draft": merged,
+        "draft": _phase78b_backfill_workspace_personal_details_from_selected_resume(
+            merged,
+            selected_resume=selected_resume,
+        ),
     }
 
 
@@ -33059,6 +33189,40 @@ def _workspace_export_has_personal_details_patch(
     return False
 
 
+def _workspace_export_personal_details_from_pages(
+    exported_pages: List[Dict[str, Any]],
+) -> Dict[str, str]:
+    texts: List[str] = []
+    link_items: List[Dict[str, str]] = []
+
+    for page in list(exported_pages or [])[:1]:
+        for block in list(page.get("blocks", []) or []):
+            for paragraph in list(block.get("paragraphs", []) or []):
+                text = _clean_text(paragraph.get("text"))
+                if text:
+                    texts.append(text)
+                link_items.extend(list(paragraph.get("link_items", []) or []))
+
+    details = _extract_resume_personal_details(
+        SimpleNamespace(
+            document=SimpleNamespace(
+                resume_name="",
+                raw_text="\n".join(texts),
+                normalized_text=" ".join(texts),
+            )
+        )
+    )
+    for link_item in link_items:
+        label = _clean_text(link_item.get("label")).lower()
+        uri = _clean_text(link_item.get("uri"))
+        if uri and ("linkedin" in label or "linkedin.com" in uri.lower()):
+            details["linkedin"] = uri
+        if uri and ("github" in label or "github.com" in uri.lower()):
+            details["github"] = uri
+
+    return _normalize_workspace_personal_details(details)
+
+
 def _workspace_export_find_soffice_binary() -> str:
     candidates = [
         _clean_text(os.environ.get("SOFFICE_BIN")),
@@ -33273,9 +33437,21 @@ def _build_tailoring_workspace_export_context(
     if not exported_pages:
         raise ValueError("Could not extract resume text for export.")
 
+    saved_personal_details = _normalize_workspace_personal_details(
+        draft.get("personal_details", {})
+    )
+    extracted_personal_details = _workspace_export_personal_details_from_pages(
+        exported_pages
+    )
+
+    effective_personal_details = dict(extracted_personal_details)
+    for field, value in saved_personal_details.items():
+        if _clean_text(value):
+            effective_personal_details[field] = value
+
     _workspace_export_apply_personal_details(
         exported_pages,
-        draft.get("personal_details", {}),
+        effective_personal_details,
     )
 
     patch_result = _apply_workspace_export_patch_specs(

@@ -1,7 +1,7 @@
-# phase56b legacy guard marker: changes_only f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56b legacy guard marker: changes_only e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
 from __future__ import annotations
 
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 f186703fecdda54458c468f9c2ed1de0517fa86942bb3d0fe0b522f0601fe5a8 c3de61f6e079ea961cae4c7f2f38695313059c15239f71e75cfc600c86d5cefe 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c c3de61f6e079ea961cae4c7f2f38695313059c15239f71e75cfc600c86d5cefe 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
 
 from copy import deepcopy
 from hashlib import sha256
@@ -352,6 +352,226 @@ def test_ui_explicit_action_and_readback_surface_are_default_off():
     assert "getScanWorkspaceLiveTailoringSuggestionEnabled()" in script
     assert "renderScanWorkspaceTailoringLlmReadback(response)" in script
     assert "Live tailoring LLM: default-off" in script
+
+
+def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
+    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+
+    score_card = html[
+        html.index("scan-workspace-review-score-card"):
+        html.index('id="scanWorkspaceControlsShell"')
+    ]
+    normal_actions = html[
+        html.index("scan-workspace-review-main-actions"):
+        html.index('id="scanWorkspaceAdvancedDiagnostics"')
+    ]
+    diagnostics_start = html.rindex(
+        "<details", 0, html.index('id="scanWorkspaceAdvancedDiagnostics"')
+    )
+    diagnostics = html[
+        diagnostics_start:
+        html.index('<div class="scan-workspace-toolbar-context">')
+    ]
+    tabs = html[
+        html.index('id="scanWorkspaceTabRow"'):
+        html.index('</section>', html.index('id="scanWorkspaceControlsShell"'))
+    ]
+
+    assert "<summary>Advanced diagnostics</summary>" in diagnostics
+    assert "These do not apply to jobs automatically." in diagnostics
+    assert "<details" in diagnostics
+    assert "open>" not in diagnostics
+
+    for label in ("Undo", "Redo", "Accept All", "Export", "Compare", "Continue"):
+        assert label in normal_actions
+    for label in (
+        "Personal Details",
+        "Skills",
+        "Searchability",
+        "Formatting",
+        "Recruiter Tips",
+    ):
+        assert label in tabs
+
+    for internal_label in (
+        "Create guarded resume copy",
+        "Create human-only workflow readiness checkpoint",
+        "Operator review packet ID",
+        "Verified artifact ID",
+        "Live tailoring suggestions",
+        "Live exact change proposals",
+    ):
+        assert internal_label not in normal_actions
+        assert internal_label not in score_card
+        assert internal_label in diagnostics
+
+    for internal_id in (
+        "scanWorkspaceLiveTailoringSuggestionToggle",
+        "scanWorkspaceLiveExactChangeProposalToggle",
+        "scanWorkspaceManualExactChangeAcceptanceToggle",
+        "scanWorkspaceAcceptedExactChangeProposalIds",
+        "scanWorkspaceGuardedResumeCopyArtifactToggle",
+        "scanWorkspaceApprovedChangePlanId",
+        "scanWorkspaceGuardedResumeCopyArtifactVerificationToggle",
+        "scanWorkspaceGuardedResumeCopyArtifactId",
+        "scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle",
+        "scanWorkspaceVerifiedArtifactOperatorReviewArtifactId",
+        "scanWorkspaceVerifiedArtifactOperatorDecisionToggle",
+        "scanWorkspaceVerifiedArtifactOperatorDecisionPacketId",
+        "scanWorkspaceVerifiedArtifactOperatorDecisionArtifactId",
+        "scanWorkspaceVerifiedArtifactOperatorDecisionValue",
+        "scanWorkspaceApplicationReadinessPacketToggle",
+        "scanWorkspaceApplicationReadinessDecisionId",
+        "scanWorkspaceApplicationReadinessReviewPacketId",
+        "scanWorkspaceApplicationReadinessArtifactId",
+        "scanWorkspaceManualApplicationHandoffPacketToggle",
+        "scanWorkspaceManualHandoffReadinessPacketId",
+        "scanWorkspaceManualHandoffArtifactId",
+        "scanWorkspaceHandoffAuditTrailToggle",
+        "scanWorkspaceHandoffAuditHandoffPacketId",
+        "scanWorkspaceHandoffAuditReadinessPacketId",
+        "scanWorkspaceHandoffAuditArtifactId",
+        "scanWorkspaceSafetyBoundarySummaryToggle",
+        "scanWorkspaceSafetyBoundaryAuditTrailId",
+        "scanWorkspaceSafetyBoundaryHandoffPacketId",
+        "scanWorkspaceSafetyBoundaryReadinessPacketId",
+        "scanWorkspaceSafetyBoundaryArtifactId",
+        "scanWorkspaceWorkflowReadinessCheckpointToggle",
+        "scanWorkspaceWorkflowReadinessSummaryId",
+        "scanWorkspaceWorkflowReadinessAuditTrailId",
+        "scanWorkspaceWorkflowReadinessHandoffPacketId",
+        "scanWorkspaceWorkflowReadinessReadinessPacketId",
+        "scanWorkspaceWorkflowReadinessArtifactId",
+        "scanWorkspaceJdLlmReadback",
+        "scanWorkspaceTailoringLlmReadback",
+        "scanWorkspaceExactChangeLlmReadback",
+        "scanWorkspaceManualExactChangeAcceptanceReadback",
+        "scanWorkspaceGuardedResumeCopyArtifactReadback",
+        "scanWorkspaceGuardedResumeCopyArtifactVerificationReadback",
+        "scanWorkspaceVerifiedArtifactOperatorReviewPacketReadback",
+        "scanWorkspaceVerifiedArtifactOperatorDecisionReadback",
+        "scanWorkspaceApplicationReadinessPacketReadback",
+        "scanWorkspaceManualApplicationHandoffPacketReadback",
+        "scanWorkspaceHandoffAuditTrailReadback",
+        "scanWorkspaceSafetyBoundarySummaryReadback",
+        "scanWorkspaceWorkflowReadinessCheckpointReadback",
+        "scanWorkspaceAgenticWorkflowIntegrationReadback",
+        "scanWorkspaceProductionReadinessCheckpointReadback",
+    ):
+        assert internal_id in diagnostics
+
+
+def test_phase78b_scan_review_summary_drops_resume_name_and_keeps_metrics():
+    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    script = (ROOT / "src/app/static/planning.js").read_text(encoding="utf-8")
+
+    score_card = html[
+        html.index("scan-workspace-review-score-card"):
+        html.index('id="scanWorkspaceControlsShell"')
+    ]
+
+    assert "Optimization review" in score_card
+    assert "{company_safe} / {title_safe}" in score_card
+    assert 'id="scanWorkspaceScoreValue"' in score_card
+    assert 'id="scanWorkspaceTrustedCount"' in score_card
+    assert 'id="scanWorkspaceAiCount"' in score_card
+    assert 'id="scanWorkspaceGuidanceCount"' in score_card
+    assert 'id="scanWorkspaceMeta"' not in score_card
+    assert "{resume_display_safe}" not in score_card
+    assert 'meta.textContent = "";' in script
+
+
+def test_phase78b_scan_preview_contact_links_render_linkedin_and_github():
+    scan_script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    planning_script = (ROOT / "src/app/static/planning.js").read_text(encoding="utf-8")
+
+    assert "function isValidScanWorkspaceLinkedInProfileUrl" in scan_script
+    assert "function normalizeValidScanWorkspaceLinkedInProfileUrl" in scan_script
+    assert "function isValidScanWorkspaceGitHubProfileUrl" in scan_script
+    assert "function normalizeValidScanWorkspaceGitHubProfileUrl" in scan_script
+    assert 'validLinkedIn ? "LinkedIn" : ""' in scan_script
+    assert 'validGitHub ? "GitHub" : ""' in scan_script
+    assert 'validLinkedIn ? { label: "LinkedIn", uri: validLinkedIn } : null' in scan_script
+    assert 'validGitHub ? { label: "GitHub", uri: validGitHub } : null' in scan_script
+    assert "Invalid LinkedIn link" in scan_script
+    assert "function isValidScanWorkspaceGitHubProfileUrl" in scan_script
+    assert "function renderScanWorkspaceLinkedText" in scan_script
+    assert "renderTailoringWorkspaceLinkedText(text, linkItems)" in scan_script
+    assert "renderScanWorkspaceLinkedText(rawText, row?.link_items || [])" in scan_script
+    assert "function renderTailoringWorkspaceLinkedText" in planning_script
+    assert 'class="tailoring-workspace-doc-link"' in planning_script
+
+
+def test_phase78b_scan_personal_details_hydrates_blank_saved_fields_from_source():
+    scan_script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    planning_script = (ROOT / "src/app/static/planning.js").read_text(encoding="utf-8")
+
+    assert "function mergeScanWorkspacePersonalDetails(baseDetails = {}, overrideDetails = {})" in planning_script
+    assert "const sourcePersonalDetails = getScanWorkspacePersonalDetailsFromPreload(payload);" in planning_script
+    assert "mergeScanWorkspacePersonalDetails(\n      sourcePersonalDetails,\n      savedPersonalDetails\n    )" in planning_script
+    assert "const sourcePersonalDetails = getSourceScanWorkspacePersonalDetails();" in scan_script
+    assert "mergeScanWorkspacePersonalDetails(\n    sourcePersonalDetails,\n    savedPersonalDetails\n  )" in scan_script
+    assert "savedDraft.personal_details ||\n        payload?.personal_details?.current" not in scan_script
+
+
+def test_phase78b_compare_and_continue_disable_when_no_changes():
+    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+
+    actions = html[
+        html.index("scan-workspace-review-main-actions"):
+        html.index('id="scanWorkspaceAdvancedDiagnostics"')
+    ]
+
+    assert 'id="scanWorkspaceCompareBtn"' in actions
+    assert 'id="scanWorkspaceSaveBtn"' in actions
+    assert actions.count('data-scan-disabled-help="No changes made"') == 2
+    assert actions.count('title="No changes made"') >= 2
+    assert "disabled" in actions
+    assert 'const noChangesLabel = "No changes made";' in script
+    assert "const compareBtn = getScanWorkspaceInput(\"scanWorkspaceCompareBtn\");" in script
+    assert "compareBtn.disabled =" in script
+    assert "saveBtn.disabled =" in script
+    assert "!isDirty" in script
+    assert "syncDisabledHelp(compareBtn, compareBtn.disabled, \"Compare draft changes\")" in script
+    assert "syncDisabledHelp(saveBtn, saveBtn.disabled, \"Continue\")" in script
+
+
+def test_phase78b_scan_controls_use_calm_tinted_styles():
+    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    css = (ROOT / "src/app/static/scan_workspace_review.css").read_text(encoding="utf-8")
+    scan_script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    redesign_css = (ROOT / "src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    styles_css = (ROOT / "src/app/static/styles.css").read_text(encoding="utf-8")
+    tab_active = css[
+        css.rindex(".scan-review-left-pane .scan-workspace-tab-btn.active"):
+        css.index("}", css.rindex(".scan-review-left-pane .scan-workspace-tab-btn.active"))
+    ]
+    surface_block = css[
+        css.index(".scan-review-v2 .scan-workspace-surface-tab,"):
+        css.index("}", css.index(".scan-review-v2 .scan-workspace-surface-tab,"))
+    ]
+    back_block = css[
+        css.rindex(".scan-workspace-page .scan-workspace-header-actions .ghost-btn"):
+        css.index("}", css.rindex(".scan-workspace-page .scan-workspace-header-actions .ghost-btn"))
+    ]
+
+    assert "scan_workspace_review.css" in html
+    assert "scan_workspace.css?v=tailoring_workspace_consolidated_v11" not in html[
+        html.index("<title>AI Optimize Scan</title>"):
+        html.index("</head>", html.index("<title>AI Optimize Scan</title>"))
+    ]
+    assert ".scan-workspace-disabled-action-wrap" in scan_script
+    assert "background-image: none !important;" in tab_active
+    assert "linear-gradient(135deg, #2563eb" not in tab_active
+    assert "background-image: none !important;" in surface_block
+    assert "border-radius: 0 !important;" in surface_block
+    assert "background-image: none !important;" in back_block
+    assert "linear-gradient(" not in back_block
+    assert ":not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab)" in redesign_css
+    assert ":not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab)" in styles_css
+    assert "background: #2563eb !important" not in tab_active
+    assert "background: var(--scan-ui-blue) !important" not in tab_active
 
 
 def test_docs_capture_phase56a_wiring_and_safety():

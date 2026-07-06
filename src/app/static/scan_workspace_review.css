@@ -706,19 +706,15 @@ body .scan-workspace-page.page[data-bs-theme="dark"] > .page-header .scan-worksp
 .scan-workspace-page .scan-workspace-header-actions :is(a, button) {
   min-height: 38px !important;
   padding: 0 16px !important;
-  border: 1px solid color-mix(in srgb, var(--scan-primary) 54%, var(--scan-border)) !important;
+  border: 1px solid var(--scan-border) !important;
   border-radius: 10px !important;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--scan-primary) 88%, #ffffff 12%),
-      color-mix(in srgb, var(--scan-primary-2) 86%, #0f172a 14%)
-    ) !important;
-  color: #ffffff !important;
+  background: var(--scan-panel-soft) !important;
+  background-image: none !important;
+  color: var(--scan-text) !important;
   font-size: 13px !important;
   font-weight: 850 !important;
   text-decoration: none !important;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--scan-primary) 24%, transparent) !important;
+  box-shadow: none !important;
 }
 
 .scan-review-v2 {
@@ -864,9 +860,10 @@ body .scan-workspace-page.page[data-bs-theme="dark"] > .page-header .scan-worksp
 }
 
 .scan-review-left-pane .scan-workspace-tab-btn.active {
-  border-color: #2563eb !important;
-  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
-  color: #ffffff !important;
+  border-color: color-mix(in srgb, var(--scan-primary) 52%, var(--scan-border)) !important;
+  background: color-mix(in srgb, var(--scan-primary) 10%, var(--scan-panel-soft)) !important;
+  background-image: none !important;
+  color: var(--scan-text) !important;
 }
 
 .scan-review-left-scroll {
@@ -1251,6 +1248,7 @@ html[data-theme] .scan-review-v2 .scan-workspace-surface-tab:is(.is-active, :foc
   border-radius: 0 !important;
   background: transparent !important;
   background-color: transparent !important;
+  background-image: none !important;
   color: var(--scan-text) !important;
   box-shadow: none !important;
   font-size: 15px !important;
@@ -2848,12 +2846,11 @@ html[data-theme="dark"] .scan-workspace-continue-modal-secondary .scan-workspace
   min-height: 42px !important;
   padding: 0 18px !important;
   border-radius: 12px !important;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--scan-primary) 88%, #ffffff 12%),
-      color-mix(in srgb, var(--scan-primary-2) 86%, #0f172a 14%)
-    ) !important;
+  border-color: var(--scan-border) !important;
+  background: var(--scan-panel-soft) !important;
+  background-image: none !important;
+  color: var(--scan-text) !important;
+  box-shadow: none !important;
   font-size: 14px !important;
 }
 
@@ -3522,12 +3519,11 @@ html[data-theme="dark"] .scan-workspace-continue-modal-secondary .scan-workspace
 }
 
 .scan-review-left-pane .scan-workspace-tab-btn.active {
-  border-color: transparent !important;
-  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
-  color: #ffffff !important;
-  box-shadow:
-    0 8px 18px rgba(37, 99, 235, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+  border-color: color-mix(in srgb, var(--scan-primary) 52%, var(--scan-border)) !important;
+  background: color-mix(in srgb, var(--scan-primary) 10%, var(--scan-panel-soft)) !important;
+  background-image: none !important;
+  color: var(--scan-text) !important;
+  box-shadow: none !important;
 }
 
 @media (max-width: 1280px) {
@@ -3664,9 +3660,11 @@ html[data-theme="dark"] .scan-workspace-continue-modal-secondary .scan-workspace
 }
 
 .scan-review-left-pane .scan-workspace-tab-btn.active {
-  border-color: transparent !important;
-  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
-  color: #ffffff !important;
+  border-color: color-mix(in srgb, var(--scan-primary) 52%, var(--scan-border)) !important;
+  background: color-mix(in srgb, var(--scan-primary) 10%, var(--scan-panel-soft)) !important;
+  background-image: none !important;
+  color: var(--scan-text) !important;
+  box-shadow: none !important;
 }
 
 /* scan_review_v2_48: star outside pill; keep manual edit on one line. */
@@ -3992,4 +3990,23 @@ html[data-theme="dark"] .scan-workspace-continue-modal-secondary .scan-workspace
     min-height: 0 !important;
     max-height: none !important;
   }
+}
+
+
+/* Phase 78B: LinkedIn field validation. */
+.scan-workspace-field-error {
+  margin-top: 6px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #b42318;
+}
+
+html[data-theme="dark"] .scan-workspace-field-error {
+  color: #fca5a5;
+}
+
+.scan-workspace-page input.is-invalid,
+.scan-workspace-page textarea.is-invalid {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
 }

@@ -57,21 +57,40 @@ SAFETY_FLAGS: dict[str, bool] = {
 }
 
 EXISTING_OUTPUT_WRAPPER_VERSION = "jd-intelligence-existing-output-wrapper-v1"
+EXISTING_OUTPUT_TRACE_PAYLOAD_VERSION = "jd-intelligence-existing-output-trace-payload-v1"
+EXISTING_OUTPUT_TRACE_STAGE_NAME = "jd_intelligence_existing_output"
+EXISTING_OUTPUT_TRACE_SOURCE_STAGE = "intelligence"
+EXISTING_OUTPUT_TRACE_DEFAULT_SAMPLE_LIMIT = 10
+EXISTING_OUTPUT_TRACE_MAX_SAMPLE_LIMIT = 25
 _BUILD_JOB_INTELLIGENCE_CALLED_KEY = "build_" "job_intelligence_called"
+_WORKFLOW_RUNNER_LIVE_EXECUTION_PERFORMED_KEY = (
+    "workflow_" "runner_live_execution_performed"
+)
 _EXISTING_OUTPUT_FALSE_FLAGS: tuple[str, ...] = (
     "provider_call_performed",
     "duplicate_llm_call_performed",
     _BUILD_JOB_INTELLIGENCE_CALLED_KEY,
     "skill_extraction_called",
     "run_chat_completion_called",
+    "evaluate_jobs_called",
     "production_output_changed",
     "database_write_performed",
     "persistence_performed",
+    "trace_persistence_performed",
     "auto_apply_performed",
     "auto_submit_performed",
     "ats_submission_performed",
+    "apply_click_performed",
     "recruiter_message_sent",
     "mark_applied_performed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "queue_changed",
+    "scheduler_changed",
+    "tailoring_changed",
+    "source_resume_changed",
+    _WORKFLOW_RUNNER_LIVE_EXECUTION_PERFORMED_KEY,
 )
 
 
@@ -247,6 +266,122 @@ def describe_existing_job_intelligence_result(
         "validation_json": validation_json,
         "metadata": metadata,
         "safety_metadata": safety_metadata,
+    }
+    return payload
+
+
+def _existing_output_trace_sample_limit(value: Any) -> int:
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        limit = EXISTING_OUTPUT_TRACE_DEFAULT_SAMPLE_LIMIT
+    return max(0, min(limit, EXISTING_OUTPUT_TRACE_MAX_SAMPLE_LIMIT))
+
+
+def _existing_output_jobs_list(jobs: Any) -> list[Any]:
+    if isinstance(jobs, Mapping):
+        return [jobs]
+    try:
+        return list(jobs or [])
+    except TypeError:
+        return []
+
+
+def _existing_output_trace_validation_summary(
+    *,
+    sampled_jobs: list[Any],
+    wrapper_outputs: list[dict[str, Any]],
+    total_jobs_seen: int,
+) -> dict[str, Any]:
+    missing_intelligence_count = 0
+    missing_skills_count = 0
+    malformed_intelligence_count = 0
+    malformed_skills_count = 0
+
+    for job in sampled_jobs:
+        source = job if isinstance(job, Mapping) else {}
+        intelligence = source.get("intelligence") if isinstance(source, Mapping) else None
+        if intelligence is None:
+            missing_intelligence_count += 1
+            continue
+        if not isinstance(intelligence, Mapping):
+            malformed_intelligence_count += 1
+            continue
+        skills = intelligence.get("skills")
+        if skills is None:
+            missing_skills_count += 1
+            continue
+        if not isinstance(skills, Mapping):
+            malformed_skills_count += 1
+            continue
+        if not all(
+            isinstance(skills.get(field_name), list)
+            for field_name in ("required", "preferred", "all")
+        ):
+            malformed_skills_count += 1
+
+    invalid_wrapper_outputs = sum(
+        1 for output in wrapper_outputs if output.get("status") != "completed"
+    )
+    valid_wrapper_outputs = len(wrapper_outputs) - invalid_wrapper_outputs
+    return {
+        "total_jobs_seen": total_jobs_seen,
+        "sampled_jobs": len(wrapper_outputs),
+        "valid_wrapper_outputs": valid_wrapper_outputs,
+        "invalid_wrapper_outputs": invalid_wrapper_outputs,
+        "missing_intelligence_count": missing_intelligence_count,
+        "missing_skills_count": missing_skills_count,
+        "malformed_intelligence_count": malformed_intelligence_count,
+        "malformed_skills_count": malformed_skills_count,
+        "provider_call_performed": False,
+        "duplicate_llm_call_performed": False,
+        "production_output_changed": False,
+    }
+
+
+def build_existing_job_intelligence_trace_payload(
+    jobs: Any,
+    *,
+    sample_limit: Any = EXISTING_OUTPUT_TRACE_DEFAULT_SAMPLE_LIMIT,
+    agent_version: str = EXISTING_OUTPUT_WRAPPER_VERSION,
+) -> dict[str, Any]:
+    """Build an in-memory trace-compatible payload from existing job intelligence."""
+
+    job_list = _existing_output_jobs_list(jobs)
+    safe_sample_limit = _existing_output_trace_sample_limit(sample_limit)
+    sampled_jobs = job_list[:safe_sample_limit]
+    wrapper_outputs = [
+        describe_existing_job_intelligence_result(
+            job,
+            agent_version=agent_version,
+        )
+        for job in sampled_jobs
+    ]
+    validation_summary = _existing_output_trace_validation_summary(
+        sampled_jobs=sampled_jobs,
+        wrapper_outputs=wrapper_outputs,
+        total_jobs_seen=len(job_list),
+    )
+    safety_metadata = _existing_output_safety_metadata()
+    payload = {
+        "stage_name": EXISTING_OUTPUT_TRACE_STAGE_NAME,
+        "source_stage": EXISTING_OUTPUT_TRACE_SOURCE_STAGE,
+        "wrapper_version": EXISTING_OUTPUT_TRACE_PAYLOAD_VERSION,
+        "agent_version": _clean_text(agent_version) or EXISTING_OUTPUT_WRAPPER_VERSION,
+        "reused_existing_pipeline_output": True,
+        "provider_call_performed": False,
+        "duplicate_llm_call_performed": False,
+        "production_output_changed": False,
+        "job_count_seen": len(job_list),
+        "job_count_sampled": len(wrapper_outputs),
+        "omitted_job_count": max(0, len(job_list) - len(wrapper_outputs)),
+        "sample_limit": safe_sample_limit,
+        "jobs": wrapper_outputs,
+        "validation_summary": validation_summary,
+        "trace_persistence_requested": False,
+        "trace_persistence_performed": False,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
     }
     return payload
 

@@ -809,6 +809,7 @@ def test_changed_files_are_limited_to_phase45b_and_legacy_guard_tests():
             "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
             "src/agents/jd_intelligence.py",
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+                "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
             "tests/support/phase_guard_registry.py",
 "tests/support/",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

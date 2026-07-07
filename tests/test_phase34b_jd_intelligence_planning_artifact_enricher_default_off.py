@@ -606,6 +606,8 @@ def test_changed_files_are_limited_to_phase34b_surface_and_legacy_guards():
         "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
             "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+                "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
+                    "tests/support/phase_guard_registry.py",
             "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",

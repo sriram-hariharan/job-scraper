@@ -24,6 +24,8 @@ EXECUTION_MODE = "read_only_preflight"
 ADVISORY_CHAIN_HARNESS_VERSION = "default_off_advisory_agent_chain_harness_v1"
 ADVISORY_CHAIN_EXECUTION_MODE = "default_off_read_only_advisory_chain"
 ADVISORY_CHAIN_TRACE_BUNDLE_VERSION = "default_off_advisory_chain_trace_bundle_v1"
+ADVISORY_CHAIN_INVOCATION_ADAPTER_VERSION = "explicit_read_only_advisory_chain_invocation_adapter_v1"
+ADVISORY_CHAIN_INVOCATION_MODE = "explicit_read_only_advisory_chain_invocation"
 PREFLIGHT_JSON_NAME = "read_only_adapter_preflight.json"
 PREFLIGHT_MD_NAME = "read_only_adapter_preflight.md"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -545,6 +547,142 @@ def validate_default_off_advisory_agent_chain_harness(
         "expected_order": expected_order,
         "actual_order": actual_order,
         "agent_count": len(chain_agents),
+    }
+
+
+def invoke_read_only_advisory_chain(
+    *,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    created_at_utc: str = "",
+    chain_run_id: str = "",
+    manifest: Dict[str, Any] | None = None,
+    contract: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    harness_result = build_default_off_advisory_agent_chain_harness(
+        enabled=True,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        created_at_utc=created_at_utc,
+        chain_run_id=chain_run_id,
+        manifest=manifest,
+        contract=contract,
+    )
+    trace_ready_result = dict(harness_result.get("trace_ready_bundle") or {})
+    payload = {
+        "adapter_version": ADVISORY_CHAIN_INVOCATION_ADAPTER_VERSION,
+        "invocation_mode": ADVISORY_CHAIN_INVOCATION_MODE,
+        "explicitly_invoked": True,
+        "default_off": True,
+        "read_only": True,
+        "dry_run": True,
+        "advisory_only": True,
+        "pipeline_run_id": _clean_text(harness_result.get("pipeline_run_id")),
+        "owner_user_id": _clean_text(harness_result.get("owner_user_id")),
+        "chain_run_id": _clean_text(harness_result.get("chain_run_id")),
+        "ordered_agent_keys": list(harness_result.get("ordered_agent_keys") or []),
+        "trace_ready_advisory_result": trace_ready_result,
+        "harness_result": harness_result,
+        "summary": {
+            "agent_count": int(dict(harness_result.get("summary") or {}).get("agent_count") or 0),
+            "trace_ready": bool(trace_ready_result.get("trace_ready")),
+            "step_count": int(dict(trace_ready_result.get("trace_summary") or {}).get("step_count") or 0),
+            "did_invoke_adapter": True,
+            "did_execute_agent_count": int(dict(harness_result.get("summary") or {}).get("did_execute_count") or 0),
+            "mutation_allowed_count": int(dict(harness_result.get("summary") or {}).get("mutation_allowed_count") or 0),
+            "production_mutating_agent_count": int(
+                dict(harness_result.get("summary") or {}).get("production_mutating_agent_count") or 0
+            ),
+        },
+        "trace_persistence_enabled": False,
+        "trace_store_write_enabled": False,
+        "did_call_trace_execution_helper": False,
+        "did_call_workflow_runner": False,
+        "did_call_live_workflow_runner": False,
+        "did_call_llm": False,
+        "did_call_live_provider": False,
+        "did_change_pipeline": False,
+        "did_change_queue": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_filtering": False,
+        "did_change_tailoring": False,
+        "did_mutate_source_resume": False,
+        "did_execute_scheduler": False,
+        "did_click_apply": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_send_recruiter_message": False,
+        "did_mark_applied": False,
+    }
+    for flag in ADVISORY_CHAIN_FALSE_FLAGS:
+        payload[flag] = False
+    payload["validation"] = validate_read_only_advisory_chain_invocation(payload)
+    return payload
+
+
+def validate_read_only_advisory_chain_invocation(payload: Dict[str, Any]) -> Dict[str, Any]:
+    reason_codes: List[str] = []
+    if _clean_text(payload.get("invocation_mode")) != ADVISORY_CHAIN_INVOCATION_MODE:
+        reason_codes.append("invocation_mode_not_explicit_read_only")
+    if payload.get("explicitly_invoked") is not True:
+        reason_codes.append("explicitly_invoked_not_true")
+    if payload.get("default_off") is not True:
+        reason_codes.append("default_off_not_true")
+    if payload.get("read_only") is not True:
+        reason_codes.append("read_only_not_true")
+    if payload.get("dry_run") is not True:
+        reason_codes.append("dry_run_not_true")
+
+    for flag in ADVISORY_CHAIN_FALSE_FLAGS:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+    for flag in [
+        "trace_persistence_enabled",
+        "trace_store_write_enabled",
+        "did_call_trace_execution_helper",
+        "did_call_workflow_runner",
+        "did_call_live_workflow_runner",
+        "did_call_llm",
+        "did_call_live_provider",
+        "did_change_pipeline",
+        "did_change_queue",
+        "did_change_scoring",
+        "did_change_ranking",
+        "did_change_filtering",
+        "did_change_tailoring",
+        "did_mutate_source_resume",
+        "did_execute_scheduler",
+        "did_click_apply",
+        "did_execute_application",
+        "did_submit_application",
+        "did_send_recruiter_message",
+        "did_mark_applied",
+    ]:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+
+    harness_result = dict(payload.get("harness_result") or {})
+    harness_validation = dict(harness_result.get("validation") or {})
+    if _clean_text(harness_validation.get("validation_status")) != "passed":
+        reason_codes.append("harness_validation_not_passed")
+
+    trace_ready_result = dict(payload.get("trace_ready_advisory_result") or {})
+    if trace_ready_result.get("trace_ready") is not True:
+        reason_codes.append("trace_ready_advisory_result_not_trace_ready")
+    if trace_ready_result.get("trace_store_write_enabled") is not False:
+        reason_codes.append("trace_ready_advisory_result_trace_store_write_enabled")
+    if list(trace_ready_result.get("ordered_agent_keys") or []) != list(payload.get("ordered_agent_keys") or []):
+        reason_codes.append("trace_ready_advisory_result_order_mismatch")
+    if int(dict(payload.get("summary") or {}).get("did_execute_agent_count") or 0) != 0:
+        reason_codes.append("did_execute_agent_count_nonzero")
+    if int(dict(payload.get("summary") or {}).get("mutation_allowed_count") or 0) != 0:
+        reason_codes.append("mutation_allowed_count_nonzero")
+
+    return {
+        "validation_status": "failed" if reason_codes else "passed",
+        "reason_codes": sorted(set(reason_codes)),
+        "ordered_agent_keys": list(payload.get("ordered_agent_keys") or []),
     }
 
 

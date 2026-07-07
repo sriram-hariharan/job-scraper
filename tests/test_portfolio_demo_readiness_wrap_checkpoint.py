@@ -629,6 +629,8 @@ ALLOWED_CHANGED |= {
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
             "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+            "src/agents/jd_intelligence.py",
+            "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
 }
 
 

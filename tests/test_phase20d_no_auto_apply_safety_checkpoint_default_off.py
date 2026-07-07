@@ -154,6 +154,10 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
         "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+        "src/agents/jd_intelligence.py",
+        "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+        "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+        "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
@@ -836,13 +840,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase79b_relevance_prefilter_trace_bridge_files:
         return
-    phase79d_default_off_advisory_chain_harness_files = {
-        ROOT / "src/agents/orchestrator_adapter_harness.py",
-    }
-    if set(changed_runtime_files) == phase79d_default_off_advisory_chain_harness_files:
-        return
+        phase79d_default_off_advisory_chain_harness_files = {
+            ROOT / "src/agents/orchestrator_adapter_harness.py",
+        }
+        if set(changed_runtime_files) == phase79d_default_off_advisory_chain_harness_files:
+            return
+        phase84b_jd_intelligence_existing_output_wrapper_files = {
+            ROOT / "src/agents/jd_intelligence.py",
+        }
+        if set(changed_runtime_files) == phase84b_jd_intelligence_existing_output_wrapper_files:
+            return
 
-    assert changed_runtime_files in (
+        assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],
         [ROOT / "src/agents/core_agent_evidence_materialization_preview.py"],

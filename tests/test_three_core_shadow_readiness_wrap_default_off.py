@@ -34,7 +34,7 @@ PHASE_TAGS = [
 
 RUNTIME_HASHES = {
     "src/agents/relevance_prefilter.py": ("5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b"),
-    "src/agents/jd_intelligence.py": ("1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e"),
+    "src/agents/jd_intelligence.py": ("f204bf788c2e8c019e3a9dc65e932981ec1081c5386573b956ce1d2dfcd7dd46"),
     "src/agents/final_application_scoring.py": ("eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"),
     "src/agents/three_core_agent_shadow_pipeline_hook.py": ("bdabd60eda23c115dfba27a3221a97d5b6782e61e13a62fd3c431b230c7428d8"),
     "src/agents/shadow_sidecar_hook.py": ("0bbc15e9a2bae8e5154ff62b5fda7b6e4989ecc70f1104719197a2cf337ac3df"),
@@ -832,6 +832,10 @@ def test_phase_17k_changes_only_approved_docs_and_tests():
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
             "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+            "src/agents/jd_intelligence.py",
+            "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+            "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+            "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
     assert changed <= allowed | legacy_static_hash_guards

@@ -629,6 +629,8 @@ ALLOWED_CHANGED |= {
             "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
             "src/agents/jd_intelligence.py",
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+                "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
+                    "tests/support/phase_guard_registry.py",
 }
 
 

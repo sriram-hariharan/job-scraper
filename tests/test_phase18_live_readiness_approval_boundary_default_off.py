@@ -21,7 +21,7 @@ ORDERED_AGENTS = [
 
 RUNTIME_HASHES = {
     "src/agents/relevance_prefilter.py": ("5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b"),
-    "src/agents/jd_intelligence.py": ("f204bf788c2e8c019e3a9dc65e932981ec1081c5386573b956ce1d2dfcd7dd46"),
+    "src/agents/jd_intelligence.py": ("3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00"),
     "src/agents/final_application_scoring.py": ("eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"),
     "src/agents/three_core_agent_shadow_operator_canary.py": ("b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"),
     "src/pipeline/collector.py": ("e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd"),
@@ -863,6 +863,7 @@ def test_phase18a_changes_only_approved_docs_and_tests():
             "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
             "src/agents/jd_intelligence.py",
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+                "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",

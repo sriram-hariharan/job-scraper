@@ -157,6 +157,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase79f_explicit_read_only_advisory_chain_invocation.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
         "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
+        "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",

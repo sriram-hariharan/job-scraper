@@ -817,5 +817,6 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
     }
     allowed |= {
         "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
+        "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
     }
     assert changed <= allowed | legacy_guards

@@ -20,7 +20,7 @@ PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
     "src/app/services.py": "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
     "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
-    "src/pipeline/collector.py": "52fef8d48ba9b42e8a317c0b08fc411e100103a8f971a782459b90725cddb0d5",
+    "src/pipeline/collector.py": "e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/jd_intelligence.py": "1f79df7e4349ce9ae7b1e5bad185a7958d86aa654d7c8bbd77634f59f529f81e",
     "src/agents/final_application_scoring.py": "eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd",
@@ -962,6 +962,8 @@ def test_phase19a_changes_only_approved_files():
         "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
+        "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
+        "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
     assert changed <= allowed | legacy_static_hash_guards
 

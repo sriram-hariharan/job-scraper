@@ -16,7 +16,7 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
     "src/app/services.py": "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
-    "src/pipeline/collector.py": "52fef8d48ba9b42e8a317c0b08fc411e100103a8f971a782459b90725cddb0d5",
+    "src/pipeline/collector.py": "e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
 }
@@ -770,5 +770,7 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
         "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
+        "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
+        "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
     assert changed <= allowed | legacy_guards

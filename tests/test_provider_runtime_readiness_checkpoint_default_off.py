@@ -284,7 +284,7 @@ def test_pipeline_decision_queue_and_dependencies_are_unchanged():
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
         ),
         "src/pipeline/collector.py": (
-            "52fef8d48ba9b42e8a317c0b08fc411e100103a8f971a782459b90725cddb0d5"
+            "e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

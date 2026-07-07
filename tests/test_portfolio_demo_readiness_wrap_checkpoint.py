@@ -627,6 +627,7 @@ ALLOWED_CHANGED |= {
     "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
+        "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
 }
 
 

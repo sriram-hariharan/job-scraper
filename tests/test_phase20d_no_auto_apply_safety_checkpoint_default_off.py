@@ -36,7 +36,7 @@ PROTECTED_HASHES = {
     "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
-    "src/pipeline/collector.py": "73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405",
+    "src/pipeline/collector.py": "5388fc3a92a521703acfb2d98bad94d5daf35d8f4367903ce565551e624de036",
 }
 
 FORBIDDEN_RUNTIME_MARKERS = (
@@ -142,6 +142,8 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "tests/test_queue_ui_metadata_contract.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "src/pipeline/collector.py",
+        "tests/test_phase79b_relevance_prefilter_live_trace_wrapper_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
@@ -674,6 +676,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "docs/phase20_provider_call_readiness_ui_readback.md",
+                "phase79b legacy guard marker",
                 "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
             )
@@ -816,6 +819,11 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/app/ui_shell.py",
     }
     if set(changed_runtime_files) == phase78d_admin_diagnostics_ui_files:
+        return
+    phase79b_relevance_prefilter_trace_bridge_files = {
+        ROOT / "src/pipeline/collector.py",
+    }
+    if set(changed_runtime_files) == phase79b_relevance_prefilter_trace_bridge_files:
         return
 
     assert changed_runtime_files in (

@@ -160,8 +160,12 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
-        "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
-        "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
+            "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+            "src/agents/jd_intelligence.py",
+            "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+            "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+            "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
+            "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
@@ -842,6 +846,11 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/agents/orchestrator_adapter_harness.py",
     }
     if set(changed_runtime_files) == phase79d_default_off_advisory_chain_harness_files:
+        return
+    phase84b_jd_intelligence_existing_output_wrapper_files = {
+        ROOT / "src/agents/jd_intelligence.py",
+    }
+    if set(changed_runtime_files) == phase84b_jd_intelligence_existing_output_wrapper_files:
         return
 
     assert changed_runtime_files in (

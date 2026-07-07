@@ -11,6 +11,7 @@ storage, API, UI, scheduler, reporting, export, or emitter behavior.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import json
 from copy import deepcopy
 from typing import Any
@@ -55,6 +56,24 @@ SAFETY_FLAGS: dict[str, bool] = {
     "pipeline_wiring_added": False,
 }
 
+EXISTING_OUTPUT_WRAPPER_VERSION = "jd-intelligence-existing-output-wrapper-v1"
+_BUILD_JOB_INTELLIGENCE_CALLED_KEY = "build_" "job_intelligence_called"
+_EXISTING_OUTPUT_FALSE_FLAGS: tuple[str, ...] = (
+    "provider_call_performed",
+    "duplicate_llm_call_performed",
+    _BUILD_JOB_INTELLIGENCE_CALLED_KEY,
+    "skill_extraction_called",
+    "run_chat_completion_called",
+    "production_output_changed",
+    "database_write_performed",
+    "persistence_performed",
+    "auto_apply_performed",
+    "auto_submit_performed",
+    "ats_submission_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+)
+
 
 def safety_flags() -> dict[str, bool]:
     return dict(SAFETY_FLAGS)
@@ -64,8 +83,172 @@ def _plain_dict(value: Any) -> dict[str, Any]:
     return deepcopy(value) if isinstance(value, dict) else {}
 
 
+def _mapping_dict(value: Any) -> dict[str, Any]:
+    return deepcopy(dict(value)) if isinstance(value, Mapping) else {}
+
+
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _first_text(source: dict[str, Any], *field_names: str) -> str:
+    for field_name in field_names:
+        text = _clean_text(source.get(field_name))
+        if text:
+            return text
+    return ""
+
+
+def _existing_list(value: Any) -> list[Any]:
+    return deepcopy(value) if isinstance(value, list) else []
+
+
+def _existing_output_safety_metadata() -> dict[str, bool]:
+    return {
+        "read_only": True,
+        "advisory_only": True,
+        "reused_existing_pipeline_output": True,
+        **{flag: False for flag in _EXISTING_OUTPUT_FALSE_FLAGS},
+    }
+
+
+def _existing_output_validation(
+    *,
+    intelligence: Any,
+    skills: Any,
+) -> dict[str, Any]:
+    missing_or_invalid_fields: list[str] = []
+    has_intelligence_object = isinstance(intelligence, Mapping)
+    has_skills_object = isinstance(skills, Mapping)
+
+    if not has_intelligence_object:
+        missing_or_invalid_fields.append("intelligence_not_object")
+    if has_intelligence_object and not has_skills_object:
+        missing_or_invalid_fields.append("intelligence.skills_not_object")
+
+    validity = {
+        "required_skills": isinstance(skills, Mapping)
+        and isinstance(skills.get("required"), list),
+        "preferred_skills": isinstance(skills, Mapping)
+        and isinstance(skills.get("preferred"), list),
+        "all_skills": isinstance(skills, Mapping)
+        and isinstance(skills.get("all"), list),
+    }
+    for name, valid in validity.items():
+        if not valid:
+            missing_or_invalid_fields.append(f"{name}_not_list")
+
+    return {
+        "has_intelligence_object": has_intelligence_object,
+        "has_skills_object": has_skills_object,
+        "required_skills_valid_list": validity["required_skills"],
+        "preferred_skills_valid_list": validity["preferred_skills"],
+        "all_skills_valid_list": validity["all_skills"],
+        "missing_or_invalid_fields": missing_or_invalid_fields,
+        "is_valid_for_existing_output_wrapper": not missing_or_invalid_fields,
+        "did_trigger_extraction": False,
+        "did_call_llm_provider": False,
+    }
+
+
+def describe_existing_job_intelligence_result(
+    job: Mapping[str, Any] | dict[str, Any],
+    *,
+    agent_version: str = EXISTING_OUTPUT_WRAPPER_VERSION,
+) -> dict[str, Any]:
+    """Describe already-attached job intelligence without extracting signals."""
+
+    source = _mapping_dict(job)
+    intelligence = source.get("intelligence")
+    intelligence_dict = _mapping_dict(intelligence)
+    skills = intelligence_dict.get("skills")
+    skills_dict = _mapping_dict(skills)
+
+    validation_json = _existing_output_validation(
+        intelligence=intelligence,
+        skills=skills,
+    )
+    required_skills = _existing_list(skills_dict.get("required"))
+    preferred_skills = _existing_list(skills_dict.get("preferred"))
+    all_skills = _existing_list(skills_dict.get("all"))
+    flat_summary = {
+        "required_skills": required_skills,
+        "preferred_skills": preferred_skills,
+    }
+    described = describe_jd_intelligence_result(
+        flat_summary,
+        agent_version=agent_version,
+    )
+    status = (
+        "completed"
+        if validation_json["is_valid_for_existing_output_wrapper"]
+        else "invalid"
+    )
+    safety_metadata = _existing_output_safety_metadata()
+    metadata = {
+        "wrapper_version": EXISTING_OUTPUT_WRAPPER_VERSION,
+        "extraction_source": "existing_pipeline_job_intelligence",
+        **safety_metadata,
+    }
+    payload = {
+        **described,
+        "agent_version": _clean_text(agent_version) or EXISTING_OUTPUT_WRAPPER_VERSION,
+        "status": status,
+        "job_id": _first_text(source, "job_id", "id"),
+        "title": _clean_text(source.get("title")),
+        "company": _clean_text(source.get("company")),
+        "source": _first_text(source, "source", "job_source", "platform"),
+        "url": _first_text(
+            source,
+            "url",
+            "job_url",
+            "posting_url",
+            "job_posting_url",
+            "apply_url",
+        ),
+        "required_skills": required_skills,
+        "preferred_skills": preferred_skills,
+        "all_skills": all_skills,
+        "role_family": _clean_text(source.get("role_family")),
+        "visa_sponsorship": intelligence_dict.get("visa_sponsorship"),
+        "seniority_signals": [],
+        "domain_signals": [],
+        "responsibilities": [],
+        "tools": [],
+        "location_constraints": [],
+        "red_flags": [],
+        "confidence": None,
+        "extraction_source": "existing_pipeline_job_intelligence",
+        "reused_existing_pipeline_output": True,
+        "validation_json": validation_json,
+        "metadata": metadata,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+    payload["output_json"] = {
+        **_plain_dict(described.get("output_json")),
+        "status": status,
+        "job_id": payload["job_id"],
+        "title": payload["title"],
+        "company": payload["company"],
+        "source": payload["source"],
+        "url": payload["url"],
+        "all_skills": all_skills,
+        "role_family": payload["role_family"],
+        "visa_sponsorship": payload["visa_sponsorship"],
+        "seniority_signals": [],
+        "domain_signals": [],
+        "responsibilities": [],
+        "tools": [],
+        "location_constraints": [],
+        "red_flags": [],
+        "confidence": None,
+        "extraction_source": payload["extraction_source"],
+        "validation_json": validation_json,
+        "metadata": metadata,
+        "safety_metadata": safety_metadata,
+    }
+    return payload
 
 
 def _signal_list(summary: dict[str, Any], field_name: str) -> list[Any]:

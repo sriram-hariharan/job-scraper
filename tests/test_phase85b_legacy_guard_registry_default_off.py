@@ -1,0 +1,113 @@
+from pathlib import Path
+
+import pytest
+
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    assert_false_safety_metadata_allowed_but_real_mutation_blocked,
+    assert_no_forbidden_runtime_calls_ast,
+    assert_protected_hashes,
+    duplicate_artifact_paths,
+    normalize_changed_path,
+)
+
+
+def test_normalize_changed_path_handles_quotes_whitespace_and_backslashes():
+    assert normalize_changed_path('  "tests\\test_example.py"  ') == "tests/test_example.py"
+    assert (
+        normalize_changed_path(' "\'docs\\phase_example.md\'" ')
+        == "docs/phase_example.md"
+    )
+
+
+def test_duplicate_artifact_paths_detects_numbered_duplicate_artifacts():
+    duplicates = duplicate_artifact_paths(
+        {
+            "tests/test_phase85b.py",
+            '"tests/test_phase85b 2.py"',
+            "docs/phase85b 3.md",
+            "docs/phase85b.md",
+        }
+    )
+
+    assert duplicates == {"tests/test_phase85b 2.py", "docs/phase85b 3.md"}
+
+
+def test_assert_changed_files_allowed_accepts_exact_allowed_files():
+    assert_changed_files_allowed(
+        {"tests/test_phase85b_legacy_guard_registry_default_off.py"},
+        {"tests/test_phase85b_legacy_guard_registry_default_off.py"},
+    )
+
+
+def test_assert_changed_files_allowed_rejects_unexpected_files_with_clear_message():
+    with pytest.raises(AssertionError) as exc:
+        assert_changed_files_allowed(
+            {"src/pipeline/collector.py", "tests/test_allowed.py"},
+            {"tests/test_allowed.py"},
+        )
+
+    assert "src/pipeline/collector.py" in str(exc.value)
+    assert "tests/test_allowed.py" not in str(exc.value)
+
+
+def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):
+    path = tmp_path / "guarded.py"
+    path.write_text("print('safe')\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError) as exc:
+        assert_protected_hashes(tmp_path, {"guarded.py": "0" * 64})
+
+    message = str(exc.value)
+    assert "guarded.py" in message
+    assert "expected" in message
+    assert "got" in message
+
+
+def test_ast_forbidden_call_helper_catches_real_calls_and_imports(tmp_path):
+    path = tmp_path / "unsafe.py"
+    path.write_text(
+        "import subprocess\n"
+        "def run():\n"
+        "    submit_application()\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError) as exc:
+        assert_no_forbidden_runtime_calls_ast(
+            [path],
+            forbidden_calls=("submit_application",),
+            forbidden_imports=("subprocess",),
+        )
+
+    message = str(exc.value)
+    assert "submit_application" in message
+    assert "subprocess" in message
+
+
+def test_ast_forbidden_call_helper_allows_false_safety_metadata(tmp_path):
+    path = tmp_path / "metadata_only.py"
+    path.write_text(
+        "SAFETY = {\n"
+        "    'database_write_performed': False,\n"
+        "    'provider_call_performed': False,\n"
+        "    'run_chat_completion_called': False,\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    assert_false_safety_metadata_allowed_but_real_mutation_blocked(path)
+
+
+def test_ast_forbidden_call_helper_blocks_real_mutation_call(tmp_path):
+    path = tmp_path / "real_mutation.py"
+    path.write_text(
+        "def run():\n"
+        "    database_write()\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError) as exc:
+        assert_false_safety_metadata_allowed_but_real_mutation_blocked(path)
+
+    assert "database_write" in str(exc.value)

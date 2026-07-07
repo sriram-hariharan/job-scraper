@@ -723,4 +723,8 @@ def test_changed_files_are_limited_to_phase46b_and_legacy_guards():
         for path in (ROOT / "tests").glob("test_*.py")
     }
 
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     assert changed <= allowed | legacy_guards

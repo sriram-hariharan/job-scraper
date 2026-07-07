@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from collections import Counter
 from copy import deepcopy
@@ -17,6 +18,7 @@ from src.agents import (
     workflow_planner,
     workflow_registry,
 )
+from src.storage.agent_trace import store as agent_trace_store
 
 
 HARNESS_VERSION = "read_only_adapter_harness_v1"
@@ -26,6 +28,8 @@ ADVISORY_CHAIN_EXECUTION_MODE = "default_off_read_only_advisory_chain"
 ADVISORY_CHAIN_TRACE_BUNDLE_VERSION = "default_off_advisory_chain_trace_bundle_v1"
 ADVISORY_CHAIN_INVOCATION_ADAPTER_VERSION = "explicit_read_only_advisory_chain_invocation_adapter_v1"
 ADVISORY_CHAIN_INVOCATION_MODE = "explicit_read_only_advisory_chain_invocation"
+ADVISORY_CHAIN_TRACE_PERSISTENCE_VERSION = "controlled_advisory_chain_trace_persistence_v1"
+ADVISORY_CHAIN_TRACE_READBACK_COMPATIBILITY_VERSION = "advisory_chain_trace_readback_compatibility_v1"
 PREFLIGHT_JSON_NAME = "read_only_adapter_preflight.json"
 PREFLIGHT_MD_NAME = "read_only_adapter_preflight.md"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +68,20 @@ ADVISORY_CHAIN_FALSE_FLAGS = [
     "scheduler_mutation_allowed",
     "workflow_runner_live_execution_allowed",
 ]
+ADVISORY_CHAIN_READBACK_SAFETY_FLAGS = [
+    "auto_apply_allowed",
+    "ats_submission_allowed",
+    "apply_click_allowed",
+    "queue_mutation_allowed",
+    "ranking_mutation_allowed",
+    "scoring_mutation_allowed",
+    "filtering_mutation_allowed",
+    "tailoring_mutation_allowed",
+    "source_resume_mutation_allowed",
+    "scheduler_mutation_allowed",
+    "live_provider_allowed",
+    "workflow_runner_live_execution_allowed",
+]
 
 
 def _clean_text(value: Any) -> str:
@@ -72,6 +90,10 @@ def _clean_text(value: Any) -> str:
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _truthy(value: Any) -> bool:
+    return _clean_text(value).lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _adapter_specs_by_key(contract: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -684,6 +706,437 @@ def validate_read_only_advisory_chain_invocation(payload: Dict[str, Any]) -> Dic
         "reason_codes": sorted(set(reason_codes)),
         "ordered_agent_keys": list(payload.get("ordered_agent_keys") or []),
     }
+
+
+def _advisory_chain_bundle_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    source = dict(payload or {})
+    if source.get("bundle_type") == "default_off_advisory_chain_trace_ready_bundle":
+        return source
+    if isinstance(source.get("trace_ready_advisory_result"), dict):
+        return dict(source.get("trace_ready_advisory_result") or {})
+    if isinstance(source.get("trace_ready_bundle"), dict):
+        return dict(source.get("trace_ready_bundle") or {})
+    return {}
+
+
+def _advisory_chain_trace_context(
+    *,
+    bundle: Dict[str, Any],
+    env: Dict[str, str],
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+) -> Dict[str, str]:
+    run_snapshot = dict(bundle.get("run_snapshot") or {})
+    owner = (
+        _clean_text(owner_user_id)
+        or _clean_text(bundle.get("owner_user_id"))
+        or _clean_text(run_snapshot.get("owner_user_id"))
+        or _clean_text(env.get("JOB_STACK_OWNER_USER_ID"))
+    )
+    pipeline = (
+        _clean_text(pipeline_run_id)
+        or _clean_text(bundle.get("pipeline_run_id"))
+        or _clean_text(run_snapshot.get("pipeline_run_id"))
+        or _clean_text(env.get("JOB_APP_PIPELINE_RUN_ID"))
+        or _clean_text(env.get("JOB_STACK_USER_PIPELINE_RUN_ID"))
+    )
+    context = (
+        _clean_text(context_id)
+        or _clean_text(env.get("APPLYLENS_AGENT_CONTEXT_ID"))
+        or _clean_text(run_snapshot.get("context_id"))
+    )
+    return {
+        "owner_user_id": owner,
+        "pipeline_run_id": pipeline,
+        "context_id": context,
+    }
+
+
+def _with_advisory_chain_trace_context(
+    *,
+    bundle: Dict[str, Any],
+    context: Dict[str, str],
+) -> Dict[str, Any]:
+    run_snapshot = dict(bundle.get("run_snapshot") or {})
+    run_snapshot.update(context)
+    step_summaries = []
+    for step in list(bundle.get("step_summaries") or []):
+        step_copy = dict(step)
+        step_copy.update(context)
+        step_copy["agent_run_id"] = _clean_text(run_snapshot.get("agent_run_id"))
+        step_summaries.append(step_copy)
+    return {
+        "run_snapshot": run_snapshot,
+        "step_summaries": step_summaries,
+    }
+
+
+def _build_advisory_chain_trace_recording_payload(
+    *,
+    run_snapshot: Dict[str, Any],
+    step_summaries: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    run_payload = agent_trace_store.create_agent_run_postgres_payload(
+        record=run_snapshot,
+        print_only=True,
+        ensure_schema=False,
+    )
+    step_payloads = [
+        agent_trace_store.record_agent_step_postgres_payload(
+            record=step,
+            print_only=True,
+            ensure_schema=False,
+        )
+        for step in step_summaries
+    ]
+    records = [
+        {
+            "record_type": "agent_run",
+            "table": "agent_runs",
+            "sql": run_payload.get("sql", ""),
+            "params": (),
+            "snapshot": dict(run_payload.get("run") or {}),
+        },
+        *[
+            {
+                "record_type": "agent_step",
+                "table": "agent_steps",
+                "sql": payload.get("sql", ""),
+                "params": (),
+                "snapshot": dict(payload.get("step") or {}),
+            }
+            for payload in step_payloads
+        ],
+    ]
+    return {
+        "operation": "build_controlled_advisory_chain_trace_recording_payload",
+        "run_count": 1,
+        "step_count": len(step_payloads),
+        "record_count": len(records),
+        "records": records,
+    }
+
+
+def _execute_advisory_chain_trace_recording(
+    recording_payload: Dict[str, Any],
+    *,
+    cursor: Any | None = None,
+    execute_callback: Any | None = None,
+) -> Dict[str, Any]:
+    executed_operations: List[Dict[str, Any]] = []
+    for record in list(recording_payload.get("records") or []):
+        operation = {
+            "record_type": _clean_text(dict(record).get("record_type")),
+            "table": _clean_text(dict(record).get("table")),
+            "sql": _clean_text(dict(record).get("sql")),
+            "params": tuple(dict(record).get("params") or ()),
+        }
+        if cursor is not None:
+            cursor.execute(operation["sql"], operation["params"])
+        else:
+            execute_callback(deepcopy(operation))
+        executed_operations.append(
+            {
+                "record_type": operation["record_type"],
+                "table": operation["table"],
+            }
+        )
+    return {
+        "operation": "execute_controlled_advisory_chain_trace_recording",
+        "executed_record_count": len(executed_operations),
+        "executed_operations": executed_operations,
+    }
+
+
+def persist_read_only_advisory_chain_trace(
+    *,
+    advisory_result: Dict[str, Any] | None = None,
+    trace_ready_bundle: Dict[str, Any] | None = None,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    env: Dict[str, str] | None = None,
+    cursor: Any | None = None,
+    execute_callback: Any | None = None,
+    trace_module: Any = trace,
+) -> Dict[str, Any]:
+    env_map = env if env is not None else os.environ
+    base_result = {
+        "persistence_version": ADVISORY_CHAIN_TRACE_PERSISTENCE_VERSION,
+        "attempted": False,
+        "recorded": False,
+        "record_count": 0,
+        "run_count": 0,
+        "step_count": 0,
+        "trace_persistence_enabled": False,
+        "trace_store_write_enabled": False,
+        "did_prepare_trace_recording_payload": False,
+        "did_call_trace_execution_helper": False,
+        "did_write_database": False,
+        "did_call_llm": False,
+        "did_call_live_provider": False,
+        "did_change_pipeline": False,
+        "did_change_queue": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_filtering": False,
+        "did_change_tailoring": False,
+        "did_mutate_source_resume": False,
+        "did_execute_scheduler": False,
+        "did_click_apply": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_send_recruiter_message": False,
+        "did_mark_applied": False,
+    }
+    for flag in ADVISORY_CHAIN_FALSE_FLAGS:
+        base_result[flag] = False
+
+    if not _truthy(env_map.get("APPLYLENS_AGENT_TRACE_ENABLED")):
+        return {**base_result, "reason": "trace_disabled"}
+
+    source_payload = dict(trace_ready_bundle or {}) if trace_ready_bundle is not None else dict(advisory_result or {})
+    bundle = _advisory_chain_bundle_from_payload(source_payload)
+    context = _advisory_chain_trace_context(
+        bundle=bundle,
+        env=env_map,
+        owner_user_id=owner_user_id,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+    )
+    if not context["owner_user_id"] or not context["pipeline_run_id"] or not context["context_id"]:
+        return {
+            **base_result,
+            "reason": "missing_trace_context",
+            **context,
+        }
+
+    if not bundle:
+        return {
+            **base_result,
+            "reason": "missing_trace_ready_bundle",
+            **context,
+        }
+
+    if (cursor is None) == (execute_callback is None):
+        return {
+            **base_result,
+            "reason": "write_executor_missing",
+            **context,
+        }
+
+    strict = _truthy(env_map.get("APPLYLENS_AGENT_TRACE_STRICT"))
+    try:
+        shaped = _with_advisory_chain_trace_context(bundle=bundle, context=context)
+        recording_payload = _build_advisory_chain_trace_recording_payload(
+            run_snapshot=shaped["run_snapshot"],
+            step_summaries=shaped["step_summaries"],
+        )
+        execution_result = _execute_advisory_chain_trace_recording(
+            recording_payload,
+            cursor=cursor,
+            execute_callback=execute_callback,
+        )
+        return {
+            **base_result,
+            "attempted": True,
+            "recorded": True,
+            "reason": "",
+            "record_count": int(recording_payload.get("record_count") or 0),
+            "run_count": int(recording_payload.get("run_count") or 0),
+            "step_count": int(recording_payload.get("step_count") or 0),
+            "trace_persistence_enabled": True,
+            "trace_store_write_enabled": True,
+            "did_prepare_trace_recording_payload": True,
+            "did_call_trace_execution_helper": True,
+            "did_write_database": True,
+            "recording_payload": recording_payload,
+            "execution_result": execution_result,
+            **context,
+        }
+    except Exception as exc:
+        if strict:
+            raise
+        return {
+            **base_result,
+            "attempted": True,
+            "recorded": False,
+            "reason": "trace_persistence_failed",
+            "warning": str(exc),
+            **context,
+        }
+
+
+def _advisory_chain_readback_empty_result() -> Dict[str, Any]:
+    safety_flags = {flag: False for flag in ADVISORY_CHAIN_READBACK_SAFETY_FLAGS}
+    return {
+        "compatibility_version": ADVISORY_CHAIN_TRACE_READBACK_COMPATIBILITY_VERSION,
+        "compatible": False,
+        "read_only": True,
+        "db_reads_performed": False,
+        "db_writes_performed": False,
+        "api_changed": False,
+        "ui_changed": False,
+        "pipeline_changed": False,
+        "run_count": 0,
+        "step_count": 0,
+        "expected_agent_order": list(workflow_registry.ORDERED_AGENT_KEYS),
+        "observed_agent_order": [],
+        "missing_agents": list(workflow_registry.ORDERED_AGENT_KEYS),
+        "unexpected_agents": [],
+        "duplicate_agents": [],
+        "reason_codes": [],
+        "safety_flags_summary": safety_flags,
+        "unsafe_safety_flags": [],
+        "did_call_llm": False,
+        "did_call_live_provider": False,
+        "did_call_workflow_runner": False,
+        "did_call_live_workflow_runner": False,
+        "did_change_queue": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_filtering": False,
+        "did_change_tailoring": False,
+        "did_mutate_source_resume": False,
+        "did_execute_scheduler": False,
+        "did_click_apply": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_send_recruiter_message": False,
+        "did_mark_applied": False,
+    }
+
+
+def _advisory_chain_readback_agent_key(value: Any) -> str:
+    text = _clean_text(value).lower()
+    if not text:
+        return ""
+    normalized = (
+        text.replace("-", "_")
+        .replace("/", "_")
+        .replace(" ", "_")
+        .replace("__", "_")
+        .strip("_")
+    )
+    aliases = {
+        "source_health_agent": "source_health",
+        "resume_match_agent": "resume_match",
+        "critic_agent": "critic",
+        "job_prioritization_agent": "job_prioritization",
+        "tailoring_decision_agent": "tailoring_decision",
+        "operator_review_agent": "operator_review",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _advisory_chain_readback_step_key(step: Dict[str, Any]) -> str:
+    for field in ("step_name", "agent_key", "agent_name"):
+        key = _advisory_chain_readback_agent_key(step.get(field))
+        if key:
+            return key
+    return ""
+
+
+def _advisory_chain_readback_steps(agent_runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    steps: List[Dict[str, Any]] = []
+    for run in agent_runs:
+        for step in list(dict(run).get("steps") or []):
+            if isinstance(step, dict):
+                steps.append(dict(step))
+    return steps
+
+
+def _advisory_chain_readback_metadata_values(
+    *,
+    agent_runs: List[Dict[str, Any]],
+    steps: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    values: List[Dict[str, Any]] = []
+    for run in agent_runs:
+        summary = dict(run).get("summary_json")
+        if isinstance(summary, dict):
+            values.append(dict(summary))
+    for step in steps:
+        for field in ("validation_json", "output_json", "input_json"):
+            value = dict(step).get(field)
+            if isinstance(value, dict):
+                values.append(dict(value))
+                safety_flags = value.get("safety_flags")
+                if isinstance(safety_flags, dict):
+                    values.append(dict(safety_flags))
+    return values
+
+
+def build_advisory_chain_trace_readback_compatibility(
+    agent_trace_payload: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Validate an existing generic agent_trace_payload result for advisory-chain readback.
+
+    The helper is intentionally in-memory only. It does not call services,
+    storage, trace persistence, providers, workflow runners, API routes, or UI code.
+    """
+
+    payload = dict(agent_trace_payload or {})
+    result = _advisory_chain_readback_empty_result()
+    reason_codes: List[str] = []
+    expected_order = list(workflow_registry.ORDERED_AGENT_KEYS)
+    agent_runs = [
+        dict(run)
+        for run in list(payload.get("agent_runs") or [])
+        if isinstance(run, dict)
+    ]
+    steps = _advisory_chain_readback_steps(agent_runs)
+    observed_order = [_advisory_chain_readback_step_key(step) for step in steps]
+    observed_order = [key for key in observed_order if key]
+    observed_counts = Counter(observed_order)
+    unexpected_agents = sorted(key for key in observed_counts if key not in expected_order)
+    missing_agents = [key for key in expected_order if observed_counts.get(key, 0) == 0]
+    duplicate_agents = sorted(key for key, count in observed_counts.items() if count > 1)
+
+    if not agent_runs:
+        reason_codes.append("missing_advisory_chain_run")
+    if len(agent_runs) != 1:
+        reason_codes.append("advisory_chain_run_count_not_one")
+    if len(steps) != len(expected_order):
+        reason_codes.append("advisory_chain_step_count_mismatch")
+    if observed_order != expected_order:
+        reason_codes.append("advisory_chain_agent_order_mismatch")
+    if missing_agents:
+        reason_codes.append("advisory_chain_agents_missing")
+    if unexpected_agents:
+        reason_codes.append("advisory_chain_agents_unexpected")
+    if duplicate_agents:
+        reason_codes.append("advisory_chain_agents_duplicated")
+
+    safety_summary = {flag: False for flag in ADVISORY_CHAIN_READBACK_SAFETY_FLAGS}
+    metadata_values = _advisory_chain_readback_metadata_values(
+        agent_runs=agent_runs,
+        steps=steps,
+    )
+    for metadata in metadata_values:
+        for flag in ADVISORY_CHAIN_READBACK_SAFETY_FLAGS:
+            if metadata.get(flag) is True:
+                safety_summary[flag] = True
+    unsafe_flags = sorted(flag for flag, value in safety_summary.items() if value is True)
+    if unsafe_flags:
+        reason_codes.append("advisory_chain_unsafe_safety_flags_present")
+
+    result.update(
+        {
+            "compatible": not reason_codes,
+            "run_count": len(agent_runs),
+            "step_count": len(steps),
+            "observed_agent_order": observed_order,
+            "missing_agents": missing_agents,
+            "unexpected_agents": unexpected_agents,
+            "duplicate_agents": duplicate_agents,
+            "reason_codes": sorted(set(reason_codes)),
+            "safety_flags_summary": safety_summary,
+            "unsafe_safety_flags": unsafe_flags,
+        }
+    )
+    return result
 
 
 def _expected_fixture_status(expected_validation: Dict[str, Any]) -> str:

@@ -743,6 +743,10 @@ def test_changed_files_limited_to_phase49a_surface_and_legacy_guards():
         "generate_tailoring_suggestions.py",
         "application_execution_queue.py",
     )
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     for path in changed:
         assert path in allowed or not any(
             path == root or path.startswith(root) for root in forbidden_roots

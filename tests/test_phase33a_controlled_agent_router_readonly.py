@@ -671,6 +671,10 @@ def test_changed_files_are_limited_to_phase33a_surface_and_legacy_guards():
         "docs/phase32_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback 2.md",
         "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off 2.py",
     }
+    allowed_changed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     for line in result.stdout.splitlines():
         path = line[3:].strip().strip('"')
         if path.startswith("tests/test_") and path.endswith(".py"):

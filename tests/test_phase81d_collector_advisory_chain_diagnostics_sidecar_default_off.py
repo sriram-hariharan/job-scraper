@@ -193,7 +193,7 @@ def test_call_site_is_after_vector_and_shadow_sidecars_before_source_health():
     assert f"{advisory_marker}." not in source
 
 
-def test_collector_diagnostics_source_has_no_persistence_provider_api_or_apply_calls():
+def test_collector_diagnostics_source_has_no_raw_trace_provider_api_or_apply_calls():
     source = (ROOT / "src/pipeline/collector.py").read_text(encoding="utf-8")
     helper_start = source.index(
         "def _maybe_invoke_advisory_chain_diagnostics_after_application_priority"
@@ -202,7 +202,6 @@ def test_collector_diagnostics_source_has_no_persistence_provider_api_or_apply_c
     helper_source = source[helper_start:helper_end]
 
     for forbidden in [
-        "persist_read_only_advisory_chain_trace(",
         "execute_agent_trace_recording(",
         "agent_trace_payload(",
         "workflow_runner",

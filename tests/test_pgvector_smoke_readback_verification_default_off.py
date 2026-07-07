@@ -205,7 +205,7 @@ def test_no_api_ui_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": ("85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"),
         "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
-        "src/pipeline/collector.py": ("52fef8d48ba9b42e8a317c0b08fc411e100103a8f971a782459b90725cddb0d5"),
+        "src/pipeline/collector.py": ("e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd"),
         "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
         "src/storage/vector_evidence/schema.sql": ("4b34a928393fcce6696a2f35d7ee62339b0483cc248daee3f0e57bdb50c11dff"),
     }

@@ -30,6 +30,12 @@ ADVISORY_CHAIN_INVOCATION_ADAPTER_VERSION = "explicit_read_only_advisory_chain_i
 ADVISORY_CHAIN_INVOCATION_MODE = "explicit_read_only_advisory_chain_invocation"
 ADVISORY_CHAIN_TRACE_PERSISTENCE_VERSION = "controlled_advisory_chain_trace_persistence_v1"
 ADVISORY_CHAIN_TRACE_READBACK_COMPATIBILITY_VERSION = "advisory_chain_trace_readback_compatibility_v1"
+ADVISORY_CHAIN_PIPELINE_BOUNDARY_INVOCATION_VERSION = (
+    "controlled_pipeline_boundary_advisory_chain_invocation_v1"
+)
+ADVISORY_CHAIN_PIPELINE_BOUNDARY_INVOCATION_MODE = (
+    "controlled_pipeline_boundary_read_only_advisory_chain_invocation"
+)
 PREFLIGHT_JSON_NAME = "read_only_adapter_preflight.json"
 PREFLIGHT_MD_NAME = "read_only_adapter_preflight.md"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -705,6 +711,170 @@ def validate_read_only_advisory_chain_invocation(payload: Dict[str, Any]) -> Dic
         "validation_status": "failed" if reason_codes else "passed",
         "reason_codes": sorted(set(reason_codes)),
         "ordered_agent_keys": list(payload.get("ordered_agent_keys") or []),
+    }
+
+
+def _pipeline_boundary_env_snapshot(env: Dict[str, str] | None) -> Dict[str, bool]:
+    env_map = env if env is not None else {}
+    return {
+        "APPLYLENS_AGENT_TRACE_ENABLED": _truthy(env_map.get("APPLYLENS_AGENT_TRACE_ENABLED")),
+        "APPLYLENS_AGENT_TRACE_STRICT": _truthy(env_map.get("APPLYLENS_AGENT_TRACE_STRICT")),
+    }
+
+
+def invoke_read_only_advisory_chain_from_pipeline_boundary(
+    *,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    context_id: str = "",
+    input_summary: Dict[str, Any] | None = None,
+    env: Dict[str, str] | None = None,
+    created_at_utc: str = "",
+    chain_run_id: str = "",
+    manifest: Dict[str, Any] | None = None,
+    contract: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    advisory_result = invoke_read_only_advisory_chain(
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        created_at_utc=created_at_utc,
+        chain_run_id=chain_run_id,
+        manifest=manifest,
+        contract=contract,
+    )
+    payload = {
+        "adapter_version": ADVISORY_CHAIN_PIPELINE_BOUNDARY_INVOCATION_VERSION,
+        "invocation_mode": ADVISORY_CHAIN_PIPELINE_BOUNDARY_INVOCATION_MODE,
+        "explicitly_invoked": True,
+        "default_off": True,
+        "read_only": True,
+        "dry_run": True,
+        "diagnostic_only": True,
+        "advisory_only": True,
+        "pipeline_run_id": _clean_text(advisory_result.get("pipeline_run_id")),
+        "owner_user_id": _clean_text(advisory_result.get("owner_user_id")),
+        "context_id": _clean_text(context_id),
+        "chain_run_id": _clean_text(advisory_result.get("chain_run_id")),
+        "pipeline_boundary": {
+            "boundary_name": "controlled_pipeline_boundary_advisory_chain",
+            "collector_wired": False,
+            "production_output_changed": False,
+            "input_summary": deepcopy(input_summary) if isinstance(input_summary, dict) else {},
+            "env_snapshot": _pipeline_boundary_env_snapshot(env),
+        },
+        "advisory_result": advisory_result,
+        "trace_ready_advisory_result": dict(advisory_result.get("trace_ready_advisory_result") or {}),
+        "ordered_agent_keys": list(advisory_result.get("ordered_agent_keys") or []),
+        "summary": {
+            **dict(advisory_result.get("summary") or {}),
+            "did_invoke_pipeline_boundary_helper": True,
+            "collector_wired": False,
+            "production_output_changed": False,
+            "trace_persisted": False,
+            "would_persist_trace": False,
+        },
+        "collector_wired": False,
+        "api_changed": False,
+        "ui_changed": False,
+        "scheduler_changed": False,
+        "production_output_changed": False,
+        "trace_persisted": False,
+        "would_persist_trace": False,
+        "trace_persistence_enabled": False,
+        "trace_store_write_enabled": False,
+        "did_call_trace_execution_helper": False,
+        "did_call_workflow_runner": False,
+        "did_call_live_workflow_runner": False,
+        "did_call_llm": False,
+        "did_call_live_provider": False,
+        "did_change_pipeline": False,
+        "did_change_queue": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_filtering": False,
+        "did_change_tailoring": False,
+        "did_mutate_source_resume": False,
+        "did_execute_scheduler": False,
+        "did_click_apply": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_send_recruiter_message": False,
+        "did_mark_applied": False,
+    }
+    for flag in ADVISORY_CHAIN_FALSE_FLAGS:
+        payload[flag] = False
+    payload["validation"] = validate_pipeline_boundary_advisory_chain_invocation(payload)
+    return payload
+
+
+def validate_pipeline_boundary_advisory_chain_invocation(payload: Dict[str, Any]) -> Dict[str, Any]:
+    reason_codes: List[str] = []
+    if _clean_text(payload.get("invocation_mode")) != ADVISORY_CHAIN_PIPELINE_BOUNDARY_INVOCATION_MODE:
+        reason_codes.append("invocation_mode_not_pipeline_boundary_read_only")
+    if payload.get("explicitly_invoked") is not True:
+        reason_codes.append("explicitly_invoked_not_true")
+    if payload.get("default_off") is not True:
+        reason_codes.append("default_off_not_true")
+    if payload.get("read_only") is not True:
+        reason_codes.append("read_only_not_true")
+    if payload.get("diagnostic_only") is not True:
+        reason_codes.append("diagnostic_only_not_true")
+
+    for flag in ADVISORY_CHAIN_FALSE_FLAGS:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+    for flag in [
+        "collector_wired",
+        "api_changed",
+        "ui_changed",
+        "scheduler_changed",
+        "production_output_changed",
+        "trace_persisted",
+        "would_persist_trace",
+        "trace_persistence_enabled",
+        "trace_store_write_enabled",
+        "did_call_trace_execution_helper",
+        "did_call_workflow_runner",
+        "did_call_live_workflow_runner",
+        "did_call_llm",
+        "did_call_live_provider",
+        "did_change_pipeline",
+        "did_change_queue",
+        "did_change_scoring",
+        "did_change_ranking",
+        "did_change_filtering",
+        "did_change_tailoring",
+        "did_mutate_source_resume",
+        "did_execute_scheduler",
+        "did_click_apply",
+        "did_execute_application",
+        "did_submit_application",
+        "did_send_recruiter_message",
+        "did_mark_applied",
+    ]:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+
+    advisory_result = dict(payload.get("advisory_result") or {})
+    advisory_validation = dict(advisory_result.get("validation") or {})
+    if _clean_text(advisory_validation.get("validation_status")) != "passed":
+        reason_codes.append("advisory_invocation_validation_not_passed")
+    if advisory_result.get("trace_store_write_enabled") is not False:
+        reason_codes.append("advisory_result_trace_store_write_enabled")
+    if advisory_result.get("did_change_pipeline") is not False:
+        reason_codes.append("advisory_result_did_change_pipeline")
+
+    boundary = dict(payload.get("pipeline_boundary") or {})
+    if boundary.get("collector_wired") is not False:
+        reason_codes.append("pipeline_boundary_collector_wired_not_false")
+    if boundary.get("production_output_changed") is not False:
+        reason_codes.append("pipeline_boundary_production_output_changed_not_false")
+
+    return {
+        "validation_status": "failed" if reason_codes else "passed",
+        "reason_codes": sorted(set(reason_codes)),
+        "ordered_agent_keys": list(payload.get("ordered_agent_keys") or []),
+        "context_id": _clean_text(payload.get("context_id")),
     }
 
 

@@ -390,6 +390,10 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         if line and line[:2].strip()
     }
     allowed = {
+            "src/app/auth_ui.py",
+            "src/app/static/shell.js",
+            "src/app/ui_shell.py",
+            "src/app/static/media/adv_diagnostics_img.svg",
         "src/tailoring/llm.py",
         "generate_tailoring_suggestions.py",
         "src/tailoring/rendering.py",

@@ -363,24 +363,24 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
     ]
     normal_actions = html[
         html.index("scan-workspace-review-main-actions"):
-        html.index('id="scanWorkspaceAdvancedDiagnostics"')
+        html.index("scan-workspace-toolbar-context")
     ]
-    diagnostics_start = html.rindex(
-        "<details", 0, html.index('id="scanWorkspaceAdvancedDiagnostics"')
-    )
     diagnostics = html[
-        diagnostics_start:
-        html.index('<div class="scan-workspace-toolbar-context">')
+        html.index('id="scanWorkspaceAdvancedDiagnostics"'):
+        html.index('@router.get("/advanced-diagnostics"')
     ]
     tabs = html[
         html.index('id="scanWorkspaceTabRow"'):
         html.index('</section>', html.index('id="scanWorkspaceControlsShell"'))
     ]
 
-    assert "<summary>Advanced diagnostics</summary>" in diagnostics
+    assert "<h2>Advanced diagnostics</h2>" in diagnostics
     assert "These do not apply to jobs automatically." in diagnostics
-    assert "<details" in diagnostics
-    assert "open>" not in diagnostics
+    assert "Selecting diagnostics does not run them." in diagnostics
+    assert "Diagnostics never apply to jobs automatically." in diagnostics
+    assert "Run selected diagnostics" in diagnostics
+    assert "Execution is not enabled yet. Selections are for admin review only." in diagnostics
+    assert "<details" not in diagnostics
 
     for label in ("Undo", "Redo", "Accept All", "Export", "Compare", "Continue"):
         assert label in normal_actions
@@ -520,7 +520,7 @@ def test_phase78b_compare_and_continue_disable_when_no_changes():
 
     actions = html[
         html.index("scan-workspace-review-main-actions"):
-        html.index('id="scanWorkspaceAdvancedDiagnostics"')
+        html.index("scan-workspace-toolbar-context")
     ]
 
     assert 'id="scanWorkspaceCompareBtn"' in actions

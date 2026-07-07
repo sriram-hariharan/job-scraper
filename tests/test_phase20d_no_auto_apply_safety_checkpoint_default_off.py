@@ -676,6 +676,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "docs/phase20_provider_call_readiness_ui_readback.md",
+                "phase79b legacy guard marker",
                 "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
                 "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
             )

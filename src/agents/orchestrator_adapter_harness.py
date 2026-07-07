@@ -29,6 +29,7 @@ ADVISORY_CHAIN_TRACE_BUNDLE_VERSION = "default_off_advisory_chain_trace_bundle_v
 ADVISORY_CHAIN_INVOCATION_ADAPTER_VERSION = "explicit_read_only_advisory_chain_invocation_adapter_v1"
 ADVISORY_CHAIN_INVOCATION_MODE = "explicit_read_only_advisory_chain_invocation"
 ADVISORY_CHAIN_TRACE_PERSISTENCE_VERSION = "controlled_advisory_chain_trace_persistence_v1"
+ADVISORY_CHAIN_TRACE_READBACK_COMPATIBILITY_VERSION = "advisory_chain_trace_readback_compatibility_v1"
 PREFLIGHT_JSON_NAME = "read_only_adapter_preflight.json"
 PREFLIGHT_MD_NAME = "read_only_adapter_preflight.md"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -65,6 +66,20 @@ ADVISORY_CHAIN_FALSE_FLAGS = [
     "llm_provider_call_allowed",
     "live_provider_allowed",
     "scheduler_mutation_allowed",
+    "workflow_runner_live_execution_allowed",
+]
+ADVISORY_CHAIN_READBACK_SAFETY_FLAGS = [
+    "auto_apply_allowed",
+    "ats_submission_allowed",
+    "apply_click_allowed",
+    "queue_mutation_allowed",
+    "ranking_mutation_allowed",
+    "scoring_mutation_allowed",
+    "filtering_mutation_allowed",
+    "tailoring_mutation_allowed",
+    "source_resume_mutation_allowed",
+    "scheduler_mutation_allowed",
+    "live_provider_allowed",
     "workflow_runner_live_execution_allowed",
 ]
 
@@ -951,6 +966,177 @@ def persist_read_only_advisory_chain_trace(
             "warning": str(exc),
             **context,
         }
+
+
+def _advisory_chain_readback_empty_result() -> Dict[str, Any]:
+    safety_flags = {flag: False for flag in ADVISORY_CHAIN_READBACK_SAFETY_FLAGS}
+    return {
+        "compatibility_version": ADVISORY_CHAIN_TRACE_READBACK_COMPATIBILITY_VERSION,
+        "compatible": False,
+        "read_only": True,
+        "db_reads_performed": False,
+        "db_writes_performed": False,
+        "api_changed": False,
+        "ui_changed": False,
+        "pipeline_changed": False,
+        "run_count": 0,
+        "step_count": 0,
+        "expected_agent_order": list(workflow_registry.ORDERED_AGENT_KEYS),
+        "observed_agent_order": [],
+        "missing_agents": list(workflow_registry.ORDERED_AGENT_KEYS),
+        "unexpected_agents": [],
+        "duplicate_agents": [],
+        "reason_codes": [],
+        "safety_flags_summary": safety_flags,
+        "unsafe_safety_flags": [],
+        "did_call_llm": False,
+        "did_call_live_provider": False,
+        "did_call_workflow_runner": False,
+        "did_call_live_workflow_runner": False,
+        "did_change_queue": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_filtering": False,
+        "did_change_tailoring": False,
+        "did_mutate_source_resume": False,
+        "did_execute_scheduler": False,
+        "did_click_apply": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_send_recruiter_message": False,
+        "did_mark_applied": False,
+    }
+
+
+def _advisory_chain_readback_agent_key(value: Any) -> str:
+    text = _clean_text(value).lower()
+    if not text:
+        return ""
+    normalized = (
+        text.replace("-", "_")
+        .replace("/", "_")
+        .replace(" ", "_")
+        .replace("__", "_")
+        .strip("_")
+    )
+    aliases = {
+        "source_health_agent": "source_health",
+        "resume_match_agent": "resume_match",
+        "critic_agent": "critic",
+        "job_prioritization_agent": "job_prioritization",
+        "tailoring_decision_agent": "tailoring_decision",
+        "operator_review_agent": "operator_review",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _advisory_chain_readback_step_key(step: Dict[str, Any]) -> str:
+    for field in ("step_name", "agent_key", "agent_name"):
+        key = _advisory_chain_readback_agent_key(step.get(field))
+        if key:
+            return key
+    return ""
+
+
+def _advisory_chain_readback_steps(agent_runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    steps: List[Dict[str, Any]] = []
+    for run in agent_runs:
+        for step in list(dict(run).get("steps") or []):
+            if isinstance(step, dict):
+                steps.append(dict(step))
+    return steps
+
+
+def _advisory_chain_readback_metadata_values(
+    *,
+    agent_runs: List[Dict[str, Any]],
+    steps: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    values: List[Dict[str, Any]] = []
+    for run in agent_runs:
+        summary = dict(run).get("summary_json")
+        if isinstance(summary, dict):
+            values.append(dict(summary))
+    for step in steps:
+        for field in ("validation_json", "output_json", "input_json"):
+            value = dict(step).get(field)
+            if isinstance(value, dict):
+                values.append(dict(value))
+                safety_flags = value.get("safety_flags")
+                if isinstance(safety_flags, dict):
+                    values.append(dict(safety_flags))
+    return values
+
+
+def build_advisory_chain_trace_readback_compatibility(
+    agent_trace_payload: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Validate an existing generic agent_trace_payload result for advisory-chain readback.
+
+    The helper is intentionally in-memory only. It does not call services,
+    storage, trace persistence, providers, workflow runners, API routes, or UI code.
+    """
+
+    payload = dict(agent_trace_payload or {})
+    result = _advisory_chain_readback_empty_result()
+    reason_codes: List[str] = []
+    expected_order = list(workflow_registry.ORDERED_AGENT_KEYS)
+    agent_runs = [
+        dict(run)
+        for run in list(payload.get("agent_runs") or [])
+        if isinstance(run, dict)
+    ]
+    steps = _advisory_chain_readback_steps(agent_runs)
+    observed_order = [_advisory_chain_readback_step_key(step) for step in steps]
+    observed_order = [key for key in observed_order if key]
+    observed_counts = Counter(observed_order)
+    unexpected_agents = sorted(key for key in observed_counts if key not in expected_order)
+    missing_agents = [key for key in expected_order if observed_counts.get(key, 0) == 0]
+    duplicate_agents = sorted(key for key, count in observed_counts.items() if count > 1)
+
+    if not agent_runs:
+        reason_codes.append("missing_advisory_chain_run")
+    if len(agent_runs) != 1:
+        reason_codes.append("advisory_chain_run_count_not_one")
+    if len(steps) != len(expected_order):
+        reason_codes.append("advisory_chain_step_count_mismatch")
+    if observed_order != expected_order:
+        reason_codes.append("advisory_chain_agent_order_mismatch")
+    if missing_agents:
+        reason_codes.append("advisory_chain_agents_missing")
+    if unexpected_agents:
+        reason_codes.append("advisory_chain_agents_unexpected")
+    if duplicate_agents:
+        reason_codes.append("advisory_chain_agents_duplicated")
+
+    safety_summary = {flag: False for flag in ADVISORY_CHAIN_READBACK_SAFETY_FLAGS}
+    metadata_values = _advisory_chain_readback_metadata_values(
+        agent_runs=agent_runs,
+        steps=steps,
+    )
+    for metadata in metadata_values:
+        for flag in ADVISORY_CHAIN_READBACK_SAFETY_FLAGS:
+            if metadata.get(flag) is True:
+                safety_summary[flag] = True
+    unsafe_flags = sorted(flag for flag, value in safety_summary.items() if value is True)
+    if unsafe_flags:
+        reason_codes.append("advisory_chain_unsafe_safety_flags_present")
+
+    result.update(
+        {
+            "compatible": not reason_codes,
+            "run_count": len(agent_runs),
+            "step_count": len(steps),
+            "observed_agent_order": observed_order,
+            "missing_agents": missing_agents,
+            "unexpected_agents": unexpected_agents,
+            "duplicate_agents": duplicate_agents,
+            "reason_codes": sorted(set(reason_codes)),
+            "safety_flags_summary": safety_summary,
+            "unsafe_safety_flags": unsafe_flags,
+        }
+    )
+    return result
 
 
 def _expected_fixture_status(expected_validation: Dict[str, Any]) -> str:

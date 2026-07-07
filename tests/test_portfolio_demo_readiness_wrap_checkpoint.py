@@ -623,6 +623,10 @@ ALLOWED_CHANGED |= {
     "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
 }
 
+ALLOWED_CHANGED |= {
+    "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
+}
+
 
 def test_portfolio_demo_readiness_doc_exists_and_has_required_terms():
     assert DOC.exists()

@@ -806,4 +806,7 @@ def test_phase19g_changes_only_approved_files():
         "src/agents/orchestrator_adapter_harness.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
+    allowed |= {
+        "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
+    }
     assert changed <= allowed | legacy_guards

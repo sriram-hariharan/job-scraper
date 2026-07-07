@@ -153,6 +153,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase79b_relevance_prefilter_live_trace_wrapper_default_off.py",
         "src/agents/orchestrator_adapter_harness.py",
         "tests/test_phase79d_default_off_advisory_agent_chain_harness.py",
+        "tests/test_phase79e_trace_ready_advisory_chain_bundle_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",

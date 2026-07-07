@@ -17,8 +17,10 @@ UNSAFE_FLAGS = [
     "ranking_mutation_allowed",
     "filtering_mutation_allowed",
     "tailoring_generation_allowed",
+    "tailoring_mutation_allowed",
     "source_resume_mutation_allowed",
     "llm_provider_call_allowed",
+    "live_provider_allowed",
     "scheduler_mutation_allowed",
     "workflow_runner_live_execution_allowed",
 ]

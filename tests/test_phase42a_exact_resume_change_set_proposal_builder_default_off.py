@@ -701,6 +701,7 @@ def test_changed_files_are_limited_to_phase42a_and_legacy_guards():
             "src/pipeline/collector.py",
             "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
+            "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }

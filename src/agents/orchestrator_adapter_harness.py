@@ -19,6 +19,8 @@ from src.agents import (
 
 HARNESS_VERSION = "read_only_adapter_harness_v1"
 EXECUTION_MODE = "read_only_preflight"
+ADVISORY_CHAIN_HARNESS_VERSION = "default_off_advisory_agent_chain_harness_v1"
+ADVISORY_CHAIN_EXECUTION_MODE = "default_off_read_only_advisory_chain"
 PREFLIGHT_JSON_NAME = "read_only_adapter_preflight.json"
 PREFLIGHT_MD_NAME = "read_only_adapter_preflight.md"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -114,6 +116,233 @@ def _reason_codes_for_result(spec: Dict[str, Any], presence: Dict[str, Dict[str,
     if presence and any(not bool(item.get("exists")) for item in presence.values()):
         reason_codes.append("missing_required_artifacts")
     return sorted(set(reason_codes))
+
+
+def _advisory_chain_agent_status(*, enabled: bool, spec: Dict[str, Any]) -> str:
+    if (
+        bool(spec.get("mutates_production_decisions"))
+        or bool(spec.get("llm_call_expected"))
+        or _clean_text(spec.get("allowed_execution_mode")) in orchestrator_adapters.LIVE_EXECUTION_MODES
+    ):
+        return "blocked_non_read_only"
+    if enabled and _clean_text(spec.get("adapter_status")) == "ready_for_read_only_adapter":
+        return "ready_read_only_advisory"
+    if enabled:
+        return "contract_only_not_executable"
+    return "disabled_default_off"
+
+
+def _build_advisory_chain_agent(
+    *,
+    index: int,
+    agent: Dict[str, Any],
+    spec: Dict[str, Any],
+    enabled: bool,
+) -> Dict[str, Any]:
+    agent_key = _clean_text(agent.get("agent_key"))
+    return {
+        "chain_index": index,
+        "agent_key": agent_key,
+        "agent_name": _clean_text(agent.get("agent_name")),
+        "owner_module": _clean_text(spec.get("owner_module") or agent.get("owner_module")),
+        "adapter_status": _clean_text(spec.get("adapter_status")),
+        "chain_status": _advisory_chain_agent_status(enabled=enabled, spec=spec),
+        "advisory_only": bool(agent.get("advisory_only")),
+        "read_only": True,
+        "diagnostic_only": bool(agent.get("diagnostic_only")),
+        "execution_enabled": False,
+        "did_execute": False,
+        "mutation_allowed": False,
+        "auto_apply_allowed": False,
+        "ats_submission_allowed": False,
+        "application_submission_allowed": False,
+        "apply_click_allowed": False,
+        "queue_mutation_allowed": False,
+        "scoring_mutation_allowed": False,
+        "ranking_mutation_allowed": False,
+        "filtering_mutation_allowed": False,
+        "tailoring_generation_allowed": False,
+        "source_resume_mutation_allowed": False,
+        "llm_provider_call_allowed": False,
+        "scheduler_mutation_allowed": False,
+        "mutates_production_decisions": bool(spec.get("mutates_production_decisions")),
+        "llm_call_expected": bool(spec.get("llm_call_expected")),
+        "allowed_execution_mode": _clean_text(spec.get("allowed_execution_mode")),
+        "trace_supported": bool(spec.get("trace_supported")),
+        "reason_codes": sorted(
+            {
+                "default_off_advisory_chain",
+                "agent_execution_disabled",
+                "production_mutation_disabled",
+                "auto_apply_disabled",
+                "ats_submission_disabled",
+                *[
+                    _clean_text(item)
+                    for item in list(spec.get("reason_codes") or [])
+                    if _clean_text(item)
+                ],
+            }
+        ),
+    }
+
+
+def build_default_off_advisory_agent_chain_harness(
+    *,
+    enabled: bool = False,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    created_at_utc: str = "",
+    manifest: Dict[str, Any] | None = None,
+    contract: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    workflow_manifest = deepcopy(manifest) if manifest is not None else workflow_registry.get_agentic_workflow_manifest()
+    adapter_contract = deepcopy(contract) if contract is not None else orchestrator_adapters.get_orchestrator_adapter_contract()
+    specs_by_key = _adapter_specs_by_key(adapter_contract)
+    agents_by_key = dict(workflow_manifest.get("agents") or {})
+    ordered_keys = list(workflow_manifest.get("ordered_agent_keys") or [])
+    chain_agents = [
+        _build_advisory_chain_agent(
+            index=index,
+            agent=dict(agents_by_key.get(agent_key) or {}),
+            spec=specs_by_key.get(_clean_text(agent_key), {}),
+            enabled=enabled,
+        )
+        for index, agent_key in enumerate(ordered_keys, start=1)
+    ]
+    status_counts = Counter(agent.get("chain_status", "") for agent in chain_agents)
+    payload = {
+        "harness_version": ADVISORY_CHAIN_HARNESS_VERSION,
+        "execution_mode": ADVISORY_CHAIN_EXECUTION_MODE,
+        "workflow_name": _clean_text(workflow_manifest.get("workflow_name")),
+        "workflow_version": _clean_text(workflow_manifest.get("workflow_version")),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "created_at_utc": _clean_text(created_at_utc) or _utc_now_iso(),
+        "default_off": True,
+        "enabled": bool(enabled),
+        "explicit_invocation_required": True,
+        "read_only": True,
+        "advisory_only": True,
+        "allow_agent_execution": False,
+        "did_execute": False,
+        "did_execute_chain": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "mutation_allowed": False,
+        "auto_apply_allowed": False,
+        "ats_submission_allowed": False,
+        "application_submission_allowed": False,
+        "apply_click_allowed": False,
+        "queue_mutation_allowed": False,
+        "scoring_mutation_allowed": False,
+        "ranking_mutation_allowed": False,
+        "filtering_mutation_allowed": False,
+        "tailoring_generation_allowed": False,
+        "source_resume_mutation_allowed": False,
+        "llm_provider_call_allowed": False,
+        "scheduler_mutation_allowed": False,
+        "workflow_runner_live_execution_allowed": False,
+        "ordered_agent_keys": ordered_keys,
+        "chain_agents": chain_agents,
+        "summary": {
+            "agent_count": len(chain_agents),
+            "execution_enabled_count": sum(1 for agent in chain_agents if agent.get("execution_enabled")),
+            "did_execute_count": sum(1 for agent in chain_agents if agent.get("did_execute")),
+            "mutation_allowed_count": sum(1 for agent in chain_agents if agent.get("mutation_allowed")),
+            "production_mutating_agent_count": sum(
+                1 for agent in chain_agents if agent.get("mutates_production_decisions")
+            ),
+            "status_counts": dict(sorted(status_counts.items())),
+        },
+        "safety_guarantees": [
+            "Default-off advisory chain artifact only.",
+            "No agents execute in this harness.",
+            "No automatic job application submission, ATS submission, or apply clicking is allowed.",
+            "No queue, ranking, scoring, filtering, tailoring, scheduler, or source resume mutation is allowed.",
+            "workflow_runner.py remains dry-run only.",
+        ],
+    }
+    payload["validation"] = validate_default_off_advisory_agent_chain_harness(
+        payload,
+        manifest=workflow_manifest,
+    )
+    return payload
+
+
+def validate_default_off_advisory_agent_chain_harness(
+    payload: Dict[str, Any],
+    *,
+    manifest: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    workflow_manifest = deepcopy(manifest) if manifest is not None else workflow_registry.get_agentic_workflow_manifest()
+    expected_order = list(workflow_manifest.get("ordered_agent_keys") or [])
+    chain_agents = list(payload.get("chain_agents") or [])
+    actual_order = [_clean_text(agent.get("agent_key")) for agent in chain_agents]
+    reason_codes: List[str] = []
+
+    if _clean_text(payload.get("execution_mode")) != ADVISORY_CHAIN_EXECUTION_MODE:
+        reason_codes.append("execution_mode_not_default_off_read_only_advisory_chain")
+    if payload.get("default_off") is not True:
+        reason_codes.append("default_off_not_true")
+    if payload.get("explicit_invocation_required") is not True:
+        reason_codes.append("explicit_invocation_required_not_true")
+    if actual_order != expected_order:
+        reason_codes.append("agent_order_mismatch")
+
+    false_flags = [
+        "allow_agent_execution",
+        "did_execute",
+        "did_execute_chain",
+        "did_mutate_production",
+        "did_write_db",
+        "mutation_allowed",
+        "auto_apply_allowed",
+        "ats_submission_allowed",
+        "application_submission_allowed",
+        "apply_click_allowed",
+        "queue_mutation_allowed",
+        "scoring_mutation_allowed",
+        "ranking_mutation_allowed",
+        "filtering_mutation_allowed",
+        "tailoring_generation_allowed",
+        "source_resume_mutation_allowed",
+        "llm_provider_call_allowed",
+        "scheduler_mutation_allowed",
+        "workflow_runner_live_execution_allowed",
+    ]
+    for flag in false_flags:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+
+    for agent in chain_agents:
+        agent_key = _clean_text(agent.get("agent_key")) or "<unknown>"
+        for flag in false_flags:
+            if flag in agent and agent.get(flag) is not False:
+                reason_codes.append(f"{agent_key}:{flag}_not_false")
+        if agent.get("advisory_only") is not True:
+            reason_codes.append(f"{agent_key}:advisory_only_not_true")
+        if agent.get("read_only") is not True:
+            reason_codes.append(f"{agent_key}:read_only_not_true")
+        if agent.get("execution_enabled") is not False:
+            reason_codes.append(f"{agent_key}:execution_enabled")
+        if agent.get("did_execute") is not False:
+            reason_codes.append(f"{agent_key}:did_execute")
+        if agent.get("mutation_allowed") is not False:
+            reason_codes.append(f"{agent_key}:mutation_allowed")
+        if agent.get("mutates_production_decisions"):
+            reason_codes.append(f"{agent_key}:mutates_production_decisions")
+        if agent.get("llm_call_expected"):
+            reason_codes.append(f"{agent_key}:llm_call_expected")
+        if _clean_text(agent.get("allowed_execution_mode")) in orchestrator_adapters.LIVE_EXECUTION_MODES:
+            reason_codes.append(f"{agent_key}:live_execution_mode")
+
+    return {
+        "validation_status": "failed" if reason_codes else "passed",
+        "reason_codes": sorted(set(reason_codes)),
+        "expected_order": expected_order,
+        "actual_order": actual_order,
+        "agent_count": len(chain_agents),
+    }
 
 
 def _expected_fixture_status(expected_validation: Dict[str, Any]) -> str:

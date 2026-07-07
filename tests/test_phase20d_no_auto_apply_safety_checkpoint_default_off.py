@@ -144,6 +144,8 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "src/pipeline/collector.py",
         "tests/test_phase79b_relevance_prefilter_live_trace_wrapper_default_off.py",
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase79d_default_off_advisory_agent_chain_harness.py",
         "docs/phase22_core_agent_evidence_materialization_ui_readback.md",
         "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
         "docs/phase22_core_agent_evidence_materialization_release_checkpoint.md",
@@ -824,6 +826,11 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/pipeline/collector.py",
     }
     if set(changed_runtime_files) == phase79b_relevance_prefilter_trace_bridge_files:
+        return
+    phase79d_default_off_advisory_chain_harness_files = {
+        ROOT / "src/agents/orchestrator_adapter_harness.py",
+    }
+    if set(changed_runtime_files) == phase79d_default_off_advisory_chain_harness_files:
         return
 
     assert changed_runtime_files in (

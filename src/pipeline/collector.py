@@ -1,5 +1,6 @@
 from collections import Counter
 from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 import asyncio
 import json
@@ -67,6 +68,145 @@ def _pipeline_preferences_from_env() -> Dict[str, List[str]]:
 
 def _truthy_env_value(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _clean_trace_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _agent_trace_context_from_env(
+    *,
+    env: Dict[str, str] | None = None,
+    context_prefix: str,
+) -> Dict[str, str]:
+    env_map = env if env is not None else os.environ
+    pipeline_run_id = (
+        _clean_trace_text(env_map.get("JOB_APP_PIPELINE_RUN_ID"))
+        or _clean_trace_text(env_map.get("JOB_STACK_USER_PIPELINE_RUN_ID"))
+    )
+    owner_user_id = _clean_trace_text(env_map.get("JOB_STACK_OWNER_USER_ID"))
+    context_id = _clean_trace_text(env_map.get("APPLYLENS_AGENT_CONTEXT_ID"))
+    if not context_id and pipeline_run_id:
+        context_id = f"{context_prefix}:{pipeline_run_id}"
+    return {
+        "pipeline_run_id": pipeline_run_id,
+        "owner_user_id": owner_user_id,
+        "context_id": context_id,
+    }
+
+
+def _record_relevance_prefilter_agent_trace(
+    *,
+    prefilter_summary: Dict[str, Any],
+    env: Dict[str, str] | None = None,
+    trace_module: Any | None = None,
+) -> Dict[str, Any]:
+    env_map = env if env is not None else os.environ
+    if not _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_ENABLED")):
+        return {"attempted": False, "reason": "trace_disabled"}
+
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="relevance_prefilter",
+    )
+    if not context["owner_user_id"] or not context["pipeline_run_id"]:
+        return {"attempted": False, "reason": "missing_trace_context", **context}
+
+    try:
+        from src.agents import relevance_prefilter
+        from src.agents import trace as default_trace_module
+
+        active_trace_module = trace_module or default_trace_module
+        started_at = _utc_now_iso()
+        payload = relevance_prefilter.describe_relevance_prefilter_result(
+            prefilter_summary
+        )
+        run_summary = {
+            "agent_name": payload["agent_name"],
+            "agent_version": payload["agent_version"],
+            "pipeline_run_id": context["pipeline_run_id"],
+            "status": payload["status"],
+            "input_count": payload["input_count"],
+            "kept_count": payload["kept_count"],
+            "dropped_count": payload["dropped_count"],
+            "reason_counts": payload["reason_counts"],
+            "live_trace_bridge": True,
+            "source_stage": _clean_trace_text(
+                prefilter_summary.get("source_stage") or "embedding_prefilter"
+            ),
+            "preserves_stage_output": True,
+        }
+        run_payload = active_trace_module.create_agent_run(
+            record={
+                "owner_user_id": context["owner_user_id"],
+                "pipeline_run_id": context["pipeline_run_id"],
+                "context_id": context["context_id"],
+                "status": "running",
+                "started_at": started_at,
+                "summary_json": run_summary,
+            }
+        )
+        agent_run_id = _clean_trace_text((run_payload.get("run") or {}).get("agent_run_id"))
+        if not agent_run_id:
+            raise RuntimeError("Agent trace run did not return agent_run_id.")
+
+        step_payload = active_trace_module.record_agent_step(
+            record={
+                "agent_run_id": agent_run_id,
+                "owner_user_id": context["owner_user_id"],
+                "pipeline_run_id": context["pipeline_run_id"],
+                "context_id": context["context_id"],
+                "agent_name": relevance_prefilter.AGENT_NAME,
+                "agent_version": payload["agent_version"],
+                "input_json": {
+                    "input_count": payload["input_count"],
+                    "role_family": payload["role_family"],
+                    "seniority": payload["seniority"],
+                    "location_policy": payload["location_policy"],
+                    "source_stage": run_summary["source_stage"],
+                },
+                "status": "running",
+                "started_at": started_at,
+                "model_provider": "deterministic",
+                "model_name": "relevance_prefilter_trace_wrapper",
+            }
+        )
+        agent_step_id = _clean_trace_text(
+            (step_payload.get("step") or {}).get("agent_step_id")
+        )
+        if not agent_step_id:
+            raise RuntimeError("Agent trace step did not return agent_step_id.")
+
+        completed_at = _utc_now_iso()
+        active_trace_module.complete_agent_step(
+            agent_step_id=agent_step_id,
+            owner_user_id=context["owner_user_id"],
+            output_json=payload["output_json"],
+            validation_json=payload["validation_json"],
+            completed_at=completed_at,
+        )
+        active_trace_module.complete_agent_run(
+            agent_run_id=agent_run_id,
+            owner_user_id=context["owner_user_id"],
+            summary_json=run_summary,
+            completed_at=completed_at,
+        )
+        return {
+            "attempted": True,
+            "recorded": True,
+            "agent_run_id": agent_run_id,
+            "agent_step_id": agent_step_id,
+            "summary": run_summary,
+            "validation": payload["validation_json"],
+        }
+    except Exception as exc:
+        if _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_STRICT")):
+            raise
+        return {"attempted": True, "recorded": False, "warning": str(exc)}
 
 
 def _record_source_health_agent_trace(
@@ -766,6 +906,25 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
             logger.info(f"AI candidate reduction rate: {reduction_pct}%")
 
         complete_stage("embedding_prefilter", counts={"prefilter_jobs": len(evaluable_jobs)})
+
+    _record_relevance_prefilter_agent_trace(
+        prefilter_summary={
+            "input_count": prefilter_input_count,
+            "kept_count": prefilter_output_count,
+            "dropped_count": prefilter_input_count - prefilter_output_count,
+            "reason_counts": {
+                "embedding_prefilter_kept": prefilter_output_count,
+                "embedding_prefilter_dropped": max(
+                    prefilter_input_count - prefilter_output_count,
+                    0,
+                ),
+            },
+            "role_family": ",".join(selected_role_families),
+            "seniority": ",".join(pipeline_preferences["target_seniority"]),
+            "location_policy": ",".join(pipeline_preferences["preferred_locations"]),
+            "source_stage": "embedding_prefilter",
+        }
+    )
 
     section("AI JOB EVALUATION", logger)
     start_stage("ai_evaluation", f"Evaluating {len(evaluable_jobs)} jobs with AI")

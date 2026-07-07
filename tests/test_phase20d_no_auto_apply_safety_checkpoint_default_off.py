@@ -4,9 +4,13 @@
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
 # phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
-from hashlib import sha256
 from pathlib import Path
-import subprocess
+
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    assert_protected_hashes,
+    get_changed_files,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,15 +60,7 @@ def _text(path: Path) -> str:
 
 
 def _changed_files() -> set[str]:
-    tracked = subprocess.check_output(
-        ["git", "diff", "--name-only"], cwd=ROOT, text=True
-    ).splitlines()
-    untracked = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=ROOT,
-        text=True,
-    ).splitlines()
-    return set(tracked + untracked)
+    return get_changed_files(ROOT)
 
 
 def test_policy_and_checkpoint_docs_exist():
@@ -113,8 +109,7 @@ def test_docs_confirm_phase20a_through_c_performed_no_live_actions():
 
 
 def test_protected_runtime_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
+    assert_protected_hashes(ROOT, PROTECTED_HASHES)
 
 
 def test_phase20d_changes_only_docs_tests_and_legacy_guards():
@@ -698,7 +693,11 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         )
     }
 
-    assert changed <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        changed,
+        allowed | legacy_guards,
+        legacy_guard_profiles=("phase85b_registry",),
+    )
 
 
 def test_no_changed_runtime_file_introduces_forbidden_automation_markers():

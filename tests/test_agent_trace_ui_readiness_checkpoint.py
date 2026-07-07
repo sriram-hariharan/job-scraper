@@ -4,8 +4,9 @@
 # phase26b legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
 # phase23f legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
 # phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
-from hashlib import sha256
 from pathlib import Path
+
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 DOC_PATH = Path("docs/agent_trace_ui_readiness_checkpoint.md")
@@ -32,10 +33,6 @@ PROTECTED_FILE_HASHES = {
 
 def _doc_text() -> str:
     return DOC_PATH.read_text()
-
-
-def _file_hash(path: str) -> str:
-    return sha256(Path(path).read_bytes()).hexdigest()
 
 
 def test_agent_trace_ui_readiness_doc_exists_and_has_required_sections():
@@ -149,10 +146,10 @@ def test_protected_runtime_files_match_checkpoint_hashes_without_git():
         "src/app/static/agentic_review.js",
     }
 
-    for path, expected_hash in PROTECTED_FILE_HASHES.items():
-        assert Path(path).exists()
-        if later_readonly_api_step_exists and path in later_readonly_api_paths:
-            continue
-        if later_readonly_ui_step_exists and path in later_readonly_ui_paths:
-            continue
-        assert _file_hash(path) == expected_hash
+    expected_hashes = {
+        path: expected_hash
+        for path, expected_hash in PROTECTED_FILE_HASHES.items()
+        if not (later_readonly_api_step_exists and path in later_readonly_api_paths)
+        and not (later_readonly_ui_step_exists and path in later_readonly_ui_paths)
+    }
+    assert_protected_hashes(Path("."), expected_hashes)

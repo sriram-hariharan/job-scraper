@@ -1,5 +1,6 @@
-from hashlib import sha256
 from pathlib import Path
+
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 REVIEW_JS_PATH = Path("src/app/static/agentic_review.js")
@@ -229,6 +230,4 @@ def test_trace_polish_doc_contains_required_contract():
 
 
 def test_protected_backend_storage_runtime_files_are_unchanged():
-    for path, expected_hash in PROTECTED_FILE_HASHES.items():
-        assert Path(path).exists(), path
-        assert sha256(Path(path).read_bytes()).hexdigest() == expected_hash, path
+    assert_protected_hashes(Path("."), PROTECTED_FILE_HASHES)

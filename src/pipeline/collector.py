@@ -21,6 +21,9 @@ THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
 ADVISORY_CHAIN_DIAGNOSTICS_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_ADVISORY_CHAIN_DIAGNOSTICS_ENABLED"
 )
+ADVISORY_CHAIN_TRACE_PERSISTENCE_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_ADVISORY_CHAIN_TRACE_PERSISTENCE_ENABLED"
+)
 
 
 def _is_user_pipeline_mode() -> bool:
@@ -527,6 +530,9 @@ def _maybe_invoke_advisory_chain_diagnostics_after_application_priority(
     enabled: bool | None = None,
     env: Dict[str, str] | None = None,
     advisory_chain_helper: Any = None,
+    persistence_helper: Any = None,
+    persistence_cursor: Any | None = None,
+    persistence_execute_callback: Any | None = None,
 ) -> Dict[str, Any] | None:
     env_map = env if env is not None else os.environ
     hook_enabled = (
@@ -565,6 +571,48 @@ def _maybe_invoke_advisory_chain_diagnostics_after_application_priority(
             input_summary=_advisory_chain_diagnostics_input_summary(scored_jobs),
             env={str(key): str(value) for key, value in dict(env_map).items()},
         )
+        persistence_result = {
+            "attempted": False,
+            "recorded": False,
+            "reason": "trace_persistence_disabled",
+            "trace_persistence_enabled": False,
+            "trace_store_write_enabled": False,
+            "did_call_trace_execution_helper": False,
+            "did_write_database": False,
+            **context,
+        }
+        if _truthy_env_value(env_map.get(ADVISORY_CHAIN_TRACE_PERSISTENCE_FLAG)):
+            if not _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_ENABLED")):
+                persistence_result["reason"] = "trace_disabled"
+            elif (persistence_cursor is None) == (persistence_execute_callback is None):
+                persistence_result["reason"] = "write_executor_missing"
+            else:
+                try:
+                    if persistence_helper is None:
+                        from src.agents.orchestrator_adapter_harness import (
+                            persist_read_only_advisory_chain_trace,
+                        )
+
+                        persistence_helper = persist_read_only_advisory_chain_trace
+                    persistence_result = persistence_helper(
+                        advisory_result=payload,
+                        owner_user_id=context["owner_user_id"],
+                        pipeline_run_id=context["pipeline_run_id"],
+                        context_id=context["context_id"],
+                        env={str(key): str(value) for key, value in dict(env_map).items()},
+                        cursor=persistence_cursor,
+                        execute_callback=persistence_execute_callback,
+                    )
+                except Exception as exc:
+                    if _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_STRICT")):
+                        raise
+                    persistence_result = {
+                        **persistence_result,
+                        "attempted": True,
+                        "reason": "trace_persistence_failed",
+                        "warning": str(exc),
+                    }
+        payload["advisory_chain_trace_persistence"] = persistence_result
         logger.info(
             "Advisory chain diagnostics evaluated after application_priority: %s",
             payload.get("validation", {}).get("validation_status", "unknown")
@@ -573,6 +621,8 @@ def _maybe_invoke_advisory_chain_diagnostics_after_application_priority(
         )
         return payload
     except Exception as exc:
+        if _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_STRICT")):
+            raise
         logger.warning(
             "Advisory chain diagnostics failed non-blocking after "
             "application_priority: %s",

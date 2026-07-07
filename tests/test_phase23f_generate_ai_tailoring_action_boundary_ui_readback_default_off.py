@@ -34,7 +34,7 @@ PROTECTED_HASHES = {
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
     "src/agents/core_agent_evidence_materialization_preview.py": "d1b0862cf0355192a45a7b45fbeaa622d72e16b7c5234c71bea75aea90db9110",
-    "src/pipeline/collector.py": "52fef8d48ba9b42e8a317c0b08fc411e100103a8f971a782459b90725cddb0d5",
+    "src/pipeline/collector.py": "e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
@@ -853,5 +853,7 @@ def test_phase23f_changes_only_static_docs_tests_and_legacy_guards():
         "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
+        "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
+        "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
     assert changed <= allowed | legacy_guards

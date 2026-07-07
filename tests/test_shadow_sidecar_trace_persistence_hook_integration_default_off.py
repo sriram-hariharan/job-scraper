@@ -210,7 +210,8 @@ def test_persistence_output_is_not_used_for_mutations_or_deterministic_decisions
 
     collector_source = Path("src/pipeline/collector.py").read_text(encoding="utf-8")
     assert "return scored_jobs" in collector_source
-    assert "trace_persistence" not in collector_source
+    assert "shadow_sidecar_trace_persistence" not in collector_source
+    assert "build_shadow_sidecar_trace_persistence_payload" not in collector_source
 
 
 def test_storage_schema_files_are_not_changed_by_hook_integration():

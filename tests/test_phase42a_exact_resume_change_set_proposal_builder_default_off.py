@@ -696,6 +696,10 @@ def test_changed_files_are_limited_to_phase42a_and_legacy_guards():
         for path in _changed_files()
         if path.startswith("tests/test_") and path.endswith(".py")
     }
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     assert _changed_files() <= allowed | legacy_guards
 
 

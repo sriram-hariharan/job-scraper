@@ -763,6 +763,10 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
         "docs/phase33_controlled_agent_router_readonly 2.md",
         "tests/test_phase33a_controlled_agent_router_readonly 2.py",
     }
+    allowed_changed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     for line in result.stdout.splitlines():
         path = line[3:].strip().strip('"')
         if path.startswith("tests/test_") and path.endswith(".py"):

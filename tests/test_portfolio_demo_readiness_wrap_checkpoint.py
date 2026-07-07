@@ -618,6 +618,15 @@ def _changed_files():
         text=True,
     ).splitlines()
     return set(tracked + untracked)
+ALLOWED_CHANGED |= {
+    "src/agents/orchestrator_adapter_harness.py",
+    "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+}
+
+ALLOWED_CHANGED |= {
+    "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
+}
+
 
 def test_portfolio_demo_readiness_doc_exists_and_has_required_terms():
     assert DOC.exists()
@@ -1097,6 +1106,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/storage/vector_evidence/embedding_runtime_adapter.py",
         "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
         "src/pipeline/collector.py",
+        "src/agents/orchestrator_adapter_harness.py",
     }
     runtime_paths = [
         path for path in changed

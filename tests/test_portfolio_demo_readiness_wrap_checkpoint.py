@@ -628,6 +628,7 @@ ALLOWED_CHANGED |= {
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
         "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase82b_collector_advisory_chain_trace_persistence_default_off.py",
+            "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
 }
 
 

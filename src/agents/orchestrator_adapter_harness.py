@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections import Counter
@@ -12,6 +13,7 @@ from typing import Any, Dict, List
 from src.agents import (
     fixture_validator,
     orchestrator_adapters,
+    trace,
     workflow_planner,
     workflow_registry,
 )
@@ -19,6 +21,11 @@ from src.agents import (
 
 HARNESS_VERSION = "read_only_adapter_harness_v1"
 EXECUTION_MODE = "read_only_preflight"
+ADVISORY_CHAIN_HARNESS_VERSION = "default_off_advisory_agent_chain_harness_v1"
+ADVISORY_CHAIN_EXECUTION_MODE = "default_off_read_only_advisory_chain"
+ADVISORY_CHAIN_TRACE_BUNDLE_VERSION = "default_off_advisory_chain_trace_bundle_v1"
+ADVISORY_CHAIN_INVOCATION_ADAPTER_VERSION = "explicit_read_only_advisory_chain_invocation_adapter_v1"
+ADVISORY_CHAIN_INVOCATION_MODE = "explicit_read_only_advisory_chain_invocation"
 PREFLIGHT_JSON_NAME = "read_only_adapter_preflight.json"
 PREFLIGHT_MD_NAME = "read_only_adapter_preflight.md"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +41,29 @@ APPROVED_FIXTURE_FILENAMES = tuple(
         ]
     )
 )
+ADVISORY_CHAIN_FALSE_FLAGS = [
+    "allow_agent_execution",
+    "did_execute",
+    "did_execute_chain",
+    "did_mutate_production",
+    "did_write_db",
+    "mutation_allowed",
+    "auto_apply_allowed",
+    "ats_submission_allowed",
+    "application_submission_allowed",
+    "apply_click_allowed",
+    "queue_mutation_allowed",
+    "scoring_mutation_allowed",
+    "ranking_mutation_allowed",
+    "filtering_mutation_allowed",
+    "tailoring_generation_allowed",
+    "tailoring_mutation_allowed",
+    "source_resume_mutation_allowed",
+    "llm_provider_call_allowed",
+    "live_provider_allowed",
+    "scheduler_mutation_allowed",
+    "workflow_runner_live_execution_allowed",
+]
 
 
 def _clean_text(value: Any) -> str:
@@ -114,6 +144,546 @@ def _reason_codes_for_result(spec: Dict[str, Any], presence: Dict[str, Dict[str,
     if presence and any(not bool(item.get("exists")) for item in presence.values()):
         reason_codes.append("missing_required_artifacts")
     return sorted(set(reason_codes))
+
+
+def _advisory_chain_agent_status(*, enabled: bool, spec: Dict[str, Any]) -> str:
+    if (
+        bool(spec.get("mutates_production_decisions"))
+        or bool(spec.get("llm_call_expected"))
+        or _clean_text(spec.get("allowed_execution_mode")) in orchestrator_adapters.LIVE_EXECUTION_MODES
+    ):
+        return "blocked_non_read_only"
+    if enabled and _clean_text(spec.get("adapter_status")) == "ready_for_read_only_adapter":
+        return "ready_read_only_advisory"
+    if enabled:
+        return "contract_only_not_executable"
+    return "disabled_default_off"
+
+
+def _build_advisory_chain_agent(
+    *,
+    index: int,
+    agent: Dict[str, Any],
+    spec: Dict[str, Any],
+    enabled: bool,
+) -> Dict[str, Any]:
+    agent_key = _clean_text(agent.get("agent_key"))
+    return {
+        "chain_index": index,
+        "agent_key": agent_key,
+        "agent_name": _clean_text(agent.get("agent_name")),
+        "agent_version": _clean_text(agent.get("agent_version")),
+        "owner_module": _clean_text(spec.get("owner_module") or agent.get("owner_module")),
+        "adapter_status": _clean_text(spec.get("adapter_status")),
+        "chain_status": _advisory_chain_agent_status(enabled=enabled, spec=spec),
+        "advisory_only": bool(agent.get("advisory_only")),
+        "read_only": True,
+        "diagnostic_only": bool(agent.get("diagnostic_only")),
+        "execution_enabled": False,
+        "did_execute": False,
+        "mutation_allowed": False,
+        "auto_apply_allowed": False,
+        "ats_submission_allowed": False,
+        "application_submission_allowed": False,
+        "apply_click_allowed": False,
+        "queue_mutation_allowed": False,
+        "scoring_mutation_allowed": False,
+        "ranking_mutation_allowed": False,
+        "filtering_mutation_allowed": False,
+        "tailoring_generation_allowed": False,
+        "tailoring_mutation_allowed": False,
+        "source_resume_mutation_allowed": False,
+        "llm_provider_call_allowed": False,
+        "live_provider_allowed": False,
+        "scheduler_mutation_allowed": False,
+        "mutates_production_decisions": bool(spec.get("mutates_production_decisions")),
+        "llm_call_expected": bool(spec.get("llm_call_expected")),
+        "allowed_execution_mode": _clean_text(spec.get("allowed_execution_mode")),
+        "trace_supported": bool(spec.get("trace_supported")),
+        "reason_codes": sorted(
+            {
+                "default_off_advisory_chain",
+                "agent_execution_disabled",
+                "production_mutation_disabled",
+                "auto_apply_disabled",
+                "ats_submission_disabled",
+                *[
+                    _clean_text(item)
+                    for item in list(spec.get("reason_codes") or [])
+                    if _clean_text(item)
+                ],
+            }
+        ),
+    }
+
+
+def _deterministic_advisory_chain_run_id(
+    *,
+    workflow_manifest: Dict[str, Any],
+    ordered_keys: List[str],
+    pipeline_run_id: str,
+    owner_user_id: str,
+) -> str:
+    seed = {
+        "bundle_version": ADVISORY_CHAIN_TRACE_BUNDLE_VERSION,
+        "workflow_name": _clean_text(workflow_manifest.get("workflow_name")),
+        "workflow_version": _clean_text(workflow_manifest.get("workflow_version")),
+        "ordered_agent_keys": list(ordered_keys),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+    }
+    digest = hashlib.sha256(json.dumps(seed, sort_keys=True).encode("utf-8")).hexdigest()
+    return f"advisory_chain_{digest[:16]}"
+
+
+def _advisory_chain_safety_summary() -> Dict[str, Any]:
+    return {
+        "trace_persistence_enabled": False,
+        "trace_store_write_enabled": False,
+        "did_prepare_trace_recording_payload": False,
+        "did_call_trace_execution_helper": False,
+        "did_read_database": False,
+        "did_write_database": False,
+        "did_create_agent_run": False,
+        "did_create_agent_step": False,
+        "did_update_agent_run": False,
+        "did_update_agent_step": False,
+        "did_call_llm": False,
+        "did_call_live_provider": False,
+        "did_change_pipeline": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_filtering": False,
+        "did_change_queue": False,
+        "did_change_tailoring": False,
+        "did_mutate_source_resume": False,
+        "did_execute_scheduler": False,
+        "did_click_apply": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_send_recruiter_message": False,
+        "did_mark_applied": False,
+    }
+
+
+def _build_advisory_chain_trace_ready_bundle(
+    *,
+    chain_run_id: str,
+    chain_agents: List[Dict[str, Any]],
+    workflow_manifest: Dict[str, Any],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    created_at_utc: str,
+    validation: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    run_snapshot = {
+        "agent_run_id": chain_run_id,
+        "owner_user_id": _clean_text(owner_user_id) or "read_only_advisory_chain",
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": "default_off_advisory_chain",
+        "status": "skipped_default_off",
+        "started_at": _clean_text(created_at_utc),
+        "completed_at": _clean_text(created_at_utc),
+        "summary_json": {
+            "workflow_name": _clean_text(workflow_manifest.get("workflow_name")),
+            "workflow_version": _clean_text(workflow_manifest.get("workflow_version")),
+            "agent_count": len(chain_agents),
+            "did_execute": False,
+            "mutation_allowed": False,
+            "auto_apply_allowed": False,
+        },
+        "error": "",
+    }
+    step_summaries = [
+        {
+            "agent_step_id": f"{chain_run_id}:{int(agent.get('chain_index') or 0):02d}:{_clean_text(agent.get('agent_key'))}",
+            "agent_run_id": chain_run_id,
+            "owner_user_id": _clean_text(owner_user_id) or "read_only_advisory_chain",
+            "pipeline_run_id": _clean_text(pipeline_run_id),
+            "context_id": "default_off_advisory_chain",
+            "agent_name": _clean_text(agent.get("agent_name")),
+            "agent_version": _clean_text(agent.get("agent_version")),
+            "step_name": _clean_text(agent.get("agent_key")),
+            "step_index": int(agent.get("chain_index") or 0),
+            "status": _clean_text(agent.get("chain_status")) or "disabled_default_off",
+            "started_at": _clean_text(created_at_utc),
+            "completed_at": _clean_text(created_at_utc),
+            "input_json": {
+                "adapter_status": _clean_text(agent.get("adapter_status")),
+                "allowed_execution_mode": _clean_text(agent.get("allowed_execution_mode")),
+            },
+            "output_json": {
+                "advisory_only": bool(agent.get("advisory_only")),
+                "read_only": bool(agent.get("read_only")),
+                "did_execute": False,
+                "mutation_allowed": False,
+            },
+            "validation_json": {
+                "reason_codes": list(agent.get("reason_codes") or []),
+                "safety_flags": {
+                    flag: bool(agent.get(flag))
+                    for flag in ADVISORY_CHAIN_FALSE_FLAGS
+                    if flag in agent
+                },
+            },
+            "latency_ms": 0,
+            "model_provider": "deterministic",
+            "model_name": "default_off_advisory_chain_harness",
+            "token_usage_json": {},
+            "cost_json": {},
+            "error": "",
+            "did_execute": False,
+            "mutation_allowed": False,
+        }
+        for agent in chain_agents
+    ]
+    stage_trace_bundle = trace.build_stage_trace_bundle_payload(
+        run_snapshot=run_snapshot,
+        step_snapshots=step_summaries,
+        expected_stage_order=list(workflow_manifest.get("ordered_agent_keys") or []),
+    )
+    return {
+        "bundle_version": ADVISORY_CHAIN_TRACE_BUNDLE_VERSION,
+        "bundle_type": "default_off_advisory_chain_trace_ready_bundle",
+        "trace_ready": True,
+        "trace_persistence_enabled": False,
+        "trace_store_write_enabled": False,
+        "chain_run_id": chain_run_id,
+        "agent_run_id": chain_run_id,
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "ordered_agent_keys": list(workflow_manifest.get("ordered_agent_keys") or []),
+        "run_snapshot": run_snapshot,
+        "step_summaries": step_summaries,
+        "stage_trace_bundle": stage_trace_bundle,
+        "trace_summary": dict(stage_trace_bundle.get("trace_summary") or {}),
+        "validation_safety_summary": {
+            "harness_validation_status": _clean_text(dict(validation or {}).get("validation_status")),
+            "harness_reason_codes": list(dict(validation or {}).get("reason_codes") or []),
+            **_advisory_chain_safety_summary(),
+        },
+        "safety_metadata": _advisory_chain_safety_summary(),
+    }
+
+
+def build_default_off_advisory_agent_chain_harness(
+    *,
+    enabled: bool = False,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    created_at_utc: str = "",
+    chain_run_id: str = "",
+    manifest: Dict[str, Any] | None = None,
+    contract: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    workflow_manifest = deepcopy(manifest) if manifest is not None else workflow_registry.get_agentic_workflow_manifest()
+    adapter_contract = deepcopy(contract) if contract is not None else orchestrator_adapters.get_orchestrator_adapter_contract()
+    specs_by_key = _adapter_specs_by_key(adapter_contract)
+    agents_by_key = dict(workflow_manifest.get("agents") or {})
+    ordered_keys = list(workflow_manifest.get("ordered_agent_keys") or [])
+    chain_agents = [
+        _build_advisory_chain_agent(
+            index=index,
+            agent=dict(agents_by_key.get(agent_key) or {}),
+            spec=specs_by_key.get(_clean_text(agent_key), {}),
+            enabled=enabled,
+        )
+        for index, agent_key in enumerate(ordered_keys, start=1)
+    ]
+    status_counts = Counter(agent.get("chain_status", "") for agent in chain_agents)
+    observed_at = _clean_text(created_at_utc) or _utc_now_iso()
+    resolved_chain_run_id = _clean_text(chain_run_id) or _deterministic_advisory_chain_run_id(
+        workflow_manifest=workflow_manifest,
+        ordered_keys=ordered_keys,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+    )
+    payload = {
+        "harness_version": ADVISORY_CHAIN_HARNESS_VERSION,
+        "execution_mode": ADVISORY_CHAIN_EXECUTION_MODE,
+        "workflow_name": _clean_text(workflow_manifest.get("workflow_name")),
+        "workflow_version": _clean_text(workflow_manifest.get("workflow_version")),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "created_at_utc": observed_at,
+        "chain_run_id": resolved_chain_run_id,
+        "default_off": True,
+        "enabled": bool(enabled),
+        "explicit_invocation_required": True,
+        "read_only": True,
+        "advisory_only": True,
+        "allow_agent_execution": False,
+        "did_execute": False,
+        "did_execute_chain": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "mutation_allowed": False,
+        "auto_apply_allowed": False,
+        "ats_submission_allowed": False,
+        "application_submission_allowed": False,
+        "apply_click_allowed": False,
+        "queue_mutation_allowed": False,
+        "scoring_mutation_allowed": False,
+        "ranking_mutation_allowed": False,
+        "filtering_mutation_allowed": False,
+        "tailoring_generation_allowed": False,
+        "tailoring_mutation_allowed": False,
+        "source_resume_mutation_allowed": False,
+        "llm_provider_call_allowed": False,
+        "live_provider_allowed": False,
+        "scheduler_mutation_allowed": False,
+        "workflow_runner_live_execution_allowed": False,
+        "ordered_agent_keys": ordered_keys,
+        "chain_agents": chain_agents,
+        "summary": {
+            "agent_count": len(chain_agents),
+            "execution_enabled_count": sum(1 for agent in chain_agents if agent.get("execution_enabled")),
+            "did_execute_count": sum(1 for agent in chain_agents if agent.get("did_execute")),
+            "mutation_allowed_count": sum(1 for agent in chain_agents if agent.get("mutation_allowed")),
+            "production_mutating_agent_count": sum(
+                1 for agent in chain_agents if agent.get("mutates_production_decisions")
+            ),
+            "status_counts": dict(sorted(status_counts.items())),
+        },
+        "safety_guarantees": [
+            "Default-off advisory chain artifact only.",
+            "No agents execute in this harness.",
+            "No automatic job application submission, ATS submission, or apply clicking is allowed.",
+            "No queue, ranking, scoring, filtering, tailoring, scheduler, or source resume mutation is allowed.",
+            "workflow_runner.py remains dry-run only.",
+        ],
+    }
+    payload["validation"] = validate_default_off_advisory_agent_chain_harness(
+        payload,
+        manifest=workflow_manifest,
+    )
+    payload["trace_ready_bundle"] = _build_advisory_chain_trace_ready_bundle(
+        chain_run_id=resolved_chain_run_id,
+        chain_agents=chain_agents,
+        workflow_manifest=workflow_manifest,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        created_at_utc=observed_at,
+        validation=payload["validation"],
+    )
+    payload["validation"] = validate_default_off_advisory_agent_chain_harness(
+        payload,
+        manifest=workflow_manifest,
+    )
+    return payload
+
+
+def validate_default_off_advisory_agent_chain_harness(
+    payload: Dict[str, Any],
+    *,
+    manifest: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    workflow_manifest = deepcopy(manifest) if manifest is not None else workflow_registry.get_agentic_workflow_manifest()
+    expected_order = list(workflow_manifest.get("ordered_agent_keys") or [])
+    chain_agents = list(payload.get("chain_agents") or [])
+    actual_order = [_clean_text(agent.get("agent_key")) for agent in chain_agents]
+    reason_codes: List[str] = []
+
+    if _clean_text(payload.get("execution_mode")) != ADVISORY_CHAIN_EXECUTION_MODE:
+        reason_codes.append("execution_mode_not_default_off_read_only_advisory_chain")
+    if payload.get("default_off") is not True:
+        reason_codes.append("default_off_not_true")
+    if payload.get("explicit_invocation_required") is not True:
+        reason_codes.append("explicit_invocation_required_not_true")
+    if actual_order != expected_order:
+        reason_codes.append("agent_order_mismatch")
+
+    false_flags = list(ADVISORY_CHAIN_FALSE_FLAGS)
+    for flag in false_flags:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+
+    for agent in chain_agents:
+        agent_key = _clean_text(agent.get("agent_key")) or "<unknown>"
+        for flag in false_flags:
+            if flag in agent and agent.get(flag) is not False:
+                reason_codes.append(f"{agent_key}:{flag}_not_false")
+        if agent.get("advisory_only") is not True:
+            reason_codes.append(f"{agent_key}:advisory_only_not_true")
+        if agent.get("read_only") is not True:
+            reason_codes.append(f"{agent_key}:read_only_not_true")
+        if agent.get("execution_enabled") is not False:
+            reason_codes.append(f"{agent_key}:execution_enabled")
+        if agent.get("did_execute") is not False:
+            reason_codes.append(f"{agent_key}:did_execute")
+        if agent.get("mutation_allowed") is not False:
+            reason_codes.append(f"{agent_key}:mutation_allowed")
+        if agent.get("mutates_production_decisions"):
+            reason_codes.append(f"{agent_key}:mutates_production_decisions")
+        if agent.get("llm_call_expected"):
+            reason_codes.append(f"{agent_key}:llm_call_expected")
+        if _clean_text(agent.get("allowed_execution_mode")) in orchestrator_adapters.LIVE_EXECUTION_MODES:
+            reason_codes.append(f"{agent_key}:live_execution_mode")
+
+    bundle = payload.get("trace_ready_bundle") if isinstance(payload, dict) else {}
+    if bundle:
+        if dict(bundle).get("trace_ready") is not True:
+            reason_codes.append("trace_ready_bundle_not_trace_ready")
+        if dict(bundle).get("trace_persistence_enabled") is not False:
+            reason_codes.append("trace_persistence_enabled_not_false")
+        if dict(bundle).get("trace_store_write_enabled") is not False:
+            reason_codes.append("trace_store_write_enabled_not_false")
+        if list(dict(bundle).get("ordered_agent_keys") or []) != expected_order:
+            reason_codes.append("trace_ready_bundle_order_mismatch")
+        step_summaries = list(dict(bundle).get("step_summaries") or [])
+        if [_clean_text(step.get("step_name")) for step in step_summaries] != expected_order:
+            reason_codes.append("trace_ready_bundle_step_order_mismatch")
+        safety = dict(dict(bundle).get("validation_safety_summary") or {})
+        for safety_flag, value in safety.items():
+            if safety_flag.startswith("did_") and value is not False:
+                reason_codes.append(f"trace_ready_bundle:{safety_flag}_not_false")
+        trace_summary = dict(dict(bundle).get("trace_summary") or {})
+        if trace_summary and trace_summary.get("all_required_fields_present") is not True:
+            reason_codes.append("trace_ready_bundle_missing_required_trace_fields")
+
+    return {
+        "validation_status": "failed" if reason_codes else "passed",
+        "reason_codes": sorted(set(reason_codes)),
+        "expected_order": expected_order,
+        "actual_order": actual_order,
+        "agent_count": len(chain_agents),
+    }
+
+
+def invoke_read_only_advisory_chain(
+    *,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    created_at_utc: str = "",
+    chain_run_id: str = "",
+    manifest: Dict[str, Any] | None = None,
+    contract: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    harness_result = build_default_off_advisory_agent_chain_harness(
+        enabled=True,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        created_at_utc=created_at_utc,
+        chain_run_id=chain_run_id,
+        manifest=manifest,
+        contract=contract,
+    )
+    trace_ready_result = dict(harness_result.get("trace_ready_bundle") or {})
+    payload = {
+        "adapter_version": ADVISORY_CHAIN_INVOCATION_ADAPTER_VERSION,
+        "invocation_mode": ADVISORY_CHAIN_INVOCATION_MODE,
+        "explicitly_invoked": True,
+        "default_off": True,
+        "read_only": True,
+        "dry_run": True,
+        "advisory_only": True,
+        "pipeline_run_id": _clean_text(harness_result.get("pipeline_run_id")),
+        "owner_user_id": _clean_text(harness_result.get("owner_user_id")),
+        "chain_run_id": _clean_text(harness_result.get("chain_run_id")),
+        "ordered_agent_keys": list(harness_result.get("ordered_agent_keys") or []),
+        "trace_ready_advisory_result": trace_ready_result,
+        "harness_result": harness_result,
+        "summary": {
+            "agent_count": int(dict(harness_result.get("summary") or {}).get("agent_count") or 0),
+            "trace_ready": bool(trace_ready_result.get("trace_ready")),
+            "step_count": int(dict(trace_ready_result.get("trace_summary") or {}).get("step_count") or 0),
+            "did_invoke_adapter": True,
+            "did_execute_agent_count": int(dict(harness_result.get("summary") or {}).get("did_execute_count") or 0),
+            "mutation_allowed_count": int(dict(harness_result.get("summary") or {}).get("mutation_allowed_count") or 0),
+            "production_mutating_agent_count": int(
+                dict(harness_result.get("summary") or {}).get("production_mutating_agent_count") or 0
+            ),
+        },
+        "trace_persistence_enabled": False,
+        "trace_store_write_enabled": False,
+        "did_call_trace_execution_helper": False,
+        "did_call_workflow_runner": False,
+        "did_call_live_workflow_runner": False,
+        "did_call_llm": False,
+        "did_call_live_provider": False,
+        "did_change_pipeline": False,
+        "did_change_queue": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_filtering": False,
+        "did_change_tailoring": False,
+        "did_mutate_source_resume": False,
+        "did_execute_scheduler": False,
+        "did_click_apply": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_send_recruiter_message": False,
+        "did_mark_applied": False,
+    }
+    for flag in ADVISORY_CHAIN_FALSE_FLAGS:
+        payload[flag] = False
+    payload["validation"] = validate_read_only_advisory_chain_invocation(payload)
+    return payload
+
+
+def validate_read_only_advisory_chain_invocation(payload: Dict[str, Any]) -> Dict[str, Any]:
+    reason_codes: List[str] = []
+    if _clean_text(payload.get("invocation_mode")) != ADVISORY_CHAIN_INVOCATION_MODE:
+        reason_codes.append("invocation_mode_not_explicit_read_only")
+    if payload.get("explicitly_invoked") is not True:
+        reason_codes.append("explicitly_invoked_not_true")
+    if payload.get("default_off") is not True:
+        reason_codes.append("default_off_not_true")
+    if payload.get("read_only") is not True:
+        reason_codes.append("read_only_not_true")
+    if payload.get("dry_run") is not True:
+        reason_codes.append("dry_run_not_true")
+
+    for flag in ADVISORY_CHAIN_FALSE_FLAGS:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+    for flag in [
+        "trace_persistence_enabled",
+        "trace_store_write_enabled",
+        "did_call_trace_execution_helper",
+        "did_call_workflow_runner",
+        "did_call_live_workflow_runner",
+        "did_call_llm",
+        "did_call_live_provider",
+        "did_change_pipeline",
+        "did_change_queue",
+        "did_change_scoring",
+        "did_change_ranking",
+        "did_change_filtering",
+        "did_change_tailoring",
+        "did_mutate_source_resume",
+        "did_execute_scheduler",
+        "did_click_apply",
+        "did_execute_application",
+        "did_submit_application",
+        "did_send_recruiter_message",
+        "did_mark_applied",
+    ]:
+        if payload.get(flag) is not False:
+            reason_codes.append(f"{flag}_not_false")
+
+    harness_result = dict(payload.get("harness_result") or {})
+    harness_validation = dict(harness_result.get("validation") or {})
+    if _clean_text(harness_validation.get("validation_status")) != "passed":
+        reason_codes.append("harness_validation_not_passed")
+
+    trace_ready_result = dict(payload.get("trace_ready_advisory_result") or {})
+    if trace_ready_result.get("trace_ready") is not True:
+        reason_codes.append("trace_ready_advisory_result_not_trace_ready")
+    if trace_ready_result.get("trace_store_write_enabled") is not False:
+        reason_codes.append("trace_ready_advisory_result_trace_store_write_enabled")
+    if list(trace_ready_result.get("ordered_agent_keys") or []) != list(payload.get("ordered_agent_keys") or []):
+        reason_codes.append("trace_ready_advisory_result_order_mismatch")
+    if int(dict(payload.get("summary") or {}).get("did_execute_agent_count") or 0) != 0:
+        reason_codes.append("did_execute_agent_count_nonzero")
+    if int(dict(payload.get("summary") or {}).get("mutation_allowed_count") or 0) != 0:
+        reason_codes.append("mutation_allowed_count_nonzero")
+
+    return {
+        "validation_status": "failed" if reason_codes else "passed",
+        "reason_codes": sorted(set(reason_codes)),
+        "ordered_agent_keys": list(payload.get("ordered_agent_keys") or []),
+    }
 
 
 def _expected_fixture_status(expected_validation: Dict[str, Any]) -> str:

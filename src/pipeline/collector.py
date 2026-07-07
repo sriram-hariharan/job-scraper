@@ -18,6 +18,9 @@ logger = get_logger("collector")
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
 )
+ADVISORY_CHAIN_DIAGNOSTICS_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_ADVISORY_CHAIN_DIAGNOSTICS_ENABLED"
+)
 
 
 def _is_user_pipeline_mode() -> bool:
@@ -500,6 +503,88 @@ def _maybe_collect_vector_evidence_after_application_priority(
             exc,
         )
         return None
+
+
+def _advisory_chain_diagnostics_input_summary(
+    scored_jobs: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    first_job = dict(scored_jobs[0]) if scored_jobs else {}
+    return {
+        "stage_name": "post_application_priority",
+        "source_stage": "application_priority",
+        "scored_job_count": len(scored_jobs),
+        "first_job": {
+            "id": _clean_trace_text(first_job.get("id") or first_job.get("job_id")),
+            "title": _clean_trace_text(first_job.get("title")),
+            "company": _clean_trace_text(first_job.get("company")),
+        },
+    }
+
+
+def _maybe_invoke_advisory_chain_diagnostics_after_application_priority(
+    scored_jobs: List[Dict[str, Any]],
+    *,
+    enabled: bool | None = None,
+    env: Dict[str, str] | None = None,
+    advisory_chain_helper: Any = None,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    hook_enabled = (
+        _truthy_env_value(env_map.get(ADVISORY_CHAIN_DIAGNOSTICS_FLAG))
+        if enabled is None
+        else enabled is True
+    )
+    if not hook_enabled:
+        return None
+
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="advisory_chain",
+    )
+    if not context["owner_user_id"] or not context["pipeline_run_id"]:
+        return {
+            "attempted": False,
+            "reason": "missing_trace_context",
+            **context,
+        }
+
+    try:
+        if advisory_chain_helper is None:
+            from src.agents.orchestrator_adapter_harness import (
+                invoke_read_only_advisory_chain_from_pipeline_boundary,
+            )
+
+            advisory_chain_helper = (
+                invoke_read_only_advisory_chain_from_pipeline_boundary
+            )
+
+        payload = advisory_chain_helper(
+            pipeline_run_id=context["pipeline_run_id"],
+            owner_user_id=context["owner_user_id"],
+            context_id=context["context_id"],
+            input_summary=_advisory_chain_diagnostics_input_summary(scored_jobs),
+            env={str(key): str(value) for key, value in dict(env_map).items()},
+        )
+        logger.info(
+            "Advisory chain diagnostics evaluated after application_priority: %s",
+            payload.get("validation", {}).get("validation_status", "unknown")
+            if isinstance(payload, dict)
+            else "unknown",
+        )
+        return payload
+    except Exception as exc:
+        logger.warning(
+            "Advisory chain diagnostics failed non-blocking after "
+            "application_priority: %s",
+            exc,
+        )
+        return {
+            "attempted": True,
+            "recorded": False,
+            "reason": "advisory_chain_diagnostics_failed",
+            "warning": str(exc),
+            **context,
+        }
 
 
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
@@ -999,6 +1084,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         scored_jobs,
         vector_evidence_hook_payload=vector_evidence_hook_payload,
     )
+    _maybe_invoke_advisory_chain_diagnostics_after_application_priority(scored_jobs)
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")

@@ -544,6 +544,8 @@ def test_changed_files_are_limited_to_phase43b_and_legacy_guards():
     }
     allowed |= {
         "src/agents/orchestrator_adapter_harness.py",
+            "src/pipeline/collector.py",
+            "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
     assert _changed_files() <= allowed | legacy_guards

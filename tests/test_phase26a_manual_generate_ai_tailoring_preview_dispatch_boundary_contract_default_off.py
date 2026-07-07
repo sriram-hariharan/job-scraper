@@ -120,7 +120,7 @@ PROTECTED_HASHES = {
         "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3"
     ),
     "src/pipeline/collector.py": (
-        "5388fc3a92a521703acfb2d98bad94d5daf35d8f4367903ce565551e624de036"
+        "52fef8d48ba9b42e8a317c0b08fc411e100103a8f971a782459b90725cddb0d5"
     ),
     "src/pipeline/job_filter.py": (
         "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4"
@@ -905,7 +905,9 @@ def test_phase26a_changes_only_helper_doc_test_and_legacy_guards():
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
     allowed |= {
+        "src/pipeline/collector.py",
         "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
+        "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
     }
     assert changed <= allowed | legacy_guards

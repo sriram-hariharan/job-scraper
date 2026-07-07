@@ -718,6 +718,8 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
     changed |= set(filter(None, untracked.stdout.splitlines()))
     allowed |= {
         "src/agents/orchestrator_adapter_harness.py",
+            "src/pipeline/collector.py",
+            "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
     for changed_path in changed:

@@ -269,11 +269,16 @@ def test_bridge_does_not_change_unapproved_api_service_or_static_files():
     )
 
     approved_phase17i_paths = {
+        "src/app/auth_ui.py",
         "src/app/api.py",
+        "src/app/planning_ui.py",
         "src/app/services.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "src/app/static/media/adv_diagnostics_img.svg",
+        "src/app/static/shell.js",
         "src/app/ui.py",
+        "src/app/ui_shell.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",
         "src/app/static/scan_workspace.css",

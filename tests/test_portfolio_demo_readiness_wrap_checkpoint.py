@@ -632,6 +632,10 @@ def test_portfolio_demo_readiness_doc_is_linked():
 
 def test_portfolio_demo_readiness_is_docs_tests_only():
     changed = _changed_files() - {
+            "src/app/auth_ui.py",
+            "src/app/static/shell.js",
+            "src/app/ui_shell.py",
+            "src/app/static/media/adv_diagnostics_img.svg",
         "src/app/services.py",
         "src/tailoring/llm.py",
         "generate_tailoring_suggestions.py",

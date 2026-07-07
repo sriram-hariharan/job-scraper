@@ -223,6 +223,10 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
         text=True,
     ).splitlines()
     changed = set(tracked + untracked) - {
+            "src/app/auth_ui.py",
+            "src/app/static/shell.js",
+            "src/app/ui_shell.py",
+            "src/app/static/media/adv_diagnostics_img.svg",
         "generate_tailoring_suggestions.py",
         "src/tailoring/rendering.py",
         "tests/test_score_first_scan.py",

@@ -1290,6 +1290,40 @@ html[data-theme] .scan-review-v2 .scan-workspace-surface-tab.is-active::after {
   background: linear-gradient(90deg, var(--scan-primary), var(--scan-primary-2)) !important;
 }
 
+.scan-review-v2 .scan-workspace-diagnostics-icon-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  margin: 0 0 3px -12px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--scan-muted) !important;
+  text-decoration: none !important;
+}
+
+.scan-review-v2 .scan-workspace-diagnostics-icon-btn:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--scan-primary) 10%, transparent) !important;
+  color: var(--scan-primary) !important;
+  outline: 0 !important;
+}
+
+.scan-review-v2 .scan-workspace-diagnostics-icon-btn.is-disabled {
+  cursor: not-allowed !important;
+  opacity: 0.55 !important;
+}
+
+.scan-review-v2 .scan-workspace-diagnostics-icon-btn img {
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+}
+
 .scan-review-v2 .scan-workspace-review-main-actions.scan-review-actions {
   grid-column: 2 !important;
   display: flex !important;
@@ -4009,4 +4043,394 @@ html[data-theme="dark"] .scan-workspace-field-error {
 .scan-workspace-page textarea.is-invalid {
   border-color: #dc2626;
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+.scan-workspace-diagnostics-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(100%, 1240px);
+  margin: 0 auto;
+}
+
+.advanced-diagnostics-selector-card,
+.advanced-diagnostics-empty-card,
+.advanced-diagnostics-context-card,
+.scan-workspace-admin-diagnostics-card {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: var(--scan-panel, #ffffff);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+.advanced-diagnostics-selector-card {
+  max-width: 820px;
+}
+
+.advanced-diagnostics-context-card {
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(20, 184, 166, 0.10)),
+    var(--scan-panel, #ffffff);
+}
+
+.advanced-diagnostics-context-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.advanced-diagnostics-context-select-wrap {
+  margin: 0;
+}
+
+.advanced-diagnostics-open-btn {
+  min-height: 42px;
+}
+
+.advanced-diagnostics-open-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.advanced-diagnostics-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.advanced-diagnostics-context-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--scan-text, #0f172a);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.advanced-diagnostics-context-meta strong {
+  color: var(--scan-muted, #64748b);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.admin-diagnostics-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-diagnostics-action-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(14, 165, 233, 0.08)),
+    rgba(255, 255, 255, 0.74);
+}
+
+.admin-diagnostics-action-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--scan-muted, #64748b);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.admin-diagnostics-action-copy strong {
+  color: var(--scan-text, #0f172a);
+  font-size: 0.9rem;
+}
+
+.admin-diagnostics-action-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-diagnostics-run-btn,
+.admin-diagnostics-clear-btn {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.admin-diagnostics-run-btn {
+  border: 1px solid rgba(37, 99, 235, 0.26);
+  background: rgba(37, 99, 235, 0.12);
+  color: #1e40af;
+}
+
+.admin-diagnostics-run-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.admin-diagnostics-clear-btn {
+  border: 1px solid rgba(100, 116, 139, 0.22);
+  background: rgba(255, 255, 255, 0.74);
+  color: #334155;
+}
+
+.admin-diagnostics-clear-btn:hover,
+.admin-diagnostics-clear-btn:focus-visible {
+  border-color: rgba(37, 99, 235, 0.34);
+  background: rgba(37, 99, 235, 0.10);
+  color: #1e40af;
+}
+
+.admin-diagnostics-action-note {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+}
+
+.admin-diagnostics-heading h2 {
+  margin: 0;
+  color: var(--scan-text, #0f172a);
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.admin-diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-diagnostics-card {
+  --admin-diagnostics-accent: #2563eb;
+  --admin-diagnostics-accent-soft: rgba(37, 99, 235, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--admin-diagnostics-accent) 26%, transparent);
+  border-top: 4px solid var(--admin-diagnostics-accent);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, var(--admin-diagnostics-accent-soft), transparent 86px),
+    color-mix(in srgb, var(--scan-panel, #ffffff) 96%, #eff6ff);
+}
+
+.admin-diagnostics-card h3 {
+  margin: 0;
+  color: var(--scan-text, #0f172a);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.admin-diagnostics-card-help {
+  margin: -2px 0 2px;
+  max-width: 62ch;
+}
+
+.admin-diagnostics-card-fields,
+.scan-workspace-advanced-readbacks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+}
+
+.admin-diagnostics-card-fields label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--scan-text, #0f172a);
+  font-weight: 700;
+}
+
+.admin-diagnostics-card-fields input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.admin-diagnostics-card-fields input[type="text"],
+.admin-diagnostics-card-fields select {
+  width: 100%;
+  max-width: 520px;
+  min-height: 36px;
+  border-radius: 10px;
+}
+
+.admin-diagnostics-card--readbacks {
+  grid-column: 1 / -1;
+}
+
+.admin-diagnostics-card--artifact-safety {
+  --admin-diagnostics-accent: #0f9f7a;
+  --admin-diagnostics-accent-soft: rgba(15, 159, 122, 0.12);
+}
+
+.admin-diagnostics-card--review-packet {
+  --admin-diagnostics-accent: #7c3aed;
+  --admin-diagnostics-accent-soft: rgba(124, 58, 237, 0.12);
+}
+
+.admin-diagnostics-card--handoff {
+  --admin-diagnostics-accent: #d97706;
+  --admin-diagnostics-accent-soft: rgba(217, 119, 6, 0.13);
+}
+
+.admin-diagnostics-card--readbacks {
+  --admin-diagnostics-accent: #64748b;
+  --admin-diagnostics-accent-soft: rgba(100, 116, 139, 0.11);
+}
+
+.admin-diagnostics-readback-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, auto);
+  gap: 10px;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--scan-text, #0f172a);
+  font-weight: 700;
+}
+
+.admin-diagnostics-status-chip {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: right;
+  white-space: normal;
+}
+
+.admin-diagnostics-status-chip--default {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+}
+
+.admin-diagnostics-status-chip--waiting {
+  background: rgba(245, 158, 11, 0.18);
+  color: #92400e;
+}
+
+html[data-theme="dark"] .advanced-diagnostics-selector-card,
+html[data-theme="dark"] .advanced-diagnostics-empty-card,
+html[data-theme="dark"] .advanced-diagnostics-context-card,
+html[data-theme="dark"] .scan-workspace-admin-diagnostics-card {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: #0f172a;
+}
+
+html[data-theme="dark"] .admin-diagnostics-card {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+html[data-theme="dark"] .admin-diagnostics-card-fields label,
+html[data-theme="dark"] .admin-diagnostics-readback-row,
+html[data-theme="dark"] .advanced-diagnostics-context-meta span {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(30, 41, 59, 0.92);
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .advanced-diagnostics-context-meta strong {
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .admin-diagnostics-action-bar {
+  border-color: rgba(96, 165, 250, 0.24);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(20, 184, 166, 0.10)),
+    rgba(15, 23, 42, 0.82);
+}
+
+html[data-theme="dark"] .admin-diagnostics-action-copy {
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .admin-diagnostics-action-copy strong {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .admin-diagnostics-run-btn {
+  border-color: rgba(96, 165, 250, 0.30);
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+}
+
+html[data-theme="dark"] .admin-diagnostics-clear-btn {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(30, 41, 59, 0.86);
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .admin-diagnostics-status-chip--default {
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .admin-diagnostics-status-chip--waiting {
+  background: rgba(245, 158, 11, 0.20);
+  color: #fcd34d;
+}
+
+@media (max-width: 760px) {
+  .advanced-diagnostics-context-form,
+  .admin-diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .advanced-diagnostics-open-btn {
+    width: 100%;
+  }
+
+  .admin-diagnostics-readback-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-diagnostics-action-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-diagnostics-action-buttons {
+    justify-content: stretch;
+  }
+
+  .admin-diagnostics-run-btn,
+  .admin-diagnostics-clear-btn {
+    flex: 1 1 180px;
+  }
+
+  .admin-diagnostics-status-chip {
+    justify-self: start;
+    text-align: left;
+  }
 }

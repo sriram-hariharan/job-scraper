@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from html import escape
 from pathlib import Path
@@ -6,8 +6,138 @@ from urllib.parse import urlencode
 
 from src.app import services
 from src.app.ui_shell import render_top_shell
+from src.auth.runtime import current_user_from_request
 
 router = APIRouter()
+
+
+def _is_admin_user(user: dict) -> bool:
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    return bool(user.get("is_admin", False)) or access_level == "admin"
+
+
+def _auth_user_from_request(request: Request | None) -> dict:
+    if request is None:
+        return {}
+    return dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+
+
+def _require_admin_user(request: Request) -> dict:
+    user = _auth_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
+
+def _admin_owner_user_id(user: dict) -> str:
+    return str(user.get("user_id") or user.get("sub") or "").strip()
+
+
+def _saved_scan_context_options(owner_user_id: str = "") -> list[dict]:
+    try:
+        payload = services.profile_saved_scans_payload(limit=50, owner_user_id=owner_user_id)
+    except Exception:
+        return []
+
+    options: list[dict] = []
+    for row in payload.get("saved_scans", []) or []:
+        if not isinstance(row, dict):
+            continue
+        scan_id = str(row.get("scan_id") or "").strip()
+        if not scan_id:
+            continue
+        company = str(row.get("job_company") or "").strip()
+        title = str(row.get("job_title") or "").strip()
+        resume_name = str(row.get("resume_name") or row.get("resume_filename") or "").strip()
+        status = str(row.get("scan_status") or "").strip()
+        timestamp = str(row.get("scan_timestamp") or "").strip()
+        source = str(row.get("scan_source") or row.get("resume_source") or "").strip()
+        primary = " / ".join(part for part in (company, title) if part) or scan_id
+        secondary_parts = []
+        if resume_name:
+            secondary_parts.append(f"Resume: {resume_name}")
+        if status:
+            secondary_parts.append(status)
+        if timestamp:
+            secondary_parts.append(timestamp)
+        if source:
+            secondary_parts.append(source)
+        options.append(
+            {
+                "scan_id": scan_id,
+                "company": company,
+                "title": title,
+                "resume": resume_name,
+                "status": status,
+                "primary": primary,
+                "secondary": " · ".join(secondary_parts),
+            }
+        )
+    return options
+
+
+def _advanced_diagnostics_selector_html(options: list[dict], selected_scan_id: str = "") -> str:
+    selected_scan_id = str(selected_scan_id or "").strip()
+    if not options:
+        return """
+      <section class="card advanced-diagnostics-selector-card">
+        <div class="section-header">
+          <div>
+            <h2>Choose scan context</h2>
+            <div class="subtext">
+              No scan diagnostics available yet. Open diagnostics from an AI Optimize Scan after saving or loading a scan.
+            </div>
+          </div>
+        </div>
+      </section>
+        """.strip()
+
+    option_rows = ['<option value="">Choose a saved scan...</option>']
+    for option in options:
+        scan_id = str(option.get("scan_id") or "")
+        label = str(option.get("primary") or scan_id)
+        secondary = str(option.get("secondary") or "")
+        option_label = f"{label} — {secondary}" if secondary else label
+        selected_attr = " selected" if scan_id and scan_id == selected_scan_id else ""
+        option_rows.append(
+            f'<option value="{escape(scan_id, quote=True)}"{selected_attr}>{escape(option_label)}</option>'
+        )
+
+    return f"""
+      <section class="card advanced-diagnostics-selector-card">
+        <div class="section-header advanced-diagnostics-selector-header">
+          <div>
+            <h2>Choose scan context</h2>
+            <div class="subtext">
+              Select a saved scan to open scan-specific diagnostics.
+            </div>
+          </div>
+        </div>
+        <form class="advanced-diagnostics-context-form" action="/advanced-diagnostics" method="get">
+          <label class="scan-workspace-input-group advanced-diagnostics-context-select-wrap">
+            <span class="scan-workspace-input-label">Saved scan</span>
+            <select
+              class="scan-workspace-input advanced-diagnostics-context-select"
+              id="advancedDiagnosticsScanSelect"
+              name="saved_scan_id"
+              aria-label="Saved scan diagnostics context"
+            >
+              {"".join(option_rows)}
+            </select>
+          </label>
+          <button
+            type="submit"
+            class="ghost-btn btn-sm advanced-diagnostics-open-btn"
+            data-advanced-diagnostics-open
+            disabled
+          >
+            Open diagnostics
+          </button>
+        </form>
+      </section>
+    """.strip()
 
 _PLANNING_JSON_CONTEXT_SUFFIXES = ("__tailoring.json", "_tailoring.json", ".json")
 
@@ -637,6 +767,37 @@ def planning_dashboard() -> str:
 </html>
     """.strip()
 
+
+@router.get("/scan-workspace", response_class=HTMLResponse)
+def scan_workspace_route(
+    request: Request,
+    company: str = "",
+    title: str = "",
+    resume: str = "",
+    status: str = "",
+    job_doc_id: str = "",
+    tailoring_json: str = "",
+    tailoring_md: str = "",
+    tailoring_llm_json: str = "",
+    packet_json: str = "",
+    saved_scan_id: str = "",
+    output_dir: str = "",
+) -> str:
+    return scan_workspace(
+        auth_user=_auth_user_from_request(request),
+        company=company,
+        title=title,
+        resume=resume,
+        status=status,
+        job_doc_id=job_doc_id,
+        tailoring_json=tailoring_json,
+        tailoring_md=tailoring_md,
+        tailoring_llm_json=tailoring_llm_json,
+        packet_json=packet_json,
+        saved_scan_id=saved_scan_id,
+        output_dir=output_dir,
+    )
+
 @router.get("/tailoring-workspace", response_class=HTMLResponse)
 def tailoring_workspace(
     company: str = "",
@@ -1097,8 +1258,692 @@ def tailoring_workspace(
 </html>
     """.strip()
 
-@router.get("/scan-workspace", response_class=HTMLResponse)
+
+def _scan_workspace_advanced_diagnostics_html() -> str:
+    return """
+              <section
+                class="scan-workspace-advanced-diagnostics admin-diagnostics-shell"
+                id="scanWorkspaceAdvancedDiagnostics"
+              >
+                <div class="admin-diagnostics-heading">
+                  <h2>Advanced diagnostics</h2>
+                </div>
+                <p class="subtext scan-workspace-advanced-diagnostics-help">
+                  Internal workflow controls and readbacks for debugging. These do not apply to jobs automatically.
+                </p>
+                <div class="admin-diagnostics-action-bar" aria-label="Diagnostics action safety">
+                  <div class="admin-diagnostics-action-copy">
+                    <strong>Selections are review-only</strong>
+                    <span>Selecting diagnostics does not run them. Use Run selected diagnostics when execution is enabled.</span>
+                    <span>Diagnostics never apply to jobs automatically.</span>
+                  </div>
+                  <div class="admin-diagnostics-action-buttons">
+                    <button
+                      type="button"
+                      class="admin-diagnostics-run-btn"
+                      data-admin-diagnostics-run
+                      disabled
+                      title="Execution is not enabled yet. Selections are for admin review only."
+                    >
+                      Run selected diagnostics
+                    </button>
+                    <button
+                      type="button"
+                      class="admin-diagnostics-clear-btn"
+                      data-admin-diagnostics-clear
+                    >
+                      Clear selections
+                    </button>
+                  </div>
+                  <p class="subtext admin-diagnostics-action-note">
+                    Execution is not enabled yet. Selections are for admin review only.
+                  </p>
+                </div>
+                <div class="scan-workspace-advanced-diagnostics-grid admin-diagnostics-grid">
+                  <section class="admin-diagnostics-card admin-diagnostics-card--context">
+                    <h3>Scan context summary</h3>
+                    <p class="subtext">
+                      Admin-only controls for the scan context selected above.
+                    </p>
+                  </section>
+                  <section class="admin-diagnostics-card admin-diagnostics-card--generation">
+                    <h3>Generation diagnostics</h3>
+                    <p class="subtext admin-diagnostics-card-help">
+                      Controls for suggestion and exact-change generation checks.
+                    </p>
+                    <div class="admin-diagnostics-card-fields">
+              <label
+                class="subtext scan-workspace-live-tailoring-toggle"
+                for="scanWorkspaceLiveTailoringSuggestionToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceLiveTailoringSuggestionToggle"
+                />
+                Live tailoring suggestions
+              </label>
+              <label
+                class="subtext scan-workspace-live-exact-change-toggle"
+                for="scanWorkspaceLiveExactChangeProposalToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceLiveExactChangeProposalToggle"
+                />
+                Live exact change proposals
+              </label>
+              <label
+                class="subtext scan-workspace-manual-exact-change-acceptance-toggle"
+                for="scanWorkspaceManualExactChangeAcceptanceToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceManualExactChangeAcceptanceToggle"
+                />
+                Accept selected exact changes
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-manual-exact-change-ids-input"
+                id="scanWorkspaceAcceptedExactChangeProposalIds"
+                placeholder="Accepted proposal IDs"
+                aria-label="Accepted exact change proposal IDs"
+              />
+                    </div>
+                  </section>
+                  <section class="admin-diagnostics-card admin-diagnostics-card--artifact-safety">
+                    <h3>Resume artifact safety</h3>
+                    <p class="subtext admin-diagnostics-card-help">
+                      Checks protected resume-copy and artifact verification workflow.
+                    </p>
+                    <div class="admin-diagnostics-card-fields">
+              <label
+                class="subtext scan-workspace-guarded-resume-copy-artifact-toggle"
+                for="scanWorkspaceGuardedResumeCopyArtifactToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceGuardedResumeCopyArtifactToggle"
+                />
+                Create guarded resume copy
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-approved-change-plan-id-input"
+                id="scanWorkspaceApprovedChangePlanId"
+                placeholder="Approved change plan ID"
+                aria-label="Approved change plan ID"
+              />
+              <label
+                class="subtext scan-workspace-guarded-resume-copy-artifact-verification-toggle"
+                for="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle"
+                />
+                Verify guarded resume copy
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-guarded-resume-copy-artifact-id-input"
+                id="scanWorkspaceGuardedResumeCopyArtifactId"
+                placeholder="Guarded artifact ID"
+                aria-label="Guarded resume copy artifact ID"
+              />
+                    </div>
+                  </section>
+                  <section class="admin-diagnostics-card admin-diagnostics-card--review-packet">
+                    <h3>Review packet/operator decision</h3>
+                    <p class="subtext admin-diagnostics-card-help">
+                      Checks review-packet creation and human decision capture.
+                    </p>
+                    <div class="admin-diagnostics-card-fields">
+              <label
+                class="subtext scan-workspace-verified-artifact-operator-review-packet-toggle"
+                for="scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle"
+                />
+                Create verified artifact review packet
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-verified-artifact-operator-review-artifact-id-input"
+                id="scanWorkspaceVerifiedArtifactOperatorReviewArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Verified artifact operator review artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-verified-artifact-operator-decision-toggle"
+                for="scanWorkspaceVerifiedArtifactOperatorDecisionToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceVerifiedArtifactOperatorDecisionToggle"
+                />
+                Capture verified artifact operator decision
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-verified-artifact-operator-decision-packet-id-input"
+                id="scanWorkspaceVerifiedArtifactOperatorDecisionPacketId"
+                placeholder="Operator review packet ID"
+                aria-label="Verified artifact operator decision packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-verified-artifact-operator-decision-artifact-id-input"
+                id="scanWorkspaceVerifiedArtifactOperatorDecisionArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Verified artifact operator decision artifact ID"
+              />
+              <select
+                class="scan-workspace-verified-artifact-operator-decision-value-input"
+                id="scanWorkspaceVerifiedArtifactOperatorDecisionValue"
+                aria-label="Verified artifact operator decision value"
+              >
+                <option value="">Decision</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="needs_changes">Needs changes</option>
+              </select>
+                    </div>
+                  </section>
+                  <section class="admin-diagnostics-card admin-diagnostics-card--handoff">
+                    <h3>Manual handoff/readiness</h3>
+                    <p class="subtext admin-diagnostics-card-help">
+                      Checks manual-only application handoff, readiness, audit, and safety summaries.
+                    </p>
+                    <div class="admin-diagnostics-card-fields">
+              <label
+                class="subtext scan-workspace-application-readiness-packet-toggle"
+                for="scanWorkspaceApplicationReadinessPacketToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceApplicationReadinessPacketToggle"
+                />
+                Create application-readiness packet
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-application-readiness-decision-id-input"
+                id="scanWorkspaceApplicationReadinessDecisionId"
+                placeholder="Operator decision ID"
+                aria-label="Application readiness operator decision ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-application-readiness-review-packet-id-input"
+                id="scanWorkspaceApplicationReadinessReviewPacketId"
+                placeholder="Operator review packet ID"
+                aria-label="Application readiness operator review packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-application-readiness-artifact-id-input"
+                id="scanWorkspaceApplicationReadinessArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Application readiness artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-manual-application-handoff-packet-toggle"
+                for="scanWorkspaceManualApplicationHandoffPacketToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceManualApplicationHandoffPacketToggle"
+                />
+                Create human-only manual application handoff packet
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-manual-handoff-readiness-packet-id-input"
+                id="scanWorkspaceManualHandoffReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Manual handoff application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-manual-handoff-artifact-id-input"
+                id="scanWorkspaceManualHandoffArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Manual handoff verified artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-handoff-audit-trail-toggle"
+                for="scanWorkspaceHandoffAuditTrailToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceHandoffAuditTrailToggle"
+                />
+                Create human-only handoff audit trail
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-handoff-audit-handoff-packet-id-input"
+                id="scanWorkspaceHandoffAuditHandoffPacketId"
+                placeholder="Manual handoff packet ID"
+                aria-label="Handoff audit manual handoff packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-handoff-audit-readiness-packet-id-input"
+                id="scanWorkspaceHandoffAuditReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Handoff audit application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-handoff-audit-artifact-id-input"
+                id="scanWorkspaceHandoffAuditArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Handoff audit verified artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-safety-boundary-summary-toggle"
+                for="scanWorkspaceSafetyBoundarySummaryToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceSafetyBoundarySummaryToggle"
+                />
+                Create human-only safety boundary summary
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-audit-id-input"
+                id="scanWorkspaceSafetyBoundaryAuditTrailId"
+                placeholder="Handoff audit trail ID"
+                aria-label="Safety boundary handoff audit trail ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-handoff-packet-id-input"
+                id="scanWorkspaceSafetyBoundaryHandoffPacketId"
+                placeholder="Manual handoff packet ID"
+                aria-label="Safety boundary manual handoff packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-readiness-packet-id-input"
+                id="scanWorkspaceSafetyBoundaryReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Safety boundary application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-safety-boundary-artifact-id-input"
+                id="scanWorkspaceSafetyBoundaryArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Safety boundary verified artifact ID"
+              />
+              <label
+                class="subtext scan-workspace-workflow-readiness-checkpoint-toggle"
+                for="scanWorkspaceWorkflowReadinessCheckpointToggle"
+              >
+                <input
+                  type="checkbox"
+                  id="scanWorkspaceWorkflowReadinessCheckpointToggle"
+                />
+                Create human-only workflow readiness checkpoint
+              </label>
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-summary-id-input"
+                id="scanWorkspaceWorkflowReadinessSummaryId"
+                placeholder="Safety boundary summary ID"
+                aria-label="Workflow readiness safety boundary summary ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-audit-id-input"
+                id="scanWorkspaceWorkflowReadinessAuditTrailId"
+                placeholder="Handoff audit trail ID"
+                aria-label="Workflow readiness handoff audit trail ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-handoff-packet-id-input"
+                id="scanWorkspaceWorkflowReadinessHandoffPacketId"
+                placeholder="Manual handoff packet ID"
+                aria-label="Workflow readiness manual handoff packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-readiness-packet-id-input"
+                id="scanWorkspaceWorkflowReadinessReadinessPacketId"
+                placeholder="Application readiness packet ID"
+                aria-label="Workflow readiness application readiness packet ID"
+              />
+              <input
+                type="text"
+                class="scan-workspace-workflow-readiness-artifact-id-input"
+                id="scanWorkspaceWorkflowReadinessArtifactId"
+                placeholder="Verified artifact ID"
+                aria-label="Workflow readiness verified artifact ID"
+              />
+                    </div>
+                  </section>
+                  <section class="admin-diagnostics-card admin-diagnostics-card--readbacks">
+                    <h3>Readback status</h3>
+                    <p class="subtext admin-diagnostics-card-help">
+                      Default-off feature/readback status for this scan context.
+                    </p>
+                    <div
+                      class="scan-workspace-advanced-readbacks"
+                      aria-label="Advanced diagnostic readbacks"
+                    >
+                  <div
+                    class="subtext scan-workspace-jd-llm-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceJdLlmReadback"
+                    aria-live="polite"
+                  >
+                    <span>Live JD LLM</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-tailoring-llm-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceTailoringLlmReadback"
+                    aria-live="polite"
+                  >
+                    <span>Live tailoring LLM</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-exact-change-llm-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceExactChangeLlmReadback"
+                    aria-live="polite"
+                  >
+                    <span>Live exact change LLM</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-manual-exact-change-acceptance-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceManualExactChangeAcceptanceReadback"
+                    aria-live="polite"
+                  >
+                    <span>Manual exact change acceptance</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-guarded-resume-copy-artifact-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceGuardedResumeCopyArtifactReadback"
+                    aria-live="polite"
+                  >
+                    <span>Guarded resume copy artifact</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-guarded-resume-copy-artifact-verification-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceGuardedResumeCopyArtifactVerificationReadback"
+                    aria-live="polite"
+                  >
+                    <span>Guarded artifact verification</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-verified-artifact-operator-review-packet-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceVerifiedArtifactOperatorReviewPacketReadback"
+                    aria-live="polite"
+                  >
+                    <span>Verified artifact operator review packet</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-verified-artifact-operator-decision-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceVerifiedArtifactOperatorDecisionReadback"
+                    aria-live="polite"
+                  >
+                    <span>Verified artifact operator decision</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-application-readiness-packet-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceApplicationReadinessPacketReadback"
+                    aria-live="polite"
+                  >
+                    <span>Application readiness packet</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-manual-application-handoff-packet-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceManualApplicationHandoffPacketReadback"
+                    aria-live="polite"
+                  >
+                    <span>Manual application handoff packet</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-handoff-audit-trail-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceHandoffAuditTrailReadback"
+                    aria-live="polite"
+                  >
+                    <span>Handoff audit trail</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-safety-boundary-summary-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceSafetyBoundarySummaryReadback"
+                    aria-live="polite"
+                  >
+                    <span>Safety boundary summary</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-workflow-readiness-checkpoint-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceWorkflowReadinessCheckpointReadback"
+                    aria-live="polite"
+                  >
+                    <span>Workflow readiness checkpoint</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--default">default-off</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-agentic-workflow-integration-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceAgenticWorkflowIntegrationReadback"
+                    aria-live="polite"
+                    aria-label="Agentic workflow demo readiness: waiting for existing scan/evaluation readback"
+                  >
+                    <span>Agentic workflow demo readiness</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--waiting">waiting for existing scan/evaluation readback</span>
+                  </div>
+                  <div
+                    class="subtext scan-workspace-production-readiness-checkpoint-readback admin-diagnostics-readback-row"
+                    id="scanWorkspaceProductionReadinessCheckpointReadback"
+                    aria-live="polite"
+                    aria-label="Demo readiness: backend checkpoint readback waiting for existing data"
+                  >
+                    <span>Demo readiness</span>
+                    <span class="admin-diagnostics-status-chip admin-diagnostics-status-chip--waiting">backend checkpoint readback waiting for existing data</span>
+                  </div>
+                    </div>
+                  </section>
+                </div>
+              </section>
+    """.strip()
+
+
+@router.get("/advanced-diagnostics", response_class=HTMLResponse)
+def advanced_diagnostics(
+    request: Request,
+    company: str = "",
+    title: str = "",
+    resume: str = "",
+    status: str = "",
+    job_doc_id: str = "",
+    tailoring_json: str = "",
+    tailoring_md: str = "",
+    tailoring_llm_json: str = "",
+    packet_json: str = "",
+    saved_scan_id: str = "",
+    output_dir: str = "",
+) -> str:
+    admin_user = _require_admin_user(request)
+    owner_user_id = _admin_owner_user_id(admin_user)
+    scan_context_options = _saved_scan_context_options(owner_user_id=owner_user_id)
+    selected_scan_id = str(saved_scan_id or "").strip()
+    selected_scan_context = next(
+        (
+            option
+            for option in scan_context_options
+            if str(option.get("scan_id") or "").strip() == selected_scan_id
+        ),
+        {},
+    )
+    if selected_scan_context:
+        company = company or str(selected_scan_context.get("company") or "")
+        title = title or str(selected_scan_context.get("title") or "")
+        resume = resume or str(selected_scan_context.get("resume") or "")
+        status = status or str(selected_scan_context.get("status") or "")
+
+    raw_resume_name = _resolve_workspace_route_resume_name(
+        resume,
+        packet_json=packet_json,
+        tailoring_json=tailoring_json,
+        output_dir=output_dir,
+    )
+    has_scan_context = bool(
+        (tailoring_json or "").strip()
+        or (tailoring_md or "").strip()
+        or (tailoring_llm_json or "").strip()
+        or (packet_json or "").strip()
+        or (saved_scan_id or "").strip()
+    )
+    hub_mode = not has_scan_context
+    selector_html = (
+        _advanced_diagnostics_selector_html(scan_context_options, selected_scan_id="")
+        if hub_mode
+        else ""
+    )
+    context_query = urlencode(
+        {
+            "company": company or "",
+            "title": title or "",
+            "resume": raw_resume_name or "",
+            "status": status or "",
+            "job_doc_id": job_doc_id or "",
+            "tailoring_json": tailoring_json or "",
+            "tailoring_md": tailoring_md or "",
+            "tailoring_llm_json": tailoring_llm_json or "",
+            "packet_json": packet_json or "",
+            "saved_scan_id": saved_scan_id or "",
+            "output_dir": output_dir or "",
+        }
+    )
+    scan_href_safe = escape(f"/scan-workspace?{context_query}", quote=True)
+    context_summary_html = """
+      <section class="card scan-workspace-intake-card advanced-diagnostics-empty-card">
+        <div class="section-header">
+          <div>
+            <h2>No scan selected</h2>
+            <div class="subtext">
+              Choose a saved scan context to inspect scan-specific controls and readbacks.
+            </div>
+          </div>
+        </div>
+      </section>
+    """.strip()
+    diagnostics_html = ""
+
+    if has_scan_context:
+        company_safe = escape(company or "-")
+        title_safe = escape(title or "-")
+        resume_safe = escape(Path(raw_resume_name).stem.replace("_", " ") if raw_resume_name else "-")
+        status_safe = escape(status or "Scan diagnostics context loaded")
+        context_id = saved_scan_id or job_doc_id or packet_json or tailoring_json or tailoring_md or tailoring_llm_json
+        context_id_safe = escape(Path(str(context_id).replace("\\", "/")).name if context_id else "Scan context")
+        back_link_html = f'<a class="ghost-btn btn-sm advanced-diagnostics-back-btn" href="{scan_href_safe}">Back to scan</a>'
+        context_summary_html = f"""
+      <section class="card scan-workspace-intake-card advanced-diagnostics-context-card">
+        <div class="section-header">
+          <div>
+            <h2>Scan diagnostics context</h2>
+            <div class="subtext">{company_safe} / {title_safe}</div>
+          </div>
+          {back_link_html}
+        </div>
+        <div class="advanced-diagnostics-context-meta">
+          <span><strong>Resume</strong>{resume_safe}</span>
+          <span><strong>Status</strong>{status_safe}</span>
+          <span><strong>Context</strong>{context_id_safe}</span>
+        </div>
+      </section>
+        """.strip()
+        diagnostics_html = f"""
+      <section class="card scan-workspace-intake-card scan-workspace-admin-diagnostics-card">
+        {_scan_workspace_advanced_diagnostics_html()}
+      </section>
+        """.strip()
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advanced Diagnostics</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" />
+</head>
+<body>
+{render_top_shell("/advanced-diagnostics")}
+  <main class="page scan-workspace-diagnostics-page">
+    <header class="page-header scan-workspace-header-shell scan-workspace-header-shell--minimal">
+      <div class="scan-workspace-header-row">
+          <div class="scan-workspace-header-copy">
+          <h1>Advanced Diagnostics</h1>
+          <div class="subtext">Admin workflow diagnostics for saved scan contexts and scan-specific readbacks.</div>
+        </div>
+      </div>
+    </header>
+
+    {selector_html}
+    {context_summary_html}
+    {diagnostics_html}
+  </main>
+
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script>
+    (() => {{
+      const select = document.getElementById("advancedDiagnosticsScanSelect");
+      const button = document.querySelector("[data-advanced-diagnostics-open]");
+      if (!select || !button) return;
+      const sync = () => {{
+        button.disabled = !select.value;
+      }};
+      select.addEventListener("change", sync);
+      sync();
+    }})();
+    (() => {{
+      const root = document.getElementById("scanWorkspaceAdvancedDiagnostics");
+      const clearButton = document.querySelector("[data-admin-diagnostics-clear]");
+      if (!root || !clearButton) return;
+      clearButton.addEventListener("click", () => {{
+        root.querySelectorAll('input[type="checkbox"]').forEach((input) => {{
+          input.checked = false;
+        }});
+        root.querySelectorAll('input[type="text"]').forEach((input) => {{
+          input.value = "";
+        }});
+        root.querySelectorAll("select").forEach((selectEl) => {{
+          selectEl.value = "";
+        }});
+      }});
+    }})();
+  </script>
+</body>
+</html>
+    """.strip()
+
 def scan_workspace(
+    auth_user: dict | None = None,
     company: str = "",
     title: str = "",
     resume: str = "",
@@ -1193,6 +2038,55 @@ def scan_workspace(
         """.strip()
 
     has_saved_scan_context = bool(saved_scan_id)
+    has_scan_diagnostics_context = has_tailoring_context or has_saved_scan_context
+    scan_diagnostics_query = urlencode(
+        {
+            "company": company or "",
+            "title": title or "",
+            "resume": raw_resume_name or "",
+            "status": status or "",
+            "job_doc_id": job_doc_id or "",
+            "tailoring_json": tailoring_json or "",
+            "tailoring_md": tailoring_md or "",
+            "tailoring_llm_json": tailoring_llm_json or "",
+            "packet_json": packet_json or "",
+            "saved_scan_id": saved_scan_id or "",
+            "output_dir": output_dir or "",
+        }
+    )
+    scan_diagnostics_href_safe = escape(f"/advanced-diagnostics?{scan_diagnostics_query}", quote=True)
+    scan_diagnostics_icon_html = ""
+    if _is_admin_user(auth_user or {}):
+        if has_scan_diagnostics_context:
+            scan_diagnostics_icon_html = f'''
+              <a
+                class="scan-workspace-diagnostics-icon-btn"
+                href="{scan_diagnostics_href_safe}"
+                aria-label="View diagnostics for this scan"
+                title="View diagnostics for this scan"
+              >
+                <img
+                  src="/static/media/adv_diagnostics_img.svg"
+                  alt=""
+                  aria-hidden="true"
+                />
+              </a>
+            '''.strip()
+        else:
+            scan_diagnostics_icon_html = '''
+              <span
+                class="scan-workspace-diagnostics-icon-btn is-disabled"
+                aria-disabled="true"
+                aria-label="Diagnostics require a saved scan or run context."
+                title="Diagnostics require a saved scan or run context."
+              >
+                <img
+                  src="/static/media/adv_diagnostics_img.svg"
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
+            '''.strip()
     scan_initial_mode = "review" if (has_tailoring_context or has_saved_scan_context) else "new_scan"
     scan_initial_mode_safe = escape(scan_initial_mode)
 
@@ -1608,6 +2502,7 @@ def scan_workspace(
                   >
                     Job Description
                   </button>
+                  {scan_diagnostics_icon_html}
                 </div>
               </div>
 
@@ -1741,418 +2636,7 @@ def scan_workspace(
                   Continue
                 </button>
               </span>
-              <details
-                class="scan-workspace-advanced-diagnostics"
-                id="scanWorkspaceAdvancedDiagnostics"
-              >
-                <summary>Advanced diagnostics</summary>
-                <p class="subtext scan-workspace-advanced-diagnostics-help">
-                  Internal workflow controls and readbacks for debugging. These do not apply to jobs automatically.
-                </p>
-                <div class="scan-workspace-advanced-diagnostics-grid">
-              <label
-                class="subtext scan-workspace-live-tailoring-toggle"
-                for="scanWorkspaceLiveTailoringSuggestionToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceLiveTailoringSuggestionToggle"
-                />
-                Live tailoring suggestions
-              </label>
-              <label
-                class="subtext scan-workspace-live-exact-change-toggle"
-                for="scanWorkspaceLiveExactChangeProposalToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceLiveExactChangeProposalToggle"
-                />
-                Live exact change proposals
-              </label>
-              <label
-                class="subtext scan-workspace-manual-exact-change-acceptance-toggle"
-                for="scanWorkspaceManualExactChangeAcceptanceToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceManualExactChangeAcceptanceToggle"
-                />
-                Accept selected exact changes
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-manual-exact-change-ids-input"
-                id="scanWorkspaceAcceptedExactChangeProposalIds"
-                placeholder="Accepted proposal IDs"
-                aria-label="Accepted exact change proposal IDs"
-              />
-              <label
-                class="subtext scan-workspace-guarded-resume-copy-artifact-toggle"
-                for="scanWorkspaceGuardedResumeCopyArtifactToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceGuardedResumeCopyArtifactToggle"
-                />
-                Create guarded resume copy
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-approved-change-plan-id-input"
-                id="scanWorkspaceApprovedChangePlanId"
-                placeholder="Approved change plan ID"
-                aria-label="Approved change plan ID"
-              />
-              <label
-                class="subtext scan-workspace-guarded-resume-copy-artifact-verification-toggle"
-                for="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle"
-                />
-                Verify guarded resume copy
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-guarded-resume-copy-artifact-id-input"
-                id="scanWorkspaceGuardedResumeCopyArtifactId"
-                placeholder="Guarded artifact ID"
-                aria-label="Guarded resume copy artifact ID"
-              />
-              <label
-                class="subtext scan-workspace-verified-artifact-operator-review-packet-toggle"
-                for="scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceVerifiedArtifactOperatorReviewPacketToggle"
-                />
-                Create verified artifact review packet
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-verified-artifact-operator-review-artifact-id-input"
-                id="scanWorkspaceVerifiedArtifactOperatorReviewArtifactId"
-                placeholder="Verified artifact ID"
-                aria-label="Verified artifact operator review artifact ID"
-              />
-              <label
-                class="subtext scan-workspace-verified-artifact-operator-decision-toggle"
-                for="scanWorkspaceVerifiedArtifactOperatorDecisionToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceVerifiedArtifactOperatorDecisionToggle"
-                />
-                Capture verified artifact operator decision
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-verified-artifact-operator-decision-packet-id-input"
-                id="scanWorkspaceVerifiedArtifactOperatorDecisionPacketId"
-                placeholder="Operator review packet ID"
-                aria-label="Verified artifact operator decision packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-verified-artifact-operator-decision-artifact-id-input"
-                id="scanWorkspaceVerifiedArtifactOperatorDecisionArtifactId"
-                placeholder="Verified artifact ID"
-                aria-label="Verified artifact operator decision artifact ID"
-              />
-              <select
-                class="scan-workspace-verified-artifact-operator-decision-value-input"
-                id="scanWorkspaceVerifiedArtifactOperatorDecisionValue"
-                aria-label="Verified artifact operator decision value"
-              >
-                <option value="">Decision</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="needs_changes">Needs changes</option>
-              </select>
-              <label
-                class="subtext scan-workspace-application-readiness-packet-toggle"
-                for="scanWorkspaceApplicationReadinessPacketToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceApplicationReadinessPacketToggle"
-                />
-                Create application-readiness packet
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-application-readiness-decision-id-input"
-                id="scanWorkspaceApplicationReadinessDecisionId"
-                placeholder="Operator decision ID"
-                aria-label="Application readiness operator decision ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-application-readiness-review-packet-id-input"
-                id="scanWorkspaceApplicationReadinessReviewPacketId"
-                placeholder="Operator review packet ID"
-                aria-label="Application readiness operator review packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-application-readiness-artifact-id-input"
-                id="scanWorkspaceApplicationReadinessArtifactId"
-                placeholder="Verified artifact ID"
-                aria-label="Application readiness artifact ID"
-              />
-              <label
-                class="subtext scan-workspace-manual-application-handoff-packet-toggle"
-                for="scanWorkspaceManualApplicationHandoffPacketToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceManualApplicationHandoffPacketToggle"
-                />
-                Create human-only manual application handoff packet
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-manual-handoff-readiness-packet-id-input"
-                id="scanWorkspaceManualHandoffReadinessPacketId"
-                placeholder="Application readiness packet ID"
-                aria-label="Manual handoff application readiness packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-manual-handoff-artifact-id-input"
-                id="scanWorkspaceManualHandoffArtifactId"
-                placeholder="Verified artifact ID"
-                aria-label="Manual handoff verified artifact ID"
-              />
-              <label
-                class="subtext scan-workspace-handoff-audit-trail-toggle"
-                for="scanWorkspaceHandoffAuditTrailToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceHandoffAuditTrailToggle"
-                />
-                Create human-only handoff audit trail
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-handoff-audit-handoff-packet-id-input"
-                id="scanWorkspaceHandoffAuditHandoffPacketId"
-                placeholder="Manual handoff packet ID"
-                aria-label="Handoff audit manual handoff packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-handoff-audit-readiness-packet-id-input"
-                id="scanWorkspaceHandoffAuditReadinessPacketId"
-                placeholder="Application readiness packet ID"
-                aria-label="Handoff audit application readiness packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-handoff-audit-artifact-id-input"
-                id="scanWorkspaceHandoffAuditArtifactId"
-                placeholder="Verified artifact ID"
-                aria-label="Handoff audit verified artifact ID"
-              />
-              <label
-                class="subtext scan-workspace-safety-boundary-summary-toggle"
-                for="scanWorkspaceSafetyBoundarySummaryToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceSafetyBoundarySummaryToggle"
-                />
-                Create human-only safety boundary summary
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-safety-boundary-audit-id-input"
-                id="scanWorkspaceSafetyBoundaryAuditTrailId"
-                placeholder="Handoff audit trail ID"
-                aria-label="Safety boundary handoff audit trail ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-safety-boundary-handoff-packet-id-input"
-                id="scanWorkspaceSafetyBoundaryHandoffPacketId"
-                placeholder="Manual handoff packet ID"
-                aria-label="Safety boundary manual handoff packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-safety-boundary-readiness-packet-id-input"
-                id="scanWorkspaceSafetyBoundaryReadinessPacketId"
-                placeholder="Application readiness packet ID"
-                aria-label="Safety boundary application readiness packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-safety-boundary-artifact-id-input"
-                id="scanWorkspaceSafetyBoundaryArtifactId"
-                placeholder="Verified artifact ID"
-                aria-label="Safety boundary verified artifact ID"
-              />
-              <label
-                class="subtext scan-workspace-workflow-readiness-checkpoint-toggle"
-                for="scanWorkspaceWorkflowReadinessCheckpointToggle"
-              >
-                <input
-                  type="checkbox"
-                  id="scanWorkspaceWorkflowReadinessCheckpointToggle"
-                />
-                Create human-only workflow readiness checkpoint
-              </label>
-              <input
-                type="text"
-                class="scan-workspace-workflow-readiness-summary-id-input"
-                id="scanWorkspaceWorkflowReadinessSummaryId"
-                placeholder="Safety boundary summary ID"
-                aria-label="Workflow readiness safety boundary summary ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-workflow-readiness-audit-id-input"
-                id="scanWorkspaceWorkflowReadinessAuditTrailId"
-                placeholder="Handoff audit trail ID"
-                aria-label="Workflow readiness handoff audit trail ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-workflow-readiness-handoff-packet-id-input"
-                id="scanWorkspaceWorkflowReadinessHandoffPacketId"
-                placeholder="Manual handoff packet ID"
-                aria-label="Workflow readiness manual handoff packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-workflow-readiness-readiness-packet-id-input"
-                id="scanWorkspaceWorkflowReadinessReadinessPacketId"
-                placeholder="Application readiness packet ID"
-                aria-label="Workflow readiness application readiness packet ID"
-              />
-              <input
-                type="text"
-                class="scan-workspace-workflow-readiness-artifact-id-input"
-                id="scanWorkspaceWorkflowReadinessArtifactId"
-                placeholder="Verified artifact ID"
-                aria-label="Workflow readiness verified artifact ID"
-              />
-                </div>
-                <div
-                  class="scan-workspace-advanced-readbacks"
-                  aria-label="Advanced diagnostic readbacks"
-                >
-                  <div
-                    class="subtext scan-workspace-jd-llm-readback"
-                    id="scanWorkspaceJdLlmReadback"
-                    aria-live="polite"
-                  >
-                    Live JD LLM: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-tailoring-llm-readback"
-                    id="scanWorkspaceTailoringLlmReadback"
-                    aria-live="polite"
-                  >
-                    Live tailoring LLM: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-exact-change-llm-readback"
-                    id="scanWorkspaceExactChangeLlmReadback"
-                    aria-live="polite"
-                  >
-                    Live exact change LLM: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-manual-exact-change-acceptance-readback"
-                    id="scanWorkspaceManualExactChangeAcceptanceReadback"
-                    aria-live="polite"
-                  >
-                    Manual exact change acceptance: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-guarded-resume-copy-artifact-readback"
-                    id="scanWorkspaceGuardedResumeCopyArtifactReadback"
-                    aria-live="polite"
-                  >
-                    Guarded resume copy artifact: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-guarded-resume-copy-artifact-verification-readback"
-                    id="scanWorkspaceGuardedResumeCopyArtifactVerificationReadback"
-                    aria-live="polite"
-                  >
-                    Guarded artifact verification: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-verified-artifact-operator-review-packet-readback"
-                    id="scanWorkspaceVerifiedArtifactOperatorReviewPacketReadback"
-                    aria-live="polite"
-                  >
-                    Verified artifact operator review packet: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-verified-artifact-operator-decision-readback"
-                    id="scanWorkspaceVerifiedArtifactOperatorDecisionReadback"
-                    aria-live="polite"
-                  >
-                    Verified artifact operator decision: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-application-readiness-packet-readback"
-                    id="scanWorkspaceApplicationReadinessPacketReadback"
-                    aria-live="polite"
-                  >
-                    Application readiness packet: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-manual-application-handoff-packet-readback"
-                    id="scanWorkspaceManualApplicationHandoffPacketReadback"
-                    aria-live="polite"
-                  >
-                    Manual application handoff packet: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-handoff-audit-trail-readback"
-                    id="scanWorkspaceHandoffAuditTrailReadback"
-                    aria-live="polite"
-                  >
-                    Handoff audit trail: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-safety-boundary-summary-readback"
-                    id="scanWorkspaceSafetyBoundarySummaryReadback"
-                    aria-live="polite"
-                  >
-                    Safety boundary summary: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-workflow-readiness-checkpoint-readback"
-                    id="scanWorkspaceWorkflowReadinessCheckpointReadback"
-                    aria-live="polite"
-                  >
-                    Workflow readiness checkpoint: default-off
-                  </div>
-                  <div
-                    class="subtext scan-workspace-agentic-workflow-integration-readback"
-                    id="scanWorkspaceAgenticWorkflowIntegrationReadback"
-                    aria-live="polite"
-                  >
-                    Agentic workflow demo readiness: waiting for existing scan/evaluation readback
-                  </div>
-                  <div
-                    class="subtext scan-workspace-production-readiness-checkpoint-readback"
-                    id="scanWorkspaceProductionReadinessCheckpointReadback"
-                    aria-live="polite"
-                  >
-                    Demo readiness: backend checkpoint readback waiting for existing data
-                  </div>
-                </div>
-              </details>
+
               </div>
             </div>
 

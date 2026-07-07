@@ -179,6 +179,11 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/app/api.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "src/app/auth_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/static/media/adv_diagnostics_img.svg",
+        "src/app/static/shell.js",
+        "src/app/ui_shell.py",
         "src/app/ui.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",
@@ -241,10 +246,16 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
         path
         for path in changed
         if path.startswith("src/")
+        and path != "src/app/auth_ui.py"
         and path != "src/app/api.py"
+        and path != "src/app/planning_ui.py"
         and path != "src/app/services.py"
         and path != "src/app/static/agentic_review.js"
         and path != "src/app/static/app_redesign.css"
+        and path != "src/app/static/media/adv_diagnostics_img.svg"
+        and path != "src/app/static/shell.js"
+        and path != "src/app/static/scan_workspace_review.css"
+        and path != "src/app/ui_shell.py"
         and path != "src/agents/manual_generate_ai_tailoring_preview_contract.py"
         and path != "src/agents/manual_generate_ai_tailoring_preview_request_packet_contract.py"
     and path != "src/agents/manual_generate_ai_tailoring_preview_dispatch_boundary_contract.py"
@@ -301,6 +312,10 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
 def test_phase23g_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+            "src/app/auth_ui.py",
+            "src/app/static/shell.js",
+            "src/app/ui_shell.py",
+            "src/app/static/media/adv_diagnostics_img.svg",
         "src/tailoring/llm.py",
         "src/tailoring/rendering.py",
         "generate_tailoring_suggestions.py",

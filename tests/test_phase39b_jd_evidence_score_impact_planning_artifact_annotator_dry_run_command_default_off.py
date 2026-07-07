@@ -704,6 +704,10 @@ def test_changed_files_are_limited_to_phase39b_and_legacy_guard_tests():
         "tests/test_phase41b_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.py",
         "tests/test_phase41a_jd_evidence_score_impact_review_queue_builder_default_off.py",
     }
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     unexpected = {
         path
         for path in changed

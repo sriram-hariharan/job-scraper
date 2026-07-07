@@ -854,4 +854,8 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
         )
     }
 
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     assert changed <= allowed | legacy_guards

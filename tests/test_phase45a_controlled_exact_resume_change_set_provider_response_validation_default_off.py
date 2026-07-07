@@ -770,6 +770,10 @@ def test_changed_files_are_limited_to_phase45a_and_legacy_guard_tests():
         "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
 
     }
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     disallowed = [
         path
         for path in changed

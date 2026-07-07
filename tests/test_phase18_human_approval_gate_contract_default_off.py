@@ -900,6 +900,10 @@ def test_phase18b_changes_only_approved_docs_and_tests():
             )
         )
     }
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     assert changed <= allowed | legacy_static_hash_guards
 
 

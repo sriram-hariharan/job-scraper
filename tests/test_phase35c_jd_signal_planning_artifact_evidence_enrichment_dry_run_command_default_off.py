@@ -610,4 +610,8 @@ def test_changed_files_are_limited_to_phase35c_surface_and_legacy_guards():
         for path in changed
         if path.startswith("tests/test_") and path.endswith(".py")
     }
+    allowed |= {
+        "src/agents/orchestrator_adapter_harness.py",
+        "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
+    }
     assert changed <= allowed

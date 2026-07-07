@@ -232,6 +232,22 @@ def render_top_shell(active_href: str) -> str:
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>
 
+        <a
+          class="profile-dropdown-nav-btn hidden"
+          href="/advanced-diagnostics"
+          id="profileAdvancedDiagnosticsLink"
+          data-admin-only="true"
+        >
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
+            <img src="/static/media/adv_diagnostics_img.svg" alt="" />
+          </span>
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">Advanced Diagnostics</span>
+            <span class="profile-dropdown-nav-subtitle">Admin workflow diagnostics</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
         <button type="button" class="profile-dropdown-danger-btn" id="profileLogoutBtn">
           Log out
         </button>

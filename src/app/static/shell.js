@@ -479,6 +479,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const profileDropdownName = qs("profileDropdownName");
   const profileDropdownEmail = qs("profileDropdownEmail");
   const profileLogoutBtn = qs("profileLogoutBtn");
+  const profileAdvancedDiagnosticsLink = qs("profileAdvancedDiagnosticsLink");
 
   function storageGet(storage, key) {
     try {
@@ -676,6 +677,8 @@ window.addEventListener("DOMContentLoaded", () => {
   function setProfileShellUser(user) {
     const displayName = String(user?.display_name || user?.email || "Account").trim();
     const email = String(user?.email || "").trim();
+    const accessLevel = String(user?.access_level || "").trim().toLowerCase();
+    const isAdmin = Boolean(user?.is_admin) || accessLevel === "admin";
     const initial = userInitialFromName(displayName, email);
 
     if (menuButton) {
@@ -695,6 +698,12 @@ window.addEventListener("DOMContentLoaded", () => {
     if (profileDropdownEmail) {
       profileDropdownEmail.textContent = email;
       profileDropdownEmail.classList.toggle("hidden", !email);
+    }
+
+    if (profileAdvancedDiagnosticsLink) {
+      profileAdvancedDiagnosticsLink.classList.toggle("hidden", !isAdmin);
+      profileAdvancedDiagnosticsLink.setAttribute("aria-hidden", isAdmin ? "false" : "true");
+      profileAdvancedDiagnosticsLink.tabIndex = isAdmin ? 0 : -1;
     }
   }
 

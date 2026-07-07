@@ -523,27 +523,29 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       min-height: 34px;
       margin: 0;
       padding: 0 !important;
-      border: 0 !important;
-      border-radius: 0;
-      background: transparent !important;
-      box-shadow: none !important;
-      color: #111827;
+      border: 1px solid rgba(100, 116, 139, 0.24) !important;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.72) !important;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08) !important;
+      color: #1e293b;
       cursor: pointer;
       transform: translateY(-50%) !important;
       appearance: none;
       -webkit-appearance: none;
-      transition: opacity 140ms ease;
+      transition: background 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
     }}
 
     .auth-password-toggle:hover,
     .auth-password-toggle:focus,
     .auth-password-toggle:active,
     .auth-password-toggle.is-visible {{
-      background: transparent !important;
-      color: #111827;
+      border-color: rgba(37, 99, 235, 0.34) !important;
+      background: rgba(239, 246, 255, 0.92) !important;
+      color: #1d4ed8;
       transform: translateY(-50%) !important;
-      box-shadow: none !important;
-      outline: none !important;
+      box-shadow: 0 10px 22px rgba(37, 99, 235, 0.14) !important;
+      outline: 2px solid rgba(96, 165, 250, 0.22) !important;
+      outline-offset: 2px;
     }}
 
     .auth-password-toggle img {{
@@ -555,7 +557,24 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-password-toggle:hover img {{
-      opacity: 0.78;
+      opacity: 0.9;
+    }}
+
+    html[data-theme="dark"] .auth-password-toggle {{
+      border-color: rgba(148, 163, 184, 0.26) !important;
+      background: rgba(15, 23, 42, 0.82) !important;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22) !important;
+      color: #e2e8f0;
+    }}
+
+    html[data-theme="dark"] .auth-password-toggle:hover,
+    html[data-theme="dark"] .auth-password-toggle:focus,
+    html[data-theme="dark"] .auth-password-toggle:active,
+    html[data-theme="dark"] .auth-password-toggle.is-visible {{
+      border-color: rgba(96, 165, 250, 0.36) !important;
+      background: rgba(30, 41, 59, 0.94) !important;
+      color: #bfdbfe;
+      box-shadow: 0 10px 22px rgba(59, 130, 246, 0.16) !important;
     }}
 
     .auth-error {{

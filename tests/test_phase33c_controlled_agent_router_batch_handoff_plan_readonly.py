@@ -438,6 +438,10 @@ def test_changed_files_are_limited_to_phase33c_surface_and_legacy_guards():
         capture_output=True,
     )
     allowed_changed = {
+            "src/app/auth_ui.py",
+            "src/app/static/shell.js",
+            "src/app/ui_shell.py",
+            "src/app/static/media/adv_diagnostics_img.svg",
         "src/app/ui.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",

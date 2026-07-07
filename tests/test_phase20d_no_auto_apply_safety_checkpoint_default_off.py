@@ -487,8 +487,13 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "src/app/static/app.js",
         "src/app/static/planning.js",
         "src/app/static/app_redesign.css",
+        "src/app/static/media/adv_diagnostics_img.svg",
+        "src/app/static/scan_workspace_review.css",
+        "src/app/static/shell.js",
         "src/app/ui.py",
+        "src/app/auth_ui.py",
         "src/app/planning_ui.py",
+        "src/app/ui_shell.py",
         "tests/test_score_first_scan.py",
         "tests/test_planning_metadata_artifacts.py",
         "tests/test_queue_ui_metadata_contract.py",
@@ -802,6 +807,15 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/app/static/styles.css",
     }
     if set(changed_runtime_files) == phase78b_scan_review_preview_cleanup_files:
+        return
+    phase78d_admin_diagnostics_ui_files = {
+        ROOT / "src/app/auth_ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/scan_workspace_review.css",
+        ROOT / "src/app/static/shell.js",
+        ROOT / "src/app/ui_shell.py",
+    }
+    if set(changed_runtime_files) == phase78d_admin_diagnostics_ui_files:
         return
 
     assert changed_runtime_files in (

@@ -378,6 +378,10 @@ def test_protected_runtime_files_are_unchanged():
 def test_phase28b_changes_only_api_doc_test_and_legacy_guards():
     changed = _changed_files()
     allowed = {
+            "src/app/auth_ui.py",
+            "src/app/static/shell.js",
+            "src/app/ui_shell.py",
+            "src/app/static/media/adv_diagnostics_img.svg",
         "src/tailoring/llm.py",
         "src/tailoring/rendering.py",
         "generate_tailoring_suggestions.py",

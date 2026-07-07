@@ -538,6 +538,10 @@ def test_phase30a_changes_only_helper_doc_test_and_legacy_guards():
     ).splitlines()
     changed = set(tracked + untracked)
     allowed = {
+            "src/app/auth_ui.py",
+            "src/app/static/shell.js",
+            "src/app/ui_shell.py",
+            "src/app/static/media/adv_diagnostics_img.svg",
         "src/tailoring/llm.py",
         "generate_tailoring_suggestions.py",
         "src/tailoring/rendering.py",

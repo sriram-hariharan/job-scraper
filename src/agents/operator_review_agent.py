@@ -49,6 +49,41 @@ OPERATOR_REVIEW_FIELDNAMES = [
     "winner_resume",
     "resolved_resume",
 ]
+OPERATOR_REVIEW_TAILORING_EVIDENCE_ARTIFACT_VERSION = (
+    "operator-review-tailoring-evidence-v1"
+)
+OPERATOR_REVIEW_TAILORING_EVIDENCE_GATE = (
+    "APPLYLENS_AGENTIC_OPERATOR_REVIEW_CONSUMES_TAILORING_DECISION_EVIDENCE_ENABLED"
+)
+OPERATOR_REVIEW_TAILORING_EVIDENCE_FALSE_FLAGS = (
+    "provider_call_performed",
+    "live_llm_call_performed",
+    "jd_extraction_performed",
+    "resume_match_execution_performed",
+    "critic_execution_performed",
+    "job_prioritization_execution_performed",
+    "tailoring_decision_execution_performed",
+    "trace_persistence_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "review_queue_mutation_performed",
+    "queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
+    "tailoring_provider_call_performed",
+    "workflow_runner_executed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+)
 
 
 def _clean_text(value: Any) -> str:
@@ -65,6 +100,125 @@ def _first_nonblank(row: Dict[str, Any], *keys: str) -> str:
         if value:
             return value
     return ""
+
+
+def _plain_dict(value: Any) -> Dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _plain_list(value: Any) -> List[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def _operator_review_tailoring_safety_metadata() -> Dict[str, bool]:
+    return {flag: False for flag in OPERATOR_REVIEW_TAILORING_EVIDENCE_FALSE_FLAGS}
+
+
+def _operator_review_reason_codes(value: Any) -> List[str]:
+    return [
+        _clean_text(code)
+        for code in _plain_list(value)
+        if _clean_text(code)
+    ]
+
+
+def _operator_review_validation_status(value: Any) -> str:
+    payload = _plain_dict(value)
+    return _clean_text(payload.get("validation_status")).lower()
+
+
+def _operator_review_identity_conflict(
+    *,
+    field_name: str,
+    primary: Dict[str, Any],
+    optional: Dict[str, Any],
+    reason_prefix: str,
+) -> str:
+    primary_value = _clean_text(primary.get(field_name))
+    optional_value = _clean_text(optional.get(field_name))
+    if primary_value and optional_value and primary_value != optional_value:
+        return f"{reason_prefix}_{field_name}_conflict"
+    return ""
+
+
+def _operator_review_tailoring_decision(
+    *,
+    tailoring_decision: str,
+    tailoring_readiness: str,
+    confidence: float,
+    operator_review_required: bool,
+    reason_codes: List[str],
+    has_source_context_gap: bool,
+) -> Dict[str, Any]:
+    decision = _clean_text(tailoring_decision).lower()
+    readiness = _clean_text(tailoring_readiness).lower()
+    reason_text = " ".join(reason_codes).lower()
+    has_blocking_risk = (
+        decision == "do_not_tailor"
+        or readiness == "blocked_by_risk"
+        or "blocking_risk" in reason_text
+        or "blocked_by_risk" in reason_text
+    )
+    if has_blocking_risk:
+        return {
+            "operator_review_lane": "hold_or_skip",
+            "operator_review_readiness": "blocked_by_risk",
+            "human_review_required": True,
+            "recommended_next_step": "hold_or_skip",
+        }
+    if (
+        decision == "no_tailoring_needed"
+        and readiness in {"ready_for_operator_review", "ready_without_tailoring", "ready"}
+        and confidence >= 0.75
+        and not operator_review_required
+        and not reason_codes
+    ):
+        return {
+            "operator_review_lane": "ready_to_apply",
+            "operator_review_readiness": "ready_without_tailoring",
+            "human_review_required": False,
+            "recommended_next_step": "review_and_apply_manually",
+        }
+    if decision in {"light_tailoring", "tailor_before_apply"} and not operator_review_required:
+        return {
+            "operator_review_lane": "tailor_then_apply",
+            "operator_review_readiness": "needs_tailoring_review",
+            "human_review_required": True,
+            "recommended_next_step": "review_tailoring_plan",
+        }
+    if has_source_context_gap and not reason_codes:
+        return {
+            "operator_review_lane": "source_watch",
+            "operator_review_readiness": "insufficient_evidence",
+            "human_review_required": True,
+            "recommended_next_step": "watch_source",
+        }
+    if has_source_context_gap and not any(
+        code in reason_codes
+        for code in {
+            "tailoring_decision_evidence_missing",
+            "tailoring_decision_evidence_malformed",
+        }
+    ):
+        return {
+            "operator_review_lane": "source_watch",
+            "operator_review_readiness": "insufficient_evidence",
+            "human_review_required": True,
+            "recommended_next_step": "watch_source",
+        }
+    if decision == "manual_review_before_tailoring" or operator_review_required:
+        return {
+            "operator_review_lane": "review_before_action",
+            "operator_review_readiness": "needs_manual_review",
+            "human_review_required": True,
+            "recommended_next_step": "review_risks_before_action",
+        }
+    return {
+        "operator_review_lane": "review_before_action",
+        "operator_review_readiness": "needs_manual_review",
+        "human_review_required": True,
+        "recommended_next_step": "collect_more_evidence",
+    }
 
 
 def _score(row: Dict[str, Any]) -> float:
@@ -117,6 +271,270 @@ def _normalize_input_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "source_recommendation": _source_recommendation(row),
         "winner_resume": _first_nonblank(row, "winner_resume", "selector_winner_resume"),
         "resolved_resume": _clean_text(row.get("resolved_resume")),
+    }
+
+
+def build_operator_review_tailoring_evidence_artifact(
+    *,
+    tailoring_decision_priority_evidence: Dict[str, Any] | None = None,
+    job_prioritization_critic_evidence: Dict[str, Any] | None = None,
+    critic_resume_match_jd_evidence: Dict[str, Any] | None = None,
+    resume_match_jd_evidence: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    """Build read-only human review evidence from an existing tailoring decision."""
+
+    tailoring_source = _plain_dict(tailoring_decision_priority_evidence)
+    priority_source = _plain_dict(job_prioritization_critic_evidence)
+    critic_source = _plain_dict(critic_resume_match_jd_evidence)
+    resume_source = _plain_dict(resume_match_jd_evidence)
+    jd_source = _plain_dict(jd_intelligence)
+    reason_codes: List[str] = []
+
+    if tailoring_decision_priority_evidence is None or tailoring_decision_priority_evidence == {}:
+        reason_codes.append("tailoring_decision_evidence_missing")
+    elif not isinstance(tailoring_decision_priority_evidence, dict):
+        reason_codes.append("tailoring_decision_evidence_malformed")
+    elif _clean_text(tailoring_source.get("artifact_type")) != "tailoring_decision_priority_evidence":
+        reason_codes.append("tailoring_decision_evidence_malformed")
+
+    optional_sources = (
+        (
+            job_prioritization_critic_evidence,
+            priority_source,
+            "job_prioritization",
+            "job_prioritization_critic_evidence",
+        ),
+        (
+            critic_resume_match_jd_evidence,
+            critic_source,
+            "critic",
+            "critic_resume_match_jd_evidence",
+        ),
+        (
+            resume_match_jd_evidence,
+            resume_source,
+            "resume_match",
+            "resume_match_jd_evidence",
+        ),
+    )
+    for raw_source, source, prefix, artifact_type in optional_sources:
+        if raw_source is None or raw_source == {}:
+            reason_codes.append(f"{prefix}_context_missing")
+        elif not isinstance(raw_source, dict):
+            reason_codes.append(f"{prefix}_context_malformed")
+        elif _clean_text(source.get("artifact_type")) != artifact_type:
+            reason_codes.append(f"{prefix}_context_malformed")
+
+    if jd_intelligence is None or jd_intelligence == {}:
+        reason_codes.append("jd_intelligence_context_missing")
+    elif not isinstance(jd_intelligence, dict):
+        reason_codes.append("jd_intelligence_context_malformed")
+
+    tailoring_validation_status = _operator_review_validation_status(
+        tailoring_source.get("validation_summary")
+    )
+    if tailoring_source and tailoring_validation_status not in {"", "passed"}:
+        reason_codes.append("tailoring_decision_validation_degraded")
+
+    for code in _operator_review_reason_codes(tailoring_source.get("reason_codes")):
+        reason_codes.append(code)
+
+    for optional_source, prefix in (
+        (priority_source, "job_prioritization_context"),
+        (critic_source, "critic_context"),
+        (resume_source, "resume_match_context"),
+        (jd_source, "jd_intelligence_context"),
+    ):
+        for field_name in ("job_id", "title", "company"):
+            conflict = _operator_review_identity_conflict(
+                field_name=field_name,
+                primary=tailoring_source,
+                optional=optional_source,
+                reason_prefix=prefix,
+            )
+            if conflict:
+                reason_codes.append(conflict)
+
+    tailoring_decision = _clean_text(tailoring_source.get("tailoring_decision")).lower()
+    tailoring_readiness = _clean_text(tailoring_source.get("tailoring_readiness")).lower()
+    operator_review_required = bool(tailoring_source.get("operator_review_required"))
+    confidence = parse_float(tailoring_source.get("confidence"))
+    priority_recommendation = _clean_text(priority_source.get("priority_recommendation")).lower()
+    priority_band = _clean_text(priority_source.get("priority_band")).lower()
+    critic_risk_flags = _operator_review_reason_codes(critic_source.get("risk_flags"))
+    critic_contradiction_flags = _operator_review_reason_codes(
+        critic_source.get("contradiction_flags")
+    )
+
+    if tailoring_decision == "no_tailoring_needed" and operator_review_required:
+        reason_codes.append("no_tailoring_needed_with_operator_review_required")
+    if tailoring_decision == "do_not_tailor" and tailoring_readiness in {
+        "ready",
+        "ready_for_operator_review",
+        "ready_without_tailoring",
+    }:
+        reason_codes.append("do_not_tailor_with_ready_readiness")
+    if (
+        priority_recommendation == "prioritize"
+        and priority_band == "high"
+        and (
+            tailoring_decision == "do_not_tailor"
+            or tailoring_readiness == "blocked_by_risk"
+        )
+    ):
+        reason_codes.append("high_priority_with_blocked_tailoring_decision")
+    if tailoring_decision == "no_tailoring_needed" and critic_risk_flags:
+        reason_codes.append("no_tailoring_needed_with_critic_risk_flags")
+    if tailoring_decision == "no_tailoring_needed" and critic_contradiction_flags:
+        reason_codes.append("no_tailoring_needed_with_critic_contradiction_flags")
+
+    job_id = (
+        _clean_text(tailoring_source.get("job_id"))
+        or _clean_text(priority_source.get("job_id"))
+        or _clean_text(critic_source.get("job_id"))
+        or _clean_text(resume_source.get("job_id"))
+        or _clean_text(jd_source.get("job_id"))
+    )
+    title = (
+        _clean_text(tailoring_source.get("title"))
+        or _clean_text(priority_source.get("title"))
+        or _clean_text(critic_source.get("title"))
+        or _clean_text(resume_source.get("title"))
+        or _clean_text(jd_source.get("title"))
+    )
+    company = (
+        _clean_text(tailoring_source.get("company"))
+        or _clean_text(priority_source.get("company"))
+        or _clean_text(critic_source.get("company"))
+        or _clean_text(resume_source.get("company"))
+        or _clean_text(jd_source.get("company"))
+    )
+    selected_resume_id = (
+        _clean_text(tailoring_source.get("selected_resume_id"))
+        or _clean_text(priority_source.get("selected_resume_id"))
+        or _clean_text(critic_source.get("selected_resume_id"))
+        or _clean_text(resume_source.get("selected_resume_id"))
+    )
+    has_source_context_gap = not all([job_id, title, company])
+    reason_codes = list(dict.fromkeys(reason_codes))
+
+    review = _operator_review_tailoring_decision(
+        tailoring_decision=tailoring_decision,
+        tailoring_readiness=tailoring_readiness,
+        confidence=confidence,
+        operator_review_required=operator_review_required,
+        reason_codes=reason_codes,
+        has_source_context_gap=has_source_context_gap,
+    )
+    if "tailoring_decision_evidence_missing" in reason_codes:
+        review = {
+            "operator_review_lane": "review_before_action",
+            "operator_review_readiness": "insufficient_evidence",
+            "human_review_required": True,
+            "recommended_next_step": "collect_more_evidence",
+        }
+    elif "tailoring_decision_evidence_malformed" in reason_codes:
+        review = {
+            "operator_review_lane": "review_before_action",
+            "operator_review_readiness": "insufficient_evidence",
+            "human_review_required": True,
+            "recommended_next_step": "collect_more_evidence",
+        }
+    elif any(
+        code in reason_codes
+        for code in {
+            "tailoring_decision_validation_degraded",
+            "no_tailoring_needed_with_operator_review_required",
+            "do_not_tailor_with_ready_readiness",
+            "high_priority_with_blocked_tailoring_decision",
+            "no_tailoring_needed_with_critic_risk_flags",
+            "no_tailoring_needed_with_critic_contradiction_flags",
+        }
+    ) and review["operator_review_lane"] == "ready_to_apply":
+        review = {
+            "operator_review_lane": "review_before_action",
+            "operator_review_readiness": "needs_manual_review",
+            "human_review_required": True,
+            "recommended_next_step": "review_risks_before_action",
+        }
+
+    validation_status = "passed"
+    if any(
+        code in reason_codes
+        for code in {
+            "tailoring_decision_evidence_missing",
+            "tailoring_decision_evidence_malformed",
+        }
+    ):
+        validation_status = "failed"
+    elif reason_codes:
+        validation_status = "degraded"
+
+    review_packet_summary = {
+        "job_id": job_id,
+        "title": title,
+        "company": company,
+        "selected_resume_id": selected_resume_id,
+        "tailoring_decision": tailoring_decision,
+        "tailoring_readiness": tailoring_readiness,
+        "tailoring_intensity": _clean_text(tailoring_source.get("tailoring_intensity")).lower(),
+        "operator_review_required": operator_review_required,
+        "priority_recommendation": priority_recommendation,
+        "priority_band": priority_band,
+        "critic_risk_flag_count": len(critic_risk_flags),
+        "critic_contradiction_count": len(critic_contradiction_flags),
+        "confidence": confidence,
+        "reason_codes": reason_codes,
+    }
+    safety_metadata = _operator_review_tailoring_safety_metadata()
+
+    return {
+        "artifact_type": "operator_review_tailoring_evidence",
+        "artifact_version": OPERATOR_REVIEW_TAILORING_EVIDENCE_ARTIFACT_VERSION,
+        "source_agent": "operator_review",
+        "source_agent_name": AGENT_NAME,
+        "source_agent_version": AGENT_VERSION,
+        "upstream_agents": [
+            "tailoring_decision",
+            "job_prioritization",
+            "critic",
+            "resume_match",
+            "jd_intelligence",
+        ],
+        "gate_name": OPERATOR_REVIEW_TAILORING_EVIDENCE_GATE,
+        "enabled": bool(enabled),
+        "default_off": True,
+        "read_only": True,
+        "diagnostic_only": True,
+        "job_id": job_id,
+        "title": title,
+        "company": company,
+        "selected_resume_id": selected_resume_id,
+        "operator_review_lane": review["operator_review_lane"],
+        "operator_review_readiness": review["operator_review_readiness"],
+        "human_review_required": review["human_review_required"],
+        "recommended_next_step": review["recommended_next_step"],
+        "review_packet_summary": review_packet_summary,
+        "reason_codes": reason_codes,
+        "validation_summary": {
+            "validation_status": validation_status,
+            "tailoring_decision_evidence_present": bool(tailoring_source),
+            "tailoring_decision_evidence_valid": (
+                bool(tailoring_source)
+                and "tailoring_decision_evidence_malformed" not in reason_codes
+            ),
+            "job_prioritization_context_present": bool(priority_source),
+            "critic_context_present": bool(critic_source),
+            "resume_match_context_present": bool(resume_source),
+            "jd_intelligence_context_present": bool(jd_source),
+            "source_context_complete": not has_source_context_gap,
+            "reason_codes": reason_codes,
+        },
+        "confidence": confidence,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
     }
 
 

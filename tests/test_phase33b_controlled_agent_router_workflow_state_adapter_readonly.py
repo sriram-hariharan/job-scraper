@@ -782,6 +782,8 @@ def test_changed_files_are_limited_to_phase33b_surface_and_legacy_guards():
             "tests/test_phase91b_job_prioritization_consumes_critic_evidence_default_off.py",
             "src/agents/tailoring_decision_agent.py",
             "tests/test_phase92b_tailoring_decision_consumes_job_prioritization_evidence_default_off.py",
+            "src/agents/operator_review_agent.py",
+            "tests/test_phase93b_operator_review_consumes_tailoring_decision_evidence_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
 "tests/support/",

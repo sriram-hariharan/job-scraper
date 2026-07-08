@@ -48,6 +48,36 @@ RECOMMENDATION_FIELDNAMES = [
     "critic_decision",
 ]
 
+JOB_PRIORITIZATION_CRITIC_EVIDENCE_ARTIFACT_VERSION = (
+    "job-prioritization-critic-evidence-v1"
+)
+JOB_PRIORITIZATION_CRITIC_EVIDENCE_GATE = (
+    "APPLYLENS_AGENTIC_JOB_PRIORITIZATION_CONSUMES_CRITIC_EVIDENCE_ENABLED"
+)
+
+JOB_PRIORITIZATION_CRITIC_EVIDENCE_FALSE_FLAGS = (
+    "provider_call_performed",
+    "live_llm_call_performed",
+    "jd_extraction_performed",
+    "resume_match_execution_performed",
+    "critic_execution_performed",
+    "trace_persistence_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "workflow_runner_executed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+)
+
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
@@ -567,6 +597,299 @@ def record_job_prioritization_agent_trace(
         if agent_trace_strict(env_map):
             raise
         return {"attempted": True, "recorded": False, "warning": str(exc)}
+
+
+def _job_prioritization_critic_safety_metadata() -> Dict[str, bool]:
+    return {
+        "read_only": True,
+        "advisory_only": True,
+        "diagnostic_only": True,
+        **{flag: False for flag in JOB_PRIORITIZATION_CRITIC_EVIDENCE_FALSE_FLAGS},
+    }
+
+
+def _evidence_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return deepcopy(value)
+    if isinstance(value, tuple):
+        return list(value)
+    if value:
+        return [value]
+    return []
+
+
+def _evidence_dict(value: Any) -> Dict[str, Any]:
+    return deepcopy(value) if isinstance(value, dict) else {}
+
+
+def _validation_status(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return _clean_text(value.get("validation_status")).lower()
+
+
+def _identity_conflict(
+    *,
+    field_name: str,
+    primary: Dict[str, Any],
+    optional: Dict[str, Any],
+    reason_prefix: str,
+) -> str:
+    primary_value = _clean_text(primary.get(field_name))
+    optional_value = _clean_text(optional.get(field_name))
+    if primary_value and optional_value and primary_value != optional_value:
+        return f"{reason_prefix}_{field_name}_conflict"
+    return ""
+
+
+def _priority_from_critic_evidence(
+    *,
+    critic_status: str,
+    evidence_quality: str,
+    confidence: float,
+    missing_required_count: int,
+    missing_required_ratio: float,
+    risk_flags: List[Any],
+    contradiction_flags: List[Any],
+    reason_codes: List[str],
+) -> Dict[str, Any]:
+    risk_present = bool(risk_flags)
+    contradiction_present = bool(contradiction_flags)
+    degraded = any(code.endswith("_degraded") for code in reason_codes)
+    malformed_or_missing = any(
+        code in reason_codes
+        for code in {
+            "critic_evidence_missing",
+            "critic_evidence_malformed",
+        }
+    )
+    if malformed_or_missing:
+        return {
+            "priority_recommendation": "manual_review",
+            "priority_band": "manual_review",
+            "readiness_level": "insufficient_evidence",
+            "manual_review_required": True,
+        }
+    if contradiction_present or risk_present:
+        return {
+            "priority_recommendation": "manual_review",
+            "priority_band": "manual_review",
+            "readiness_level": "blocked_by_risk",
+            "manual_review_required": True,
+        }
+    if degraded:
+        return {
+            "priority_recommendation": "manual_review",
+            "priority_band": "manual_review",
+            "readiness_level": "needs_human_review",
+            "manual_review_required": True,
+        }
+    if (
+        critic_status == "approved"
+        and evidence_quality == "strong"
+        and confidence >= 0.75
+    ):
+        return {
+            "priority_recommendation": "prioritize",
+            "priority_band": "high",
+            "readiness_level": "ready_for_tailoring_review",
+            "manual_review_required": False,
+        }
+    if (
+        evidence_quality == "weak"
+        or confidence < 0.40
+        or missing_required_count >= 2
+        or missing_required_ratio >= 0.50
+        or critic_status in {"rejected", "insufficient_evidence"}
+    ):
+        return {
+            "priority_recommendation": "deprioritize",
+            "priority_band": "low",
+            "readiness_level": "insufficient_evidence",
+            "manual_review_required": True,
+        }
+    return {
+        "priority_recommendation": "standard_review",
+        "priority_band": "medium",
+        "readiness_level": "needs_human_review",
+        "manual_review_required": True,
+    }
+
+
+def build_job_prioritization_critic_evidence_artifact(
+    *,
+    critic_resume_match_jd_evidence: Dict[str, Any] | None = None,
+    resume_match_jd_evidence: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    """Prioritize already-built Critic evidence without side effects."""
+
+    critic_source = _evidence_dict(critic_resume_match_jd_evidence)
+    resume_source = _evidence_dict(resume_match_jd_evidence)
+    jd_source = _evidence_dict(jd_intelligence)
+    reason_codes: List[str] = []
+
+    if critic_resume_match_jd_evidence is None or critic_resume_match_jd_evidence == {}:
+        reason_codes.append("critic_evidence_missing")
+    elif not isinstance(critic_resume_match_jd_evidence, dict):
+        reason_codes.append("critic_evidence_malformed")
+    elif _clean_text(critic_source.get("artifact_type")) != "critic_resume_match_jd_evidence":
+        reason_codes.append("critic_evidence_malformed")
+
+    if resume_match_jd_evidence is None or resume_match_jd_evidence == {}:
+        reason_codes.append("resume_match_context_missing")
+    elif not isinstance(resume_match_jd_evidence, dict):
+        reason_codes.append("resume_match_context_malformed")
+    elif _clean_text(resume_source.get("artifact_type")) != "resume_match_jd_evidence":
+        reason_codes.append("resume_match_context_malformed")
+
+    if jd_intelligence is None or jd_intelligence == {}:
+        reason_codes.append("jd_intelligence_context_missing")
+    elif not isinstance(jd_intelligence, dict):
+        reason_codes.append("jd_intelligence_context_malformed")
+
+    critic_validation_status = _validation_status(critic_source.get("validation_summary"))
+    if critic_source and critic_validation_status not in {"", "passed"}:
+        reason_codes.append("critic_validation_degraded")
+
+    for code in _evidence_list(critic_source.get("reason_codes")):
+        text = _clean_text(code)
+        if text:
+            reason_codes.append(text)
+
+    for optional_source, prefix in (
+        (resume_source, "resume_match_context"),
+        (jd_source, "jd_intelligence_context"),
+    ):
+        for field_name in ("job_id", "title", "company"):
+            conflict = _identity_conflict(
+                field_name=field_name,
+                primary=critic_source,
+                optional=optional_source,
+                reason_prefix=prefix,
+            )
+            if conflict:
+                reason_codes.append(conflict)
+
+    critic_status = _clean_text(critic_source.get("critic_status")).lower()
+    evidence_quality = _clean_text(critic_source.get("evidence_quality")).lower()
+    risk_flags = _evidence_list(critic_source.get("risk_flags"))
+    contradiction_flags = _evidence_list(critic_source.get("contradiction_flags"))
+    if critic_status == "approved" and evidence_quality in {"", "missing", "weak"}:
+        reason_codes.append("approved_critic_with_weak_or_missing_evidence")
+    if critic_status == "approved" and contradiction_flags:
+        reason_codes.append("approved_critic_with_contradiction_flags")
+
+    gap_analysis = _evidence_dict(critic_source.get("gap_analysis"))
+    missing_required = _evidence_list(
+        gap_analysis.get("missing_required_skills")
+        if gap_analysis
+        else critic_source.get("missing_required_skills")
+    )
+    missing_required_count = len(missing_required)
+    if not missing_required_count:
+        missing_required_count = int(parse_float(gap_analysis.get("missing_required_skill_count")))
+    missing_required_ratio = parse_float(gap_analysis.get("missing_required_skill_ratio"))
+    confidence = parse_float(critic_source.get("confidence"))
+
+    reason_codes = list(dict.fromkeys(reason_codes))
+    priority = _priority_from_critic_evidence(
+        critic_status=critic_status,
+        evidence_quality=evidence_quality,
+        confidence=confidence,
+        missing_required_count=missing_required_count,
+        missing_required_ratio=missing_required_ratio,
+        risk_flags=risk_flags,
+        contradiction_flags=contradiction_flags,
+        reason_codes=reason_codes,
+    )
+    job_id = (
+        _clean_text(critic_source.get("job_id"))
+        or _clean_text(resume_source.get("job_id"))
+        or _clean_text(jd_source.get("job_id"))
+    )
+    title = (
+        _clean_text(critic_source.get("title"))
+        or _clean_text(resume_source.get("title"))
+        or _clean_text(jd_source.get("title"))
+    )
+    company = (
+        _clean_text(critic_source.get("company"))
+        or _clean_text(resume_source.get("company"))
+        or _clean_text(jd_source.get("company"))
+    )
+    selected_resume_id = (
+        _clean_text(critic_source.get("selected_resume_id"))
+        or _clean_text(resume_source.get("selected_resume_id"))
+    )
+    hard_validation_codes = {
+        "critic_evidence_missing",
+        "critic_evidence_malformed",
+        "critic_validation_degraded",
+        "approved_critic_with_weak_or_missing_evidence",
+        "approved_critic_with_contradiction_flags",
+    }
+    validation_status = "passed"
+    if any(code in hard_validation_codes for code in reason_codes):
+        validation_status = "degraded"
+    if "critic_evidence_malformed" in reason_codes:
+        validation_status = "failed"
+    safety_metadata = _job_prioritization_critic_safety_metadata()
+
+    return {
+        "artifact_type": "job_prioritization_critic_evidence",
+        "artifact_version": JOB_PRIORITIZATION_CRITIC_EVIDENCE_ARTIFACT_VERSION,
+        "source_agent": "job_prioritization",
+        "source_agent_name": AGENT_NAME,
+        "source_agent_version": AGENT_VERSION,
+        "upstream_agents": ["critic", "resume_match", "jd_intelligence"],
+        "gate_name": JOB_PRIORITIZATION_CRITIC_EVIDENCE_GATE,
+        "enabled": bool(enabled),
+        "default_off": True,
+        "read_only": True,
+        "diagnostic_only": True,
+        "job_id": job_id,
+        "title": title,
+        "company": company,
+        "selected_resume_id": selected_resume_id,
+        "priority_recommendation": priority["priority_recommendation"],
+        "priority_band": priority["priority_band"],
+        "readiness_level": priority["readiness_level"],
+        "manual_review_required": priority["manual_review_required"],
+        "tailoring_decision_input_summary": {
+            "job_id": job_id,
+            "selected_resume_id": selected_resume_id,
+            "priority_recommendation": priority["priority_recommendation"],
+            "priority_band": priority["priority_band"],
+            "readiness_level": priority["readiness_level"],
+            "manual_review_required": priority["manual_review_required"],
+            "critic_status": critic_status,
+            "evidence_quality": evidence_quality,
+            "confidence": confidence,
+            "risk_flag_count": len(risk_flags),
+            "contradiction_count": len(contradiction_flags),
+            "missing_required_skill_count": missing_required_count,
+            "reason_codes": reason_codes,
+        },
+        "reason_codes": reason_codes,
+        "validation_summary": {
+            "validation_status": validation_status,
+            "critic_evidence_present": bool(critic_source),
+            "critic_evidence_valid": (
+                bool(critic_source)
+                and "critic_evidence_malformed" not in reason_codes
+            ),
+            "resume_match_context_present": bool(resume_source),
+            "jd_intelligence_context_present": bool(jd_source),
+            "risk_flag_count": len(risk_flags),
+            "contradiction_count": len(contradiction_flags),
+            "reason_codes": reason_codes,
+        },
+        "confidence": confidence,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
 
 
 STRATEGY_RECOMMENDATION_ACTIONS = {

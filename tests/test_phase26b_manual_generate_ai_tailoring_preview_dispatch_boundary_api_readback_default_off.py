@@ -792,6 +792,8 @@ def test_phase26b_changes_only_api_doc_test_and_legacy_guards():
             "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
             "src/agents/resume_match_agent.py",
             "tests/test_phase89b_resume_match_consumes_jd_intelligence_default_off.py",
+            "src/agents/critic_agent.py",
+            "tests/test_phase90b_critic_consumes_resume_match_jd_evidence_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

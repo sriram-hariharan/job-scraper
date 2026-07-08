@@ -230,12 +230,13 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
         "src/agents/controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
         "src/agents/controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
-        "src/agents/orchestrator_adapter_harness.py",
-        "src/pipeline/collector.py",
-        "src/agents/jd_intelligence.py",
-        "src/agents/resume_match_agent.py",
-        "src/app/api.py",
-        "src/app/services.py",
+            "src/agents/orchestrator_adapter_harness.py",
+            "src/pipeline/collector.py",
+            "src/agents/jd_intelligence.py",
+            "src/agents/resume_match_agent.py",
+            "src/agents/critic_agent.py",
+            "src/app/api.py",
+            "src/app/services.py",
         "src/tailoring/llm.py",
         "src/app/planning_ui.py",
         "src/app/static/planning.js",
@@ -297,7 +298,8 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/orchestrator_adapter_harness.py"
     and path != "src/agents/jd_intelligence.py"
     and path != "src/agents/resume_match_agent.py"
-        ]
+    and path != "src/agents/critic_agent.py"
+            ]
     forbidden = (
         "provider_call(",
         "database_write(",
@@ -830,6 +832,8 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
             "src/agents/resume_match_agent.py",
             "tests/test_phase89b_resume_match_consumes_jd_intelligence_default_off.py",
+            "src/agents/critic_agent.py",
+            "tests/test_phase90b_critic_consumes_resume_match_jd_evidence_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

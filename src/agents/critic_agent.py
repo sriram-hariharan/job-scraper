@@ -506,6 +506,311 @@ def _critic_guardrail_safety_metadata() -> Dict[str, bool]:
     }
 
 
+CRITIC_RESUME_MATCH_JD_EVIDENCE_GATE = (
+    "APPLYLENS_AGENTIC_CRITIC_CONSUMES_RESUME_MATCH_JD_EVIDENCE_ENABLED"
+)
+CRITIC_RESUME_MATCH_JD_EVIDENCE_ARTIFACT_VERSION = (
+    "critic-resume-match-jd-evidence-v1"
+)
+
+
+def _critic_resume_match_jd_safety_metadata() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "live_llm_call_performed": False,
+        "jd_extraction_performed": False,
+        "resume_match_execution_performed": False,
+        "trace_persistence_performed": False,
+        "collector_output_changed": False,
+        "production_output_changed": False,
+        "scoring_changed": False,
+        "ranking_changed": False,
+        "filtering_changed": False,
+        "queue_mutation_performed": False,
+        "scheduler_mutation_performed": False,
+        "tailoring_mutation_performed": False,
+        "source_resume_mutation_performed": False,
+        "workflow_runner_executed": False,
+        "auto_apply_performed": False,
+        "ats_submission_performed": False,
+        "recruiter_message_sent": False,
+        "mark_applied_performed": False,
+    }
+
+
+def _critic_evidence_list(value: Any) -> List[str]:
+    return _as_list(value)
+
+
+def _critic_evidence_key_set(values: Iterable[Any]) -> set[str]:
+    return {
+        _normalize_term(value)
+        for value in values
+        if _normalize_term(value)
+    }
+
+
+def _critic_evidence_missing_required_ratio(
+    *,
+    required: List[str],
+    missing: List[str],
+) -> float:
+    if not required:
+        return 1.0
+    missing_keys = _critic_evidence_key_set(missing)
+    required_keys = _critic_evidence_key_set(required)
+    if not required_keys:
+        return 1.0
+    return len(missing_keys & required_keys) / len(required_keys)
+
+
+def _critic_evidence_quality(
+    *,
+    required_skills: List[str],
+    missing_required_skills: List[str],
+    confidence: float,
+    upstream_reason_codes: List[str],
+) -> str:
+    if not required_skills:
+        return "missing"
+    missing_ratio = _critic_evidence_missing_required_ratio(
+        required=required_skills,
+        missing=missing_required_skills,
+    )
+    if any("malformed" in code or "missing" in code for code in upstream_reason_codes):
+        if missing_ratio >= 0.5 or confidence < 0.4:
+            return "weak"
+        return "partial"
+    if missing_ratio <= 0.2 and confidence >= 0.7:
+        return "strong"
+    if missing_ratio <= 0.5 and confidence >= 0.4:
+        return "partial"
+    return "weak"
+
+
+def _critic_status_for_evidence_quality(evidence_quality: str) -> str:
+    if evidence_quality == "strong":
+        return "approved"
+    if evidence_quality == "partial":
+        return "needs_review"
+    if evidence_quality == "missing":
+        return "insufficient_evidence"
+    return "rejected"
+
+
+def _critic_evidence_contradictions(
+    *,
+    resume_match_evidence: Dict[str, Any],
+    jd_intelligence: Dict[str, Any],
+) -> List[str]:
+    flags: List[str] = []
+    rm_required = _critic_evidence_list(resume_match_evidence.get("jd_required_skills"))
+    rm_all = _critic_evidence_list(resume_match_evidence.get("jd_all_skills"))
+    rm_known = _critic_evidence_key_set(rm_required + rm_all)
+    for skill in _critic_evidence_list(
+        resume_match_evidence.get("matched_required_skills")
+    ):
+        if _normalize_term(skill) and _normalize_term(skill) not in rm_known:
+            flags.append(f"matched_required_skill_not_in_resume_match_jd:{skill}")
+
+    if jd_intelligence:
+        wrapper_required = _critic_evidence_list(jd_intelligence.get("required_skills"))
+        wrapper_all = _critic_evidence_list(jd_intelligence.get("all_skills"))
+        wrapper_required_keys = _critic_evidence_key_set(wrapper_required)
+        wrapper_all_keys = _critic_evidence_key_set(wrapper_all)
+        rm_required_keys = _critic_evidence_key_set(rm_required)
+        rm_all_keys = _critic_evidence_key_set(rm_all)
+        if wrapper_required_keys and rm_required_keys and wrapper_required_keys != rm_required_keys:
+            flags.append("jd_required_skills_conflict")
+        if wrapper_all_keys and rm_all_keys and not rm_required_keys.issubset(wrapper_all_keys | rm_all_keys):
+            flags.append("jd_all_skills_conflict")
+    return list(dict.fromkeys(flags))
+
+
+def build_critic_resume_match_jd_evidence_artifact(
+    *,
+    resume_match_jd_evidence: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    """Critique already-built Resume Match/JD evidence without side effects."""
+
+    resume_match_source = (
+        deepcopy(resume_match_jd_evidence)
+        if isinstance(resume_match_jd_evidence, dict)
+        else {}
+    )
+    jd_source = deepcopy(jd_intelligence) if isinstance(jd_intelligence, dict) else {}
+    reason_codes: List[str] = []
+    if resume_match_jd_evidence is None or resume_match_jd_evidence == {}:
+        reason_codes.append("resume_match_evidence_missing")
+    elif not isinstance(resume_match_jd_evidence, dict):
+        reason_codes.append("resume_match_evidence_malformed")
+    elif _clean_text(resume_match_source.get("artifact_type")) != "resume_match_jd_evidence":
+        reason_codes.append("resume_match_evidence_malformed")
+
+    if jd_intelligence is None or jd_intelligence == {}:
+        reason_codes.append("jd_intelligence_context_missing")
+    elif not isinstance(jd_intelligence, dict):
+        reason_codes.append("jd_intelligence_context_malformed")
+    else:
+        validation_json = jd_source.get("validation_json")
+        if isinstance(validation_json, dict):
+            if validation_json.get("is_valid_for_existing_output_wrapper") is False:
+                reason_codes.append("jd_intelligence_context_malformed")
+            reason_codes.extend(
+                _clean_text(code)
+                for code in validation_json.get("missing_or_invalid_fields", [])
+                if _clean_text(code)
+            )
+        else:
+            reason_codes.append("jd_intelligence_context_validation_missing")
+
+    upstream_reason_codes = [
+        _clean_text(code)
+        for code in list(resume_match_source.get("reason_codes") or [])
+        if _clean_text(code)
+    ]
+    reason_codes.extend(upstream_reason_codes)
+
+    required_skills = _critic_evidence_list(resume_match_source.get("jd_required_skills"))
+    preferred_skills = _critic_evidence_list(resume_match_source.get("jd_preferred_skills"))
+    missing_required = _critic_evidence_list(
+        resume_match_source.get("missing_required_skills")
+    )
+    missing_preferred = _critic_evidence_list(
+        resume_match_source.get("missing_preferred_skills")
+    )
+    matched_required = _critic_evidence_list(
+        resume_match_source.get("matched_required_skills")
+    )
+    confidence = parse_float(resume_match_source.get("confidence"))
+    validation_summary = resume_match_source.get("validation_summary")
+    if isinstance(validation_summary, dict):
+        if _clean_text(validation_summary.get("validation_status")) not in {"", "passed"}:
+            reason_codes.append("resume_match_validation_degraded")
+    elif resume_match_source:
+        reason_codes.append("resume_match_validation_missing")
+
+    contradiction_flags = _critic_evidence_contradictions(
+        resume_match_evidence=resume_match_source,
+        jd_intelligence=jd_source,
+    )
+    if contradiction_flags:
+        reason_codes.append("upstream_evidence_contradiction")
+
+    evidence_quality = (
+        "missing"
+        if not resume_match_source
+        else _critic_evidence_quality(
+            required_skills=required_skills,
+            missing_required_skills=missing_required,
+            confidence=confidence,
+            upstream_reason_codes=[
+                code
+                for code in reason_codes
+                if code != "jd_intelligence_context_missing"
+            ],
+        )
+    )
+    critic_status = _critic_status_for_evidence_quality(evidence_quality)
+    if contradiction_flags and critic_status == "approved":
+        critic_status = "needs_review"
+        evidence_quality = "partial"
+
+    risk_flags: List[str] = []
+    missing_ratio = _critic_evidence_missing_required_ratio(
+        required=required_skills,
+        missing=missing_required,
+    )
+    if missing_ratio >= 0.5 and required_skills:
+        risk_flags.append("required_skill_coverage_low")
+    if confidence < 0.4:
+        risk_flags.append("resume_match_confidence_low")
+    if contradiction_flags:
+        risk_flags.append("upstream_evidence_contradiction")
+    if "jd_intelligence_context_missing" in reason_codes:
+        risk_flags.append("jd_context_unavailable")
+
+    if evidence_quality == "strong":
+        review_guidance = "Resume Match evidence is strong; downstream prioritization can treat the match as well supported."
+    elif evidence_quality == "partial":
+        review_guidance = "Review missing skills and contradiction flags before using this match for prioritization."
+    elif evidence_quality == "weak":
+        review_guidance = "Treat this match as weak evidence until missing required skills are reviewed."
+    else:
+        review_guidance = "Resume Match evidence is missing or malformed; keep this item in manual review."
+
+    artifact_reason_codes = list(dict.fromkeys(reason_codes))
+    safety_metadata = _critic_resume_match_jd_safety_metadata()
+    job_id = _clean_text(resume_match_source.get("job_id")) or _clean_text(jd_source.get("job_id"))
+    title = _clean_text(resume_match_source.get("title")) or _clean_text(jd_source.get("title"))
+    company = _clean_text(resume_match_source.get("company")) or _clean_text(jd_source.get("company"))
+    selected_resume_id = _clean_text(resume_match_source.get("selected_resume_id"))
+
+    return {
+        "artifact_type": "critic_resume_match_jd_evidence",
+        "artifact_version": CRITIC_RESUME_MATCH_JD_EVIDENCE_ARTIFACT_VERSION,
+        "source_agent": "critic",
+        "source_agent_name": AGENT_NAME,
+        "source_agent_version": AGENT_VERSION,
+        "upstream_agents": ["resume_match", "jd_intelligence"],
+        "gate_name": CRITIC_RESUME_MATCH_JD_EVIDENCE_GATE,
+        "enabled": bool(enabled),
+        "default_off": True,
+        "read_only": True,
+        "diagnostic_only": True,
+        "job_id": job_id,
+        "title": title,
+        "company": company,
+        "selected_resume_id": selected_resume_id,
+        "critic_status": critic_status,
+        "evidence_quality": evidence_quality,
+        "gap_analysis": {
+            "missing_required_skills": missing_required,
+            "missing_preferred_skills": missing_preferred,
+            "matched_required_skill_count": len(matched_required),
+            "required_skill_count": len(required_skills),
+            "missing_required_skill_ratio": round(missing_ratio, 4),
+        },
+        "risk_flags": risk_flags,
+        "contradiction_flags": contradiction_flags,
+        "missing_required_skills": missing_required,
+        "unsupported_match_claims": contradiction_flags,
+        "review_guidance": review_guidance,
+        "job_prioritization_input_summary": {
+            "job_id": job_id,
+            "selected_resume_id": selected_resume_id,
+            "critic_status": critic_status,
+            "evidence_quality": evidence_quality,
+            "confidence": confidence,
+            "missing_required_skill_count": len(missing_required),
+            "risk_flag_count": len(risk_flags),
+            "contradiction_count": len(contradiction_flags),
+            "reason_codes": artifact_reason_codes,
+        },
+        "reason_codes": artifact_reason_codes,
+        "validation_summary": {
+            "validation_status": "passed" if not artifact_reason_codes else "degraded",
+            "resume_match_evidence_present": bool(resume_match_source),
+            "resume_match_evidence_valid": (
+                bool(resume_match_source)
+                and "resume_match_evidence_malformed" not in artifact_reason_codes
+            ),
+            "jd_intelligence_context_present": bool(jd_source),
+            "jd_intelligence_context_valid": (
+                bool(jd_source)
+                and "jd_intelligence_context_malformed" not in artifact_reason_codes
+            ),
+            "contradiction_count": len(contradiction_flags),
+            "reason_codes": artifact_reason_codes,
+        },
+        "confidence": confidence,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+
+
 def _critic_guardrail_suggestion_list(value: Any) -> List[Dict[str, Any]]:
     if not isinstance(value, list):
         return []

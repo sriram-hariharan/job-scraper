@@ -157,6 +157,8 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
                     "tests/support/phase_guard_registry.py",
                     "src/agents/resume_match_agent.py",
                     "tests/test_phase89b_resume_match_consumes_jd_intelligence_default_off.py",
+            "src/agents/critic_agent.py",
+            "tests/test_phase90b_critic_consumes_resume_match_jd_evidence_default_off.py",
                     "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
         "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
@@ -850,6 +852,11 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/agents/resume_match_agent.py",
     }
     if set(changed_runtime_files) == phase89b_resume_match_jd_evidence_files:
+        return
+    phase90b_critic_resume_match_jd_evidence_files = {
+        ROOT / "src/agents/critic_agent.py",
+    }
+    if set(changed_runtime_files) == phase90b_critic_resume_match_jd_evidence_files:
         return
         phase79d_default_off_advisory_chain_harness_files = {
             ROOT / "src/agents/orchestrator_adapter_harness.py",

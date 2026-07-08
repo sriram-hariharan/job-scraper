@@ -16,7 +16,7 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
     "src/app/services.py": "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
-    "src/pipeline/collector.py": "a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344",
+    "src/pipeline/collector.py": "cae9f4a51ef14c7b1185a64f2e229591274c284c2985989ec1f5997f7728ee42",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
 }
 
@@ -806,6 +806,7 @@ def test_phase19i_changes_only_approved_files():
             "tests/test_phase94b_agent_evidence_chain_composition_default_off.py",
             "tests/test_phase95b_agent_evidence_chain_trace_payload_default_off.py",
                 "tests/test_phase96b_agent_evidence_chain_trace_persistence_default_off.py",
+                "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

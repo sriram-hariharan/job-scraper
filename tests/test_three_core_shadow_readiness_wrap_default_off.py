@@ -46,7 +46,7 @@ RUNTIME_HASHES = {
     "src/agents/three_core_agent_shadow_callable_adapters.py": ("e7bfcf282a40d254ffbef99d2a8c92abdd2d43ac931741e7a39da1724dd8e37f"),
     "src/agents/three_core_agent_shadow_runtime_readback.py": ("7a11a895ebb409b035cdd2851947f310df4b4fc7a58529794a3046fbbb6ac6b4"),
     "src/agents/three_core_agent_shadow_operator_canary.py": ("b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"),
-    "src/pipeline/collector.py": ("a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344"),
+    "src/pipeline/collector.py": ("cae9f4a51ef14c7b1185a64f2e229591274c284c2985989ec1f5997f7728ee42"),
     "src/app/api.py": ("85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"),
     "src/app/services.py": ("e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c"),
     "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),

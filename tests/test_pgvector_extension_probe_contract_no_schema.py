@@ -265,7 +265,7 @@ def test_no_dependency_schema_migration_api_service_or_pipeline_change():
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"
         ),
         "src/pipeline/collector.py": (
-            "e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd"
+            "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

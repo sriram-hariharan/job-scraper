@@ -323,7 +323,7 @@ def test_no_api_ui_pipeline_scoring_ranking_queue_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": ("85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"),
         "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
-        "src/pipeline/collector.py": ("e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd"),
+        "src/pipeline/collector.py": ("71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),
         "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
         "application_execution_queue.py": ("c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"),

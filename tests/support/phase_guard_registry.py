@@ -87,6 +87,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase90b_critic_consumes_resume_match_jd_evidence_default_off.py",
             "src/agents/job_prioritization_agent.py",
             "tests/test_phase91b_job_prioritization_consumes_critic_evidence_default_off.py",
+            "src/agents/tailoring_decision_agent.py",
+            "tests/test_phase92b_tailoring_decision_consumes_job_prioritization_evidence_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }

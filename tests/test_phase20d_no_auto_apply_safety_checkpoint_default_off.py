@@ -163,6 +163,8 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase91b_job_prioritization_consumes_critic_evidence_default_off.py",
             "src/agents/tailoring_decision_agent.py",
             "tests/test_phase92b_tailoring_decision_consumes_job_prioritization_evidence_default_off.py",
+            "src/agents/operator_review_agent.py",
+            "tests/test_phase93b_operator_review_consumes_tailoring_decision_evidence_default_off.py",
                     "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
         "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
@@ -871,6 +873,11 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/agents/tailoring_decision_agent.py",
     }
     if set(changed_runtime_files) == phase92b_tailoring_decision_priority_evidence_files:
+        return
+    phase93b_operator_review_tailoring_evidence_files = {
+        ROOT / "src/agents/operator_review_agent.py",
+    }
+    if set(changed_runtime_files) == phase93b_operator_review_tailoring_evidence_files:
         return
         phase79d_default_off_advisory_chain_harness_files = {
             ROOT / "src/agents/orchestrator_adapter_harness.py",

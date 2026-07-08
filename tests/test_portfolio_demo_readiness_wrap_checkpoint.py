@@ -631,6 +631,7 @@ ALLOWED_CHANGED |= {
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
                 "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+            "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
                     "tests/support/phase_guard_registry.py",
 }
 

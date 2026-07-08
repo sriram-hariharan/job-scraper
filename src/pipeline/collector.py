@@ -30,6 +30,10 @@ JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_FLAG = (
 JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_SAMPLE_LIMIT_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_SAMPLE_LIMIT"
 )
+JD_INTELLIGENCE_EXISTING_OUTPUT_TRACE_PERSISTENCE_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_JD_INTELLIGENCE_EXISTING_OUTPUT_"
+    "TRACE_PERSISTENCE_ENABLED"
+)
 
 
 def _is_user_pipeline_mode() -> bool:
@@ -649,6 +653,9 @@ def _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(
     enabled: bool | None = None,
     env: Dict[str, str] | None = None,
     payload_builder: Any = None,
+    persistence_helper: Any = None,
+    persistence_cursor: Any | None = None,
+    persistence_execute_callback: Any | None = None,
 ) -> Dict[str, Any] | None:
     env_map = env if env is not None else os.environ
     diagnostics_enabled = (
@@ -684,6 +691,80 @@ def _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(
             payload.setdefault("trace_persistence_requested", False)
             payload.setdefault("trace_persistence_performed", False)
             payload.setdefault("production_output_changed", False)
+            persistence_result = {
+                "attempted": False,
+                "recorded": False,
+                "reason": "trace_persistence_disabled",
+                "trace_persistence_requested": False,
+                "trace_persistence_performed": False,
+                "trace_store_write_enabled": False,
+                "did_call_trace_execution_helper": False,
+                "did_write_database": False,
+            }
+            if _truthy_env_value(
+                env_map.get(JD_INTELLIGENCE_EXISTING_OUTPUT_TRACE_PERSISTENCE_FLAG)
+            ):
+                context = _agent_trace_context_from_env(
+                    env=env_map,
+                    context_prefix="jd_intelligence_existing_output",
+                )
+                persistence_result.update(
+                    {
+                        "trace_persistence_requested": True,
+                        **context,
+                    }
+                )
+                payload["trace_persistence_requested"] = True
+                if not _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_ENABLED")):
+                    persistence_result["reason"] = "trace_disabled"
+                elif (
+                    not context["owner_user_id"]
+                    or not context["pipeline_run_id"]
+                    or not context["context_id"]
+                ):
+                    persistence_result["reason"] = "missing_trace_context"
+                elif (persistence_cursor is None) == (persistence_execute_callback is None):
+                    persistence_result["reason"] = "write_executor_missing"
+                else:
+                    try:
+                        if persistence_helper is None:
+                            jd_intelligence_module = __import__(
+                                "src.agents." "jd_intelligence",
+                                fromlist=["persist_existing_job_intelligence_trace_payload"],
+                            )
+                            persistence_helper = getattr(
+                                jd_intelligence_module,
+                                "persist_existing_job_intelligence_trace_payload",
+                            )
+                        persistence_result = persistence_helper(
+                            diagnostics_payload=payload,
+                            owner_user_id=context["owner_user_id"],
+                            pipeline_run_id=context["pipeline_run_id"],
+                            context_id=context["context_id"],
+                            cursor=persistence_cursor,
+                            execute_callback=persistence_execute_callback,
+                            strict=_truthy_env_value(
+                                env_map.get("APPLYLENS_AGENT_TRACE_STRICT")
+                            ),
+                            diagnostics_gate_enabled=True,
+                            persistence_gate_enabled=True,
+                        )
+                    except Exception as exc:
+                        if _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_STRICT")):
+                            raise
+                        persistence_result = {
+                            **persistence_result,
+                            "attempted": True,
+                            "recorded": False,
+                            "reason": "trace_persistence_failed",
+                            "warning": str(exc),
+                        }
+                payload["trace_persistence_performed"] = bool(
+                    persistence_result.get("trace_persistence_performed")
+                )
+            payload["jd_intelligence_existing_output_trace_persistence"] = (
+                persistence_result
+            )
             logger.info(
                 "JD intelligence existing-output diagnostics evaluated after "
                 "intelligence: seen=%s sampled=%s invalid=%s",

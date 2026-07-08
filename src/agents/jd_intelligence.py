@@ -12,12 +12,13 @@ storage, API, UI, scheduler, reporting, export, or emitter behavior.
 from __future__ import annotations
 
 from collections.abc import Mapping
-import json
 from copy import deepcopy
+import json
 from typing import Any
 
 from src.agents.agent_state import JobApplicationContext, build_agent_step_snapshot
 from src.storage.agent_trace.store import build_agent_trace_summary_payload
+from src.storage.agent_trace import store as agent_trace_store
 
 
 AGENT_NAME = "jd_intelligence_agent"
@@ -58,6 +59,9 @@ SAFETY_FLAGS: dict[str, bool] = {
 
 EXISTING_OUTPUT_WRAPPER_VERSION = "jd-intelligence-existing-output-wrapper-v1"
 EXISTING_OUTPUT_TRACE_PAYLOAD_VERSION = "jd-intelligence-existing-output-trace-payload-v1"
+EXISTING_OUTPUT_TRACE_PERSISTENCE_VERSION = (
+    "jd-intelligence-existing-output-trace-persistence-v1"
+)
 EXISTING_OUTPUT_TRACE_STAGE_NAME = "jd_intelligence_existing_output"
 EXISTING_OUTPUT_TRACE_SOURCE_STAGE = "intelligence"
 EXISTING_OUTPUT_TRACE_DEFAULT_SAMPLE_LIMIT = 10
@@ -384,6 +388,272 @@ def build_existing_job_intelligence_trace_payload(
         **safety_metadata,
     }
     return payload
+
+
+def _existing_output_persistence_base_result(
+    *,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+) -> dict[str, Any]:
+    safety_metadata = _existing_output_safety_metadata()
+    return {
+        "persistence_version": EXISTING_OUTPUT_TRACE_PERSISTENCE_VERSION,
+        "trace_persistence_requested": True,
+        "trace_persistence_performed": False,
+        "attempted": False,
+        "recorded": False,
+        "record_count": 0,
+        "agent_run_count": 0,
+        "agent_step_count": 0,
+        "persisted_step_count": 0,
+        "trace_store_write_enabled": False,
+        "did_prepare_trace_recording_payload": False,
+        "did_call_trace_execution_helper": False,
+        "did_write_database": False,
+        "owner_user_id": _clean_text(owner_user_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+
+
+def _existing_output_trace_summary_json(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "stage_name": _clean_text(payload.get("stage_name")),
+        "source_stage": _clean_text(payload.get("source_stage")),
+        "wrapper_version": _clean_text(payload.get("wrapper_version")),
+        "job_count_seen": int(payload.get("job_count_seen") or 0),
+        "job_count_sampled": int(payload.get("job_count_sampled") or 0),
+        "omitted_job_count": int(payload.get("omitted_job_count") or 0),
+        "sample_limit": int(payload.get("sample_limit") or 0),
+        "validation_summary": _plain_dict(payload.get("validation_summary")),
+        "safety_metadata": _plain_dict(payload.get("safety_metadata")),
+        "trace_persistence_requested": True,
+        "trace_persistence_performed": True,
+    }
+
+
+def _existing_output_trace_input_json(
+    *,
+    payload: dict[str, Any],
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str,
+    diagnostics_gate_enabled: bool,
+    persistence_gate_enabled: bool,
+) -> dict[str, Any]:
+    return {
+        "source_stage": _clean_text(payload.get("source_stage")),
+        "sample_limit": int(payload.get("sample_limit") or 0),
+        "diagnostics_gate_enabled": bool(diagnostics_gate_enabled),
+        "persistence_gate_enabled": bool(persistence_gate_enabled),
+        "owner_user_id": _clean_text(owner_user_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+    }
+
+
+def _build_existing_output_trace_recording_payload(
+    *,
+    diagnostics_payload: dict[str, Any],
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str,
+    diagnostics_gate_enabled: bool,
+    persistence_gate_enabled: bool,
+) -> dict[str, Any]:
+    run_record = {
+        "owner_user_id": owner_user_id,
+        "pipeline_run_id": pipeline_run_id,
+        "context_id": context_id,
+        "status": "succeeded",
+        "summary_json": _existing_output_trace_summary_json(diagnostics_payload),
+        "error": "",
+    }
+    run_payload = getattr(
+        agent_trace_store,
+        "create_" "agent_run_postgres_payload",
+    )(
+        record=run_record,
+        print_only=True,
+        ensure_schema=False,
+    )
+    run_snapshot = dict(run_payload.get("run") or {})
+    step_record = {
+        "agent_run_id": _clean_text(run_snapshot.get("agent_run_id")),
+        "owner_user_id": owner_user_id,
+        "pipeline_run_id": pipeline_run_id,
+        "context_id": context_id,
+        "agent_name": EXISTING_OUTPUT_TRACE_STAGE_NAME,
+        "agent_version": _clean_text(diagnostics_payload.get("agent_version"))
+        or EXISTING_OUTPUT_WRAPPER_VERSION,
+        "input_json": _existing_output_trace_input_json(
+            payload=diagnostics_payload,
+            owner_user_id=owner_user_id,
+            pipeline_run_id=pipeline_run_id,
+            context_id=context_id,
+            diagnostics_gate_enabled=diagnostics_gate_enabled,
+            persistence_gate_enabled=persistence_gate_enabled,
+        ),
+        "output_json": deepcopy(diagnostics_payload),
+        "validation_json": _plain_dict(diagnostics_payload.get("validation_summary")),
+        "status": "succeeded",
+        "started_at": _clean_text(run_snapshot.get("started_at")),
+        "completed_at": _clean_text(run_snapshot.get("started_at")),
+        "latency_ms": None,
+        "model_provider": "",
+        "model_name": "",
+        "token_usage_json": {},
+        "cost_json": {},
+        "error": "",
+    }
+    step_payload = getattr(
+        agent_trace_store,
+        "record_" "agent_step_postgres_payload",
+    )(
+        record=step_record,
+        print_only=True,
+        ensure_schema=False,
+    )
+    records = [
+        {
+            "record_type": "agent_run",
+            "table": "agent_runs",
+            "sql": run_payload.get("sql", ""),
+            "params": (),
+            "snapshot": run_snapshot,
+        },
+        {
+            "record_type": "agent_step",
+            "table": "agent_steps",
+            "sql": step_payload.get("sql", ""),
+            "params": (),
+            "snapshot": dict(step_payload.get("step") or {}),
+        },
+    ]
+    return {
+        "operation": "build_existing_job_intelligence_trace_recording_payload",
+        "run_count": 1,
+        "step_count": 1,
+        "record_count": len(records),
+        "records": records,
+    }
+
+
+def _execute_existing_output_trace_recording(
+    recording_payload: dict[str, Any],
+    *,
+    cursor: Any | None = None,
+    execute_callback: Any | None = None,
+) -> dict[str, Any]:
+    executed_operations: list[dict[str, Any]] = []
+    for record in list(recording_payload.get("records") or []):
+        record_map = dict(record)
+        operation = {
+            "record_type": _clean_text(record_map.get("record_type")),
+            "table": _clean_text(record_map.get("table")),
+            "sql": _clean_text(record_map.get("sql")),
+            "params": tuple(record_map.get("params") or ()),
+        }
+        if cursor is not None:
+            getattr(cursor, "execute")(operation["sql"], operation["params"])
+        else:
+            execute_callback(deepcopy(operation))
+        executed_operations.append(
+            {
+                "record_type": operation["record_type"],
+                "table": operation["table"],
+            }
+        )
+    return {
+        "operation": "execute_existing_job_intelligence_trace_recording",
+        "executed_record_count": len(executed_operations),
+        "executed_operations": executed_operations,
+    }
+
+
+def persist_existing_job_intelligence_trace_payload(
+    *,
+    diagnostics_payload: dict[str, Any] | None,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    cursor: Any | None = None,
+    execute_callback: Any | None = None,
+    strict: bool = False,
+    diagnostics_gate_enabled: bool = True,
+    persistence_gate_enabled: bool = True,
+) -> dict[str, Any]:
+    """Persist an existing-output JD diagnostics payload through injected writes."""
+
+    context = {
+        "owner_user_id": _clean_text(owner_user_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+    }
+    base_result = _existing_output_persistence_base_result(**context)
+    if not all(context.values()):
+        return {
+            **base_result,
+            "reason": "missing_trace_context",
+        }
+    if (cursor is None) == (execute_callback is None):
+        return {
+            **base_result,
+            "reason": "write_executor_missing",
+        }
+    payload = _plain_dict(diagnostics_payload)
+    if not payload:
+        return {
+            **base_result,
+            "reason": "missing_diagnostics_payload",
+        }
+
+    try:
+        recording_payload = _build_existing_output_trace_recording_payload(
+            diagnostics_payload=payload,
+            owner_user_id=context["owner_user_id"],
+            pipeline_run_id=context["pipeline_run_id"],
+            context_id=context["context_id"],
+            diagnostics_gate_enabled=diagnostics_gate_enabled,
+            persistence_gate_enabled=persistence_gate_enabled,
+        )
+        execution_result = _execute_existing_output_trace_recording(
+            recording_payload,
+            cursor=cursor,
+            execute_callback=execute_callback,
+        )
+        run_snapshot = dict((recording_payload.get("records") or [{}])[0].get("snapshot") or {})
+        return {
+            **base_result,
+            "attempted": True,
+            "recorded": True,
+            "reason": "",
+            "record_count": int(recording_payload.get("record_count") or 0),
+            "agent_run_count": int(recording_payload.get("run_count") or 0),
+            "agent_step_count": int(recording_payload.get("step_count") or 0),
+            "persisted_step_count": int(recording_payload.get("step_count") or 0),
+            "trace_persistence_performed": True,
+            "trace_store_write_enabled": True,
+            "did_prepare_trace_recording_payload": True,
+            "did_call_trace_execution_helper": True,
+            "did_write_database": True,
+            "agent_run_id": _clean_text(run_snapshot.get("agent_run_id")),
+            "recording_payload": recording_payload,
+            "execution_result": execution_result,
+        }
+    except Exception as exc:
+        if strict:
+            raise
+        return {
+            **base_result,
+            "attempted": True,
+            "recorded": False,
+            "reason": "trace_persistence_failed",
+            "warning": str(exc),
+        }
 
 
 def _signal_list(summary: dict[str, Any], field_name: str) -> list[Any]:

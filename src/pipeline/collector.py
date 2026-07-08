@@ -34,6 +34,60 @@ JD_INTELLIGENCE_EXISTING_OUTPUT_TRACE_PERSISTENCE_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_JD_INTELLIGENCE_EXISTING_OUTPUT_"
     "TRACE_PERSISTENCE_ENABLED"
 )
+EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_EVIDENCE_CHAIN_DIAGNOSTICS_ENABLED"
+)
+EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_VERSION = (
+    "agent-evidence-chain-collector-diagnostics-v1"
+)
+EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS = [
+    "resume_match_jd_evidence",
+    "critic_resume_match_jd_evidence",
+    "job_prioritization_critic_evidence",
+    "tailoring_decision_priority_evidence",
+    "operator_review_tailoring_evidence",
+]
+EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FALSE_FLAGS = (
+    "provider_call_performed",
+    "live_llm_call_performed",
+    "evidence_chain_bundle_execution_performed",
+    "evidence_chain_trace_payload_execution_performed",
+    "evidence_chain_trace_persistence_performed",
+    "jd_extraction_performed",
+    "jd_wrapper_execution_performed",
+    "resume_match_execution_performed",
+    "critic_execution_performed",
+    "job_prioritization_execution_performed",
+    "tailoring_decision_execution_performed",
+    "operator_review_execution_performed",
+    "trace_store_write_performed",
+    "database_write_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "evaluable_jobs_changed",
+    "scored_jobs_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "cache_behavior_changed",
+    "retry_behavior_changed",
+    "dedupe_behavior_changed",
+    "source_health_behavior_changed",
+    "ats_health_behavior_changed",
+    "review_queue_mutation_performed",
+    "queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
+    "workflow_runner_executed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+)
 
 
 def _is_user_pipeline_mode() -> bool:
@@ -810,6 +864,199 @@ def _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(
         }
 
 
+def _evidence_chain_collector_safety_metadata() -> Dict[str, bool]:
+    return {
+        flag: False
+        for flag in EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FALSE_FLAGS
+    }
+
+
+def _mapping_present(value: Any) -> bool:
+    return isinstance(value, dict) and bool(value)
+
+
+def _has_any_key(job: Dict[str, Any], keys: List[str]) -> bool:
+    return any(key in job and job.get(key) is not None for key in keys)
+
+
+def _evidence_chain_missing_artifacts(
+    *,
+    jobs_inspected_count: int,
+    artifact_counts: Dict[str, int],
+) -> List[str]:
+    if jobs_inspected_count <= 0:
+        return list(EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS)
+    return [
+        key
+        for key in EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS
+        if int(artifact_counts.get(key, 0) or 0) < jobs_inspected_count
+    ]
+
+
+def _evidence_chain_readiness(
+    *,
+    jobs_inspected_count: int,
+    jd_intelligence_present_count: int,
+    artifact_counts: Dict[str, int],
+) -> Dict[str, Any]:
+    if jobs_inspected_count <= 0:
+        return {
+            "evidence_chain_readiness": "unavailable",
+            "readiness_reason_codes": ["no_jobs_available"],
+            "next_recommended_engineering_step": (
+                "Run collector with scored jobs before evaluating controlled "
+                "evidence-chain execution readiness."
+            ),
+        }
+
+    missing_artifacts = _evidence_chain_missing_artifacts(
+        jobs_inspected_count=jobs_inspected_count,
+        artifact_counts=artifact_counts,
+    )
+    present_artifact_types = [
+        key
+        for key in EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS
+        if int(artifact_counts.get(key, 0) or 0) > 0
+    ]
+
+    if not missing_artifacts:
+        return {
+            "evidence_chain_readiness": "ready_from_existing_artifacts",
+            "readiness_reason_codes": ["all_required_evidence_artifacts_present"],
+            "next_recommended_engineering_step": (
+                "Controlled evidence-chain execution can consume existing "
+                "artifacts without creating missing downstream evidence."
+            ),
+        }
+
+    reason_codes: List[str] = []
+    if jd_intelligence_present_count <= 0:
+        reason_codes.append("jd_intelligence_missing")
+
+    if present_artifact_types:
+        reason_codes.append("partial_evidence_artifacts_present")
+        return {
+            "evidence_chain_readiness": "degraded",
+            "readiness_reason_codes": sorted(set(reason_codes)),
+            "next_recommended_engineering_step": (
+                "Normalize partial evidence-chain artifacts, then add a "
+                "controlled execution path for missing agent evidence."
+            ),
+        }
+
+    reason_codes.append("downstream_evidence_artifacts_missing")
+    return {
+        "evidence_chain_readiness": "inputs_missing",
+        "readiness_reason_codes": sorted(set(reason_codes)),
+        "next_recommended_engineering_step": (
+            "Add a controlled evidence-chain execution path to build missing "
+            "Phase 89-93 agent evidence artifacts before bundle or trace steps."
+        ),
+    }
+
+
+def _maybe_build_evidence_chain_collector_diagnostics(
+    scored_jobs: List[Dict[str, Any]],
+    *,
+    enabled: bool | None = None,
+    env: Dict[str, str] | None = None,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    diagnostics_enabled = (
+        _truthy_env_value(env_map.get(EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FLAG))
+        if enabled is None
+        else enabled is True
+    )
+    if not diagnostics_enabled:
+        return None
+
+    jobs = [
+        dict(job)
+        for job in list(scored_jobs or [])
+        if isinstance(job, dict)
+    ]
+    jobs_inspected_count = len(jobs)
+    artifact_counts = {
+        key: sum(1 for job in jobs if _mapping_present(job.get(key)))
+        for key in EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS
+    }
+    jd_intelligence_present_count = sum(
+        1 for job in jobs if _mapping_present(job.get("intelligence"))
+    )
+    ai_evaluation_present_count = sum(
+        1
+        for job in jobs
+        if _has_any_key(
+            job,
+            [
+                "ai_fit",
+                "ai_fit_score",
+                "ai_relevance",
+                "skill_match",
+                "seniority_match",
+                "learning_opportunity",
+            ],
+        )
+    )
+    scoring_present_count = sum(
+        1
+        for job in jobs
+        if _has_any_key(job, ["priority_score", "ai_signal_score"])
+    )
+    missing_artifacts = _evidence_chain_missing_artifacts(
+        jobs_inspected_count=jobs_inspected_count,
+        artifact_counts=artifact_counts,
+    )
+    readiness = _evidence_chain_readiness(
+        jobs_inspected_count=jobs_inspected_count,
+        jd_intelligence_present_count=jd_intelligence_present_count,
+        artifact_counts=artifact_counts,
+    )
+    safety_metadata = _evidence_chain_collector_safety_metadata()
+
+    return {
+        "artifact_type": "agent_evidence_chain_collector_diagnostics",
+        "artifact_version": EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_VERSION,
+        "gate_name": EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FLAG,
+        "enabled": True,
+        "default_off": True,
+        "diagnostic_only": True,
+        "read_only": True,
+        "collector_stage": "post_score_jobs",
+        "jobs_inspected_count": jobs_inspected_count,
+        "jd_intelligence_present_count": jd_intelligence_present_count,
+        "ai_evaluation_present_count": ai_evaluation_present_count,
+        "scoring_present_count": scoring_present_count,
+        "resume_match_jd_evidence_present_count": artifact_counts[
+            "resume_match_jd_evidence"
+        ],
+        "critic_resume_match_jd_evidence_present_count": artifact_counts[
+            "critic_resume_match_jd_evidence"
+        ],
+        "job_prioritization_critic_evidence_present_count": artifact_counts[
+            "job_prioritization_critic_evidence"
+        ],
+        "tailoring_decision_priority_evidence_present_count": artifact_counts[
+            "tailoring_decision_priority_evidence"
+        ],
+        "operator_review_tailoring_evidence_present_count": artifact_counts[
+            "operator_review_tailoring_evidence"
+        ],
+        "evidence_chain_required_artifacts": list(
+            EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS
+        ),
+        "evidence_chain_missing_artifacts": missing_artifacts,
+        "automatic_internal_decisioning_goal": True,
+        "external_action_automation_goal": False,
+        "next_phase_should_execute_controlled_chain": True,
+        "trace_persistence_requested": False,
+        "trace_persistence_performed": False,
+        "safety_metadata": safety_metadata,
+        **readiness,
+        **safety_metadata,
+    }
+
+
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
     from src.intelligence.market_insights import (
         detect_ai_hiring_surges,
@@ -1311,6 +1558,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         vector_evidence_hook_payload=vector_evidence_hook_payload,
     )
     _maybe_invoke_advisory_chain_diagnostics_after_application_priority(scored_jobs)
+    _maybe_build_evidence_chain_collector_diagnostics(scored_jobs)
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")

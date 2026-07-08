@@ -192,7 +192,7 @@ def test_no_api_service_pipeline_dependency_or_decision_module_change():
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c"
         ),
         "src/pipeline/collector.py": (
-            "a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344"
+            "cae9f4a51ef14c7b1185a64f2e229591274c284c2985989ec1f5997f7728ee42"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

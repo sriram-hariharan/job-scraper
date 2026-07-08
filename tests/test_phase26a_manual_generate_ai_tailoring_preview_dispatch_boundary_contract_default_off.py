@@ -120,7 +120,7 @@ PROTECTED_HASHES = {
         "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3"
     ),
     "src/pipeline/collector.py": (
-        "a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344"
+        "cae9f4a51ef14c7b1185a64f2e229591274c284c2985989ec1f5997f7728ee42"
     ),
     "src/pipeline/job_filter.py": (
         "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4"
@@ -930,6 +930,7 @@ def test_phase26a_changes_only_helper_doc_test_and_legacy_guards():
             "tests/test_phase94b_agent_evidence_chain_composition_default_off.py",
             "tests/test_phase95b_agent_evidence_chain_trace_payload_default_off.py",
                 "tests/test_phase96b_agent_evidence_chain_trace_persistence_default_off.py",
+                "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

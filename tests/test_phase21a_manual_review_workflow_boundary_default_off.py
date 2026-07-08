@@ -174,6 +174,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase93b_operator_review_consumes_tailoring_decision_evidence_default_off.py",
             "src/agents/evidence_chain_composition.py",
             "tests/test_phase94b_agent_evidence_chain_composition_default_off.py",
+            "tests/test_phase95b_agent_evidence_chain_trace_payload_default_off.py",
                     "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",

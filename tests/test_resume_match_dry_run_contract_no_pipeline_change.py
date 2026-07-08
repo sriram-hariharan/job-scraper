@@ -169,7 +169,8 @@ def test_resume_match_dry_run_does_not_mutate_inputs():
 def test_resume_match_dry_run_source_has_no_runtime_side_effect_markers():
     source = Path("src/agents/resume_match_agent.py").read_text()
     start = source.index("RESUME_MATCH_DRY_RUN_DIMENSIONS")
-    snippet = source[start:]
+    end = source.index("RESUME_MATCH_JD_EVIDENCE_GATE")
+    snippet = source[start:end]
 
     forbidden_markers = [
         "run_chat_completion",

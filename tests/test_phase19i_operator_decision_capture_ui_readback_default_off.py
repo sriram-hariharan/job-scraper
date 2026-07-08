@@ -16,7 +16,7 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 PROTECTED_HASHES = {
     "src/app/api.py": "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
     "src/app/services.py": "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
-    "src/pipeline/collector.py": "e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd",
+    "src/pipeline/collector.py": "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
 }
 
@@ -790,6 +790,7 @@ def test_phase19i_changes_only_approved_files():
             "src/agents/jd_intelligence.py",
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
                 "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
+                "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",

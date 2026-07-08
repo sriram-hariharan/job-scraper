@@ -185,7 +185,7 @@ def test_no_pipeline_dependency_or_decision_module_change():
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c"
         ),
         "src/pipeline/collector.py": (
-            "e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd"
+            "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

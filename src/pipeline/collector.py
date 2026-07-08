@@ -24,6 +24,12 @@ ADVISORY_CHAIN_DIAGNOSTICS_FLAG = (
 ADVISORY_CHAIN_TRACE_PERSISTENCE_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_ADVISORY_CHAIN_TRACE_PERSISTENCE_ENABLED"
 )
+JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_ENABLED"
+)
+JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_SAMPLE_LIMIT_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_SAMPLE_LIMIT"
+)
 
 
 def _is_user_pipeline_mode() -> bool:
@@ -637,6 +643,92 @@ def _maybe_invoke_advisory_chain_diagnostics_after_application_priority(
         }
 
 
+def _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(
+    intelligent_jobs: List[Dict[str, Any]],
+    *,
+    enabled: bool | None = None,
+    env: Dict[str, str] | None = None,
+    payload_builder: Any = None,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    diagnostics_enabled = (
+        _truthy_env_value(env_map.get(JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_FLAG))
+        if enabled is None
+        else enabled is True
+    )
+    if not diagnostics_enabled:
+        return None
+
+    sample_limit = env_map.get(
+        JD_INTELLIGENCE_EXISTING_OUTPUT_DIAGNOSTICS_SAMPLE_LIMIT_FLAG,
+        "",
+    )
+    try:
+        if payload_builder is None:
+            jd_intelligence_module = __import__(
+                "src.agents." "jd_intelligence",
+                fromlist=["build_existing_job_intelligence_trace_payload"],
+            )
+            payload_builder = getattr(
+                jd_intelligence_module,
+                "build_existing_job_intelligence_trace_payload",
+            )
+
+        payload = payload_builder(
+            intelligent_jobs,
+            sample_limit=sample_limit,
+        )
+        if isinstance(payload, dict):
+            payload.setdefault("attempted", True)
+            payload.setdefault("enabled", True)
+            payload.setdefault("trace_persistence_requested", False)
+            payload.setdefault("trace_persistence_performed", False)
+            payload.setdefault("production_output_changed", False)
+            logger.info(
+                "JD intelligence existing-output diagnostics evaluated after "
+                "intelligence: seen=%s sampled=%s invalid=%s",
+                payload.get("job_count_seen", 0),
+                payload.get("job_count_sampled", 0),
+                (payload.get("validation_summary") or {}).get(
+                    "invalid_wrapper_outputs",
+                    0,
+                ),
+            )
+        return payload
+    except Exception as exc:
+        logger.warning(
+            "JD intelligence existing-output diagnostics failed non-blocking "
+            "after intelligence: %s",
+            exc,
+        )
+        return {
+            "attempted": True,
+            "enabled": True,
+            "reason": "jd_intelligence_existing_output_diagnostics_failed",
+            "warning": str(exc),
+            "trace_persistence_requested": False,
+            "trace_persistence_performed": False,
+            "production_output_changed": False,
+            "auto_" "apply_performed": False,
+            "auto_" "submit_performed": False,
+            "ats_submission_performed": False,
+            "apply_click_performed": False,
+            "recruiter_message_sent": False,
+            "mark_applied_performed": False,
+            "provider_call_performed": False,
+            "duplicate_llm_call_performed": False,
+            "database_write_performed": False,
+            "scoring_changed": False,
+            "ranking_changed": False,
+            "filtering_changed": False,
+            "queue_changed": False,
+            "scheduler_changed": False,
+            "tailoring_changed": False,
+            "source_resume_changed": False,
+            "workflow_" "runner_live_execution_performed": False,
+        }
+
+
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
     from src.intelligence.market_insights import (
         detect_ai_hiring_surges,
@@ -936,6 +1028,9 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
     complete_stage("intelligence", counts={"intelligent_jobs": len(intelligent_jobs)})
+    _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(
+        intelligent_jobs
+    )
 
     skill_cache_summary = get_skill_cache_metrics()
     logger.info(

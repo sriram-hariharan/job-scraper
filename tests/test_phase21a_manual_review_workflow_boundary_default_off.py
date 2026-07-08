@@ -177,6 +177,8 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase95b_agent_evidence_chain_trace_payload_default_off.py",
                 "tests/test_phase96b_agent_evidence_chain_trace_persistence_default_off.py",
                 "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
+            "src/agents/evidence_chain_execution.py",
+            "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
                     "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
@@ -906,6 +908,11 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/agents/evidence_chain_composition.py",
     }
     if set(changed_runtime_files) == phase94b_agent_evidence_chain_composition_files:
+        return
+    phase98b_controlled_evidence_chain_execution_files = {
+        ROOT / "src/agents/evidence_chain_execution.py",
+    }
+    if set(changed_runtime_files) == phase98b_controlled_evidence_chain_execution_files:
         return
 
     assert changed_runtime_files in (

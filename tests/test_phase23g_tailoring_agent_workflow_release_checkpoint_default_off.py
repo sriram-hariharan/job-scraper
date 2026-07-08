@@ -238,6 +238,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
             "src/agents/job_prioritization_agent.py",
             "src/agents/tailoring_decision_agent.py",
             "src/agents/operator_review_agent.py",
+            "src/agents/evidence_chain_composition.py",
             "src/app/api.py",
             "src/app/services.py",
         "src/tailoring/llm.py",
@@ -305,6 +306,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/job_prioritization_agent.py"
     and path != "src/agents/tailoring_decision_agent.py"
     and path != "src/agents/operator_review_agent.py"
+    and path != "src/agents/evidence_chain_composition.py"
             ]
     forbidden = (
         "provider_call(",
@@ -844,8 +846,10 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase91b_job_prioritization_consumes_critic_evidence_default_off.py",
             "src/agents/tailoring_decision_agent.py",
             "tests/test_phase92b_tailoring_decision_consumes_job_prioritization_evidence_default_off.py",
-            "src/agents/operator_review_agent.py",
-            "tests/test_phase93b_operator_review_consumes_tailoring_decision_evidence_default_off.py",
+                "src/agents/operator_review_agent.py",
+                "src/agents/evidence_chain_composition.py",
+                "tests/test_phase93b_operator_review_consumes_tailoring_decision_evidence_default_off.py",
+                "tests/test_phase94b_agent_evidence_chain_composition_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

@@ -1117,6 +1117,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
         "src/pipeline/collector.py",
         "src/agents/orchestrator_adapter_harness.py",
+        "src/agents/evidence_chain_execution.py",
     }
     runtime_paths = [
         path for path in changed

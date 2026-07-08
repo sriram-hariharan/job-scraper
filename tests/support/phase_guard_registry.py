@@ -96,6 +96,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase95b_agent_evidence_chain_trace_payload_default_off.py",
             "tests/test_phase96b_agent_evidence_chain_trace_persistence_default_off.py",
             "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
+            "src/agents/evidence_chain_execution.py",
+            "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }

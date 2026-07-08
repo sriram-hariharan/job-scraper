@@ -239,6 +239,7 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
             "src/agents/tailoring_decision_agent.py",
             "src/agents/operator_review_agent.py",
             "src/agents/evidence_chain_composition.py",
+            "src/agents/evidence_chain_execution.py",
             "src/app/api.py",
             "src/app/services.py",
         "src/tailoring/llm.py",
@@ -307,6 +308,7 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
     and path != "src/agents/tailoring_decision_agent.py"
     and path != "src/agents/operator_review_agent.py"
     and path != "src/agents/evidence_chain_composition.py"
+    and path != "src/agents/evidence_chain_execution.py"
     and path != "src/pipeline/collector.py"
             ]
     forbidden = (
@@ -854,6 +856,8 @@ def test_phase23g_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase95b_agent_evidence_chain_trace_payload_default_off.py",
                 "tests/test_phase96b_agent_evidence_chain_trace_persistence_default_off.py",
                 "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
+            "src/agents/evidence_chain_execution.py",
+            "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

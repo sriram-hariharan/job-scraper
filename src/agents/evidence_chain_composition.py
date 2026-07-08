@@ -1,0 +1,439 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from hashlib import sha256
+import json
+from typing import Any, Dict, List
+
+
+ARTIFACT_VERSION = "agent-evidence-chain-bundle-v1"
+GATE_NAME = "APPLYLENS_AGENTIC_EVIDENCE_CHAIN_COMPOSITION_ENABLED"
+ORDERED_AGENT_KEYS = [
+    "jd_intelligence",
+    "resume_match",
+    "critic",
+    "job_prioritization",
+    "tailoring_decision",
+    "operator_review",
+]
+EXPECTED_ARTIFACT_TYPES = {
+    "jd_intelligence": "",
+    "resume_match": "resume_match_jd_evidence",
+    "critic": "critic_resume_match_jd_evidence",
+    "job_prioritization": "job_prioritization_critic_evidence",
+    "tailoring_decision": "tailoring_decision_priority_evidence",
+    "operator_review": "operator_review_tailoring_evidence",
+}
+REQUIRED_AGENT_KEYS = {"tailoring_decision", "operator_review"}
+FALSE_SAFETY_FLAGS = (
+    "provider_call_performed",
+    "live_llm_call_performed",
+    "jd_extraction_performed",
+    "jd_wrapper_execution_performed",
+    "resume_match_execution_performed",
+    "critic_execution_performed",
+    "job_prioritization_execution_performed",
+    "tailoring_decision_execution_performed",
+    "operator_review_execution_performed",
+    "trace_persistence_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "review_queue_mutation_performed",
+    "queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
+    "tailoring_provider_call_performed",
+    "workflow_runner_executed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+)
+RISK_SAFETY_FLAGS = set(FALSE_SAFETY_FLAGS) | {
+    "did_call_llm",
+    "did_call_live_provider",
+    "did_write_database",
+    "did_change_pipeline",
+    "did_change_scoring",
+    "did_change_ranking",
+    "did_change_filtering",
+    "did_change_queue",
+    "did_change_tailoring",
+    "did_mutate_source_resume",
+    "did_click_apply",
+    "did_execute_application",
+    "did_submit_application",
+    "did_send_recruiter_message",
+    "did_mark_applied",
+}
+
+
+def _clean_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _plain_dict(value: Any) -> Dict[str, Any]:
+    return deepcopy(value) if isinstance(value, dict) else {}
+
+
+def _plain_list(value: Any) -> List[Any]:
+    return deepcopy(value) if isinstance(value, list) else []
+
+
+def _phase94b_safety_metadata() -> Dict[str, bool]:
+    return {flag: False for flag in FALSE_SAFETY_FLAGS}
+
+
+def _reason_codes(value: Any) -> List[str]:
+    return [
+        _clean_text(code)
+        for code in _plain_list(value)
+        if _clean_text(code)
+    ]
+
+
+def _validation_status(artifact: Dict[str, Any]) -> str:
+    validation = _plain_dict(artifact.get("validation_summary"))
+    if not validation:
+        validation = _plain_dict(artifact.get("validation_json"))
+    status = _clean_text(validation.get("validation_status")).lower()
+    if status:
+        return status
+    if validation.get("is_valid_for_existing_output_wrapper") is False:
+        return "degraded"
+    return ""
+
+
+def _artifact_validity(
+    *,
+    agent_key: str,
+    raw_artifact: Any,
+) -> Dict[str, Any]:
+    expected_type = EXPECTED_ARTIFACT_TYPES[agent_key]
+    present = raw_artifact is not None and raw_artifact != {}
+    is_mapping = isinstance(raw_artifact, dict)
+    artifact = _plain_dict(raw_artifact)
+    actual_type = _clean_text(artifact.get("artifact_type"))
+    reason_codes: List[str] = []
+
+    if not present:
+        reason_codes.append(f"{agent_key}_artifact_missing")
+    elif not is_mapping:
+        reason_codes.append(f"{agent_key}_artifact_malformed")
+    elif expected_type and actual_type != expected_type:
+        reason_codes.append(f"{agent_key}_artifact_type_mismatch")
+
+    validation_status = _validation_status(artifact)
+    if validation_status and validation_status != "passed":
+        reason_codes.append(f"{agent_key}_validation_{validation_status}")
+
+    valid = present and is_mapping and not any(
+        code.endswith("_malformed") or code.endswith("_type_mismatch")
+        for code in reason_codes
+    )
+    return {
+        "present": present,
+        "is_mapping": is_mapping,
+        "expected_artifact_type": expected_type,
+        "actual_artifact_type": actual_type,
+        "validation_status": validation_status,
+        "valid": valid,
+        "reason_codes": reason_codes,
+    }
+
+
+def _risky_safety_flags(artifact: Dict[str, Any]) -> List[str]:
+    safety = _plain_dict(artifact.get("safety_metadata"))
+    merged = {**safety}
+    for flag in RISK_SAFETY_FLAGS:
+        if flag in artifact:
+            merged[flag] = artifact.get(flag)
+    return sorted(
+        flag
+        for flag, value in merged.items()
+        if flag in RISK_SAFETY_FLAGS and value is True
+    )
+
+
+def _safety_metadata_rollup(artifacts: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    per_agent = {}
+    risky_agents: List[str] = []
+    risky_flags_by_agent: Dict[str, List[str]] = {}
+    for agent_key in ORDERED_AGENT_KEYS:
+        artifact = artifacts.get(agent_key) or {}
+        risky_flags = _risky_safety_flags(artifact)
+        per_agent[agent_key] = {
+            "present": bool(artifact),
+            "risky_flags": risky_flags,
+            "all_risky_flags_false": not risky_flags,
+        }
+        if risky_flags:
+            risky_agents.append(agent_key)
+            risky_flags_by_agent[agent_key] = risky_flags
+    return {
+        "per_agent": per_agent,
+        "risky_agent_keys": risky_agents,
+        "risky_flags_by_agent": risky_flags_by_agent,
+        "all_supplied_artifacts_safe": not risky_agents,
+    }
+
+
+def _chain_id(
+    *,
+    supplied_chain_id: str,
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    artifacts: Dict[str, Dict[str, Any]],
+) -> str:
+    if _clean_text(supplied_chain_id):
+        return _clean_text(supplied_chain_id)
+    seed = {
+        "artifact_version": ARTIFACT_VERSION,
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "context_id": _clean_text(context_id),
+        "artifacts": artifacts,
+    }
+    digest = sha256(json.dumps(seed, sort_keys=True).encode("utf-8")).hexdigest()
+    return f"agent_evidence_chain_{digest[:16]}"
+
+
+def _has_blocking_risk(
+    *,
+    artifacts: Dict[str, Dict[str, Any]],
+    chain_reason_codes: List[str],
+) -> bool:
+    risk_words = ("blocked", "blocking", "risk", "contradiction", "do_not_tailor")
+    domain_reason_codes = [
+        code
+        for code in chain_reason_codes
+        if not _clean_text(code).endswith("_risky_safety_flags")
+    ]
+    reason_text = " ".join(domain_reason_codes).lower()
+    if any(word in reason_text for word in risk_words):
+        return True
+    operator = artifacts.get("operator_review") or {}
+    tailoring = artifacts.get("tailoring_decision") or {}
+    critic = artifacts.get("critic") or {}
+    return (
+        _clean_text(operator.get("operator_review_lane")) == "hold_or_skip"
+        or _clean_text(operator.get("operator_review_readiness")) == "blocked_by_risk"
+        or _clean_text(tailoring.get("tailoring_readiness")) == "blocked_by_risk"
+        or _clean_text(tailoring.get("tailoring_decision")) == "do_not_tailor"
+        or bool(_plain_list(critic.get("risk_flags")))
+        or bool(_plain_list(critic.get("contradiction_flags")))
+    )
+
+
+def _chain_status_and_readiness(
+    *,
+    validity: Dict[str, Dict[str, Any]],
+    chain_reason_codes: List[str],
+    artifacts: Dict[str, Dict[str, Any]],
+    safety_rollup: Dict[str, Any],
+) -> Dict[str, str]:
+    missing_required = [
+        key for key in REQUIRED_AGENT_KEYS if not validity[key]["present"]
+    ]
+    malformed = [
+        key
+        for key, item in validity.items()
+        if item["present"] and not item["valid"]
+    ]
+    if malformed:
+        return {
+            "chain_status": "malformed_artifacts",
+            "chain_readiness": "needs_manual_review",
+        }
+    if missing_required:
+        return {
+            "chain_status": "missing_required_artifacts",
+            "chain_readiness": "insufficient_evidence",
+        }
+    if _has_blocking_risk(artifacts=artifacts, chain_reason_codes=chain_reason_codes):
+        return {
+            "chain_status": "blocked_by_risk",
+            "chain_readiness": "blocked_by_risk",
+        }
+    if not safety_rollup.get("all_supplied_artifacts_safe"):
+        return {
+            "chain_status": "partial",
+            "chain_readiness": "needs_manual_review",
+        }
+    if any(not validity[key]["present"] for key in ORDERED_AGENT_KEYS):
+        return {
+            "chain_status": "partial",
+            "chain_readiness": "needs_more_evidence",
+        }
+    if any(
+        validity[key]["validation_status"]
+        and validity[key]["validation_status"] != "passed"
+        for key in ORDERED_AGENT_KEYS
+    ):
+        return {
+            "chain_status": "partial",
+            "chain_readiness": "needs_manual_review",
+        }
+    return {
+        "chain_status": "complete",
+        "chain_readiness": "ready_for_human_review",
+    }
+
+
+def _terminal_operator_review_summary(artifact: Dict[str, Any]) -> Dict[str, Any]:
+    summary = _plain_dict(artifact.get("review_packet_summary"))
+    return {
+        "job_id": _clean_text(artifact.get("job_id") or summary.get("job_id")),
+        "title": _clean_text(artifact.get("title") or summary.get("title")),
+        "company": _clean_text(artifact.get("company") or summary.get("company")),
+        "selected_resume_id": _clean_text(
+            artifact.get("selected_resume_id") or summary.get("selected_resume_id")
+        ),
+        "operator_review_lane": _clean_text(artifact.get("operator_review_lane")),
+        "operator_review_readiness": _clean_text(
+            artifact.get("operator_review_readiness")
+        ),
+        "human_review_required": bool(artifact.get("human_review_required")),
+        "recommended_next_step": _clean_text(artifact.get("recommended_next_step")),
+        "confidence": artifact.get("confidence"),
+        "reason_codes": _reason_codes(artifact.get("reason_codes")),
+    }
+
+
+def _confidence_summary(artifacts: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    values: Dict[str, float] = {}
+    for agent_key, artifact in artifacts.items():
+        raw = artifact.get("confidence")
+        if isinstance(raw, (int, float)):
+            values[agent_key] = float(raw)
+    if not values:
+        return {"per_agent": {}, "minimum_confidence": None, "maximum_confidence": None}
+    return {
+        "per_agent": values,
+        "minimum_confidence": min(values.values()),
+        "maximum_confidence": max(values.values()),
+    }
+
+
+def build_agent_evidence_chain_bundle(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    resume_match_jd_evidence: Dict[str, Any] | None = None,
+    critic_resume_match_jd_evidence: Dict[str, Any] | None = None,
+    job_prioritization_critic_evidence: Dict[str, Any] | None = None,
+    tailoring_decision_priority_evidence: Dict[str, Any] | None = None,
+    operator_review_tailoring_evidence: Dict[str, Any] | None = None,
+    enabled: bool = False,
+    chain_id: str = "",
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    context_id: str = "",
+) -> Dict[str, Any]:
+    """Bundle already-built agent evidence artifacts without executing agents."""
+
+    raw_artifacts = {
+        "jd_intelligence": jd_intelligence,
+        "resume_match": resume_match_jd_evidence,
+        "critic": critic_resume_match_jd_evidence,
+        "job_prioritization": job_prioritization_critic_evidence,
+        "tailoring_decision": tailoring_decision_priority_evidence,
+        "operator_review": operator_review_tailoring_evidence,
+    }
+    artifacts = {
+        key: _plain_dict(value)
+        for key, value in raw_artifacts.items()
+    }
+    artifact_presence = {
+        key: {
+            "present": value is not None and value != {},
+            "is_mapping": isinstance(value, dict),
+        }
+        for key, value in raw_artifacts.items()
+    }
+    artifact_validity = {
+        key: _artifact_validity(agent_key=key, raw_artifact=value)
+        for key, value in raw_artifacts.items()
+    }
+    per_agent_validation_summary = {
+        key: {
+            "validation_status": artifact_validity[key]["validation_status"],
+            "valid": artifact_validity[key]["valid"],
+            "reason_codes": list(artifact_validity[key]["reason_codes"]),
+        }
+        for key in ORDERED_AGENT_KEYS
+    }
+    per_agent_reason_codes = {
+        key: list(
+            dict.fromkeys(
+                [
+                    *artifact_validity[key]["reason_codes"],
+                    *_reason_codes(artifacts[key].get("reason_codes")),
+                ]
+            )
+        )
+        for key in ORDERED_AGENT_KEYS
+    }
+    chain_reason_codes = list(
+        dict.fromkeys(
+            code
+            for key in ORDERED_AGENT_KEYS
+            for code in per_agent_reason_codes[key]
+            if code
+        )
+    )
+    safety_rollup = _safety_metadata_rollup(artifacts)
+    for agent_key in safety_rollup.get("risky_agent_keys") or []:
+        chain_reason_codes.append(f"{agent_key}_risky_safety_flags")
+    chain_reason_codes = list(dict.fromkeys(chain_reason_codes))
+    status = _chain_status_and_readiness(
+        validity=artifact_validity,
+        chain_reason_codes=chain_reason_codes,
+        artifacts=artifacts,
+        safety_rollup=safety_rollup,
+    )
+    safety_metadata = _phase94b_safety_metadata()
+    resolved_chain_id = _chain_id(
+        supplied_chain_id=chain_id,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+        artifacts=artifacts,
+    )
+    return {
+        "artifact_type": "agent_evidence_chain_bundle",
+        "artifact_version": ARTIFACT_VERSION,
+        "source_agent": "evidence_chain_composition",
+        "ordered_agent_keys": list(ORDERED_AGENT_KEYS),
+        "gate_name": GATE_NAME,
+        "enabled": bool(enabled),
+        "default_off": True,
+        "read_only": True,
+        "diagnostic_only": True,
+        "chain_id": resolved_chain_id,
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "context_id": _clean_text(context_id),
+        "artifacts": artifacts,
+        "artifact_presence": artifact_presence,
+        "artifact_validity": artifact_validity,
+        "per_agent_validation_summary": per_agent_validation_summary,
+        "per_agent_reason_codes": per_agent_reason_codes,
+        "chain_reason_codes": chain_reason_codes,
+        "chain_status": status["chain_status"],
+        "chain_readiness": status["chain_readiness"],
+        "terminal_operator_review_summary": _terminal_operator_review_summary(
+            artifacts["operator_review"]
+        ),
+        "confidence_summary": _confidence_summary(artifacts),
+        "safety_metadata_rollup": safety_rollup,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }

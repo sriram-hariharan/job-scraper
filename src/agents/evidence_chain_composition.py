@@ -13,6 +13,10 @@ TRACE_PAYLOAD_GATE_NAME = "APPLYLENS_AGENTIC_EVIDENCE_CHAIN_TRACE_PAYLOAD_ENABLE
 TRACE_PAYLOAD_SAMPLE_LIMIT = 6
 TRACE_PAYLOAD_MAX_SAMPLE_LIMIT = 6
 TRACE_PAYLOAD_REDACTION_POLICY = "compact_agent_summaries_only_no_full_nested_artifacts"
+TRACE_PERSISTENCE_VERSION = "agent-evidence-chain-trace-persistence-v1"
+TRACE_PERSISTENCE_GATE_NAME = (
+    "APPLYLENS_AGENTIC_EVIDENCE_CHAIN_TRACE_PERSISTENCE_ENABLED"
+)
 ORDERED_AGENT_KEYS = [
     "jd_intelligence",
     "resume_match",
@@ -95,6 +99,41 @@ TRACE_PAYLOAD_FALSE_SAFETY_FLAGS = (
     "recruiter_message_sent",
     "mark_applied_performed",
 )
+TRACE_PERSISTENCE_SAFETY_FLAGS = (
+    "provider_call_performed",
+    "live_llm_call_performed",
+    "evidence_chain_bundle_execution_performed",
+    "evidence_chain_trace_payload_execution_performed",
+    "jd_extraction_performed",
+    "jd_wrapper_execution_performed",
+    "resume_match_execution_performed",
+    "critic_execution_performed",
+    "job_prioritization_execution_performed",
+    "tailoring_decision_execution_performed",
+    "operator_review_execution_performed",
+    "trace_persistence_requested",
+    "trace_persistence_performed",
+    "trace_store_write_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "review_queue_mutation_performed",
+    "queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
+    "tailoring_provider_call_performed",
+    "workflow_runner_executed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+)
 RISK_SAFETY_FLAGS = set(FALSE_SAFETY_FLAGS) | {
     "did_call_llm",
     "did_call_live_provider",
@@ -132,6 +171,18 @@ def _phase94b_safety_metadata() -> Dict[str, bool]:
 
 def _phase95b_safety_metadata() -> Dict[str, bool]:
     return {flag: False for flag in TRACE_PAYLOAD_FALSE_SAFETY_FLAGS}
+
+
+def _phase96b_safety_metadata(
+    *,
+    persistence_requested: bool = False,
+    persistence_performed: bool = False,
+) -> Dict[str, bool]:
+    safety = {flag: False for flag in TRACE_PERSISTENCE_SAFETY_FLAGS}
+    safety["trace_persistence_requested"] = bool(persistence_requested)
+    safety["trace_persistence_performed"] = bool(persistence_performed)
+    safety["trace_store_write_performed"] = bool(persistence_performed)
+    return safety
 
 
 def _reason_codes(value: Any) -> List[str]:
@@ -608,6 +659,347 @@ def build_agent_evidence_chain_trace_payload(
         "trace_persistence_performed": False,
         **safety_metadata,
     }
+
+
+def _trace_persistence_base_result(
+    *,
+    trace_payload: Dict[str, Any] | None,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    persistence_gate_enabled: bool = False,
+    persistence_performed: bool = False,
+) -> Dict[str, Any]:
+    payload = _plain_dict(trace_payload)
+    safety_metadata = _phase96b_safety_metadata(
+        persistence_requested=bool(persistence_gate_enabled),
+        persistence_performed=bool(persistence_performed),
+    )
+    return {
+        "persistence_version": TRACE_PERSISTENCE_VERSION,
+        "artifact_type": "agent_evidence_chain_trace_persistence_result",
+        "source_artifact_type": "agent_evidence_chain_trace_payload",
+        "gate_name": TRACE_PERSISTENCE_GATE_NAME,
+        "attempted": False,
+        "recorded": False,
+        "reason": "",
+        "record_count": 0,
+        "run_count": 0,
+        "step_count": 0,
+        "trace_persistence_enabled": bool(persistence_gate_enabled),
+        "trace_store_write_enabled": False,
+        "did_prepare_trace_recording_payload": False,
+        "did_call_trace_execution_helper": False,
+        "did_write_database": bool(persistence_performed),
+        "owner_user_id": _clean_text(owner_user_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+        "chain_id": _clean_text(payload.get("chain_id")),
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+
+
+def _trace_payload_validity(trace_payload: Any) -> Dict[str, Any]:
+    if trace_payload is None or trace_payload == {} or not isinstance(trace_payload, dict):
+        return {
+            "valid": False,
+            "reason": "trace_payload_missing_or_malformed",
+            "payload": {},
+        }
+    payload = _plain_dict(trace_payload)
+    if _clean_text(payload.get("artifact_type")) != "agent_evidence_chain_trace_payload":
+        return {
+            "valid": False,
+            "reason": "trace_payload_wrong_artifact_type",
+            "payload": payload,
+        }
+    return {"valid": True, "reason": "", "payload": payload}
+
+
+def _trace_store_payload_builder_module() -> Any:
+    return __import__(
+        "src.storage.agent_trace.store",
+        fromlist=[
+            "create_agent_run_postgres_payload",
+            "record_agent_step_postgres_payload",
+        ],
+    )
+
+
+def _trace_persistence_run_record(
+    *,
+    trace_payload: Dict[str, Any],
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str,
+) -> Dict[str, Any]:
+    summary = _plain_dict(trace_payload.get("agent_run_compatible_summary"))
+    chain_id = _clean_text(trace_payload.get("chain_id"))
+    return {
+        "agent_run_id": _clean_text(
+            f"agent_evidence_chain_trace:{chain_id or pipeline_run_id}:{context_id}"
+        ),
+        "owner_user_id": owner_user_id,
+        "pipeline_run_id": pipeline_run_id,
+        "context_id": context_id,
+        "status": "succeeded",
+        "started_at": "1970-01-01T00:00:00+00:00",
+        "completed_at": "1970-01-01T00:00:00+00:00",
+        "summary_json": {
+            **summary,
+            "artifact_type": _clean_text(trace_payload.get("artifact_type")),
+            "payload_version": _clean_text(trace_payload.get("payload_version")),
+            "source_agent": "evidence_chain_composition",
+            "chain_id": chain_id,
+            "chain_status": _clean_text(trace_payload.get("chain_status")),
+            "chain_readiness": _clean_text(trace_payload.get("chain_readiness")),
+            "chain_reason_codes": _reason_codes(trace_payload.get("chain_reason_codes")),
+            "sampling_summary": _plain_dict(trace_payload.get("sampling_summary")),
+            "redaction_policy": _clean_text(trace_payload.get("redaction_policy")),
+            "safety_metadata": _plain_dict(trace_payload.get("safety_metadata")),
+        },
+        "error": "",
+    }
+
+
+def _trace_step_status(step_summary: Dict[str, Any]) -> str:
+    if not bool(step_summary.get("artifact_present")):
+        return "skipped"
+    if bool(step_summary.get("artifact_valid")):
+        return "succeeded"
+    return "degraded"
+
+
+def _trace_persistence_step_records(
+    *,
+    trace_payload: Dict[str, Any],
+    run_record: Dict[str, Any],
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str,
+) -> List[Dict[str, Any]]:
+    step_summaries = [
+        _plain_dict(step)
+        for step in _plain_list(trace_payload.get("agent_step_compatible_summaries"))
+    ]
+    records: List[Dict[str, Any]] = []
+    for index, step_summary in enumerate(step_summaries):
+        agent_key = _clean_text(step_summary.get("agent_key")) or f"agent_{index}"
+        records.append(
+            {
+                "agent_step_id": _clean_text(
+                    f"{run_record['agent_run_id']}:{index}:{agent_key}"
+                ),
+                "agent_run_id": _clean_text(run_record.get("agent_run_id")),
+                "owner_user_id": owner_user_id,
+                "pipeline_run_id": pipeline_run_id,
+                "context_id": context_id,
+                "agent_name": agent_key,
+                "agent_version": _clean_text(trace_payload.get("payload_version")),
+                "input_json": {
+                    "source_artifact_type": _clean_text(
+                        trace_payload.get("source_artifact_type")
+                    ),
+                    "chain_id": _clean_text(trace_payload.get("chain_id")),
+                    "pipeline_run_id": pipeline_run_id,
+                    "owner_user_id": owner_user_id,
+                    "context_id": context_id,
+                    "gate_name": TRACE_PERSISTENCE_GATE_NAME,
+                    "step_index": index,
+                    "redaction_policy": _clean_text(trace_payload.get("redaction_policy")),
+                },
+                "output_json": step_summary,
+                "validation_json": _plain_dict(step_summary.get("validation_summary")),
+                "status": _trace_step_status(step_summary),
+                "started_at": "1970-01-01T00:00:00+00:00",
+                "completed_at": "1970-01-01T00:00:00+00:00",
+                "latency_ms": None,
+                "model_provider": "",
+                "model_name": "",
+                "token_usage_json": {},
+                "cost_json": {},
+                "error": "",
+            }
+        )
+    return records
+
+
+def _build_agent_evidence_chain_trace_recording_payload(
+    *,
+    trace_payload: Dict[str, Any],
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str,
+) -> Dict[str, Any]:
+    trace_store = _trace_store_payload_builder_module()
+    run_record = _trace_persistence_run_record(
+        trace_payload=trace_payload,
+        owner_user_id=owner_user_id,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+    )
+    run_payload = getattr(trace_store, "create_" "agent_run_postgres_payload")(
+        record=run_record,
+        print_only=True,
+        ensure_schema=False,
+    )
+    run_snapshot = _plain_dict(run_payload.get("run"))
+    step_records = _trace_persistence_step_records(
+        trace_payload=trace_payload,
+        run_record=run_snapshot,
+        owner_user_id=owner_user_id,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+    )
+    step_payloads = [
+        getattr(trace_store, "record_" "agent_step_postgres_payload")(
+            record=step_record,
+            print_only=True,
+            ensure_schema=False,
+        )
+        for step_record in step_records
+    ]
+    records = [
+        {
+            "record_type": "agent_run",
+            "table": "agent_runs",
+            "sql": _clean_text(run_payload.get("sql")),
+            "params": (),
+            "snapshot": run_snapshot,
+        },
+        *[
+            {
+                "record_type": "agent_step",
+                "table": "agent_steps",
+                "sql": _clean_text(step_payload.get("sql")),
+                "params": (),
+                "snapshot": _plain_dict(step_payload.get("step")),
+            }
+            for step_payload in step_payloads
+        ],
+    ]
+    return {
+        "operation": "build_agent_evidence_chain_trace_recording_payload",
+        "run_count": 1,
+        "step_count": len(step_payloads),
+        "record_count": len(records),
+        "records": records,
+    }
+
+
+def _execute_agent_evidence_chain_trace_recording(
+    recording_payload: Dict[str, Any],
+    *,
+    cursor: Any | None = None,
+    execute_callback: Any | None = None,
+) -> Dict[str, Any]:
+    executed_operations: List[Dict[str, Any]] = []
+    for record in _plain_list(recording_payload.get("records")):
+        record_map = _plain_dict(record)
+        operation = {
+            "record_type": _clean_text(record_map.get("record_type")),
+            "table": _clean_text(record_map.get("table")),
+            "sql": _clean_text(record_map.get("sql")),
+            "params": tuple(record_map.get("params") or ()),
+        }
+        if cursor is not None:
+            getattr(cursor, "execute")(operation["sql"], operation["params"])
+        else:
+            execute_callback(deepcopy(operation))
+        executed_operations.append(
+            {
+                "record_type": operation["record_type"],
+                "table": operation["table"],
+            }
+        )
+    return {
+        "operation": "execute_agent_evidence_chain_trace_recording",
+        "executed_record_count": len(executed_operations),
+        "executed_operations": executed_operations,
+    }
+
+
+def persist_agent_evidence_chain_trace_payload(
+    *,
+    trace_payload: Dict[str, Any] | None,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    cursor: Any | None = None,
+    execute_callback: Any | None = None,
+    persistence_gate_enabled: bool = False,
+    strict: bool = False,
+) -> Dict[str, Any]:
+    """Persist an evidence-chain trace payload only through an injected executor."""
+
+    context = {
+        "owner_user_id": _clean_text(owner_user_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+    }
+    payload_state = _trace_payload_validity(trace_payload)
+    base_result = _trace_persistence_base_result(
+        trace_payload=payload_state.get("payload"),
+        persistence_gate_enabled=persistence_gate_enabled,
+        **context,
+    )
+    if not persistence_gate_enabled:
+        return {**base_result, "reason": "trace_persistence_disabled"}
+    if not all(context.values()):
+        return {**base_result, "reason": "missing_trace_context"}
+    if cursor is None and execute_callback is None:
+        return {**base_result, "reason": "write_executor_missing"}
+    if cursor is not None and execute_callback is not None:
+        return {**base_result, "reason": "multiple_write_executors"}
+    if not payload_state["valid"]:
+        return {**base_result, "reason": payload_state["reason"]}
+
+    payload = _plain_dict(payload_state.get("payload"))
+    try:
+        recording_payload = _build_agent_evidence_chain_trace_recording_payload(
+            trace_payload=payload,
+            **context,
+        )
+        execution_result = _execute_agent_evidence_chain_trace_recording(
+            recording_payload,
+            cursor=cursor,
+            execute_callback=execute_callback,
+        )
+        success_base = _trace_persistence_base_result(
+            trace_payload=payload,
+            persistence_gate_enabled=persistence_gate_enabled,
+            persistence_performed=True,
+            **context,
+        )
+        run_snapshot = _plain_dict(
+            _plain_dict((recording_payload.get("records") or [{}])[0]).get("snapshot")
+        )
+        return {
+            **success_base,
+            "attempted": True,
+            "recorded": True,
+            "reason": "",
+            "record_count": int(recording_payload.get("record_count") or 0),
+            "run_count": int(recording_payload.get("run_count") or 0),
+            "step_count": int(recording_payload.get("step_count") or 0),
+            "trace_store_write_enabled": True,
+            "did_prepare_trace_recording_payload": True,
+            "did_call_trace_execution_helper": True,
+            "agent_run_id": _clean_text(run_snapshot.get("agent_run_id")),
+            "recording_payload": recording_payload,
+            "execution_result": execution_result,
+        }
+    except Exception as exc:
+        if strict:
+            raise
+        return {
+            **base_result,
+            "attempted": True,
+            "recorded": False,
+            "reason": "trace_persistence_failed",
+            "error_message": str(exc),
+        }
 
 
 def build_agent_evidence_chain_bundle(

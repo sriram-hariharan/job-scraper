@@ -120,7 +120,7 @@ PROTECTED_HASHES = {
         "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3"
     ),
     "src/pipeline/collector.py": (
-        "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50"
+        "a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344"
     ),
     "src/pipeline/job_filter.py": (
         "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4"
@@ -915,6 +915,7 @@ def test_phase26a_changes_only_helper_doc_test_and_legacy_guards():
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
                 "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+            "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",

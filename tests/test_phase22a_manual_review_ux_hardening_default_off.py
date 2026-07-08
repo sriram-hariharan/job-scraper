@@ -52,7 +52,7 @@ PROTECTED_HASHES = {
     "src/app/services.py": "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
-    "src/pipeline/collector.py": "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50",
+    "src/pipeline/collector.py": "a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344",
 }
 
 
@@ -715,6 +715,7 @@ def test_phase22a_changes_only_static_docs_tests_and_legacy_guards():
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
                 "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+            "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",

@@ -61,10 +61,10 @@ ADAPTER_FIELDS = [
 
 RUNTIME_HASHES = {
     "src/agents/relevance_prefilter.py": ("5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b"),
-    "src/agents/jd_intelligence.py": ("3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00"),
+    "src/agents/jd_intelligence.py": ("c0150f2717581647c22bd084e3223691c1ce25d9b573acff10369def28f37f02"),
     "src/agents/final_application_scoring.py": ("eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"),
     "src/agents/three_core_agent_shadow_operator_canary.py": ("b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"),
-    "src/pipeline/collector.py": ("71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50"),
+    "src/pipeline/collector.py": ("a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344"),
     "src/app/api.py": ("85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"),
     "src/app/services.py": ("e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c"),
     "src/app/static/agentic_review.js": ("1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b"),
@@ -975,6 +975,7 @@ def test_phase18f_changes_only_approved_docs_and_tests():
             "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
                 "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+            "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",

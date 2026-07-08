@@ -151,7 +151,7 @@ def test_ui_does_not_add_pipeline_or_mutation_controls():
 def test_no_pipeline_dependency_or_backend_change():
     protected_hashes = {
         "src/app/api.py": ("85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"),
-        "src/pipeline/collector.py": ("e1f7b8894abe44e044983ce4a031cf7312ee079bb1fad8e54e28783f8a5318bd"),
+        "src/pipeline/collector.py": ("71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),
         "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
         "application_execution_queue.py": ("c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"),

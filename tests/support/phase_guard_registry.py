@@ -79,6 +79,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
             "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
             "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
+                "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
         },
     }
     try:

@@ -168,6 +168,8 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "tests/test_phase90b_critic_consumes_resume_match_jd_evidence_default_off.py",
             "src/agents/job_prioritization_agent.py",
             "tests/test_phase91b_job_prioritization_consumes_critic_evidence_default_off.py",
+            "src/agents/tailoring_decision_agent.py",
+            "tests/test_phase92b_tailoring_decision_consumes_job_prioritization_evidence_default_off.py",
                     "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
@@ -882,6 +884,11 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/agents/job_prioritization_agent.py",
     }
     if set(changed_runtime_files) == phase91b_job_prioritization_critic_evidence_files:
+        return
+    phase92b_tailoring_decision_priority_evidence_files = {
+        ROOT / "src/agents/tailoring_decision_agent.py",
+    }
+    if set(changed_runtime_files) == phase92b_tailoring_decision_priority_evidence_files:
         return
 
     assert changed_runtime_files in (

@@ -81,6 +81,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
             "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
+            "src/agents/resume_match_agent.py",
+            "tests/test_phase89b_resume_match_consumes_jd_intelligence_default_off.py",
+            "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }
     try:

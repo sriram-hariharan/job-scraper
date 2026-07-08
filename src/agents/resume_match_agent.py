@@ -664,3 +664,244 @@ def build_resume_match_dry_run_payload(
         "job_id": _clean_text(job_id),
         "safety_metadata": _dry_run_safety_metadata(),
     }
+
+
+RESUME_MATCH_JD_EVIDENCE_GATE = (
+    "APPLYLENS_AGENTIC_RESUME_MATCH_CONSUMES_JD_INTELLIGENCE_ENABLED"
+)
+RESUME_MATCH_JD_EVIDENCE_ARTIFACT_VERSION = "resume-match-jd-evidence-v1"
+
+
+def _jd_evidence_safety_metadata() -> Dict[str, bool]:
+    return {
+        "provider_call_performed": False,
+        "live_llm_call_performed": False,
+        "jd_extraction_performed": False,
+        "trace_persistence_performed": False,
+        "collector_output_changed": False,
+        "production_output_changed": False,
+        "scoring_changed": False,
+        "ranking_changed": False,
+        "filtering_changed": False,
+        "queue_mutation_performed": False,
+        "scheduler_mutation_performed": False,
+        "tailoring_mutation_performed": False,
+        "source_resume_mutation_performed": False,
+        "workflow_runner_executed": False,
+        "auto_apply_performed": False,
+        "ats_submission_performed": False,
+        "recruiter_message_sent": False,
+        "mark_applied_performed": False,
+    }
+
+
+def _jd_evidence_list(value: Any) -> List[str]:
+    return _dry_run_list(value)
+
+
+def _jd_evidence_selected_resume_row(
+    *,
+    resume_rows: List[Any],
+    selected_resume_id: str,
+    fallback_resume_id: str,
+) -> Dict[str, Any]:
+    target_id = _clean_text(selected_resume_id) or _clean_text(fallback_resume_id)
+    for index, row in enumerate(resume_rows):
+        if not isinstance(row, dict):
+            continue
+        if _resume_variant_id(row, index) == target_id:
+            return dict(row)
+    return {}
+
+
+def _jd_evidence_match_split(
+    *,
+    signals: List[str],
+    resume_row: Dict[str, Any],
+) -> Dict[str, List[str]]:
+    resume_text = _resume_search_text(resume_row)
+    matched = [signal for signal in signals if _dry_run_contains(resume_text, signal)]
+    return {
+        "matched": matched,
+        "missing": [signal for signal in signals if signal not in matched],
+    }
+
+
+def _jd_evidence_resume_fields_used(resume_row: Dict[str, Any]) -> List[str]:
+    fields = [
+        "resume_id",
+        "resume_name",
+        "title",
+        "summary",
+        "raw_text",
+        "normalized_text",
+        "evidence_text",
+        "skills",
+        "tools",
+        "methods",
+        "workflows",
+        "business_contexts",
+        "stakeholder_contexts",
+        "ownership_signals",
+        "seniority_signals",
+        "analytics_ml_signals",
+        "domain_signals",
+        "tooling_signals",
+        "quantified_bullets",
+        "bullets",
+    ]
+    return [
+        field_name
+        for field_name in fields
+        if _resume_evidence_values(resume_row, [field_name])
+    ]
+
+
+def build_resume_match_jd_evidence_artifact(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: str = "",
+    job_id: str = "",
+    title: str = "",
+    company: str = "",
+    enabled: bool = False,
+) -> Dict[str, Any]:
+    """Build read-only Resume Match evidence from an existing JD wrapper output."""
+
+    jd_source = deepcopy(jd_intelligence) if isinstance(jd_intelligence, dict) else {}
+    resume_rows = deepcopy(
+        resume_variants if resume_variants is not None else resume_evidence_rows or []
+    )
+    if not isinstance(resume_rows, list):
+        resume_rows = []
+
+    reason_codes: List[str] = []
+    if jd_intelligence is None or jd_intelligence == {}:
+        reason_codes.append("jd_intelligence_missing")
+    elif not isinstance(jd_intelligence, dict):
+        reason_codes.append("jd_intelligence_malformed")
+
+    validation_json = jd_source.get("validation_json")
+    if isinstance(validation_json, dict):
+        if validation_json.get("is_valid_for_existing_output_wrapper") is False:
+            reason_codes.append("jd_intelligence_malformed")
+        reason_codes.extend(
+            _clean_text(code)
+            for code in validation_json.get("missing_or_invalid_fields", [])
+            if _clean_text(code)
+        )
+    elif jd_source:
+        reason_codes.append("jd_intelligence_validation_missing")
+
+    required_skills = _jd_evidence_list(jd_source.get("required_skills"))
+    preferred_skills = _jd_evidence_list(jd_source.get("preferred_skills"))
+    all_skills = _jd_evidence_list(jd_source.get("all_skills"))
+    if not all_skills:
+        all_skills = list(dict.fromkeys(required_skills + preferred_skills))
+    if not required_skills:
+        reason_codes.append("jd_required_skills_missing")
+    if not resume_rows:
+        reason_codes.append("resume_evidence_missing")
+
+    resolved_job_id = _clean_text(job_id) or _clean_text(jd_source.get("job_id"))
+    resolved_title = _clean_text(title) or _clean_text(jd_source.get("title"))
+    resolved_company = _clean_text(company) or _clean_text(jd_source.get("company"))
+
+    dry_run_payload = build_resume_match_dry_run_payload(
+        jd_intelligence={
+            "required_skills": required_skills,
+            "preferred_skills": preferred_skills,
+        },
+        resume_variants=resume_rows,
+        selected_resume_id=selected_resume_id,
+        job_id=resolved_job_id,
+    )
+    selected_row = _jd_evidence_selected_resume_row(
+        resume_rows=resume_rows,
+        selected_resume_id=selected_resume_id,
+        fallback_resume_id=dry_run_payload.get("selected_resume_id", ""),
+    )
+    required_split = _jd_evidence_match_split(
+        signals=required_skills,
+        resume_row=selected_row,
+    )
+    preferred_split = _jd_evidence_match_split(
+        signals=preferred_skills,
+        resume_row=selected_row,
+    )
+    artifact_reason_codes = list(
+        dict.fromkeys(reason_codes + list(dry_run_payload.get("risk_flags") or []))
+    )
+    validation_status = "passed" if not artifact_reason_codes else "degraded"
+    safety_metadata = _jd_evidence_safety_metadata()
+
+    return {
+        "artifact_type": "resume_match_jd_evidence",
+        "artifact_version": RESUME_MATCH_JD_EVIDENCE_ARTIFACT_VERSION,
+        "source_agent": "resume_match",
+        "source_agent_name": AGENT_NAME,
+        "source_agent_version": AGENT_VERSION,
+        "upstream_agent": "jd_intelligence",
+        "upstream_evidence_source": _clean_text(
+            jd_source.get("extraction_source")
+        ) or "existing_pipeline_job_intelligence",
+        "gate_name": RESUME_MATCH_JD_EVIDENCE_GATE,
+        "enabled": bool(enabled),
+        "default_off": True,
+        "read_only": True,
+        "diagnostic_only": True,
+        "job_id": resolved_job_id,
+        "title": resolved_title,
+        "company": resolved_company,
+        "jd_required_skills": required_skills,
+        "jd_preferred_skills": preferred_skills,
+        "jd_all_skills": all_skills,
+        "matched_required_skills": required_split["matched"],
+        "missing_required_skills": required_split["missing"],
+        "matched_preferred_skills": preferred_split["matched"],
+        "missing_preferred_skills": preferred_split["missing"],
+        "selected_resume_id": _clean_text(dry_run_payload.get("selected_resume_id")),
+        "resume_evidence_fields_used": _jd_evidence_resume_fields_used(selected_row),
+        "match_status": _clean_text(dry_run_payload.get("match_status")),
+        "recommendation_label": _clean_text(dry_run_payload.get("recommendation_label")),
+        "confidence": float(dry_run_payload.get("confidence", 0.0) or 0.0),
+        "candidate_resume_scores": deepcopy(
+            dry_run_payload.get("candidate_resume_scores") or []
+        ),
+        "dimension_scores": deepcopy(dry_run_payload.get("dimension_scores") or {}),
+        "matched_evidence": deepcopy(dry_run_payload.get("matched_evidence") or []),
+        "weak_evidence": deepcopy(dry_run_payload.get("weak_evidence") or []),
+        "missing_evidence": deepcopy(dry_run_payload.get("missing_evidence") or []),
+        "source_fields_used": list(dry_run_payload.get("source_fields_used") or []),
+        "critic_input_summary": {
+            "job_id": resolved_job_id,
+            "selected_resume_id": _clean_text(dry_run_payload.get("selected_resume_id")),
+            "match_status": _clean_text(dry_run_payload.get("match_status")),
+            "confidence": float(dry_run_payload.get("confidence", 0.0) or 0.0),
+            "matched_required_skill_count": len(required_split["matched"]),
+            "missing_required_skill_count": len(required_split["missing"]),
+            "matched_preferred_skill_count": len(preferred_split["matched"]),
+            "missing_preferred_skill_count": len(preferred_split["missing"]),
+            "reason_codes": artifact_reason_codes,
+        },
+        "reason_codes": artifact_reason_codes,
+        "validation_summary": {
+            "validation_status": validation_status,
+            "jd_intelligence_present": bool(jd_source),
+            "jd_intelligence_valid": (
+                validation_json.get("is_valid_for_existing_output_wrapper")
+                if isinstance(validation_json, dict)
+                else bool(jd_source)
+            ),
+            "resume_evidence_available": bool(resume_rows),
+            "required_skill_count": len(required_skills),
+            "preferred_skill_count": len(preferred_skills),
+            "matched_required_skill_count": len(required_split["matched"]),
+            "matched_preferred_skill_count": len(preferred_split["matched"]),
+            "reason_codes": artifact_reason_codes,
+        },
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }

@@ -820,6 +820,8 @@ def test_phase31a_changes_only_helper_doc_test_and_legacy_guards():
             "tests/test_phase90b_critic_consumes_resume_match_jd_evidence_default_off.py",
             "src/agents/job_prioritization_agent.py",
             "tests/test_phase91b_job_prioritization_consumes_critic_evidence_default_off.py",
+            "src/agents/tailoring_decision_agent.py",
+            "tests/test_phase92b_tailoring_decision_consumes_job_prioritization_evidence_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

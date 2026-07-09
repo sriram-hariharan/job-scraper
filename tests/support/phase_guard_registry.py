@@ -101,6 +101,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",
             "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
+            "tests/test_phase102b_jd_intelligence_controlled_llm_ownership_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }
@@ -137,10 +138,14 @@ def assert_protected_hashes(
             "src/app/services.py",
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
         ): "cc2de35be2ccdf50640b5933651f0d8ef596a400d4c38436ea8aebd8320a9d6c",
-        (
-            "src/agents/jd_intelligence.py",
-            "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",
-        ): "c0150f2717581647c22bd084e3223691c1ce25d9b573acff10369def28f37f02",
+            (
+                "src/agents/jd_intelligence.py",
+                "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",
+            ): "c72224bbc8e64b13c725f9180d227c413fb2fd9a65a97e2e72954f61a8f32b45",
+            (
+                "src/agents/jd_intelligence.py",
+                "c0150f2717581647c22bd084e3223691c1ce25d9b573acff10369def28f37f02",
+            ): "c72224bbc8e64b13c725f9180d227c413fb2fd9a65a97e2e72954f61a8f32b45",
         (
             "src/pipeline/collector.py",
             "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50",

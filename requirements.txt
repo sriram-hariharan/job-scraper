@@ -15,6 +15,7 @@ pdfminer.six
 sentence-transformers
 numpy
 google-genai
+langgraph
 llama-index 
 llama-index-embeddings-huggingface
 fastapi

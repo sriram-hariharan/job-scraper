@@ -813,6 +813,8 @@ def test_changed_files_are_limited_to_phase46a_and_legacy_guard_tests():
             "tests/test_phase93b_operator_review_consumes_tailoring_decision_evidence_default_off.py",
             "tests/test_phase94b_agent_evidence_chain_composition_default_off.py",
             "src/agents/evidence_chain_execution.py",
+                "requirements.txt",
+                "src/agents/evidence_chain_langgraph_harness.py",
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",

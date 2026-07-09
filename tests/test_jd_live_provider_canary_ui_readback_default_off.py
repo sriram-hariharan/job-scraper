@@ -173,7 +173,7 @@ def test_old_broad_handler_scans_remain_provider_free():
 
 def test_api_service_pipeline_dependencies_and_css_are_unchanged():
     expected = {
-        "requirements.txt": ("96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"),
+        "requirements.txt": ("5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"),
         "src/app/api.py": ("d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"),
         "src/app/services.py": ("bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2"),
         "src/app/static/app_redesign.css": ("81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961"),

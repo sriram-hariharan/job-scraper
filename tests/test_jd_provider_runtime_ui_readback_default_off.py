@@ -183,7 +183,7 @@ def test_legacy_broad_handler_scans_remain_provider_free():
 def test_no_api_service_pipeline_dependency_or_decision_module_change():
     expected = {
         "requirements.txt": (
-            "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
+            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"
         ),
         "src/app/api.py": (
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"

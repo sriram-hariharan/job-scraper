@@ -595,6 +595,7 @@ def test_changed_files_are_limited_to_phase44a_and_legacy_guards():
         if path.startswith("tests/test_") and path.endswith(".py")
     }
     allowed |= {
+        "requirements.txt",
         "src/agents/orchestrator_adapter_harness.py",
             "src/pipeline/collector.py",
             "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",

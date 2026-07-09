@@ -637,6 +637,7 @@ def test_changed_files_are_limited_to_phase40b_and_legacy_guard_tests():
         "tests/test_phase41a_jd_evidence_score_impact_review_queue_builder_default_off.py",
     }
     allowed |= {
+        "requirements.txt",
         "src/agents/orchestrator_adapter_harness.py",
             "src/pipeline/collector.py",
             "tests/test_phase81d_collector_advisory_chain_diagnostics_sidecar_default_off.py",

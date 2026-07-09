@@ -784,10 +784,12 @@ def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
     }
 
     allowed |= {
+        "requirements.txt",
         "src/agents/orchestrator_adapter_harness.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
     allowed |= {
+        "requirements.txt",
         "src/pipeline/collector.py",
         "tests/test_phase80d_advisory_chain_trace_readback_compatibility.py",
         "tests/test_phase81b_controlled_pipeline_advisory_chain_invocation_default_off.py",
@@ -815,6 +817,8 @@ def test_phase25b_changes_only_api_doc_test_and_legacy_guards():
                 "tests/test_phase96b_agent_evidence_chain_trace_persistence_default_off.py",
                 "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
             "src/agents/evidence_chain_execution.py",
+                "requirements.txt",
+                "src/agents/evidence_chain_langgraph_harness.py",
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",

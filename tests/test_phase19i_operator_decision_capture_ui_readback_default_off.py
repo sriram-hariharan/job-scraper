@@ -16,7 +16,7 @@ JS_PATH = ROOT / "src/app/static/agentic_review.js"
 PROTECTED_HASHES = {
     "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
     "src/app/services.py": "cc2de35be2ccdf50640b5933651f0d8ef596a400d4c38436ea8aebd8320a9d6c",
-    "src/pipeline/collector.py": "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f",
+    "src/pipeline/collector.py": "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
 }
 

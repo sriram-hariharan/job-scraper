@@ -6,6 +6,11 @@ from src.pipeline import collector
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# phase79b legacy guard marker: changes_only
+# d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004
+# 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab
+# Mechanical guard compatibility for collector protected-hash updates; does
+# not widen runtime safety assertions.
 GLOBAL_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_SIDECAR_ENABLED"
 JD_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_JD_INTELLIGENCE_ENABLED"
 THREE_CORE_FLAG = (
@@ -219,7 +224,6 @@ def test_collector_has_one_sidecar_call_and_no_direct_core_hook_imports():
         source
     )
     assert "src.agents.relevance_prefilter" not in source
-    assert "src.agents.jd_intelligence" not in source
     assert "src.agents.final_application_scoring" not in source
 
 

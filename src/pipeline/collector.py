@@ -34,6 +34,12 @@ JD_INTELLIGENCE_EXISTING_OUTPUT_TRACE_PERSISTENCE_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_JD_INTELLIGENCE_EXISTING_OUTPUT_"
     "TRACE_PERSISTENCE_ENABLED"
 )
+JD_INTELLIGENCE_CONTROLLED_LLM_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_JD_INTELLIGENCE_CONTROLLED_LLM_ENABLED"
+)
+JD_INTELLIGENCE_CONTROLLED_LLM_VERSION = (
+    "collector-jd-intelligence-controlled-llm-runtime-v1"
+)
 EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_EVIDENCE_CHAIN_DIAGNOSTICS_ENABLED"
 )
@@ -159,6 +165,28 @@ EVIDENCE_CHAIN_TRACE_PERSISTENCE_FALSE_FLAGS = (
     "source_resume_mutation_performed",
     "generated_resume_mutation_performed",
     "workflow_runner_executed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+    "external_action_automation_performed",
+)
+JD_INTELLIGENCE_CONTROLLED_LLM_FALSE_FLAGS = (
+    "database_write_performed",
+    "trace_persistence_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "queue_mutation_performed",
+    "review_queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
     "application_status_changed",
     "auto_apply_performed",
     "ats_submission_performed",
@@ -941,6 +969,177 @@ def _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(
             "source_resume_changed": False,
             "workflow_" "runner_live_execution_performed": False,
         }
+
+
+def _jd_controlled_llm_safety_metadata() -> Dict[str, bool]:
+    return {
+        "read_only": True,
+        "diagnostic_only": True,
+        "sidecar_only": True,
+        **{flag: False for flag in JD_INTELLIGENCE_CONTROLLED_LLM_FALSE_FLAGS},
+    }
+
+
+def _job_intelligence_skill_signals(job: Dict[str, Any]) -> Dict[str, Any]:
+    intelligence = job.get("intelligence") if isinstance(job, dict) else {}
+    intelligence_map = dict(intelligence or {}) if isinstance(intelligence, dict) else {}
+    skills = intelligence_map.get("skills")
+    skills_map = dict(skills or {}) if isinstance(skills, dict) else {}
+    required = list(skills_map.get("required") or [])
+    preferred = list(skills_map.get("preferred") or [])
+    all_skills = list(skills_map.get("all") or [])
+    if not all_skills:
+        all_skills = required + [skill for skill in preferred if skill not in required]
+    return {
+        "intelligence": deepcopy(intelligence_map),
+        "required_skills": required,
+        "preferred_skills": preferred,
+        "all_skills": all_skills,
+        "extraction_ready": isinstance(skills, dict),
+        "extraction_source": "existing_build_job_intelligence",
+    }
+
+
+def _jd_controlled_llm_metadata(job: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = job.get("_jd_intelligence_llm_metadata")
+    if not isinstance(metadata, dict):
+        metadata = job.get("jd_intelligence_llm_metadata")
+    return deepcopy(dict(metadata or {})) if isinstance(metadata, dict) else {}
+
+
+def _build_intelligent_jobs_with_controlled_jd_agent_ownership(
+    detailed_jobs: List[Dict[str, Any]],
+    *,
+    build_job_intelligence_func: Any,
+    artifact_builder: Any = None,
+    enabled: bool | None = None,
+    env: Dict[str, str] | None = None,
+    strict: bool = True,
+) -> Dict[str, Any]:
+    env_map = env if env is not None else os.environ
+    gate_enabled = (
+        _truthy_env_value(env_map.get(JD_INTELLIGENCE_CONTROLLED_LLM_FLAG))
+        if enabled is None
+        else enabled is True
+    )
+    if not gate_enabled:
+        return {
+            "enabled": False,
+            "intelligent_jobs": [
+                build_job_intelligence_func(job) for job in detailed_jobs
+            ],
+            "jd_intelligence_controlled_llm_runtime_summary": None,
+        }
+
+    if artifact_builder is None:
+        from src.agents.jd_intelligence import (
+            build_jd_intelligence_controlled_llm_artifact,
+        )
+
+        artifact_builder = build_jd_intelligence_controlled_llm_artifact
+
+    intelligent_jobs: List[Dict[str, Any]] = []
+    artifacts: List[Dict[str, Any]] = []
+    extraction_helper_called_count = 0
+    error_count = 0
+
+    for raw_job in list(detailed_jobs or []):
+        source_job = deepcopy(dict(raw_job or {}))
+        holder: Dict[str, Any] = {"called": False, "job": None}
+
+        def extraction_helper(request_packet: Dict[str, Any]) -> Dict[str, Any]:
+            nonlocal extraction_helper_called_count
+            extraction_helper_called_count += 1
+            holder["called"] = True
+            adapter_job = deepcopy(dict(request_packet.get("job") or source_job))
+            intelligent_job = build_job_intelligence_func(adapter_job)
+            if not isinstance(intelligent_job, dict):
+                intelligent_job = adapter_job
+            holder["job"] = deepcopy(intelligent_job)
+            return {
+                **_job_intelligence_skill_signals(intelligent_job),
+                **_jd_controlled_llm_metadata(intelligent_job),
+            }
+
+        try:
+            artifact = artifact_builder(
+                source_job,
+                enabled=True,
+                extraction_helper=extraction_helper,
+                env=env_map,
+                strict=strict,
+            )
+        except Exception:
+            error_count += 1
+            if strict:
+                raise
+            intelligent_jobs.append(source_job)
+            continue
+
+        artifact_map = dict(artifact or {}) if isinstance(artifact, dict) else {}
+        artifacts.append(artifact_map)
+        if holder["called"] and isinstance(holder.get("job"), dict):
+            intelligent_jobs.append(deepcopy(holder["job"]))
+        else:
+            intelligent_jobs.append(source_job)
+
+    safety_metadata = _jd_controlled_llm_safety_metadata()
+    summary = {
+        "artifact_type": "jd_intelligence_controlled_llm_runtime_summary",
+        "artifact_version": JD_INTELLIGENCE_CONTROLLED_LLM_VERSION,
+        "gate_name": JD_INTELLIGENCE_CONTROLLED_LLM_FLAG,
+        "enabled": True,
+        "default_off": True,
+        "collector_stage": "intelligence",
+        "total_jobs_seen": len(list(detailed_jobs or [])),
+        "artifacts_built": len(artifacts),
+        "existing_intelligence_reused_count": sum(
+            1 for artifact in artifacts if artifact.get("existing_intelligence_reused")
+        ),
+        "duplicate_call_avoided_count": sum(
+            1
+            for artifact in artifacts
+            if artifact.get("duplicate_call_avoided")
+            or artifact.get("duplicate_llm_call_avoided")
+        ),
+        "extraction_helper_called_count": extraction_helper_called_count,
+        "fallback_used_count": sum(
+            1
+            for artifact in artifacts
+            if artifact.get("fallback_used")
+            or artifact.get("deterministic_fallback_used")
+        ),
+        "provider_call_performed_count": sum(
+            1 for artifact in artifacts if artifact.get("provider_call_performed")
+        ),
+        "token_metrics_available_count": sum(
+            1
+            for artifact in artifacts
+            if (artifact.get("safety_metadata") or {}).get("token_metrics_available")
+        ),
+        "cost_metrics_available_count": sum(
+            1
+            for artifact in artifacts
+            if (artifact.get("safety_metadata") or {}).get("cost_metrics_available")
+        ),
+        "latency_metrics_available_count": sum(
+            1
+            for artifact in artifacts
+            if (artifact.get("safety_metadata") or {}).get("latency_metrics_available")
+        ),
+        "error_count": error_count
+        + sum(1 for artifact in artifacts if artifact.get("error_message")),
+        "artifacts": artifacts,
+        "trace_persistence_requested": False,
+        "trace_persistence_performed": False,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+    return {
+        "enabled": True,
+        "intelligent_jobs": intelligent_jobs,
+        "jd_intelligence_controlled_llm_runtime_summary": summary,
+    }
 
 
 def _evidence_chain_collector_safety_metadata() -> Dict[str, bool]:
@@ -1847,7 +2046,29 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     reset_provider_metrics()
     reset_skill_cache_metrics()
 
-    intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
+    if _truthy_env_value(os.environ.get(JD_INTELLIGENCE_CONTROLLED_LLM_FLAG)):
+        controlled_jd_result = _build_intelligent_jobs_with_controlled_jd_agent_ownership(
+            detailed_jobs,
+            build_job_intelligence_func=build_job_intelligence,
+            enabled=True,
+            env=os.environ,
+            strict=True,
+        )
+        intelligent_jobs = controlled_jd_result["intelligent_jobs"]
+        controlled_jd_summary = controlled_jd_result.get(
+            "jd_intelligence_controlled_llm_runtime_summary"
+        )
+        if isinstance(controlled_jd_summary, dict):
+            logger.info(
+                "JD Intelligence controlled LLM ownership evaluated: seen=%s "
+                "artifacts=%s reused=%s extraction_helper_calls=%s",
+                controlled_jd_summary.get("total_jobs_seen", 0),
+                controlled_jd_summary.get("artifacts_built", 0),
+                controlled_jd_summary.get("existing_intelligence_reused_count", 0),
+                controlled_jd_summary.get("extraction_helper_called_count", 0),
+            )
+    else:
+        intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
     complete_stage("intelligence", counts={"intelligent_jobs": len(intelligent_jobs)})
     _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(

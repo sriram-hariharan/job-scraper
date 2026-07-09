@@ -713,6 +713,7 @@ def test_changed_files_are_limited_to_phase47b_and_legacy_guards():
             "tests/test_phase94b_agent_evidence_chain_composition_default_off.py",
             "src/agents/evidence_chain_execution.py",
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
+            "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

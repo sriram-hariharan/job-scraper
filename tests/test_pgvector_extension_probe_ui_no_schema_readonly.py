@@ -176,7 +176,7 @@ def test_no_api_service_pipeline_schema_migration_or_dependency_change():
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96"
         ),
         "src/pipeline/collector.py": (
-            "cae9f4a51ef14c7b1185a64f2e229591274c284c2985989ec1f5997f7728ee42"
+            "3e5d429fe94cdd9d58d0c0a666563caee25f50865bc18a3824b6bac634a00971"
         ),
         "requirements.txt": (
             "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"

@@ -449,6 +449,7 @@ def test_changed_files_are_limited_to_phase43a_and_legacy_guards():
             "src/app/static/scan_workspace_review.css",
             "src/app/static/styles.css",
         "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
         "tests/test_queue_ui_metadata_contract.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",

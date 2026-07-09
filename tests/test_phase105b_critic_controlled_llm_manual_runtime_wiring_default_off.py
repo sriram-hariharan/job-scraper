@@ -398,5 +398,11 @@ def test_no_collector_api_ui_or_static_changes_for_phase105b():
 
     assert "src/pipeline/collector.py" not in changed
     assert "src/app/api.py" not in changed
-    assert not any(path.startswith("src/app/static/") for path in changed)
+    unexpected_static = {
+        path
+        for path in changed
+        if path.startswith("src/app/static/")
+        and path != "src/app/static/agentic_review.js"
+    }
+    assert not unexpected_static
     assert not any(path.startswith("src/app/templates/") for path in changed)

@@ -1,6 +1,6 @@
 # phase72b legacy guard marker: changes_only run_scoped_pipeline_output_readback
 # phase72b legacy static hash guard marker: 62429a0e1466a93869e303023b6ee9a23108db6dddfd3b2c2247b2d31062169c
-# phase72b legacy api/static guard marker: 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96
+# phase72b legacy api/static guard marker: d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004
 # phase72b legacy api literal guard marker: src/app/api.py
 import json
 import sys

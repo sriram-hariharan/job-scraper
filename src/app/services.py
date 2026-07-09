@@ -1587,6 +1587,320 @@ def agent_trace_payload(
     return payload
 
 
+EVIDENCE_CHAIN_TRACE_READBACK_VERSION = "evidence-chain-trace-readback-v1"
+
+
+def _evidence_chain_trace_readback_safety_metadata() -> Dict[str, bool]:
+    return {
+        "read_only": True,
+        "database_write_performed": False,
+        "trace_persistence_performed": False,
+        "provider_call_performed": False,
+        "live_llm_call_performed": False,
+        "collector_execution_performed": False,
+        "workflow_runner_executed": False,
+        "production_output_changed": False,
+        "scoring_changed": False,
+        "ranking_changed": False,
+        "filtering_changed": False,
+        "queue_mutation_performed": False,
+        "review_queue_mutation_performed": False,
+        "scheduler_mutation_performed": False,
+        "tailoring_mutation_performed": False,
+        "source_resume_mutation_performed": False,
+        "generated_resume_mutation_performed": False,
+        "application_status_changed": False,
+        "auto_apply_performed": False,
+        "ats_submission_performed": False,
+        "apply_click_performed": False,
+        "recruiter_message_sent": False,
+        "mark_applied_performed": False,
+        "external_action_automation_performed": False,
+    }
+
+
+def _evidence_chain_trace_empty_payload(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str = "",
+    agent_run_id: str = "",
+    warnings: List[str] | None = None,
+) -> Dict[str, Any]:
+    warning_values = [
+        _clean_text(warning)
+        for warning in list(warnings or [])
+        if _clean_text(warning)
+    ]
+    safety_metadata = _evidence_chain_trace_readback_safety_metadata()
+    return {
+        "artifact_type": "evidence_chain_trace_readback",
+        "artifact_version": EVIDENCE_CHAIN_TRACE_READBACK_VERSION,
+        "owner_user_id": _clean_text(owner_user_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+        "agent_run_id": _clean_text(agent_run_id),
+        "found": False,
+        "run_count": 0,
+        "step_count": 0,
+        "latest_run": {},
+        "agent_steps": [],
+        "per_agent_status": {},
+        "persistence_summary": {
+            "evidence_chain_run_count": 0,
+            "evidence_chain_step_count": 0,
+            "latest_agent_run_id": "",
+        },
+        "warnings": warning_values,
+        "warning_count": len(warning_values),
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+
+
+def _is_evidence_chain_trace_run(row: Dict[str, Any]) -> bool:
+    if not isinstance(row, dict):
+        return False
+    agent_run_id = _clean_text(row.get("agent_run_id"))
+    summary = row.get("summary_json")
+    if not isinstance(summary, dict):
+        summary = {}
+    return (
+        agent_run_id.startswith("agent_evidence_chain_trace:")
+        or _clean_text(summary.get("source_agent")) == "evidence_chain_composition"
+    )
+
+
+def _compact_evidence_chain_run(row: Dict[str, Any]) -> Dict[str, Any]:
+    summary = row.get("summary_json")
+    if not isinstance(summary, dict):
+        summary = {}
+    return {
+        "agent_run_id": _clean_text(row.get("agent_run_id")),
+        "context_id": _clean_text(row.get("context_id")),
+        "status": _clean_text(row.get("status")) or "unknown",
+        "started_at": _clean_text(row.get("started_at")),
+        "completed_at": _clean_text(row.get("completed_at")),
+        "chain_id": _clean_text(summary.get("chain_id")),
+        "chain_status": _clean_text(summary.get("chain_status")),
+        "chain_readiness": _clean_text(summary.get("chain_readiness")),
+        "source_agent": _clean_text(summary.get("source_agent")),
+        "error": _clean_text(row.get("error")),
+    }
+
+
+def _compact_evidence_chain_step(row: Dict[str, Any]) -> Dict[str, Any]:
+    output = row.get("output_json")
+    if not isinstance(output, dict):
+        output = {}
+    validation = row.get("validation_json")
+    if not isinstance(validation, dict):
+        validation = {}
+    agent_name = _clean_text(row.get("agent_name")) or _clean_text(
+        output.get("agent_key")
+    )
+    return {
+        "agent_step_id": _clean_text(row.get("agent_step_id")),
+        "agent_run_id": _clean_text(row.get("agent_run_id")),
+        "agent_name": agent_name,
+        "agent_key": _clean_text(output.get("agent_key")) or agent_name,
+        "status": _clean_text(row.get("status")) or "unknown",
+        "started_at": _clean_text(row.get("started_at")),
+        "completed_at": _clean_text(row.get("completed_at")),
+        "artifact_present": bool(output.get("artifact_present")),
+        "artifact_valid": bool(output.get("artifact_valid")),
+        "validation_status": _clean_text(validation.get("validation_status")),
+        "error": _clean_text(row.get("error")),
+    }
+
+
+def _evidence_chain_per_agent_status(
+    steps: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    statuses: Dict[str, Dict[str, Any]] = {}
+    for step in steps:
+        agent_key = _clean_text(step.get("agent_key")) or _clean_text(
+            step.get("agent_name")
+        )
+        if not agent_key:
+            continue
+        statuses[agent_key] = {
+            "status": _clean_text(step.get("status")) or "unknown",
+            "artifact_present": bool(step.get("artifact_present")),
+            "artifact_valid": bool(step.get("artifact_valid")),
+            "validation_status": _clean_text(step.get("validation_status")),
+        }
+    return dict(sorted(statuses.items()))
+
+
+def _safe_trace_limit(value: Any, *, default: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(1, min(parsed, maximum))
+
+
+def get_evidence_chain_trace_readback_payload(
+    *,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    agent_run_id: str = "",
+    limit_runs: int = 10,
+    limit_steps: int = 100,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_pipeline_run_id = _clean_text(pipeline_run_id)
+    safe_context_id = _clean_text(context_id)
+    safe_agent_run_id = _clean_text(agent_run_id)
+    safe_limit_runs = _safe_trace_limit(limit_runs, default=10, maximum=50)
+    safe_limit_steps = _safe_trace_limit(limit_steps, default=100, maximum=200)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    if not safe_pipeline_run_id:
+        raise ValueError("Pipeline run id is required.")
+
+    try:
+        if safe_agent_run_id:
+            run_payload = get_agent_run_postgres_payload(
+                owner_user_id=owner,
+                agent_run_id=safe_agent_run_id,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            raw_runs = (
+                [dict(run_payload.get("run", {}) or {})]
+                if bool(run_payload.get("found", False))
+                else []
+            )
+        else:
+            runs_payload = list_agent_runs_postgres_payload(
+                owner_user_id=owner,
+                pipeline_run_id=safe_pipeline_run_id,
+                context_id=safe_context_id,
+                limit=200,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            raw_runs = [
+                dict(row or {})
+                for row in list(runs_payload.get("runs", []) or [])
+                if isinstance(row, dict)
+            ]
+
+        raw_runs = _agent_trace_rows_for_owner_pipeline(
+            raw_runs,
+            owner_user_id=owner,
+            pipeline_run_id=safe_pipeline_run_id,
+            context_id=safe_context_id,
+        )
+        if safe_agent_run_id:
+            raw_runs = [
+                run
+                for run in raw_runs
+                if _clean_text(run.get("agent_run_id")) == safe_agent_run_id
+            ]
+        evidence_runs = [
+            run
+            for run in raw_runs
+            if _is_evidence_chain_trace_run(run)
+        ][:safe_limit_runs]
+        run_ids = {_clean_text(run.get("agent_run_id")) for run in evidence_runs}
+
+        steps_payload = list_agent_steps_postgres_payload(
+            owner_user_id=owner,
+            agent_run_id=safe_agent_run_id,
+            pipeline_run_id=safe_pipeline_run_id,
+            context_id=safe_context_id,
+            limit=500,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        raw_steps = [
+            dict(row or {})
+            for row in list(steps_payload.get("steps", []) or [])
+            if isinstance(row, dict)
+        ]
+    except (SystemExit, ValueError, OSError, subprocess.SubprocessError) as exc:
+        logger.warning(
+            "Evidence-chain trace readback returned empty payload for "
+            "owner_user_id=%s pipeline_run_id=%s: %s",
+            owner,
+            safe_pipeline_run_id,
+            exc,
+        )
+        return _evidence_chain_trace_empty_payload(
+            owner_user_id=owner,
+            pipeline_run_id=safe_pipeline_run_id,
+            context_id=safe_context_id,
+            agent_run_id=safe_agent_run_id,
+            warnings=["trace_store_read_failed"],
+        )
+
+    raw_steps = _agent_trace_rows_for_owner_pipeline(
+        raw_steps,
+        owner_user_id=owner,
+        pipeline_run_id=safe_pipeline_run_id,
+        context_id=safe_context_id,
+    )
+    evidence_steps = [
+        step
+        for step in raw_steps
+        if _clean_text(step.get("agent_run_id")) in run_ids
+        and (not safe_agent_run_id or _clean_text(step.get("agent_run_id")) == safe_agent_run_id)
+    ][:safe_limit_steps]
+    malformed_warnings: List[str] = []
+    for run in evidence_runs:
+        if not isinstance(run.get("summary_json"), dict):
+            malformed_warnings.append("malformed_run_summary_json")
+            break
+    for step in evidence_steps:
+        if not isinstance(step.get("output_json"), dict) or not isinstance(
+            step.get("validation_json"), dict
+        ):
+            malformed_warnings.append("malformed_step_json")
+            break
+
+    compact_runs = [_compact_evidence_chain_run(run) for run in evidence_runs]
+    compact_steps = [_compact_evidence_chain_step(step) for step in evidence_steps]
+    latest_run = compact_runs[0] if compact_runs else {}
+    safety_metadata = _evidence_chain_trace_readback_safety_metadata()
+    warnings = sorted(set(malformed_warnings))
+    return {
+        "artifact_type": "evidence_chain_trace_readback",
+        "artifact_version": EVIDENCE_CHAIN_TRACE_READBACK_VERSION,
+        "owner_user_id": owner,
+        "pipeline_run_id": safe_pipeline_run_id,
+        "context_id": safe_context_id,
+        "agent_run_id": safe_agent_run_id,
+        "found": bool(compact_runs),
+        "run_count": len(compact_runs),
+        "step_count": len(compact_steps),
+        "latest_run": latest_run,
+        "agent_steps": compact_steps,
+        "per_agent_status": _evidence_chain_per_agent_status(compact_steps),
+        "persistence_summary": {
+            "evidence_chain_run_count": len(compact_runs),
+            "evidence_chain_step_count": len(compact_steps),
+            "latest_agent_run_id": _clean_text(latest_run.get("agent_run_id")),
+        },
+        "warnings": warnings,
+        "warning_count": len(warnings),
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+
+
 def shadow_sidecar_trace_readback_service_payload(
     *,
     owner_user_id: str = "",

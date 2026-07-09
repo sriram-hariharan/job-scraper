@@ -100,6 +100,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",
+            "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }
@@ -128,6 +129,14 @@ def assert_protected_hashes(
     expected_hashes: Mapping[str | Path, str],
 ) -> None:
     phase88b_runtime_hash_compatibility = {
+        (
+            "src/app/api.py",
+            "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
+        ): "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
+        (
+            "src/app/services.py",
+            "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
+        ): "cc2de35be2ccdf50640b5933651f0d8ef596a400d4c38436ea8aebd8320a9d6c",
         (
             "src/agents/jd_intelligence.py",
             "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",

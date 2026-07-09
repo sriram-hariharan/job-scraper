@@ -40,6 +40,16 @@ EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FLAG = (
 EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_VERSION = (
     "agent-evidence-chain-collector-diagnostics-v1"
 )
+EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_EVIDENCE_CHAIN_EXECUTION_ENABLED"
+)
+EVIDENCE_CHAIN_COLLECTOR_EXECUTION_SAMPLE_LIMIT_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_EVIDENCE_CHAIN_EXECUTION_SAMPLE_LIMIT"
+)
+EVIDENCE_CHAIN_COLLECTOR_EXECUTION_VERSION = (
+    "collector-controlled-evidence-chain-execution-v1"
+)
+EVIDENCE_CHAIN_COLLECTOR_EXECUTION_DEFAULT_SAMPLE_LIMIT = 10
 EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS = [
     "resume_match_jd_evidence",
     "critic_resume_match_jd_evidence",
@@ -87,6 +97,39 @@ EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_FALSE_FLAGS = (
     "apply_click_performed",
     "recruiter_message_sent",
     "mark_applied_performed",
+)
+EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FALSE_FLAGS = (
+    "provider_call_performed",
+    "live_llm_call_performed",
+    "trace_persistence_performed",
+    "trace_store_write_performed",
+    "database_write_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "evaluable_jobs_changed",
+    "scored_jobs_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "cache_behavior_changed",
+    "retry_behavior_changed",
+    "dedupe_behavior_changed",
+    "source_health_behavior_changed",
+    "ats_health_behavior_changed",
+    "review_queue_mutation_performed",
+    "queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
+    "workflow_runner_executed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+    "external_action_automation_performed",
 )
 
 
@@ -871,6 +914,31 @@ def _evidence_chain_collector_safety_metadata() -> Dict[str, bool]:
     }
 
 
+def _evidence_chain_execution_safety_metadata(
+    *,
+    automatic_internal_decisioning_performed: bool = False,
+) -> Dict[str, bool]:
+    return {
+        **{
+            flag: False
+            for flag in EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FALSE_FLAGS
+        },
+        "automatic_internal_decisioning_performed": bool(
+            automatic_internal_decisioning_performed
+        ),
+    }
+
+
+def _evidence_chain_execution_sample_limit(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = EVIDENCE_CHAIN_COLLECTOR_EXECUTION_DEFAULT_SAMPLE_LIMIT
+    if parsed < 0:
+        return 0
+    return min(parsed, EVIDENCE_CHAIN_COLLECTOR_EXECUTION_DEFAULT_SAMPLE_LIMIT)
+
+
 def _mapping_present(value: Any) -> bool:
     return isinstance(value, dict) and bool(value)
 
@@ -1055,6 +1123,132 @@ def _maybe_build_evidence_chain_collector_diagnostics(
         **readiness,
         **safety_metadata,
     }
+
+
+def _maybe_run_controlled_evidence_chain_execution_after_application_priority(
+    scored_jobs: List[Dict[str, Any]],
+    *,
+    enabled: bool | None = None,
+    env: Dict[str, str] | None = None,
+    execution_helper: Any = None,
+    sample_limit: Any = None,
+    include_trace_payload: bool = True,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    execution_enabled = (
+        _truthy_env_value(env_map.get(EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FLAG))
+        if enabled is None
+        else enabled is True
+    )
+    if not execution_enabled:
+        return None
+
+    requested_sample_limit = (
+        sample_limit
+        if sample_limit is not None
+        else env_map.get(EVIDENCE_CHAIN_COLLECTOR_EXECUTION_SAMPLE_LIMIT_FLAG, "")
+    )
+    safe_sample_limit = _evidence_chain_execution_sample_limit(
+        requested_sample_limit
+    )
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="evidence_chain_execution",
+    )
+    jobs_copy = [
+        deepcopy(dict(job))
+        for job in list(scored_jobs or [])
+        if isinstance(job, dict)
+    ][:safe_sample_limit]
+    base_payload = {
+        "artifact_type": "collector_controlled_evidence_chain_execution_result",
+        "artifact_version": EVIDENCE_CHAIN_COLLECTOR_EXECUTION_VERSION,
+        "collector_stage": "post_score_jobs",
+        "gate_name": EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FLAG,
+        "enabled": True,
+        "default_off": True,
+        "read_only": True,
+        "diagnostic_only": True,
+        "sidecar_only": True,
+        "include_trace_payload": bool(include_trace_payload),
+        "sample_limit": safe_sample_limit,
+        "jobs_received_count": len(
+            [job for job in list(scored_jobs or []) if isinstance(job, dict)]
+        ),
+        "jobs_sampled_count": len(jobs_copy),
+        **context,
+    }
+
+    try:
+        if execution_helper is None:
+            from src.agents.evidence_chain_execution import (
+                execute_controlled_evidence_chain,
+            )
+
+            execution_helper = execute_controlled_evidence_chain
+
+        execution_result = execution_helper(
+            jobs_copy,
+            resume_context=None,
+            pipeline_run_id=context["pipeline_run_id"],
+            owner_user_id=context["owner_user_id"],
+            context_id=context["context_id"],
+            execution_gate_enabled=True,
+            include_trace_payload=include_trace_payload,
+            sample_limit=safe_sample_limit,
+        )
+        automatic_internal_decisioning = bool(
+            isinstance(execution_result, dict)
+            and execution_result.get("automatic_internal_decisioning_performed")
+        )
+        safety_metadata = _evidence_chain_execution_safety_metadata(
+            automatic_internal_decisioning_performed=automatic_internal_decisioning
+        )
+        payload = {
+            **base_payload,
+            "attempted": True,
+            "executed": bool(
+                isinstance(execution_result, dict)
+                and execution_result.get("executed")
+            ),
+            "reason": (
+                execution_result.get("reason", "")
+                if isinstance(execution_result, dict)
+                else "evidence_chain_execution_completed"
+            ),
+            "execution_result": execution_result,
+            "trace_persistence_requested": False,
+            "trace_persistence_performed": False,
+            "safety_metadata": safety_metadata,
+            **safety_metadata,
+        }
+        logger.info(
+            "Controlled evidence-chain execution sidecar evaluated after "
+            "application_priority: %s",
+            payload.get("reason", "unknown"),
+        )
+        return payload
+    except Exception as exc:
+        safety_metadata = _evidence_chain_execution_safety_metadata(
+            automatic_internal_decisioning_performed=False
+        )
+        logger.warning(
+            "Controlled evidence-chain execution sidecar failed non-blocking "
+            "after application_priority: %s",
+            exc,
+        )
+        return {
+            **base_payload,
+            "attempted": True,
+            "executed": False,
+            "reason": "evidence_chain_execution_failed",
+            "warning": str(exc),
+            "error_message": str(exc),
+            "trace_persistence_requested": False,
+            "trace_persistence_performed": False,
+            "safety_metadata": safety_metadata,
+            **safety_metadata,
+        }
 
 
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
@@ -1559,6 +1753,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
     _maybe_invoke_advisory_chain_diagnostics_after_application_priority(scored_jobs)
     _maybe_build_evidence_chain_collector_diagnostics(scored_jobs)
+    _maybe_run_controlled_evidence_chain_execution_after_application_priority(scored_jobs)
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")

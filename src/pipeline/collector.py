@@ -49,6 +49,12 @@ EVIDENCE_CHAIN_COLLECTOR_EXECUTION_SAMPLE_LIMIT_FLAG = (
 EVIDENCE_CHAIN_COLLECTOR_EXECUTION_VERSION = (
     "collector-controlled-evidence-chain-execution-v1"
 )
+EVIDENCE_CHAIN_TRACE_PERSISTENCE_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_EVIDENCE_CHAIN_TRACE_PERSISTENCE_ENABLED"
+)
+EVIDENCE_CHAIN_TRACE_PERSISTENCE_VERSION = (
+    "collector-controlled-evidence-chain-trace-persistence-v1"
+)
 EVIDENCE_CHAIN_COLLECTOR_EXECUTION_DEFAULT_SAMPLE_LIMIT = 10
 EVIDENCE_CHAIN_REQUIRED_ARTIFACT_KEYS = [
     "resume_match_jd_evidence",
@@ -104,6 +110,36 @@ EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FALSE_FLAGS = (
     "trace_persistence_performed",
     "trace_store_write_performed",
     "database_write_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "evaluable_jobs_changed",
+    "scored_jobs_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "cache_behavior_changed",
+    "retry_behavior_changed",
+    "dedupe_behavior_changed",
+    "source_health_behavior_changed",
+    "ats_health_behavior_changed",
+    "review_queue_mutation_performed",
+    "queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
+    "workflow_runner_executed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+    "external_action_automation_performed",
+)
+EVIDENCE_CHAIN_TRACE_PERSISTENCE_FALSE_FLAGS = (
+    "provider_call_performed",
+    "live_llm_call_performed",
     "collector_output_changed",
     "production_output_changed",
     "evaluable_jobs_changed",
@@ -929,6 +965,22 @@ def _evidence_chain_execution_safety_metadata(
     }
 
 
+def _evidence_chain_trace_persistence_safety_metadata(
+    *,
+    persistence_performed: bool = False,
+) -> Dict[str, bool]:
+    return {
+        **{
+            flag: False
+            for flag in EVIDENCE_CHAIN_TRACE_PERSISTENCE_FALSE_FLAGS
+        },
+        "database_write_performed": bool(persistence_performed),
+        "trace_persistence_performed": bool(persistence_performed),
+        "trace_store_write_performed": bool(persistence_performed),
+        "observability_mutation_performed": bool(persistence_performed),
+    }
+
+
 def _evidence_chain_execution_sample_limit(value: Any) -> int:
     try:
         parsed = int(value)
@@ -937,6 +989,38 @@ def _evidence_chain_execution_sample_limit(value: Any) -> int:
     if parsed < 0:
         return 0
     return min(parsed, EVIDENCE_CHAIN_COLLECTOR_EXECUTION_DEFAULT_SAMPLE_LIMIT)
+
+
+def _valid_evidence_chain_trace_payloads_from_execution_result(
+    execution_result: Any,
+) -> List[Dict[str, Any]]:
+    if not isinstance(execution_result, dict):
+        return []
+
+    raw_result = execution_result
+    if (
+        _clean_trace_text(execution_result.get("artifact_type"))
+        == "collector_controlled_evidence_chain_execution_result"
+    ):
+        raw_result = execution_result.get("execution_result")
+    if not isinstance(raw_result, dict):
+        return []
+
+    payloads: List[Dict[str, Any]] = []
+    for per_job_result in list(raw_result.get("per_job_results") or []):
+        if not isinstance(per_job_result, dict):
+            continue
+        artifacts = per_job_result.get("artifacts")
+        if not isinstance(artifacts, dict):
+            continue
+        payload = artifacts.get("agent_evidence_chain_trace_payload")
+        if (
+            isinstance(payload, dict)
+            and _clean_trace_text(payload.get("artifact_type"))
+            == "agent_evidence_chain_trace_payload"
+        ):
+            payloads.append(deepcopy(payload))
+    return payloads
 
 
 def _mapping_present(value: Any) -> bool:
@@ -1249,6 +1333,222 @@ def _maybe_run_controlled_evidence_chain_execution_after_application_priority(
             "safety_metadata": safety_metadata,
             **safety_metadata,
         }
+
+
+def _maybe_persist_controlled_evidence_chain_execution_trace(
+    execution_result: Dict[str, Any] | None,
+    *,
+    enabled: bool | None = None,
+    env: Dict[str, str] | None = None,
+    execute_callback: Any | None = None,
+    cursor: Any | None = None,
+    strict: bool = False,
+    persistence_helper: Any = None,
+) -> Dict[str, Any]:
+    env_map = env if env is not None else os.environ
+    persistence_enabled = (
+        _truthy_env_value(env_map.get(EVIDENCE_CHAIN_TRACE_PERSISTENCE_FLAG))
+        if enabled is None
+        else enabled is True
+    )
+    trace_enabled = _truthy_env_value(env_map.get("APPLYLENS_AGENT_TRACE_ENABLED"))
+    execution_enabled = _truthy_env_value(
+        env_map.get(EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FLAG)
+    )
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="evidence_chain_trace_persistence",
+    )
+
+    def result(
+        *,
+        attempted: bool = False,
+        persisted: bool = False,
+        reason: str = "",
+        payloads_found_count: int = 0,
+        payloads_attempted_count: int = 0,
+        payloads_persisted_count: int = 0,
+        payloads_failed_count: int = 0,
+        record_count: int = 0,
+        run_count: int = 0,
+        step_count: int = 0,
+        per_payload_results: List[Dict[str, Any]] | None = None,
+        error_message: str = "",
+    ) -> Dict[str, Any]:
+        safety_metadata = _evidence_chain_trace_persistence_safety_metadata(
+            persistence_performed=bool(persisted)
+        )
+        payload = {
+            "artifact_type": "collector_controlled_evidence_chain_trace_persistence_result",
+            "artifact_version": EVIDENCE_CHAIN_TRACE_PERSISTENCE_VERSION,
+            "collector_stage": "post_score_jobs",
+            "gate_name": EVIDENCE_CHAIN_TRACE_PERSISTENCE_FLAG,
+            "trace_gate_name": "APPLYLENS_AGENT_TRACE_ENABLED",
+            "execution_gate_name": EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FLAG,
+            "enabled": bool(persistence_enabled),
+            "trace_enabled": bool(trace_enabled),
+            "execution_enabled": bool(execution_enabled),
+            "default_off": True,
+            "read_only": True,
+            "diagnostic_only": True,
+            "sidecar_only": True,
+            "attempted": bool(attempted),
+            "persisted": bool(persisted),
+            "recorded": bool(persisted),
+            "reason": reason,
+            "payloads_found_count": int(payloads_found_count),
+            "payloads_attempted_count": int(payloads_attempted_count),
+            "payloads_persisted_count": int(payloads_persisted_count),
+            "payloads_failed_count": int(payloads_failed_count),
+            "record_count": int(record_count),
+            "run_count": int(run_count),
+            "step_count": int(step_count),
+            "owner_user_id": context["owner_user_id"],
+            "pipeline_run_id": context["pipeline_run_id"],
+            "context_id": context["context_id"],
+            "per_payload_results": list(per_payload_results or []),
+            "trace_persistence_requested": bool(persistence_enabled),
+            "trace_persistence_performed": bool(persisted),
+            "trace_store_write_performed": bool(persisted),
+            "database_write_performed": bool(persisted),
+            "safety_metadata": safety_metadata,
+            **safety_metadata,
+        }
+        if error_message:
+            payload["error_message"] = error_message
+            payload["warning"] = error_message
+        return payload
+
+    if not execution_enabled:
+        return result(reason="execution_gate_disabled")
+    if not persistence_enabled:
+        return result(reason="trace_persistence_disabled")
+    if not trace_enabled:
+        return result(reason="trace_disabled")
+    if not isinstance(execution_result, dict) or not execution_result:
+        return result(reason="execution_result_missing")
+    if not (
+        context["owner_user_id"]
+        and context["pipeline_run_id"]
+        and context["context_id"]
+    ):
+        return result(reason="missing_trace_context")
+    if cursor is None and execute_callback is None:
+        return result(reason="write_executor_missing")
+    if cursor is not None and execute_callback is not None:
+        return result(reason="multiple_write_executors")
+
+    trace_payloads = _valid_evidence_chain_trace_payloads_from_execution_result(
+        execution_result
+    )
+    if not trace_payloads:
+        return result(reason="trace_payload_missing")
+
+    if persistence_helper is None:
+        from src.agents.evidence_chain_composition import (
+            persist_agent_evidence_chain_trace_payload,
+        )
+
+        persistence_helper = persist_agent_evidence_chain_trace_payload
+
+    per_payload_results: List[Dict[str, Any]] = []
+    payloads_persisted_count = 0
+    payloads_failed_count = 0
+    record_count = 0
+    run_count = 0
+    step_count = 0
+    strict_mode = bool(strict) or _truthy_env_value(
+        env_map.get("APPLYLENS_AGENT_TRACE_STRICT")
+    )
+
+    for index, trace_payload in enumerate(trace_payloads):
+        try:
+            persistence_result = persistence_helper(
+                trace_payload=trace_payload,
+                owner_user_id=context["owner_user_id"],
+                pipeline_run_id=context["pipeline_run_id"],
+                context_id=context["context_id"],
+                cursor=cursor,
+                execute_callback=execute_callback,
+                persistence_gate_enabled=True,
+                strict=strict_mode,
+            )
+        except Exception as exc:
+            if strict_mode:
+                raise
+            payloads_failed_count += 1
+            per_payload_results.append(
+                {
+                    "payload_index": index,
+                    "attempted": True,
+                    "recorded": False,
+                    "reason": "evidence_chain_trace_persistence_failed",
+                    "error_message": str(exc),
+                }
+            )
+            continue
+
+        persisted = bool(
+            isinstance(persistence_result, dict)
+            and (
+                persistence_result.get("recorded")
+                or persistence_result.get("trace_persistence_performed")
+            )
+        )
+        if persisted:
+            payloads_persisted_count += 1
+            record_count += int(persistence_result.get("record_count") or 0)
+            run_count += int(persistence_result.get("run_count") or 0)
+            step_count += int(persistence_result.get("step_count") or 0)
+        else:
+            payloads_failed_count += 1
+        per_payload_results.append(
+            {
+                "payload_index": index,
+                "attempted": bool(
+                    isinstance(persistence_result, dict)
+                    and persistence_result.get("attempted")
+                ),
+                "recorded": persisted,
+                "reason": (
+                    persistence_result.get("reason", "")
+                    if isinstance(persistence_result, dict)
+                    else "invalid_persistence_result"
+                ),
+                "record_count": int(
+                    persistence_result.get("record_count") or 0
+                )
+                if isinstance(persistence_result, dict)
+                else 0,
+                "run_count": int(persistence_result.get("run_count") or 0)
+                if isinstance(persistence_result, dict)
+                else 0,
+                "step_count": int(persistence_result.get("step_count") or 0)
+                if isinstance(persistence_result, dict)
+                else 0,
+                "agent_run_id": (
+                    _clean_trace_text(persistence_result.get("agent_run_id"))
+                    if isinstance(persistence_result, dict)
+                    else ""
+                ),
+            }
+        )
+
+    persisted_any = payloads_persisted_count > 0
+    reason = "" if persisted_any else "evidence_chain_trace_persistence_failed"
+    return result(
+        attempted=True,
+        persisted=persisted_any,
+        reason=reason,
+        payloads_found_count=len(trace_payloads),
+        payloads_attempted_count=len(trace_payloads),
+        payloads_persisted_count=payloads_persisted_count,
+        payloads_failed_count=payloads_failed_count,
+        record_count=record_count,
+        run_count=run_count,
+        step_count=step_count,
+        per_payload_results=per_payload_results,
+    )
 
 
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
@@ -1753,7 +2053,12 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
     _maybe_invoke_advisory_chain_diagnostics_after_application_priority(scored_jobs)
     _maybe_build_evidence_chain_collector_diagnostics(scored_jobs)
-    _maybe_run_controlled_evidence_chain_execution_after_application_priority(scored_jobs)
+    evidence_chain_execution_result = (
+        _maybe_run_controlled_evidence_chain_execution_after_application_priority(scored_jobs)
+    )
+    _maybe_persist_controlled_evidence_chain_execution_trace(
+        evidence_chain_execution_result
+    )
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")

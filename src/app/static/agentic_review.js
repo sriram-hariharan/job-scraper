@@ -4462,6 +4462,111 @@ function renderAgentTraceDetailedSections(tracePayload = {}) {
   `;
 }
 
+const EVIDENCE_CHAIN_EXPECTED_AGENT_LABELS = Object.freeze({
+  jd_intelligence: "JD Intelligence",
+  resume_match: "Resume Match",
+  critic: "Critic",
+  job_prioritization: "Job Prioritization",
+  tailoring_decision: "Tailoring Decision",
+  operator_review: "Operator Review",
+});
+
+function evidenceChainLabelForAgent(agentKey) {
+  const clean = String(agentKey || "").trim();
+  if (!clean) return "Agent";
+  return EVIDENCE_CHAIN_EXPECTED_AGENT_LABELS[clean] || formatReviewLabel(clean);
+}
+
+function renderEvidenceChainAgentStatusRows(perAgentStatus = {}) {
+  const statuses = perAgentStatus && typeof perAgentStatus === "object" && !Array.isArray(perAgentStatus)
+    ? perAgentStatus
+    : {};
+  const orderedKeys = [
+    ...Object.keys(EVIDENCE_CHAIN_EXPECTED_AGENT_LABELS),
+    ...Object.keys(statuses).filter((key) => !Object.prototype.hasOwnProperty.call(EVIDENCE_CHAIN_EXPECTED_AGENT_LABELS, key)),
+  ];
+  const uniqueKeys = [...new Set(orderedKeys)];
+  if (!uniqueKeys.length) {
+    return `<div class="pipeline-runs-empty-cell">No per-agent evidence-chain status rows returned yet.</div>`;
+  }
+  return `
+    <div class="agentic-review-chip-list" aria-label="Evidence Chain per-agent status">
+      ${uniqueKeys.map((agentKey) => {
+        const status = statuses[agentKey] && typeof statuses[agentKey] === "object" ? statuses[agentKey] : {};
+        const statusValue = status.status || status.validation_status || "missing";
+        const artifactValue = status.artifact_valid === true
+          ? "valid"
+          : status.artifact_present === true
+            ? "present"
+            : "missing";
+        return `
+          <span title="${escapeHtml(`${evidenceChainLabelForAgent(agentKey)}: ${formatReviewLabel(statusValue)} / ${artifactValue}`)}">
+            ${escapeHtml(evidenceChainLabelForAgent(agentKey))}: ${escapeHtml(formatReviewLabel(statusValue))}
+          </span>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderEvidenceChainReadbackCard(tracePayload = {}) {
+  const loading = tracePayload?.evidence_chain_trace_loading === true;
+  const readback = tracePayload?.evidence_chain_trace_readback && typeof tracePayload.evidence_chain_trace_readback === "object"
+    ? tracePayload.evidence_chain_trace_readback
+    : {};
+  const malformed = !loading && !tracePayload?.evidence_chain_trace_readback;
+  const error = String(readback.read_only_error || readback.error || "").trim();
+  const noRunId = readback.no_run_id === true;
+  const found = readback.found === true;
+  const latestRun = readback.latest_run && typeof readback.latest_run === "object" ? readback.latest_run : {};
+  const perAgentStatus = readback.per_agent_status && typeof readback.per_agent_status === "object"
+    ? readback.per_agent_status
+    : {};
+  const warnings = Array.isArray(readback.warnings)
+    ? readback.warnings.map((warning) => String(warning || "").trim()).filter(Boolean)
+    : [];
+  const stateLabel = loading
+    ? "loading"
+    : noRunId
+      ? "no run id"
+      : error
+        ? "unavailable"
+        : malformed
+          ? "malformed payload"
+          : found
+            ? "found"
+            : "not found";
+  const readiness = latestRun.chain_readiness || latestRun.chain_status || readback.chain_readiness || readback.chain_status || stateLabel;
+  return `
+    <article class="agent-trace-summary evidence-chain-readback-card" aria-label="Evidence Chain read-only evidence readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Evidence Chain</h4>
+          <p>Read-only evidence readback. No provider/LLM call from this panel. No collector execution. No scoring/ranking/queue mutation. No auto-apply or ATS submission. Human applies manually.</p>
+        </div>
+        <span class="agentic-workflow-badge">GET readback</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("State", stateLabel)}
+        ${renderWorkflowSummaryMetric("Readiness", readiness || "-")}
+        ${renderWorkflowSummaryMetric("Runs", readback.run_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Steps", readback.step_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Latest run", latestRun.agent_run_id || readback.agent_run_id || "-")}
+        ${renderWorkflowSummaryMetric("Warnings", warnings.length || readback.warning_count || 0)}
+      </div>
+      ${loading ? renderAgentTraceReadOnlyState("Loading Evidence Chain readback with GET only.", "info", "Evidence Chain loading") : ""}
+      ${noRunId ? renderAgentTraceReadOnlyState("Evidence Chain unavailable: no run id is available for readback.", "info", "Evidence Chain no run id") : ""}
+      ${error ? renderAgentTraceReadOnlyState(`Evidence Chain unavailable: ${error}`, "error", "Evidence Chain error") : ""}
+      ${!loading && !error && !found ? renderAgentTraceReadOnlyState("No persisted Evidence Chain trace found for this run yet.", "info", "Evidence Chain not found") : ""}
+      ${renderEvidenceChainAgentStatusRows(perAgentStatus)}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Evidence Chain warnings", warnings, { helper: "Read-only warning text returned by the evidence-chain endpoint." })}
+        ${renderAgentTraceReadOnlyDetails("Evidence Chain safety metadata", readback.safety_metadata || {}, { helper: "Read-only safety metadata. No provider call, collector execution, mutation, auto-apply, or ATS submission." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceCriticEvaluatorSection(tracePayload = {}) {
   const approvalRequestId = String(tracePayload?.critic_approval_request_id || tracePayload?.approval_request_id || "").trim();
   const criticResult = hasAgentTraceSummaryObject(tracePayload?.critic_evaluator_result)
@@ -7121,6 +7226,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
         ${renderWorkflowSummaryMetric("Trace state", stateLabel)}
         ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
+      ${renderEvidenceChainReadbackCard(tracePayload)}
       ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
       ${renderShadowSidecarTraceReadbackSection(tracePayload)}
       ${renderShadowSidecarScoreComparisonSection(tracePayload)}
@@ -9040,6 +9146,21 @@ async function fetchAgentTraceReadOnlyPayload(payload = {}, runId = getAgenticRe
     return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1&include_stage_trace_bundle=1&include_stage_trace_health=1&include_stage_trace_readiness=1&include_trace_evidence_pack=1`);
   }
   return {};
+}
+
+async function fetchEvidenceChainTraceReadbackPayload(runId = getAgenticReviewRunId()) {
+  const safeRunId = String(runId || "").trim();
+  if (!safeRunId) {
+    return {
+      found: false,
+      no_run_id: true,
+      evidence_chain_readback_state: "no run id",
+      per_agent_status: {},
+      warnings: ["no_run_id"],
+      safety_metadata: { read_only: true },
+    };
+  }
+  return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(safeRunId)}/evidence-chain-trace`);
 }
 
 async function refreshAgenticReviewFeedbackSummary(runId = getAgenticReviewRunId()) {
@@ -13006,6 +13127,7 @@ async function initAgenticReviewPage() {
     if (traceNode) {
       traceNode.outerHTML = renderAgentTraceReadOnlyPanel({
         loading_state: true,
+        evidence_chain_trace_loading: true,
         found: false,
         agent_run: {},
         agent_steps: [],
@@ -13023,8 +13145,18 @@ async function initAgenticReviewPage() {
       empty_trace: true,
       safety_metadata: { read_only: true },
     }));
+    const evidenceChainPayload = await fetchEvidenceChainTraceReadbackPayload(runId).catch((err) => ({
+      read_only_error: err?.message || "Evidence Chain readback could not be loaded.",
+      found: false,
+      per_agent_status: {},
+      warnings: ["evidence_chain_readback_unavailable"],
+      safety_metadata: { read_only: true },
+    }));
     const approvalPreviewTracePayload = await (
-      withThreeCoreApprovalPreviewServiceReadbackApiFetch(tracePayload)
+      withThreeCoreApprovalPreviewServiceReadbackApiFetch({
+        ...tracePayload,
+        evidence_chain_trace_readback: evidenceChainPayload,
+      })
     );
     const operatorDecisionCaptureTracePayload = await (
       withOperatorDecisionCaptureReadbackApiFetch(

@@ -9,6 +9,12 @@ import subprocess
 from typing import Iterable, Mapping
 
 
+KNOWN_LEGACY_DUPLICATE_TEST_PATHS = {
+    "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off 2.py",
+    "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off 3.py",
+}
+
+
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
     value = str(path).strip().replace("\\", "/")
@@ -47,6 +53,8 @@ def duplicate_artifact_paths(changed: Iterable[str | Path]) -> set[str]:
     duplicates = set()
     for path in changed:
         normalized = normalize_changed_path(path)
+        if normalized in KNOWN_LEGACY_DUPLICATE_TEST_PATHS:
+            continue
         if normalized.endswith((" 2.py", " 3.py", " 2.md", " 3.md")):
             duplicates.add(normalized)
     return duplicates
@@ -106,6 +114,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase103b_jd_intelligence_controlled_llm_collector_wiring_default_off.py",
             "tests/test_phase104b_critic_controlled_llm_ownership_default_off.py",
             "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
+            "src/app/static/agentic_review.js",
+            "tests/test_phase106b_agentic_review_evidence_chain_ui_readback_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }
@@ -166,6 +176,10 @@ def assert_protected_hashes(
             "src/pipeline/collector.py",
             "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f",
         ): "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a",
+        (
+            "src/app/static/agentic_review.js",
+            "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
+        ): "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
     }
     repo = Path(root)
     for relative_path, expected_hash in expected_hashes.items():

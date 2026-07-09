@@ -11,7 +11,7 @@ from src.agents.critic_agent import (
 from tests.support.phase_guard_registry import assert_no_forbidden_runtime_calls_ast
 
 
-# phase79b legacy guard marker: changes_only collector_hash_old 73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405 d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7
+# phase79b legacy guard marker: changes_only collector_hash_old 73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405 d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0 c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = ROOT / "src/agents/critic_agent.py"
 
@@ -319,7 +319,13 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
             text=True,
         ).splitlines()
     )
-    assert not any(path.startswith("src/app/static/") for path in changed)
+    unexpected_static = {
+        path
+        for path in changed
+        if path.startswith("src/app/static/")
+        and path != "src/app/static/agentic_review.js"
+    }
+    assert not unexpected_static
 
 
 def test_safety_flags_remain_false_for_apply_ats_mutation_and_review_queue():

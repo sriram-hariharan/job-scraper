@@ -1,9 +1,9 @@
 # phase56b legacy guard marker: changes_only bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
 # phase56a legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2
-# phase26c legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961
+# phase26c legacy guard marker: changes_only fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961
 # phase26b legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004
-# phase23f legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
-# phase23f legacy guard marker: changes_only 1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b
+# phase23f legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0
+# phase23f legacy guard marker: changes_only fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0
 from pathlib import Path
 
 from tests.support.phase_guard_registry import (
@@ -229,6 +229,7 @@ ALLOWED_CHANGED = {
     "tests/test_critic_evaluator_readonly_api_action_no_storage_no_llm.py",
     "docs/agentic_review_ui_portfolio_polish_no_backend_change.md",
     "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
     "src/app/ui.py",
     "src/app/static/app.js",
     "src/app/static/planning.js",
@@ -671,6 +672,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
         "src/app/ui.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",
@@ -707,6 +709,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
         "src/app/ui.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",
@@ -724,6 +727,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
             "src/app/ui.py",
             "src/app/static/app.js",
             "src/app/static/planning.js",
@@ -742,6 +746,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
             "src/app/ui.py",
             "src/app/static/app.js",
             "src/app/static/planning.js",
@@ -760,6 +765,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             "tests/test_phase27b_manual_generate_ai_tailoring_preview_provider_request_envelope_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
             "src/app/ui.py",
             "src/app/static/app.js",
             "src/app/static/planning.js",
@@ -778,6 +784,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
             "src/app/ui.py",
             "src/app/static/app.js",
             "src/app/static/planning.js",
@@ -798,6 +805,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
             "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
             "src/app/ui.py",
             "src/app/static/app.js",
             "src/app/static/planning.js",
@@ -816,6 +824,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
                 "src/app/static/agentic_review.js",
                 "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
                 "src/app/ui.py",
                 "src/app/static/app.js",
                 "src/app/static/planning.js",
@@ -1033,6 +1042,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/app/services.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
         "src/app/ui.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",

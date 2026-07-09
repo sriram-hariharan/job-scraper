@@ -205,7 +205,7 @@ DOC_MARKERS = (
 
 PROTECTED_HASHES = {
     "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-    "src/app/static/agentic_review.js": "1dfa42f640a639b82ce8f22e652b91e92f25f8087ecafe817c97a05b48018e0b",
+    "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
     "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py": "2b31a53bd2cb8f8c4aa8359d5fcbcd246cd9618e65228b38675d7bd2af9470a4",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
@@ -598,6 +598,7 @@ def test_phase31b_changes_only_api_doc_test_and_legacy_guards():
             "tests/test_phase31b_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback_default_off.py",
                                 "src/app/static/agentic_review.js",
                                 "src/app/static/app_redesign.css",
+            "src/app/static/agentic_review.js",
                                 "src/app/ui.py",
                                 "src/app/static/app.js",
                                 "src/app/static/planning.js",
@@ -829,6 +830,7 @@ def test_phase31b_changes_only_api_doc_test_and_legacy_guards():
             "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",
             "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
+                "src/app/static/agentic_review.js",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

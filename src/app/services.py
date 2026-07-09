@@ -19715,56 +19715,86 @@ def build_manual_critic_guardrail_dry_run_payload(
     effective_adapter = adapter
     if effective_feature_enabled and effective_adapter is None:
         effective_adapter = _live_critic_guardrail_provider_adapter
-    did_call_llm = False
-    if effective_feature_enabled and effective_adapter is not None:
-        did_call_llm = True
-        try:
-            provider_payload = effective_adapter(
-                {
-                    "tailoring_suggestion_payload": normalized_tailoring or {},
-                    "jd_intelligence": normalized_jd or normalized_jd_signals or {},
-                    "resume_variants": normalized_resume_variants or [],
-                    "resume_evidence_rows": normalized_resume_evidence_rows or [],
-                    "context_id": _clean_text(context_id),
-                    "job_id": _clean_text(job_id),
-                    "config": dict(config or {}) if isinstance(config, dict) else {},
-                }
-            )
-            provider_payload = dict(provider_payload or {}) if isinstance(provider_payload, dict) else {"raw_response": provider_payload}
-            provider_metadata = {
-                "model_provider": _clean_text(provider_payload.get("model_provider")),
-                "model_name": _clean_text(provider_payload.get("model_name")),
-                "prompt_version": _clean_text(provider_payload.get("prompt_version")) or LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION,
-                "token_usage": dict(provider_payload.get("token_usage") or {}),
-                "cost": dict(provider_payload.get("cost") or {}),
-                "latency_ms": provider_payload.get("latency_ms", 0),
-                "provider_fallback_used": bool(provider_payload.get("provider_fallback_used", False)),
-                "structured_output_schema": provider_payload.get("structured_output_schema") or _live_critic_guardrail_structured_output_contract(),
+    critic_input = {
+        "tailoring_suggestion_payload": normalized_tailoring or {},
+        "jd_intelligence": normalized_jd or normalized_jd_signals or {},
+        "resume_variants": normalized_resume_variants or [],
+        "resume_evidence_rows": normalized_resume_evidence_rows or [],
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "config": dict(config or {}) if isinstance(config, dict) else {},
+    }
+    controlled_artifact = critic_agent.build_critic_controlled_llm_guardrail_artifact(
+        critic_input,
+        enabled=effective_feature_enabled,
+        guardrail_adapter=effective_adapter,
+    )
+    did_call_llm = bool(
+        isinstance(controlled_artifact, dict)
+        and controlled_artifact.get("provider_call_performed")
+    )
+    if effective_feature_enabled and did_call_llm:
+        provider_payload = dict(
+            controlled_artifact.get("guardrail_result") or {}
+        ) if isinstance(controlled_artifact, dict) else {}
+        provider_metadata = {
+            "model_provider": _clean_text(
+                provider_payload.get("model_provider")
+                or provider_payload.get("provider")
+            ),
+            "model_name": _clean_text(
+                provider_payload.get("model_name")
+                or provider_payload.get("model")
+            ),
+            "prompt_version": (
+                _clean_text(provider_payload.get("prompt_version"))
+                or LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION
+            ),
+            "token_usage": dict(provider_payload.get("token_usage") or {}),
+            "cost": dict(provider_payload.get("cost") or {}),
+            "latency_ms": provider_payload.get("latency_ms", 0),
+            "provider_fallback_used": bool(
+                provider_payload.get("provider_fallback_used")
+                or provider_payload.get("fallback_provider_used")
+                or provider_payload.get("fallback_used")
+            ),
+            "structured_output_schema": (
+                provider_payload.get("structured_output_schema")
+                or _live_critic_guardrail_structured_output_contract()
+            ),
+        }
+        provider_critic, provider_validation_errors = (
+            _normalise_live_critic_provider_payload(provider_payload)
+        )
+        if provider_critic is not None:
+            payload = {
+                **payload,
+                **provider_critic,
+                "fallback_used": False,
+                "validation_status": "valid",
+                "validation_errors": [],
+                **provider_metadata,
             }
-            provider_critic, provider_validation_errors = _normalise_live_critic_provider_payload(provider_payload)
-            if provider_critic is not None:
-                payload = {
-                    **payload,
-                    **provider_critic,
-                    "fallback_used": False,
-                    "validation_status": "valid",
-                    "validation_errors": [],
-                    **provider_metadata,
-                }
-            else:
-                payload = {
-                    **payload,
-                    "fallback_used": True,
-                    "validation_status": "fallback",
-                    "validation_errors": provider_validation_errors,
-                    **provider_metadata,
-                }
-        except Exception as exc:
+        else:
+            error_message = _clean_text(
+                controlled_artifact.get("error_message")
+                if isinstance(controlled_artifact, dict)
+                else ""
+            )
+            if (
+                isinstance(controlled_artifact, dict)
+                and controlled_artifact.get("reason") == "critic_llm_guardrail_failed"
+                and error_message
+            ):
+                provider_validation_errors = [
+                    f"adapter_error:{error_message.split(':', 1)[0]}"
+                ]
             payload = {
                 **payload,
                 "fallback_used": True,
                 "validation_status": "fallback",
-                "validation_errors": [f"adapter_error:{exc.__class__.__name__}"],
+                "validation_errors": provider_validation_errors,
+                **provider_metadata,
             }
     else:
         payload = {
@@ -19792,6 +19822,7 @@ def build_manual_critic_guardrail_dry_run_payload(
     return {
         **payload,
         "safety_metadata": safety,
+        "critic_controlled_llm_guardrail_artifact": controlled_artifact,
         "manual_surface": True,
         "read_only": True,
         "default_feature_flag_enabled": False,

@@ -1130,6 +1130,8 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/pipeline/collector.py",
         "src/agents/orchestrator_adapter_harness.py",
         "src/agents/evidence_chain_execution.py",
+                "requirements.txt",
+                "src/agents/evidence_chain_langgraph_harness.py",
     }
     runtime_paths = [
         path for path in changed

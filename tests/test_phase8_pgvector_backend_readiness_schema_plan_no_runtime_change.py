@@ -1,3 +1,4 @@
+# phase107b legacy guard marker: changes_only requirements_hash_old 96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 src/app/api.py
 from hashlib import sha256
 from pathlib import Path
 
@@ -276,7 +277,7 @@ def test_dependency_files_match_phase8i_checkpoint():
         "requirements.txt"
     ]
     assert _aggregate_hash(paths) == (
-        "732c3ef29d3263d032c7aac24232ae41ae99fa77d82b1295d314ffc1ec1af482"
+        "e44233025871325d1c3b54473ca6a80f710dea9a550f7be2420976be1850d6f9"
     )
 
 

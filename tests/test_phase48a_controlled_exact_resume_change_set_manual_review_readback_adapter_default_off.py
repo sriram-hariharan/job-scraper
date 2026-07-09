@@ -1,5 +1,5 @@
-# phase56b legacy guard marker: changes_only e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
-# phase56a legacy guard marker: changes_only 85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96 e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c
+# phase56b legacy guard marker: changes_only cc2de35be2ccdf50640b5933651f0d8ef596a400d4c38436ea8aebd8320a9d6c 1ff2a73993300f391aa1fb8151a4d225e803b6c5d499e311faa5058efc4b965c
+# phase56a legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 cc2de35be2ccdf50640b5933651f0d8ef596a400d4c38436ea8aebd8320a9d6c
 from __future__ import annotations
 
 from copy import deepcopy
@@ -743,6 +743,7 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",
+            "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

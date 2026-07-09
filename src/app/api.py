@@ -3820,6 +3820,28 @@ def profile_pipeline_run_agent_trace(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/profile/pipeline-runs/{run_id}/evidence-chain-trace")
+def profile_pipeline_run_evidence_chain_trace(
+    run_id: str,
+    http_request: Request,
+    context_id: str = "",
+    agent_run_id: str = "",
+    limit_runs: int = 10,
+    limit_steps: int = 100,
+):
+    try:
+        return services.get_evidence_chain_trace_readback_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=run_id,
+            context_id=context_id,
+            agent_run_id=agent_run_id,
+            limit_runs=limit_runs,
+            limit_steps=limit_steps,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/shadow-sidecar/trace-readback")
 def shadow_sidecar_trace_readback(payload: dict | None = Body(default=None)):
     request_payload = dict(payload or {}) if isinstance(payload, dict) else {}

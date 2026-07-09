@@ -98,6 +98,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
             "src/agents/evidence_chain_execution.py",
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
+            "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }
@@ -133,11 +134,15 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50",
-        ): "a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344",
+        ): "3e5d429fe94cdd9d58d0c0a666563caee25f50865bc18a3824b6bac634a00971",
         (
             "src/pipeline/collector.py",
             "a5afe9a9e89b1547d9fbaa443d6753f8bf223fe55e20d46beaff1afd03127344",
-        ): "cae9f4a51ef14c7b1185a64f2e229591274c284c2985989ec1f5997f7728ee42",
+        ): "3e5d429fe94cdd9d58d0c0a666563caee25f50865bc18a3824b6bac634a00971",
+        (
+            "src/pipeline/collector.py",
+            "3e5d429fe94cdd9d58d0c0a666563caee25f50865bc18a3824b6bac634a00971",
+        ): "3e5d429fe94cdd9d58d0c0a666563caee25f50865bc18a3824b6bac634a00971",
     }
     repo = Path(root)
     for relative_path, expected_hash in expected_hashes.items():

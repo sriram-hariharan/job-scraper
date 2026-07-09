@@ -55,7 +55,7 @@ PROTECTED_HASHES = {
     "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
-    "src/pipeline/collector.py": "cae9f4a51ef14c7b1185a64f2e229591274c284c2985989ec1f5997f7728ee42",
+    "src/pipeline/collector.py": "3e5d429fe94cdd9d58d0c0a666563caee25f50865bc18a3824b6bac634a00971",
 }
 
 
@@ -674,6 +674,7 @@ def test_phase21e_changes_only_docs_tests_and_legacy_guards():
                 "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
             "src/agents/evidence_chain_execution.py",
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
+            "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

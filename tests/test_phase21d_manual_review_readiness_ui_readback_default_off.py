@@ -803,6 +803,8 @@ def test_phase21d_changes_only_static_docs_tests_and_legacy_guards():
                 "tests/test_phase96b_agent_evidence_chain_trace_persistence_default_off.py",
                 "tests/test_phase97b_agent_evidence_chain_collector_diagnostics_default_off.py",
             "src/agents/evidence_chain_execution.py",
+                "requirements.txt",
+                "src/agents/evidence_chain_langgraph_harness.py",
             "tests/test_phase98b_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase99b_collector_controlled_evidence_chain_execution_default_off.py",
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",

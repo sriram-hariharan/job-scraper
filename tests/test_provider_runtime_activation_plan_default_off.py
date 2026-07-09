@@ -203,7 +203,7 @@ def test_plan_module_has_no_sdk_network_or_runtime_execution_wiring():
 def test_pipeline_dependencies_and_application_authority_are_unchanged():
     expected = {
         "requirements.txt": (
-            "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
+            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"
         ),
         "src/pipeline/collector.py": (
             "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a"

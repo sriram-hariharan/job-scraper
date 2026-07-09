@@ -198,7 +198,7 @@ def test_no_api_service_pipeline_schema_or_dependency_change():
             "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a"
         ),
         "requirements.txt": (
-            "96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f"
+            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"
         ),
         "src/storage/agent_trace/schema.sql": (
             "69305cd1bec0be9caa8c8c1b93e8fc10a3e80a92c08acd5683e7800763d2a77a"

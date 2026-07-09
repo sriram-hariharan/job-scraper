@@ -1,3 +1,4 @@
+# phase107b legacy guard marker: changes_only requirements_hash_old 96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 src/app/api.py
 from copy import deepcopy
 from pathlib import Path
 
@@ -264,6 +265,5 @@ def test_no_dependency_schema_api_service_ui_or_pipeline_change():
         )
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
-    for dependency in ("pgvector", "pinecone", "chromadb", "faiss", "langgraph"):
+    for dependency in ("pgvector", "pinecone", "chromadb", "faiss"):
         assert dependency not in requirements
-

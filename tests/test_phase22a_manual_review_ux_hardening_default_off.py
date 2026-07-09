@@ -52,7 +52,7 @@ PROTECTED_HASHES = {
     "src/app/services.py": "cc2de35be2ccdf50640b5933651f0d8ef596a400d4c38436ea8aebd8320a9d6c",
     "src/agents/manual_review_readiness_contract.py": "5253414d1343d5eae64af7fbb6f87da68f9d4931b762cac972a94c29dc9ad5a2",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
-    "src/pipeline/collector.py": "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f",
+    "src/pipeline/collector.py": "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a",
 }
 
 

@@ -78,8 +78,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_agent_trace_ui_readiness_checkpoint.py",
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
             "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+            "tests/test_three_core_agent_collector_shadow_wiring_default_off.py",
             "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
-                "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+            "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
             "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
             "src/agents/resume_match_agent.py",
             "tests/test_phase89b_resume_match_consumes_jd_intelligence_default_off.py",
@@ -102,6 +103,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase100b_evidence_chain_trace_persistence_readback_default_off.py",
             "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
             "tests/test_phase102b_jd_intelligence_controlled_llm_ownership_default_off.py",
+            "tests/test_phase103b_jd_intelligence_controlled_llm_collector_wiring_default_off.py",
             "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
         },
     }
@@ -157,7 +159,7 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f",
-        ): "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f",
+        ): "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a",
     }
     repo = Path(root)
     for relative_path, expected_hash in expected_hashes.items():

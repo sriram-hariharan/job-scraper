@@ -120,7 +120,7 @@ PROTECTED_HASHES = {
         "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3"
     ),
     "src/pipeline/collector.py": (
-        "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f"
+        "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a"
     ),
     "src/pipeline/job_filter.py": (
         "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4"

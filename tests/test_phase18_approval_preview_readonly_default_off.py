@@ -63,7 +63,7 @@ PREVIEW_CAPABILITIES = [
 
 RUNTIME_HASHES = {
     "src/agents/relevance_prefilter.py": ("5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b"),
-    "src/agents/jd_intelligence.py": ("c0150f2717581647c22bd084e3223691c1ce25d9b573acff10369def28f37f02"),
+    "src/agents/jd_intelligence.py": ("c72224bbc8e64b13c725f9180d227c413fb2fd9a65a97e2e72954f61a8f32b45"),
     "src/agents/final_application_scoring.py": ("eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"),
     "src/agents/three_core_agent_shadow_operator_canary.py": ("b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"),
     "src/pipeline/collector.py": ("29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f"),

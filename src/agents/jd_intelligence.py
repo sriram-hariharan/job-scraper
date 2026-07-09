@@ -66,6 +66,11 @@ EXISTING_OUTPUT_TRACE_STAGE_NAME = "jd_intelligence_existing_output"
 EXISTING_OUTPUT_TRACE_SOURCE_STAGE = "intelligence"
 EXISTING_OUTPUT_TRACE_DEFAULT_SAMPLE_LIMIT = 10
 EXISTING_OUTPUT_TRACE_MAX_SAMPLE_LIMIT = 25
+CONTROLLED_LLM_ARTIFACT_VERSION = "jd-intelligence-controlled-llm-artifact-v1"
+CONTROLLED_LLM_ARTIFACT_TYPE = "jd_intelligence_controlled_llm_artifact"
+CONTROLLED_LLM_GATE_NAME = (
+    "APPLYLENS_AGENTIC_JD_INTELLIGENCE_CONTROLLED_LLM_ENABLED"
+)
 _BUILD_JOB_INTELLIGENCE_CALLED_KEY = "build_" "job_intelligence_called"
 _WORKFLOW_RUNNER_LIVE_EXECUTION_PERFORMED_KEY = (
     "workflow_" "runner_live_execution_performed"
@@ -133,6 +138,440 @@ def _existing_output_safety_metadata() -> dict[str, bool]:
         "reused_existing_pipeline_output": True,
         **{flag: False for flag in _EXISTING_OUTPUT_FALSE_FLAGS},
     }
+
+
+def _controlled_llm_truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = _clean_text(value).lower()
+    return text in {"1", "true", "yes", "on", "enabled"}
+
+
+def _controlled_llm_gate_enabled(
+    *,
+    enabled: bool,
+    env: Mapping[str, Any] | dict[str, Any] | None,
+) -> bool:
+    if bool(enabled):
+        return True
+    if isinstance(env, Mapping):
+        return _controlled_llm_truthy(env.get(CONTROLLED_LLM_GATE_NAME))
+    return False
+
+
+def _controlled_llm_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return deepcopy(value)
+    if isinstance(value, tuple):
+        return list(deepcopy(value))
+    text = _clean_text(value)
+    return [text] if text else []
+
+
+def _controlled_llm_skills_from_intelligence(
+    intelligence: Mapping[str, Any] | dict[str, Any] | None,
+) -> tuple[dict[str, list[Any]], bool]:
+    source = _mapping_dict(intelligence)
+    skills = source.get("skills")
+    skills_dict = _mapping_dict(skills)
+    required = _controlled_llm_list(skills_dict.get("required"))
+    preferred = _controlled_llm_list(skills_dict.get("preferred"))
+    all_skills = _controlled_llm_list(skills_dict.get("all"))
+    has_skill_shape = isinstance(skills, Mapping) and any(
+        isinstance(skills.get(field_name), (list, tuple, str))
+        for field_name in ("required", "preferred", "all")
+    )
+    signal_lists = {
+        field_name: _controlled_llm_list(source.get(field_name))
+        for field_name in SIGNAL_LIST_FIELDS
+    }
+    has_signal_shape = any(
+        isinstance(source.get(field_name), (list, tuple, str))
+        for field_name in SIGNAL_LIST_FIELDS
+    )
+    if not all_skills:
+        all_skills = [*required, *preferred]
+    return (
+        {
+            **signal_lists,
+            "required_skills": required or signal_lists["required_skills"],
+            "preferred_skills": preferred or signal_lists["preferred_skills"],
+            "all_skills": all_skills,
+        },
+        has_skill_shape or has_signal_shape,
+    )
+
+
+def _controlled_llm_job_description(job: Mapping[str, Any]) -> str:
+    for field_name in (
+        "description",
+        "job_description",
+        "description_text",
+        "details",
+        "summary",
+    ):
+        text = _clean_text(job.get(field_name))
+        if text:
+            return text
+    return ""
+
+
+def _controlled_llm_metadata(raw: dict[str, Any] | None) -> dict[str, Any]:
+    source = _plain_dict(raw)
+    nested = _plain_dict(source.get("metadata"))
+    token_usage = source.get("token_usage")
+    if not isinstance(token_usage, dict):
+        token_usage = source.get("token_usage_json")
+    if not isinstance(token_usage, dict):
+        token_usage = {
+            key: source.get(key)
+            for key in ("input_tokens", "output_tokens", "total_tokens")
+            if source.get(key) is not None
+        }
+    cost = source.get("cost")
+    if not isinstance(cost, dict):
+        cost = source.get("cost_json")
+    if not isinstance(cost, dict) and source.get("estimated_cost") is not None:
+        cost = {"estimated_cost": source.get("estimated_cost")}
+    provider = source.get("provider", source.get("model_provider"))
+    model = source.get("model", source.get("model_name"))
+    prompt_version = source.get("prompt_version")
+    return {
+        **nested,
+        "provider": _clean_text(provider),
+        "model": _clean_text(model),
+        "prompt_version": _clean_text(prompt_version),
+        "cache_hit": bool(source.get("cache_hit", nested.get("cache_hit", False))),
+        "cache_key": _clean_text(source.get("cache_key", nested.get("cache_key", ""))),
+        "retry_count": int(source.get("retry_count", nested.get("retry_count", 0)) or 0),
+        "schema_validation_passed": bool(
+            source.get(
+                "schema_validation_passed",
+                nested.get("schema_validation_passed", False),
+            )
+        ),
+        "parse_retry_performed": bool(
+            source.get("parse_retry_performed", nested.get("parse_retry_performed", False))
+        ),
+        "fallback_provider_used": bool(
+            source.get(
+                "fallback_provider_used",
+                nested.get("fallback_provider_used", False),
+            )
+        ),
+        "error_message": _clean_text(
+            source.get("error_message", nested.get("error_message", ""))
+        ),
+        "token_usage": token_usage if isinstance(token_usage, dict) else {},
+        "cost": cost if isinstance(cost, dict) else {},
+        "latency_ms": source.get("latency_ms", nested.get("latency_ms")),
+    }
+
+
+def _controlled_llm_signals(raw: dict[str, Any] | None) -> dict[str, Any]:
+    source = _plain_dict(raw)
+    signals = _plain_dict(source.get("jd_signals")) or _plain_dict(source.get("signals"))
+    if not signals and isinstance(source.get("intelligence"), Mapping):
+        skills, _ = _controlled_llm_skills_from_intelligence(source.get("intelligence"))
+        signals = skills
+    combined = {**source, **signals}
+    required = _controlled_llm_list(combined.get("required_skills"))
+    preferred = _controlled_llm_list(combined.get("preferred_skills"))
+    all_skills = _controlled_llm_list(combined.get("all_skills"))
+    if not all_skills:
+        all_skills = [*required, *preferred]
+    payload = {
+        field_name: _controlled_llm_list(combined.get(field_name))
+        for field_name in SIGNAL_LIST_FIELDS
+    }
+    payload["required_skills"] = required
+    payload["preferred_skills"] = preferred
+    payload["all_skills"] = all_skills
+    payload["responsibilities"] = _controlled_llm_list(combined.get("responsibilities"))
+    payload["tools"] = _controlled_llm_list(combined.get("tools"))
+    payload["location_constraints"] = _controlled_llm_list(
+        combined.get("location_constraints")
+    )
+    payload["red_flags"] = _controlled_llm_list(combined.get("red_flags"))
+    payload["confidence"] = combined.get(
+        "confidence",
+        combined.get("extraction_confidence"),
+    )
+    return payload
+
+
+def _controlled_llm_safety_metadata(
+    *,
+    provider_call_performed: bool,
+    duplicate_call_avoided: bool,
+    existing_intelligence_reused: bool,
+    deterministic_fallback_used: bool,
+    cache_hit: bool = False,
+    schema_validation_passed: bool = False,
+    token_metrics_available: bool = False,
+    cost_metrics_available: bool = False,
+    latency_metrics_available: bool = False,
+) -> dict[str, bool]:
+    return {
+        "read_only": True,
+        "advisory_only": True,
+        "provider_call_performed": bool(provider_call_performed),
+        "live_llm_call_performed": bool(provider_call_performed),
+        "duplicate_llm_call_avoided": bool(duplicate_call_avoided),
+        "existing_intelligence_reused": bool(existing_intelligence_reused),
+        "deterministic_fallback_used": bool(deterministic_fallback_used),
+        "cache_hit": bool(cache_hit),
+        "schema_validation_passed": bool(schema_validation_passed),
+        "token_metrics_available": bool(token_metrics_available),
+        "cost_metrics_available": bool(cost_metrics_available),
+        "latency_metrics_available": bool(latency_metrics_available),
+        "database_write_performed": False,
+        "trace_persistence_performed": False,
+        "collector_output_changed": False,
+        "production_output_changed": False,
+        "scoring_changed": False,
+        "ranking_changed": False,
+        "filtering_changed": False,
+        "queue_mutation_performed": False,
+        "review_queue_mutation_performed": False,
+        "scheduler_mutation_performed": False,
+        "tailoring_mutation_performed": False,
+        "source_resume_mutation_performed": False,
+        "generated_resume_mutation_performed": False,
+        "application_status_changed": False,
+        "auto_apply_performed": False,
+        "ats_submission_performed": False,
+        "apply_click_performed": False,
+        "recruiter_message_sent": False,
+        "mark_applied_performed": False,
+        "external_action_automation_performed": False,
+    }
+
+
+def _controlled_llm_artifact(
+    *,
+    job: dict[str, Any],
+    source: str,
+    reason: str,
+    status: str,
+    signals: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+    gated_off: bool = False,
+    fallback_used: bool = False,
+    provider_call_performed: bool = False,
+    duplicate_call_avoided: bool = False,
+    existing_intelligence_reused: bool = False,
+    gate_enabled: bool = False,
+    error_message: str = "",
+) -> dict[str, Any]:
+    safe_signals = _plain_dict(signals)
+    safe_metadata = _plain_dict(metadata)
+    token_usage = _plain_dict(safe_metadata.get("token_usage"))
+    cost = _plain_dict(safe_metadata.get("cost"))
+    latency_present = safe_metadata.get("latency_ms") is not None
+    safety_metadata = _controlled_llm_safety_metadata(
+        provider_call_performed=provider_call_performed,
+        duplicate_call_avoided=duplicate_call_avoided,
+        existing_intelligence_reused=existing_intelligence_reused,
+        deterministic_fallback_used=fallback_used,
+        cache_hit=bool(safe_metadata.get("cache_hit", False)),
+        schema_validation_passed=bool(safe_metadata.get("schema_validation_passed", False)),
+        token_metrics_available=bool(token_usage),
+        cost_metrics_available=bool(cost),
+        latency_metrics_available=latency_present,
+    )
+    output_json = {
+        "artifact_type": CONTROLLED_LLM_ARTIFACT_TYPE,
+        "artifact_version": CONTROLLED_LLM_ARTIFACT_VERSION,
+        "agent_name": AGENT_NAME,
+        "agent_version": CONTROLLED_LLM_ARTIFACT_VERSION,
+        "status": status,
+        "source": source,
+        "reason": reason,
+        "required_skills": _controlled_llm_list(safe_signals.get("required_skills")),
+        "preferred_skills": _controlled_llm_list(safe_signals.get("preferred_skills")),
+        "all_skills": _controlled_llm_list(safe_signals.get("all_skills")),
+        "responsibilities": _controlled_llm_list(safe_signals.get("responsibilities")),
+        "tools": _controlled_llm_list(safe_signals.get("tools")),
+        "location_constraints": _controlled_llm_list(
+            safe_signals.get("location_constraints")
+        ),
+        "red_flags": _controlled_llm_list(safe_signals.get("red_flags")),
+        "confidence": safe_signals.get("confidence"),
+        "metadata": safe_metadata,
+        "safety_metadata": safety_metadata,
+    }
+    return {
+        **output_json,
+        "default_off": True,
+        "gate_name": CONTROLLED_LLM_GATE_NAME,
+        "gate_enabled": bool(gate_enabled),
+        "enabled": bool(gate_enabled),
+        "gated_off": bool(gated_off),
+        "fallback_used": bool(fallback_used),
+        "deterministic_fallback_used": bool(fallback_used),
+        "used_existing_intelligence": bool(existing_intelligence_reused),
+        "existing_intelligence_reused": bool(existing_intelligence_reused),
+        "duplicate_call_avoided": bool(duplicate_call_avoided),
+        "provider_call_performed": bool(provider_call_performed),
+        "live_llm_call_performed": bool(provider_call_performed),
+        "extraction_helper_attempted": bool(provider_call_performed),
+        "error_message": _clean_text(error_message),
+        "job_id": _first_text(job, "job_id", "id"),
+        "title": _clean_text(job.get("title")),
+        "company": _clean_text(job.get("company")),
+        "output_json": output_json,
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+
+
+def build_jd_intelligence_controlled_llm_artifact(
+    job: Mapping[str, Any] | dict[str, Any],
+    *,
+    existing_intelligence: Mapping[str, Any] | dict[str, Any] | None = None,
+    enabled: bool = False,
+    extraction_helper: Any = None,
+    env: Mapping[str, Any] | dict[str, Any] | None = None,
+    strict: bool = False,
+) -> dict[str, Any]:
+    """Build a default-off JD Intelligence LLM ownership artifact.
+
+    The helper is intentionally dependency-injected: callers may provide a
+    controlled extraction helper, but this module does not import provider
+    clients or pipeline extraction modules.
+    """
+
+    source_job = _mapping_dict(job)
+    intelligence_source = (
+        _mapping_dict(existing_intelligence)
+        if isinstance(existing_intelligence, Mapping)
+        else _mapping_dict(source_job.get("intelligence"))
+    )
+    existing_signals, existing_is_sufficient = _controlled_llm_skills_from_intelligence(
+        intelligence_source
+    )
+    gate_enabled = _controlled_llm_gate_enabled(enabled=enabled, env=env)
+
+    if existing_is_sufficient:
+        return _controlled_llm_artifact(
+            job=source_job,
+            source="existing_job_intelligence",
+            reason="existing_intelligence_reused",
+            status="completed",
+            signals=existing_signals,
+            metadata={"extraction_source": "existing_job_intelligence"},
+            provider_call_performed=False,
+            duplicate_call_avoided=True,
+            existing_intelligence_reused=True,
+            gate_enabled=gate_enabled,
+        )
+
+    if not gate_enabled:
+        return _controlled_llm_artifact(
+            job=source_job,
+            source="deterministic_fallback",
+            reason="llm_gate_disabled",
+            status="fallback",
+            signals={},
+            metadata={"extraction_source": "deterministic_fallback"},
+            gated_off=True,
+            fallback_used=True,
+            gate_enabled=False,
+        )
+
+    if not callable(extraction_helper):
+        return _controlled_llm_artifact(
+            job=source_job,
+            source="deterministic_fallback",
+            reason="extraction_helper_missing",
+            status="fallback",
+            signals={},
+            metadata={"extraction_source": "deterministic_fallback"},
+            fallback_used=True,
+            gate_enabled=True,
+        )
+
+    request_packet = {
+        "artifact_type": CONTROLLED_LLM_ARTIFACT_TYPE,
+        "artifact_version": CONTROLLED_LLM_ARTIFACT_VERSION,
+        "agent_name": AGENT_NAME,
+        "job": deepcopy(source_job),
+        "existing_intelligence": deepcopy(intelligence_source),
+        "job_description": _controlled_llm_job_description(source_job),
+        "gate_name": CONTROLLED_LLM_GATE_NAME,
+        "gate_enabled": True,
+        "default_off": True,
+        "read_only": True,
+        "advisory_only": True,
+    }
+    try:
+        raw_result = extraction_helper(deepcopy(request_packet))
+    except Exception as exc:
+        if strict:
+            raise
+        metadata = {
+            "extraction_source": "extraction_helper",
+            "error_message": str(exc),
+        }
+        return _controlled_llm_artifact(
+            job=source_job,
+            source="deterministic_fallback",
+            reason="jd_intelligence_llm_extraction_failed",
+            status="fallback",
+            signals={},
+            metadata=metadata,
+            fallback_used=True,
+            provider_call_performed=True,
+            gate_enabled=True,
+            error_message=str(exc),
+        )
+
+    raw_payload = _plain_dict(raw_result)
+    signals = _controlled_llm_signals(raw_payload)
+    metadata = {
+        **_controlled_llm_metadata(raw_payload),
+        "extraction_source": _clean_text(raw_payload.get("extraction_source"))
+        or "extraction_helper",
+    }
+    ready = bool(
+        raw_payload.get("extraction_ready", True)
+        and any(
+            signals.get(field_name)
+            for field_name in (
+                "required_skills",
+                "preferred_skills",
+                "all_skills",
+                "responsibilities",
+                "tools",
+            )
+        )
+    )
+    if not ready:
+        metadata["error_message"] = metadata.get("error_message") or "no_jd_signals"
+        return _controlled_llm_artifact(
+            job=source_job,
+            source="deterministic_fallback",
+            reason="jd_intelligence_llm_extraction_failed",
+            status="fallback",
+            signals={},
+            metadata=metadata,
+            fallback_used=True,
+            provider_call_performed=True,
+            gate_enabled=True,
+            error_message=metadata["error_message"],
+        )
+
+    return _controlled_llm_artifact(
+        job=source_job,
+        source="controlled_extraction_helper",
+        reason="controlled_llm_extraction_performed",
+        status="completed",
+        signals=signals,
+        metadata=metadata,
+        provider_call_performed=True,
+        gate_enabled=True,
+    )
 
 
 def _existing_output_validation(

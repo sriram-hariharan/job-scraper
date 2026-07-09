@@ -506,6 +506,337 @@ def _critic_guardrail_safety_metadata() -> Dict[str, bool]:
     }
 
 
+CRITIC_CONTROLLED_LLM_GUARDRAIL_ARTIFACT_TYPE = (
+    "critic_controlled_llm_guardrail_artifact"
+)
+CRITIC_CONTROLLED_LLM_GUARDRAIL_ARTIFACT_VERSION = (
+    "critic-controlled-llm-guardrail-v1"
+)
+CRITIC_CONTROLLED_LLM_GUARDRAIL_GATE = (
+    "APPLYLENS_AGENTIC_CRITIC_CONTROLLED_LLM_GUARDRAIL_ENABLED"
+)
+CRITIC_CONTROLLED_LLM_FALSE_FLAGS = (
+    "database_write_performed",
+    "trace_persistence_performed",
+    "collector_output_changed",
+    "production_output_changed",
+    "scoring_changed",
+    "ranking_changed",
+    "filtering_changed",
+    "queue_mutation_performed",
+    "review_queue_mutation_performed",
+    "scheduler_mutation_performed",
+    "tailoring_mutation_performed",
+    "source_resume_mutation_performed",
+    "generated_resume_mutation_performed",
+    "application_status_changed",
+    "auto_apply_performed",
+    "ats_submission_performed",
+    "apply_click_performed",
+    "recruiter_message_sent",
+    "mark_applied_performed",
+    "external_action_automation_performed",
+)
+
+
+def _critic_controlled_llm_false_flags() -> Dict[str, bool]:
+    return {flag: False for flag in CRITIC_CONTROLLED_LLM_FALSE_FLAGS}
+
+
+def _critic_controlled_llm_metric_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _critic_controlled_llm_metric_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _critic_controlled_llm_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return deepcopy(value)
+    if value in (None, ""):
+        return []
+    return [deepcopy(value)]
+
+
+def _critic_controlled_llm_metadata(source: Dict[str, Any]) -> Dict[str, Any]:
+    token_usage = source.get("token_usage")
+    if not isinstance(token_usage, dict):
+        token_usage = source.get("token_usage_json")
+    token_usage = deepcopy(token_usage) if isinstance(token_usage, dict) else {}
+    input_tokens = _critic_controlled_llm_metric_int(
+        source.get("input_tokens")
+        or source.get("input_token_count")
+        or token_usage.get("input_tokens")
+        or token_usage.get("input_token_count")
+    )
+    output_tokens = _critic_controlled_llm_metric_int(
+        source.get("output_tokens")
+        or source.get("output_token_count")
+        or token_usage.get("output_tokens")
+        or token_usage.get("output_token_count")
+    )
+    total_tokens = _critic_controlled_llm_metric_int(
+        source.get("total_tokens")
+        or source.get("total_token_count")
+        or token_usage.get("total_tokens")
+        or token_usage.get("total_token_count")
+    )
+    cost = source.get("cost")
+    if not isinstance(cost, dict):
+        cost = source.get("cost_json")
+    cost = deepcopy(cost) if isinstance(cost, dict) else {}
+    estimated_cost = _critic_controlled_llm_metric_float(
+        source.get("estimated_cost") or cost.get("estimated_cost")
+    )
+    latency_ms = _critic_controlled_llm_metric_int(source.get("latency_ms"))
+    schema_validation_passed = source.get("schema_validation_passed")
+    if schema_validation_passed is None:
+        validation_status = _clean_text(source.get("validation_status")).lower()
+        schema_validation_passed = validation_status == "valid"
+    schema_validation_errors = source.get("schema_validation_errors")
+    if schema_validation_errors is None:
+        schema_validation_errors = source.get("validation_errors")
+    metadata = {
+        "provider": _clean_text(source.get("provider") or source.get("model_provider")),
+        "model": _clean_text(source.get("model") or source.get("model_name")),
+        "prompt_version": _clean_text(source.get("prompt_version")),
+        "token_usage": token_usage,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "cost": cost,
+        "estimated_cost": estimated_cost,
+        "latency_ms": latency_ms,
+        "fallback_provider_used": bool(
+            source.get("fallback_provider_used")
+            or source.get("provider_fallback_used")
+            or source.get("fallback_used") is True
+        ),
+        "schema_validation_passed": bool(schema_validation_passed),
+        "schema_validation_errors": _critic_controlled_llm_list(
+            schema_validation_errors
+        ),
+        "retry_count": _critic_controlled_llm_metric_int(source.get("retry_count")),
+        "cache_hit": bool(source.get("cache_hit", False)),
+        "cache_key": _clean_text(source.get("cache_key")),
+        "error_message": _clean_text(source.get("error_message")),
+    }
+    return metadata
+
+
+def _critic_controlled_llm_response(source: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = source.get("normalized_response")
+    if not isinstance(normalized, dict):
+        normalized = {}
+    response = {
+        "decision": _clean_text(source.get("decision")),
+        "verdict": _clean_text(source.get("verdict")),
+        "critic_status": _clean_text(source.get("critic_status")),
+        "risk_level": _clean_text(source.get("risk_level")),
+        "concerns": _critic_controlled_llm_list(source.get("concerns")),
+        "unsupported_claims": _critic_controlled_llm_list(
+            source.get("unsupported_claims")
+            or source.get("unsupported_claim_risks")
+        ),
+        "validation_errors": _critic_controlled_llm_list(
+            source.get("validation_errors")
+        ),
+        "review_notes": _clean_text(source.get("review_notes")),
+        "recommendations": _critic_controlled_llm_list(source.get("recommendations")),
+        "normalized_response": deepcopy(normalized),
+        "reason_codes": _critic_guardrail_text_list(source.get("reason_codes")),
+        "approved_suggestions": deepcopy(source.get("approved_suggestions") or []),
+        "downgraded_suggestions": deepcopy(
+            source.get("downgraded_suggestions") or []
+        ),
+        "rejected_suggestions": deepcopy(source.get("rejected_suggestions") or []),
+        "evidence_gaps": _critic_guardrail_text_list(source.get("evidence_gaps")),
+        "rationale": _clean_text(source.get("rationale")),
+    }
+    if "raw_response" in source:
+        response["raw_response"] = deepcopy(source.get("raw_response"))
+    return response
+
+
+def _critic_controlled_llm_artifact(
+    *,
+    status: str,
+    source: str,
+    reason: str,
+    critic_input: Dict[str, Any],
+    guardrail_result: Dict[str, Any] | None = None,
+    enabled: bool,
+    gated_off: bool,
+    fallback_used: bool,
+    provider_call_performed: bool,
+    live_llm_call_performed: bool,
+    existing_guardrail_result_reused: bool,
+    duplicate_llm_call_avoided: bool,
+    error_message: str = "",
+) -> Dict[str, Any]:
+    result = deepcopy(guardrail_result) if isinstance(guardrail_result, dict) else {}
+    metadata = _critic_controlled_llm_metadata(result)
+    if error_message and not metadata["error_message"]:
+        metadata["error_message"] = error_message
+    token_metrics_available = any(
+        value is not None
+        for value in (
+            metadata["input_tokens"],
+            metadata["output_tokens"],
+            metadata["total_tokens"],
+        )
+    ) or bool(metadata["token_usage"])
+    cost_metrics_available = metadata["estimated_cost"] is not None or bool(
+        metadata["cost"]
+    )
+    latency_metrics_available = metadata["latency_ms"] is not None
+    safety_metadata = {
+        "provider_call_performed": provider_call_performed,
+        "live_llm_call_performed": live_llm_call_performed,
+        "duplicate_llm_call_avoided": duplicate_llm_call_avoided,
+        "existing_guardrail_result_reused": existing_guardrail_result_reused,
+        "deterministic_fallback_used": fallback_used,
+        "gated_off": gated_off,
+        "schema_validation_passed": bool(metadata["schema_validation_passed"]),
+        "token_metrics_available": token_metrics_available,
+        "cost_metrics_available": cost_metrics_available,
+        "latency_metrics_available": latency_metrics_available,
+        **_critic_controlled_llm_false_flags(),
+    }
+    return {
+        "artifact_type": CRITIC_CONTROLLED_LLM_GUARDRAIL_ARTIFACT_TYPE,
+        "artifact_version": CRITIC_CONTROLLED_LLM_GUARDRAIL_ARTIFACT_VERSION,
+        "gate_name": CRITIC_CONTROLLED_LLM_GUARDRAIL_GATE,
+        "default_off": True,
+        "enabled": bool(enabled),
+        "status": status,
+        "source": source,
+        "reason": reason,
+        "read_only": True,
+        "advisory_only": True,
+        "guardrail_decision_only": True,
+        "gated_off": gated_off,
+        "fallback_used": fallback_used,
+        "provider_call_performed": provider_call_performed,
+        "live_llm_call_performed": live_llm_call_performed,
+        "existing_guardrail_result_reused": existing_guardrail_result_reused,
+        "duplicate_llm_call_avoided": duplicate_llm_call_avoided,
+        "critic_input": deepcopy(critic_input),
+        "guardrail_result": result,
+        "normalized_guardrail_response": _critic_controlled_llm_response(result),
+        "metadata": metadata,
+        "error_message": metadata["error_message"],
+        "safety_metadata": safety_metadata,
+        **safety_metadata,
+    }
+
+
+def build_critic_controlled_llm_guardrail_artifact(
+    critic_input: Dict[str, Any] | None = None,
+    *,
+    payload: Dict[str, Any] | None = None,
+    existing_guardrail_result: Dict[str, Any] | None = None,
+    enabled: bool = False,
+    guardrail_adapter: Any = None,
+    env: Dict[str, str] | None = None,
+    strict: bool = False,
+) -> Dict[str, Any]:
+    """Own one Critic guardrail LLM-capable result through an injected adapter."""
+
+    del env
+    source_input = critic_input if critic_input is not None else payload
+    safe_input = deepcopy(source_input) if isinstance(source_input, dict) else {}
+    if isinstance(existing_guardrail_result, dict) and existing_guardrail_result:
+        return _critic_controlled_llm_artifact(
+            status="completed",
+            source="existing_critic_guardrail_result",
+            reason="existing_guardrail_result_reused",
+            critic_input=safe_input,
+            guardrail_result=existing_guardrail_result,
+            enabled=enabled,
+            gated_off=False,
+            fallback_used=False,
+            provider_call_performed=False,
+            live_llm_call_performed=False,
+            existing_guardrail_result_reused=True,
+            duplicate_llm_call_avoided=True,
+        )
+    if enabled is not True:
+        return _critic_controlled_llm_artifact(
+            status="fallback",
+            source="deterministic_fallback",
+            reason="critic_llm_gate_disabled",
+            critic_input=safe_input,
+            enabled=False,
+            gated_off=True,
+            fallback_used=True,
+            provider_call_performed=False,
+            live_llm_call_performed=False,
+            existing_guardrail_result_reused=False,
+            duplicate_llm_call_avoided=False,
+        )
+    if not callable(guardrail_adapter):
+        return _critic_controlled_llm_artifact(
+            status="fallback",
+            source="deterministic_fallback",
+            reason="critic_llm_guardrail_adapter_missing",
+            critic_input=safe_input,
+            enabled=True,
+            gated_off=False,
+            fallback_used=True,
+            provider_call_performed=False,
+            live_llm_call_performed=False,
+            existing_guardrail_result_reused=False,
+            duplicate_llm_call_avoided=False,
+            error_message="guardrail_adapter_missing",
+        )
+    try:
+        adapter_result = guardrail_adapter(deepcopy(safe_input))
+    except Exception as exc:
+        if strict:
+            raise
+        return _critic_controlled_llm_artifact(
+            status="fallback",
+            source="controlled_guardrail_adapter",
+            reason="critic_llm_guardrail_failed",
+            critic_input=safe_input,
+            enabled=True,
+            gated_off=False,
+            fallback_used=True,
+            provider_call_performed=True,
+            live_llm_call_performed=True,
+            existing_guardrail_result_reused=False,
+            duplicate_llm_call_avoided=False,
+            error_message=f"{exc.__class__.__name__}: {exc}",
+        )
+    result = adapter_result if isinstance(adapter_result, dict) else {"raw_response": adapter_result}
+    return _critic_controlled_llm_artifact(
+        status="completed",
+        source="controlled_guardrail_adapter",
+        reason="controlled_critic_guardrail_llm_performed",
+        critic_input=safe_input,
+        guardrail_result=result,
+        enabled=True,
+        gated_off=False,
+        fallback_used=False,
+        provider_call_performed=True,
+        live_llm_call_performed=True,
+        existing_guardrail_result_reused=False,
+        duplicate_llm_call_avoided=False,
+    )
+
+
 CRITIC_RESUME_MATCH_JD_EVIDENCE_GATE = (
     "APPLYLENS_AGENTIC_CRITIC_CONSUMES_RESUME_MATCH_JD_EVIDENCE_ENABLED"
 )

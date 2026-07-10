@@ -2870,9 +2870,15 @@ html[data-theme="dark"] .scan-workspace-continue-modal-secondary .scan-workspace
 
 .scan-workspace-page .scan-workspace-header-copy h1,
 .scan-workspace-page .page-header h1 {
-  font-size: clamp(28px, 4vw, 46px) !important;
+  font-size: clamp(26px, 2vw, 34px) !important;
   line-height: 1.03 !important;
   white-space: normal !important;
+}
+
+body .scan-workspace-page.page > .scan-workspace-header-shell.scan-workspace-header-shell--minimal .scan-workspace-header-copy h1 {
+  font-size: clamp(26px, 2vw, 34px) !important;
+  line-height: 1.04 !important;
+  letter-spacing: 0 !important;
 }
 
 .scan-workspace-page .scan-workspace-header-actions .ghost-btn,

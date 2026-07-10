@@ -326,6 +326,8 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         and path != "src/app/static/agentic_review.js"
         and path != "src/app/static/app.js"
         and path != "src/app/static/planning.js"
+        and path != "src/app/static/scan_workspace.js"
+        and path != "src/app/static/scan_workspace_review.css"
     }
     assert not unexpected_static
 

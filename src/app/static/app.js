@@ -1265,6 +1265,10 @@ function getSelectedPipelineLlmActions() {
     .filter(Boolean);
 }
 
+function getDefaultPipelineLlmActions() {
+  return ["APPLY", "APPLY_REVIEW_VARIANTS"];
+}
+
 function getPipelineDeleteSeenDataValue() {
   return getBinaryToggleValue("pipelineDeleteSeenData");
 }
@@ -2018,9 +2022,7 @@ function showAppError(title, err, subtitle = "Review the message below.") {
 
 function collectPipelineConfig() {
   const llmActions = getSelectedPipelineLlmActions();
-  if (!llmActions.length) {
-    throw new Error("Select at least one LLM action.");
-  }
+  const effectiveLlmActions = llmActions.length ? llmActions : getDefaultPipelineLlmActions();
   const paths = derivePipelinePaths(DEFAULT_OUTPUT_DIR);
 
   return {
@@ -2028,11 +2030,11 @@ function collectPipelineConfig() {
     job_packet_limit: Number(qs("pipelineJobPacketLimitInput").value || 0),
     output_dir: paths.output_dir,
     log_path: paths.log_path,
-    llm_actions: llmActions,
+    llm_actions: effectiveLlmActions,
     planning_only: getBinaryToggleBool("pipelinePlanningOnly"),
-    generate_tailoring: getBinaryToggleBool("pipelineGenerateTailoring"),
-    generate_llm_tailoring: getBinaryToggleBool("pipelineGenerateLlmTailoring"),
-    refresh_llm_tailoring: getBinaryToggleBool("pipelineRefreshLlmTailoring"),
+    generate_tailoring: false,
+    generate_llm_tailoring: false,
+    refresh_llm_tailoring: false,
     generate_llm_fallback: getBinaryToggleBool("pipelineGenerateLlmFallback"),
     generate_llm_adjudication: getBinaryToggleBool("pipelineGenerateLlmAdjudication"),
     delete_seen_data: getPipelineDeleteSeenDataValue(),
@@ -2040,8 +2042,6 @@ function collectPipelineConfig() {
 }
 
 function renderPipelineConfirmSummary(config) {
-  const llmActions = Array.isArray(config.llm_actions) ? config.llm_actions : [];
-
   const buildBoolTile = (label, enabled) => `
     <div class="pipeline-confirm-flag ${enabled ? "is-enabled" : "is-disabled"}">
       <div class="pipeline-confirm-flag-copy">
@@ -2077,8 +2077,8 @@ function renderPipelineConfirmSummary(config) {
             <div class="pipeline-confirm-stat-value">${escapeHtml(String(config.job_packet_limit ?? 0))}</div>
           </div>
           <div class="pipeline-confirm-stat">
-            <div class="pipeline-confirm-stat-label">LLM actions</div>
-            <div class="pipeline-confirm-stat-value">${escapeHtml(String(llmActions.length))}</div>
+            <div class="pipeline-confirm-stat-label">Run mode</div>
+            <div class="pipeline-confirm-stat-value">${config.planning_only ? "Plan only" : "Scan + Plan"}</div>
           </div>
         </div>
       </section>
@@ -2090,30 +2090,18 @@ function renderPipelineConfirmSummary(config) {
           ${buildMetaRow("Job packet limit", config.job_packet_limit)}
         </section>
 
-        <section class="pipeline-confirm-panel pipeline-confirm-panel--actions">
-          <div class="pipeline-confirm-panel-title">LLM actions</div>
-          <div class="pipeline-confirm-chip-row">
-            ${
-              llmActions.length
-                ? llmActions
-                    .map((action) => `<span class="pipeline-confirm-chip">${escapeHtml(action)}</span>`)
-                    .join("")
-                : `<span class="pipeline-confirm-chip pipeline-confirm-chip--muted">None selected</span>`
-            }
-          </div>
+        <section class="pipeline-confirm-panel pipeline-confirm-panel--scope">
+          <div class="pipeline-confirm-panel-title">Planning</div>
+          ${buildMetaRow("Run mode", config.planning_only ? "Plan only" : "Scan + Plan")}
+          ${buildMetaRow("Rerun seen jobs", config.delete_seen_data === "yes" ? "Yes" : "No")}
         </section>
       </div>
 
       <section class="pipeline-confirm-panel pipeline-confirm-panel--flags">
         <div class="pipeline-confirm-panel-title">Run options</div>
         <div class="pipeline-confirm-flag-grid">
-          ${buildBoolTile("Planning only", config.planning_only)}
-          ${buildBoolTile("Generate tailoring", config.generate_tailoring)}
-          ${buildBoolTile("Generate LLM tailoring", config.generate_llm_tailoring)}
-          ${buildBoolTile("Refresh LLM tailoring", config.refresh_llm_tailoring)}
-          ${buildBoolTile("Generate LLM fallback", config.generate_llm_fallback)}
-          ${buildBoolTile("Generate LLM adjudication", config.generate_llm_adjudication)}
-          ${buildBoolTile("Delete seen data", config.delete_seen_data === "yes")}
+          ${buildBoolTile("AI review", config.generate_llm_adjudication)}
+          ${buildBoolTile("Backup ranking", config.generate_llm_fallback)}
         </div>
       </section>
     </div>
@@ -2728,11 +2716,11 @@ function attachPipelineConfigHandlers() {
     outputDirInput.addEventListener("input", syncPipelinePathPreview);
   }
 
-  qs("pipelineSelectAllActionsBtn").addEventListener("click", () => {
+  qs("pipelineSelectAllActionsBtn")?.addEventListener("click", () => {
     setPipelineLlmActions(["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR", "SKIP_FOR_NOW"]);
   });
 
-  qs("pipelineClearAllActionsBtn").addEventListener("click", () => {
+  qs("pipelineClearAllActionsBtn")?.addEventListener("click", () => {
     setPipelineLlmActions([]);
   });
 

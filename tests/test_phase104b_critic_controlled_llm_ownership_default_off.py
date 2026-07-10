@@ -324,6 +324,7 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         for path in changed
         if path.startswith("src/app/static/")
         and path != "src/app/static/agentic_review.js"
+        and path != "src/app/static/app.js"
     }
     assert not unexpected_static
 

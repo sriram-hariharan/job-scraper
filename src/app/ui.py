@@ -310,9 +310,18 @@ def executive_dashboard() -> str:
       </div>
 
       <div class="pipeline-modal-scroll">
-        <div class="pipeline-form-grid">
-          <div class="control-group pipeline-limit-group">
-            <label for="pipelineJobLimitInput">Job limit</label>
+        <div class="pipeline-option-sections compact-option-sections">
+          <div class="pipeline-option-section">
+            <div class="pipeline-option-section-header">
+              <div class="pipeline-option-title">Run size</div>
+            </div>
+
+            <div class="pipeline-form-grid pipeline-form-grid--compact">
+              <div class="control-group pipeline-limit-group">
+                <label for="pipelineJobLimitInput">
+                  Job limit
+                  <span class="packet-info-icon pipeline-help-icon" title="Maximum jobs allowed into this run." aria-label="Maximum jobs allowed into this run.">?</span>
+                </label>
             <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" />
 
             <div class="pipeline-inline-helper">
@@ -325,108 +334,28 @@ def executive_dashboard() -> str:
               </div>
             </div>
 
-            <div class="control-help field-help-wide">How many jobs can enter this run.</div>
-          </div>
-
-          <div class="control-group">
-            <label for="pipelineJobPacketLimitInput">Job packet limit</label>
-            <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
-            <div class="control-help field-help-wide">How many detailed planning packets to build. 0 means all selected jobs.</div>
-          </div>
-
-        </div>
-
-        <div class="pipeline-support-row">
-          <div class="control-group pipeline-toggle-group">
-            <label>Delete seen data</label>
-            <div class="binary-toggle" role="radiogroup" aria-label="Delete seen data">
-              <label class="binary-toggle-option">
-                <input type="radio" name="pipelineDeleteSeenData" value="no" checked />
-                <span>No</span>
-              </label>
-              <label class="binary-toggle-option">
-                <input type="radio" name="pipelineDeleteSeenData" value="yes" />
-                <span>Yes</span>
-              </label>
-            </div>
-            <div class="control-help field-help-wide">No keeps the seen-job cache. Yes reruns jobs that were already seen before.</div>
-          </div>
-        </div>
-
-        <div class="pipeline-option-sections compact-option-sections">
-          <div class="pipeline-option-section">
-            <div class="pipeline-option-section-header">
-              <div class="pipeline-option-title">LLM ACTIONS</div>
-              <div class="pipeline-inline-actions">
-                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--select" id="pipelineSelectAllActionsBtn">Select all</button>
-                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--clear" id="pipelineClearAllActionsBtn">Clear all</button>
               </div>
-            </div>
 
-            <div class="pipeline-toggle-grid">
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">APPLY</div>
-                  <div class="pipeline-toggle-help">Include APPLY jobs in the LLM action pass.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="APPLY action">
+              <div class="control-group">
+                <label for="pipelineJobPacketLimitInput">
+                  Packet limit
+                  <span class="packet-info-icon pipeline-help-icon" title="Maximum detailed planning packets to build. 0 means all selected jobs." aria-label="Maximum detailed planning packets to build. 0 means all selected jobs.">?</span>
+                </label>
+                <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
+              </div>
+
+              <div class="control-group pipeline-toggle-group pipeline-toggle-group--inline">
+                <label>
+                  Rerun seen jobs
+                  <span class="packet-info-icon pipeline-help-icon" title="Include jobs that were already seen before." aria-label="Include jobs that were already seen before.">?</span>
+                </label>
+                <div class="binary-toggle" role="radiogroup" aria-label="Rerun seen jobs">
                   <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionApply" data-pipeline-llm-action-toggle="APPLY" value="no" />
+                    <input type="radio" name="pipelineDeleteSeenData" value="no" checked />
                     <span>No</span>
                   </label>
                   <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionApply" data-pipeline-llm-action-toggle="APPLY" value="yes" checked />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">APPLY_REVIEW_VARIANTS</div>
-                  <div class="pipeline-toggle-help">Include variant-review jobs in the LLM action pass.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="APPLY_REVIEW_VARIANTS action">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionApplyReviewVariants" data-pipeline-llm-action-toggle="APPLY_REVIEW_VARIANTS" value="no" />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionApplyReviewVariants" data-pipeline-llm-action-toggle="APPLY_REVIEW_VARIANTS" value="yes" checked />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">MAYBE_TAILOR</div>
-                  <div class="pipeline-toggle-help">Include maybe-tailor jobs in the LLM action pass.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="MAYBE_TAILOR action">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionMaybeTailor" data-pipeline-llm-action-toggle="MAYBE_TAILOR" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionMaybeTailor" data-pipeline-llm-action-toggle="MAYBE_TAILOR" value="yes" />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">SKIP_FOR_NOW</div>
-                  <div class="pipeline-toggle-help">Include skip-for-now jobs in the LLM action pass.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="SKIP_FOR_NOW action">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionSkipForNow" data-pipeline-llm-action-toggle="SKIP_FOR_NOW" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineLlmActionSkipForNow" data-pipeline-llm-action-toggle="SKIP_FOR_NOW" value="yes" />
+                    <input type="radio" name="pipelineDeleteSeenData" value="yes" />
                     <span>Yes</span>
                   </label>
                 </div>
@@ -436,111 +365,84 @@ def executive_dashboard() -> str:
 
           <div class="pipeline-option-section">
             <div class="pipeline-option-section-header">
-              <div class="pipeline-option-title">RUN OPTIONS</div>
-              <div class="pipeline-inline-actions">
-                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--select" id="pipelineSelectAllRunOptionsBtn">Select all</button>
-                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--clear" id="pipelineClearAllRunOptionsBtn">Clear all</button>
-              </div>
+              <div class="pipeline-option-title">Run mode</div>
             </div>
 
-            <div class="pipeline-toggle-grid">
-              <div class="pipeline-toggle-item">
+            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
+              <div class="pipeline-toggle-item pipeline-toggle-item--mode">
                 <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">Planning only</div>
-                  <div class="pipeline-toggle-help">Skip the scrape and run downstream planning only.</div>
+                  <div class="pipeline-toggle-name">
+                    Scan + Plan
+                    <span class="packet-info-icon pipeline-help-icon" title="Scrape jobs, score them, and build planning outputs." aria-label="Scrape jobs, score them, and build planning outputs.">?</span>
+                  </div>
                 </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Planning only">
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Run mode">
                   <label class="binary-toggle-option">
                     <input type="radio" name="pipelinePlanningOnly" value="no" checked />
-                    <span>No</span>
+                    <span>Scan + Plan</span>
                   </label>
                   <label class="binary-toggle-option">
                     <input type="radio" name="pipelinePlanningOnly" value="yes" />
-                    <span>Yes</span>
+                    <span>Plan only</span>
                   </label>
+                </div>
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name pipeline-toggle-name--secondary">
+                    Plan only
+                    <span class="packet-info-icon pipeline-help-icon" title="Skip scraping and rebuild planning from existing jobs." aria-label="Skip scraping and rebuild planning from existing jobs.">?</span>
+                  </div>
                 </div>
               </div>
+            </div>
+          </div>
 
+          <div class="pipeline-option-section">
+            <div class="pipeline-option-section-header">
+              <div class="pipeline-option-title">AI planning</div>
+            </div>
+
+            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
               <div class="pipeline-toggle-item">
                 <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">Generate tailoring</div>
-                  <div class="pipeline-toggle-help">Build deterministic tailoring artifacts.</div>
+                  <div class="pipeline-toggle-name">
+                    AI review
+                    <span class="packet-info-icon pipeline-help-icon" title="Use AI to review planning decisions and borderline fits. This does not tailor resumes." aria-label="Use AI to review planning decisions and borderline fits. This does not tailor resumes.">?</span>
+                  </div>
                 </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate tailoring">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateTailoring" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateTailoring" value="yes" />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">Generate LLM tailoring</div>
-                  <div class="pipeline-toggle-help">Run live LLM tailoring generation.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM tailoring">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmTailoring" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmTailoring" value="yes" />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">Refresh LLM tailoring</div>
-                  <div class="pipeline-toggle-help">Force regeneration instead of reusing cached tailoring.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Refresh LLM tailoring">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineRefreshLlmTailoring" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineRefreshLlmTailoring" value="yes" />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">Generate LLM fallback</div>
-                  <div class="pipeline-toggle-help">Run fallback ranking when needed.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM fallback">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmFallback" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmFallback" value="yes" />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">Generate LLM adjudication</div>
-                  <div class="pipeline-toggle-help">Run LLM adjudication in application planning when enabled.</div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM adjudication">
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="AI review">
                   <label class="binary-toggle-option">
                     <input type="radio" name="pipelineGenerateLlmAdjudication" value="no" />
                     <span>No</span>
                   </label>
                   <label class="binary-toggle-option">
                     <input type="radio" name="pipelineGenerateLlmAdjudication" value="yes" checked />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pipeline-option-section pipeline-option-section--advanced">
+            <div class="pipeline-option-section-header">
+              <div class="pipeline-option-title">Advanced</div>
+            </div>
+
+            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">
+                    Backup ranking
+                    <span class="packet-info-icon pipeline-help-icon" title="Use fallback ranking when normal ranking signals are incomplete." aria-label="Use fallback ranking when normal ranking signals are incomplete.">?</span>
+                  </div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Backup ranking">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmFallback" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmFallback" value="yes" />
                     <span>Yes</span>
                   </label>
                 </div>

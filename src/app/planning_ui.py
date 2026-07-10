@@ -429,7 +429,60 @@ def planning_dashboard() -> str:
       </div>
     </div>
   </section>
-    <section class="modal-backdrop hidden" id="resumeChoiceModal">
+
+  <section
+    class="modal-backdrop hidden generate-suggestions-loader"
+    id="generateSuggestionsLoader"
+    aria-live="polite"
+  >
+    <div class="modal-card generate-suggestions-loader-card">
+      <div class="generate-suggestions-loader-topline">
+        <div>
+          <div class="subtext" id="generateSuggestionsLoaderBadge">
+            Preparing
+          </div>
+          <h3 id="generateSuggestionsLoaderTitle">Generating Suggestions</h3>
+        </div>
+        <button
+          type="button"
+          class="ghost-btn modal-close-btn"
+          id="generateSuggestionsCancelBtn"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <div class="generate-suggestions-loader-body">
+        <div class="loading-spinner" id="generateSuggestionsSpinner"></div>
+        <div class="subtext" id="generateSuggestionsLoaderText">
+          Preparing job and resume context.
+        </div>
+        <div
+          class="resume-choice-loading-steps generate-suggestions-step-list"
+          id="generateSuggestionsStepList"
+        ></div>
+        <div class="generate-suggestions-loader-error hidden" id="generateSuggestionsError"></div>
+      </div>
+
+      <div class="modal-actions generate-suggestions-loader-actions">
+        <button
+          type="button"
+          class="ghost-btn hidden"
+          id="generateSuggestionsOpenWorkspaceBtn"
+        >
+          Open Workspace
+        </button>
+        <button
+          type="button"
+          class="ghost-btn hidden"
+          id="generateSuggestionsRetryBtn"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  </section>
+  <section class="modal-backdrop hidden" id="resumeChoiceModal">
     <div class="modal-card resume-choice-modal-card">
       <div class="modal-header">
         <div>

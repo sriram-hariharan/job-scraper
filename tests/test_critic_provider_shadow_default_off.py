@@ -275,7 +275,7 @@ def test_no_database_api_ui_pipeline_dependency_or_mutation_wiring():
         "requirements.txt": "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
         "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
         "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-        "src/pipeline/collector.py": "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a",
+        "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
     }

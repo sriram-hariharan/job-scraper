@@ -954,6 +954,12 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == phase110b_generate_suggestions_loader_files:
         return
+    phase113_frontend_scan_polish_files = {
+        ROOT / "src/app/static/scan_workspace.js",
+        ROOT / "src/app/static/scan_workspace_review.css",
+    }
+    if set(changed_runtime_files) == phase113_frontend_scan_polish_files:
+        return
 
     assert changed_runtime_files in (
         [],

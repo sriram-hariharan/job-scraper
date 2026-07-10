@@ -10,6 +10,11 @@ from pathlib import Path
 import subprocess
 
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs/phase18_human_approval_gate_contract.md"
 
@@ -222,15 +227,7 @@ def test_recommended_next_phase_is_read_only_preview_without_execution():
 
 
 def test_phase18b_changes_only_approved_docs_and_tests():
-    tracked = subprocess.check_output(
-        ["git", "diff", "--name-only"], cwd=ROOT, text=True
-    ).splitlines()
-    untracked = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=ROOT,
-        text=True,
-    ).splitlines()
-    changed = set(tracked + untracked) - {
+    changed = get_changed_files(ROOT) - {
             "src/app/auth_ui.py",
             "src/app/static/shell.js",
             "src/app/ui_shell.py",
@@ -965,7 +962,11 @@ def test_phase18b_changes_only_approved_docs_and_tests():
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
-    assert changed <= allowed | legacy_static_hash_guards
+    assert_changed_files_allowed(
+        changed,
+        allowed | legacy_static_hash_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )
 
 
 def test_phase18b_key_runtime_files_are_unchanged():

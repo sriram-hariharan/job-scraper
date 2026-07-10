@@ -736,7 +736,10 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
     assert_changed_files_allowed(
         changed,
         allowed | legacy_guards,
-        legacy_guard_profiles=("phase85b_registry",),
+        legacy_guard_profiles=(
+            "phase85b_registry",
+            "config_vocabulary_scoring_change",
+        ),
     )
 
 

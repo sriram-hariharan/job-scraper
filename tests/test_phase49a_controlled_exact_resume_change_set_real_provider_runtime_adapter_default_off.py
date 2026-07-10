@@ -5,6 +5,12 @@ from __future__ import annotations
 from hashlib import sha256
 import importlib
 from pathlib import Path
+
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
 import sys
 import types
 
@@ -790,6 +796,11 @@ def test_changed_files_limited_to_phase49a_surface_and_legacy_guards():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
+    phase116_allowed_changed_files = {
+        "src/config/consts.py",
+        "tests/test_phase116a_applied_ai_scoring_fix.py",
+    }
+    allowed |= phase116_allowed_changed_files
     for path in changed:
         assert path in allowed or not any(
             path == root or path.startswith(root) for root in forbidden_roots

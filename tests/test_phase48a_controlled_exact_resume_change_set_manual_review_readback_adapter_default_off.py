@@ -7,6 +7,12 @@ from hashlib import sha256
 import importlib
 from pathlib import Path
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = (
@@ -763,6 +769,12 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
         }
+    profile_allowed_changed_files = {
+        "src/config/consts.py",
+        "tests/test_phase116a_applied_ai_scoring_fix.py",
+    }
+    allowed |= profile_allowed_changed_files
+
     for changed_path in changed:
         if changed_path == "requirements.txt":
             continue

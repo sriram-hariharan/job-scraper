@@ -6,6 +6,12 @@ from hashlib import sha256
 from pathlib import Path
 import subprocess
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 from src.agents.controlled_agent_router_readonly import (
     build_controlled_agent_router_readonly_decision,
 )
@@ -720,6 +726,11 @@ def test_changed_files_are_limited_to_phase33a_surface_and_legacy_guards():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
+    phase116_allowed_changed_files = {
+        "src/config/consts.py",
+        "tests/test_phase116a_applied_ai_scoring_fix.py",
+    }
+    allowed_changed |= phase116_allowed_changed_files
     for line in result.stdout.splitlines():
         path = line[3:].strip().strip('"')
         if path.startswith("tests/test_") and path.endswith(".py"):

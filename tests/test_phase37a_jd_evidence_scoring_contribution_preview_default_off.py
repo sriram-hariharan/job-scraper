@@ -9,6 +9,12 @@ import json
 from pathlib import Path
 import subprocess
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 from src.agents import jd_evidence_scoring_contribution_preview_default_off as preview
 from src.agents.jd_evidence_scoring_contribution_preview_default_off import (
     build_jd_evidence_scoring_contribution_preview_default_off,
@@ -560,14 +566,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
 
 
 def test_changed_files_are_limited_to_phase37a_surface_and_legacy_guards():
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "HEAD"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    changed = get_changed_files(ROOT)
     allowed = {
             "src/app/auth_ui.py",
             "src/app/static/shell.js",
@@ -744,4 +743,8 @@ def test_changed_files_are_limited_to_phase37a_surface_and_legacy_guards():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
-    assert changed <= allowed
+    assert_changed_files_allowed(
+        changed,
+        allowed,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

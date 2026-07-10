@@ -56,6 +56,7 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
         {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
+            "tests/test_phase116a_applied_ai_scoring_fix.py",
         },
         set(),
         legacy_guard_profiles=("config_vocabulary_scoring_change",),

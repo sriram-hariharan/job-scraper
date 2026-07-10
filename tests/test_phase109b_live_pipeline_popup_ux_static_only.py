@@ -165,10 +165,14 @@ def test_phase109b_adds_only_ui_static_and_focused_test_files():
 
     allowed = {
         "src/app/ui.py",
+        "src/app/planning_ui.py",
         "src/app/static/app.js",
+        "src/app/static/planning.js",
         "src/app/static/app_redesign.css",
         "src/app/static/styles.css",
         "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
+        "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+        "tests/test_phase71a_tailoring_workspace_artifact_path_preload_repair_default_off.py",
         "tests/support/phase_guard_registry.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",

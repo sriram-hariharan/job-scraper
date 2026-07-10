@@ -715,6 +715,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
+        "tests/test_phase110b_generate_suggestions_loader_static_only.py",
         "docs/phase22_manual_review_ux_hardening.md",
         "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
     }
@@ -928,6 +929,12 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/app/static/app.js",
     }
     if set(changed_runtime_files) == phase109b_live_pipeline_popup_ux_files:
+        return
+    phase110b_generate_suggestions_loader_files = {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/planning.js",
+    }
+    if set(changed_runtime_files) == phase110b_generate_suggestions_loader_files:
         return
         phase79d_default_off_advisory_chain_harness_files = {
             ROOT / "src/agents/orchestrator_adapter_harness.py",

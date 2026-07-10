@@ -180,6 +180,64 @@ def test_scan_phrase_structured_output_contract_is_strict_schema():
     assert contract["schema"]["properties"]["options"]["maxItems"] == 3
 
 
+def test_scan_workspace_phrase_request_uses_planning_output_dir_endpoint():
+    source = Path("src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    phrase_handler = source.split("async function generateScanWorkspacePhrasesForActiveMarker()", 1)[1].split(
+        "function applyScanWorkspacePhraseOption", 1
+    )[0]
+
+    assert "const context = getScanWorkspaceContext();" in phrase_handler
+    assert '"/planning/generate-scan-phrases"' in phrase_handler
+    assert "context?.planningOutputDir" in phrase_handler
+    assert "postJsonWithTimeout(phraseUrl, requestBody, 20000)" in phrase_handler
+    assert "fetch(phraseUrl" in phrase_handler
+
+
+def test_scan_workspace_phrase_request_rewrites_optional_tailoring_artifact_key():
+    source = Path("src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    helper_block = source.split("function normalizeScanWorkspacePhraseArtifactKey", 1)[1].split(
+        "function scanWorkspacePhraseErrorMessage",
+        1,
+    )[0]
+    request_block = source.split("function buildScanWorkspacePhraseRequest", 1)[1].split(
+        "function renderScanWorkspacePhraseOptionsHtml",
+        1,
+    )[0]
+
+    assert 'raw.endsWith("__tailoring.json")' in helper_block
+    assert 'raw.slice(0, -"__tailoring.json".length)' in helper_block
+    assert 'raw.endsWith("_tailoring.json")' in helper_block
+    assert 'raw.slice(0, -"_tailoring.json".length)' in helper_block
+    assert "normalizeScanWorkspacePhraseArtifactKey(baseRequest.tailoring_json_path)" in request_block
+
+
+def test_scan_workspace_phrase_artifact_not_found_error_is_friendly():
+    source = Path("src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    error_block = source.split("function scanWorkspacePhraseErrorMessage", 1)[1].split(
+        "function buildScanWorkspacePhraseRequest",
+        1,
+    )[0]
+
+    assert "/artifact not found/i.test(message)" in error_block
+    assert "Regenerate suggestions first to create the scan artifact." in error_block
+    assert "tmp/pipeline_runs" not in error_block
+
+
+def test_scan_workspace_heading_uses_shared_page_heading_scale():
+    source = Path("src/app/static/scan_workspace_review.css").read_text(encoding="utf-8")
+    header_block = source.split("scan_review_v2_39", 1)[1].split(
+        ".scan-workspace-page .scan-workspace-header-actions .ghost-btn",
+        1,
+    )[0]
+
+    assert "font-size: clamp(26px, 2vw, 34px) !important;" in header_block
+    assert (
+        "body .scan-workspace-page.page > .scan-workspace-header-shell"
+        ".scan-workspace-header-shell--minimal .scan-workspace-header-copy h1"
+    ) in header_block
+    assert "font-size: clamp(28px, 4vw, 46px) !important;" not in header_block
+
+
 def test_saved_scan_contract_normalizes_pasted_text_record():
     row = saved_scan_db_row(
         {

@@ -5128,12 +5128,34 @@ function getScanWorkspaceGuidanceSignalTerms(marker) {
   return terms.slice(0, 3);
 }
 
+function normalizeScanWorkspacePhraseArtifactKey(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (raw.endsWith("__tailoring.json")) {
+    return `${raw.slice(0, -"__tailoring.json".length)}.json`;
+  }
+  if (raw.endsWith("_tailoring.json")) {
+    return `${raw.slice(0, -"_tailoring.json".length)}.json`;
+  }
+  return raw;
+}
+
+function scanWorkspacePhraseErrorMessage(error) {
+  const message = error instanceof Error
+    ? String(error.message || "").trim()
+    : String(error || "").trim();
+  if (/artifact not found/i.test(message)) {
+    return "Regenerate suggestions first to create the scan artifact.";
+  }
+  return message || "Failed to generate LLM phrase options.";
+}
+
 function buildScanWorkspacePhraseRequest(marker) {
   const baseRequest = buildScanWorkspaceDocumentPreviewRequest([]);
   if (!baseRequest || !marker) return null;
 
   return {
-    tailoring_json_path: baseRequest.tailoring_json_path,
+    tailoring_json_path: normalizeScanWorkspacePhraseArtifactKey(baseRequest.tailoring_json_path),
     selected_resume: baseRequest.selected_resume,
     bullet_key: getScanWorkspaceMarkerBulletKey(marker),
     current_text: getScanWorkspaceManualTextForMarker(marker) || String(marker?.originalText || "").trim(),
@@ -5823,10 +5845,15 @@ async function generateScanWorkspacePhrasesForActiveMarker() {
   renderScanWorkspaceSuggestionPopover();
 
   try {
+    const context = getScanWorkspaceContext();
+    const phraseUrl = buildScanWorkspacePlanningEndpoint(
+      "/planning/generate-scan-phrases",
+      context?.planningOutputDir
+    );
     const response =
       typeof postJsonWithTimeout === "function"
-        ? await postJsonWithTimeout("/planning/generate-scan-phrases", requestBody, 20000)
-        : await fetch("/planning/generate-scan-phrases", {
+        ? await postJsonWithTimeout(phraseUrl, requestBody, 20000)
+        : await fetch(phraseUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
@@ -5855,8 +5882,7 @@ async function generateScanWorkspacePhrasesForActiveMarker() {
   } catch (err) {
     scanWorkspacePhraseState.options = [];
     scanWorkspacePhraseState.lastNote = "";
-    scanWorkspacePhraseState.lastError =
-      err instanceof Error ? err.message : "Failed to generate LLM phrase options.";
+    scanWorkspacePhraseState.lastError = scanWorkspacePhraseErrorMessage(err);
   } finally {
     scanWorkspacePhraseState.isLoading = false;
     renderScanWorkspaceSuggestionPopover();
@@ -6625,4 +6651,3 @@ window.addEventListener("DOMContentLoaded", () => {
  * the LinkedIn edit field and resume preview contact row when the normal
  * hydration path left LinkedIn empty.
  */
-

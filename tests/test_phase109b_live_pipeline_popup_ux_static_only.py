@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-import subprocess
+
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -148,20 +152,7 @@ def test_confirm_summary_uses_user_facing_labels_not_internal_buckets():
 
 
 def test_phase109b_adds_only_ui_static_and_focused_test_files():
-    changed = set(
-        subprocess.check_output(
-            ["git", "diff", "--name-only"],
-            cwd=ROOT,
-            text=True,
-        ).splitlines()
-    )
-    changed.update(
-        subprocess.check_output(
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            cwd=ROOT,
-            text=True,
-        ).splitlines()
-    )
+    changed = get_changed_files(ROOT)
 
     allowed = {
         "src/app/ui.py",
@@ -182,7 +173,11 @@ def test_phase109b_adds_only_ui_static_and_focused_test_files():
         "tests/test_phase104b_critic_controlled_llm_ownership_default_off.py",
         "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
     }
-    assert changed <= allowed
+    assert_changed_files_allowed(
+        changed,
+        allowed,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )
     assert "src/app/api.py" not in changed
     assert "src/app/services.py" not in changed
     assert "src/pipeline/collector.py" not in changed

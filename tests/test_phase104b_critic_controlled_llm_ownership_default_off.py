@@ -8,7 +8,10 @@ from src.agents.critic_agent import (
     CRITIC_CONTROLLED_LLM_GUARDRAIL_ARTIFACT_TYPE,
     build_critic_controlled_llm_guardrail_artifact,
 )
-from tests.support.phase_guard_registry import assert_no_forbidden_runtime_calls_ast
+from tests.support.phase_guard_registry import (
+    assert_no_forbidden_runtime_calls_ast,
+    get_changed_files,
+)
 
 
 # phase79b legacy guard marker: changes_only collector_hash_old 73cd47f98ece2b4cf1006ac17da559d1f621fb6bc4e92a75f9e92870f60b7405 d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0 c0c7a0a229a0cc9a1042c84c37a1728a33707e1035f6d604b6fe6aa74cc4b5e7
@@ -305,20 +308,7 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         text = (ROOT / relative_path).read_text(encoding="utf-8")
         assert "build_critic_controlled_llm_guardrail_artifact" not in text
 
-    changed = set(
-        subprocess.check_output(
-            ["git", "diff", "--name-only"],
-            cwd=ROOT,
-            text=True,
-        ).splitlines()
-    )
-    changed.update(
-        subprocess.check_output(
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            cwd=ROOT,
-            text=True,
-        ).splitlines()
-    )
+    changed = get_changed_files(ROOT)
     unexpected_static = {
         path
         for path in changed

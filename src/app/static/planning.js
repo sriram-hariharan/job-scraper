@@ -30,6 +30,8 @@ let generateSuggestionsState = {
   isRunning: false,
   stepIndex: 0,
   stepTimer: null,
+  requestSeq: 0,
+  cancelledRequestSeq: null,
 };
 
 const PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY = "planningTableLastResponse_v4";
@@ -12048,9 +12050,7 @@ async function initScanWorkspacePage() {
 function buildTailoringWorkspaceUrl(row) {
   const params = new URLSearchParams();
 
-  const selectedResume =
-    normalizeResumePreviewName(row.operator_selected_resume) ||
-    normalizeResumePreviewName(row.winner_resume);
+  const selectedResume = normalizeResumePreviewName(resolvePlanningRowSelectedResume(row));
 
   params.set("company", row.job_company || "");
   params.set("title", row.job_title || "");
@@ -12072,17 +12072,46 @@ function hasTailoringWorkspaceArtifacts(row) {
     row?.tailoring_json ||
     row?.tailoring_json_key ||
     row?.tailoring_md ||
-    row?.tailoring_llm_json ||
-    row?.packet_json ||
-    row?.packet_json_key
+    row?.tailoring_llm_json
   );
 }
 
-function resolveGenerateSuggestionsSelectedResume(row) {
+function hasPlanningPacketArtifact(row) {
+  return Boolean(row?.packet_json || row?.packet_json_key);
+}
+
+function resolvePlanningRowSelectedResume(row) {
   return (
     normalizeResumeName(row?.operator_selected_resume) ||
+    normalizeResumeName(row?.selected_resume) ||
+    normalizeResumeName(row?.packet_resume) ||
+    normalizeResumeName(row?.resolved_resume) ||
+    normalizeResumeName(row?.selector_winner_resume) ||
     normalizeResumeName(row?.winner_resume)
   );
+}
+
+function resolveGenerateSuggestionsAllowedResume(row) {
+  const winnerResume = normalizeResumeName(row?.winner_resume);
+  const runnerUpResume =
+    normalizeResumeName(row?.runner_up_resume) ||
+    normalizeResumeName(row?.runnerup_resume);
+  const allowedResumes = [winnerResume, runnerUpResume].filter(Boolean);
+
+  for (const candidate of [
+    normalizeResumeName(row?.operator_selected_resume),
+    normalizeResumeName(row?.selected_resume),
+  ]) {
+    if (candidate && allowedResumes.includes(candidate)) {
+      return candidate;
+    }
+  }
+
+  return winnerResume || runnerUpResume || "";
+}
+
+function resolveGenerateSuggestionsSelectedResume(row) {
+  return resolveGenerateSuggestionsAllowedResume(row);
 }
 
 function canGenerateSuggestionsForRow(row) {
@@ -12098,6 +12127,29 @@ function buildGenerateSuggestionsPayload(row) {
     generate_llm_tailoring: true,
     refresh_llm_tailoring: false,
   };
+}
+
+function resolvePlanningRowOutputDir(row) {
+  return String(
+    row?.planning_output_dir ||
+    row?.output_dir ||
+    row?.packet_output_dir ||
+    row?.artifact_output_dir ||
+    ""
+  ).trim();
+}
+
+function buildGenerateSuggestionsEndpoint(row) {
+  const outputDir = resolvePlanningRowOutputDir(row);
+  if (!outputDir) {
+    return "/planning/regenerate-selected-resume";
+  }
+
+  const normalizedOutputDir = outputDir.replace(/\/+$/, "");
+  const params = new URLSearchParams();
+  params.set("output_dir", outputDir);
+  params.set("job_corpus", `${normalizedOutputDir}/current_run_job_corpus.jsonl`);
+  return `/planning/regenerate-selected-resume?${params.toString()}`;
 }
 
 function getTailoringWorkspaceRouteStatusLabel(row) {
@@ -12213,7 +12265,13 @@ function buildTailoringButtonHtml(row) {
       data-job-company="${escapeHtml(row.job_company || "")}"
       data-job-title="${escapeHtml(row.job_title || "")}"
       data-winner-resume="${escapeHtml(row.winner_resume || "")}"
+      data-runner-up-resume="${escapeHtml(row.runner_up_resume || "")}"
+      data-runnerup-resume="${escapeHtml(row.runnerup_resume || "")}"
       data-operator-selected-resume="${escapeHtml(row.operator_selected_resume || "")}"
+      data-selected-resume="${escapeHtml(row.selected_resume || "")}"
+      data-packet-resume="${escapeHtml(row.packet_resume || "")}"
+      data-resolved-resume="${escapeHtml(row.resolved_resume || "")}"
+      data-selector-winner-resume="${escapeHtml(row.selector_winner_resume || "")}"
       data-llm-tailoring-status="${escapeHtml(row.llm_tailoring_status || "")}"
       data-tailoring-json="${escapeHtml(row.tailoring_json || "")}"
       data-tailoring-json-key="${escapeHtml(row.tailoring_json_key || "")}"
@@ -12222,6 +12280,9 @@ function buildTailoringButtonHtml(row) {
       data-packet-json="${escapeHtml(row.packet_json || "")}"
       data-packet-json-key="${escapeHtml(row.packet_json_key || "")}"
       data-planning-output-dir="${escapeHtml(row.planning_output_dir || "")}"
+      data-output-dir="${escapeHtml(row.output_dir || "")}"
+      data-packet-output-dir="${escapeHtml(row.packet_output_dir || "")}"
+      data-artifact-output-dir="${escapeHtml(row.artifact_output_dir || "")}"
       data-tailoring-workspace-state="${escapeHtml(row.tailoring_workspace_state || "")}"
       data-tailoring-actionable-replacement-count="${escapeHtml(row.tailoring_actionable_replacement_count || "")}"
       data-tailoring-review-replacement-count="${escapeHtml(row.tailoring_review_replacement_count || "")}"
@@ -12242,7 +12303,13 @@ async function handleTailoringClick(button) {
     job_company: button.dataset.jobCompany || "",
     job_title: button.dataset.jobTitle || "",
     winner_resume: button.dataset.winnerResume || "",
+    runner_up_resume: button.dataset.runnerUpResume || "",
+    runnerup_resume: button.dataset.runnerupResume || "",
     operator_selected_resume: button.dataset.operatorSelectedResume || "",
+    selected_resume: button.dataset.selectedResume || "",
+    packet_resume: button.dataset.packetResume || "",
+    resolved_resume: button.dataset.resolvedResume || "",
+    selector_winner_resume: button.dataset.selectorWinnerResume || "",
     llm_tailoring_status: button.dataset.llmTailoringStatus || "",
     tailoring_json: button.dataset.tailoringJson || "",
     tailoring_json_key: button.dataset.tailoringJsonKey || "",
@@ -12251,6 +12318,9 @@ async function handleTailoringClick(button) {
     packet_json: button.dataset.packetJson || "",
     packet_json_key: button.dataset.packetJsonKey || "",
     planning_output_dir: button.dataset.planningOutputDir || "",
+    output_dir: button.dataset.outputDir || "",
+    packet_output_dir: button.dataset.packetOutputDir || "",
+    artifact_output_dir: button.dataset.artifactOutputDir || "",
     tailoring_workspace_state: button.dataset.tailoringWorkspaceState || "",
     tailoring_actionable_replacement_count: button.dataset.tailoringActionableReplacementCount || "",
     tailoring_review_replacement_count: button.dataset.tailoringReviewReplacementCount || "",
@@ -12270,17 +12340,38 @@ function clearGenerateSuggestionsStepTimer() {
   }
 }
 
+function buildGenerateSuggestionsStepRunnerHtml(activeIndex = 0, completed = false) {
+  const cappedIndex = Math.max(0, Math.min(activeIndex, GENERATE_SUGGESTIONS_STEPS.length - 1));
+  const activeLabel = GENERATE_SUGGESTIONS_STEPS[cappedIndex] || GENERATE_SUGGESTIONS_STEPS[0];
+  const previousLabel = cappedIndex > 0 ? GENERATE_SUGGESTIONS_STEPS[cappedIndex - 1] : "";
+  const progressLabel = `Step ${cappedIndex + 1} of ${GENERATE_SUGGESTIONS_STEPS.length}`;
+
+  return `
+    <div class="generate-suggestions-step-runner" aria-label="${escapeHtml(progressLabel)}">
+      ${previousLabel ? `
+        <div class="generate-suggestions-step-previous">
+          <span class="generate-suggestions-step-check">✓</span>
+          <span>${escapeHtml(previousLabel)}</span>
+        </div>
+      ` : ""}
+      <div class="generate-suggestions-step-current ${completed ? "is-complete" : ""}">
+        <span class="generate-suggestions-step-pulse" aria-hidden="true"></span>
+        <span class="generate-suggestions-step-label">${escapeHtml(activeLabel)}</span>
+      </div>
+      <div class="generate-suggestions-step-progress">${escapeHtml(progressLabel)}</div>
+    </div>
+  `;
+}
+
 function renderGenerateSuggestionsSteps(activeIndex = 0, completed = false) {
   const stepsEl = qs("generateSuggestionsStepList");
-  if (!stepsEl) return;
-
   const cappedIndex = Math.max(0, Math.min(activeIndex, GENERATE_SUGGESTIONS_STEPS.length - 1));
-  const steps = GENERATE_SUGGESTIONS_STEPS.map((label, index) => ({
-    label,
-    state: completed || index < cappedIndex ? "done" : (index === cappedIndex ? "active" : "pending"),
-  }));
+  const currentStep = GENERATE_SUGGESTIONS_STEPS[cappedIndex] || GENERATE_SUGGESTIONS_STEPS[0];
+  const textEl = qs("generateSuggestionsLoaderText");
 
-  stepsEl.innerHTML = buildResumeChoiceLoadingStepsHtml(steps);
+  generateSuggestionsState.stepIndex = cappedIndex;
+  if (textEl) textEl.textContent = currentStep;
+  if (stepsEl) stepsEl.innerHTML = buildGenerateSuggestionsStepRunnerHtml(cappedIndex, completed);
 }
 
 function startGenerateSuggestionsStepTimer() {
@@ -12323,14 +12414,14 @@ function setGenerateSuggestionsLoaderState(state, {
   if (openBtn) openBtn.classList.add("hidden");
   if (cancelBtn) {
     cancelBtn.textContent = state === "success" ? "Close" : "Cancel";
-    cancelBtn.disabled = state === "running";
+    cancelBtn.disabled = false;
   }
 
   if (state === "running") {
     generateSuggestionsState.isRunning = true;
     if (titleEl) titleEl.textContent = "Generating Suggestions";
     if (badgeEl) badgeEl.textContent = "Running";
-    if (textEl) textEl.textContent = message || "Preparing job and resume context.";
+    renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false);
     if (spinnerEl) spinnerEl.classList.remove("hidden");
     return;
   }
@@ -12342,7 +12433,7 @@ function setGenerateSuggestionsLoaderState(state, {
     renderGenerateSuggestionsSteps(GENERATE_SUGGESTIONS_STEPS.length - 1, true);
     if (titleEl) titleEl.textContent = "Opening workspace";
     if (badgeEl) badgeEl.textContent = "Ready";
-    if (textEl) textEl.textContent = message || "Suggestions are ready. Opening workspace.";
+    if (textEl) textEl.textContent = "Opening workspace";
     if (spinnerEl) spinnerEl.classList.add("hidden");
     if (openBtn && workspaceUrl) openBtn.classList.remove("hidden");
     return;
@@ -12362,7 +12453,10 @@ function setGenerateSuggestionsLoaderState(state, {
 }
 
 function closeGenerateSuggestionsLoader() {
-  if (generateSuggestionsState.isRunning) return;
+  if (generateSuggestionsState.isRunning) {
+    generateSuggestionsState.cancelledRequestSeq = generateSuggestionsState.requestSeq;
+  }
+  generateSuggestionsState.isRunning = false;
   clearGenerateSuggestionsStepTimer();
   getGenerateSuggestionsLoader()?.classList.add("hidden");
 }
@@ -12375,7 +12469,13 @@ function getPlanningRowFromTailoringDataset(button) {
     job_company: button.dataset.jobCompany || "",
     job_title: button.dataset.jobTitle || "",
     winner_resume: button.dataset.winnerResume || "",
+    runner_up_resume: button.dataset.runnerUpResume || "",
+    runnerup_resume: button.dataset.runnerupResume || "",
     operator_selected_resume: button.dataset.operatorSelectedResume || "",
+    selected_resume: button.dataset.selectedResume || "",
+    packet_resume: button.dataset.packetResume || "",
+    resolved_resume: button.dataset.resolvedResume || "",
+    selector_winner_resume: button.dataset.selectorWinnerResume || "",
     llm_tailoring_status: button.dataset.llmTailoringStatus || "",
     tailoring_json: button.dataset.tailoringJson || "",
     tailoring_json_key: button.dataset.tailoringJsonKey || "",
@@ -12384,6 +12484,9 @@ function getPlanningRowFromTailoringDataset(button) {
     packet_json: button.dataset.packetJson || "",
     packet_json_key: button.dataset.packetJsonKey || "",
     planning_output_dir: button.dataset.planningOutputDir || "",
+    output_dir: button.dataset.outputDir || "",
+    packet_output_dir: button.dataset.packetOutputDir || "",
+    artifact_output_dir: button.dataset.artifactOutputDir || "",
     tailoring_workspace_state: button.dataset.tailoringWorkspaceState || "",
     tailoring_actionable_replacement_count: button.dataset.tailoringActionableReplacementCount || "",
     tailoring_review_replacement_count: button.dataset.tailoringReviewReplacementCount || "",
@@ -12403,11 +12506,22 @@ function buildGenerateSuggestionsWorkspaceRow(row, payload = {}) {
     job_doc_id: payload.job_doc_id || row.job_doc_id || "",
     job_company: payload.job_company || row.job_company || "",
     job_title: payload.job_title || row.job_title || "",
+    winner_resume: row.winner_resume || "",
+    runner_up_resume: row.runner_up_resume || "",
+    runnerup_resume: row.runnerup_resume || "",
     operator_selected_resume:
       payload.selected_resume ||
       row.operator_selected_resume ||
+      row.selected_resume ||
+      row.packet_resume ||
+      row.resolved_resume ||
+      row.selector_winner_resume ||
       row.winner_resume ||
       "",
+    selected_resume: payload.selected_resume || row.selected_resume || "",
+    packet_resume: row.packet_resume || "",
+    resolved_resume: row.resolved_resume || "",
+    selector_winner_resume: row.selector_winner_resume || "",
     tailoring_json: payload.tailoring_json || row.tailoring_json || "",
     tailoring_json_key: payload.tailoring_json_key || row.tailoring_json_key || "",
     tailoring_md: payload.tailoring_md || row.tailoring_md || "",
@@ -12416,6 +12530,9 @@ function buildGenerateSuggestionsWorkspaceRow(row, payload = {}) {
     packet_json_key: payload.packet_json_key || row.packet_json_key || "",
     planning_output_dir:
       row.planning_output_dir ||
+      row.output_dir ||
+      row.packet_output_dir ||
+      row.artifact_output_dir ||
       payload.planning_output_dir ||
       phase71bDeriveRunScopedPlanningOutputDir(artifactPath),
     llm_tailoring_status: payload.llm_tailoring_status || row.llm_tailoring_status || "generated",
@@ -12430,9 +12547,12 @@ function extractGenerateSuggestionsError(err) {
 async function handleGenerateSuggestionsClick(button) {
   const row = getPlanningRowFromTailoringDataset(button);
   const payload = buildGenerateSuggestionsPayload(row);
+  const requestSeq = generateSuggestionsState.requestSeq + 1;
 
   generateSuggestionsState.row = row;
   generateSuggestionsState.payload = payload;
+  generateSuggestionsState.requestSeq = requestSeq;
+  generateSuggestionsState.cancelledRequestSeq = null;
   generateSuggestionsState.lastWorkspaceUrl = hasTailoringWorkspaceArtifacts(row)
     ? buildTailoringWorkspaceUrl(row)
     : "";
@@ -12451,7 +12571,11 @@ async function handleGenerateSuggestionsClick(button) {
   startGenerateSuggestionsStepTimer();
 
   try {
-    const response = await postJson("/planning/regenerate-selected-resume", payload);
+    const response = await postJson(buildGenerateSuggestionsEndpoint(row), payload);
+    if (generateSuggestionsState.cancelledRequestSeq === requestSeq) {
+      return;
+    }
+
     const workspaceRow = buildGenerateSuggestionsWorkspaceRow(row, response || {});
     const workspaceUrl = buildTailoringWorkspaceUrl(workspaceRow);
 
@@ -12462,9 +12586,16 @@ async function handleGenerateSuggestionsClick(button) {
     });
 
     window.setTimeout(() => {
+      if (generateSuggestionsState.cancelledRequestSeq === requestSeq) {
+        return;
+      }
       window.location.href = workspaceUrl;
     }, 450);
   } catch (err) {
+    if (generateSuggestionsState.cancelledRequestSeq === requestSeq) {
+      return;
+    }
+
     setGenerateSuggestionsLoaderState("error", {
       error: extractGenerateSuggestionsError(err),
       workspaceUrl: generateSuggestionsState.lastWorkspaceUrl,
@@ -12483,7 +12614,13 @@ async function retryGenerateSuggestions() {
       jobCompany: generateSuggestionsState.row.job_company || "",
       jobTitle: generateSuggestionsState.row.job_title || "",
       winnerResume: generateSuggestionsState.row.winner_resume || "",
+      runnerUpResume: generateSuggestionsState.row.runner_up_resume || "",
+      runnerupResume: generateSuggestionsState.row.runnerup_resume || "",
       operatorSelectedResume: generateSuggestionsState.row.operator_selected_resume || "",
+      selectedResume: generateSuggestionsState.row.selected_resume || "",
+      packetResume: generateSuggestionsState.row.packet_resume || "",
+      resolvedResume: generateSuggestionsState.row.resolved_resume || "",
+      selectorWinnerResume: generateSuggestionsState.row.selector_winner_resume || "",
       llmTailoringStatus: generateSuggestionsState.row.llm_tailoring_status || "",
       tailoringJson: generateSuggestionsState.row.tailoring_json || "",
       tailoringJsonKey: generateSuggestionsState.row.tailoring_json_key || "",
@@ -12492,6 +12629,9 @@ async function retryGenerateSuggestions() {
       packetJson: generateSuggestionsState.row.packet_json || "",
       packetJsonKey: generateSuggestionsState.row.packet_json_key || "",
       planningOutputDir: generateSuggestionsState.row.planning_output_dir || "",
+      outputDir: generateSuggestionsState.row.output_dir || "",
+      packetOutputDir: generateSuggestionsState.row.packet_output_dir || "",
+      artifactOutputDir: generateSuggestionsState.row.artifact_output_dir || "",
       tailoringWorkspaceState: generateSuggestionsState.row.tailoring_workspace_state || "",
       tailoringActionableReplacementCount: generateSuggestionsState.row.tailoring_actionable_replacement_count || "",
       tailoringReviewReplacementCount: generateSuggestionsState.row.tailoring_review_replacement_count || "",
@@ -12611,7 +12751,7 @@ function buildPlanningPacketWorkspaceStatusHtml(row) {
 }
 
 function buildPlanningSelectedResumeHtml(row) {
-  return buildCompactTextHtml(row.operator_selected_resume || row.winner_resume, {
+  return buildCompactTextHtml(resolvePlanningRowSelectedResume(row), {
     emptyLabel: "-",
     truncate: false,
     wrap: true,

@@ -49,6 +49,9 @@ EVIDENCE_CHAIN_COLLECTOR_DIAGNOSTICS_VERSION = (
 EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_EVIDENCE_CHAIN_EXECUTION_ENABLED"
 )
+EVIDENCE_CHAIN_LANGGRAPH_EXECUTION_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_LANGGRAPH_EVIDENCE_CHAIN_EXECUTION_ENABLED"
+)
 EVIDENCE_CHAIN_COLLECTOR_EXECUTION_SAMPLE_LIMIT_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_EVIDENCE_CHAIN_EXECUTION_SAMPLE_LIMIT"
 )
@@ -1414,6 +1417,7 @@ def _maybe_run_controlled_evidence_chain_execution_after_application_priority(
     enabled: bool | None = None,
     env: Dict[str, str] | None = None,
     execution_helper: Any = None,
+    langgraph_execution_helper: Any = None,
     sample_limit: Any = None,
     include_trace_payload: bool = True,
 ) -> Dict[str, Any] | None:
@@ -1425,6 +1429,9 @@ def _maybe_run_controlled_evidence_chain_execution_after_application_priority(
     )
     if not execution_enabled:
         return None
+    langgraph_execution_enabled = _truthy_env_value(
+        env_map.get(EVIDENCE_CHAIN_LANGGRAPH_EXECUTION_FLAG)
+    )
 
     requested_sample_limit = (
         sample_limit
@@ -1448,6 +1455,11 @@ def _maybe_run_controlled_evidence_chain_execution_after_application_priority(
         "artifact_version": EVIDENCE_CHAIN_COLLECTOR_EXECUTION_VERSION,
         "collector_stage": "post_score_jobs",
         "gate_name": EVIDENCE_CHAIN_COLLECTOR_EXECUTION_FLAG,
+        "langgraph_gate_name": EVIDENCE_CHAIN_LANGGRAPH_EXECUTION_FLAG,
+        "langgraph_execution_enabled": bool(langgraph_execution_enabled),
+        "execution_engine": (
+            "langgraph" if langgraph_execution_enabled else "deterministic"
+        ),
         "enabled": True,
         "default_off": True,
         "read_only": True,
@@ -1463,23 +1475,42 @@ def _maybe_run_controlled_evidence_chain_execution_after_application_priority(
     }
 
     try:
-        if execution_helper is None:
-            from src.agents.evidence_chain_execution import (
-                execute_controlled_evidence_chain,
+        if langgraph_execution_enabled:
+            if langgraph_execution_helper is None:
+                from src.agents.evidence_chain_langgraph_harness import (
+                    execute_langgraph_evidence_chain,
+                )
+
+                langgraph_execution_helper = execute_langgraph_evidence_chain
+
+            execution_result = langgraph_execution_helper(
+                jobs_copy,
+                resume_context=None,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                context_id=context["context_id"],
+                enabled=True,
+                include_trace_payload=include_trace_payload,
+                sample_limit=safe_sample_limit,
             )
+        else:
+            if execution_helper is None:
+                from src.agents.evidence_chain_execution import (
+                    execute_controlled_evidence_chain,
+                )
 
-            execution_helper = execute_controlled_evidence_chain
+                execution_helper = execute_controlled_evidence_chain
 
-        execution_result = execution_helper(
-            jobs_copy,
-            resume_context=None,
-            pipeline_run_id=context["pipeline_run_id"],
-            owner_user_id=context["owner_user_id"],
-            context_id=context["context_id"],
-            execution_gate_enabled=True,
-            include_trace_payload=include_trace_payload,
-            sample_limit=safe_sample_limit,
-        )
+            execution_result = execution_helper(
+                jobs_copy,
+                resume_context=None,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                context_id=context["context_id"],
+                execution_gate_enabled=True,
+                include_trace_payload=include_trace_payload,
+                sample_limit=safe_sample_limit,
+            )
         automatic_internal_decisioning = bool(
             isinstance(execution_result, dict)
             and execution_result.get("automatic_internal_decisioning_performed")

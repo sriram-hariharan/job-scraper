@@ -120,6 +120,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "requirements.txt",
             "src/agents/evidence_chain_langgraph_harness.py",
             "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+            "tests/test_phase108a_collector_langgraph_evidence_chain_execution_default_off.py",
             "tests/test_critic_provider_shadow_default_off.py",
             "tests/test_jd_intelligence_provider_shadow_default_off.py",
             "tests/test_jd_live_provider_canary_api_readback_default_off.py",
@@ -251,7 +252,11 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f",
-        ): "1d35d00e54d1d858134b2e524955887bd7adbbce3a01e53d1782debc4584490a",
+        ): "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+        (
+            "src/pipeline/collector.py",
+            "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+        ): "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
         (
             "src/app/static/agentic_review.js",
             "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",

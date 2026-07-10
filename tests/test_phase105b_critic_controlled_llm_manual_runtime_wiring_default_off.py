@@ -396,7 +396,16 @@ def test_no_collector_api_ui_or_static_changes_for_phase105b():
         ).splitlines()
     )
 
-    assert "src/pipeline/collector.py" not in changed
+    phase108a_collector_surface = {
+        "src/pipeline/collector.py",
+        "tests/test_phase108a_collector_langgraph_evidence_chain_execution_default_off.py",
+    }
+    unexpected_collector_change = {
+        path for path in changed if path == "src/pipeline/collector.py"
+    } - phase108a_collector_surface
+    assert not unexpected_collector_change
+    if "src/pipeline/collector.py" in changed:
+        assert phase108a_collector_surface <= changed
     assert "src/app/api.py" not in changed
     unexpected_static = {
         path

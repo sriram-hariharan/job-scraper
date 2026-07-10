@@ -8,6 +8,12 @@ import importlib
 from pathlib import Path
 import subprocess
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 from src.agents import (
     jd_evidence_score_impact_review_queue_builder_default_off as queue_builder,
 )
@@ -521,14 +527,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
 
 
 def test_changed_files_are_limited_to_phase41a_and_legacy_guard_tests():
-    result = subprocess.run(
-        ["git", "diff", "--name-only"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    changed = get_changed_files(ROOT)
     allowed = {
             "src/app/auth_ui.py",
             "src/app/static/shell.js",
@@ -681,4 +680,8 @@ def test_changed_files_are_limited_to_phase41a_and_legacy_guard_tests():
         if path not in allowed
         and not (path.startswith("tests/test_") and path.endswith(".py"))
     }
-    assert unexpected == set()
+    assert_changed_files_allowed(
+        unexpected,
+        set(),
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

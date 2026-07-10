@@ -9,6 +9,12 @@ import json
 from pathlib import Path
 import subprocess
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 from src.agents import (
     controlled_exact_resume_change_set_provider_response_validation_default_off
     as validation,
@@ -818,6 +824,11 @@ def test_changed_files_are_limited_to_phase45a_and_legacy_guard_tests():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
+    phase116_allowed_changed_files = {
+        "src/config/consts.py",
+        "tests/test_phase116a_applied_ai_scoring_fix.py",
+    }
+    allowed |= phase116_allowed_changed_files
     disallowed = [
         path
         for path in changed

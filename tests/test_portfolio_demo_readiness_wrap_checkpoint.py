@@ -11,6 +11,7 @@ from tests.support.phase_guard_registry import (
     get_changed_files,
 )
 
+
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs/portfolio_demo_readiness_wrap_checkpoint.md"
 
@@ -1034,10 +1035,14 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
     assert_changed_files_allowed(
         changed,
         ALLOWED_CHANGED | legacy_static_hash_guards,
-        legacy_guard_profiles=("phase85b_registry",),
+        legacy_guard_profiles=(
+            "phase85b_registry",
+            "config_vocabulary_scoring_change",
+        ),
     )
 
     approved_runtime_paths = {
+        "src/config/consts.py",
         "src/app/api.py",
         "src/app/services.py",
         "src/app/static/agentic_review.js",

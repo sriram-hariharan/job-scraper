@@ -8,6 +8,12 @@ import json
 from pathlib import Path
 import subprocess
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 import run_jd_evidence_final_scoring_feature_adapter_dry_run as command
 from run_jd_evidence_final_scoring_feature_adapter_dry_run import (
     DryRunLoadError,
@@ -521,14 +527,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
 
 
 def test_changed_files_are_limited_to_phase36b_surface_and_legacy_guards():
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "HEAD"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    changed = get_changed_files(ROOT)
     allowed = {
             "src/app/auth_ui.py",
             "src/app/static/shell.js",
@@ -708,4 +707,8 @@ def test_changed_files_are_limited_to_phase36b_surface_and_legacy_guards():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
-    assert changed <= allowed
+    assert_changed_files_allowed(
+        changed,
+        allowed,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

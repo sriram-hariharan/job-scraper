@@ -13,6 +13,11 @@ import subprocess
 from src.agents import tailoring_agent_opportunity_contract as contract
 
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = ROOT / "src/agents/tailoring_agent_opportunity_contract.py"
 DOC_PATH = ROOT / "docs/phase23_tailoring_agent_opportunity_contract.md"
@@ -870,4 +875,8 @@ def test_phase23a_changes_only_helper_doc_test_and_legacy_guards():
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
-    assert changed <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        changed,
+        allowed | legacy_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

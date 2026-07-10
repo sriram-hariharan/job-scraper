@@ -772,6 +772,8 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
     profile_allowed_changed_files = {
         "src/config/consts.py",
         "tests/test_phase116a_applied_ai_scoring_fix.py",
+        "src/matching/clearance_requirements.py",
+        "tests/test_phase117b_ts_clearance_diagnostic.py",
     }
     allowed |= profile_allowed_changed_files
 

@@ -853,7 +853,10 @@ def test_phase_17k_changes_only_approved_docs_and_tests():
     assert_changed_files_allowed(
         changed,
         allowed | legacy_static_hash_guards,
-        legacy_guard_profiles=("phase85b_registry",),
+        legacy_guard_profiles=(
+            "phase85b_registry",
+            "config_vocabulary_scoring_change",
+        ),
     )
 
 

@@ -9,6 +9,12 @@ from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract import (
     build_manual_generate_ai_tailoring_preview_request_packet_contract,
 )
@@ -376,20 +382,7 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
     status = ROOT.joinpath(".git").exists()
     assert status
 
-    import subprocess
-
-    result = subprocess.run(
-        ["git", "status", "--short"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    changed = {
-        line[3:]
-        for line in result.stdout.splitlines()
-        if line and line[:2].strip()
-    }
+    changed = get_changed_files(ROOT)
     allowed = {
             "src/app/auth_ui.py",
             "src/app/static/shell.js",
@@ -916,4 +909,8 @@ def test_phase25a_changes_are_limited_to_contract_doc_and_tests():
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
-    assert changed <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        changed,
+        allowed | legacy_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

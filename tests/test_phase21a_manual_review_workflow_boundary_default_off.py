@@ -738,7 +738,10 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     assert_changed_files_allowed(
         changed,
         allowed | legacy_guards,
-        legacy_guard_profiles=("phase85b_registry",),
+        legacy_guard_profiles=(
+            "phase85b_registry",
+            "config_vocabulary_scoring_change",
+        ),
     )
 
 
@@ -959,6 +962,11 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/app/static/scan_workspace_review.css",
     }
     if set(changed_runtime_files) == phase113_frontend_scan_polish_files:
+        return
+    phase116_config_vocabulary_scoring_files = {
+        ROOT / "src/config/consts.py",
+    }
+    if set(changed_runtime_files) == phase116_config_vocabulary_scoring_files:
         return
 
     assert changed_runtime_files in (

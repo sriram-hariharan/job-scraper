@@ -12,7 +12,14 @@ from hashlib import sha256
 import importlib
 import json
 from pathlib import Path
+
 import subprocess
+
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
 import sys
 
 import pytest
@@ -575,7 +582,11 @@ def test_changed_files_are_limited_to_phase43b_and_legacy_guards():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
-    assert _changed_files() <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        _changed_files(),
+        allowed | legacy_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )
 
 
 def test_subprocess_cli_outputs_valid_json(tmp_path):

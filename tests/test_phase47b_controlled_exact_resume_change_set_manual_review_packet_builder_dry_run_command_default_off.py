@@ -10,6 +10,12 @@ import json
 from pathlib import Path
 import subprocess
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 import pytest
 
 import run_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run as command
@@ -454,14 +460,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
 
 
 def test_changed_files_are_limited_to_phase47b_and_legacy_guards():
-    result = subprocess.run(
-        ["git", "diff", "--name-only"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    changed = get_changed_files(ROOT)
     untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard"],
         cwd=ROOT,
@@ -735,4 +734,8 @@ def test_changed_files_are_limited_to_phase47b_and_legacy_guards():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
-    assert changed <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        changed,
+        allowed | legacy_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

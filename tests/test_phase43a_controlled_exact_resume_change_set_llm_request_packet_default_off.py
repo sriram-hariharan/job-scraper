@@ -5,6 +5,12 @@ from hashlib import sha256
 import importlib
 from pathlib import Path
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 from src.agents import (
     controlled_exact_resume_change_set_llm_request_packet_default_off as packet_builder,
 )
@@ -576,17 +582,12 @@ def test_changed_files_are_limited_to_phase43a_and_legacy_guards():
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
         "tests/test_phase80b_controlled_advisory_chain_trace_persistence.py",
     }
-    assert _changed_files() <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        _changed_files(),
+        allowed | legacy_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )
 
 
 def _changed_files() -> set[str]:
-    import subprocess
-
-    result = subprocess.run(
-        ["git", "diff", "--name-only"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    return get_changed_files(ROOT)

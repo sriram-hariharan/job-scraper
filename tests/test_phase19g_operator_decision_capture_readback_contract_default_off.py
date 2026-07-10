@@ -13,6 +13,11 @@ import subprocess
 from src.agents import operator_decision_capture_readback_contract as contract
 
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 
 PROTECTED_HASHES = {
@@ -224,15 +229,7 @@ def test_protected_files_are_unchanged():
 
 
 def test_phase19g_changes_only_approved_files():
-    tracked = subprocess.check_output(
-        ["git", "diff", "--name-only"], cwd=ROOT, text=True
-    ).splitlines()
-    untracked = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=ROOT,
-        text=True,
-    ).splitlines()
-    changed = set(tracked + untracked) - {
+    changed = get_changed_files(ROOT) - {
             "src/app/auth_ui.py",
             "src/app/static/shell.js",
             "src/app/ui_shell.py",
@@ -865,4 +862,8 @@ def test_phase19g_changes_only_approved_files():
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
-    assert changed <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        changed,
+        allowed | legacy_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

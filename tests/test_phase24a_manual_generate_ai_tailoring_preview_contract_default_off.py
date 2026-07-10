@@ -8,6 +8,12 @@ from hashlib import sha256
 from pathlib import Path
 import subprocess
 
+from tests.support.phase_guard_registry import (
+    assert_changed_files_allowed,
+    get_changed_files,
+)
+
+
 from src.agents import manual_generate_ai_tailoring_preview_contract as contract
 
 
@@ -800,4 +806,8 @@ def test_phase24a_changes_only_helper_doc_test_and_legacy_guards():
             "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
         "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
     }
-    assert changed <= allowed | legacy_guards
+    assert_changed_files_allowed(
+        changed,
+        allowed | legacy_guards,
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )

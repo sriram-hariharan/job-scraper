@@ -57,6 +57,8 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
             "tests/test_phase116a_applied_ai_scoring_fix.py",
+            "src/matching/clearance_requirements.py",
+            "tests/test_phase117b_ts_clearance_diagnostic.py",
         },
         set(),
         legacy_guard_profiles=("config_vocabulary_scoring_change",),
@@ -76,6 +78,34 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("config_vocabulary_scoring_change",),
+            )
+
+
+def test_active_ts_clearance_diagnostic_profile_is_narrow():
+    assert_changed_files_allowed(
+        {
+            "src/matching/clearance_requirements.py",
+            "tests/test_phase117b_ts_clearance_diagnostic.py",
+        },
+        set(),
+        legacy_guard_profiles=("active_ts_clearance_diagnostic",),
+    )
+
+    for forbidden_path in (
+        "src/matching/scorer.py",
+        "src/matching/dimensions.py",
+        "src/matching/job_adapter.py",
+        "src/app/services.py",
+        "src/pipeline/collector.py",
+        "src/ai/llm_client.py",
+        "src/app/application_execution_queue.py",
+        "src/integrations/ats_submitter.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {forbidden_path},
+                set(),
+                legacy_guard_profiles=("active_ts_clearance_diagnostic",),
             )
 
 

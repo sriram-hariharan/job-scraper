@@ -741,6 +741,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         legacy_guard_profiles=(
             "phase85b_registry",
             "config_vocabulary_scoring_change",
+            "active_ts_clearance_diagnostic",
         ),
     )
 
@@ -967,6 +968,11 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/config/consts.py",
     }
     if set(changed_runtime_files) == phase116_config_vocabulary_scoring_files:
+        return
+    phase117b_active_ts_clearance_diagnostic_files = {
+        ROOT / "src/matching/clearance_requirements.py",
+    }
+    if set(changed_runtime_files) == phase117b_active_ts_clearance_diagnostic_files:
         return
 
     assert changed_runtime_files in (

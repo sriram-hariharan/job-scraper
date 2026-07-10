@@ -6,7 +6,10 @@ from pathlib import Path
 import subprocess
 
 from src.app import services
-from tests.support.phase_guard_registry import assert_no_forbidden_runtime_calls_ast
+from tests.support.phase_guard_registry import (
+    assert_no_forbidden_runtime_calls_ast,
+    get_changed_files,
+)
 
 
 # phase105b legacy guard marker: changes_only services_hash bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2 api_hash d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004
@@ -381,20 +384,7 @@ def test_service_manual_critic_slice_does_not_add_job_fit_or_raw_provider_calls(
 
 
 def test_no_collector_api_ui_or_static_changes_for_phase105b():
-    changed = set(
-        subprocess.check_output(
-            ["git", "diff", "--name-only"],
-            cwd=ROOT,
-            text=True,
-        ).splitlines()
-    )
-    changed.update(
-        subprocess.check_output(
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            cwd=ROOT,
-            text=True,
-        ).splitlines()
-    )
+    changed = get_changed_files(ROOT)
 
     phase108a_collector_surface = {
         "src/pipeline/collector.py",

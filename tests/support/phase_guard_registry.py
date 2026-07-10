@@ -76,6 +76,26 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "config_vocabulary_scoring_change": {
+            "src/config/consts.py",
+            "tests/test_phase115a_applied_ai_scoring_fix.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_phase18_approval_preview_readonly_default_off.py",
+            "tests/test_phase18_safety_wrap_release_checkpoint_default_off.py",
+            "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
+            "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
+            "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
+            "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
+            "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
+            "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
+            "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+            "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
+            "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
+            "tests/test_phase104b_critic_controlled_llm_ownership_default_off.py",
+            "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
+            "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
+        },
         "phase85b_registry": {
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",

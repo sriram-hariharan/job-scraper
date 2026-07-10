@@ -51,6 +51,33 @@ def test_assert_changed_files_allowed_rejects_unexpected_files_with_clear_messag
     assert "tests/test_allowed.py" not in str(exc.value)
 
 
+def test_config_vocabulary_scoring_change_profile_is_narrow():
+    assert_changed_files_allowed(
+        {
+            "src/config/consts.py",
+            "tests/test_phase115a_applied_ai_scoring_fix.py",
+        },
+        set(),
+        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+    )
+
+    for forbidden_path in (
+        "src/app/services.py",
+        "src/pipeline/collector.py",
+        "src/matching/scorer.py",
+        "src/ai/llm_client.py",
+        "src/app/application_execution_queue.py",
+        "src/integrations/ats_submitter.py",
+        "src/tailoring/source_resume_overwrite.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {forbidden_path},
+                set(),
+                legacy_guard_profiles=("config_vocabulary_scoring_change",),
+            )
+
+
 def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):
     path = tmp_path / "guarded.py"
     path.write_text("print('safe')\n", encoding="utf-8")

@@ -71,6 +71,12 @@ Every simulated step has `execution_status=skipped_dry_run`, `execution_enabled=
 - Benchmarkability: deterministic fixtures and CLI checks measure whether the agentic layer continues to behave as expected.
 - Safe missing data behavior: optional artifacts and traces are allowed to be absent; UI surfaces should remain usable.
 
+### Current Hybrid Scoring Boundary
+
+Hybrid scoring is partially implemented through deterministic evidence dimensions plus always-on local `semantic_alignment`. The semantic component uses deterministic token-cosine similarity at weight `0.05`, and its weighted contribution is included in `final_score` without provider, Groq, LLM, RAG, embedding, or vector-store calls.
+
+Active TS/Top Secret clearance remains diagnostic-only with no score cap or penalty. Optional LLM adjudication is default-off and readback-only, not decision authority: it cannot override winner, resolved resume, final score, ranking, queue, or action. External application actions remain human-controlled, with no auto-apply, ATS submission, recruiter messaging, or source-resume overwrite.
+
 ## Implemented Agents
 
 ### Resume Match Agent

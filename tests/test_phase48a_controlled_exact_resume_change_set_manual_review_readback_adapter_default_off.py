@@ -788,6 +788,16 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
         "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
     }
     allowed |= phase123b_llm_adjudicator_readback_files
+    allowed |= {
+        "README.md",
+        "docs/architecture_summary.md",
+        "docs/agentic_platform.md",
+        "docs/full_fledged_agentic_ai_app_roadmap.md",
+        "docs/portfolio_overview.md",
+        "docs/demo_walkthrough.md",
+        "docs/portfolio_demo_readiness_wrap_checkpoint.md",
+        "tests/support/phase_guard_registry.py",
+    }
 
     for changed_path in changed:
         if changed_path == "requirements.txt":

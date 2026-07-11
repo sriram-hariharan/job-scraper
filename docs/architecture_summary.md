@@ -26,6 +26,22 @@ company discovery
 
 Application planning writes artifacts such as source health, best resume by job, application shortlist, execution queue, tailoring decision summaries, operator review summaries, job packets, workflow summaries, verification payloads, dry-run outputs, and RAG Evaluation reports when those diagnostic hooks are present.
 
+## Hybrid Scoring And Adjudicator Readback
+
+The resume selector first computes deterministic evidence dimensions. It always adds local `semantic_alignment`, calculated with deterministic token-cosine similarity at weight `0.05`, and includes that weighted contribution in `final_score`. This scoring path has no provider, Groq, LLM, RAG, embedding, or vector-store call.
+
+Active TS/Top Secret clearance findings are hard-requirement diagnostics for readback only. They do not cap scores, add penalties, or change ranking. After deterministic selection, the default-off LLM adjudicator may emit separate `llm_adjudicator_readback_*` fields. Those fields cannot override the winner, resolved resume, final score, ranking, queue, or action.
+
+The Planning service already merges selector fields into Planning rows. The Planning UI displays those existing fields in a compact details block without invoking adjudication or calling a provider:
+
+```text
+deterministic dimensions + local semantic_alignment
+  -> deterministic winner/resolved resume/final_score
+  -> optional default-off adjudicator readback
+  -> existing Planning row fields
+  -> readback-only Planning display
+```
+
 ## Agentic Layer
 
 - `src/agents/workflow_registry.py` declares the ApplyLens Agentic Workflow manifest, ordered agents, expected artifacts, required flags, safety guarantees, and benchmark metric keys.

@@ -25,6 +25,11 @@ The completed portfolio scope includes:
 - explicit read-only Critic/Evaluator API action
 - deterministic evaluator
 - trace-only evaluation inputs
+- deterministic local semantic similarity helper
+- always-on `semantic_alignment` with weight `0.05` included in `final_score`
+- diagnostic-only active TS/Top Secret clearance readback with no cap or penalty
+- optional default-off LLM adjudicator readback that cannot override selection or scoring
+- Planning UI display of existing adjudicator readback without a provider call
 
 ## Demo flow
 
@@ -36,6 +41,7 @@ The completed portfolio scope includes:
 6. no auto-apply or submission occurs.
 7. no application execution occurs.
 8. no application submission occurs.
+9. optional adjudicator commentary remains readback-only and cannot change winner, resolved resume, final score, ranking, queue, or action.
 
 ## Safety guarantees
 
@@ -54,6 +60,12 @@ The portfolio demo intentionally preserves safety boundaries:
 - no scheduler
 - no background task
 - no file export
+- no auto-apply
+- no ATS submission
+- no recruiter messaging
+- no source-resume overwrite
+
+The implemented scoring system does include deterministic local `semantic_alignment` at weight `0.05`. The “no scoring change” guarantee above means this documentation/readiness wrap makes no scoring change; it does not describe semantic scoring as zero-weight or diagnostic-only. The optional LLM adjudicator is not part of `final_score` and has no decision authority.
 
 ## What is intentionally not implemented
 
@@ -73,6 +85,8 @@ These remain future production-platform work, not portfolio blockers.
 ## How to explain this in interviews
 
 Explain that ApplyLens AI is not just a scraper. It is a job automation platform with a safe agentic observability layer. The important design choice is separation of responsibilities: existing filtering/ranking stays unchanged, agents emit trace metadata, the UI shows trace state read-only, and the Critic/Evaluator only reviews trace inputs through an explicit user action.
+
+For scoring, explain that deterministic evidence dimensions and local token-cosine semantic alignment produce the final score. Optional LLM adjudicator output is a separate, default-off readback that helps a human inspect candidates without changing the selected resume or score.
 
 The strongest engineering point is that the agentic layer was added incrementally without rewriting the pipeline or changing application scoring/submission behavior.
 

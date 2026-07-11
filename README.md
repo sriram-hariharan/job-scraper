@@ -150,6 +150,14 @@ It supports:
 - Tailoring packet generation.
 - LLM fallback/adjudication modes where configured.
 
+### Hybrid Resume-Job Scoring
+
+Final resume-job scoring combines deterministic evidence dimensions with an always-on local `semantic_alignment` component. Semantic alignment uses deterministic token-cosine similarity with a fixed weight of `0.05`; its weighted score is included in `final_score`. Scoring does not call a provider, Groq, an LLM, RAG, an embedding service, or a vector store.
+
+Hard-requirement findings, including missing active TS/Top Secret clearance, remain diagnostic-only: they do not cap, penalize, or reorder scores. An optional LLM adjudicator can add default-off, readback-only commentary after deterministic resume selection. It cannot override the winner, resolved resume, final score, ranking, queue, or action. Planning only displays adjudicator output that already exists; it does not trigger a provider call.
+
+The operator remains in control. ApplyLens does not auto-apply, submit applications to an ATS, message recruiters, or overwrite source resumes.
+
 ### Local RAG
 
 The app includes a local retrieval layer for job search and question answering:

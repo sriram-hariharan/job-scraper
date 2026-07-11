@@ -832,6 +832,16 @@ def test_changed_files_limited_to_phase49b_surface_and_legacy_guards():
         "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
     }
     allowed |= phase123b_llm_adjudicator_readback_files
+    allowed |= {
+        "README.md",
+        "docs/architecture_summary.md",
+        "docs/agentic_platform.md",
+        "docs/full_fledged_agentic_ai_app_roadmap.md",
+        "docs/portfolio_overview.md",
+        "docs/demo_walkthrough.md",
+        "docs/portfolio_demo_readiness_wrap_checkpoint.md",
+        "tests/support/phase_guard_registry.py",
+    }
     for path in changed:
         assert path in allowed or not any(
             path == root or path.startswith(root) for root in forbidden_roots

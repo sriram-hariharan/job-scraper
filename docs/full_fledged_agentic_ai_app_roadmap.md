@@ -10,7 +10,7 @@ The target is not a chatbot. The target is not fake agents talking to each other
 
 The current system is a production-style deterministic and read-only agentic workflow foundation. The current agents are mostly advisory and deterministic. That is intentional because the workflow touches resumes, approvals, application planning, and future application execution.
 
-The future system will add persisted per-run and per-job traces, LLM-backed JD intelligence, evidence-backed resume matching, LLM-backed tailoring suggestions, critic validation, benchmark evaluation, LLMOps observability, human feedback loops, and RAG evaluation dashboards.
+Evidence-backed resume matching now includes deterministic dimensions and always-on local semantic alignment at weight `0.05`. A default-off LLM adjudicator can provide readback-only commentary after deterministic selection. LLM score mutation and winner override are not implemented. Broader persisted per-run and per-job traces, LLM-backed tailoring suggestions, benchmark expansion, LLMOps observability, human feedback loops, and RAG evaluation dashboards remain roadmap work.
 
 ## Product Principle
 
@@ -123,6 +123,8 @@ Requirements:
 - no final scoring mutation
 
 ## Phase 6: Evidence-Backed Resume Match Agent
+
+Current status: deterministic scoring plus local semantic alignment is live, and optional LLM adjudicator readback is live behind a default-off gate. The adjudicator does not calculate `final_score`, choose the winner, or mutate ranking, queue, or action. Any future LLM decision authority remains intentionally unimplemented.
 
 Outputs:
 

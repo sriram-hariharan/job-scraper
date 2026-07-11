@@ -36,6 +36,11 @@ REQUIRED_TERMS = [
     "explicit read-only Critic/Evaluator API action",
     "deterministic evaluator",
     "trace-only evaluation inputs",
+    "deterministic local semantic similarity helper",
+    "always-on `semantic_alignment` with weight `0.05` included in `final_score`",
+    "diagnostic-only active TS/Top Secret clearance readback with no cap or penalty",
+    "optional default-off LLM adjudicator readback",
+    "Planning UI display of existing adjudicator readback without a provider call",
     "no live LLM call",
     "no model provider call",
     "no storage writes",
@@ -1041,6 +1046,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         legacy_guard_profiles=(
             "phase85b_registry",
             "config_vocabulary_scoring_change",
+            "hybrid_scoring_readiness_docs_wrap",
         ),
     )
 

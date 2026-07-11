@@ -745,6 +745,16 @@ def test_changed_files_are_limited_to_phase33a_surface_and_legacy_guards():
         "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
     }
     allowed_changed |= phase123b_llm_adjudicator_readback_files
+    allowed_changed |= {
+        "README.md",
+        "docs/architecture_summary.md",
+        "docs/agentic_platform.md",
+        "docs/full_fledged_agentic_ai_app_roadmap.md",
+        "docs/portfolio_overview.md",
+        "docs/demo_walkthrough.md",
+        "docs/portfolio_demo_readiness_wrap_checkpoint.md",
+        "tests/support/phase_guard_registry.py",
+    }
     for line in result.stdout.splitlines():
         path = line[3:].strip().strip('"')
         if path.startswith("tests/test_") and path.endswith(".py"):

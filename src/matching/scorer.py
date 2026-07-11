@@ -1,4 +1,3 @@
-import os
 import re
 from typing import Callable, Dict, List, Set, Tuple
 
@@ -31,8 +30,7 @@ from src.resume.models import ResumeEvidence
 
 
 _UNIMPLEMENTED_DIMENSIONS = set()
-_SEMANTIC_SCORE_COMPONENT_ENV = "APPLYLENS_SEMANTIC_SCORE_COMPONENT_ENABLED"
-_TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
+_SEMANTIC_ALIGNMENT_WEIGHT = 0.05
 
 _ANALYTICS_TITLE_TOKENS = {"analytics", "analyst", "bi", "insights"}
 _DATA_TITLE_TOKENS = {"data", "scientist", "science"}
@@ -184,10 +182,6 @@ def _role_family_title_adjustment(role_family: str, title: str) -> Tuple[float, 
 
 def _normalize_text(value: str) -> str:
     return canonical_signal_term(value)
-
-
-def _semantic_score_component_enabled() -> bool:
-    return str(os.getenv(_SEMANTIC_SCORE_COMPONENT_ENV, "") or "").strip().lower() in _TRUE_ENV_VALUES
 
 
 def _unique_preserve_order(values: List[str]) -> List[str]:
@@ -1546,18 +1540,18 @@ def _semantic_alignment_dimension(
         _job_semantic_text(job),
         getattr(resume.document, "raw_text", ""),
     )
-    similarity = float(diagnostic.get("similarity") or 0.0)
+    similarity = max(0.0, min(1.0, float(diagnostic.get("similarity") or 0.0)))
     return MatchDimensionScore(
         name="semantic_alignment",
-        score=max(0.0, min(1.0, similarity)),
-        weight=0.0,
-        weighted_score=0.0,
+        score=similarity,
+        weight=_SEMANTIC_ALIGNMENT_WEIGHT,
+        weighted_score=round(similarity * _SEMANTIC_ALIGNMENT_WEIGHT, 6),
         reason=(
-            "Diagnostic-only semantic JD/resume similarity; no score impact in Phase 121B."
+            "Semantic JD/resume similarity included as a small weighted score component."
         ),
         evidence=[
             f"method={diagnostic.get('method', '')}",
-            "score_impact=false",
+            "score_impact=true",
         ],
     )
 
@@ -1594,13 +1588,13 @@ def score_resume_job_match(
             _skipped_dimension(dimension, "Scoring skipped because deterministic prefilter failed.")
             for dimension in dimensions
         ]
-        if _semantic_score_component_enabled():
-            skipped.append(_semantic_alignment_dimension(resume, job))
+        skipped.append(_semantic_alignment_dimension(resume, job))
+        final_score = round(sum(score.weighted_score for score in skipped), 6)
         return ResumeJobMatchResult(
             pair=pair,
             prefilter=prefilter_result,
             dimension_scores=skipped,
-            final_score=0.0,
+            final_score=final_score,
             match_bucket="filtered_out",
         )
 
@@ -1731,8 +1725,7 @@ def score_resume_job_match(
             )
         )
 
-    if _semantic_score_component_enabled():
-        dimension_scores.append(_semantic_alignment_dimension(resume, job))
+    dimension_scores.append(_semantic_alignment_dimension(resume, job))
 
     final_score = round(sum(score.weighted_score for score in dimension_scores), 6)
 

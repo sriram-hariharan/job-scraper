@@ -26,6 +26,10 @@ python -m src.evaluation.agentic_benchmark --no-write --print-summary
 
 "This is the recruiter-friendly view of the agentic layer. It shows what the advisory system saw and validated without changing what jobs are shown or how the queue is ordered."
 
+0:48 - Optional: open a Planning row with `LLM adjudicator readback`.
+
+"Hybrid scoring combines deterministic evidence dimensions with local semantic alignment at a small fixed weight. When optional adjudicator output was generated, Planning displays that existing selector readback here. Opening this detail does not call a provider, and the commentary cannot override the selected resume or score."
+
 0:55 - Show Agent Trace.
 
 "Agent Trace records aggregate run and step diagnostics when tracing is enabled. It is traceability for the workflow layer, not hidden autonomous execution."
@@ -77,6 +81,10 @@ find "$TMP_CHAIN_DIR" -maxdepth 3 -type f -print | sort
 - Do not claim the manual read-only adapter chain is live orchestration.
 - Do not claim feedback tunes ranking, scoring, queue action, resume selection, tailoring generation, or packet generation.
 - Do not claim RAG Evaluation changes retrieval, embeddings, ranking, scoring, or queue behavior.
+- Do not claim Groq or an LLM calculates `final_score`, chooses the winner, or changes the queue action.
+- Do not claim active TS clearance diagnostics cap or penalize scores.
+- Do not claim the Planning readback UI triggers adjudication or a provider call.
+- Do not claim auto-apply, ATS submission, recruiter messaging, or source-resume overwrite.
 - Do not claim benchmark results from a live production run unless you are showing a real sanitized run and clearly label it.
 - Do not show private user data, real resumes, real applications, real emails, or confidential company details.
 

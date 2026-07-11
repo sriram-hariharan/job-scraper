@@ -30,6 +30,16 @@ ApplyLens AI combines a FastAPI web app, PostgreSQL-backed user/session/run stor
 - Diagnostic RAG Evaluation artifacts, validation helpers, compact Agentic Review display, and offline benchmark metric.
 - Deterministic benchmark command: `python -m src.evaluation.agentic_benchmark --no-write --print-summary`.
 
+## Hybrid Scoring And Readback
+
+- Hybrid resume-job scoring combines deterministic evidence dimensions with a small, local `semantic_alignment` component.
+- Semantic alignment uses deterministic token-cosine similarity with a fixed `0.05` scoring weight and no external model call.
+- The semantic weighted contribution is included in `final_score`; Groq and other LLM providers are not part of final scoring.
+- Active TS/Top Secret clearance gaps are diagnostic-only and do not cap, penalize, or reorder scores.
+- An optional, default-off LLM adjudicator provides readback-only commentary on deterministic resume candidates.
+- LLM adjudication cannot override the selected resume, resolved resume, final score, ranking, queue action, or application decision.
+- The workflow is human-in-the-loop with no auto-apply, ATS submission, recruiter messaging, or source-resume overwrite.
+
 ## Manual Read-Only Adapter Chain
 
 The manual read-only adapter chain is a portfolio-safe demonstration of how advisory agent adapters can be composed without becoming live orchestration. It runs only when explicitly invoked against caller-provided rows or the sanitized smoke fixture documented in `docs/read_only_chain_smoke.md`.
@@ -67,6 +77,7 @@ Applied AI Engineer:
 
 - Designed an applied AI workflow for resume/job decision support with advisory prioritization, tailoring-decision metadata, human feedback capture, RAG Evaluation diagnostics, and dry-run orchestration artifacts.
 - Added verifier, artifact, and Agentic Review visibility for manually produced adapter-chain diagnostics without changing queue action, tailoring, packet generation, scoring, or ranking.
+- Built hybrid resume-job scoring from deterministic evidence dimensions and local token-cosine semantic alignment, plus optional non-mutating LLM adjudicator readback for candidate review.
 
 Data Scientist:
 

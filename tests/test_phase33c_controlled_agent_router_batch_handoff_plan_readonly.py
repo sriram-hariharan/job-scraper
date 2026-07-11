@@ -808,6 +808,8 @@ def test_changed_files_are_limited_to_phase33c_surface_and_legacy_guards():
         "tests/test_phase116a_applied_ai_scoring_fix.py",
         "src/matching/clearance_requirements.py",
         "tests/test_phase117b_ts_clearance_diagnostic.py",
+        "jd_resume_diff_helper.py",
+        "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
     }
     allowed_changed |= phase116_allowed_changed_files
     for line in result.stdout.splitlines():

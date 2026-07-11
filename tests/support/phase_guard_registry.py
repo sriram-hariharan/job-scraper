@@ -429,6 +429,14 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
             "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
         },
+        "planning_ai_review_copy_polish_static_only": {
+            "src/app/static/planning.js",
+            "docs/demo_walkthrough.md",
+            "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
+            "tests/test_phase126b_planning_ai_review_copy_polish_static_only.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -438,7 +446,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
 
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
-    return legacy_guard_allowlist("hybrid_scoring_readiness_docs_wrap")
+    return legacy_guard_allowlist("planning_ai_review_copy_polish_static_only")
 
 
 def assert_changed_files_allowed(

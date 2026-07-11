@@ -26,7 +26,7 @@ DOC_PATH = (
     / "docs/phase69_agentic_workflow_production_readiness_checkpoint_default_off.md"
 )
 PROTECTED_HASHES = {
-    "src/matching/scorer.py": "c3f0b1f4a938ca933b10991af1ddb0aca2790136c7c6b487a8ee79556ee5ceac",
+    "src/matching/scorer.py": "5a7fa4abf6adb353bbb8c3f8c3113279409de1250f99e61a36056c5d06503062",
     "src/matching/dimensions.py": "3ccd5e87b9a8aee7901b3efb5ef7582b0fd652aa498f862d0486fbbd97740b9b",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "application_execution_" + "queue" + ".py": (

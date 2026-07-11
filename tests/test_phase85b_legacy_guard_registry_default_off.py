@@ -61,6 +61,10 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
             "tests/test_phase117b_ts_clearance_diagnostic.py",
             "jd_resume_diff_helper.py",
             "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
+            "src/matching/semantic_similarity.py",
+            "tests/test_phase120b_semantic_similarity_diagnostic.py",
+            "src/matching/scorer.py",
+            "tests/test_phase121b_semantic_alignment_dimension_default_off.py",
         },
         set(),
         legacy_guard_profiles=("config_vocabulary_scoring_change",),
@@ -69,7 +73,8 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
     for forbidden_path in (
         "src/app/services.py",
         "src/pipeline/collector.py",
-        "src/matching/scorer.py",
+        "src/matching/dimensions.py",
+        "src/matching/job_adapter.py",
         "src/ai/llm_client.py",
         "src/app/application_execution_queue.py",
         "src/integrations/ats_submitter.py",
@@ -207,6 +212,41 @@ def test_semantic_similarity_diagnostic_only_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("semantic_similarity_diagnostic_only",),
+            )
+
+
+def test_semantic_alignment_dimension_default_off_profile_is_narrow():
+    assert_changed_files_allowed(
+        {
+            "src/matching/scorer.py",
+            "src/matching/semantic_similarity.py",
+            "tests/test_phase121b_semantic_alignment_dimension_default_off.py",
+        },
+        set(),
+        legacy_guard_profiles=("semantic_alignment_dimension_default_off",),
+    )
+
+    for forbidden_path in (
+        "src/matching/dimensions.py",
+        "src/matching/models.py",
+        "src/matching/job_adapter.py",
+        "batch_select_best_resume_variant.py",
+        "application_shortlist_from_batch_selector.py",
+        "application_execution_queue.py",
+        "src/app/services.py",
+        "src/app/api.py",
+        "src/pipeline/collector.py",
+        "src/ai/llm_client.py",
+        "src/agents/resume_match_agent.py",
+        "src/rag/retriever.py",
+        "src/tailoring/llm.py",
+        "requirements.txt",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {forbidden_path},
+                set(),
+                legacy_guard_profiles=("semantic_alignment_dimension_default_off",),
             )
 
 

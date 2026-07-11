@@ -289,18 +289,18 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
             )
 
 
-def test_current_milestone_guard_compatibility_is_exact_phase123b_surface():
+def test_current_milestone_guard_compatibility_is_exact_phase124b_surface():
     assert current_milestone_guard_compatibility_allowlist() == {
-        "src/agents/llm_adjudicator_readback.py",
-        "batch_select_best_resume_variant.py",
-        "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+        "src/app/static/planning.js",
+        "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }
 
     assert_changed_files_allowed(
         {
-            "src/agents/llm_adjudicator_readback.py",
-            "batch_select_best_resume_variant.py",
-            "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+            "src/app/static/planning.js",
+            "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
         set(),
     )

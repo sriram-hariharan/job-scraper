@@ -391,7 +391,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/matching/semantic_similarity.py",
             "tests/test_phase120b_semantic_similarity_diagnostic.py",
         },
-        "semantic_alignment_dimension_default_off": {
+        "semantic_alignment_weighted_score_component": {
             "src/matching/scorer.py",
             "src/matching/semantic_similarity.py",
             "tests/test_phase121b_semantic_alignment_dimension_default_off.py",

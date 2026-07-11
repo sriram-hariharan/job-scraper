@@ -215,7 +215,7 @@ def test_semantic_similarity_diagnostic_only_profile_is_narrow():
             )
 
 
-def test_semantic_alignment_dimension_default_off_profile_is_narrow():
+def test_semantic_alignment_weighted_score_component_profile_is_narrow():
     assert_changed_files_allowed(
         {
             "src/matching/scorer.py",
@@ -223,7 +223,7 @@ def test_semantic_alignment_dimension_default_off_profile_is_narrow():
             "tests/test_phase121b_semantic_alignment_dimension_default_off.py",
         },
         set(),
-        legacy_guard_profiles=("semantic_alignment_dimension_default_off",),
+        legacy_guard_profiles=("semantic_alignment_weighted_score_component",),
     )
 
     for forbidden_path in (
@@ -246,7 +246,7 @@ def test_semantic_alignment_dimension_default_off_profile_is_narrow():
             assert_changed_files_allowed(
                 {forbidden_path},
                 set(),
-                legacy_guard_profiles=("semantic_alignment_dimension_default_off",),
+                legacy_guard_profiles=("semantic_alignment_weighted_score_component",),
             )
 
 

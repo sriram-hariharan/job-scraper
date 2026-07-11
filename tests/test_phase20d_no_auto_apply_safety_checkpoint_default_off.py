@@ -743,7 +743,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "active_ts_clearance_packet_diagnostic",
             "active_ts_clearance_scan_warning_readback",
             "semantic_similarity_diagnostic_only",
-            "semantic_alignment_dimension_default_off",
+            "semantic_alignment_weighted_score_component",
         ),
     )
 

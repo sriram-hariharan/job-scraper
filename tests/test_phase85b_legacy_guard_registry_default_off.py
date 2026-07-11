@@ -289,18 +289,54 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
             )
 
 
-def test_current_milestone_guard_compatibility_is_exact_phase124b_surface():
+def test_current_milestone_guard_compatibility_is_exact_phase125b_surface():
     assert current_milestone_guard_compatibility_allowlist() == {
-        "src/app/static/planning.js",
-        "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
+        "README.md",
+        "docs/architecture_summary.md",
+        "docs/agentic_platform.md",
+        "docs/full_fledged_agentic_ai_app_roadmap.md",
+        "docs/portfolio_overview.md",
+        "docs/demo_walkthrough.md",
+        "docs/portfolio_demo_readiness_wrap_checkpoint.md",
+        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+        "tests/test_phase125b_hybrid_scoring_readiness_docs.py",
+        "tests/support/phase_guard_registry.py",
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase33a_controlled_agent_router_readonly.py",
+        "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+        "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+        "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+        "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+        "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+        "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
+        "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
+        "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+        "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
     }
 
     assert_changed_files_allowed(
         {
-            "src/app/static/planning.js",
-            "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
+            "README.md",
+            "docs/architecture_summary.md",
+            "docs/agentic_platform.md",
+            "docs/full_fledged_agentic_ai_app_roadmap.md",
+            "docs/portfolio_overview.md",
+            "docs/demo_walkthrough.md",
+            "docs/portfolio_demo_readiness_wrap_checkpoint.md",
+            "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+            "tests/test_phase125b_hybrid_scoring_readiness_docs.py",
+            "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_phase33a_controlled_agent_router_readonly.py",
+            "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+            "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+            "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+            "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+            "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+            "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
+            "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
+            "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+            "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
         },
         set(),
     )

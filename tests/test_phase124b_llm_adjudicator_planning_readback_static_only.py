@@ -32,7 +32,8 @@ def test_planning_row_renders_existing_readback_without_new_column():
     renderer = _function_block("buildLlmAdjudicatorReadbackHtml")
 
     assert "buildLlmAdjudicatorReadbackHtml(row)" in recommendation
-    assert "LLM adjudicator readback" in renderer
+    assert "AI review notes" in renderer
+    assert "LLM adjudicator readback" not in renderer
     assert "<details" not in renderer
     assert "buildRecommendationDetailsHtml" in renderer
     assert 'colspan="8"' in source
@@ -77,7 +78,7 @@ def test_readback_renders_compact_escaped_fields_and_safety_copy():
         "adjudicator_summary",
     ]:
         assert marker in renderer
-    assert "Readback only. Does not override the selected resume or score." in renderer
+    assert "Advisory only. Does not override the selected resume or score." in renderer
     assert "escapeHtml(item.label)" in details
     assert "escapeHtml(item.value)" in details
 

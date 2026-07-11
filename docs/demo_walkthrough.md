@@ -26,7 +26,7 @@ python -m src.evaluation.agentic_benchmark --no-write --print-summary
 
 "This is the recruiter-friendly view of the agentic layer. It shows what the advisory system saw and validated without changing what jobs are shown or how the queue is ordered."
 
-0:48 - Optional: open a Planning row with `LLM adjudicator readback`.
+0:48 - Optional: open a Planning row with `AI review notes`.
 
 "Hybrid scoring combines deterministic evidence dimensions with local semantic alignment at a small fixed weight. When optional adjudicator output was generated, Planning displays that existing selector readback here. Opening this detail does not call a provider, and the commentary cannot override the selected resume or score."
 

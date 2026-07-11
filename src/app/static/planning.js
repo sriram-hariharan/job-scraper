@@ -12859,6 +12859,77 @@ function buildPlanningRecommendationCellHtml(row) {
     <div class="queue-recommendation-summary">
       <span class="pill recommendation-chip recommendation-chip--${tone}">${action}</span>
       ${details}
+      ${buildLlmAdjudicatorReadbackHtml(row)}
+    </div>
+  `;
+}
+
+function isLlmAdjudicatorReadbackEnabled(value) {
+  return ["true", "1", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+function parseLlmAdjudicatorReadback(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildLlmAdjudicatorReadbackHtml(row) {
+  if (!isLlmAdjudicatorReadbackEnabled(row?.llm_adjudicator_readback_enabled)) return "";
+
+  const rowStatus = String(row?.llm_adjudicator_readback_status || "").trim().toLowerCase();
+  if (rowStatus === "disabled") return "";
+
+  const readback = parseLlmAdjudicatorReadback(row?.llm_adjudicator_readback);
+  const status = String(readback?.status || rowStatus || "unavailable").trim().toLowerCase();
+  const hasEnabledState = Boolean(readback) || [
+    "provider_error",
+    "malformed_response",
+    "unavailable",
+    "error",
+  ].includes(status);
+  if (!hasEnabledState) return "";
+
+  const provider = readback?.provider_used || readback?.provider_requested || "";
+  const model = readback?.model_used || readback?.model_requested || "";
+  const candidateScores = readback?.candidate_scores && typeof readback.candidate_scores === "object"
+    ? readback.candidate_scores
+    : {};
+  const candidates = Array.isArray(readback?.candidate_resume_names)
+    ? readback.candidate_resume_names
+    : [];
+  const candidateSummary = candidates
+    .map((name) => {
+      const score = candidateScores[name];
+      return score === undefined || score === null || score === ""
+        ? String(name || "")
+        : `${String(name || "")} (${String(score)})`;
+    })
+    .filter(Boolean)
+    .join(", ");
+  const safeUnavailableMessage = ["provider_error", "malformed_response", "unavailable", "error"].includes(status)
+    ? "Readback unavailable. The deterministic selection remains unchanged."
+    : "";
+  const details = buildRecommendationDetailsHtml([
+    { label: "Status", value: status.replaceAll("_", " ") },
+    { label: "Provider", value: provider },
+    { label: "Model", value: model },
+    { label: "Candidates", value: candidateSummary },
+    { label: "Recommendation", value: readback?.adjudicator_recommendation_label || "" },
+    { label: "Summary", value: readback?.adjudicator_summary || safeUnavailableMessage },
+    { label: "Safety", value: "Readback only. Does not override the selected resume or score." },
+  ]);
+
+  return `
+    <div class="planning-llm-adjudicator-readback">
+      <span class="queue-workspace-pill">LLM adjudicator readback</span>
+      ${details}
     </div>
   `;
 }

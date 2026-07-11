@@ -741,6 +741,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "config_vocabulary_scoring_change",
             "active_ts_clearance_diagnostic",
             "active_ts_clearance_packet_diagnostic",
+            "active_ts_clearance_scan_warning_readback",
         ),
     )
 
@@ -950,6 +951,12 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "jd_resume_diff_helper.py",
     }
     if set(changed_runtime_files) == phase118b_active_ts_clearance_packet_diagnostic_files:
+        return
+    phase119b_active_ts_clearance_scan_warning_files = {
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/scan_workspace_review.css",
+    }
+    if set(changed_runtime_files) == phase119b_active_ts_clearance_scan_warning_files:
         return
         phase79d_default_off_advisory_chain_harness_files = {
             ROOT / "src/agents/orchestrator_adapter_harness.py",

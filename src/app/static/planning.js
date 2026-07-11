@@ -118,6 +118,10 @@ const scanWorkspaceState = {
   rewriteReviewDecisions: {},
   suggestionDecisionOverrides: {},
   excludedScanIssueIds: [],
+  hardRequirementDiagnostics: [],
+  hardRequirementDiagnosticsKey: "",
+  hardRequirementDiagnosticsStatus: "idle",
+  hardRequirementDiagnosticsRequestSeq: 0,
   selectedTab: "personal_details",
   activeCandidateId: "",
   annotationMarkerSignature: "",
@@ -9523,6 +9527,124 @@ function getScanWorkspacePayload() {
     : null;
 }
 
+function normalizeScanWorkspaceHardRequirementDiagnostics(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const reasonCode = String(entry.reason_code || entry.code || entry.diagnostic_code || "").trim();
+      const message = String(entry.message || entry.summary || entry.description || "").trim();
+      return {
+        reasonCode,
+        message,
+      };
+    })
+    .filter((entry) => entry.reasonCode || entry.message);
+}
+
+function getScanWorkspaceHardRequirementDiagnostics() {
+  return Array.isArray(scanWorkspaceState.hardRequirementDiagnostics)
+    ? scanWorkspaceState.hardRequirementDiagnostics
+    : [];
+}
+
+function getScanWorkspaceHardRequirementDiagnosticsStateKey(context) {
+  const packetKey = getTailoringWorkspaceBasePacketKey(context);
+  if (!packetKey) return "";
+  return `${String(context?.planningOutputDir || "").trim()}::${packetKey}`;
+}
+
+async function loadScanWorkspaceHardRequirementDiagnostics() {
+  const context = getScanWorkspaceContext();
+  const packetKey = getTailoringWorkspaceBasePacketKey(context);
+  const stateKey = getScanWorkspaceHardRequirementDiagnosticsStateKey(context);
+
+  if (!packetKey || !stateKey) {
+    scanWorkspaceState.hardRequirementDiagnostics = [];
+    scanWorkspaceState.hardRequirementDiagnosticsKey = "";
+    scanWorkspaceState.hardRequirementDiagnosticsStatus = "idle";
+    return;
+  }
+
+  if (
+    scanWorkspaceState.hardRequirementDiagnosticsKey === stateKey &&
+    ["loading", "loaded", "failed"].includes(scanWorkspaceState.hardRequirementDiagnosticsStatus)
+  ) {
+    return;
+  }
+
+  const requestSeq = scanWorkspaceState.hardRequirementDiagnosticsRequestSeq + 1;
+  scanWorkspaceState.hardRequirementDiagnosticsRequestSeq = requestSeq;
+  scanWorkspaceState.hardRequirementDiagnosticsKey = stateKey;
+  scanWorkspaceState.hardRequirementDiagnosticsStatus = "loading";
+  scanWorkspaceState.hardRequirementDiagnostics = [];
+
+  try {
+    const artifact = await loadArtifact(packetKey, context?.planningOutputDir || "");
+    const packet = artifact?.data && typeof artifact.data === "object" ? artifact.data : {};
+    const diagnostics = normalizeScanWorkspaceHardRequirementDiagnostics(
+      packet?.summary?.hard_requirement_diagnostics
+    );
+
+    if (scanWorkspaceState.hardRequirementDiagnosticsRequestSeq !== requestSeq) return;
+
+    scanWorkspaceState.hardRequirementDiagnostics = diagnostics;
+    scanWorkspaceState.hardRequirementDiagnosticsStatus = "loaded";
+    renderScanWorkspaceView();
+  } catch {
+    if (scanWorkspaceState.hardRequirementDiagnosticsRequestSeq !== requestSeq) return;
+
+    scanWorkspaceState.hardRequirementDiagnostics = [];
+    scanWorkspaceState.hardRequirementDiagnosticsStatus = "failed";
+    renderScanWorkspaceView();
+  }
+}
+
+function ensureScanWorkspaceHardRequirementDiagnosticsReadback() {
+  const context = getScanWorkspaceContext();
+  const stateKey = getScanWorkspaceHardRequirementDiagnosticsStateKey(context);
+
+  if (!stateKey) {
+    if (scanWorkspaceState.hardRequirementDiagnosticsKey) {
+      scanWorkspaceState.hardRequirementDiagnostics = [];
+      scanWorkspaceState.hardRequirementDiagnosticsKey = "";
+      scanWorkspaceState.hardRequirementDiagnosticsStatus = "idle";
+    }
+    return;
+  }
+
+  if (scanWorkspaceState.hardRequirementDiagnosticsKey !== stateKey) {
+    void loadScanWorkspaceHardRequirementDiagnostics();
+  }
+}
+
+function renderScanWorkspaceHardRequirementDiagnosticsBanner() {
+  const diagnostics = getScanWorkspaceHardRequirementDiagnostics();
+  if (!diagnostics.length) return "";
+
+  const messages = diagnostics
+    .map((diagnostic) => {
+      const reasonCode = String(diagnostic?.reasonCode || "").trim().toLowerCase();
+      if (reasonCode === "missing_active_ts_clearance") {
+        return "Hard requirement gap: Active TS/Top Secret clearance was required but not found in the selected resume.";
+      }
+      return "Hard requirement gap: A required credential was not found in the selected resume.";
+    })
+    .filter(Boolean);
+
+  if (!messages.length) return "";
+
+  return `
+    <div class="scan-workspace-hard-requirement-warning" role="status">
+      <span class="scan-workspace-hard-requirement-warning-kicker">Hard requirement</span>
+      ${messages.map((message) => `
+        <p class="scan-workspace-hard-requirement-warning-text">${escapeHtml(message)}</p>
+      `).join("")}
+    </div>
+  `;
+}
+
 function normalizeScanWorkspaceProfileUrl(value, expectedHost) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -11610,7 +11732,11 @@ function renderScanWorkspaceView() {
   const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
 
   const activePanel = getScanWorkspaceActiveTaxonomyPanel(payload);
-  root.innerHTML = renderScanWorkspaceTaxonomyPanel(activePanel);
+  ensureScanWorkspaceHardRequirementDiagnosticsReadback();
+  root.innerHTML = `
+    ${renderScanWorkspaceHardRequirementDiagnosticsBanner()}
+    ${renderScanWorkspaceTaxonomyPanel(activePanel)}
+  `;
 
   renderScanWorkspaceTabs();
   updateScanWorkspaceMeta();

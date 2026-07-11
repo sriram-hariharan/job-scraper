@@ -13,6 +13,7 @@ from src.config.consts import (
     CONTEXT_TOKEN_STOPWORDS,
     _CLAUSE_SPLIT_ACTION_VERBS, 
 )
+from src.matching.clearance_requirements import active_ts_clearance_diagnostic
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import (
@@ -1542,6 +1543,27 @@ def _payload_for_json(
     top_bullets: List[dict],
     top_evidence_units: List[dict],
 ) -> dict:
+    job_text = " ".join(
+        str(value or "").strip()
+        for value in (
+            getattr(job_evidence, "retrieval_text", ""),
+            getattr(job_evidence, "preview", ""),
+            selected_job_record.get("description_text", ""),
+            selected_job_record.get("description", ""),
+            selected_job_record.get("job_description", ""),
+            selected_job_record.get("preview", ""),
+            selected_job_record.get("retrieval_text", ""),
+        )
+        if str(value or "").strip()
+    )
+    resume_text = str(getattr(selected_resume.document, "raw_text", "") or "")
+    hard_requirement_diagnostic = active_ts_clearance_diagnostic(
+        job_text,
+        resume_text,
+    )
+    hard_requirement_diagnostics = (
+        [hard_requirement_diagnostic] if hard_requirement_diagnostic else []
+    )
     return {
         "job": {
             "job_doc_id": job_evidence.job_doc_id,
@@ -1574,6 +1596,7 @@ def _payload_for_json(
             "missing_required": missing_required,
             "matched_preferred": matched_preferred,
             "missing_preferred": missing_preferred,
+            "hard_requirement_diagnostics": hard_requirement_diagnostics,
             "matched_terms": list(selected_result.prefilter.matched_terms),
             "top_dimensions": _dimension_snapshot(selected_result),
             "term_support": summary_term_support,

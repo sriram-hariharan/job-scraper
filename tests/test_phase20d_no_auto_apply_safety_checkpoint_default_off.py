@@ -743,6 +743,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "active_ts_clearance_packet_diagnostic",
             "active_ts_clearance_scan_warning_readback",
             "semantic_similarity_diagnostic_only",
+            "semantic_alignment_dimension_default_off",
         ),
     )
 
@@ -963,6 +964,11 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/matching/semantic_similarity.py",
     }
     if set(changed_runtime_files) == phase120b_semantic_similarity_diagnostic_files:
+        return
+    phase121b_semantic_alignment_dimension_files = {
+        ROOT / "src/matching/scorer.py",
+    }
+    if set(changed_runtime_files) == phase121b_semantic_alignment_dimension_files:
         return
         phase79d_default_off_advisory_chain_harness_files = {
             ROOT / "src/agents/orchestrator_adapter_harness.py",

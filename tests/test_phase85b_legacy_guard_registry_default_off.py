@@ -7,6 +7,7 @@ from tests.support.phase_guard_registry import (
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
     assert_protected_hashes,
+    current_milestone_guard_compatibility_allowlist,
     duplicate_artifact_paths,
     normalize_changed_path,
 )
@@ -146,6 +147,7 @@ def test_active_ts_clearance_packet_diagnostic_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("active_ts_clearance_packet_diagnostic",),
+                include_current_milestone_compatibility=False,
             )
 
 
@@ -212,6 +214,7 @@ def test_semantic_similarity_diagnostic_only_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("semantic_similarity_diagnostic_only",),
+                include_current_milestone_compatibility=False,
             )
 
 
@@ -247,7 +250,69 @@ def test_semantic_alignment_weighted_score_component_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("semantic_alignment_weighted_score_component",),
+                include_current_milestone_compatibility=False,
             )
+
+
+def test_llm_adjudicator_readback_default_off_profile_is_narrow():
+    assert_changed_files_allowed(
+        {
+            "src/agents/llm_adjudicator_readback.py",
+            "batch_select_best_resume_variant.py",
+            "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+        },
+        set(),
+        legacy_guard_profiles=("llm_adjudicator_readback_default_off",),
+    )
+
+    for forbidden_path in (
+        "src/matching/scorer.py",
+        "src/matching/dimensions.py",
+        "src/matching/models.py",
+        "src/matching/job_adapter.py",
+        "application_shortlist_from_batch_selector.py",
+        "application_execution_queue.py",
+        "run_application_planning.py",
+        "src/app/services.py",
+        "src/app/api.py",
+        "src/pipeline/collector.py",
+        "src/ai/llm_client.py",
+        "src/rag/retriever.py",
+        "src/tailoring/llm.py",
+        "requirements.txt",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {forbidden_path},
+                set(),
+                legacy_guard_profiles=("llm_adjudicator_readback_default_off",),
+            )
+
+
+def test_current_milestone_guard_compatibility_is_exact_phase123b_surface():
+    assert current_milestone_guard_compatibility_allowlist() == {
+        "src/agents/llm_adjudicator_readback.py",
+        "batch_select_best_resume_variant.py",
+        "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+    }
+
+    assert_changed_files_allowed(
+        {
+            "src/agents/llm_adjudicator_readback.py",
+            "batch_select_best_resume_variant.py",
+            "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+        },
+        set(),
+    )
+
+    for forbidden_path in (
+        "src/matching/scorer.py",
+        "src/app/api.py",
+        "src/pipeline/collector.py",
+        "requirements.txt",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed({forbidden_path}, set())
 
 
 def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):

@@ -816,6 +816,12 @@ def test_changed_files_are_limited_to_phase33c_surface_and_legacy_guards():
             "tests/test_phase121b_semantic_alignment_dimension_default_off.py",
     }
     allowed_changed |= phase116_allowed_changed_files
+    phase123b_llm_adjudicator_readback_files = {
+        "src/agents/llm_adjudicator_readback.py",
+        "batch_select_best_resume_variant.py",
+        "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+    }
+    allowed_changed |= phase123b_llm_adjudicator_readback_files
     for line in result.stdout.splitlines():
         path = line[3:].strip().strip('"')
         if path.startswith("tests/test_") and path.endswith(".py"):

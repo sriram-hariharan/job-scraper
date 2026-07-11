@@ -826,6 +826,12 @@ def test_changed_files_limited_to_phase49b_surface_and_legacy_guards():
             "tests/test_phase121b_semantic_alignment_dimension_default_off.py",
     }
     allowed |= phase116_allowed_changed_files
+    phase123b_llm_adjudicator_readback_files = {
+        "src/agents/llm_adjudicator_readback.py",
+        "batch_select_best_resume_variant.py",
+        "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+    }
+    allowed |= phase123b_llm_adjudicator_readback_files
     for path in changed:
         assert path in allowed or not any(
             path == root or path.startswith(root) for root in forbidden_roots

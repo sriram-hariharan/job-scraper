@@ -637,6 +637,9 @@ ALLOWED_CHANGED |= {
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
             "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
                     "tests/support/phase_guard_registry.py",
+            "src/agents/llm_adjudicator_readback.py",
+            "batch_select_best_resume_variant.py",
+            "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
 }
 
 
@@ -1136,11 +1139,12 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/storage/vector_evidence/embedding_runtime_adapter.py",
         "src/storage/admin_tools/vector_evidence_pgvector_smoke.py",
         "src/pipeline/collector.py",
-        "src/agents/orchestrator_adapter_harness.py",
-        "src/agents/evidence_chain_execution.py",
-                "requirements.txt",
-                "src/agents/evidence_chain_langgraph_harness.py",
-    }
+            "src/agents/orchestrator_adapter_harness.py",
+            "src/agents/evidence_chain_execution.py",
+            "src/agents/llm_adjudicator_readback.py",
+                    "requirements.txt",
+                    "src/agents/evidence_chain_langgraph_harness.py",
+        }
     runtime_paths = [
         path for path in changed
         if path not in approved_runtime_paths

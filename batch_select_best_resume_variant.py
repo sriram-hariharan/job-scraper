@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from difflib import SequenceMatcher
 
+from src.agents.llm_adjudicator_readback import (
+    build_llm_adjudicator_readback,
+    llm_adjudicator_readback_enabled,
+)
 from src.ai.llm_client import (
     get_default_model,
     get_default_provider,
@@ -202,6 +206,43 @@ def _dimension_scores_json(result) -> str:
             }
         )
     return json.dumps(payload, ensure_ascii=False)
+
+
+def _semantic_alignment_summary(result) -> Dict[str, Any]:
+    for dim in result.dimension_scores:
+        if dim.name == "semantic_alignment":
+            return {
+                "score": round(float(dim.score), 6),
+                "weight": round(float(dim.weight), 6),
+                "weighted_score": round(float(dim.weighted_score), 6),
+                "reason": dim.reason,
+                "evidence": list(dim.evidence),
+            }
+    return {}
+
+
+def _llm_adjudicator_candidate_summary(result) -> Dict[str, Any]:
+    return {
+        "resume_name": result.pair.resume_name,
+        "final_score": round(float(result.final_score), 6),
+        "match_bucket": result.match_bucket,
+        "top_dimensions": _dimension_snapshot(result),
+        "semantic_alignment": _semantic_alignment_summary(result),
+        "hard_requirement_diagnostics": [],
+        "missing_requirements": list(result.prefilter.missing_requirements),
+        "matched_terms": list(result.prefilter.matched_terms),
+        "prefilter_passed": bool(result.prefilter.passed),
+    }
+
+
+def _llm_adjudicator_readback_csv_fields(
+    readback: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "llm_adjudicator_readback_enabled": str(bool(readback.get("enabled"))),
+        "llm_adjudicator_readback_status": str(readback.get("status", "") or ""),
+        "llm_adjudicator_readback": json.dumps(readback, ensure_ascii=False),
+    }
 
 def _is_title_only_edge(
     winner,
@@ -1594,6 +1635,17 @@ def main() -> None:
             llm_fallback=llm_fallback,
             llm_adjudication=llm_adjudication,
         )
+        llm_adjudicator_readback = build_llm_adjudicator_readback(
+            candidates=[
+                _llm_adjudicator_candidate_summary(result)
+                for result in selected[:3]
+            ]
+            if has_credible_match
+            else [],
+            provider=LLM_ADJUDICATION_PROVIDER,
+            model=LLM_ADJUDICATION_MODEL,
+            enabled=llm_adjudicator_readback_enabled(),
+        )
                 
         output_row = {
                 "job_doc_id": winner.pair.job_doc_id,
@@ -1742,6 +1794,7 @@ def main() -> None:
                 "llm_adjudication_cache_hit": llm_adjudication["cache_hit"],
                 "llm_adjudication_differs_from_deterministic": llm_adjudication["differs_from_deterministic"],
                 "llm_adjudication_error_type": llm_adjudication["error_type"],
+                **_llm_adjudicator_readback_csv_fields(llm_adjudicator_readback),
             }
         output_row.update(compute_resume_selection_credibility(output_row))
         if output_row["fallback_only_no_deterministic_match"] == "true":
@@ -1840,6 +1893,9 @@ def main() -> None:
         "llm_adjudication_cache_hit",
         "llm_adjudication_differs_from_deterministic",
         "llm_adjudication_error_type",
+        "llm_adjudicator_readback_enabled",
+        "llm_adjudicator_readback_status",
+        "llm_adjudicator_readback",
     ]
 
     output_csv_path = Path(args.output_csv)

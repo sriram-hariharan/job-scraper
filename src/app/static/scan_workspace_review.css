@@ -3885,6 +3885,44 @@ body .scan-workspace-page.page > .scan-workspace-header-shell.scan-workspace-hea
   min-width: 96px !important;
 }
 
+#scanWorkspaceInteractiveSummary .scan-workspace-hard-requirement-warning {
+  display: grid !important;
+  gap: 4px !important;
+  margin: 0 0 12px !important;
+  padding: 12px 14px !important;
+  border: 1px solid rgba(217, 119, 6, 0.28) !important;
+  border-radius: 8px !important;
+  background: rgba(251, 191, 36, 0.12) !important;
+  color: var(--scan-text) !important;
+  box-shadow: none !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-hard-requirement-warning-kicker {
+  color: #92400e !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0 !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-hard-requirement-warning-text {
+  margin: 0 !important;
+  color: var(--scan-text) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1.45 !important;
+}
+
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-hard-requirement-warning {
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  background: rgba(146, 64, 14, 0.26) !important;
+}
+
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-hard-requirement-warning-kicker {
+  color: #fbbf24 !important;
+}
+
 /* scan_review_v2_58: single source of truth for review pane layout, height, and internal scrolling. */
 .scan-review-v2 {
   --scan-review-pane-top: 6px;

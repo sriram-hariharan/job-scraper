@@ -144,6 +144,38 @@ def test_active_ts_clearance_packet_diagnostic_profile_is_narrow():
             )
 
 
+def test_active_ts_clearance_scan_warning_readback_profile_is_narrow():
+    assert_changed_files_allowed(
+        {
+            "src/app/static/planning.js",
+            "src/app/static/scan_workspace_review.css",
+            "tests/test_phase119b_ts_clearance_scan_warning_static_only.py",
+        },
+        set(),
+        legacy_guard_profiles=("active_ts_clearance_scan_warning_readback",),
+    )
+
+    for forbidden_path in (
+        "src/app/services.py",
+        "src/app/api.py",
+        "src/pipeline/collector.py",
+        "src/matching/scorer.py",
+        "src/matching/dimensions.py",
+        "src/matching/job_adapter.py",
+        "src/ai/llm_client.py",
+        "src/agents/resume_match_agent.py",
+        "src/tailoring/llm.py",
+        "src/app/application_execution_queue.py",
+        "src/integrations/ats_submitter.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {forbidden_path},
+                set(),
+                legacy_guard_profiles=("active_ts_clearance_scan_warning_readback",),
+            )
+
+
 def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):
     path = tmp_path / "guarded.py"
     path.write_text("print('safe')\n", encoding="utf-8")

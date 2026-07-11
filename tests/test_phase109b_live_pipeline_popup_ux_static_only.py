@@ -176,7 +176,10 @@ def test_phase109b_adds_only_ui_static_and_focused_test_files():
     assert_changed_files_allowed(
         changed,
         allowed,
-        legacy_guard_profiles=("config_vocabulary_scoring_change",),
+        legacy_guard_profiles=(
+            "config_vocabulary_scoring_change",
+            "active_ts_clearance_scan_warning_readback",
+        ),
     )
     assert "src/app/api.py" not in changed
     assert "src/app/services.py" not in changed

@@ -176,6 +176,40 @@ def test_active_ts_clearance_scan_warning_readback_profile_is_narrow():
             )
 
 
+def test_semantic_similarity_diagnostic_only_profile_is_narrow():
+    assert_changed_files_allowed(
+        {
+            "src/matching/semantic_similarity.py",
+            "tests/test_phase120b_semantic_similarity_diagnostic.py",
+        },
+        set(),
+        legacy_guard_profiles=("semantic_similarity_diagnostic_only",),
+    )
+
+    for forbidden_path in (
+        "src/matching/scorer.py",
+        "src/matching/dimensions.py",
+        "src/matching/job_adapter.py",
+        "batch_select_best_resume_variant.py",
+        "application_shortlist_from_batch_selector.py",
+        "application_execution_queue.py",
+        "src/app/services.py",
+        "src/app/api.py",
+        "src/pipeline/collector.py",
+        "src/ai/llm_client.py",
+        "src/agents/resume_match_agent.py",
+        "src/rag/retriever.py",
+        "src/tailoring/llm.py",
+        "requirements.txt",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {forbidden_path},
+                set(),
+                legacy_guard_profiles=("semantic_similarity_diagnostic_only",),
+            )
+
+
 def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):
     path = tmp_path / "guarded.py"
     path.write_text("print('safe')\n", encoding="utf-8")

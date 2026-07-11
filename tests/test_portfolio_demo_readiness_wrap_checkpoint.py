@@ -1044,6 +1044,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
     approved_runtime_paths = {
         "src/config/consts.py",
         "src/matching/clearance_requirements.py",
+        "src/matching/semantic_similarity.py",
         "src/app/api.py",
         "src/app/services.py",
         "src/app/static/agentic_review.js",

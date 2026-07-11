@@ -743,6 +743,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "config_vocabulary_scoring_change",
             "active_ts_clearance_diagnostic",
             "active_ts_clearance_packet_diagnostic",
+            "active_ts_clearance_scan_warning_readback",
         ),
     )
 
@@ -979,6 +980,12 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "jd_resume_diff_helper.py",
     }
     if set(changed_runtime_files) == phase118b_active_ts_clearance_packet_diagnostic_files:
+        return
+    phase119b_active_ts_clearance_scan_warning_files = {
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/scan_workspace_review.css",
+    }
+    if set(changed_runtime_files) == phase119b_active_ts_clearance_scan_warning_files:
         return
 
     assert changed_runtime_files in (

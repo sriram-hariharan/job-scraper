@@ -85,6 +85,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "jd_resume_diff_helper.py",
             "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
             "tests/test_phase119b_ts_clearance_scan_warning_static_only.py",
+            "src/matching/semantic_similarity.py",
+            "tests/test_phase120b_semantic_similarity_diagnostic.py",
             "tests/test_phase18_human_approval_gate_contract_default_off.py",
             "tests/test_phase18_live_provider_activation_plan_default_off.py",
             "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
@@ -345,6 +347,10 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/app/static/planning.js",
             "src/app/static/scan_workspace_review.css",
             "tests/test_phase119b_ts_clearance_scan_warning_static_only.py",
+        },
+        "semantic_similarity_diagnostic_only": {
+            "src/matching/semantic_similarity.py",
+            "tests/test_phase120b_semantic_similarity_diagnostic.py",
         },
     }
     try:

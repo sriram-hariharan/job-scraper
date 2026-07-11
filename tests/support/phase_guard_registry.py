@@ -82,6 +82,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase116a_applied_ai_scoring_fix.py",
             "src/matching/clearance_requirements.py",
             "tests/test_phase117b_ts_clearance_diagnostic.py",
+            "jd_resume_diff_helper.py",
+            "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
             "tests/test_phase18_human_approval_gate_contract_default_off.py",
             "tests/test_phase18_live_provider_activation_plan_default_off.py",
             "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
@@ -333,6 +335,10 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "active_ts_clearance_diagnostic": {
             "src/matching/clearance_requirements.py",
             "tests/test_phase117b_ts_clearance_diagnostic.py",
+        },
+        "active_ts_clearance_packet_diagnostic": {
+            "jd_resume_diff_helper.py",
+            "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
         },
     }
     try:

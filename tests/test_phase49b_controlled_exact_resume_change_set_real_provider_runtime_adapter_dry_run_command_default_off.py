@@ -818,6 +818,8 @@ def test_changed_files_limited_to_phase49b_surface_and_legacy_guards():
         "tests/test_phase116a_applied_ai_scoring_fix.py",
         "src/matching/clearance_requirements.py",
         "tests/test_phase117b_ts_clearance_diagnostic.py",
+        "jd_resume_diff_helper.py",
+        "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
     }
     allowed |= phase116_allowed_changed_files
     for path in changed:

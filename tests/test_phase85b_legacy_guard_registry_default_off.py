@@ -59,6 +59,8 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
             "tests/test_phase116a_applied_ai_scoring_fix.py",
             "src/matching/clearance_requirements.py",
             "tests/test_phase117b_ts_clearance_diagnostic.py",
+            "jd_resume_diff_helper.py",
+            "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
         },
         set(),
         legacy_guard_profiles=("config_vocabulary_scoring_change",),
@@ -106,6 +108,39 @@ def test_active_ts_clearance_diagnostic_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("active_ts_clearance_diagnostic",),
+            )
+
+
+def test_active_ts_clearance_packet_diagnostic_profile_is_narrow():
+    assert_changed_files_allowed(
+        {
+            "jd_resume_diff_helper.py",
+            "tests/test_phase118b_ts_clearance_packet_diagnostic.py",
+        },
+        set(),
+        legacy_guard_profiles=("active_ts_clearance_packet_diagnostic",),
+    )
+
+    for forbidden_path in (
+        "src/matching/scorer.py",
+        "src/matching/dimensions.py",
+        "src/matching/job_adapter.py",
+        "batch_select_best_resume_variant.py",
+        "application_shortlist_from_batch_selector.py",
+        "application_execution_queue.py",
+        "src/app/services.py",
+        "src/pipeline/collector.py",
+        "src/ai/llm_client.py",
+        "src/agents/resume_match_agent.py",
+        "src/tailoring/llm.py",
+        "src/app/application_execution_queue.py",
+        "src/integrations/ats_submitter.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {forbidden_path},
+                set(),
+                legacy_guard_profiles=("active_ts_clearance_packet_diagnostic",),
             )
 
 

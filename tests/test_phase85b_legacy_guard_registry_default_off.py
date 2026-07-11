@@ -289,22 +289,22 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
             )
 
 
-def test_current_milestone_guard_compatibility_is_exact_phase126b_surface():
+def test_current_milestone_guard_compatibility_is_exact_phase127b_surface():
     assert current_milestone_guard_compatibility_allowlist() == {
-        "src/app/static/planning.js",
         "docs/demo_walkthrough.md",
-        "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
-        "tests/test_phase126b_planning_ai_review_copy_polish_static_only.py",
+        "docs/portfolio_demo_readiness_wrap_checkpoint.md",
+        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+        "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
         "tests/support/phase_guard_registry.py",
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }
 
     assert_changed_files_allowed(
         {
-            "src/app/static/planning.js",
             "docs/demo_walkthrough.md",
-            "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
-            "tests/test_phase126b_planning_ai_review_copy_polish_static_only.py",
+            "docs/portfolio_demo_readiness_wrap_checkpoint.md",
+            "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+            "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },

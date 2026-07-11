@@ -135,6 +135,31 @@ Verification plan:
 - Confirm no src/ files changed.
 - Confirm no application execution or application submission paths changed.
 
+## Phase 127 demo freeze checkpoint
+
+The Phase 127 portfolio demo freeze is documentation/readiness only. The finalized 4-5 minute primary demo route is:
+
+1. Run live pipeline with sanitized data.
+2. Open Planning and show deterministic score, selected resume, and `AI review notes · advisory`.
+3. Trigger Generate Suggestions and show its full-page progress flow.
+4. Review the result in Tailoring Workspace and AI Optimize Scan.
+5. Point out the diagnostic-only TS clearance warning when present.
+6. Open Agentic Review and show evidence-chain traceability.
+7. Close with the permanent human-control safety boundary.
+
+Freeze readiness confirms:
+
+- hybrid scoring is ready with always-on local `semantic_alignment` at weight `0.05`;
+- AI review notes remain default-off, readback-only, and non-mutating;
+- Generate Suggestions and Tailoring Workspace are ready for the sanitized demo path;
+- AI Optimize Scan diagnostic readback is ready and does not change scoring;
+- Agentic Review evidence-chain and trace displays are ready;
+- no auto-apply, ATS submission, recruiter messaging, application status mutation, or source-resume overwrite is introduced;
+- the final application action remains manual and human-controlled;
+- the full test suite is expected green when the configured `DATABASE_URL` is available.
+
+After this checkpoint, feature work is frozen for the portfolio demo. Future changes should use a separate post-freeze branch.
+
 ## Stop condition
 
 Stop condition: stop feature work after this checkpoint.

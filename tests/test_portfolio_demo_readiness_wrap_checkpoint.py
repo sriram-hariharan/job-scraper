@@ -67,6 +67,10 @@ REQUIRED_TERMS = [
     "stop feature work after this checkpoint",
     "How to explain this in interviews",
     "Stop condition",
+    "Phase 127 demo freeze checkpoint",
+    "4-5 minute primary demo route",
+    "AI review notes · advisory",
+    "full test suite is expected green when the configured `DATABASE_URL` is available",
 ]
 
 ALLOWED_CHANGED = {

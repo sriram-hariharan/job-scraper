@@ -1,62 +1,54 @@
 # ApplyLens AI Demo Walkthrough
 
-This is a 2-3 minute portfolio script for showing the implemented system with sanitized/local data only. Do not show private resumes, real application data, real emails, or private company/client details.
+This is a 4-5 minute primary portfolio demo for showing the implemented system with sanitized/local data only. Do not show private resumes, real application data, real emails, or private company/client details.
 
 ## Setup
 
 - Start the local FastAPI app.
 - Use a sanitized local account and sanitized pipeline artifacts.
-- Keep the Agentic Benchmark command ready:
+- Keep one eligible Planning row ready for Generate Suggestions.
 
-```bash
-python -m src.evaluation.agentic_benchmark --no-write --print-summary
-```
+## Primary Demo Script
 
-## Script
+0:00 - Run the live pipeline with sanitized data.
 
-0:00 - Open the dashboard or profile pipeline runs.
+"ApplyLens AI is a job-application intelligence workspace. The live pipeline collects and normalizes jobs, matches them against saved resumes, and creates reviewable planning artifacts."
 
-"ApplyLens AI is a job-application intelligence workspace. The core pipeline scrapes and normalizes jobs, matches them against saved resumes, and creates reviewable planning artifacts."
+0:35 - Open Planning.
 
-0:20 - Open one pipeline run.
+"Planning shows the ranked job, deterministic score, selected resume, packet status, and next human review step. Hybrid scoring combines evidence dimensions with always-on local `semantic_alignment` at weight `0.05`. No provider or LLM calculates the final score."
 
-"Each run is owner-scoped and artifact-backed. The app keeps run status, counts, generated planning outputs, and diagnostic metadata available from the UI."
+Open `AI review notes · advisory` when present.
 
-0:40 - Open Agentic Review.
+"Planning displays that existing selector readback as optional readback and advisory notes. This display does not call a provider from the UI and cannot override the selected resume, score, ranking, queue, or action."
 
-"This is the recruiter-friendly view of the agentic layer. It shows what the advisory system saw and validated without changing what jobs are shown or how the queue is ordered."
+1:15 - Trigger Generate Suggestions for one eligible row.
 
-0:48 - Optional: open a Planning row with `AI review notes`.
+"Generate Suggestions runs one existing backend request while the full-page step runner communicates progress. It does not apply to the job or change application status."
 
-"Hybrid scoring combines deterministic evidence dimensions with local semantic alignment at a small fixed weight. When optional adjudicator output was generated, Planning displays that existing selector readback here. Opening this detail does not call a provider, and the commentary cannot override the selected resume or score."
+1:50 - Show the full-page progress flow, then Tailoring Workspace.
 
-0:55 - Show Agent Trace.
+"The workspace opens the selected resume and generated suggestions for human review. The operator accepts, edits, or rejects suggestions before export; source resumes are not overwritten."
 
-"Agent Trace records aggregate run and step diagnostics when tracing is enabled. It is traceability for the workflow layer, not hidden autonomous execution."
+2:30 - Open AI Optimize Scan.
 
-1:10 - Show Workflow Verification.
+"AI Optimize Scan explains match gaps and suggestion coverage. When active TS/Top Secret clearance is required but missing, the clearance warning is diagnostic-only: it does not cap or penalize the score and does not change the selected resume."
 
-"The verifier checks whether expected agentic artifacts are present and internally consistent. Missing optional data is a warning in non-strict mode, which keeps the operator page usable."
+3:10 - Open Agentic Review.
 
-1:25 - Show Manifest, Execution Plan, and Dry Run.
+"Agentic Review shows the evidence chain, Agent Trace, and workflow verification from existing run artifacts. This is traceability for the workflow layer, not hidden autonomous execution."
 
-"The workflow registry defines the implemented advisory agents and safety guarantees. The execution plan is diagnostic. The runner is dry-run only: `src/agents/workflow_runner.py` reports skipped steps and does not execute agents or mutate production decisions."
+Show one collapsed trace detail and the workflow verification summary.
 
-1:50 - Show Human Feedback.
+"The agentic layer explains and verifies pipeline decisions without changing what jobs are shown, how the queue is ordered, or which application action a human takes."
 
-"The Human Feedback section lets the user explicitly mark the Agentic Review as useful or not useful. Feedback is append-only and read-only for evaluation; it does not tune ranking, scoring, queue action, tailoring, or packet generation."
+4:15 - Close with human-control safety guarantees.
 
-2:05 - Show RAG Evaluation.
+"ApplyLens never auto-applies, submits to an ATS, messages recruiters, or overwrites source resumes. There is no production decision mutation from these diagnostics, and the final application action remains manual and human-controlled."
 
-"RAG Evaluation summarizes retrieval diagnostics such as average retrieval score, top-k hit rate, and missing evidence warnings. It does not alter retrieval behavior, embeddings, ranking, or production decisions."
+## Optional Technical Appendix
 
-2:20 - Show benchmark command.
-
-"The project includes an offline deterministic benchmark using sanitized/offline fixtures. This validates advisory-agent behavior, workflow registry contracts, agent feedback export shape, and RAG Evaluation schema shape without live scraping or LLM calls."
-
-2:40 - Optional 60-90 second manual chain smoke demo.
-
-"There is also a manual read-only adapter chain smoke fixture for technical reviewers. It is not production and not live orchestration; it runs only from an explicit local command against sanitized rows."
+For a technical reviewer, optionally show the 60-90 second manual read-only adapter-chain smoke demo after the primary product demo. It is not production and not live orchestration; it runs only from an explicit local command against sanitized rows.
 
 ```bash
 TMP_CHAIN_DIR="$(mktemp -d)"
@@ -67,13 +59,15 @@ python -m src.agents.read_only_chain_artifact_generator \
 find "$TMP_CHAIN_DIR" -maxdepth 3 -type f -print | sort
 ```
 
-"The generator requires both `--queue-input` and `--output-dir`; it refuses to run without explicit paths. The root output includes `read_only_adapter_chain_result.json`, `read_only_adapter_chain_report.md`, and generator-specific report files; adapter-specific CSV/JSON/Markdown files stay inside adapter subdirectories. The chain result uses `execution_mode=manual_read_only_adapter_chain` and safety flags such as `did_mutate_production=false`, `allow_live_pipeline_wiring=false`, and `allow_application_submission=false`."
+The generator requires both `--queue-input` and `--output-dir`; it refuses to run without explicit paths. The resulting artifacts remain diagnostic and can be copied manually into a sanitized run artifact set for Agentic Review. The app does not run this chain from UI actions, live planning, the scheduler, or `workflow_runner.py`.
 
-"For viewer testing, those two root chain artifacts can be copied into a sanitized run artifact set so Agentic Review can display them. That copy is manual; the app does not run the chain from UI actions, live planning, the scheduler, or `workflow_runner.py`."
+The chain result uses `execution_mode=manual_read_only_adapter_chain` and safety flags including `did_mutate_production=false`, `allow_live_pipeline_wiring=false`, and `allow_application_submission=false`. `src/agents/workflow_runner.py` remains dry-run only.
 
-3:50 - End with safety guarantees.
+The offline benchmark is also available as an optional technical check:
 
-"The important engineering choice is separation: the production pipeline creates the real application-planning outputs, while the agentic layer explains, verifies, traces, and evaluates them. No production decision mutation happens from these diagnostics."
+```bash
+python -m src.evaluation.agentic_benchmark --no-write --print-summary
+```
 
 ## What Not To Claim
 
@@ -90,15 +84,14 @@ find "$TMP_CHAIN_DIR" -maxdepth 3 -type f -print | sort
 
 ## Quick Feature Checklist
 
-- Dashboard/profile pipeline runs
-- Pipeline run details
-- Agentic Review
-- Agent Trace
-- Workflow Verification
-- Manifest / Execution Plan / Dry Run
-- Human Feedback
-- RAG Evaluation
-- Manual read-only adapter chain smoke fixture: `docs/read_only_chain_smoke.md`
-- Operator runbook for the explicit generator: `docs/read_only_chain_operator_runbook.md`
-- Agentic Benchmark command
-- Safety close: no production decision mutation
+- Run live pipeline
+- Planning score and selected resume
+- AI review notes · advisory
+- Generate Suggestions full-page progress
+- Tailoring Workspace
+- AI Optimize Scan diagnostic-only clearance warning
+- Agentic Review evidence chain
+- Agent Trace and Workflow Verification
+- Optional manual read-only adapter chain smoke fixture: `docs/read_only_chain_smoke.md`
+- Optional Agentic Benchmark command
+- Safety close: final application action remains manual

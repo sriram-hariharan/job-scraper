@@ -289,22 +289,22 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
             )
 
 
-def test_current_milestone_guard_compatibility_is_exact_phase127b_surface():
+def test_current_milestone_guard_compatibility_is_exact_phase128b_surface():
     assert current_milestone_guard_compatibility_allowlist() == {
-        "docs/demo_walkthrough.md",
-        "docs/portfolio_demo_readiness_wrap_checkpoint.md",
-        "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
-        "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
+        "src/agents/llm_adjudicator_readback.py",
+        "batch_select_best_resume_variant.py",
+        "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+        "tests/test_phase128b_policy_driven_llm_adjudicator_readback.py",
         "tests/support/phase_guard_registry.py",
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }
 
     assert_changed_files_allowed(
         {
-            "docs/demo_walkthrough.md",
-            "docs/portfolio_demo_readiness_wrap_checkpoint.md",
-            "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
-            "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
+            "src/agents/llm_adjudicator_readback.py",
+            "batch_select_best_resume_variant.py",
+            "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+            "tests/test_phase128b_policy_driven_llm_adjudicator_readback.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },

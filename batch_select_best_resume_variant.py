@@ -8,8 +8,7 @@ from typing import Any, Dict, List, Optional
 from difflib import SequenceMatcher
 
 from src.agents.llm_adjudicator_readback import (
-    build_llm_adjudicator_readback,
-    llm_adjudicator_readback_enabled,
+    build_policy_driven_llm_adjudicator_readback,
 )
 from src.ai.llm_client import (
     get_default_model,
@@ -1635,16 +1634,15 @@ def main() -> None:
             llm_fallback=llm_fallback,
             llm_adjudication=llm_adjudication,
         )
-        llm_adjudicator_readback = build_llm_adjudicator_readback(
-            candidates=[
-                _llm_adjudicator_candidate_summary(result)
-                for result in selected[:3]
-            ]
+        llm_adjudicator_candidates = (
+            [_llm_adjudicator_candidate_summary(result) for result in selected[:3]]
             if has_credible_match
-            else [],
+            else []
+        )
+        llm_adjudicator_readback = build_policy_driven_llm_adjudicator_readback(
+            candidates=llm_adjudicator_candidates,
             provider=LLM_ADJUDICATION_PROVIDER,
             model=LLM_ADJUDICATION_MODEL,
-            enabled=llm_adjudicator_readback_enabled(),
         )
                 
         output_row = {

@@ -445,6 +445,14 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
+        "policy_driven_llm_adjudicator_readback": {
+            "src/agents/llm_adjudicator_readback.py",
+            "batch_select_best_resume_variant.py",
+            "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
+            "tests/test_phase128b_policy_driven_llm_adjudicator_readback.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -454,7 +462,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
 
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
-    return legacy_guard_allowlist("portfolio_demo_freeze_checkpoint")
+    return legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
 
 
 def assert_changed_files_allowed(

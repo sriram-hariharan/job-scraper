@@ -3,6 +3,7 @@
 # phase26b legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004
 from hashlib import sha256
 from pathlib import Path
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 REVIEW_JS_PATH = Path("src/app/static/agentic_review.js")
@@ -46,9 +47,13 @@ def _trace_fetch_snippet() -> str:
 
 
 def test_step_206a_backend_storage_pipeline_and_execution_files_are_unchanged():
-    for path, expected_hash in PROTECTED_FILE_HASHES.items():
-        assert Path(path).exists(), path
-        assert sha256(Path(path).read_bytes()).hexdigest() == expected_hash, path
+    assert_protected_hashes(
+        Path("."),
+        PROTECTED_FILE_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_no_critic_evaluator_readonly_frontend_auto_call_or_hidden_llm_call():

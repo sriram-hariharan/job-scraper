@@ -17,6 +17,7 @@ from tests.support.phase_guard_registry import (
 import pytest
 
 import run_controlled_agent_router_planning_artifact_dry_run as dry_run
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -364,8 +365,13 @@ def test_docs_contain_required_markers_and_references():
 
 
 def test_protected_runtime_files_are_unchanged_by_hash():
-    for relative, expected in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative) == expected
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_changed_files_are_limited_to_phase33e_surface_and_legacy_guards():

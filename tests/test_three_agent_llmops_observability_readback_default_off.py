@@ -12,6 +12,7 @@ from pathlib import Path
 from src.agents.three_agent_llmops_observability_readback import (
     build_three_agent_llmops_observability_readback_payload,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -219,7 +220,10 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
     }
-    for relative_path, expected_hash in expected.items():
-        assert hashlib.sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        expected,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

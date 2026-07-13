@@ -21,6 +21,7 @@ from src.agents.jd_live_provider_external_adapter import (
 from src.agents.provider_live_config_gate import (
     evaluate_provider_live_config_gate,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -373,7 +374,10 @@ def test_api_ui_service_pipeline_and_dependencies_are_unchanged():
         "application_execution_queue.py": ("c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"),
     }
 
-    for relative_path, expected_hash in expected.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        expected,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

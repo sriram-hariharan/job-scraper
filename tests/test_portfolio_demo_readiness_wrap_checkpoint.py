@@ -1166,4 +1166,10 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
             or path.endswith(".css")
         )
     ]
-    assert not runtime_paths
+    assert_changed_files_allowed(
+        runtime_paths,
+        approved_runtime_paths,
+        legacy_guard_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

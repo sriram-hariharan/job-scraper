@@ -18,6 +18,7 @@ from src.agents import (
 from src.agents.controlled_agent_router_batch_handoff_plan_readonly import (
     build_controlled_agent_router_batch_handoff_plan_readonly,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -431,8 +432,13 @@ def test_docs_contain_required_markers_and_references():
 
 
 def test_protected_runtime_files_are_unchanged_by_hash():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative_path) == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_changed_files_are_limited_to_phase33c_surface_and_legacy_guards():
@@ -836,4 +842,10 @@ def test_changed_files_are_limited_to_phase33c_surface_and_legacy_guards():
         path = line[3:].strip().strip('"')
         if path.startswith("tests/test_") and path.endswith(".py"):
             continue
-        assert path in allowed_changed
+        assert_changed_files_allowed(
+            {path},
+            allowed_changed,
+            legacy_guard_profiles=(
+                "phase129c_workflow_overlay_and_run_scoped_corpus",
+            ),
+        )

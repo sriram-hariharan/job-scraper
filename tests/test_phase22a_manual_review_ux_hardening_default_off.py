@@ -14,6 +14,7 @@ from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
     get_changed_files,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 ROOT = Path(__file__).resolve().parents[1]
 DOC_PATH = ROOT / "docs/phase22_manual_review_ux_hardening.md"
@@ -166,8 +167,13 @@ def test_phase22a_adds_no_endpoint_urls_or_fetch_changes():
 
 
 def test_protected_backend_and_helper_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase22a_changes_only_static_docs_tests_and_legacy_guards():

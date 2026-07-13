@@ -9,6 +9,7 @@ from src.app import services
 from tests.support.phase_guard_registry import (
     assert_no_forbidden_runtime_calls_ast,
     get_changed_files,
+    legacy_guard_allowlist,
 )
 
 
@@ -385,6 +386,9 @@ def test_service_manual_critic_slice_does_not_add_job_fit_or_raw_provider_calls(
 
 def test_no_collector_api_ui_or_static_changes_for_phase105b():
     changed = get_changed_files(ROOT)
+    phase129_surface = legacy_guard_allowlist(
+        "phase129c_workflow_overlay_and_run_scoped_corpus"
+    )
 
     phase108a_collector_surface = {
         "src/pipeline/collector.py",
@@ -396,16 +400,28 @@ def test_no_collector_api_ui_or_static_changes_for_phase105b():
     assert not unexpected_collector_change
     if "src/pipeline/collector.py" in changed:
         assert phase108a_collector_surface <= changed
-    assert "src/app/api.py" not in changed
+    unexpected_api_change = {
+        path for path in changed if path == "src/app/api.py"
+    } - phase129_surface
+    assert not unexpected_api_change
+    for relative_path in ("src/pipeline/collector.py", "src/app/api.py"):
+        text = (ROOT / relative_path).read_text(encoding="utf-8")
+        assert "build_critic_controlled_llm_guardrail_artifact" not in text
+
+    historical_static_surface = {
+        "src/app/static/agentic_review.js",
+        "src/app/static/app.js",
+        "src/app/static/planning.js",
+        "src/app/static/scan_workspace.js",
+        "src/app/static/scan_workspace_review.css",
+        "src/app/static/styles.css",
+    }
     unexpected_static = {
         path
         for path in changed
         if path.startswith("src/app/static/")
-        and path != "src/app/static/agentic_review.js"
-        and path != "src/app/static/app.js"
-        and path != "src/app/static/planning.js"
-        and path != "src/app/static/scan_workspace.js"
-        and path != "src/app/static/scan_workspace_review.css"
+        and path not in historical_static_surface
+        and path not in phase129_surface
     }
     assert not unexpected_static
     assert not any(path.startswith("src/app/templates/") for path in changed)

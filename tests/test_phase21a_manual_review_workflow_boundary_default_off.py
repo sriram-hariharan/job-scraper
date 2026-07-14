@@ -1022,6 +1022,11 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == phase123b_llm_adjudicator_readback_helper_files:
         return
+    phase129_auth_artwork_runtime_files = {
+        ROOT / "src/app/auth_ui.py",
+    }
+    if set(changed_runtime_files) == phase129_auth_artwork_runtime_files:
+        return
     phase129b_auth_loader_ui_files = {
         ROOT / "src/app/auth_ui.py",
         ROOT / "src/app/ui.py",

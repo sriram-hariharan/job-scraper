@@ -269,7 +269,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     .auth-shell {{
       position: relative;
       display: grid;
-      grid-template-columns: minmax(0, 62%) minmax(400px, 38%);
+      grid-template-columns: minmax(0, 60%) minmax(420px, 40%);
       width: 100%;
       height: 100dvh;
       min-height: 0;
@@ -280,6 +280,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       background-image: url("/static/media/Login_page_BG_img.jpg");
       background-size: cover;
       background-position: center center;
+      background-attachment: fixed;
       box-shadow: none;
       overflow: hidden;
     }}
@@ -290,22 +291,24 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       inset: 0;
       z-index: 0;
       background:
-        linear-gradient(90deg, rgba(248, 251, 255, 0.94) 0%, rgba(246, 250, 255, 0.82) 34%, rgba(235, 244, 255, 0.34) 61%, rgba(13, 35, 71, 0.16) 100%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 58%, rgba(7, 27, 61, 0.28));
+        linear-gradient(90deg, rgba(248, 251, 255, 0.5) 0%, rgba(246, 250, 255, 0.34) 27%, rgba(235, 244, 255, 0.08) 49%, transparent 68%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 56%, rgba(7, 27, 61, 0.2));
       pointer-events: none;
     }}
 
     .auth-hero {{
       position: relative;
       display: grid;
-      grid-template-rows: auto 1fr auto;
-      gap: clamp(16px, 2.6vh, 28px);
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      row-gap: clamp(14px, 2vh, 24px);
       min-width: 0;
       height: 100%;
       min-height: 0;
-      padding: clamp(24px, 3.6vh, 46px) clamp(34px, 5vw, 76px);
+      padding: clamp(58px, 7.5vh, 82px) clamp(84px, 6.2vw, 120px) clamp(46px, 5.5vh, 66px);
+      padding-right: clamp(24px, 3vw, 58px);
       background: transparent;
       border-right: 1px solid rgba(255, 255, 255, 0.24);
+      overflow: hidden;
       z-index: 1;
     }}
 
@@ -321,7 +324,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       position: absolute;
       inset: auto 0 18%;
       height: 18%;
-      background: linear-gradient(180deg, transparent, rgba(219, 234, 254, 0.18), transparent);
+      background: linear-gradient(180deg, transparent, rgba(219, 234, 254, 0.1), transparent);
       filter: blur(22px);
     }}
 
@@ -335,10 +338,13 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       border-radius: 50%;
       transform: rotate(-4deg) skewX(-18deg);
       box-shadow: 0 -18px 42px rgba(96, 165, 250, 0.2);
+      opacity: 0.42;
     }}
 
     .auth-brand-lockup {{
       position: relative;
+      z-index: 1;
+      grid-column: 1 / -1;
       display: flex;
       align-items: center;
       width: fit-content;
@@ -351,28 +357,48 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     .auth-brand-logo {{
       display: block;
-      width: clamp(210px, 22vw, 310px);
-      height: clamp(68px, 8vw, 98px);
+      width: clamp(84px, 5.8vw, 98px);
+      height: clamp(84px, 5.8vw, 98px);
       object-fit: contain;
-      object-position: left center;
+      object-position: center;
+      clip-path: inset(0 0 40% 0);
       filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.14));
+      transform: translateY(3px) scale(1.78);
+      transform-origin: center;
+      margin-left: 4px;
+      margin-right: -6px;
     }}
 
     .auth-brand-text {{
-      display: none;
+      display: block;
+      margin-left: 0;
+      color: #07152f;
+      font-size: clamp(27px, 2.1vw, 34px);
+      font-weight: 900;
+      line-height: 1;
+      transform: translateY(-1px);
     }}
 
     .auth-brand-text small {{
       display: none;
     }}
 
+    .auth-brand-text em,
+    .auth-form-brand em {{
+      color: #2bb673;
+      font-style: normal;
+    }}
+
     .auth-hero-copy {{
       position: relative;
-      z-index: 1;
-      align-self: center;
+      z-index: 2;
+      grid-row: 2;
+      align-self: start;
       display: grid;
-      gap: 18px;
-      max-width: min(590px, 70%);
+      gap: clamp(11px, 1.4vh, 15px);
+      width: min(570px, 64%);
+      max-width: 570px;
+      margin-top: 0;
     }}
 
     .auth-hero-kicker {{
@@ -391,9 +417,9 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     .auth-hero-title {{
       margin: 0;
-      max-width: 650px;
+      max-width: 570px;
       color: #07152f !important;
-      font-size: clamp(42px, 4.5vw, 68px) !important;
+      font-size: clamp(44px, 3vw, 56px) !important;
       font-weight: 950 !important;
       line-height: 1.02 !important;
       letter-spacing: 0 !important;
@@ -404,91 +430,107 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-hero-subtitle {{
-      max-width: 520px;
+      max-width: 500px;
       margin: 0;
       color: #1e293b;
-      font-size: clamp(15px, 1.2vw, 17px);
-      line-height: 1.6;
-      font-weight: 650;
+      font-size: clamp(15px, 0.95vw, 17px);
+      line-height: 1.5;
+      font-weight: 450 !important;
     }}
 
     .auth-hero-bullets {{
+      position: relative;
+      z-index: 2;
       display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 4px;
+      flex-wrap: nowrap;
+      gap: 6px;
+      width: max-content;
+      max-width: none;
+      margin-top: 2px;
     }}
 
-    .auth-workflow {{
-      position: relative;
+    .auth-workflow-artwork {{
+      position: absolute;
+      top: clamp(85px, 9vh, 105px);
+      right: clamp(70px, 5.5vw, 105px);
+      width: auto;
+      height: min(68vh, 650px);
+      object-fit: contain;
       z-index: 1;
-      position: absolute;
-      top: 21%;
-      right: clamp(18px, 2.4vw, 38px);
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 22px;
-      width: min(180px, 20%);
-      margin: 0;
-    }}
-
-    .auth-workflow::before {{
-      content: "";
-      position: absolute;
-      left: 20px;
-      top: 34px;
-      bottom: 34px;
-      width: 1px;
-      background: linear-gradient(180deg, rgba(37, 99, 235, 0.16), rgba(37, 99, 235, 0.52), rgba(37, 99, 235, 0.12));
-    }}
-
-    .auth-workflow-step {{
-      display: grid;
-      grid-template-columns: 28px minmax(0, 1fr);
-      gap: 8px;
-      min-height: 42px;
-      padding: 6px 9px 6px 6px;
-      position: relative;
-      border: 1px solid rgba(255, 255, 255, 0.62);
-      border-radius: 10px;
-      background: rgba(244, 248, 255, 0.62);
-      color: #334155;
-      font-size: 12px;
-      font-weight: 850;
-    }}
-
-    .auth-workflow-step span {{
-      display: inline-grid;
-      place-items: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: rgba(219, 234, 254, 0.9);
-      color: #2563eb;
-      font-size: 11px;
-      font-weight: 900;
+      pointer-events: none;
+      user-select: none;
     }}
 
     .auth-safety-line {{
       position: relative;
       z-index: 1;
+      grid-column: 1;
+      grid-row: 3;
       align-self: end;
       margin: 0;
-      max-width: 500px;
+      max-width: 540px;
       color: #f8fafc;
-      font-size: 13px;
-      font-weight: 850;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.5;
+      padding-left: 38px;
+    }}
+
+    .auth-safety-line::before {{
+      content: "✓";
+      position: absolute;
+      left: 0;
+      top: 50%;
+      display: grid;
+      place-items: center;
+      width: 27px;
+      height: 27px;
+      border-radius: 8px;
+      background: #2bb673;
+      color: #ffffff;
+      font-size: 17px;
+      font-weight: 900;
+      transform: translateY(-50%);
+      box-shadow: 0 8px 20px rgba(43, 182, 115, 0.28);
     }}
 
     .auth-hero-bullet {{
-      border: 1px solid rgba(148, 163, 184, 0.28);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.70);
       border-radius: 999px;
-      padding: 8px 12px;
-      background: rgba(255, 255, 255, 0.7);
+      padding: 7px 9px;
+      background: rgba(255, 255, 255, 0.76);
       color: #1e293b;
-      font-size: 13px;
-      font-weight: 850;
-      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1;
+      white-space: nowrap;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07), inset 0 1px rgba(255, 255, 255, 0.64);
+      backdrop-filter: blur(15px) saturate(1.06);
+      -webkit-backdrop-filter: blur(15px) saturate(1.06);
+    }}
+
+    .auth-hero-bullet img {{
+      display: block;
+      width: 15px;
+      height: 15px;
+      object-fit: contain;
+      opacity: 1;
+      filter: brightness(0) saturate(100%) invert(37%) sepia(92%) saturate(3292%) hue-rotate(216deg) brightness(98%) contrast(91%);
+    }}
+
+    .auth-hero-bullet:nth-child(2) img {{
+      filter: brightness(0) saturate(100%) invert(47%) sepia(73%) saturate(1217%) hue-rotate(91deg) brightness(92%) contrast(93%);
+    }}
+
+    .auth-hero-bullet:nth-child(3) img {{
+      filter: brightness(0) saturate(100%) invert(34%) sepia(91%) saturate(3095%) hue-rotate(252deg) brightness(93%) contrast(100%);
+    }}
+
+    .auth-hero-bullet:nth-child(4) img {{
+      filter: brightness(0) saturate(100%) invert(49%) sepia(78%) saturate(2264%) hue-rotate(151deg) brightness(91%) contrast(94%);
     }}
 
     .auth-proof-row {{
@@ -528,45 +570,61 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       min-width: 0;
       height: 100%;
       min-height: 0;
-      padding: clamp(20px, 3.2vh, 38px) clamp(24px, 3.4vw, 54px);
+      padding: clamp(22px, 4vh, 44px) clamp(28px, 3.5vw, 58px);
       background: transparent;
       z-index: 1;
     }}
 
     .auth-form-card {{
-      width: min(540px, 100%);
+      width: min(600px, 100%);
+      height: min(76dvh, 820px);
+      min-height: 620px;
       margin: 0 auto;
-      padding: clamp(26px, 3.2vh, 38px) clamp(30px, 3.4vw, 46px);
+      padding: clamp(28px, 3.8vh, 42px) clamp(34px, 3.2vw, 50px);
       border: 1px solid rgba(255, 255, 255, 0.7);
       border-radius: 28px;
-      background: rgba(238, 245, 255, 0.68);
-      box-shadow: 0 28px 80px rgba(12, 38, 82, 0.28);
+      background: rgba(249, 251, 255, 0.78);
+      box-shadow: 0 28px 80px rgba(12, 38, 82, 0.22);
       backdrop-filter: blur(24px) saturate(1.25);
       -webkit-backdrop-filter: blur(24px) saturate(1.25);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }}
 
     .auth-form-brand {{
       display: flex;
+      align-items: center;
       justify-content: center;
-      margin-bottom: 18px;
+      margin-bottom: 12px;
     }}
 
     .auth-form-logo {{
       display: block;
-      width: 220px;
-      height: 76px;
+      width: 60px;
+      height: 60px;
       object-fit: contain;
+      clip-path: inset(0 0 40% 0);
+      transform: translateY(2px) scale(1.8);
+      transform-origin: center;
+      margin-right: -8px;
     }}
 
     .auth-form-brand span {{
-      display: none;
+      display: block;
+      margin-left: 0;
+      color: #07152f;
+      font-size: 23px;
+      font-weight: 900;
+      line-height: 1;
+      transform: translateY(-1px);
     }}
 
     .auth-title {{
       margin: 0;
       text-align: center;
       color: #111827 !important;
-      font-size: clamp(34px, 3vw, 48px) !important;
+      font-size: clamp(30px, 2.2vw, 38px) !important;
       font-weight: 950 !important;
       line-height: 1 !important;
       letter-spacing: 0 !important;
@@ -574,16 +632,16 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     .auth-subtitle {{
       max-width: 390px;
-      margin: 12px auto 26px;
+      margin: 10px auto 24px;
       text-align: center;
       color: #475569;
-      font-size: 16px;
-      line-height: 1.55;
+      font-size: 14px;
+      line-height: 1.5;
     }}
 
     .auth-form {{
       display: grid;
-      gap: 16px;
+      gap: 14px;
     }}
 
     .auth-field {{
@@ -598,13 +656,13 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     .auth-field input {{
       width: 100%;
       border: 1px solid rgba(71, 94, 132, 0.22);
-      border-radius: 16px;
-      padding: 15px 16px;
+      border-radius: 12px;
+      padding: 14px 16px;
       background: #f8fbff;
       color: #111827;
       outline: none;
-      font-size: 16px;
-      font-weight: 750;
+      font-size: 15px;
+      font-weight: 450;
       transition:
         border-color 140ms ease,
         box-shadow 140ms ease,
@@ -637,74 +695,83 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-password-control input {{
-      padding-right: 52px;
+      padding-right: 58px;
     }}
 
-    .auth-password-toggle {{
+    html body .auth-shell #passwordToggleBtn.auth-password-toggle {{
       position: absolute;
-      right: 10px;
+      right: 6px;
       top: 50%;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 34px;
-      min-width: 34px;
-      height: 34px;
-      min-height: 34px;
+      width: 40px;
+      min-width: 40px;
+      height: 40px;
+      min-height: 40px;
       margin: 0;
       padding: 0 !important;
-      border: 1px solid rgba(100, 116, 139, 0.24) !important;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.72) !important;
-      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08) !important;
-      color: #1e293b;
+      border: 0 !important;
+      border-radius: 50%;
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+      color: #64748b;
       cursor: pointer;
       transform: translateY(-50%) !important;
       appearance: none;
       -webkit-appearance: none;
-      transition: background 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+      transition: background 140ms ease, color 140ms ease, opacity 140ms ease;
     }}
 
-    .auth-password-toggle:hover,
-    .auth-password-toggle:focus,
-    .auth-password-toggle:active,
-    .auth-password-toggle.is-visible {{
-      border-color: rgba(37, 99, 235, 0.34) !important;
-      background: rgba(239, 246, 255, 0.92) !important;
+    html body .auth-shell #passwordToggleBtn.auth-password-toggle:hover,
+    html body .auth-shell #passwordToggleBtn.auth-password-toggle:active,
+    html body .auth-shell #passwordToggleBtn.auth-password-toggle.is-visible {{
+      border: 0 !important;
+      background: rgba(99, 102, 241, 0.08) !important;
       color: #1d4ed8;
       transform: translateY(-50%) !important;
-      box-shadow: 0 10px 22px rgba(37, 99, 235, 0.14) !important;
-      outline: 2px solid rgba(96, 165, 250, 0.22) !important;
-      outline-offset: 2px;
+      box-shadow: none !important;
+    }}
+
+    html body .auth-shell #passwordToggleBtn.auth-password-toggle:focus-visible {{
+      border: 0 !important;
+      background: rgba(99, 102, 241, 0.08) !important;
+      box-shadow: none !important;
+      outline: 2px solid rgba(99, 102, 241, 0.36) !important;
+      outline-offset: 1px;
     }}
 
     .auth-password-toggle img {{
       display: block;
-      width: 20px;
-      height: 20px;
-      opacity: 1;
+      width: 21px;
+      height: 21px;
+      opacity: 0.68;
       pointer-events: none;
     }}
 
-    .auth-password-toggle:hover img {{
-      opacity: 0.9;
+    .auth-password-toggle:hover img,
+    .auth-password-toggle:focus-visible img,
+    .auth-password-toggle.is-visible img {{
+      opacity: 0.92;
     }}
 
-    html[data-theme="dark"] .auth-password-toggle {{
-      border-color: rgba(148, 163, 184, 0.26) !important;
-      background: rgba(15, 23, 42, 0.82) !important;
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22) !important;
+    html[data-theme="dark"] body .auth-shell #passwordToggleBtn.auth-password-toggle {{
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
       color: #e2e8f0;
     }}
 
-    html[data-theme="dark"] .auth-password-toggle:hover,
-    html[data-theme="dark"] .auth-password-toggle:focus,
-    html[data-theme="dark"] .auth-password-toggle:active,
-    html[data-theme="dark"] .auth-password-toggle.is-visible {{
-      border-color: rgba(96, 165, 250, 0.36) !important;
-      background: rgba(30, 41, 59, 0.94) !important;
+    html[data-theme="dark"] body .auth-shell #passwordToggleBtn.auth-password-toggle:hover,
+    html[data-theme="dark"] body .auth-shell #passwordToggleBtn.auth-password-toggle:focus-visible,
+    html[data-theme="dark"] body .auth-shell #passwordToggleBtn.auth-password-toggle:active,
+    html[data-theme="dark"] body .auth-shell #passwordToggleBtn.auth-password-toggle.is-visible {{
+      border: 0 !important;
+      background: rgba(96, 165, 250, 0.1) !important;
       color: #bfdbfe;
-      box-shadow: 0 10px 22px rgba(59, 130, 246, 0.16) !important;
+      box-shadow: none !important;
     }}
 
     .auth-error {{
@@ -732,9 +799,9 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       margin-top: 6px;
       width: 100%;
       border: 0;
-      border-radius: 16px;
-      padding: 15px 16px;
-      background: linear-gradient(135deg, #2563eb, #0891b2);
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
       color: #ffffff;
       cursor: pointer;
       font-size: 16px;
@@ -758,11 +825,12 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-alt {{
-      display: inline-flex;
-      margin-top: 22px;
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
       color: #2563eb;
       text-decoration: none;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 800;
     }}
 
@@ -771,8 +839,8 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-control-note {{
-      margin: 20px 0 0;
-      padding-top: 18px;
+      margin: 28px 0 0;
+      padding-top: 16px;
       border-top: 1px solid rgba(148, 163, 184, 0.2);
       color: #64748b;
       font-size: 12px;
@@ -787,14 +855,17 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       }}
 
       .auth-hero {{
+        grid-template-columns: 1fr;
         padding: 24px;
       }}
 
       .auth-hero-copy {{
+        width: 100%;
+        max-width: 100%;
         margin: 0;
       }}
 
-      .auth-workflow {{
+      .auth-workflow-artwork {{
         display: none;
       }}
 
@@ -806,8 +877,8 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     @media (min-width: 561px) and (max-height: 920px) {{
       .auth-brand-logo {{
-        width: 220px;
-        height: 68px;
+        width: 82px;
+        height: 82px;
       }}
 
       .auth-hero-copy {{
@@ -815,7 +886,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       }}
 
       .auth-hero-title {{
-        font-size: clamp(38px, 4vw, 56px) !important;
+        font-size: clamp(44px, 3vw, 54px) !important;
       }}
 
       .auth-form-brand {{
@@ -823,11 +894,11 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       }}
 
       .auth-form-logo {{
-        height: 60px;
+        height: 50px;
       }}
 
       .auth-subtitle {{
-        margin-bottom: 18px;
+        margin-bottom: 16px;
       }}
 
       .auth-form {{
@@ -835,12 +906,12 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       }}
 
       .auth-field input {{
-        padding-block: 13px;
+        padding-block: 12px;
       }}
 
       .auth-control-note {{
-        margin-top: 14px;
-        padding-top: 12px;
+        margin-top: 24px;
+        padding-top: 11px;
       }}
     }}
 
@@ -881,14 +952,19 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
         padding-bottom: 28px;
       }}
 
+      .auth-form-card {{
+        height: auto;
+        min-height: 0;
+      }}
+
       .auth-scene-wave,
-      .auth-workflow {{
+      .auth-workflow-artwork {{
         display: none;
       }}
 
       .auth-brand-logo {{
-        width: 190px;
-        height: 62px;
+        width: 70px;
+        height: 70px;
       }}
 
       .auth-hero-title {{
@@ -921,32 +997,31 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       <div class="auth-brand-lockup">
         <img class="auth-brand-logo" src="/static/media/app-logo.svg" alt="ApplyLens AI" />
         <span class="auth-brand-text">
-          ApplyLens AI
+          ApplyLens <em>AI</em>
           <small>Job intelligence</small>
         </span>
       </div>
 
       <div class="auth-hero-copy">
         <div class="auth-hero-kicker">Human-controlled AI workflow</div>
-        <h2 class="auth-hero-title">Turn live jobs into<br /><span>review-ready<br />applications.</span></h2>
+        <h2 class="auth-hero-title">Turn live jobs into<br /><span>review-ready</span><br />applications.</h2>
         <p class="auth-hero-subtitle">
-          Scrape roles, compare resume fit, review policy-driven AI notes, generate tailoring suggestions, and keep every final application decision manual.
+          Scrape roles, score fit, review policy-driven AI notes, generate tailoring suggestions, and keep every final decision manual.
         </p>
         <div class="auth-hero-bullets" aria-label="ApplyLens AI workflow">
-          <span class="auth-hero-bullet">Live job pipeline</span>
-          <span class="auth-hero-bullet">Hybrid fit scoring</span>
-          <span class="auth-hero-bullet">Policy AI review</span>
-          <span class="auth-hero-bullet">Tailoring workspace</span>
-          <span class="auth-hero-bullet">Human-controlled applications</span>
+          <span class="auth-hero-bullet"><img src="/static/media/auth_hero_icons/collect_jobs.svg" alt="" aria-hidden="true" />Live job pipeline</span>
+          <span class="auth-hero-bullet"><img src="/static/media/auth_hero_icons/score_fit.svg" alt="" aria-hidden="true" />Hybrid fit scoring</span>
+          <span class="auth-hero-bullet"><img src="/static/media/auth_hero_icons/review_ai_notes.svg" alt="" aria-hidden="true" />Policy AI review</span>
+          <span class="auth-hero-bullet"><img src="/static/media/auth_hero_icons/tailor_safely.svg" alt="" aria-hidden="true" />Tailoring workspace</span>
         </div>
       </div>
 
-      <div class="auth-workflow" aria-label="ApplyLens AI workflow steps">
-        <div class="auth-workflow-step"><span>01</span>Collect jobs</div>
-        <div class="auth-workflow-step"><span>02</span>Score fit</div>
-        <div class="auth-workflow-step"><span>03</span>Review AI notes</div>
-        <div class="auth-workflow-step"><span>04</span>Tailor safely</div>
-      </div>
+      <img
+        class="auth-workflow-artwork"
+        src="/static/media/auth_workflow_hero.svg"
+        alt=""
+        aria-hidden="true"
+      />
       <p class="auth-safety-line">You stay in control. No auto-apply. No recruiter messages.<br />Your workspace prepares evidence and suggestions.</p>
     </section>
 
@@ -954,7 +1029,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       <div class="auth-form-card">
         <div class="auth-form-brand">
           <img class="auth-form-logo" src="/static/media/app-logo.svg" alt="" />
-          <span>ApplyLens AI</span>
+          <span>ApplyLens <em>AI</em></span>
         </div>
         <h1 class="auth-title">{escape(title)}</h1>
         <p class="auth-subtitle">{escape(subtitle)}</p>

@@ -10,12 +10,15 @@ PLANNING_UI = ROOT / "src/app/planning_ui.py"
 APP_JS = ROOT / "src/app/static/app.js"
 PLANNING_JS = ROOT / "src/app/static/planning.js"
 CSS = ROOT / "src/app/static/styles.css"
+AUTH_HERO_ICONS = ROOT / "src/app/static/media/auth_hero_icons"
+AUTH_WORKFLOW_ARTWORK = ROOT / "src/app/static/media/auth_workflow_hero.svg"
+D3_VENDOR = ROOT / "src/app/static/vendor/d3"
 
 
 def test_auth_pages_use_current_product_and_safety_copy():
     source = AUTH_UI.read_text(encoding="utf-8")
     for text in (
-        "Turn live jobs into<br /><span>review-ready<br />applications.</span>",
+        "Turn live jobs into<br /><span>review-ready</span><br />applications.",
         'title = "Create your workspace" if is_register else "Welcome back"',
         "Live job pipeline",
         "Hybrid fit scoring",
@@ -38,6 +41,16 @@ def test_auth_shell_is_cinematic_responsive_and_has_no_fake_social_login():
         "auth-scene",
         "auth-scene-haze",
         "auth-scene-wave",
+        "auth-workflow-artwork",
+        'src="/static/media/auth_workflow_hero.svg"',
+        "height: min(68vh, 650px)",
+        "background: rgba(255, 255, 255, 0.76)",
+        ".auth-password-toggle:focus-visible",
+        "background: transparent !important",
+        "background-image: none !important",
+        "#passwordToggleBtn.auth-password-toggle",
+        "scale(1.78)",
+        "max-width: 500px",
         "backdrop-filter: blur(24px)",
         "@media (max-width: 900px)",
         "@media (max-width: 560px)",
@@ -47,11 +60,83 @@ def test_auth_shell_is_cinematic_responsive_and_has_no_fake_social_login():
     ):
         assert marker in source
     assert "clip-path: polygon" not in source
+    assert "auth-workflow-step" not in source
+    assert "<span>01</span>" not in source
+    assert "auth-workflow-tile--check" not in source
+    assert "border: 1px solid rgba(100, 116, 139, 0.24) !important" not in source
+    auth_input_css = source[source.index("    .auth-field input {{"):source.index("    .auth-field input::placeholder")]
+    assert "font-weight: 450" in auth_input_css
+    assert "font-weight: 650" not in auth_input_css
+    assert "Scrape roles, score fit, review policy-driven AI notes" in source
+    assert source.count('class="auth-hero-bullet"') == 4
+    assert "setInterval" not in source
+    assert "MutationObserver" not in source
     assert "ChatGPT Image" not in source
     assert (ROOT / "src/app/static/media/Login_page_BG_img.jpg").is_file()
     assert (ROOT / "src/app/static/media/Login_page_BG_img.LICENSE.txt").is_file()
+    expected_icons = {
+        "collect_jobs.svg",
+        "score_fit.svg",
+        "review_ai_notes.svg",
+        "tailor_safely.svg",
+        "apply_with_confidence.svg",
+    }
+    assert {path.name for path in AUTH_HERO_ICONS.glob("*.svg")} == expected_icons
+    assert (AUTH_HERO_ICONS / "LICENSES.txt").is_file()
+    for icon_name in expected_icons:
+        icon_source = (AUTH_HERO_ICONS / icon_name).read_text(encoding="utf-8")
+        assert 'viewBox="0 0 24 24"' in icon_source
+        assert "<script" not in icon_source
+        assert "<animate" not in icon_source
+        assert "foreignObject" not in icon_source
+        assert "href=" not in icon_source
+        assert "onload=" not in icon_source
+        assert "onclick=" not in icon_source
     for forbidden in ("Google login", "Facebook login", "Microsoft login", "Forgot password"):
         assert forbidden not in source
+
+
+def test_auth_workflow_uses_finished_designer_artwork_only():
+    source = AUTH_UI.read_text(encoding="utf-8")
+
+    assert AUTH_WORKFLOW_ARTWORK.is_file()
+    artwork_source = AUTH_WORKFLOW_ARTWORK.read_text(encoding="utf-8")
+    assert artwork_source.lstrip().startswith("<svg")
+    assert not D3_VENDOR.exists()
+    assert "/static/vendor/d3/" not in source
+    assert "window.d3" not in source
+    assert "cdn.jsdelivr.net" not in source
+    assert "unpkg.com" not in source
+    assert source.count('class="auth-workflow-artwork"') == 1
+    assert source.count('src="/static/media/auth_workflow_hero.svg"') == 1
+    assert '<svg class="auth-workflow' not in source
+    for forbidden in (
+        "auth-workflow-scene",
+        "auth-workflow-svg",
+        "auth-workflow-rail",
+        "auth-workflow-node",
+        "auth-workflow-icon",
+        "updateWorkflowConnector",
+        "toWorkflowPoint",
+        "connectorLine",
+        "curveCatmullRom",
+        "curveMonotoneY",
+        "workflowPath.setAttribute",
+        "scheduleWorkflowContrastUpdate",
+        "sampleWorkflowLuminance",
+        "relativeLuminance",
+        "workflowContrastClasses",
+        "workflowBackgroundContext",
+        'document.createElement("canvas")',
+    ):
+        assert forbidden not in source
+    assert "setInterval" not in source
+    assert "MutationObserver" not in source
+    assert "ResizeObserver" not in source
+    assert ".auth-password-toggle:focus-visible" in source
+    assert 'mode === "register" ? "/auth/register" : "/auth/login"' in source
+    for fake_social in ("Google login", "Facebook login", "Microsoft login"):
+        assert fake_social not in source
 
 
 def test_generate_suggestions_waits_for_explicit_workspace_action():
@@ -159,7 +244,7 @@ def test_step_tracks_update_from_state_without_rebuilding_every_poll():
 
 
 def test_phase129b_does_not_touch_backend_markers():
-    markers = ("phase129b", "pipelineSuccessPlanningBtn", "auth-workflow-step")
+    markers = ("phase129b", "pipelineSuccessPlanningBtn", "auth-workflow-node")
     for relative in (
         "src/app/api.py",
         "src/app/services.py",

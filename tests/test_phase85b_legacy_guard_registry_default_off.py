@@ -302,14 +302,24 @@ def test_current_milestone_guard_compatibility_is_exact_phase128b_and_phase129c_
     phase129_profile = legacy_guard_allowlist(
         "phase129c_workflow_overlay_and_run_scoped_corpus"
     )
+    phase129_auth_artwork_files = {
+        "src/app/static/media/auth_workflow_hero.svg",
+        "src/app/static/media/auth_hero_icons/LICENSES.txt",
+        "src/app/static/media/auth_hero_icons/apply_with_confidence.svg",
+        "src/app/static/media/auth_hero_icons/collect_jobs.svg",
+        "src/app/static/media/auth_hero_icons/review_ai_notes.svg",
+        "src/app/static/media/auth_hero_icons/score_fit.svg",
+        "src/app/static/media/auth_hero_icons/tailor_safely.svg",
+    }
     assert "tests/test_phase85b_legacy_guard_registry_default_off.py" in phase129_profile
+    assert phase129_auth_artwork_files <= phase129_profile
     assert not any("*" in path for path in phase129_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | phase129_profile
     )
-    assert len(phase129_profile) == 195
+    assert len(phase129_profile) == 202
 
     assert_changed_files_allowed(
         {

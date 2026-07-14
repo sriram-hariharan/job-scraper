@@ -457,6 +457,13 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         },
         "phase129b_auth_loader_ui": {
             "src/app/auth_ui.py",
+            "src/app/static/media/auth_workflow_hero.svg",
+            "src/app/static/media/auth_hero_icons/LICENSES.txt",
+            "src/app/static/media/auth_hero_icons/apply_with_confidence.svg",
+            "src/app/static/media/auth_hero_icons/collect_jobs.svg",
+            "src/app/static/media/auth_hero_icons/review_ai_notes.svg",
+            "src/app/static/media/auth_hero_icons/score_fit.svg",
+            "src/app/static/media/auth_hero_icons/tailor_safely.svg",
             "src/app/ui.py",
             "src/app/planning_ui.py",
             "src/app/static/app.js",
@@ -476,6 +483,13 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         },
         "phase129c_workflow_overlay_and_run_scoped_corpus": {
             "src/app/auth_ui.py",
+            "src/app/static/media/auth_workflow_hero.svg",
+            "src/app/static/media/auth_hero_icons/LICENSES.txt",
+            "src/app/static/media/auth_hero_icons/apply_with_confidence.svg",
+            "src/app/static/media/auth_hero_icons/collect_jobs.svg",
+            "src/app/static/media/auth_hero_icons/review_ai_notes.svg",
+            "src/app/static/media/auth_hero_icons/score_fit.svg",
+            "src/app/static/media/auth_hero_icons/tailor_safely.svg",
             "src/app/ui.py",
             "src/app/planning_ui.py",
             "src/app/static/app.js",
@@ -698,6 +712,18 @@ def assert_changed_files_allowed(
         normalized_allowed |= legacy_guard_allowlist(profile)
     if include_current_milestone_compatibility:
         normalized_allowed |= current_milestone_guard_compatibility_allowlist()
+    collapsed_directories = {
+        path for path in normalized_changed if path.endswith("/")
+    }
+    if collapsed_directories:
+        exact_changed = get_changed_files(Path.cwd())
+        for directory in collapsed_directories:
+            descendants = {
+                path for path in exact_changed if path.startswith(directory)
+            }
+            if descendants and descendants <= normalized_allowed:
+                normalized_changed.remove(directory)
+                normalized_changed.update(descendants)
     reject_duplicate_artifact_paths(normalized_changed)
     extra = normalized_changed - normalized_allowed
     assert not extra, "Unexpected changed files: " + ", ".join(sorted(extra))

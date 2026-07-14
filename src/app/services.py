@@ -7010,6 +7010,62 @@ def _pipeline_run_output_dir_from_record(run: Dict[str, Any]) -> str:
     )
 
 
+def resolve_user_pipeline_run_planning_paths(
+    *,
+    owner_user_id: str,
+    run_id: str,
+) -> Tuple[Path, Path]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    if not owner or not safe_run_id:
+        raise ValueError("Pipeline run context is required to generate suggestions.")
+
+    run, _ = _user_pipeline_run_and_artifacts(owner, safe_run_id)
+    run_status = _clean_text(run.get("status")).lower()
+    if run_status != "succeeded":
+        raise ValueError(
+            "The planning artifacts for this pipeline run are not ready. "
+            "Complete the pipeline run, then retry."
+        )
+    output_dir_text = _pipeline_run_output_dir_from_record(run)
+    if not output_dir_text:
+        raise ValueError(
+            "The job corpus for this completed run is unavailable. "
+            "Run the pipeline again or review the run details."
+        )
+
+    output_dir = Path(output_dir_text).expanduser().resolve()
+    expected_owner = _safe_owner_dir_name(owner) or "anonymous"
+    expected_run = _safe_run_dir_name(safe_run_id)
+    parts = output_dir.parts
+    if not (
+        len(parts) >= 5
+        and parts[-1] == "application_planning"
+        and parts[-2] == expected_run
+        and parts[-3] == expected_owner
+        and parts[-4] == "pipeline_runs"
+        and parts[-5] == "tmp"
+    ):
+        raise ValueError("The selected pipeline run has an invalid artifact location.")
+
+    job_corpus = output_dir / "current_run_job_corpus.jsonl"
+    status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
+    final_job_count = run.get("final_job_count", status_json.get("final_job_count"))
+    if final_job_count == 0 or _clean_text(final_job_count) == "0":
+        raise ValueError("No planning job is available for this run.")
+    if not output_dir.is_dir() or not job_corpus.is_file():
+        raise ValueError(
+            "The job corpus for this completed run is unavailable. "
+            "Run the pipeline again or review the run details."
+        )
+    if job_corpus.stat().st_size == 0:
+        raise ValueError(
+            "The planning corpus for this completed run is unavailable. "
+            "Review the run details or run the pipeline again."
+        )
+    return output_dir, job_corpus
+
+
 def _pipeline_run_log_path_from_record(run: Dict[str, Any]) -> str:
     status_json, config_json, nested_config = _pipeline_run_status_config(run)
     return (
@@ -27003,7 +27059,13 @@ def _latest_user_pipeline_artifact_context(
     workflow_summary = _agentic_workflow_summary_from_artifacts(artifacts)
     workflow_verification = _agentic_workflow_verification_from_artifacts(artifacts)
 
-    if not any([best_text, queue_text, manifest_text]):
+    status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
+    final_job_count = run.get("final_job_count", status_json.get("final_job_count"))
+    zero_result_run = (
+        _clean_text(run.get("status")).lower() == "succeeded"
+        and (final_job_count == 0 or _clean_text(final_job_count) == "0")
+    )
+    if not any([best_text, queue_text, manifest_text]) and not zero_result_run:
         return {}
 
     return {
@@ -27024,6 +27086,7 @@ def _latest_user_pipeline_artifact_context(
         "agentic_workflow_verification": workflow_verification,
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
+        "zero_result_run": zero_result_run,
     }
 
 
@@ -27060,7 +27123,13 @@ def _latest_user_pipeline_filesystem_context(
     operator_review_text = _read_text_if_file(output_dir / "operator_review_recommendations.csv")
     corpus_text = _read_text_if_file(output_dir / "current_run_job_corpus.jsonl")
 
-    if not any([best_text, queue_text, manifest_text]):
+    status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
+    final_job_count = run.get("final_job_count", status_json.get("final_job_count"))
+    zero_result_run = (
+        _clean_text(run.get("status")).lower() == "succeeded"
+        and (final_job_count == 0 or _clean_text(final_job_count) == "0")
+    )
+    if not any([best_text, queue_text, manifest_text]) and not zero_result_run:
         return {}
 
     return {
@@ -27082,6 +27151,7 @@ def _latest_user_pipeline_filesystem_context(
         "agentic_workflow_verification": _agentic_workflow_verification_from_dir(output_dir),
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
+        "zero_result_run": zero_result_run,
     }
 
 
@@ -27486,12 +27556,16 @@ def browse_payload(
 
         finalized_page_rows: List[Dict[str, Any]] = []
         for row in page_rows:
+            contextual_row = dict(row)
+            if artifact_context:
+                contextual_row["pipeline_run_id"] = _clean_text(artifact_context.get("run_id"))
+                contextual_row["planning_output_dir"] = str(effective_output_dir)
             if requested_tailoring_states:
-                finalized_page_rows.append(row)
+                finalized_page_rows.append(contextual_row)
                 continue
 
             _, enriched_row = _row_matches_tailoring_state_filter(
-                row,
+                contextual_row,
                 [],
                 output_dir=effective_output_dir,
             )
@@ -27519,6 +27593,8 @@ def browse_payload(
             "total_pages": total_pages,
             "has_prev_page": current_page > 1,
             "has_next_page": current_page < total_pages,
+            "pipeline_run_id": _clean_text(artifact_context.get("run_id")) if artifact_context else "",
+            "planning_output_dir": str(effective_output_dir),
         }
 
         return payload

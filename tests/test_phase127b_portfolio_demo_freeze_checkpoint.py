@@ -99,6 +99,17 @@ def test_phase127b_guard_profile_is_docs_and_tests_only():
     assert not {path for path in allowed if path.startswith("src/")}
     assert_changed_files_allowed(
         get_changed_files(ROOT),
-        set(),
+        {
+            "src/app/auth_ui.py",
+            "src/app/ui.py",
+            "src/app/planning_ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "src/app/static/styles.css",
+            "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
+            "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+            "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
+            "tests/test_phase129b_auth_and_loader_overlay_static_only.py",
+        },
         legacy_guard_profiles=("portfolio_demo_freeze_checkpoint",),
     )

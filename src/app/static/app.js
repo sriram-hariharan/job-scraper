@@ -35,8 +35,6 @@ const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
 const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
 let pipelinePollTimer = null;
-let pipelineSuccessGifTimer = null;
-let pipelineFailureGifTimer = null;
 
 const DEFAULT_OUTPUT_DIR = "outputs/application_planning";
 const DEFAULT_STAGE_ORDER = [
@@ -76,6 +74,26 @@ const STAGE_LABELS = {
   planning: "Planning",
   finalization: "Finalization",
 };
+
+const PIPELINE_VISIBLE_STAGE_GROUPS = [
+  { key: "starting", label: "Starting pipeline", stages: ["startup"] },
+  { key: "collecting", label: "Collecting jobs", stages: ["scraping"] },
+  { key: "filtering", label: "Filtering and deduplicating", stages: ["filtering", "dedupe"] },
+  { key: "ranking", label: "Ranking opportunities", stages: ["ranking", "cache_filter", "details"] },
+  { key: "intelligence", label: "Running job intelligence", stages: ["intelligence"] },
+  { key: "evaluating", label: "Evaluating fit", stages: ["ai_evaluation_filter", "embedding_prefilter", "ai_evaluation"] },
+  { key: "matching", label: "Matching resumes", stages: ["resume_matching"] },
+  { key: "prioritizing", label: "Prioritizing applications", stages: ["application_priority"] },
+  { key: "planning", label: "Preparing planning artifacts", stages: ["rag_export", "planning"] },
+  { key: "finalizing", label: "Finalizing run", stages: ["finalization"] },
+];
+
+const PIPELINE_STAGE_TO_VISIBLE_GROUP = PIPELINE_VISIBLE_STAGE_GROUPS.reduce((acc, group, index) => {
+  group.stages.forEach((stage) => {
+    acc[stage] = index;
+  });
+  return acc;
+}, {});
 
 const COUNT_LABELS = {
   scraped_jobs: "Scraped",
@@ -1549,39 +1567,90 @@ function renderPipelineCounts(pipeline) {
   qs("pipelineLoadingCounts").innerHTML = buildPipelineCountsHtml(pipeline);
 }
 
-function renderPipelineStageStepper(pipeline) {
-  const order = Array.isArray(pipeline.stage_order) && pipeline.stage_order.length
-    ? pipeline.stage_order
-    : DEFAULT_STAGE_ORDER;
+function getPipelineVisibleGroupIndex(stage) {
+  if (!stage) return 0;
+  return PIPELINE_STAGE_TO_VISIBLE_GROUP[stage] ?? 0;
+}
 
-  const completed = new Set(Array.isArray(pipeline.completed_stages) ? pipeline.completed_stages : []);
-  const current = pipeline.current_stage || "";
-  const status = pipeline.status || "idle";
+function buildPipelineVisibleStageStepsHtml(pipeline = {}, mode = "running") {
+  const completedStages = new Set(Array.isArray(pipeline.completed_stages) ? pipeline.completed_stages : []);
+  const currentStage = pipeline.current_stage || "";
+  const currentGroupIndex = getPipelineVisibleGroupIndex(currentStage);
+  const status = pipeline.status || mode;
 
-  const html = order.map((stage) => {
-    let stateClass = "pending";
-    let marker = "○";
+  return PIPELINE_VISIBLE_STAGE_GROUPS.map((group, index) => {
+    const groupHasCompletedStage = group.stages.some((stage) => completedStages.has(stage));
+    const isCurrentGroup = index === currentGroupIndex;
+    let stateClass = "is-pending";
+    let marker = "";
+    let indicatorLabel = "Pending";
 
-    if (completed.has(stage)) {
-      stateClass = "complete";
+    if (mode === "complete" || status === "succeeded" || index < currentGroupIndex || groupHasCompletedStage) {
+      stateClass = "is-complete";
       marker = "✓";
-    } else if (status === "running" && current === stage) {
-      stateClass = "current";
-      marker = "•";
-    } else if (status === "failed" && current === stage) {
-      stateClass = "failed";
+      indicatorLabel = "Complete";
+    } else if ((mode === "failed" || status === "failed" || status === "stopped") && isCurrentGroup) {
+      stateClass = "is-error";
       marker = "!";
+      indicatorLabel = "Needs attention";
+    } else if ((mode === "running" || status === "running") && isCurrentGroup) {
+      stateClass = "is-active";
+      indicatorLabel = "Current";
     }
 
     return `
-      <div class="pipeline-step pipeline-step--${stateClass}">
-        <div class="pipeline-step-marker">${escapeHtml(marker)}</div>
-        <div class="pipeline-step-label">${escapeHtml(titleCaseStage(stage))}</div>
+      <div class="workflow-step pipeline-step ${stateClass}" data-workflow-step-index="${index}">
+        <span class="workflow-step__indicator pipeline-step-marker" aria-label="${escapeHtml(indicatorLabel)}">${escapeHtml(marker)}</span>
+        <span class="workflow-step__label pipeline-step-label">${escapeHtml(group.label)}</span>
       </div>
     `;
   }).join("");
+}
 
-  qs("pipelineStageStepper").innerHTML = html;
+function getWorkflowStepPositionClass(index, activeIndex) {
+  const distance = index - activeIndex;
+  if (distance < -1 || distance > 2) return "is-hidden";
+  if (distance === -1) return "is-previous";
+  if (distance === 0) return "is-active-position";
+  if (distance === 1) return "is-next";
+  return "is-upcoming";
+}
+
+function renderPipelineStageStepper(pipeline, targetId = "pipelineStageStepper", mode = "running") {
+  const target = qs(targetId);
+  if (!target) return;
+  const currentGroupIndex = mode === "complete"
+    ? PIPELINE_VISIBLE_STAGE_GROUPS.length - 1
+    : getPipelineVisibleGroupIndex(pipeline.current_stage || "");
+
+  if (target.children.length !== PIPELINE_VISIBLE_STAGE_GROUPS.length) {
+    target.innerHTML = buildPipelineVisibleStageStepsHtml(pipeline, mode);
+  }
+
+  target.style.setProperty("--workflow-active-index", String(currentGroupIndex));
+  target.dataset.activeIndex = String(currentGroupIndex);
+
+  const completedStages = new Set(Array.isArray(pipeline.completed_stages) ? pipeline.completed_stages : []);
+  const status = pipeline.status || mode;
+  Array.from(target.children).forEach((step, index) => {
+    const group = PIPELINE_VISIBLE_STAGE_GROUPS[index];
+    const groupHasCompletedStage = group.stages.some((stage) => completedStages.has(stage));
+    const isCurrentGroup = index === currentGroupIndex;
+    const isComplete = mode === "complete" || status === "succeeded" || index < currentGroupIndex || groupHasCompletedStage;
+    const isError = (mode === "failed" || status === "failed" || status === "stopped") && isCurrentGroup;
+    const isActive = !isComplete && !isError && isCurrentGroup;
+    const stateClass = isComplete ? "is-complete" : (isError ? "is-error" : (isActive ? "is-active" : "is-pending"));
+    const marker = isComplete ? "✓" : (isError ? "!" : "");
+    const indicatorLabel = isComplete ? "Complete" : (isError ? "Needs attention" : (isActive ? "Current" : "Pending"));
+    const indicator = step.querySelector(".workflow-step__indicator");
+
+    step.className = `workflow-step pipeline-step ${stateClass} ${getWorkflowStepPositionClass(index, currentGroupIndex)}`;
+    step.setAttribute("aria-hidden", step.classList.contains("is-hidden") ? "true" : "false");
+    if (indicator) {
+      indicator.textContent = marker;
+      indicator.setAttribute("aria-label", indicatorLabel);
+    }
+  });
 }
 
 function getPipelineSuccessKey(pipeline = {}) {
@@ -1639,99 +1708,102 @@ function wasPipelineSuccessAlreadyShown(successKey) {
   return sessionStorage.getItem(PIPELINE_SHOWN_SUCCESS_KEY) === successKey;
 }
 
+function derivePipelineCompletionSummary(pipeline = {}) {
+  const counts = pipeline.counts || {};
+  const jobsCollected = Number(counts.scraped_jobs ?? 0);
+  const passedFiltersValue = counts.filtered_jobs;
+  const jobsPassedFilters = passedFiltersValue === undefined || passedFiltersValue === null
+    ? null
+    : Number(passedFiltersValue);
+  const planningJobs = Number(pipeline.final_job_count ?? counts.rag_export_count ?? 0);
+  const isEmptyResult = planningJobs === 0;
+  const rejectionDefinitions = [
+    ["Role or title mismatch", counts.filter_title_mismatch],
+    ["Location mismatch", counts.filter_location_not_us],
+    ["Outside the freshness window", counts.filter_not_recent],
+    ["Missing posting timestamp", counts.filter_missing_timestamp],
+    ["Excluded keyword", counts.filter_excluded_keyword],
+  ];
+  const rejectionReasons = rejectionDefinitions
+    .map(([label, value]) => ({ label, count: Number(value ?? 0) }))
+    .filter((item) => Number.isFinite(item.count) && item.count > 0)
+    .sort((left, right) => right.count - left.count);
+
+  let emptyResultReason = "No detailed rejection breakdown was recorded for this run.";
+  if (jobsCollected > 0 && jobsPassedFilters === 0 && rejectionReasons.length) {
+    emptyResultReason = "No jobs passed the configured role, location, and freshness filters.";
+  } else if (jobsPassedFilters === null) {
+    emptyResultReason = "The run completed without a recorded filtering count. Review run details before interpreting the result.";
+  } else if (jobsPassedFilters > 0 && planningJobs === 0) {
+    emptyResultReason = "Jobs passed filtering, but none remained available for planning.";
+  }
+
+  return {
+    jobsCollected,
+    jobsPassedFilters,
+    planningJobs,
+    isEmptyResult,
+    rejectionReasons,
+    emptyResultReason,
+  };
+}
+
 function renderPipelineSuccessSummary(pipeline = {}) {
-  const summaryMessage = pipeline.summary_message || "Run finished successfully.";
-  const metaBits = [
-    pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
-    pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
-    pipeline.final_job_count !== undefined && pipeline.final_job_count !== null
-      ? `Display jobs: ${pipeline.final_job_count}`
-      : "",
-  ].filter(Boolean);
+  const summary = derivePipelineCompletionSummary(pipeline);
+  const collectedDenominator = Math.max(summary.jobsCollected, 1);
+  const metrics = [
+    ["Collected", summary.jobsCollected],
+    ["Passed filters", summary.jobsPassedFilters],
+    ["Planning jobs", summary.planningJobs],
+  ];
+  const metricsHtml = metrics.map(([label, value]) => `
+    <div class="pipeline-result-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value === null ? "Not recorded" : Number(value).toLocaleString())}</strong>
+    </div>
+  `).join("");
+  const reasonsHtml = summary.rejectionReasons.length
+    ? `
+      <div class="pipeline-empty-reasons__title">Top reasons jobs were excluded</div>
+      <ul>
+        ${summary.rejectionReasons.slice(0, 4).map((reason) => {
+          const ratio = Math.min((reason.count / collectedDenominator) * 100, 100);
+          return `
+          <li>
+            <div class="pipeline-empty-reason-row">
+              <span>${escapeHtml(reason.label)}</span>
+              <strong>${escapeHtml(reason.count.toLocaleString())}</strong>
+            </div>
+            <div class="pipeline-empty-reason-bar" aria-hidden="true">
+              <span style="--pipeline-reason-ratio: ${ratio.toFixed(3)}%"></span>
+            </div>
+          </li>
+        `;
+        }).join("")}
+      </ul>
+    `
+    : `<div class="pipeline-empty-reasons__unavailable">${escapeHtml(summary.emptyResultReason)}</div>`;
 
-  const metaLine = metaBits.length
-    ? `<div class="pipeline-success-summary-text">${escapeHtml(metaBits.join(" · "))}</div>`
-    : "";
-
-  qs("pipelineSuccessTitle").textContent = "Pipeline completed";
-  qs("pipelineSuccessText").textContent = summaryMessage;
-  qs("pipelineSuccessSummary").innerHTML = `
-    ${metaLine}
-    <div class="pipeline-loading-counts">${buildPipelineCountsHtml(pipeline)}</div>
-  `;
-}
-
-function stopPipelineSuccessGifTimer() {
-  if (pipelineSuccessGifTimer) {
-    clearTimeout(pipelineSuccessGifTimer);
-    pipelineSuccessGifTimer = null;
-  }
-}
-
-function restartPipelineSuccessGif() {
-  const gif = qs("pipelineSuccessGif");
-  const staticCheck = qs("pipelineSuccessStaticCheck");
-  if (!gif || !staticCheck) return;
-
-  stopPipelineSuccessGifTimer();
-
-  staticCheck.classList.add("hidden");
-  gif.classList.remove("hidden");
-
-  const src = gif.dataset.src || gif.getAttribute("src");
-  if (!src) return;
-
-  gif.removeAttribute("src");
-  void gif.offsetWidth;
-
-  requestAnimationFrame(() => {
-    gif.setAttribute("src", src);
-
-    // Match this to the real GIF duration.
-    pipelineSuccessGifTimer = setTimeout(() => {
-      gif.classList.add("hidden");
-      staticCheck.classList.remove("hidden");
-    }, 1800);
-  });
-}
-
-function stopPipelineFailureGifTimer() {
-  if (pipelineFailureGifTimer) {
-    clearTimeout(pipelineFailureGifTimer);
-    pipelineFailureGifTimer = null;
-  }
-}
-
-function restartPipelineFailureGif() {
-  const gif = qs("pipelineFailureGif");
-  const staticCross = qs("pipelineFailureStaticCross");
-  if (!gif || !staticCross) return;
-
-  stopPipelineFailureGifTimer();
-
-  staticCross.classList.add("hidden");
-  gif.classList.remove("hidden");
-
-  const src = gif.dataset.src || gif.getAttribute("src");
-  if (!src) return;
-
-  gif.removeAttribute("src");
-  void gif.offsetWidth;
-
-  requestAnimationFrame(() => {
-    gif.setAttribute("src", src);
-
-    pipelineFailureGifTimer = setTimeout(() => {
-      gif.classList.add("hidden");
-      staticCross.classList.remove("hidden");
-    }, 1800);
-  });
+  qs("pipelineSuccessTitle").textContent = summary.isEmptyResult
+    ? "No jobs matched this run"
+    : "Pipeline run is ready";
+  qs("pipelineSuccessText").textContent = summary.isEmptyResult
+    ? summary.emptyResultReason
+    : "Your job results and planning artifacts are ready to review.";
+  qs("pipelineResultMetrics").innerHTML = metricsHtml;
+  qs("pipelineEmptyReasons").innerHTML = reasonsHtml;
+  qs("pipelineEmptyReasons").classList.toggle("hidden", !summary.isEmptyResult);
+  qs("pipelineOverlaySuccess").classList.toggle("is-empty-result", summary.isEmptyResult);
+  qs("pipelineOverlayCard").classList.toggle("is-empty-result", summary.isEmptyResult);
+  qs("pipelineSuccessPlanningBtn").classList.toggle("hidden", summary.isEmptyResult);
+  qs("pipelineSuccessDetailsBtn").classList.toggle("hidden", !summary.isEmptyResult);
+  qs("pipelineSuccessRunAgainBtn").classList.toggle("hidden", !summary.isEmptyResult);
+  qs("pipelineSuccessPlanningBtn").disabled = false;
+  renderPipelineStageStepper({ ...pipeline, status: "succeeded" }, "pipelineSuccessStageStepper", "complete");
 }
 
 function renderPipelineFailureSummary(pipeline = {}) {
-  const reason = pipeline.error || pipeline.stage_message || "Run failed.";
   const currentStage = pipeline.current_stage ? titleCaseStage(pipeline.current_stage) : "";
-  const summaryMessage = pipeline.summary_message || "";
   const metaBits = [
     pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
     pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
@@ -1745,14 +1817,15 @@ function renderPipelineFailureSummary(pipeline = {}) {
     ? `<div class="pipeline-success-summary-text">${escapeHtml(metaBits.join(" · "))}</div>`
     : "";
 
-  qs("pipelineFailureTitle").textContent = "Pipeline failed";
-  qs("pipelineFailureText").textContent = summaryMessage || "Run failed before completion.";
+  qs("pipelineFailureTitle").textContent = "Pipeline could not finish";
+  qs("pipelineFailureText").textContent = "The run stopped before completion. Review diagnostics for technical details.";
   qs("pipelineFailureSummary").innerHTML = metaLine;
   qs("pipelineFailureReason").innerHTML = `
     <div class="pipeline-success-summary-text">
-      <strong>Reason:</strong> ${escapeHtml(reason)}
+      No application actions were taken. Technical details remain available in pipeline diagnostics.
     </div>
   `;
+  renderPipelineStageStepper(pipeline, "pipelineFailureStageStepper", "failed");
 }
 
 function showPipelineFailureOverlay(pipeline = {}) {
@@ -1770,6 +1843,9 @@ function showPipelineFailureOverlay(pipeline = {}) {
   loadingPane.classList.add("hidden");
   successPane.classList.add("hidden");
   failurePane.classList.remove("hidden");
+  qs("pipelineOverlayCard").classList.remove("is-success");
+  qs("pipelineOverlayCard").classList.remove("is-empty-result");
+  qs("pipelineOverlayCard").classList.add("is-error");
 
   state.pipelineSuccessVisible = false;
   state.currentPipelineSuccessKey = null;
@@ -1777,8 +1853,11 @@ function showPipelineFailureOverlay(pipeline = {}) {
   state.currentPipelineFailureKey = failureKey;
 
   renderPipelineFailureSummary(pipeline);
-  restartPipelineFailureGif();
-
+  const status = String(pipeline.status || "failed").toLowerCase();
+  if (status === "cancelled" || status === "canceled" || status === "stopped") {
+    qs("pipelineFailureTitle").textContent = "Pipeline run was cancelled";
+    qs("pipelineFailureText").textContent = "The run stopped before completion. No application actions were taken.";
+  }
   overlay.classList.remove("hidden");
 }
 
@@ -1795,13 +1874,13 @@ function showPipelineSuccessOverlay(pipeline = {}) {
 
   loadingPane.classList.add("hidden");
   successPane.classList.remove("hidden");
+  qs("pipelineOverlayCard").classList.remove("is-error");
+  qs("pipelineOverlayCard").classList.add("is-success");
 
   state.pipelineSuccessVisible = true;
   state.currentPipelineSuccessKey = successKey;
 
   renderPipelineSuccessSummary(pipeline);
-  restartPipelineSuccessGif();
-
   overlay.classList.remove("hidden");
 }
 
@@ -1810,14 +1889,6 @@ function showPageLoadingOverlay(title, text, pipeline = {}) {
   const loadingPane = qs("pipelineOverlayLoading");
   const successPane = qs("pipelineOverlaySuccess");
   const failurePane = qs("pipelineOverlayFailure");
-  const successGif = qs("pipelineSuccessGif");
-  const staticCheck = qs("pipelineSuccessStaticCheck");
-  const failureGif = qs("pipelineFailureGif");
-  const staticCross = qs("pipelineFailureStaticCross");
-
-  stopPipelineSuccessGifTimer();
-  stopPipelineFailureGifTimer();
-
   state.pipelineSuccessVisible = false;
   state.currentPipelineSuccessKey = null;
   state.pipelineFailureVisible = false;
@@ -1826,14 +1897,12 @@ function showPageLoadingOverlay(title, text, pipeline = {}) {
   loadingPane.classList.remove("hidden");
   successPane.classList.add("hidden");
   failurePane.classList.add("hidden");
+  qs("pipelineOverlayCard").classList.remove("is-success", "is-error", "is-empty-result");
 
-  if (successGif) successGif.classList.remove("hidden");
-  if (staticCheck) staticCheck.classList.add("hidden");
-  if (failureGif) failureGif.classList.remove("hidden");
-  if (staticCross) staticCross.classList.add("hidden");
-
-  qs("pageLoadingTitle").textContent = title || "Running live pipeline...";
-  qs("pageLoadingText").textContent = text || "Preparing pipeline run.";
+  qs("pageLoadingTitle").textContent = "Running live job pipeline";
+  qs("pageLoadingText").textContent = pipeline.status === "running"
+    ? "Collecting jobs, filtering duplicates, scoring fit, and preparing planning artifacts."
+    : (text || "Preparing your private pipeline run.");
   qs("pipelineLoadingMeta").textContent = buildPipelineMetaText(pipeline);
   renderPipelineCounts(pipeline);
   renderPipelineStageStepper(pipeline);
@@ -1842,8 +1911,6 @@ function showPageLoadingOverlay(title, text, pipeline = {}) {
 }
 
 function hidePageLoadingOverlay() {
-  stopPipelineSuccessGifTimer();
-  stopPipelineFailureGifTimer();
   state.pipelineSuccessVisible = false;
   state.currentPipelineSuccessKey = null;
   state.pipelineFailureVisible = false;
@@ -1863,7 +1930,10 @@ function renderPipelineStatus(payload) {
   const overlayEl = qs("pageLoadingOverlay");
   const pendingStart = hasPipelinePendingSuccess();
 
-  if (pendingStart && status !== "succeeded" && status !== "failed" && status !== "stopped") {
+  const terminalFailure = ["failed", "cancelled", "canceled", "stopped"].includes(status);
+  const runningLike = ["queued", "starting", "running"].includes(status);
+
+  if (pendingStart && status !== "succeeded" && !terminalFailure) {
     showPageLoadingOverlay(
       "Running live pipeline...",
       pipeline.stage_message || "Starting pipeline run...",
@@ -1882,7 +1952,7 @@ function renderPipelineStatus(payload) {
     return;
   }
 
-  if (status === "running") {
+  if (runningLike) {
     runBtn.disabled = true;
     runBtn.textContent = "Pipeline Running...";
 
@@ -1901,21 +1971,17 @@ function renderPipelineStatus(payload) {
     refreshTablesAfterPipelineSuccess(pipeline);
 
     const successKey = getPipelineSuccessKey(pipeline);
-    const shouldShowSuccess =
-      hasPipelinePendingSuccess() && !wasPipelineSuccessAlreadyShown(successKey);
-
-    if (shouldShowSuccess) {
+    const overlayIsVisible = !overlayEl.classList.contains("hidden");
+    if (hasPipelinePendingSuccess() || overlayIsVisible || state.pipelineSuccessVisible) {
       markPipelineSuccessShown(successKey);
       clearPipelinePendingSuccess();
       showPipelineSuccessOverlay(pipeline);
-    } else if (!state.pipelineSuccessVisible) {
-      hidePageLoadingOverlay();
     }
 
     return;
   }
 
-  if (status === "failed") {
+  if (terminalFailure) {
     runBtn.disabled = false;
     runBtn.textContent = "Run Live Pipeline";
 
@@ -1926,8 +1992,6 @@ function renderPipelineStatus(payload) {
     if (shouldShowFailure) {
       clearPipelinePendingSuccess();
       showPipelineFailureOverlay(pipeline);
-    } else if (!state.pipelineFailureVisible) {
-      hidePageLoadingOverlay();
     }
 
     return;
@@ -1935,7 +1999,9 @@ function renderPipelineStatus(payload) {
 
   runBtn.disabled = false;
   runBtn.textContent = "Run Live Pipeline";
-  hidePageLoadingOverlay();
+  if (!overlayEl.classList.contains("hidden")) {
+    qs("pipelineLoadingMeta").textContent = "Waiting for the latest pipeline status. This window will remain open.";
+  }
 }
 
 async function loadPipelineStatus() {
@@ -2121,14 +2187,18 @@ function startPipelinePolling() {
   pipelinePollTimer = setInterval(async () => {
     try {
       const data = await loadPipelineStatus();
-      if (!data.pipeline || !data.pipeline.is_running) {
+      const status = String(data?.pipeline?.status || "").toLowerCase();
+      if (["succeeded", "failed", "cancelled", "canceled", "stopped"].includes(status)) {
         stopPipelinePolling();
         await loadStatus();
         await reloadCurrentTable();
       }
     } catch (err) {
-      stopPipelinePolling();
       console.error(err);
+      const meta = qs("pipelineLoadingMeta");
+      if (meta) {
+        meta.textContent = "Temporarily unable to refresh pipeline status. Retrying automatically…";
+      }
     }
   }, 2000);
 }
@@ -2628,6 +2698,7 @@ function attachApplicationHandlers() {
   });
 
   qs("confirmPipelineRunBtn").addEventListener("click", async () => {
+    let pipelineStarted = false;
     try {
       const config = state.pendingPipelineConfig || collectPipelineConfig();
       closePipelineConfirmModal();
@@ -2645,12 +2716,23 @@ function attachApplicationHandlers() {
       });
 
       await postJson("/pipeline/run", config);
-      await loadPipelineStatus();
+      pipelineStarted = true;
       startPipelinePolling();
+      try {
+        await loadPipelineStatus();
+      } catch (statusErr) {
+        console.error(statusErr);
+        qs("pipelineLoadingMeta").textContent = "Pipeline started. Waiting for the latest status…";
+      }
     } catch (err) {
-      clearPipelinePendingSuccess();
-      hidePageLoadingOverlay();
-      showAppError("Failed to start live pipeline", err);
+      if (!pipelineStarted) {
+        clearPipelinePendingSuccess();
+        showPipelineFailureOverlay({
+          status: "failed",
+          current_stage: "startup",
+          error: extractErrorMessage(err),
+        });
+      }
     }
   });
 
@@ -2660,6 +2742,20 @@ function attachApplicationHandlers() {
   }); 
   qs("pipelineFailureOkBtn").addEventListener("click", () => {
     hidePageLoadingOverlay();
+  });
+  qs("pipelineSuccessPlanningBtn").addEventListener("click", () => {
+    qs("pipelineSuccessPlanningBtn").disabled = true;
+    state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
+    window.location.href = "/planning";
+  });
+  qs("pipelineSuccessDetailsBtn").addEventListener("click", () => {
+    state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
+    window.location.href = "/profile?tab=pipeline-runs";
+  });
+  qs("pipelineSuccessRunAgainBtn").addEventListener("click", () => {
+    state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
+    hidePageLoadingOverlay();
+    openPipelineConfigModal();
   });
 
   qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);

@@ -480,73 +480,82 @@ def executive_dashboard() -> str:
     </div>
   </section>
 
-  <section class="page-loading-overlay hidden" id="pageLoadingOverlay">
-    <div class="page-loading-card pipeline-loading-card" id="pipelineOverlayCard">
+  <section class="page-loading-overlay workflow-overlay workflow-overlay--pipeline hidden" id="pageLoadingOverlay" aria-live="polite" aria-modal="true" role="dialog">
+    <div class="page-loading-card pipeline-loading-card workflow-overlay__panel" id="pipelineOverlayCard">
       <div class="pipeline-overlay-loading" id="pipelineOverlayLoading">
-        <div class="loading-spinner"></div>
-        <div class="page-loading-title" id="pageLoadingTitle">Running live pipeline...</div>
-        <div class="page-loading-text" id="pageLoadingText">Preparing pipeline run.</div>
-
-        <div class="pipeline-loading-meta" id="pipelineLoadingMeta"></div>
-        <div class="pipeline-loading-counts" id="pipelineLoadingCounts"></div>
-        <div class="pipeline-stage-stepper" id="pipelineStageStepper"></div>
+        <header class="workflow-overlay__header pipeline-workflow-header">
+          <div>
+            <div class="workflow-overlay__eyebrow">Live workflow</div>
+            <div class="page-loading-title" id="pageLoadingTitle">Running live job pipeline</div>
+            <div class="page-loading-text" id="pageLoadingText">Collecting jobs, filtering duplicates, scoring fit, and preparing planning artifacts.</div>
+          </div>
+        </header>
+        <div class="workflow-overlay__metrics">
+          <div class="pipeline-loading-meta" id="pipelineLoadingMeta"></div>
+          <div class="pipeline-loading-counts" id="pipelineLoadingCounts"></div>
+        </div>
+        <div class="workflow-overlay__body">
+          <div class="workflow-step-viewport">
+            <div class="pipeline-stage-stepper workflow-step-track" id="pipelineStageStepper"></div>
+          </div>
+        </div>
       </div>
 
       <div class="pipeline-overlay-success hidden" id="pipelineOverlaySuccess">
-        <div class="pipeline-success-visual">
-          <img
-            id="pipelineSuccessGif"
-            class="pipeline-success-gif"
-            src="/static/media/success_check.gif"
-            data-src="/static/media/success_check.gif"
-            alt="Pipeline completed successfully"
-          />
-          <div class="pipeline-success-static-check hidden" id="pipelineSuccessStaticCheck">✓</div>
+        <header class="workflow-overlay__header pipeline-result-header">
+          <div class="pipeline-result-header__layout">
+            <div class="workflow-completion-indicator" aria-hidden="true">✓</div>
+            <div class="pipeline-result-header__copy">
+              <div class="workflow-overlay__eyebrow">Complete</div>
+              <div class="page-loading-title pipeline-success-title" id="pipelineSuccessTitle">
+                Pipeline run is ready
+              </div>
+              <div class="page-loading-text pipeline-success-text" id="pipelineSuccessText">
+                Your job results and planning artifacts are ready to review.
+              </div>
+            </div>
+          </div>
+        </header>
+        <div class="workflow-overlay__metrics pipeline-success-summary" id="pipelineSuccessSummary">
+          <div class="pipeline-result-metrics" id="pipelineResultMetrics"></div>
+          <div class="pipeline-empty-reasons hidden" id="pipelineEmptyReasons"></div>
         </div>
-
-        <div class="page-loading-title pipeline-success-title" id="pipelineSuccessTitle">
-          Pipeline completed
+        <div class="workflow-overlay__body workflow-overlay__body--completion">
+          <div class="workflow-step-viewport">
+            <div class="pipeline-stage-stepper workflow-step-track" id="pipelineSuccessStageStepper"></div>
+          </div>
         </div>
-        <div class="page-loading-text pipeline-success-text" id="pipelineSuccessText">
-          Run finished successfully.
-        </div>
-
-        <div class="pipeline-success-summary" id="pipelineSuccessSummary"></div>
-
-        <div class="modal-actions pipeline-success-actions">
-          <button type="button" id="pipelineSuccessOkBtn">OK</button>
+        <div class="modal-actions pipeline-success-actions workflow-overlay__footer">
+          <button type="button" class="ghost-btn pipeline-result-action pipeline-result-action--tertiary" id="pipelineSuccessOkBtn">Close</button>
+          <button type="button" class="ghost-btn pipeline-result-action pipeline-result-action--secondary hidden" id="pipelineSuccessDetailsBtn">Review Run Details</button>
+          <button type="button" class="pipeline-result-action pipeline-result-action--primary hidden" id="pipelineSuccessRunAgainBtn">Adjust Settings</button>
+          <button type="button" id="pipelineSuccessPlanningBtn">View Planning</button>
         </div>
       </div>
 
       <div class="pipeline-overlay-failure hidden" id="pipelineOverlayFailure">
-        <div class="pipeline-success-visual">
-          <img
-            id="pipelineFailureGif"
-            class="pipeline-success-gif"
-            src="/static/media/failed.gif"
-            data-src="/static/media/failed.gif"
-            alt="Pipeline failed"
-          />
-          <div
-            class="pipeline-success-static-check hidden"
-            id="pipelineFailureStaticCross"
-          >
-            ✕
+        <header class="workflow-overlay__header">
+          <div>
+            <div class="workflow-overlay__eyebrow">Needs attention</div>
+            <div class="page-loading-title pipeline-success-title" id="pipelineFailureTitle">
+              Pipeline could not finish
+            </div>
+            <div class="page-loading-text pipeline-success-text" id="pipelineFailureText">
+              The run stopped before completion. Review diagnostics for technical details.
+            </div>
+          </div>
+        </header>
+        <div class="workflow-overlay__metrics">
+          <div class="pipeline-success-summary" id="pipelineFailureSummary"></div>
+          <div class="pipeline-success-summary" id="pipelineFailureReason"></div>
+        </div>
+        <div class="workflow-overlay__body workflow-overlay__body--completion">
+          <div class="workflow-step-viewport">
+            <div class="pipeline-stage-stepper workflow-step-track" id="pipelineFailureStageStepper"></div>
           </div>
         </div>
-
-        <div class="page-loading-title pipeline-success-title" id="pipelineFailureTitle">
-          Pipeline failed
-        </div>
-        <div class="page-loading-text pipeline-success-text" id="pipelineFailureText">
-          Run failed.
-        </div>
-
-        <div class="pipeline-success-summary" id="pipelineFailureSummary"></div>
-        <div class="pipeline-success-summary" id="pipelineFailureReason"></div>
-
-        <div class="modal-actions pipeline-success-actions">
-          <button type="button" id="pipelineFailureOkBtn">OK</button>
+        <div class="modal-actions pipeline-success-actions workflow-overlay__footer">
+          <button type="button" id="pipelineFailureOkBtn">Close</button>
         </div>
       </div>
     </div>

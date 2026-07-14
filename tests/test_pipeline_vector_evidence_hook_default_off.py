@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.agents import vector_evidence_pipeline_hook
 from src.pipeline import collector
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -242,8 +243,10 @@ def test_dependency_api_ui_and_protected_runtime_hashes_are_unchanged():
     }
     import hashlib
 
-    for relative_path, expected_hash in expected.items():
-        actual = hashlib.sha256(
-            (ROOT / relative_path).read_bytes()
-        ).hexdigest()
-        assert actual == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        expected,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

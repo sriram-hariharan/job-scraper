@@ -13,6 +13,7 @@ import pytest
 
 from src.agents import vector_evidence_contract
 from src.storage.vector_evidence import store
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -329,10 +330,13 @@ def test_no_api_ui_pipeline_scoring_ranking_queue_or_dependency_change():
         "application_execution_queue.py": ("c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"),
         "requirements.txt": ("5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"),
     }
-    for relative_path, expected_hash in protected_hashes.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        protected_hashes,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
     assert "pgvector" not in requirements

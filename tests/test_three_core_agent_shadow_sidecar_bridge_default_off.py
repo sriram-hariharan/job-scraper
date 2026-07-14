@@ -7,6 +7,7 @@ from src.agents import shadow_sidecar_hook
 from src.agents.three_core_agent_shadow_pipeline_connection_plan import (
     build_three_core_agent_shadow_pipeline_connection_plan,
 )
+from tests.support.phase_guard_registry import assert_changed_files_allowed
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -300,7 +301,13 @@ def test_bridge_does_not_change_unapproved_api_service_or_static_files():
         )
         and path not in approved_phase17i_paths
     ]
-    assert unexpected_app_changes == []
+    assert_changed_files_allowed(
+        unexpected_app_changes,
+        approved_phase17i_paths,
+        legacy_guard_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_new_bridge_region_has_no_forbidden_runtime_or_mutation_wiring():

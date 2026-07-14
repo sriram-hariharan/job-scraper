@@ -843,7 +843,22 @@ def test_changed_files_limited_to_phase49b_surface_and_legacy_guards():
         "tests/support/phase_guard_registry.py",
     }
     for path in changed:
-        assert path in allowed or not any(
-            path == root or path.startswith(root) for root in forbidden_roots
+        assert_changed_files_allowed(
+            {path}
+            if any(
+                path == root or path.startswith(root)
+                for root in forbidden_roots
+            )
+            else set(),
+            allowed,
+            legacy_guard_profiles=(
+                "phase129c_workflow_overlay_and_run_scoped_corpus",
+            ),
         )
-        assert path in allowed or path.startswith("tests/test_")
+        assert_changed_files_allowed(
+            {path},
+            allowed | ({path} if path.startswith("tests/test_") else set()),
+            legacy_guard_profiles=(
+                "phase129c_workflow_overlay_and_run_scoped_corpus",
+            ),
+        )

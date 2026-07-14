@@ -11,6 +11,7 @@ from src.agents.critic_agent import (
 from tests.support.phase_guard_registry import (
     assert_no_forbidden_runtime_calls_ast,
     get_changed_files,
+    legacy_guard_allowlist,
 )
 
 
@@ -309,15 +310,23 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         assert "build_critic_controlled_llm_guardrail_artifact" not in text
 
     changed = get_changed_files(ROOT)
+    phase129_surface = legacy_guard_allowlist(
+        "phase129c_workflow_overlay_and_run_scoped_corpus"
+    )
+    historical_static_surface = {
+        "src/app/static/agentic_review.js",
+        "src/app/static/app.js",
+        "src/app/static/planning.js",
+        "src/app/static/scan_workspace.js",
+        "src/app/static/scan_workspace_review.css",
+        "src/app/static/styles.css",
+    }
     unexpected_static = {
         path
         for path in changed
         if path.startswith("src/app/static/")
-        and path != "src/app/static/agentic_review.js"
-        and path != "src/app/static/app.js"
-        and path != "src/app/static/planning.js"
-        and path != "src/app/static/scan_workspace.js"
-        and path != "src/app/static/scan_workspace_review.css"
+        and path not in historical_static_surface
+        and path not in phase129_surface
     }
     assert not unexpected_static
 

@@ -14,12 +14,10 @@ let resumeChoiceState = {
 };
 
 const GENERATE_SUGGESTIONS_STEPS = [
-  "Loading job and resume context",
-  "Reading job requirements",
-  "Finding match gaps",
-  "Building tailoring strategy",
-  "Generating suggestions",
-  "Running safety review",
+  "Reading job details",
+  "Checking resume evidence",
+  "Building targeted edits",
+  "Preparing review packet",
   "Opening workspace",
 ];
 
@@ -2014,8 +2012,14 @@ function applyPlanningTableResponse(data, { historyMode = "replace" } = {}) {
 
   syncPlanningBrowserUrl({ mode: historyMode });
 
+  const contextualRows = (data.rows || []).map((row) => ({
+    ...row,
+    pipeline_run_id: row.pipeline_run_id || data.pipeline_run_id || "",
+    planning_output_dir: row.planning_output_dir || data.planning_output_dir || "",
+  }));
+
   renderPlanningRows(
-    data.rows || [],
+    contextualRows,
     `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
   );
 }
@@ -12250,6 +12254,7 @@ function canGenerateSuggestionsForRow(row) {
 
 function buildGenerateSuggestionsPayload(row) {
   return {
+    pipeline_run_id: row?.pipeline_run_id || row?.run_id || "",
     job_doc_id: row?.job_doc_id || "",
     queue_rank: row?.queue_rank || "",
     selected_resume: resolveGenerateSuggestionsSelectedResume(row),
@@ -12269,6 +12274,9 @@ function resolvePlanningRowOutputDir(row) {
 }
 
 function buildGenerateSuggestionsEndpoint(row) {
+  if (row?.pipeline_run_id || row?.run_id) {
+    return "/planning/regenerate-selected-resume";
+  }
   const outputDir = resolvePlanningRowOutputDir(row);
   if (!outputDir) {
     return "/planning/regenerate-selected-resume";
@@ -12412,6 +12420,7 @@ function buildTailoringButtonHtml(row) {
       data-output-dir="${escapeHtml(row.output_dir || "")}"
       data-packet-output-dir="${escapeHtml(row.packet_output_dir || "")}"
       data-artifact-output-dir="${escapeHtml(row.artifact_output_dir || "")}"
+      data-pipeline-run-id="${escapeHtml(row.pipeline_run_id || row.run_id || "")}"
       data-tailoring-workspace-state="${escapeHtml(row.tailoring_workspace_state || "")}"
       data-tailoring-actionable-replacement-count="${escapeHtml(row.tailoring_actionable_replacement_count || "")}"
       data-tailoring-review-replacement-count="${escapeHtml(row.tailoring_review_replacement_count || "")}"
@@ -12450,6 +12459,7 @@ async function handleTailoringClick(button) {
     output_dir: button.dataset.outputDir || "",
     packet_output_dir: button.dataset.packetOutputDir || "",
     artifact_output_dir: button.dataset.artifactOutputDir || "",
+    pipeline_run_id: button.dataset.pipelineRunId || "",
     tailoring_workspace_state: button.dataset.tailoringWorkspaceState || "",
     tailoring_actionable_replacement_count: button.dataset.tailoringActionableReplacementCount || "",
     tailoring_review_replacement_count: button.dataset.tailoringReviewReplacementCount || "",
@@ -12469,38 +12479,69 @@ function clearGenerateSuggestionsStepTimer() {
   }
 }
 
-function buildGenerateSuggestionsStepRunnerHtml(activeIndex = 0, completed = false) {
+function buildGenerateSuggestionsStepRunnerHtml(activeIndex = 0, completed = false, failed = false) {
   const cappedIndex = Math.max(0, Math.min(activeIndex, GENERATE_SUGGESTIONS_STEPS.length - 1));
-  const activeLabel = GENERATE_SUGGESTIONS_STEPS[cappedIndex] || GENERATE_SUGGESTIONS_STEPS[0];
-  const previousLabel = cappedIndex > 0 ? GENERATE_SUGGESTIONS_STEPS[cappedIndex - 1] : "";
-  const progressLabel = `Step ${cappedIndex + 1} of ${GENERATE_SUGGESTIONS_STEPS.length}`;
 
   return `
-    <div class="generate-suggestions-step-runner" aria-label="${escapeHtml(progressLabel)}">
-      ${previousLabel ? `
-        <div class="generate-suggestions-step-previous">
-          <span class="generate-suggestions-step-check">✓</span>
-          <span>${escapeHtml(previousLabel)}</span>
-        </div>
-      ` : ""}
-      <div class="generate-suggestions-step-current ${completed ? "is-complete" : ""}">
-        <span class="generate-suggestions-step-pulse" aria-hidden="true"></span>
-        <span class="generate-suggestions-step-label">${escapeHtml(activeLabel)}</span>
-      </div>
-      <div class="generate-suggestions-step-progress">${escapeHtml(progressLabel)}</div>
+    <div class="workflow-step-track generate-suggestions-step-runner" aria-label="Generate Suggestions processing cues">
+      ${GENERATE_SUGGESTIONS_STEPS.map((label, index) => {
+        const isComplete = completed || index < cappedIndex;
+        const isFailed = failed && index === cappedIndex;
+        const isActive = !completed && !failed && index === cappedIndex;
+        const stateClass = isComplete ? "is-complete" : (isFailed ? "is-error" : (isActive ? "is-active" : "is-pending"));
+        const marker = isComplete ? "✓" : (isFailed ? "!" : "");
+        const indicatorLabel = isComplete ? "Complete" : (isFailed ? "Needs attention" : (isActive ? "Current" : "Pending"));
+        return `
+          <div class="workflow-step generate-suggestions-step-item ${stateClass}" data-workflow-step-index="${index}">
+            <span class="workflow-step__indicator generate-suggestions-step-marker" aria-label="${escapeHtml(indicatorLabel)}">${escapeHtml(marker)}</span>
+            <span class="workflow-step__label generate-suggestions-step-label">${escapeHtml(label)}</span>
+          </div>
+        `;
+      }).join("")}
     </div>
   `;
 }
 
-function renderGenerateSuggestionsSteps(activeIndex = 0, completed = false) {
+function getGenerateSuggestionsStepPositionClass(index, activeIndex) {
+  const distance = index - activeIndex;
+  if (distance < -1 || distance > 2) return "is-hidden";
+  if (distance === -1) return "is-previous";
+  if (distance === 0) return "is-active-position";
+  if (distance === 1) return "is-next";
+  return "is-upcoming";
+}
+
+function renderGenerateSuggestionsSteps(activeIndex = 0, completed = false, failed = false) {
   const stepsEl = qs("generateSuggestionsStepList");
   const cappedIndex = Math.max(0, Math.min(activeIndex, GENERATE_SUGGESTIONS_STEPS.length - 1));
-  const currentStep = GENERATE_SUGGESTIONS_STEPS[cappedIndex] || GENERATE_SUGGESTIONS_STEPS[0];
-  const textEl = qs("generateSuggestionsLoaderText");
-
   generateSuggestionsState.stepIndex = cappedIndex;
-  if (textEl) textEl.textContent = currentStep;
-  if (stepsEl) stepsEl.innerHTML = buildGenerateSuggestionsStepRunnerHtml(cappedIndex, completed);
+  if (!stepsEl) return;
+
+  let track = stepsEl.querySelector(".workflow-step-track");
+  if (!track || track.children.length !== GENERATE_SUGGESTIONS_STEPS.length) {
+    stepsEl.innerHTML = buildGenerateSuggestionsStepRunnerHtml(cappedIndex, completed, failed);
+    track = stepsEl.querySelector(".workflow-step-track");
+  }
+  if (!track) return;
+
+  track.style.setProperty("--workflow-active-index", String(cappedIndex));
+  track.dataset.activeIndex = String(cappedIndex);
+  Array.from(track.children).forEach((step, index) => {
+    const isComplete = completed || index < cappedIndex;
+    const isFailed = failed && index === cappedIndex;
+    const isActive = !completed && !failed && index === cappedIndex;
+    const stateClass = isComplete ? "is-complete" : (isFailed ? "is-error" : (isActive ? "is-active" : "is-pending"));
+    const indicator = step.querySelector(".workflow-step__indicator");
+    const marker = isComplete ? "✓" : (isFailed ? "!" : "");
+    const indicatorLabel = isComplete ? "Complete" : (isFailed ? "Needs attention" : (isActive ? "Current" : "Pending"));
+
+    step.className = `workflow-step generate-suggestions-step-item ${stateClass} ${getGenerateSuggestionsStepPositionClass(index, cappedIndex)}`;
+    step.setAttribute("aria-hidden", step.classList.contains("is-hidden") ? "true" : "false");
+    if (indicator) {
+      indicator.textContent = marker;
+      indicator.setAttribute("aria-label", indicatorLabel);
+    }
+  });
 }
 
 function startGenerateSuggestionsStepTimer() {
@@ -12508,12 +12549,10 @@ function startGenerateSuggestionsStepTimer() {
   generateSuggestionsState.stepIndex = 0;
   renderGenerateSuggestionsSteps(0, false);
   generateSuggestionsState.stepTimer = window.setInterval(() => {
-    generateSuggestionsState.stepIndex = Math.min(
-      generateSuggestionsState.stepIndex + 1,
-      GENERATE_SUGGESTIONS_STEPS.length - 2
-    );
-    renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false);
-  }, 900);
+    const lastProcessingCue = GENERATE_SUGGESTIONS_STEPS.length - 2;
+    if (!generateSuggestionsState.isRunning || generateSuggestionsState.stepIndex >= lastProcessingCue) return;
+    renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex + 1, false);
+  }, 1800);
 }
 
 function setGenerateSuggestionsLoaderState(state, {
@@ -12527,13 +12566,13 @@ function setGenerateSuggestionsLoaderState(state, {
   const titleEl = qs("generateSuggestionsLoaderTitle");
   const badgeEl = qs("generateSuggestionsLoaderBadge");
   const textEl = qs("generateSuggestionsLoaderText");
-  const spinnerEl = qs("generateSuggestionsSpinner");
   const errorEl = qs("generateSuggestionsError");
   const retryBtn = qs("generateSuggestionsRetryBtn");
   const openBtn = qs("generateSuggestionsOpenWorkspaceBtn");
   const cancelBtn = qs("generateSuggestionsCancelBtn");
 
   loader.classList.remove("hidden");
+  loader.classList.remove("is-success", "is-error");
 
   if (errorEl) {
     errorEl.textContent = "";
@@ -12548,10 +12587,10 @@ function setGenerateSuggestionsLoaderState(state, {
 
   if (state === "running") {
     generateSuggestionsState.isRunning = true;
-    if (titleEl) titleEl.textContent = "Generating Suggestions";
+    if (titleEl) titleEl.textContent = "Preparing tailoring workspace";
     if (badgeEl) badgeEl.textContent = "Running";
+    if (textEl) textEl.textContent = "Building review-ready suggestions from the selected job and resume.";
     renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false);
-    if (spinnerEl) spinnerEl.classList.remove("hidden");
     return;
   }
 
@@ -12559,20 +12598,20 @@ function setGenerateSuggestionsLoaderState(state, {
   clearGenerateSuggestionsStepTimer();
 
   if (state === "success") {
+    loader.classList.add("is-success");
     renderGenerateSuggestionsSteps(GENERATE_SUGGESTIONS_STEPS.length - 1, true);
-    if (titleEl) titleEl.textContent = "Opening workspace";
+    if (titleEl) titleEl.textContent = "Tailoring workspace is ready";
     if (badgeEl) badgeEl.textContent = "Ready";
-    if (textEl) textEl.textContent = "Opening workspace";
-    if (spinnerEl) spinnerEl.classList.add("hidden");
+    if (textEl) textEl.textContent = "Your suggestions and review packet are ready for inspection.";
     if (openBtn && workspaceUrl) openBtn.classList.remove("hidden");
     return;
   }
 
-  renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false);
+  renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false, true);
+  loader.classList.add("is-error");
   if (titleEl) titleEl.textContent = "Could not generate suggestions";
   if (badgeEl) badgeEl.textContent = "Needs attention";
   if (textEl) textEl.textContent = message || "Review the message below.";
-  if (spinnerEl) spinnerEl.classList.add("hidden");
   if (errorEl) {
     errorEl.textContent = error || "Something went wrong while generating suggestions.";
     errorEl.classList.remove("hidden");
@@ -12616,6 +12655,7 @@ function getPlanningRowFromTailoringDataset(button) {
     output_dir: button.dataset.outputDir || "",
     packet_output_dir: button.dataset.packetOutputDir || "",
     artifact_output_dir: button.dataset.artifactOutputDir || "",
+    pipeline_run_id: button.dataset.pipelineRunId || "",
     tailoring_workspace_state: button.dataset.tailoringWorkspaceState || "",
     tailoring_actionable_replacement_count: button.dataset.tailoringActionableReplacementCount || "",
     tailoring_review_replacement_count: button.dataset.tailoringReviewReplacementCount || "",
@@ -12670,7 +12710,17 @@ function buildGenerateSuggestionsWorkspaceRow(row, payload = {}) {
 }
 
 function extractGenerateSuggestionsError(err) {
-  return String(err?.message || err || "Unable to generate suggestions right now.");
+  const message = extractErrorMessage(err);
+  if (/planning artifacts.*not ready/i.test(message)) {
+    return "The planning artifacts for this pipeline run are not ready. Complete the pipeline run, then retry.";
+  }
+  if (/no planning job.*available/i.test(message)) {
+    return "No planning job is available for this run.";
+  }
+  if (/missing job corpus|job corpus.*unavailable/i.test(message)) {
+    return "The planning corpus for this completed run is unavailable. Review the run details or run the pipeline again.";
+  }
+  return message || "Unable to generate suggestions right now.";
 }
 
 async function handleGenerateSuggestionsClick(button) {
@@ -12711,15 +12761,8 @@ async function handleGenerateSuggestionsClick(button) {
     generateSuggestionsState.lastWorkspaceUrl = workspaceUrl;
     setGenerateSuggestionsLoaderState("success", {
       workspaceUrl,
-      message: "Suggestions are ready. Opening workspace.",
+      message: "Suggestions are ready.",
     });
-
-    window.setTimeout(() => {
-      if (generateSuggestionsState.cancelledRequestSeq === requestSeq) {
-        return;
-      }
-      window.location.href = workspaceUrl;
-    }, 450);
   } catch (err) {
     if (generateSuggestionsState.cancelledRequestSeq === requestSeq) {
       return;
@@ -12761,6 +12804,7 @@ async function retryGenerateSuggestions() {
       outputDir: generateSuggestionsState.row.output_dir || "",
       packetOutputDir: generateSuggestionsState.row.packet_output_dir || "",
       artifactOutputDir: generateSuggestionsState.row.artifact_output_dir || "",
+      pipelineRunId: generateSuggestionsState.row.pipeline_run_id || generateSuggestionsState.row.run_id || "",
       tailoringWorkspaceState: generateSuggestionsState.row.tailoring_workspace_state || "",
       tailoringActionableReplacementCount: generateSuggestionsState.row.tailoring_actionable_replacement_count || "",
       tailoringReviewReplacementCount: generateSuggestionsState.row.tailoring_review_replacement_count || "",
@@ -12772,6 +12816,8 @@ async function retryGenerateSuggestions() {
 
 function openGenerateSuggestionsWorkspace() {
   if (!generateSuggestionsState.lastWorkspaceUrl) return;
+  const button = qs("generateSuggestionsOpenWorkspaceBtn");
+  if (button) button.disabled = true;
   window.location.href = generateSuggestionsState.lastWorkspaceUrl;
 }
 

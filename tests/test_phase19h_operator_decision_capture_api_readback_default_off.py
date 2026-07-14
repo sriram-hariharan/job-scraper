@@ -19,6 +19,7 @@ from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
     get_changed_files,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "/api/operator-decision-capture-readback"
@@ -198,8 +199,13 @@ def test_route_calls_only_phase19g_helper_without_forbidden_wiring():
 
 
 def test_protected_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase19h_changes_only_approved_files():

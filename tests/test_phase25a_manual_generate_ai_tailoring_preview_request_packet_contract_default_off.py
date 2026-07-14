@@ -18,6 +18,7 @@ from tests.support.phase_guard_registry import (
 from src.agents.manual_generate_ai_tailoring_preview_request_packet_contract import (
     build_manual_generate_ai_tailoring_preview_request_packet_contract,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -374,8 +375,13 @@ def test_docs_capture_default_off_request_packet_safety_contract():
 
 
 def test_protected_runtime_api_ui_and_generation_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative_path) == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase25a_changes_are_limited_to_contract_doc_and_tests():

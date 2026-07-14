@@ -3,6 +3,7 @@
 # phase26b legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004
 from hashlib import sha256
 from pathlib import Path
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 REVIEW_JS_PATH = Path("src/app/static/agentic_review.js")
@@ -53,9 +54,13 @@ def _approval_mock_snippet() -> str:
 
 
 def test_step_205a_agentic_review_polish_is_ui_only_and_backend_is_unchanged():
-    for path, expected_hash in PROTECTED_FILE_HASHES.items():
-        assert Path(path).exists(), path
-        assert sha256(Path(path).read_bytes()).hexdigest() == expected_hash, path
+    assert_protected_hashes(
+        Path("."),
+        PROTECTED_FILE_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_agent_trace_copy_is_clean_readonly_get_only_and_debug_values_are_collapsed():

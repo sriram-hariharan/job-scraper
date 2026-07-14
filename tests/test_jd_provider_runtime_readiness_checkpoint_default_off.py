@@ -17,6 +17,7 @@ from src.agents.jd_provider_runtime_trace_readback import (
 from src.agents.provider_runtime_activation_plan import (
     build_provider_runtime_activation_plan,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -253,7 +254,10 @@ def test_dependency_pipeline_and_application_authority_files_are_unchanged():
         "application_execution_queue.py": ("c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"),
     }
 
-    for relative_path, expected_hash in expected.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        expected,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

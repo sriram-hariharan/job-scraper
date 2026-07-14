@@ -3370,14 +3370,23 @@ def planning_select_resume(
 
 @app.post("/planning/regenerate-selected-resume")
 def planning_regenerate_selected_resume(
+    http_request: Request,
     payload: dict = Body(...),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     job_corpus: str = str(services.DEFAULT_CORPUS_PATH),
 ):
     try:
+        pipeline_run_id = str(payload.get("pipeline_run_id", "") or "").strip()
+        resolved_output_dir = Path(output_dir)
+        resolved_job_corpus = Path(job_corpus)
+        if pipeline_run_id:
+            resolved_output_dir, resolved_job_corpus = services.resolve_user_pipeline_run_planning_paths(
+                owner_user_id=_auth_owner_user_id(http_request),
+                run_id=pipeline_run_id,
+            )
         return services.regenerate_selected_resume_tailoring_payload(
-            output_dir=Path(output_dir),
-            job_corpus=Path(job_corpus),
+            output_dir=resolved_output_dir,
+            job_corpus=resolved_job_corpus,
             job_doc_id=str(payload.get("job_doc_id", "") or ""),
             queue_rank=str(payload.get("queue_rank", "") or ""),
             selected_resume=str(payload.get("selected_resume", "") or ""),

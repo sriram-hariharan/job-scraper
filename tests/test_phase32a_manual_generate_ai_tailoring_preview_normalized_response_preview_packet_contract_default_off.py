@@ -16,6 +16,7 @@ from tests.support.phase_guard_registry import (
 from src.agents.manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract import (
     build_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -493,8 +494,13 @@ def test_doc_contains_required_safety_markers_and_references():
 
 
 def test_protected_runtime_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative_path) == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase32a_changes_only_helper_doc_test_and_legacy_guards():

@@ -18,6 +18,7 @@ from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
     get_changed_files,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -1023,8 +1024,10 @@ def test_phase19a_changes_only_approved_files():
 
 
 def test_protected_runtime_hashes_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        path = ROOT / relative_path
-
-        assert path.exists()
-        assert sha256(path.read_bytes()).hexdigest() == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

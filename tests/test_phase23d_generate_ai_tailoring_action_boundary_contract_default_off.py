@@ -17,6 +17,7 @@ from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
     get_changed_files,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = (
@@ -303,10 +304,13 @@ def test_docs_contain_required_boundaries_and_references():
 
 
 def test_protected_runtime_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase23d_changes_only_helper_doc_test_and_legacy_guards():

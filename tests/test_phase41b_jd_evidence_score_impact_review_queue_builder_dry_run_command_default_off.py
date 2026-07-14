@@ -12,6 +12,7 @@ import sys
 import pytest
 
 import run_jd_evidence_score_impact_review_queue_builder_dry_run as command
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -492,8 +493,13 @@ def test_docs_include_required_phase41b_markers():
 
 
 def test_protected_backend_and_runtime_hashes_unchanged():
-    for relative, expected in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative) == expected, relative
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_subprocess_cli_outputs_valid_json(tmp_path):

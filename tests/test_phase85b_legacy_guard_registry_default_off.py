@@ -9,6 +9,7 @@ from tests.support.phase_guard_registry import (
     assert_protected_hashes,
     current_milestone_guard_compatibility_allowlist,
     duplicate_artifact_paths,
+    legacy_guard_allowlist,
     normalize_changed_path,
 )
 
@@ -69,6 +70,7 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
         },
         set(),
         legacy_guard_profiles=("config_vocabulary_scoring_change",),
+        include_current_milestone_compatibility=False,
     )
 
     for forbidden_path in (
@@ -86,6 +88,7 @@ def test_config_vocabulary_scoring_change_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("config_vocabulary_scoring_change",),
+                include_current_milestone_compatibility=False,
             )
 
 
@@ -97,6 +100,7 @@ def test_active_ts_clearance_diagnostic_profile_is_narrow():
         },
         set(),
         legacy_guard_profiles=("active_ts_clearance_diagnostic",),
+        include_current_milestone_compatibility=False,
     )
 
     for forbidden_path in (
@@ -114,6 +118,7 @@ def test_active_ts_clearance_diagnostic_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("active_ts_clearance_diagnostic",),
+                include_current_milestone_compatibility=False,
             )
 
 
@@ -160,6 +165,7 @@ def test_active_ts_clearance_scan_warning_readback_profile_is_narrow():
         },
         set(),
         legacy_guard_profiles=("active_ts_clearance_scan_warning_readback",),
+        include_current_milestone_compatibility=False,
     )
 
     for forbidden_path in (
@@ -180,6 +186,7 @@ def test_active_ts_clearance_scan_warning_readback_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("active_ts_clearance_scan_warning_readback",),
+                include_current_milestone_compatibility=False,
             )
 
 
@@ -263,6 +270,7 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
         },
         set(),
         legacy_guard_profiles=("llm_adjudicator_readback_default_off",),
+        include_current_milestone_compatibility=False,
     )
 
     for forbidden_path in (
@@ -286,18 +294,32 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
                 {forbidden_path},
                 set(),
                 legacy_guard_profiles=("llm_adjudicator_readback_default_off",),
+                include_current_milestone_compatibility=False,
             )
 
 
-def test_current_milestone_guard_compatibility_is_exact_phase128b_surface():
-    assert current_milestone_guard_compatibility_allowlist() == {
-        "src/agents/llm_adjudicator_readback.py",
-        "batch_select_best_resume_variant.py",
-        "tests/test_phase123b_llm_adjudicator_readback_default_off.py",
-        "tests/test_phase128b_policy_driven_llm_adjudicator_readback.py",
-        "tests/support/phase_guard_registry.py",
-        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+def test_current_milestone_guard_compatibility_is_exact_phase128b_and_phase129c_surface():
+    phase129_profile = legacy_guard_allowlist(
+        "phase129c_workflow_overlay_and_run_scoped_corpus"
+    )
+    phase129_auth_artwork_files = {
+        "src/app/static/media/auth_workflow_hero.svg",
+        "src/app/static/media/auth_hero_icons/LICENSES.txt",
+        "src/app/static/media/auth_hero_icons/apply_with_confidence.svg",
+        "src/app/static/media/auth_hero_icons/collect_jobs.svg",
+        "src/app/static/media/auth_hero_icons/review_ai_notes.svg",
+        "src/app/static/media/auth_hero_icons/score_fit.svg",
+        "src/app/static/media/auth_hero_icons/tailor_safely.svg",
     }
+    assert "tests/test_phase85b_legacy_guard_registry_default_off.py" in phase129_profile
+    assert phase129_auth_artwork_files <= phase129_profile
+    assert not any("*" in path for path in phase129_profile)
+
+    assert current_milestone_guard_compatibility_allowlist() == (
+        legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+        | phase129_profile
+    )
+    assert len(phase129_profile) == 202
 
     assert_changed_files_allowed(
         {
@@ -313,12 +335,33 @@ def test_current_milestone_guard_compatibility_is_exact_phase128b_surface():
 
     for forbidden_path in (
         "src/matching/scorer.py",
-        "src/app/api.py",
         "src/pipeline/collector.py",
         "requirements.txt",
+        "src/app/unapproved_runtime.py",
+        "src/app/static/media/unapproved.jpg",
+        "tests/test_unapproved_phase129_surface.py",
     ):
         with pytest.raises(AssertionError):
             assert_changed_files_allowed({forbidden_path}, set())
+
+    phase129_api_baseline = {
+        "src/app/api.py": (
+            "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"
+        ),
+    }
+    assert_protected_hashes(
+        Path(__file__).resolve().parents[1],
+        phase129_api_baseline,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
+    with pytest.raises(AssertionError):
+        assert_protected_hashes(
+            Path(__file__).resolve().parents[1],
+            phase129_api_baseline,
+            compatibility_profiles=("config_vocabulary_scoring_change",),
+        )
 
 
 def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):

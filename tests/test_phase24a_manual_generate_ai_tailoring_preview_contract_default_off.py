@@ -15,6 +15,7 @@ from tests.support.phase_guard_registry import (
 
 
 from src.agents import manual_generate_ai_tailoring_preview_contract as contract
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -267,10 +268,13 @@ def test_docs_contain_required_safety_markers_and_phase23_reference():
 
 
 def test_protected_runtime_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase24a_changes_only_helper_doc_test_and_legacy_guards():

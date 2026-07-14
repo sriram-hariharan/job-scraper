@@ -6,6 +6,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from src.app import services
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -194,10 +195,13 @@ def test_no_api_service_pipeline_schema_migration_or_dependency_change():
             "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
         ),
     }
-    for relative_path, expected_hash in protected_hashes.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        protected_hashes,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
     schema_and_migration_paths = [
         path

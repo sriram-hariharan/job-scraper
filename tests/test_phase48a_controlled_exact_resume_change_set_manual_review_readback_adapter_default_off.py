@@ -803,8 +803,23 @@ def test_changed_files_are_limited_to_phase48a_contract_surface():
         if changed_path == "requirements.txt":
             continue
         assert not changed_path.endswith(("requirements.txt", "pyproject.toml", "poetry.lock"))
-        assert changed_path in allowed or not any(
-            changed_path == root or changed_path.startswith(root)
-            for root in forbidden_roots
+        assert_changed_files_allowed(
+            {changed_path}
+            if any(
+                changed_path == root or changed_path.startswith(root)
+                for root in forbidden_roots
+            )
+            else set(),
+            allowed,
+            legacy_guard_profiles=(
+                "phase129c_workflow_overlay_and_run_scoped_corpus",
+            ),
         )
-        assert changed_path in allowed or changed_path.startswith("tests/test_")
+        assert_changed_files_allowed(
+            {changed_path},
+            allowed
+            | ({changed_path} if changed_path.startswith("tests/test_") else set()),
+            legacy_guard_profiles=(
+                "phase129c_workflow_overlay_and_run_scoped_corpus",
+            ),
+        )

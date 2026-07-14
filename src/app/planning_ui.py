@@ -430,217 +430,42 @@ def planning_dashboard() -> str:
     </div>
   </section>
 
-  <style>
-    .generate-suggestions-fullpage {{
-      position: fixed;
-      inset: 0;
-      z-index: 1200;
-      display: grid;
-      place-items: center;
-      padding: clamp(24px, 6vw, 72px);
-      background:
-        radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--app-primary) 16%, transparent), transparent 34%),
-        color-mix(in srgb, var(--app-bg) 88%, rgba(8, 13, 24, 0.72));
-      backdrop-filter: blur(10px);
-      color: var(--app-text);
-    }}
-
-    .generate-suggestions-fullpage.hidden {{
-      display: none !important;
-    }}
-
-    .generate-suggestions-fullpage-card {{
-      width: min(760px, 100%);
-      min-height: min(560px, calc(100vh - 96px));
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      gap: clamp(22px, 4vw, 42px);
-      padding: clamp(24px, 5vw, 56px);
-      border: 1px solid color-mix(in srgb, var(--app-border) 78%, var(--app-primary));
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--app-panel) 94%, transparent);
-      box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
-    }}
-
-    .generate-suggestions-loader-topline {{
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 20px;
-    }}
-
-    .generate-suggestions-loader-topline h3 {{
-      margin: 4px 0 0;
-      font-size: clamp(30px, 5vw, 52px);
-      line-height: 1.05;
-      letter-spacing: 0;
-      color: var(--app-text);
-    }}
-
-    .generate-suggestions-loader-body {{
-      display: grid;
-      place-items: center;
-      align-content: center;
-      gap: 22px;
-      text-align: center;
-    }}
-
-    .generate-suggestions-progress-accent {{
-      width: 84px;
-      height: 84px;
-      display: grid;
-      place-items: center;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--app-primary) 10%, transparent);
-    }}
-
-    .generate-suggestions-progress-accent .loading-spinner {{
-      width: 48px;
-      height: 48px;
-      border-width: 4px;
-    }}
-
-    .generate-suggestions-current-step {{
-      width: min(560px, 100%);
-      min-height: 152px;
-      display: grid;
-      place-items: center;
-    }}
-
-    .generate-suggestions-step-runner {{
-      width: 100%;
-      display: grid;
-      gap: 16px;
-      justify-items: center;
-    }}
-
-    .generate-suggestions-step-previous {{
-      min-height: 24px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--app-muted);
-      font-size: 14px;
-      opacity: 0.72;
-    }}
-
-    .generate-suggestions-step-check {{
-      width: 20px;
-      height: 20px;
-      display: inline-grid;
-      place-items: center;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--app-success) 16%, transparent);
-      color: var(--app-success);
-      font-size: 12px;
-      font-weight: 800;
-    }}
-
-    .generate-suggestions-step-current {{
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      min-height: 72px;
-      padding: 8px 0;
-      color: var(--app-text);
-      font-size: clamp(24px, 4vw, 38px);
-      font-weight: 800;
-      line-height: 1.18;
-    }}
-
-    .generate-suggestions-step-pulse {{
-      width: 14px;
-      height: 14px;
-      flex: 0 0 auto;
-      border-radius: 999px;
-      background: var(--app-primary);
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--app-primary) 40%, transparent);
-      animation: generate-suggestions-pulse 1300ms ease-out infinite;
-    }}
-
-    .generate-suggestions-step-current.is-complete .generate-suggestions-step-pulse {{
-      animation: none;
-      background: var(--app-success);
-    }}
-
-    .generate-suggestions-step-progress {{
-      color: var(--app-muted);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0;
-      text-transform: uppercase;
-    }}
-
-    .generate-suggestions-loader-error {{
-      max-width: 620px;
-      padding: 12px 14px;
-      border: 1px solid color-mix(in srgb, var(--app-danger) 36%, var(--app-border));
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--app-danger) 10%, transparent);
-      color: var(--app-danger);
-      line-height: 1.5;
-    }}
-
-    .generate-suggestions-loader-actions {{
-      justify-content: center;
-    }}
-
-    @keyframes generate-suggestions-pulse {{
-      0% {{
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--app-primary) 42%, transparent);
-      }}
-      100% {{
-        box-shadow: 0 0 0 18px transparent;
-      }}
-    }}
-  </style>
-
   <section
-    class="generate-suggestions-fullpage hidden"
+    class="generate-suggestions-fullpage workflow-overlay workflow-overlay--tailoring hidden"
     id="generateSuggestionsLoader"
     aria-live="polite"
     aria-modal="true"
     role="dialog"
   >
-    <div class="generate-suggestions-fullpage-card">
-      <div class="generate-suggestions-loader-topline">
+    <div class="generate-suggestions-fullpage-card workflow-overlay__panel">
+      <div class="generate-suggestions-loader-topline workflow-overlay__header">
         <div>
-          <div class="subtext" id="generateSuggestionsLoaderBadge">
+          <div class="subtext workflow-overlay__eyebrow" id="generateSuggestionsLoaderBadge">
             Preparing
           </div>
-          <h3 id="generateSuggestionsLoaderTitle">Generating Suggestions</h3>
+          <div class="workflow-completion-indicator" aria-hidden="true">✓</div>
+          <h3 id="generateSuggestionsLoaderTitle">Preparing tailoring workspace</h3>
         </div>
-        <button
-          type="button"
-          class="ghost-btn modal-close-btn"
-          id="generateSuggestionsCancelBtn"
-        >
-          Cancel
-        </button>
       </div>
 
-      <div class="generate-suggestions-loader-body">
-        <div class="generate-suggestions-progress-accent">
-          <div class="loading-spinner" id="generateSuggestionsSpinner"></div>
+      <div class="workflow-overlay__metrics">
+        <div class="subtext workflow-overlay__supporting" id="generateSuggestionsLoaderText">
+          Building review-ready suggestions from the selected job and resume.
         </div>
-        <div class="subtext" id="generateSuggestionsLoaderText">
-          Loading job and resume context
-        </div>
-        <div
-          class="generate-suggestions-current-step"
-          id="generateSuggestionsStepList"
-        ></div>
+      </div>
+
+      <div class="generate-suggestions-loader-body workflow-overlay__body">
+        <div class="workflow-step-viewport generate-suggestions-current-step" id="generateSuggestionsStepList"></div>
         <div class="generate-suggestions-loader-error hidden" id="generateSuggestionsError"></div>
       </div>
 
-      <div class="modal-actions generate-suggestions-loader-actions">
+      <div class="modal-actions generate-suggestions-loader-actions workflow-overlay__footer">
         <button
           type="button"
           class="ghost-btn hidden"
           id="generateSuggestionsOpenWorkspaceBtn"
         >
-          Open Workspace
+          Open Tailoring Workspace
         </button>
         <button
           type="button"
@@ -648,6 +473,13 @@ def planning_dashboard() -> str:
           id="generateSuggestionsRetryBtn"
         >
           Retry
+        </button>
+        <button
+          type="button"
+          class="ghost-btn"
+          id="generateSuggestionsCancelBtn"
+        >
+          Cancel
         </button>
       </div>
     </div>

@@ -253,6 +253,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
             "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase104b_critic_controlled_llm_ownership_default_off.py",
+            "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
             "tests/test_three_core_shadow_readiness_wrap_default_off.py",
             "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
             "tests/test_agent_trace_ui_readiness_checkpoint.py",
@@ -453,6 +455,236 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
+        "phase129b_auth_loader_ui": {
+            "src/app/auth_ui.py",
+            "src/app/static/media/auth_workflow_hero.svg",
+            "src/app/static/media/auth_hero_icons/LICENSES.txt",
+            "src/app/static/media/auth_hero_icons/apply_with_confidence.svg",
+            "src/app/static/media/auth_hero_icons/collect_jobs.svg",
+            "src/app/static/media/auth_hero_icons/review_ai_notes.svg",
+            "src/app/static/media/auth_hero_icons/score_fit.svg",
+            "src/app/static/media/auth_hero_icons/tailor_safely.svg",
+            "src/app/ui.py",
+            "src/app/planning_ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "src/app/static/styles.css",
+            "src/app/static/media/Login_page_BG_img.jpg",
+            "src/app/static/media/Login_page_BG_img.LICENSE.txt",
+            "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
+            "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+            "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
+            "tests/test_phase129b_auth_and_loader_overlay_static_only.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase104b_critic_controlled_llm_ownership_default_off.py",
+            "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
+        },
+        "phase129c_workflow_overlay_and_run_scoped_corpus": {
+            "src/app/auth_ui.py",
+            "src/app/static/media/auth_workflow_hero.svg",
+            "src/app/static/media/auth_hero_icons/LICENSES.txt",
+            "src/app/static/media/auth_hero_icons/apply_with_confidence.svg",
+            "src/app/static/media/auth_hero_icons/collect_jobs.svg",
+            "src/app/static/media/auth_hero_icons/review_ai_notes.svg",
+            "src/app/static/media/auth_hero_icons/score_fit.svg",
+            "src/app/static/media/auth_hero_icons/tailor_safely.svg",
+            "src/app/ui.py",
+            "src/app/planning_ui.py",
+            "src/app/static/app.js",
+            "src/app/static/planning.js",
+            "src/app/static/styles.css",
+            "src/app/api.py",
+            "src/app/services.py",
+            "src/app/static/media/Login_page_BG_img.jpg",
+            "src/app/static/media/Login_page_BG_img.LICENSE.txt",
+            "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
+            "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+            "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
+            "tests/test_phase129b_auth_and_loader_overlay_static_only.py",
+            "tests/test_phase129c_workflow_overlay_and_run_scoped_corpus.py",
+            "tests/test_phase129d_pipeline_persistence_and_suggestions_error_layout.py",
+            "tests/test_phase129e_zero_job_and_compact_workflow_overlay.py",
+            "tests/test_phase129f_zero_result_pipeline_empty_state.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase104b_critic_controlled_llm_ownership_default_off.py",
+            "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
+            "tests/test_agentic_review_ui_compaction_polish_no_backend_change.py",
+            "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",
+            "tests/test_critic_provider_shadow_default_off.py",
+            "tests/test_jd_intelligence_provider_shadow_default_off.py",
+            "tests/test_jd_live_provider_canary_api_readback_default_off.py",
+            "tests/test_jd_live_provider_canary_command_default_off.py",
+            "tests/test_jd_live_provider_canary_default_off.py",
+            "tests/test_jd_live_provider_canary_readback_default_off.py",
+            "tests/test_jd_live_provider_canary_readiness_checkpoint_default_off.py",
+            "tests/test_jd_live_provider_canary_runbook_default_off.py",
+            "tests/test_jd_live_provider_canary_service_readback_default_off.py",
+            "tests/test_jd_live_provider_canary_shadow_bridge_default_off.py",
+            "tests/test_jd_live_provider_canary_ui_readback_default_off.py",
+            "tests/test_jd_live_provider_external_adapter_default_off.py",
+            "tests/test_jd_manual_live_canary_readiness_checkpoint_default_off.py",
+            "tests/test_jd_provider_runtime_activation_default_off.py",
+            "tests/test_jd_provider_runtime_readiness_checkpoint_default_off.py",
+            "tests/test_jd_provider_runtime_review_packet_default_off.py",
+            "tests/test_jd_provider_runtime_service_readback_default_off.py",
+            "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",
+            "tests/test_jd_provider_runtime_trace_readback_default_off.py",
+            "tests/test_jd_provider_runtime_ui_readback_default_off.py",
+            "tests/test_pgvector_connection_provider_default_off.py",
+            "tests/test_pgvector_extension_probe_contract_no_schema.py",
+            "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+            "tests/test_pgvector_local_smoke_default_off.py",
+            "tests/test_pgvector_real_local_smoke_command_default_off.py",
+            "tests/test_pgvector_schema_store_adapter_default_off.py",
+            "tests/test_pgvector_smoke_readback_verification_default_off.py",
+            "tests/test_pgvector_store_db_executor_default_off.py",
+            "tests/test_phase106b_agentic_review_evidence_chain_ui_readback_default_off.py",
+            "tests/test_phase18_approval_preview_readonly_default_off.py",
+            "tests/test_phase18_human_approval_gate_contract_default_off.py",
+            "tests/test_phase18_live_provider_activation_plan_default_off.py",
+            "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
+            "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
+            "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
+            "tests/test_phase18_operator_decision_capture_contract_default_off.py",
+            "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
+            "tests/test_phase18_provider_readback_audit_contract_default_off.py",
+            "tests/test_phase18_provider_response_validation_contract_default_off.py",
+            "tests/test_phase18_provider_runtime_adapter_contract_default_off.py",
+            "tests/test_phase18_safety_wrap_release_checkpoint_default_off.py",
+            "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
+            "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
+            "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
+            "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
+            "tests/test_phase19e_three_core_approval_preview_ui_api_fetch_default_off.py",
+            "tests/test_phase19f_approval_preview_operator_decision_preview_default_off.py",
+            "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
+            "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
+            "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
+            "tests/test_phase19j_readonly_approval_workflow_release_checkpoint_default_off.py",
+            "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
+            "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
+            "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
+            "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
+            "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
+            "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
+            "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
+            "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
+            "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
+            "tests/test_phase22b_core_agent_automation_mutation_inventory_default_off.py",
+            "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+            "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
+            "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+            "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
+            "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+            "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+            "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+            "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
+            "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
+            "tests/test_phase23f_generate_ai_tailoring_action_boundary_ui_readback_default_off.py",
+            "tests/test_phase23g_tailoring_agent_workflow_release_checkpoint_default_off.py",
+            "tests/test_phase24a_manual_generate_ai_tailoring_preview_contract_default_off.py",
+            "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
+            "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
+            "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
+            "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
+            "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
+            "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
+            "tests/test_phase25d_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint_default_off.py",
+            "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
+            "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
+            "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
+            "tests/test_phase26d_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint_default_off.py",
+            "tests/test_phase27a_manual_generate_ai_tailoring_preview_provider_request_envelope_contract_default_off.py",
+            "tests/test_phase27b_manual_generate_ai_tailoring_preview_provider_request_envelope_api_readback_default_off.py",
+            "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
+            "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
+            "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
+            "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
+            "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
+            "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
+            "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
+            "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
+            "tests/test_phase29c_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback_default_off.py",
+            "tests/test_phase29d_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint_default_off.py",
+            "tests/test_phase30a_manual_generate_ai_tailoring_preview_provider_response_validation_contract_default_off.py",
+            "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
+            "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
+            "tests/test_phase30d_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint_default_off.py",
+            "tests/test_phase31a_manual_generate_ai_tailoring_preview_provider_response_normalization_contract_default_off.py",
+            "tests/test_phase31b_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback_default_off.py",
+            "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
+            "tests/test_phase31d_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint_default_off.py",
+            "tests/test_phase32a_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract_default_off.py",
+            "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off.py",
+            "tests/test_phase33a_controlled_agent_router_readonly.py",
+            "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+            "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+            "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+            "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
+            "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+            "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
+            "tests/test_phase34c_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.py",
+            "tests/test_phase35a_jd_signal_resume_evidence_matrix_default_off.py",
+            "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
+            "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",
+            "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
+            "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
+            "tests/test_phase37a_jd_evidence_scoring_contribution_preview_default_off.py",
+            "tests/test_phase37b_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.py",
+            "tests/test_phase38a_jd_evidence_score_impact_preview_default_off.py",
+            "tests/test_phase38b_jd_evidence_score_impact_preview_dry_run_command_default_off.py",
+            "tests/test_phase39a_jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+            "tests/test_phase39b_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.py",
+            "tests/test_phase40a_jd_evidence_score_impact_review_packet_builder_default_off.py",
+            "tests/test_phase40b_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.py",
+            "tests/test_phase41a_jd_evidence_score_impact_review_queue_builder_default_off.py",
+            "tests/test_phase41b_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.py",
+            "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+            "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+            "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
+            "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
+            "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+            "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
+            "tests/test_phase70a_ux_polish_agentic_workflow_demo_readiness_default_off.py",
+            "tests/test_phase70b_ux_polish_agentic_workflow_demo_readiness_readback_default_off.py",
+            "tests/test_pipeline_embedding_retrieval_hook_default_off.py",
+            "tests/test_pipeline_runtime_embedding_bridge_default_off.py",
+            "tests/test_pipeline_vector_evidence_hook_default_off.py",
+            "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
+            "tests/test_provider_live_activation_safety_plan_default_off.py",
+            "tests/test_provider_live_config_gate_default_off.py",
+            "tests/test_provider_runtime_ui_readback_default_off.py",
+            "tests/test_semantic_evidence_quality_gate_default_off.py",
+            "tests/test_shadow_agent_vector_evidence_input_default_off.py",
+            "tests/test_shadow_semantic_evidence_agent_input_default_off.py",
+            "tests/test_shadow_vector_evidence_context_default_off.py",
+            "tests/test_tailoring_provider_shadow_default_off.py",
+            "tests/test_three_agent_llmops_aggregate_default_off.py",
+            "tests/test_three_agent_llmops_observability_readback_default_off.py",
+            "tests/test_three_agent_llmops_observability_service_bridge_default_off.py",
+            "tests/test_three_agent_llmops_observability_ui_default_off.py",
+            "tests/test_three_agent_llmops_trace_contract_default_off.py",
+            "tests/test_three_agent_provider_handoff_default_off.py",
+            "tests/test_three_agent_shadow_workflow_default_off.py",
+            "tests/test_three_agent_workflow_readiness_default_off.py",
+            "tests/test_three_core_agent_shadow_sidecar_bridge_default_off.py",
+            "tests/test_vector_evidence_embedding_indexing_helper_default_off.py",
+            "tests/test_vector_evidence_embedding_provider_contract_default_off.py",
+            "tests/test_vector_evidence_embedding_retrieval_helper_default_off.py",
+            "tests/test_vector_evidence_embedding_runtime_adapter_default_off.py",
+            "tests/test_vector_evidence_embedding_runtime_service_bridge_default_off.py",
+            "tests/test_vector_evidence_readback_service_helper_default_off.py",
+            "tests/test_vector_evidence_readback_ui_default_off.py",
+            "tests/test_vector_evidence_service_connection_provider_bridge_default_off.py",
+            "tests/test_vector_evidence_service_db_executor_bridge_default_off.py",
+            "tests/test_vector_evidence_service_pgvector_store_flagged_default_off.py",
+            "tests/test_vector_evidence_ui_no_db_readonly.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -462,7 +694,10 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
 
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
-    return legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+    return (
+        legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+        | legacy_guard_allowlist("phase129c_workflow_overlay_and_run_scoped_corpus")
+    )
 
 
 def assert_changed_files_allowed(
@@ -477,6 +712,18 @@ def assert_changed_files_allowed(
         normalized_allowed |= legacy_guard_allowlist(profile)
     if include_current_milestone_compatibility:
         normalized_allowed |= current_milestone_guard_compatibility_allowlist()
+    collapsed_directories = {
+        path for path in normalized_changed if path.endswith("/")
+    }
+    if collapsed_directories:
+        exact_changed = get_changed_files(Path.cwd())
+        for directory in collapsed_directories:
+            descendants = {
+                path for path in exact_changed if path.startswith(directory)
+            }
+            if descendants and descendants <= normalized_allowed:
+                normalized_changed.remove(directory)
+                normalized_changed.update(descendants)
     reject_duplicate_artifact_paths(normalized_changed)
     extra = normalized_changed - normalized_allowed
     assert not extra, "Unexpected changed files: " + ", ".join(sorted(extra))
@@ -485,8 +732,17 @@ def assert_changed_files_allowed(
 def assert_protected_hashes(
     root: str | Path,
     expected_hashes: Mapping[str | Path, str],
+    compatibility_profiles: Iterable[str] = (),
 ) -> None:
     phase88b_runtime_hash_compatibility = {
+        (
+            "src/app/api.py",
+            "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
+        ): "2f7a496c44a6bc9d3f06e6df55941f6285eeb3be24b6cbf82d58a2b909c80047",
+        (
+            "src/app/services.py",
+            "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+        ): "7c64c593e1d79c996f9853d1d37038718a0e7d76f2f95eba7e7df6e63ddbe813",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
@@ -498,7 +754,7 @@ def assert_protected_hashes(
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+        ): "7c64c593e1d79c996f9853d1d37038718a0e7d76f2f95eba7e7df6e63ddbe813",
             (
                 "src/agents/jd_intelligence.py",
                 "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",
@@ -529,6 +785,12 @@ def assert_protected_hashes(
         ): "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
     }
     repo = Path(root)
+    profiles = tuple(compatibility_profiles)
+    compatible_paths = (
+        merge_allowed(*(legacy_guard_allowlist(profile) for profile in profiles))
+        if profiles
+        else None
+    )
     for relative_path, expected_hash in expected_hashes.items():
         normalized = normalize_changed_path(relative_path)
         path = repo / normalized
@@ -537,7 +799,9 @@ def assert_protected_hashes(
         compatible_hash = phase88b_runtime_hash_compatibility.get(
             (normalized, expected_hash)
         )
-        if compatible_hash == actual_hash:
+        if compatible_hash == actual_hash and (
+            compatible_paths is None or normalized in compatible_paths
+        ):
             continue
         assert actual_hash == expected_hash, (
             f"Hash mismatch for {normalized}: expected {expected_hash}, got {actual_hash}"

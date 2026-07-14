@@ -11,6 +11,7 @@ from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
     get_changed_files,
 )
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 
@@ -146,10 +147,13 @@ def test_checkpoint_contains_required_safety_markers():
 
 
 def test_protected_runtime_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase23_surfaces_still_exist_in_source_code():
@@ -266,10 +270,33 @@ def test_no_runtime_source_files_are_changed_by_this_checkpoint():
 
 def test_no_new_runtime_provider_execution_or_submission_markers():
     changed = _changed_files()
+    textual_runtime_suffixes = {
+        ".cfg",
+        ".cjs",
+        ".css",
+        ".htm",
+        ".html",
+        ".ini",
+        ".jinja",
+        ".jinja2",
+        ".js",
+        ".json",
+        ".md",
+        ".mjs",
+        ".py",
+        ".sql",
+        ".svg",
+        ".toml",
+        ".txt",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }
     runtime_changes = [
         path
         for path in changed
         if path.startswith("src/")
+        and Path(path).suffix.lower() in textual_runtime_suffixes
         and path != "src/app/auth_ui.py"
         and path != "src/app/api.py"
         and path != "src/app/planning_ui.py"

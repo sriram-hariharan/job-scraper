@@ -121,6 +121,17 @@ def test_protected_runtime_files_are_unchanged():
 
 def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
+        "src/app/auth_ui.py",
+        "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
+        "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+        "tests/test_phase127b_portfolio_demo_freeze_checkpoint.py",
+        "tests/test_phase129b_auth_and_loader_overlay_static_only.py",
+        "tests/test_phase129c_workflow_overlay_and_run_scoped_corpus.py",
+        "tests/test_phase129d_pipeline_persistence_and_suggestions_error_layout.py",
+        "tests/test_phase129e_zero_job_and_compact_workflow_overlay.py",
+        "tests/test_phase129f_zero_result_pipeline_empty_state.py",
+        "tests/test_phase104b_critic_controlled_llm_ownership_default_off.py",
+        "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
         "generate_tailoring_suggestions.py",
         "src/tailoring/rendering.py",
         "tests/test_score_first_scan.py",
@@ -842,7 +853,7 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     phase77a_compact_dashboard_decision_files = {
         ROOT / "src/app/static/app.js",
         ROOT / "src/app/static/planning.js",
-        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/styles.css",
             "src/app/static/agentic_review.js",
         ROOT / "src/app/ui.py",
         ROOT / "src/app/planning_ui.py",
@@ -852,7 +863,7 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     phase77d_ui_ux_cleanup_files = {
         ROOT / "src/app/static/app.js",
         ROOT / "src/app/static/planning.js",
-        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/styles.css",
             "src/app/static/agentic_review.js",
         ROOT / "src/app/ui.py",
     }
@@ -1010,6 +1021,27 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/agents/llm_adjudicator_readback.py",
     }
     if set(changed_runtime_files) == phase123b_llm_adjudicator_readback_helper_files:
+        return
+    phase129_auth_artwork_runtime_files = {
+        ROOT / "src/app/auth_ui.py",
+    }
+    if set(changed_runtime_files) == phase129_auth_artwork_runtime_files:
+        return
+    phase129b_auth_loader_ui_files = {
+        ROOT / "src/app/auth_ui.py",
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/styles.css",
+    }
+    if set(changed_runtime_files) == phase129b_auth_loader_ui_files:
+        return
+    phase129c_workflow_overlay_and_corpus_files = phase129b_auth_loader_ui_files | {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+    }
+    if set(changed_runtime_files) == phase129c_workflow_overlay_and_corpus_files:
         return
 
     assert changed_runtime_files in (

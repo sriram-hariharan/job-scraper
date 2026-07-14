@@ -7,6 +7,7 @@ import subprocess
 
 PLANNING_JS = Path("src/app/static/planning.js")
 PLANNING_UI = Path("src/app/planning_ui.py")
+STYLES_CSS = Path("src/app/static/styles.css")
 
 
 def _source() -> str:
@@ -104,6 +105,12 @@ const rows = {{
     runner_up_resume: "Runner.pdf",
     packet_json: "packet.json",
     planning_output_dir: "tmp/pipeline runs/user one/run 1/application_planning",
+  }}),
+  runScoped: labelFor({{
+    job_doc_id: "job-run-scoped",
+    winner_resume: "RunWinner.pdf",
+    planning_output_dir: "outputs/application_planning",
+    pipeline_run_id: "run-123",
   }}),
   packetResolved: labelFor({{
     queue_rank: "2",
@@ -246,6 +253,10 @@ def test_generate_suggestions_request_url_uses_run_scoped_job_corpus_when_availa
         in packet_selected["endpoint"]
     )
 
+    run_scoped = cases["runScoped"]
+    assert run_scoped["endpoint"] == "/planning/regenerate-selected-resume"
+    assert run_scoped["payload"]["pipeline_run_id"] == "run-123"
+
     only_winner = cases["onlyWinner"]
     assert (
         "job_corpus=tmp%2Fpipeline_runs%2Fuser%2Frun%2Fapplication_planning%2Fcurrent_run_job_corpus.jsonl"
@@ -357,12 +368,10 @@ def test_generate_suggestions_loader_steps_and_states_are_present():
     markup = PLANNING_UI.read_text(encoding="utf-8")
 
     for label in [
-        "Loading job and resume context",
-        "Reading job requirements",
-        "Finding match gaps",
-        "Building tailoring strategy",
-        "Generating suggestions",
-        "Running safety review",
+        "Reading job details",
+        "Checking resume evidence",
+        "Building targeted edits",
+        "Preparing review packet",
         "Opening workspace",
     ]:
         assert label in source
@@ -381,9 +390,10 @@ def test_generate_suggestions_loader_steps_and_states_are_present():
     assert "generate-suggestions-fullpage-card" in markup
     assert "generate-suggestions-current-step" in markup
     assert "resume-choice-loading-steps generate-suggestions-step-list" not in markup
-    assert ".generate-suggestions-fullpage" in markup
-    assert "position: fixed" in markup
-    assert "inset: 0" in markup
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    assert ".workflow-overlay" in styles
+    assert "position: fixed" in styles
+    assert "inset: 0" in styles
 
     loader_source = _function_source(source, "setGenerateSuggestionsLoaderState")
     runner_source = _function_source(source, "buildGenerateSuggestionsStepRunnerHtml")
@@ -391,12 +401,21 @@ def test_generate_suggestions_loader_steps_and_states_are_present():
     assert '"success"' in loader_source
     assert '"running"' in loader_source
     assert '"Could not generate suggestions"' in loader_source
-    assert '"Opening workspace"' in loader_source
-    assert "generate-suggestions-step-current" in runner_source
-    assert "generate-suggestions-step-previous" in runner_source
-    assert "generate-suggestions-step-progress" in runner_source
+    assert '"Tailoring workspace is ready"' in loader_source
+    assert "generate-suggestions-step-item" in runner_source
+    assert "workflow-step-track" in runner_source
+    assert "workflow-step__indicator" in runner_source
+    assert 'isComplete ? "is-complete"' in runner_source
+    assert 'isFailed ? "is-error"' in runner_source
+    assert 'isActive ? "is-active"' in runner_source
+    assert '"is-pending"' in runner_source
+    assert "generate-suggestions-step-progress" not in runner_source
     assert "buildResumeChoiceLoadingStepsHtml" not in render_source
     assert "GENERATE_SUGGESTIONS_STEPS.map" not in render_source
+    timer_source = _function_source(source, "startGenerateSuggestionsStepTimer")
+    assert "window.setInterval" in timer_source
+    assert "lastProcessingCue" in timer_source
+    assert "GENERATE_SUGGESTIONS_STEPS.length - 2" in timer_source
 
 
 def test_generate_suggestions_error_state_keeps_fullpage_retry_cancel_controls():
@@ -415,14 +434,17 @@ def test_generate_suggestions_error_state_keeps_fullpage_retry_cancel_controls()
     assert "cancelledRequestSeq === requestSeq" in handler_source
 
 
-def test_generate_suggestions_opens_tailoring_workspace_after_success():
+def test_generate_suggestions_waits_for_workspace_action_after_success():
     source = _source()
     handler_source = _async_function_source(source, "handleGenerateSuggestionsClick")
+    open_source = _function_source(source, "openGenerateSuggestionsWorkspace")
 
     assert "buildGenerateSuggestionsWorkspaceRow(row, response || {})" in handler_source
     assert "buildTailoringWorkspaceUrl(workspaceRow)" in handler_source
     assert "generateSuggestionsState.lastWorkspaceUrl = workspaceUrl" in handler_source
-    assert "window.location.href = workspaceUrl" in handler_source
+    assert "window.location.href" not in handler_source
+    assert "window.location.href = generateSuggestionsState.lastWorkspaceUrl" in open_source
+    assert "Open Tailoring Workspace" in PLANNING_UI.read_text(encoding="utf-8")
 
 
 def test_generate_suggestions_click_is_separate_from_workspace_open_click():

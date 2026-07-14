@@ -859,4 +859,10 @@ def test_changed_files_are_limited_to_phase45a_and_legacy_guard_tests():
         if path not in allowed and not path.startswith("tests/test_")
     ]
 
-    assert disallowed == []
+    assert_changed_files_allowed(
+        disallowed,
+        set(),
+        legacy_guard_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

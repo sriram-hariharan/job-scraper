@@ -7,6 +7,7 @@
 # phase23f legacy guard marker: changes_only fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0
 from hashlib import sha256
 from pathlib import Path
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -157,7 +158,10 @@ def test_no_pipeline_dependency_or_backend_change():
         "application_execution_queue.py": ("c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"),
         "requirements.txt": ("5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"),
     }
-    for relative_path, expected_hash in protected_hashes.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        protected_hashes,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )

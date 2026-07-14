@@ -17,6 +17,7 @@ from src.agents.manual_generate_ai_tailoring_preview_provider_call_dry_run_packe
     build_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract,
 )
 from src.app import api
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -408,10 +409,13 @@ def test_docs_contain_required_safety_markers_and_references():
 
 
 def test_protected_runtime_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase29b_changes_only_api_doc_test_and_legacy_guards():

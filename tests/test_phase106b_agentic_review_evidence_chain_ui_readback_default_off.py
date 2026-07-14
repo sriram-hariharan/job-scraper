@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 from pathlib import Path
+from tests.support.phase_guard_registry import assert_protected_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -134,10 +135,13 @@ def test_phase106b_safety_copy_is_visible_and_specific():
 
 
 def test_phase106b_does_not_change_protected_backend_runtime_files():
-    for path, expected_hash in PROTECTED_BACKEND_HASHES.items():
-        full_path = ROOT / path
-        assert full_path.exists(), path
-        assert sha256(full_path.read_bytes()).hexdigest() == expected_hash, path
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_BACKEND_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase106b_manual_critic_guardrail_remains_manual_click_only():

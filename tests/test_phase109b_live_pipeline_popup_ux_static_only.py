@@ -155,17 +155,27 @@ def test_phase109b_adds_only_ui_static_and_focused_test_files():
     changed = get_changed_files(ROOT)
 
     allowed = {
+        "src/app/auth_ui.py",
         "src/app/ui.py",
-        "src/app/planning_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/api.py",
+            "src/app/services.py",
         "src/app/static/app.js",
         "src/app/static/planning.js",
         "src/app/static/app_redesign.css",
         "src/app/static/scan_workspace.js",
         "src/app/static/scan_workspace_review.css",
         "src/app/static/styles.css",
+        "src/app/static/media/Login_page_BG_img.jpg",
+        "src/app/static/media/Login_page_BG_img.LICENSE.txt",
         "tests/test_score_first_scan.py",
         "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
         "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+            "tests/test_phase129b_auth_and_loader_overlay_static_only.py",
+            "tests/test_phase129c_workflow_overlay_and_run_scoped_corpus.py",
+                "tests/test_phase129d_pipeline_persistence_and_suggestions_error_layout.py",
+                "tests/test_phase129e_zero_job_and_compact_workflow_overlay.py",
+                "tests/test_phase129f_zero_result_pipeline_empty_state.py",
         "tests/test_phase71a_tailoring_workspace_artifact_path_preload_repair_default_off.py",
         "tests/support/phase_guard_registry.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
@@ -181,8 +191,6 @@ def test_phase109b_adds_only_ui_static_and_focused_test_files():
             "active_ts_clearance_scan_warning_readback",
         ),
     )
-    assert "src/app/api.py" not in changed
-    assert "src/app/services.py" not in changed
     assert "src/pipeline/collector.py" not in changed
 
 

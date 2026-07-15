@@ -524,7 +524,23 @@ function getMultiSelectValues(id) {
 
   return getMultiSelectOptions(root, ".multi-select-option.is-selected")
     .map((option) => String(option.dataset.value || "").trim())
-    .filter(Boolean);
+    .filter((value) => Boolean(value) && value !== (root.dataset.allValue || ""));
+}
+
+function setMultiSelectOptionSelected(option, isSelected) {
+  if (!option) return;
+  option.classList.toggle("is-selected", isSelected);
+  option.setAttribute("aria-checked", isSelected ? "true" : "false");
+}
+
+function resetMultiSelectToAll(id) {
+  const root = getMultiSelectRoot(id);
+  if (!root) return;
+  const allValue = root.dataset.allValue || "";
+  getMultiSelectOptions(root).forEach((option) => {
+    setMultiSelectOptionSelected(option, Boolean(allValue) && option.dataset.value === allValue);
+  });
+  updateMultiSelectLabel(root);
 }
 
 function appendMultiValueParams(params, key, values) {
@@ -566,8 +582,16 @@ function setMultiSelectOpen(root, isOpen) {
       document.body.appendChild(menu);
     }
     positionMultiSelectMenu(root);
+    menu.querySelector(".multi-select-search-input")?.focus({ preventScroll: true });
   } else {
+    const searchInput = menu.querySelector(".multi-select-search-input");
+    if (searchInput) {
+      searchInput.value = "";
+      filterMultiSelectOptions(root, "");
+    }
     menu.hidden = true;
+    root.classList.remove("opens-upward");
+    delete menu.dataset.placement;
     resetMultiSelectMenuPosition(menu);
     if (menu.parentElement !== root) {
       root.appendChild(menu);
@@ -604,6 +628,9 @@ function positionMultiSelectMenu(root) {
   const availableSpace = openAbove ? availableAbove : availableBelow;
   const maxHeight = Math.max(168, Math.min(380, availableSpace - 8));
 
+  root.classList.toggle("opens-upward", openAbove);
+  menu.dataset.placement = openAbove ? "top" : "bottom";
+
   menu.style.setProperty("position", "fixed", "important");
   menu.style.setProperty("left", `${left}px`, "important");
   menu.style.setProperty("right", "auto", "important");
@@ -622,11 +649,65 @@ function clearMultiSelect(id) {
   const root = getMultiSelectRoot(id);
   if (!root) return;
 
-  getMultiSelectOptions(root).forEach((option) => {
-    option.classList.remove("is-selected");
-    option.setAttribute("aria-checked", "false");
-  });
+  if (root.dataset.allValue) {
+    resetMultiSelectToAll(id);
+    return;
+  }
 
+  getMultiSelectOptions(root).forEach((option) => setMultiSelectOptionSelected(option, false));
+
+  updateMultiSelectLabel(root);
+}
+
+function normalizeMultiSelectSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\/_-]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function filterMultiSelectOptions(root, query) {
+  const normalizedQuery = normalizeMultiSelectSearchText(query);
+  let visibleCount = 0;
+  getMultiSelectOptions(root).forEach((option) => {
+    const label = option.querySelector(".multi-select-option-label")?.textContent || "";
+    const isVisible = !normalizedQuery || normalizeMultiSelectSearchText(label).includes(normalizedQuery);
+    option.hidden = !isVisible;
+    if (isVisible) visibleCount += 1;
+  });
+  const empty = getMultiSelectMenu(root)?.querySelector(".multi-select-empty");
+  if (empty) empty.hidden = visibleCount > 0;
+}
+
+function bindMultiSelectSearch(root) {
+  const searchInput = getMultiSelectMenu(root)?.querySelector(".multi-select-search-input");
+  if (!searchInput || searchInput.dataset.bound === "true") return;
+  searchInput.dataset.bound = "true";
+  searchInput.addEventListener("click", (event) => event.stopPropagation());
+  searchInput.addEventListener("input", () => filterMultiSelectOptions(root, searchInput.value));
+}
+
+function handleMultiSelectOptionSelection(root, option) {
+  const allValue = root.dataset.allValue || "";
+  const optionValue = String(option.dataset.value || "");
+  if (allValue && optionValue === allValue) {
+    getMultiSelectOptions(root).forEach((candidate) => {
+      setMultiSelectOptionSelected(candidate, candidate === option);
+    });
+  } else {
+    const isSelected = !option.classList.contains("is-selected");
+    setMultiSelectOptionSelected(option, isSelected);
+    if (allValue && isSelected) {
+      const allOption = getMultiSelectOptions(root).find(
+        (candidate) => candidate.dataset.value === allValue
+      );
+      setMultiSelectOptionSelected(allOption, false);
+    }
+    if (allValue && !getMultiSelectValues(root.id).length) {
+      resetMultiSelectToAll(root.id);
+    }
+  }
   updateMultiSelectLabel(root);
 }
 
@@ -639,6 +720,8 @@ function setMultiSelectValues(id, values) {
       .map((value) => String(value || "").trim())
       .filter(Boolean)
   );
+  const allValue = root.dataset.allValue || "";
+  if (allValue && selectedValues.size === 0) selectedValues.add(allValue);
 
   getMultiSelectOptions(root).forEach((option) => {
     const optionValue = String(option.dataset.value || "").trim();
@@ -661,6 +744,7 @@ function initMultiSelect(id) {
 
   root._multiSelectMenu = menu;
   root.dataset.bound = "true";
+  bindMultiSelectSearch(root);
   updateMultiSelectLabel(root);
 
   trigger.addEventListener("click", (event) => {
@@ -676,16 +760,41 @@ function initMultiSelect(id) {
     setMultiSelectOpen(root, willOpen);
   });
 
-  getMultiSelectOptions(root).forEach((option) => {
-    option.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const isSelected = option.classList.toggle("is-selected");
-      option.setAttribute("aria-checked", isSelected ? "true" : "false");
-      updateMultiSelectLabel(root);
-    });
+  menu.addEventListener("click", (event) => {
+    const option = event.target.closest(".multi-select-option");
+    if (!option || !menu.contains(option)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleMultiSelectOptionSelection(root, option);
   });
+}
+
+function renderPreferenceOptions(rootId, payload = {}) {
+  const root = getMultiSelectRoot(rootId);
+  const optionsRoot = getMultiSelectMenu(root)?.querySelector(".multi-select-options");
+  if (!root || !optionsRoot) return;
+  const options = Array.isArray(payload.preference_options) ? payload.preference_options : [];
+  optionsRoot.innerHTML = `
+    <button type="button" class="multi-select-option is-selected" data-value="__all__" aria-checked="true">
+      <span class="multi-select-option-check">✓</span>
+      <span class="multi-select-option-label">All Preferences</span>
+    </button>
+    ${options.map((option) => `
+      <button type="button" class="multi-select-option" data-value="${escapeHtml(option.role_family_id || "")}" aria-checked="false">
+        <span class="multi-select-option-check">✓</span>
+        <span class="multi-select-option-label">${escapeHtml(option.display_name || option.role_family_id || "")}</span>
+      </button>
+    `).join("")}
+  `;
+}
+
+async function loadPreferenceFilterOptions(rootId) {
+  try {
+    const payload = await fetchJson("/onboarding/preferences");
+    renderPreferenceOptions(rootId, payload);
+  } catch (error) {
+    console.warn("Could not load preference filter options.", error);
+  }
 }
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -1682,6 +1791,7 @@ function countPlanningActiveFilters() {
   if (getMultiSelectValues("planningActionFilter").length) count += 1;
   if (getMultiSelectValues("planningWinnerBucket").length) count += 1;
   if (getMultiSelectValues("planningTailoringFilter").length) count += 1;
+  if (getMultiSelectValues("planningPreferenceFilter").length) count += 1;
   if (planningUndecidedOnlyEnabled()) count += 1;
   return count;
 }
@@ -1900,6 +2010,7 @@ function buildPlanningUrl(pageOverride = null) {
   const actions = getMultiSelectValues("planningActionFilter");
   const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
   const tailoringStates = getMultiSelectValues("planningTailoringFilter");
+  const preferenceIds = getMultiSelectValues("planningPreferenceFilter");
   const undecidedOnly = planningUndecidedOnlyEnabled() ? "true" : "";
   const limit = qs("planningLimitInput").value || "15";
   const page =
@@ -1910,6 +2021,7 @@ function buildPlanningUrl(pageOverride = null) {
   appendMultiValueParams(params, "action", actions);
   appendMultiValueParams(params, "winner_bucket", winnerBuckets);
   appendMultiValueParams(params, "tailoring_state", tailoringStates);
+  appendMultiValueParams(params, "preference_id", preferenceIds);
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
   params.set("limit", limit);
   params.set("page", String(page));
@@ -2102,6 +2214,7 @@ function readPlanningUrlState(search = window.location.search) {
     actions: params.getAll("action").map((value) => String(value || "").trim()).filter(Boolean),
     winnerBuckets: params.getAll("winner_bucket").map((value) => String(value || "").trim()).filter(Boolean),
     tailoringStates: params.getAll("tailoring_state").map((value) => String(value || "").trim()).filter(Boolean),
+    preferenceIds: params.getAll("preference_id").map((value) => String(value || "").trim()).filter(Boolean),
     undecidedOnly: params.get("undecided_only") === "true",
     limit,
     page,
@@ -2116,6 +2229,7 @@ function applyPlanningUrlState(search = window.location.search) {
   setMultiSelectValues("planningActionFilter", state.actions);
   setMultiSelectValues("planningWinnerBucket", state.winnerBuckets);
   setMultiSelectValues("planningTailoringFilter", state.tailoringStates);
+  setMultiSelectValues("planningPreferenceFilter", state.preferenceIds);
 
   const undecidedYes = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='yes']");
   const undecidedNo = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='no']");
@@ -2143,6 +2257,7 @@ function buildPlanningBrowserUrl() {
   const actions = getMultiSelectValues("planningActionFilter");
   const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
   const tailoringStates = getMultiSelectValues("planningTailoringFilter");
+  const preferenceIds = getMultiSelectValues("planningPreferenceFilter");
   const undecidedOnly = planningUndecidedOnlyEnabled();
   const limit = String(qs("planningLimitInput")?.value || "15").trim() || "15";
   const page = Number(planningTableState.pagination.page || 1);
@@ -2150,6 +2265,7 @@ function buildPlanningBrowserUrl() {
   appendMultiValueParams(params, "action", actions);
   appendMultiValueParams(params, "winner_bucket", winnerBuckets);
   appendMultiValueParams(params, "tailoring_state", tailoringStates);
+  appendMultiValueParams(params, "preference_id", preferenceIds);
 
   if (undecidedOnly) params.set("undecided_only", "true");
   if (limit !== "15") params.set("limit", limit);
@@ -13167,6 +13283,7 @@ function clearPlanningFilters() {
   clearMultiSelect("planningActionFilter");
   clearMultiSelect("planningWinnerBucket");
   clearMultiSelect("planningTailoringFilter");
+  resetMultiSelectToAll("planningPreferenceFilter");
 
   const defaultUndecided = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='no']");
   if (defaultUndecided) {
@@ -13181,6 +13298,7 @@ function attachPlanningHandlers() {
   initMultiSelect("planningActionFilter");
   initMultiSelect("planningWinnerBucket");
   initMultiSelect("planningTailoringFilter");
+  initMultiSelect("planningPreferenceFilter");
 
   qs("planningApplyFiltersBtn").addEventListener("click", async () => {
     try {
@@ -13417,6 +13535,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   if (isPlanningPage) {
     bindAppErrorModal();
+    await loadPreferenceFilterOptions("planningPreferenceFilter");
     applyPlanningUrlState(window.location.search);
     attachPlanningHandlers();
     bindTableSorting("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort, () => {

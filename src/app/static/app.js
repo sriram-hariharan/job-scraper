@@ -88,6 +88,14 @@ const PIPELINE_VISIBLE_STAGE_GROUPS = [
   { key: "finalizing", label: "Finalizing run", stages: ["finalization"] },
 ];
 
+const PIPELINE_FINALIZING_FALLBACK = {
+  key: "finalizing-results-fallback",
+  label: "Finalizing pipeline results",
+  description: "Saving run results and preparing the dashboards.",
+  stages: [],
+  isUiFallback: true,
+};
+
 const PIPELINE_STAGE_TO_VISIBLE_GROUP = PIPELINE_VISIBLE_STAGE_GROUPS.reduce((acc, group, index) => {
   group.stages.forEach((stage) => {
     acc[stage] = index;
@@ -584,7 +592,23 @@ function getMultiSelectValues(id) {
 
   return getMultiSelectOptions(root, ".multi-select-option.is-selected")
     .map((option) => String(option.dataset.value || "").trim())
-    .filter(Boolean);
+    .filter((value) => Boolean(value) && value !== (root.dataset.allValue || ""));
+}
+
+function setMultiSelectOptionSelected(option, isSelected) {
+  if (!option) return;
+  option.classList.toggle("is-selected", isSelected);
+  option.setAttribute("aria-checked", isSelected ? "true" : "false");
+}
+
+function resetMultiSelectToAll(id) {
+  const root = getMultiSelectRoot(id);
+  if (!root) return;
+  const allValue = root.dataset.allValue || "";
+  getMultiSelectOptions(root).forEach((option) => {
+    setMultiSelectOptionSelected(option, Boolean(allValue) && option.dataset.value === allValue);
+  });
+  updateMultiSelectLabel(root);
 }
 
 function appendMultiValueParams(params, key, values) {
@@ -626,8 +650,16 @@ function setMultiSelectOpen(root, isOpen) {
       document.body.appendChild(menu);
     }
     positionMultiSelectMenu(root);
+    menu.querySelector(".multi-select-search-input")?.focus({ preventScroll: true });
   } else {
+    const searchInput = menu.querySelector(".multi-select-search-input");
+    if (searchInput) {
+      searchInput.value = "";
+      filterMultiSelectOptions(root, "");
+    }
     menu.hidden = true;
+    root.classList.remove("opens-upward");
+    delete menu.dataset.placement;
     resetMultiSelectMenuPosition(menu);
     if (menu.parentElement !== root) {
       root.appendChild(menu);
@@ -664,6 +696,9 @@ function positionMultiSelectMenu(root) {
   const availableSpace = openAbove ? availableAbove : availableBelow;
   const maxHeight = Math.max(168, Math.min(380, availableSpace - 8));
 
+  root.classList.toggle("opens-upward", openAbove);
+  menu.dataset.placement = openAbove ? "top" : "bottom";
+
   menu.style.setProperty("position", "fixed", "important");
   menu.style.setProperty("left", `${left}px`, "important");
   menu.style.setProperty("right", "auto", "important");
@@ -682,11 +717,65 @@ function clearMultiSelect(id) {
   const root = getMultiSelectRoot(id);
   if (!root) return;
 
-  getMultiSelectOptions(root).forEach((option) => {
-    option.classList.remove("is-selected");
-    option.setAttribute("aria-checked", "false");
-  });
+  if (root.dataset.allValue) {
+    resetMultiSelectToAll(id);
+    return;
+  }
 
+  getMultiSelectOptions(root).forEach((option) => setMultiSelectOptionSelected(option, false));
+
+  updateMultiSelectLabel(root);
+}
+
+function normalizeMultiSelectSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\/_-]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function filterMultiSelectOptions(root, query) {
+  const normalizedQuery = normalizeMultiSelectSearchText(query);
+  let visibleCount = 0;
+  getMultiSelectOptions(root).forEach((option) => {
+    const label = option.querySelector(".multi-select-option-label")?.textContent || "";
+    const isVisible = !normalizedQuery || normalizeMultiSelectSearchText(label).includes(normalizedQuery);
+    option.hidden = !isVisible;
+    if (isVisible) visibleCount += 1;
+  });
+  const empty = getMultiSelectMenu(root)?.querySelector(".multi-select-empty");
+  if (empty) empty.hidden = visibleCount > 0;
+}
+
+function bindMultiSelectSearch(root) {
+  const searchInput = getMultiSelectMenu(root)?.querySelector(".multi-select-search-input");
+  if (!searchInput || searchInput.dataset.bound === "true") return;
+  searchInput.dataset.bound = "true";
+  searchInput.addEventListener("click", (event) => event.stopPropagation());
+  searchInput.addEventListener("input", () => filterMultiSelectOptions(root, searchInput.value));
+}
+
+function handleMultiSelectOptionSelection(root, option) {
+  const allValue = root.dataset.allValue || "";
+  const optionValue = String(option.dataset.value || "");
+  if (allValue && optionValue === allValue) {
+    getMultiSelectOptions(root).forEach((candidate) => {
+      setMultiSelectOptionSelected(candidate, candidate === option);
+    });
+  } else {
+    const isSelected = !option.classList.contains("is-selected");
+    setMultiSelectOptionSelected(option, isSelected);
+    if (allValue && isSelected) {
+      const allOption = getMultiSelectOptions(root).find(
+        (candidate) => candidate.dataset.value === allValue
+      );
+      setMultiSelectOptionSelected(allOption, false);
+    }
+    if (allValue && !getMultiSelectValues(root.id).length) {
+      resetMultiSelectToAll(root.id);
+    }
+  }
   updateMultiSelectLabel(root);
 }
 
@@ -700,6 +789,7 @@ function initMultiSelect(id) {
 
   root._multiSelectMenu = menu;
   root.dataset.bound = "true";
+  bindMultiSelectSearch(root);
   updateMultiSelectLabel(root);
 
   trigger.addEventListener("click", (event) => {
@@ -715,16 +805,41 @@ function initMultiSelect(id) {
     setMultiSelectOpen(root, willOpen);
   });
 
-  getMultiSelectOptions(root).forEach((option) => {
-    option.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const isSelected = option.classList.toggle("is-selected");
-      option.setAttribute("aria-checked", isSelected ? "true" : "false");
-      updateMultiSelectLabel(root);
-    });
+  menu.addEventListener("click", (event) => {
+    const option = event.target.closest(".multi-select-option");
+    if (!option || !menu.contains(option)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleMultiSelectOptionSelection(root, option);
   });
+}
+
+function renderPreferenceOptions(rootId, payload = {}) {
+  const root = getMultiSelectRoot(rootId);
+  const optionsRoot = getMultiSelectMenu(root)?.querySelector(".multi-select-options");
+  if (!root || !optionsRoot) return;
+  const options = Array.isArray(payload.preference_options) ? payload.preference_options : [];
+  optionsRoot.innerHTML = `
+    <button type="button" class="multi-select-option is-selected" data-value="__all__" aria-checked="true">
+      <span class="multi-select-option-check">✓</span>
+      <span class="multi-select-option-label">All Preferences</span>
+    </button>
+    ${options.map((option) => `
+      <button type="button" class="multi-select-option" data-value="${escapeHtml(option.role_family_id || "")}" aria-checked="false">
+        <span class="multi-select-option-check">✓</span>
+        <span class="multi-select-option-label">${escapeHtml(option.display_name || option.role_family_id || "")}</span>
+      </button>
+    `).join("")}
+  `;
+}
+
+async function loadPreferenceFilterOptions(rootId) {
+  try {
+    const payload = await fetchJson("/onboarding/preferences");
+    renderPreferenceOptions(rootId, payload);
+  } catch (error) {
+    console.warn("Could not load preference filter options.", error);
+  }
 }
 
 function normalizeExecutiveViewMode(value) {
@@ -1572,20 +1687,50 @@ function getPipelineVisibleGroupIndex(stage) {
   return PIPELINE_STAGE_TO_VISIBLE_GROUP[stage] ?? 0;
 }
 
-function buildPipelineVisibleStageStepsHtml(pipeline = {}, mode = "running") {
+function getPipelineStageRenderModel(pipeline = {}, mode = "running") {
   const completedStages = new Set(Array.isArray(pipeline.completed_stages) ? pipeline.completed_stages : []);
-  const currentStage = pipeline.current_stage || "";
-  const currentGroupIndex = getPipelineVisibleGroupIndex(currentStage);
   const status = pipeline.status || mode;
+  const groups = PIPELINE_VISIBLE_STAGE_GROUPS.slice();
+  let activeIndex = mode === "complete"
+    ? groups.length - 1
+    : getPipelineVisibleGroupIndex(pipeline.current_stage || "");
 
-  return PIPELINE_VISIBLE_STAGE_GROUPS.map((group, index) => {
-    const groupHasCompletedStage = group.stages.some((stage) => completedStages.has(stage));
-    const isCurrentGroup = index === currentGroupIndex;
+  if (status === "running" || mode === "running") {
+    const allKnownStagesComplete = groups.every(
+      (group) => group.stages.length && group.stages.every((stage) => completedStages.has(stage))
+    );
+    if (allKnownStagesComplete) {
+      groups.push(PIPELINE_FINALIZING_FALLBACK);
+      activeIndex = groups.length - 1;
+    } else {
+      const currentGroup = groups[activeIndex];
+      const currentComplete = currentGroup?.stages.length
+        && currentGroup.stages.every((stage) => completedStages.has(stage));
+      if (currentComplete) {
+        const nextIncompleteIndex = groups.findIndex(
+          (group, index) => index > activeIndex
+            && !group.stages.every((stage) => completedStages.has(stage))
+        );
+        if (nextIncompleteIndex >= 0) activeIndex = nextIncompleteIndex;
+      }
+    }
+  }
+
+  return { groups, activeIndex, completedStages, status };
+}
+
+function buildPipelineVisibleStageStepsHtml(pipeline = {}, mode = "running") {
+  const { groups, activeIndex, completedStages, status } = getPipelineStageRenderModel(pipeline, mode);
+
+  return groups.map((group, index) => {
+    const groupHasCompletedStage = group.stages.length > 0
+      && group.stages.every((stage) => completedStages.has(stage));
+    const isCurrentGroup = index === activeIndex;
     let stateClass = "is-pending";
     let marker = "";
     let indicatorLabel = "Pending";
 
-    if (mode === "complete" || status === "succeeded" || index < currentGroupIndex || groupHasCompletedStage) {
+    if (!group.isUiFallback && (mode === "complete" || status === "succeeded" || index < activeIndex || groupHasCompletedStage)) {
       stateClass = "is-complete";
       marker = "✓";
       indicatorLabel = "Complete";
@@ -1601,7 +1746,10 @@ function buildPipelineVisibleStageStepsHtml(pipeline = {}, mode = "running") {
     return `
       <div class="workflow-step pipeline-step ${stateClass}" data-workflow-step-index="${index}">
         <span class="workflow-step__indicator pipeline-step-marker" aria-label="${escapeHtml(indicatorLabel)}">${escapeHtml(marker)}</span>
-        <span class="workflow-step__label pipeline-step-label">${escapeHtml(group.label)}</span>
+        <span class="workflow-step__label pipeline-step-label">
+          ${escapeHtml(group.label)}
+          ${group.description ? `<small>${escapeHtml(group.description)}</small>` : ""}
+        </span>
       </div>
     `;
   }).join("");
@@ -1619,24 +1767,25 @@ function getWorkflowStepPositionClass(index, activeIndex) {
 function renderPipelineStageStepper(pipeline, targetId = "pipelineStageStepper", mode = "running") {
   const target = qs(targetId);
   if (!target) return;
-  const currentGroupIndex = mode === "complete"
-    ? PIPELINE_VISIBLE_STAGE_GROUPS.length - 1
-    : getPipelineVisibleGroupIndex(pipeline.current_stage || "");
+  const model = getPipelineStageRenderModel(pipeline, mode);
+  const currentGroupIndex = model.activeIndex;
 
-  if (target.children.length !== PIPELINE_VISIBLE_STAGE_GROUPS.length) {
+  if (target.children.length !== model.groups.length) {
     target.innerHTML = buildPipelineVisibleStageStepsHtml(pipeline, mode);
   }
 
   target.style.setProperty("--workflow-active-index", String(currentGroupIndex));
   target.dataset.activeIndex = String(currentGroupIndex);
 
-  const completedStages = new Set(Array.isArray(pipeline.completed_stages) ? pipeline.completed_stages : []);
-  const status = pipeline.status || mode;
+  const completedStages = model.completedStages;
+  const status = model.status;
   Array.from(target.children).forEach((step, index) => {
-    const group = PIPELINE_VISIBLE_STAGE_GROUPS[index];
-    const groupHasCompletedStage = group.stages.some((stage) => completedStages.has(stage));
+    const group = model.groups[index];
+    const groupHasCompletedStage = group.stages.length > 0
+      && group.stages.every((stage) => completedStages.has(stage));
     const isCurrentGroup = index === currentGroupIndex;
-    const isComplete = mode === "complete" || status === "succeeded" || index < currentGroupIndex || groupHasCompletedStage;
+    const isComplete = !group.isUiFallback
+      && (mode === "complete" || status === "succeeded" || index < currentGroupIndex || groupHasCompletedStage);
     const isError = (mode === "failed" || status === "failed" || status === "stopped") && isCurrentGroup;
     const isActive = !isComplete && !isError && isCurrentGroup;
     const stateClass = isComplete ? "is-complete" : (isError ? "is-error" : (isActive ? "is-active" : "is-pending"));
@@ -1645,12 +1794,22 @@ function renderPipelineStageStepper(pipeline, targetId = "pipelineStageStepper",
     const indicator = step.querySelector(".workflow-step__indicator");
 
     step.className = `workflow-step pipeline-step ${stateClass} ${getWorkflowStepPositionClass(index, currentGroupIndex)}`;
-    step.setAttribute("aria-hidden", step.classList.contains("is-hidden") ? "true" : "false");
+    step.setAttribute("aria-hidden", "false");
     if (indicator) {
       indicator.textContent = marker;
       indicator.setAttribute("aria-label", indicatorLabel);
     }
   });
+
+  const viewport = target.closest(".workflow-step-viewport");
+  const activeStep = target.querySelector(".workflow-step.is-active");
+  if (viewport && activeStep) {
+    const viewportRect = viewport.getBoundingClientRect();
+    const activeRect = activeStep.getBoundingClientRect();
+    if (activeRect.top < viewportRect.top || activeRect.bottom > viewportRect.bottom) {
+      activeStep.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
 }
 
 function getPipelineSuccessKey(pipeline = {}) {
@@ -1859,6 +2018,7 @@ function showPipelineFailureOverlay(pipeline = {}) {
     qs("pipelineFailureText").textContent = "The run stopped before completion. No application actions were taken.";
   }
   overlay.classList.remove("hidden");
+  document.body.classList.add("pipeline-workflow-open");
 }
 
 function showPipelineSuccessOverlay(pipeline = {}) {
@@ -1882,6 +2042,7 @@ function showPipelineSuccessOverlay(pipeline = {}) {
 
   renderPipelineSuccessSummary(pipeline);
   overlay.classList.remove("hidden");
+  document.body.classList.add("pipeline-workflow-open");
 }
 
 function showPageLoadingOverlay(title, text, pipeline = {}) {
@@ -1908,6 +2069,7 @@ function showPageLoadingOverlay(title, text, pipeline = {}) {
   renderPipelineStageStepper(pipeline);
 
   overlay.classList.remove("hidden");
+  document.body.classList.add("pipeline-workflow-open");
 }
 
 function hidePageLoadingOverlay() {
@@ -1916,6 +2078,7 @@ function hidePageLoadingOverlay() {
   state.pipelineFailureVisible = false;
   state.currentPipelineFailureKey = null;
   qs("pageLoadingOverlay").classList.add("hidden");
+  document.body.classList.remove("pipeline-workflow-open");
 }
 
 function renderPipelineStatus(payload) {
@@ -2477,12 +2640,14 @@ function renderQueueRows(rows, metaLabel) {
 
 function buildBrowseUrl(pageOverride = null) {
   const actions = getMultiSelectValues("actionFilter");
+  const preferenceIds = getMultiSelectValues("preferenceFilter");
   const undecidedOnly = getBinaryToggleBool("executiveUndecidedOnly") ? "true" : "";
   const limit = qs("limitInput").value || "15";
   const page = pageOverride ?? queueTableState.page ?? 1;
 
   const params = new URLSearchParams();
   appendMultiValueParams(params, "action", actions);
+  appendMultiValueParams(params, "preference_id", preferenceIds);
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
   params.set("limit", limit);
   params.set("page", String(page));
@@ -2590,6 +2755,7 @@ async function reloadCurrentTable(pageOverride = null) {
 
 function clearFilters() {
   clearMultiSelect("actionFilter");
+  resetMultiSelectToAll("preferenceFilter");
   setBinaryToggleValue("executiveUndecidedOnly", false);
   qs("limitInput").value = "15";
   queueTableState.page = 1;
@@ -2843,6 +3009,7 @@ function attachPipelineConfigHandlers() {
 
 function attachEventHandlers() {
   initMultiSelect("actionFilter");
+  initMultiSelect("preferenceFilter");
   qs("applyFiltersBtn").addEventListener("click", async () => {
     queueTableState.page = 1;
     try {
@@ -2916,6 +3083,7 @@ function attachEventHandlers() {
 
 async function init() {
   try {
+    await loadPreferenceFilterOptions("preferenceFilter");
     attachEventHandlers();
     attachApplicationHandlers();
     attachPipelineConfigHandlers();

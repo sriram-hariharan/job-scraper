@@ -217,6 +217,28 @@ def planning_dashboard() -> str:
             </div>
           </div>
 
+          <div class="control-group dashboard-field dashboard-field--preferences">
+            <label>Preferences</label>
+            <div class="multi-select" id="planningPreferenceFilter" data-placeholder="All Preferences" data-all-value="__all__" data-searchable="true">
+              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
+                <span class="multi-select-trigger-label">All Preferences</span>
+                <span class="multi-select-trigger-icon">▾</span>
+              </button>
+              <div class="multi-select-menu" role="menu" hidden>
+                <label class="multi-select-search">
+                  <input type="search" class="multi-select-search-input" placeholder="Search preferences" aria-label="Search preferences" autocomplete="off" />
+                </label>
+                <div class="multi-select-options">
+                  <button type="button" class="multi-select-option is-selected" data-value="__all__" aria-checked="true">
+                    <span class="multi-select-option-check">✓</span>
+                    <span class="multi-select-option-label">All Preferences</span>
+                  </button>
+                </div>
+                <div class="multi-select-empty" hidden>No preferences found</div>
+              </div>
+            </div>
+          </div>
+
           <div class="control-group dashboard-field planning-field--winner-bucket">
             <label>Match Strength</label>
             <div class="multi-select" id="planningWinnerBucket" data-placeholder="All">

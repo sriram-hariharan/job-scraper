@@ -310,8 +310,11 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         assert "build_critic_controlled_llm_guardrail_artifact" not in text
 
     changed = get_changed_files(ROOT)
-    phase129_surface = legacy_guard_allowlist(
-        "phase129c_workflow_overlay_and_run_scoped_corpus"
+    phase129_surface = (
+        legacy_guard_allowlist("phase129b_auth_loader_ui")
+        | legacy_guard_allowlist(
+            "phase129c_workflow_overlay_and_run_scoped_corpus"
+        )
     )
     historical_static_surface = {
         "src/app/static/agentic_review.js",

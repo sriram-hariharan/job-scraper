@@ -185,7 +185,7 @@ html[data-theme="light"] .notification-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -208,7 +208,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
   color: #ffffff !important;
@@ -227,7 +227,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .job-apply-btn:not(:disabled):hover,
 .apply-btn:not(:disabled):hover,
@@ -237,7 +237,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: var(--app-shadow-sm) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):disabled,
 [aria-disabled="true"] {
   cursor: not-allowed !important;
   opacity: 0.58 !important;
@@ -1503,7 +1503,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -1665,15 +1665,25 @@ body .multi-select-trigger {
   grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: 10px !important;
-  min-height: 46px !important;
-  padding: 10px 14px !important;
-  border-radius: 13px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 255, 0.96)),
-    var(--app-surface) !important;
+  min-height: 42px !important;
+  padding: 8px 12px !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 10px !important;
+  background: var(--app-surface-2) !important;
   color: var(--app-text) !important;
-  font-size: 14px !important;
-  font-weight: 850 !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  box-shadow: none !important;
+}
+
+body .multi-select-trigger:hover {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-3) !important;
+}
+
+body .multi-select.is-open .multi-select-trigger {
+  border-color: var(--app-primary) !important;
+  box-shadow: 0 0 0 3px var(--app-focus) !important;
 }
 
 body .multi-select-trigger-label {
@@ -1684,78 +1694,145 @@ body .multi-select-trigger-label {
 }
 
 body .multi-select-trigger-icon {
-  display: inline-grid !important;
-  place-items: center !important;
-  width: 24px !important;
-  height: 24px !important;
-  border-radius: 999px !important;
-  background: #eaf2ff !important;
-  color: #2563eb !important;
+  width: auto !important;
+  height: auto !important;
+  background: transparent !important;
+  color: var(--app-muted) !important;
   justify-self: end !important;
   margin-left: auto !important;
+  transition: transform var(--app-fast) var(--app-ease), color var(--app-fast) var(--app-ease);
+}
+
+body .multi-select.is-open .multi-select-trigger-icon {
+  color: var(--app-primary) !important;
+  transform: rotate(180deg);
 }
 
 body .multi-select-menu {
   left: 0 !important;
   right: auto !important;
-  width: max(100%, min(360px, calc(100vw - 48px))) !important;
-  max-width: calc(100vw - 48px) !important;
-  max-height: min(360px, calc(100vh - 160px)) !important;
+  min-width: min(280px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: min(360px, calc(100dvh - 32px)) !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  gap: 6px !important;
-  padding: 8px !important;
-  border: 1px solid #bfdbfe !important;
-  border-radius: 14px !important;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  overscroll-behavior: contain !important;
+  gap: 2px !important;
+  padding: 6px !important;
+  border: 1px solid var(--app-border-2) !important;
+  border-radius: 12px !important;
+  background: var(--app-surface-2) !important;
   box-shadow:
-    0 24px 60px rgba(15, 23, 42, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.76) inset !important;
-  z-index: 5000 !important;
+    var(--app-shadow-md),
+    0 1px 0 color-mix(in srgb, var(--app-text) 5%, transparent) inset !important;
+  z-index: 10000 !important;
+}
+
+body .multi-select-menu[data-placement="bottom"] {
+  border-top-left-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+}
+
+body .multi-select-menu[data-placement="top"] {
+  border-bottom-left-radius: 8px !important;
+  border-bottom-right-radius: 8px !important;
+}
+
+body .multi-select-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: block;
+  padding: 2px 2px 6px;
+  background: var(--app-surface-2);
+}
+
+body .multi-select-search-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-inset);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+body .multi-select-search-input:focus {
+  border-color: var(--app-primary);
+  outline: 3px solid var(--app-focus);
+  outline-offset: 0;
+}
+
+body .multi-select-options {
+  display: grid;
+  gap: 2px;
+}
+
+body .multi-select-empty {
+  padding: 14px 10px;
+  color: var(--app-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 body .multi-select-option {
-  min-height: 44px !important;
-  grid-template-columns: 24px minmax(0, 1fr) !important;
-  gap: 10px !important;
-  padding: 9px 10px !important;
+  display: grid !important;
+  width: 100% !important;
+  min-height: 42px !important;
+  grid-template-columns: 18px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 9px !important;
+  margin: 0 !important;
+  padding: 7px 9px !important;
   border: 1px solid transparent !important;
-  border-radius: 11px !important;
+  border-radius: 8px !important;
   background: transparent !important;
-  color: #0f172a !important;
+  color: var(--app-text-2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  text-align: left !important;
   box-shadow: none !important;
 }
 
-body .multi-select-option:hover {
-  border-color: #bfdbfe !important;
-  background: #eff6ff !important;
+body .multi-select-option[hidden],
+body .multi-select-empty[hidden] {
+  display: none !important;
+}
+
+body .multi-select-option:hover,
+body .multi-select-option:focus-visible {
+  border-color: transparent !important;
+  background: color-mix(in srgb, var(--app-primary) 10%, var(--app-surface-2)) !important;
+  color: var(--app-text) !important;
   transform: none !important;
   box-shadow: none !important;
 }
 
 body .multi-select-option.is-selected {
-  border-color: #93c5fd !important;
-  background: #dbeafe !important;
-  color: #1e3a8a !important;
+  border-color: color-mix(in srgb, var(--app-primary) 24%, transparent) !important;
+  background: color-mix(in srgb, var(--app-primary) 13%, var(--app-surface-2)) !important;
+  color: var(--app-text) !important;
 }
 
 body .multi-select-option-check {
   display: inline-grid !important;
   place-items: center !important;
-  width: 22px !important;
-  height: 22px !important;
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 999px !important;
-  background: #ffffff !important;
+  width: 16px !important;
+  height: 16px !important;
+  border: 1px solid var(--app-border-2) !important;
+  border-radius: 5px !important;
+  background: var(--app-inset) !important;
   color: transparent !important;
-  font-size: 12px !important;
+  font-size: 10px !important;
 }
 
 body .multi-select-option.is-selected .multi-select-option-check {
-  border-color: #2563eb !important;
-  background: #2563eb !important;
-  color: #ffffff !important;
+  border-color: var(--app-primary) !important;
+  background: var(--app-primary) !important;
+  color: #fff !important;
   opacity: 1 !important;
 }
 
@@ -3959,7 +4036,7 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -3997,81 +4074,6 @@ html[data-theme="light"] body .scheduler-page .scheduler-table-tabs {
   background: transparent !important;
   box-shadow: none !important;
 }
-/* ui_redesign_v24_eof: final tab/dropdown override. */
-body .multi-select-menu {
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
-  padding: 8px !important;
-  border: 1px solid #bfdbfe !important;
-  border-radius: 16px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.98)) !important;
-  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(191, 219, 254, 0.42) !important;
-}
-
-body .multi-select-option {
-  display: grid !important;
-  grid-template-columns: 28px minmax(0, 1fr) !important;
-  gap: 10px !important;
-  align-items: center !important;
-  min-height: 44px !important;
-  width: 100% !important;
-  margin: 0 !important;
-  padding: 9px 12px !important;
-  border: 0 !important;
-  border-radius: 12px !important;
-  background: transparent !important;
-  color: #0f172a !important;
-  font-size: 13px !important;
-  font-weight: 850 !important;
-  line-height: 1.2 !important;
-  text-align: left !important;
-  white-space: normal !important;
-  word-break: break-word !important;
-  box-shadow: none !important;
-}
-
-body .multi-select-option + .multi-select-option {
-  margin-top: 4px !important;
-}
-
-body .multi-select-option:hover,
-body .multi-select-option:focus-visible {
-  background: #dbeafe !important;
-  color: #1d4ed8 !important;
-}
-
-body .multi-select-option.is-selected {
-  background: #ecfdf5 !important;
-  color: #047857 !important;
-}
-
-body .multi-select-option-check {
-  display: inline-grid !important;
-  place-items: center !important;
-  width: 22px !important;
-  height: 22px !important;
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 999px !important;
-  background: #ffffff !important;
-  color: transparent !important;
-  font-size: 12px !important;
-  line-height: 1 !important;
-}
-
-body .multi-select-option.is-selected .multi-select-option-check {
-  border-color: #22c55e !important;
-  background: #22c55e !important;
-  color: #ffffff !important;
-}
-
-body .multi-select-option-label {
-  min-width: 0 !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  white-space: normal !important;
-}
-
 body .application-tabs,
 body .scheduler-page .scheduler-table-tabs,
 body .scheduler-page .scheduler-tab-row,

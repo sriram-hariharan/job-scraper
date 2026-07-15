@@ -160,6 +160,14 @@ def test_generate_suggestions_waits_for_explicit_workspace_action():
 def test_pipeline_overlay_waits_and_offers_planning_action():
     markup = UI.read_text(encoding="utf-8")
     script = APP_JS.read_text(encoding="utf-8")
+    for overlay_id in [
+        "pageLoadingOverlay",
+        "pipelineOverlayCard",
+        "pipelineOverlayLoading",
+        "pipelineOverlaySuccess",
+        "pipelineOverlayFailure",
+    ]:
+        assert f'id="{overlay_id}"' in markup
     assert "Running live job pipeline" in markup
     assert "Pipeline run is ready" in markup
     assert 'id="pipelineSuccessPlanningBtn">View Planning</button>' in markup
@@ -172,10 +180,17 @@ def test_pipeline_overlay_waits_and_offers_planning_action():
     assert "pipeline-workflow-orbit" not in markup
     assert "pipelineSuccessStageStepper" in markup
     assert "pipelineFailureStageStepper" in markup
+    assert "workflow-current-activity" in markup
+    assert "workflow-current-activity__spinner" in markup
+    assert 'id="pipelineLoadingMeta"' in markup
     assert "Your job results and planning artifacts are ready to review." in script
     assert 'qs("pipelineSuccessPlanningBtn").disabled = true' in script
     assert "No application actions were taken." in script
     assert "PIPELINE_VISIBLE_STAGE_GROUPS" in script
+    assert 'document.body.classList.add("pipeline-workflow-open")' in script
+    assert 'document.body.classList.remove("pipeline-workflow-open")' in script
+    assert 'window.location.href = "/planning"' in script
+    assert "window.setTimeout" not in script[script.index("function showPipelineSuccessOverlay"):script.index("function showPageLoadingOverlay")]
     for label in [
         "Starting pipeline",
         "Collecting jobs",
@@ -193,10 +208,28 @@ def test_pipeline_overlay_waits_and_offers_planning_action():
 
 def test_processing_surfaces_share_compact_moving_step_viewport_and_reduced_motion():
     source = CSS.read_text(encoding="utf-8")
+    canonical_start = source.index("/* phase129c: canonical shared workflow overlay system. */")
     assert ".workflow-overlay__panel" in source
-    assert "width: min(840px, 88vw)" in source
-    assert "height: auto !important" in source
-    assert "max-height: 82dvh !important" in source
+    pipeline_css = source[source.index(".workflow-overlay--pipeline {"):source.index(".workflow-overlay--tailoring {")]
+    pipeline_panel_css = source[source.index("html[data-theme] body .workflow-overlay--pipeline .workflow-overlay__panel"):source.index(".workflow-overlay__header {")]
+    assert "height: 100dvh" in pipeline_css
+    assert "overflow-y: auto" in pipeline_css
+    assert "overflow-x: hidden" in pipeline_css
+    assert "overscroll-behavior: contain" in pipeline_css
+    assert "width: 100% !important" in pipeline_panel_css
+    assert "min-height: 100dvh !important" in pipeline_panel_css
+    assert "max-height: none !important" in pipeline_panel_css
+    assert "overflow: visible !important" in pipeline_panel_css
+    assert "body.pipeline-workflow-open" in source
+    assert ".workflow-overlay--pipeline .workflow-overlay__header" in source
+    assert "position: sticky" in source
+    assert ".workflow-current-activity__spinner" in source
+    metric_start = source.index(".pipeline-loading-counts {", canonical_start)
+    metric_end = source.index(".pipeline-count-chip {", metric_start)
+    metric_css = source[metric_start:metric_end]
+    assert "display: flex !important" in metric_css
+    assert "flex-wrap: wrap" in metric_css
+    assert "justify-content: center !important" in metric_css
     assert ".workflow-overlay__body" in source
     assert ".workflow-overlay--pipeline" in source
     assert ".workflow-overlay--tailoring" in source
@@ -215,10 +248,21 @@ def test_processing_surfaces_share_compact_moving_step_viewport_and_reduced_moti
     assert ".workflow-step.is-next" in source
     assert ".workflow-step.is-upcoming" in source
     assert ".workflow-step.is-hidden" in source
+    pipeline_timeline_start = source.index(".workflow-overlay--pipeline .workflow-step-track")
+    pipeline_timeline_end = source.index(".workflow-overlay--pipeline .workflow-step {", pipeline_timeline_start)
+    pipeline_timeline_css = source[pipeline_timeline_start:pipeline_timeline_end]
+    assert "display: grid" in pipeline_timeline_css
+    assert "height: auto" in pipeline_timeline_css
+    pipeline_step_css = source[source.index(".workflow-overlay--pipeline .workflow-step {"):source.index(".workflow-step:not(:last-child)::after")]
+    assert "position: relative !important" in pipeline_step_css
+    assert "transform: none !important" in pipeline_step_css
     assert "transform 420ms" in source
     assert "@keyframes workflow-step-spin" in source
     assert "@media (max-width: 640px)" in source
     assert "@media (prefers-reduced-motion: reduce)" in source
+    reduced_motion = source[source.index("@media (prefers-reduced-motion: reduce)"):]
+    assert ".workflow-current-activity__spinner" in reduced_motion
+    assert "animation: none !important" in reduced_motion
     assert "phase129b: shared cinematic workflow overlays" not in source
     assert "generate-suggestions-document-stack" not in source
     assert "pipeline-workflow-orbit" not in source
@@ -232,8 +276,8 @@ def test_step_tracks_update_from_state_without_rebuilding_every_poll():
     pipeline_render = app_script[app_script.index("function renderPipelineStageStepper"):app_script.index("function getPipelineSuccessKey")]
     suggestions_render = planning_script[planning_script.index("function renderGenerateSuggestionsSteps"):planning_script.index("function startGenerateSuggestionsStepTimer")]
 
-    assert "getPipelineVisibleGroupIndex(pipeline.current_stage" in pipeline_render
-    assert "target.children.length !== PIPELINE_VISIBLE_STAGE_GROUPS.length" in pipeline_render
+    assert "getPipelineStageRenderModel(pipeline, mode)" in pipeline_render
+    assert "target.children.length !== model.groups.length" in pipeline_render
     assert 'target.dataset.activeIndex = String(currentGroupIndex)' in pipeline_render
     assert "getWorkflowStepPositionClass" in pipeline_render
     assert "track.children.length !== GENERATE_SUGGESTIONS_STEPS.length" in suggestions_render

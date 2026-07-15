@@ -317,9 +317,11 @@ def test_current_milestone_guard_compatibility_is_exact_phase128b_and_phase129c_
 
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+        | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | phase129_profile
     )
-    assert len(phase129_profile) == 202
+    assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
+    assert len(phase129_profile) == 205
 
     assert_changed_files_allowed(
         {

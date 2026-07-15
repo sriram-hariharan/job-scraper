@@ -468,6 +468,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/app/planning_ui.py",
             "src/app/static/app.js",
             "src/app/static/planning.js",
+            "src/app/static/app_redesign.css",
             "src/app/static/styles.css",
             "src/app/static/media/Login_page_BG_img.jpg",
             "src/app/static/media/Login_page_BG_img.LICENSE.txt",
@@ -494,6 +495,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/app/planning_ui.py",
             "src/app/static/app.js",
             "src/app/static/planning.js",
+            "src/app/static/app_redesign.css",
             "src/app/static/styles.css",
             "src/app/api.py",
             "src/app/services.py",
@@ -507,6 +509,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase129d_pipeline_persistence_and_suggestions_error_layout.py",
             "tests/test_phase129e_zero_job_and_compact_workflow_overlay.py",
             "tests/test_phase129f_zero_result_pipeline_empty_state.py",
+            "tests/test_onboarding_api.py",
+            "tests/test_queue_ui_metadata_contract.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
@@ -696,6 +700,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+        | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | legacy_guard_allowlist("phase129c_workflow_overlay_and_run_scoped_corpus")
     )
 
@@ -738,11 +743,15 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "2f7a496c44a6bc9d3f06e6df55941f6285eeb3be24b6cbf82d58a2b909c80047",
+        ): "dbfefcdabc0fa41b41c83007cabd8679d4fa97fd69a5d5277fc7b80ca1edb91b",
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "7c64c593e1d79c996f9853d1d37038718a0e7d76f2f95eba7e7df6e63ddbe813",
+        ): "d216bb1464e9a2ccf9e7f6eab3c1eaa25385c162a6c0e88afb123c8a905a8c6d",
+        (
+            "src/app/static/app_redesign.css",
+            "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
+        ): "ffd5d85260e279c851d970db6c05d83d6a3b31fdfd5849e259aa4fe1babf7e24",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
@@ -751,10 +760,6 @@ def assert_protected_hashes(
             "src/app/services.py",
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
         ): "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        (
-            "src/app/services.py",
-            "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "7c64c593e1d79c996f9853d1d37038718a0e7d76f2f95eba7e7df6e63ddbe813",
             (
                 "src/agents/jd_intelligence.py",
                 "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",

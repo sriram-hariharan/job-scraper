@@ -83,6 +83,37 @@ def test_valid_onboarding_preferences_save():
     assert captured["owner_user_id"] == "user_123"
 
 
+def test_onboarding_preferences_readback_exposes_selected_role_options_only():
+    captured, *originals = _patch_onboarding_storage(resume_count=1)
+    original_get = services.get_onboarding_preferences_postgres_payload
+
+    def fake_get_preferences(owner_user_id, **kwargs):
+        return {
+            "data": {
+                "found": True,
+                "owner_user_id": owner_user_id,
+                "preferences": services.validate_onboarding_preferences_payload(
+                    {"selected_role_families": ["backend_engineering"]}
+                ),
+            }
+        }
+
+    services.get_onboarding_preferences_postgres_payload = fake_get_preferences
+    try:
+        payload = services.onboarding_preferences_payload(owner_user_id="user_123")
+    finally:
+        services.get_onboarding_preferences_postgres_payload = original_get
+        _restore_onboarding_storage(originals)
+
+    assert payload["owner_user_id"] == "user_123"
+    assert payload["preference_options"] == [
+        {
+            "role_family_id": "backend_engineering",
+            "display_name": services.ROLE_TAXONOMY["backend_engineering"]["display_name"],
+        }
+    ]
+
+
 def test_invalid_onboarding_role_is_rejected():
     captured, *originals = _patch_onboarding_storage(resume_count=1)
     try:

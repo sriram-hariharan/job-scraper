@@ -87,6 +87,28 @@ def executive_dashboard() -> str:
             </div>
           </div>
 
+          <div class="control-group dashboard-field dashboard-field--preferences">
+            <label>Preferences</label>
+            <div class="multi-select" id="preferenceFilter" data-placeholder="All Preferences" data-all-value="__all__" data-searchable="true">
+              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
+                <span class="multi-select-trigger-label">All Preferences</span>
+                <span class="multi-select-trigger-icon">▾</span>
+              </button>
+              <div class="multi-select-menu" role="menu" hidden>
+                <label class="multi-select-search">
+                  <input type="search" class="multi-select-search-input" placeholder="Search preferences" aria-label="Search preferences" autocomplete="off" />
+                </label>
+                <div class="multi-select-options">
+                  <button type="button" class="multi-select-option is-selected" data-value="__all__" aria-checked="true">
+                    <span class="multi-select-option-check">✓</span>
+                    <span class="multi-select-option-label">All Preferences</span>
+                  </button>
+                </div>
+                <div class="multi-select-empty" hidden>No preferences found</div>
+              </div>
+            </div>
+          </div>
+
           <div class="control-group dashboard-field dashboard-field--limit">
             <label for="limitInput">Limit</label>
             <input type="number" id="limitInput" value="15" min="1" max="200" />
@@ -488,10 +510,16 @@ def executive_dashboard() -> str:
             <div class="workflow-overlay__eyebrow">Live workflow</div>
             <div class="page-loading-title" id="pageLoadingTitle">Running live job pipeline</div>
             <div class="page-loading-text" id="pageLoadingText">Collecting jobs, filtering duplicates, scoring fit, and preparing planning artifacts.</div>
+            <div class="workflow-current-activity">
+              <span class="workflow-current-activity__spinner" aria-hidden="true"></span>
+              <div class="workflow-current-activity__copy">
+                <span class="workflow-current-activity__label">Current activity</span>
+                <div class="pipeline-loading-meta" id="pipelineLoadingMeta"></div>
+              </div>
+            </div>
           </div>
         </header>
         <div class="workflow-overlay__metrics">
-          <div class="pipeline-loading-meta" id="pipelineLoadingMeta"></div>
           <div class="pipeline-loading-counts" id="pipelineLoadingCounts"></div>
         </div>
         <div class="workflow-overlay__body">

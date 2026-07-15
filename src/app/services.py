@@ -859,6 +859,11 @@ def onboarding_preferences_payload(
         "found": bool(payload.get("data", {}).get("found", False)),
         "owner_user_id": owner,
         "preferences": preferences,
+        "preference_options": [
+            option
+            for option in _role_family_options_payload()
+            if option["role_family_id"] in set(preferences.get("selected_role_families", []) or [])
+        ],
         "requirements": status,
     }
 
@@ -13518,6 +13523,10 @@ def _load_job_metadata_overlay_from_corpus(
                 record.get("ashby_timestamp_status")
                 or metadata.get("ashby_timestamp_status")
             )
+            role_family = _clean_text(
+                record.get("role_family")
+                or metadata.get("role_family")
+            )
 
             if not any([job_doc_id, job_url, job_company, job_title]):
                 continue
@@ -13534,6 +13543,7 @@ def _load_job_metadata_overlay_from_corpus(
                 "freshness_status": freshness_status,
                 "ashby_timestamp_status": ashby_timestamp_status,
                 "job_url": job_url,
+                "role_family": role_family,
             }
 
             for key in _application_row_key_candidates(key_row):
@@ -13559,6 +13569,7 @@ def _overlay_job_metadata(
         merged["freshness_status"] = _clean_text(merged.get("freshness_status"))
         merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
+        merged["role_family"] = _clean_text(merged.get("role_family"))
 
         if latest_by_key:
             for key in _application_row_key_candidates(merged):
@@ -13576,6 +13587,8 @@ def _overlay_job_metadata(
                     merged["ashby_timestamp_status"] = overlay["ashby_timestamp_status"]
                 if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
                     merged["job_url"] = overlay["job_url"]
+                if overlay.get("role_family"):
+                    merged["role_family"] = overlay["role_family"]
                 break
 
         overlaid_rows.append(merged)
@@ -26938,6 +26951,10 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
             record.get("ashby_timestamp_status")
             or metadata.get("ashby_timestamp_status")
         )
+        role_family = _clean_text(
+            record.get("role_family")
+            or metadata.get("role_family")
+        )
 
         if not any([job_doc_id, job_url, job_company, job_title]):
             continue
@@ -26954,6 +26971,7 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
             "freshness_status": freshness_status,
             "ashby_timestamp_status": ashby_timestamp_status,
             "job_url": job_url,
+            "role_family": role_family,
         }
 
         for key in _application_row_key_candidates(key_row):
@@ -26976,6 +26994,7 @@ def _overlay_job_metadata_from_map(
         merged["freshness_status"] = _clean_text(merged.get("freshness_status"))
         merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
+        merged["role_family"] = _clean_text(merged.get("role_family"))
 
         if latest_by_key:
             for key in _application_row_key_candidates(merged):
@@ -26993,6 +27012,8 @@ def _overlay_job_metadata_from_map(
                     merged["ashby_timestamp_status"] = overlay["ashby_timestamp_status"]
                 if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
                     merged["job_url"] = overlay["job_url"]
+                if overlay.get("role_family"):
+                    merged["role_family"] = overlay["role_family"]
                 break
 
         overlaid_rows.append(merged)
@@ -27441,6 +27462,40 @@ def status_payload(
     }
 
 
+def _validated_browse_preference_ids(
+    requested_values: Any,
+    *,
+    owner_user_id: str = "",
+) -> tuple[List[str], List[str]]:
+    requested = list(dict.fromkeys(
+        _clean_text(value)
+        for value in (requested_values or [])
+        if _clean_text(value)
+    ))
+    if not requested:
+        return [], []
+
+    owner_preferences = set(
+        _preferences_for_pipeline(owner_user_id).get("selected_role_families", [])
+    )
+    return requested, [value for value in requested if value in owner_preferences]
+
+
+def _filter_browse_rows_by_preference_ids(
+    rows: List[Dict[str, Any]],
+    *,
+    requested_ids: List[str],
+    validated_ids: List[str],
+) -> List[Dict[str, Any]]:
+    if not requested_ids:
+        return rows
+    allowed = set(validated_ids)
+    return [
+        row for row in rows
+        if _clean_text(row.get("role_family")) in allowed
+    ]
+
+
 def browse_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     owner_user_id: str = "",
@@ -27455,6 +27510,7 @@ def browse_payload(
         "fallback_status": "",
         "winner_bucket": "",
         "tailoring_state": "",
+        "preference_id": [],
         "company_contains": "",
         "title_contains": "",
         "limit": 15,
@@ -27469,6 +27525,10 @@ def browse_payload(
 
     requested_tailoring_states = _normalize_tailoring_state_filter_values(
         resolved_filters.get("tailoring_state", [])
+    )
+    requested_preference_ids, validated_preference_ids = _validated_browse_preference_ids(
+        resolved_filters.get("preference_id", []),
+        owner_user_id=owner_user_id,
     )
 
     try:
@@ -27526,6 +27586,18 @@ def browse_payload(
 
         selected = _exclude_applied_rows(selected)
 
+        if requested_preference_ids:
+            selected = (
+                _overlay_job_metadata_from_map(selected, job_metadata_by_key)
+                if artifact_context
+                else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+            )
+            selected = _filter_browse_rows_by_preference_ids(
+                selected,
+                requested_ids=requested_preference_ids,
+                validated_ids=validated_preference_ids,
+            )
+
         if requested_tailoring_states:
             enriched_selected: List[Dict[str, Any]] = []
             for row in selected:
@@ -27579,6 +27651,7 @@ def browse_payload(
                 "fallback_status": resolved_filters.get("fallback_status", ""),
                 "winner_bucket": resolved_filters.get("winner_bucket", ""),
                 "tailoring_state": requested_tailoring_states,
+                "preference_id": validated_preference_ids,
                 "company_contains": resolved_filters.get("company_contains", ""),
                 "title_contains": resolved_filters.get("title_contains", ""),
                 "limit": requested_limit,

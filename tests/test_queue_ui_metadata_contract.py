@@ -55,7 +55,7 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
         ":not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab)"
         ":not(.sort-header-btn):not(.scheduler-tab-btn)"
         ":not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn)"
-        ":not(.app-shell-menu-btn):not(.multi-select-trigger)"
+        ":not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option)"
     )
     assert primary_selector in css
     assert f"{primary_selector},\n.app-shell-primary-link" in css
@@ -82,8 +82,9 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
 
     assert "body .multi-select-trigger {" in css
     caret_css = _css_block(css, "body .multi-select-trigger-icon {")
-    assert "place-items: center !important" in caret_css
-    assert "width: 24px !important" in caret_css
+    assert "background: transparent !important" in caret_css
+    assert "width: auto !important" in caret_css
+    assert "color: var(--app-muted) !important" in caret_css
 
 
 def test_queue_ui_renders_job_location_below_title():
@@ -900,3 +901,144 @@ def test_missing_operator_review_overlay_is_safe():
     rows = [{"job_doc_id": "job_1", "job_company": "Acme", "job_title": "Backend Engineer", "action": "APPLY"}]
 
     assert services._overlay_operator_review(rows, {}) == rows
+
+
+def test_live_pipeline_overlay_keeps_one_finalizing_activity_state():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/styles.css").read_text(encoding="utf-8")
+
+    assert 'label: "Finalizing pipeline results"' in app_source
+    assert 'description: "Saving run results and preparing the dashboards."' in app_source
+    assert "allKnownStagesComplete" in app_source
+    assert "groups.push(PIPELINE_FINALIZING_FALLBACK)" in app_source
+    assert 'status === "running"' in app_source
+    assert 'activeStep.scrollIntoView({ block: "nearest", behavior: "smooth" })' in app_source
+    assert "window.location" not in app_source[app_source.index("function renderPipelineStageStepper"):app_source.index("function getPipelineSuccessKey")]
+    for overlay_id in ("pipelineOverlayLoading", "pipelineOverlaySuccess", "pipelineOverlayFailure"):
+        assert f'id="{overlay_id}"' in markup
+    metric_css = css[css.index(".pipeline-loading-counts {", css.index("/* phase129c:")):]
+    assert "display: flex !important" in metric_css
+    assert "flex-wrap: wrap" in metric_css
+    assert "justify-content: center !important" in metric_css
+    assert "animation: workflow-step-spin 900ms linear infinite" in css
+
+
+def test_executive_and_planning_preferences_filters_use_backend_ids_and_search():
+    executive_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    api_source = Path("src/app/api.py").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert 'id="preferenceFilter"' in executive_markup
+    assert 'id="planningPreferenceFilter"' in planning_markup
+    for markup in (executive_markup, planning_markup):
+        assert 'data-all-value="__all__"' in markup
+        assert 'data-searchable="true"' in markup
+        assert "All Preferences" in markup
+        assert "Search preferences" in markup
+        assert "No preferences found" in markup
+
+    for source in (app_source, planning_source):
+        assert 'fetchJson("/onboarding/preferences")' in source
+        assert 'appendMultiValueParams(params, "preference_id", preferenceIds)' in source
+        assert 'value !== (root.dataset.allValue || "")' in source
+        assert "filterMultiSelectOptions" in source
+        assert "resetMultiSelectToAll" in source
+
+    assert "preference_id: list[str] | None = Query(default=None)" in api_source
+    assert "preference_id=preference_id or []" in api_source
+    assert '"preference_options"' in services_source
+    assert "_filter_browse_rows_by_preference_ids" in services_source
+    assert 'if _clean_text(row.get("role_family")) in allowed' in services_source
+    assert "total_count = len(selected)" in services_source
+
+
+def test_shared_multi_select_contract_supports_dynamic_preference_options():
+    executive_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    for markup in (executive_markup, planning_markup):
+        preference_markup = markup[markup.index('data-placeholder="All Preferences"'):]
+        assert 'class="multi-select-option is-selected" data-value="__all__" aria-checked="true"' in preference_markup
+        assert preference_markup.count('placeholder="Search preferences"') == 1
+        assert preference_markup.count('aria-label="Search preferences"') == 1
+        assert 'class="multi-select-empty" hidden' in preference_markup
+
+    for source in (app_source, planning_source):
+        engine = source[source.index("function handleMultiSelectOptionSelection"):source.index("function normalize", source.index("function handleMultiSelectOptionSelection"))]
+        assert 'menu.addEventListener("click", (event) =>' in engine
+        assert 'event.target.closest(".multi-select-option")' in engine
+        assert "handleMultiSelectOptionSelection(root, option)" in engine
+        assert 'setMultiSelectOptionSelected(candidate, candidate === option)' in engine
+        assert "setMultiSelectOptionSelected(allOption, false)" in engine
+        assert "resetMultiSelectToAll(root.id)" in engine
+        assert 'getMultiSelectMenu(root)?.querySelector(".multi-select-options")' in engine
+        assert 'option.addEventListener("click"' not in engine
+        assert 'root.classList.toggle("opens-upward", openAbove)' in source
+        assert 'menu.dataset.placement = openAbove ? "top" : "bottom"' in source
+
+    canonical_css = css[css.index("body .multi-select {"):css.index("body .application-tabs {")]
+    assert "background: var(--app-surface-2) !important" in canonical_css
+    assert "position: sticky" in canonical_css
+    assert "overflow-y: auto !important" in canonical_css
+    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in canonical_css
+    assert ":not(.multi-select-option)" in css
+
+
+def test_shared_preference_search_filters_current_portaled_options_without_mutating_selection():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source):
+        search_engine = source[
+            source.index("function normalizeMultiSelectSearchText"):
+            source.index("function handleMultiSelectOptionSelection")
+        ]
+        assert '.addEventListener("input", () => filterMultiSelectOptions' in search_engine
+        assert '.toLowerCase()' in search_engine
+        assert '.replace(/[\\/_-]+/g, " ")' in search_engine
+        assert '.replace(/\\s+/g, " ")' in search_engine
+        assert "normalizeMultiSelectSearchText(label).includes(normalizedQuery)" in search_engine
+        assert "getMultiSelectOptions(root).forEach((option) =>" in search_engine
+        assert 'getMultiSelectMenu(root)?.querySelector(".multi-select-search-input")' in search_engine
+        assert "option.hidden = !isVisible" in search_engine
+        assert "empty.hidden = visibleCount > 0" in search_engine
+        assert "setMultiSelectOptionSelected" not in search_engine
+        assert "aria-checked" not in search_engine
+        assert "fetch(" not in search_engine
+        assert "fetchJson(" not in search_engine
+
+    assert "body .multi-select-option[hidden]" in css
+    assert "body .multi-select-empty[hidden]" in css
+    assert "display: none !important" in css
+
+
+def test_preference_filter_rejects_ids_outside_authenticated_owner_preferences(monkeypatch):
+    monkeypatch.setattr(
+        services,
+        "_preferences_for_pipeline",
+        lambda owner_user_id="": {"selected_role_families": ["data_science"]},
+    )
+    requested, validated = services._validated_browse_preference_ids(
+        ["data_science", "backend_engineering"],
+        owner_user_id="owner-1",
+    )
+    rows = [
+        {"job_doc_id": "job-1", "role_family": "data_science"},
+        {"job_doc_id": "job-2", "role_family": "backend_engineering"},
+    ]
+    filtered = services._filter_browse_rows_by_preference_ids(
+        rows,
+        requested_ids=requested,
+        validated_ids=validated,
+    )
+
+    assert validated == ["data_science"]
+    assert [row["job_doc_id"] for row in filtered] == ["job-1"]

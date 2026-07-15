@@ -298,10 +298,28 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
             )
 
 
-def test_current_milestone_guard_compatibility_is_exact_phase128b_and_phase129c_surface():
+def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     phase129_profile = legacy_guard_allowlist(
         "phase129c_workflow_overlay_and_run_scoped_corpus"
     )
+    phase132_profile = legacy_guard_allowlist("phase132b_premium_preferences_ui")
+    expected_phase132_profile = {
+        "src/app/api.py",
+        "src/app/onboarding_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/services.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/onboarding.js",
+        "src/app/static/preference_location_selector.js",
+        "src/app/static/profile.js",
+        "src/pipeline/location_preferences.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_location_preference_search_api.py",
+        "tests/test_onboarding_ui_contract.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
     phase129_auth_artwork_files = {
         "src/app/static/media/auth_workflow_hero.svg",
         "src/app/static/media/auth_hero_icons/LICENSES.txt",
@@ -314,11 +332,15 @@ def test_current_milestone_guard_compatibility_is_exact_phase128b_and_phase129c_
     assert "tests/test_phase85b_legacy_guard_registry_default_off.py" in phase129_profile
     assert phase129_auth_artwork_files <= phase129_profile
     assert not any("*" in path for path in phase129_profile)
+    assert phase132_profile == expected_phase132_profile
+    assert len(phase132_profile) == 15
+    assert not any("*" in path for path in phase132_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | phase129_profile
+        | phase132_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

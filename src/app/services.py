@@ -35,6 +35,7 @@ from src.config.consts import (
     DOMAIN_SIGNAL_PATTERNS,
 )
 from src.config.role_taxonomy import ROLE_TAXONOMY
+from src.pipeline.location_preferences import search_us_location_specs
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
@@ -866,6 +867,20 @@ def onboarding_preferences_payload(
             if option["role_family_id"] in set(preferences.get("selected_role_families", []) or [])
         ],
         "requirements": status,
+    }
+
+
+def onboarding_location_search_payload(
+    query: str,
+    *,
+    limit: int = 15,
+) -> Dict[str, Any]:
+    results = search_us_location_specs(query, limit=limit)
+    return {
+        "ok": True,
+        "query": str(query or "").strip(),
+        "count": len(results),
+        "results": results,
     }
 
 

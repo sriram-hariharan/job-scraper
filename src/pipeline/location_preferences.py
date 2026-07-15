@@ -15,6 +15,8 @@ DEFAULT_LOCATION_DATA_PATH = (
 )
 SUPPORTED_LOCATION_TYPES = {"state", "city", "remote", "nationwide", "legacy_text"}
 LOCATION_EVIDENCE_FIELD = "_location_preference_evidence"
+MAX_LOCATION_SEARCH_QUERY_LENGTH = 80
+MAX_LOCATION_SEARCH_RESULTS = 20
 
 _SPACE_RE = re.compile(r"\s+")
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -316,6 +318,103 @@ def normalize_location_specs(
         seen_ids.add(canonical["id"])
         normalized.append(canonical)
     return normalized
+
+
+def search_us_location_specs(
+    query: Any,
+    *,
+    limit: int = 15,
+    data_path: Path = DEFAULT_LOCATION_DATA_PATH,
+) -> List[Dict[str, str]]:
+    """Return a small, deterministic set of public canonical location specs."""
+    if not isinstance(query, str):
+        raise ValueError("Location search query must be text.")
+    cleaned_query = _SPACE_RE.sub(" ", query).strip()
+    if not cleaned_query:
+        return []
+    if len(cleaned_query) > MAX_LOCATION_SEARCH_QUERY_LENGTH:
+        raise ValueError(
+            f"Location search query must be {MAX_LOCATION_SEARCH_QUERY_LENGTH} characters or fewer."
+        )
+    if isinstance(limit, bool) or not isinstance(limit, int):
+        raise ValueError("Location search limit must be an integer.")
+    if limit < 1 or limit > MAX_LOCATION_SEARCH_RESULTS:
+        raise ValueError(
+            f"Location search limit must be between 1 and {MAX_LOCATION_SEARCH_RESULTS}."
+        )
+
+    data = load_us_location_data(str(data_path))
+    normalized_query = normalize_location_text(cleaned_query)
+    ranked: List[Tuple[Tuple[Any, ...], Dict[str, str]]] = []
+
+    def add_candidate(spec: Dict[str, str], match_rank: int) -> None:
+        type_rank = {
+            "remote": 0,
+            "nationwide": 1,
+            "state": 2,
+            "city": 3,
+        }[spec["type"]]
+        ranked.append(
+            (
+                (
+                    match_rank,
+                    type_rank,
+                    spec["display_name"].casefold(),
+                    spec.get("state_code", ""),
+                    spec["id"],
+                ),
+                spec,
+            )
+        )
+
+    special_candidates = (
+        (_remote_spec(), ("remote", "remote us")),
+        (_nationwide_spec(), tuple(sorted(_NATIONWIDE_VALUES))),
+    )
+    for spec, aliases in special_candidates:
+        display_normalized = normalize_location_text(spec["display_name"])
+        if normalized_query == display_normalized or normalized_query in aliases:
+            add_candidate(spec, 0)
+        elif any(alias.startswith(normalized_query) for alias in aliases):
+            add_candidate(spec, 3)
+        elif normalized_query in display_normalized or any(
+            normalized_query in alias for alias in aliases
+        ):
+            add_candidate(spec, 6)
+
+    for state_code, state_name in data["state_by_code"].items():
+        spec = _state_spec(state_code, data)
+        name_normalized = normalize_location_text(state_name)
+        code_normalized = normalize_location_text(state_code)
+        if normalized_query == name_normalized:
+            add_candidate(spec, 0)
+        elif normalized_query == code_normalized:
+            add_candidate(spec, 1)
+        elif name_normalized.startswith(normalized_query) or code_normalized.startswith(
+            normalized_query
+        ):
+            add_candidate(spec, 3)
+        elif normalized_query in name_normalized:
+            add_candidate(spec, 5)
+
+    for city in data["city_by_state_and_name"].values():
+        spec = _city_spec(city)
+        city_normalized = normalize_location_text(city["city"])
+        display_normalized = normalize_location_text(spec["display_name"])
+        full_state_normalized = normalize_location_text(
+            f"{city['city']} {city['state_name']}"
+        )
+        if normalized_query in {display_normalized, full_state_normalized, city_normalized}:
+            add_candidate(spec, 2)
+        elif city_normalized.startswith(normalized_query) or display_normalized.startswith(
+            normalized_query
+        ):
+            add_candidate(spec, 4)
+        elif normalized_query in display_normalized or normalized_query in full_state_normalized:
+            add_candidate(spec, 6)
+
+    ranked.sort(key=lambda item: item[0])
+    return [copy.deepcopy(spec) for _sort_key, spec in ranked[:limit]]
 
 
 def _parsed_location_from_spec(spec: Dict[str, str]) -> Dict[str, str]:

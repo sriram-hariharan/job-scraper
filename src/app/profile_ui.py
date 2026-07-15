@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from html import escape
 
-from src.app.onboarding_ui import _role_family_cards_html
+from src.app.onboarding_ui import _location_preferences_html, _role_family_cards_html
 from src.app.ui_shell import render_top_shell
 from src.auth.runtime import current_user_from_request
 
@@ -16,11 +16,13 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
     tab_attr = " data-profile-tab-panel" if tab_panel else ""
     return f"""
     <section class="card profile-section-card profile-preferences-section{hidden_class}" id="profilePreferencesSection"{tab_attr}>
-      <div class="section-header">
+      <div class="section-header preferences-command-header">
         <div>
           <h2>Preferences</h2>
           <div class="subtext">Update the same role and matching preferences you selected during onboarding.</div>
+          <div class="preferences-configuration-summary" id="profilePreferencesConfigurationSummary">Loading your configuration...</div>
         </div>
+        <span class="preferences-save-state is-loading" id="profilePreferencesChangeState">Loading preferences</span>
       </div>
 
       <div class="profile-inline-status hidden" id="profilePreferencesStatusBanner"></div>
@@ -48,8 +50,8 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
         <section class="profile-preferences-group">
           <div class="profile-preferences-group-header">
             <div>
-              <h3>Seniority and location</h3>
-              <p class="subtext">These are saved as preferences and can be changed anytime.</p>
+              <h3>Seniority</h3>
+              <p class="subtext">Choose every level that fits your current search.</p>
             </div>
           </div>
           <div class="onboarding-field-grid">
@@ -63,10 +65,10 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
 
           </div>
 
-          <label class="onboarding-text-field">
-            <span>Preferred locations</span>
-            <textarea id="profilePreferredLocationsInput" rows="3" placeholder="New York, Remote, Boston"></textarea>
-          </label>
+        </section>
+
+        <section class="profile-preferences-group preference-location-panel">
+          {_location_preferences_html(prefix="profilePreferences")}
         </section>
 
         <section class="profile-preferences-group">
@@ -706,7 +708,8 @@ def profile_preferences_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_preferences_bulk_r1"></script>
+  <script src="/static/preference_location_selector.js?v=location_preferences_b2"></script>
+  <script src="/static/profile.js?v=location_preferences_b2"></script>
 </body>
 </html>
     """.strip()

@@ -17,12 +17,39 @@ function checkedValues(name) {
 }
 
 let onboardingRequirementState = {};
+let onboardingLocationSelector = null;
 
 function setCheckedValues(name, values) {
   const selected = new Set(Array.isArray(values) ? values.map(String) : []);
   document.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
     input.checked = selected.has(String(input.value || ""));
   });
+}
+
+function setOnboardingCheckboxGroup(name, checked) {
+  document.querySelectorAll(`#onboardingForm input[name="${name}"]`).forEach((input) => {
+    input.checked = Boolean(checked);
+  });
+}
+
+function updateOnboardingConfigurationSummary() {
+  const summary = onboardingQs("onboardingConfigurationSummary");
+  if (!summary) return;
+  const roleCount = checkedValues("selected_role_families").length;
+  const locationCount = onboardingLocationSelector?.serialize().preferred_location_specs.length || 0;
+  summary.textContent = `${roleCount} role ${roleCount === 1 ? "family" : "families"} · ${locationCount} preferred location${locationCount === 1 ? "" : "s"}`;
+}
+
+function setOnboardingChangeState(label, state = "saved") {
+  const indicator = onboardingQs("onboardingChangeState");
+  if (!indicator) return;
+  indicator.textContent = label;
+  indicator.className = `preferences-save-state is-${state}`;
+}
+
+function markOnboardingPreferencesDirty() {
+  updateOnboardingConfigurationSummary();
+  setOnboardingChangeState("Unsaved changes", "dirty");
 }
 
 function setTextareaList(id, values) {
@@ -48,11 +75,17 @@ async function onboardingFetchJson(url, options = {}) {
 }
 
 function collectOnboardingPreferences(onboardingCompleted) {
+  const locationPreferences = onboardingLocationSelector?.serialize() || {
+    preferred_locations: [],
+    preferred_location_specs: [],
+    location_strict_match: false,
+    location_show_others_if_unmatched: false,
+  };
   return {
     onboarding_completed: Boolean(onboardingCompleted),
     selected_role_families: checkedValues("selected_role_families"),
     target_seniority: checkedValues("target_seniority"),
-    preferred_locations: splitPreferenceList(onboardingQs("preferredLocationsInput")?.value),
+    ...locationPreferences,
     preferred_skills: splitPreferenceList(onboardingQs("preferredSkillsInput")?.value),
     excluded_keywords: splitPreferenceList(onboardingQs("excludedKeywordsInput")?.value),
   };
@@ -117,7 +150,7 @@ function renderRequirementStatus(requirements) {
 function hydrateOnboardingForm(preferences) {
   setCheckedValues("selected_role_families", preferences?.selected_role_families || []);
   setCheckedValues("target_seniority", preferences?.target_seniority || []);
-  setTextareaList("preferredLocationsInput", preferences?.preferred_locations || []);
+  onboardingLocationSelector?.setPreferences(preferences || {});
   setTextareaList("preferredSkillsInput", preferences?.preferred_skills || []);
   setTextareaList("excludedKeywordsInput", preferences?.excluded_keywords || []);
 }
@@ -128,10 +161,13 @@ async function loadOnboardingPreferences() {
     const payload = await onboardingFetchJson("/onboarding/preferences");
     hydrateOnboardingForm(payload.preferences || {});
     renderRequirementStatus(payload.requirements || {});
+    updateOnboardingConfigurationSummary();
+    setOnboardingChangeState("All changes saved", "saved");
   } catch (error) {
     if (saveStatus) {
       saveStatus.textContent = `Could not load onboarding preferences. ${error.message}`;
     }
+    setOnboardingChangeState("Load failed", "error");
   }
 }
 
@@ -149,6 +185,7 @@ async function saveOnboardingPreferences(onboardingCompleted) {
   if (completeBtn) completeBtn.disabled = true;
   if (draftBtn) draftBtn.disabled = true;
   if (saveStatus) saveStatus.textContent = onboardingCompleted ? "Completing onboarding..." : "Saving preferences...";
+  setOnboardingChangeState("Saving...", "saving");
 
   try {
     const payload = await onboardingFetchJson("/onboarding/preferences", {
@@ -160,11 +197,13 @@ async function saveOnboardingPreferences(onboardingCompleted) {
     if (saveStatus) {
       saveStatus.textContent = onboardingCompleted ? "Onboarding complete. Opening dashboard..." : "Preferences saved.";
     }
+    setOnboardingChangeState("All changes saved", "saved");
     if (onboardingCompleted) {
       window.location.href = "/";
     }
   } catch (error) {
     if (saveStatus) saveStatus.textContent = error.message;
+    setOnboardingChangeState("Save failed", "error");
     renderRequirementStatus({});
   } finally {
     if (draftBtn) draftBtn.disabled = false;
@@ -176,10 +215,28 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = onboardingQs("onboardingForm");
   const draftBtn = onboardingQs("onboardingSaveDraftBtn");
 
+  onboardingLocationSelector = window.ApplyLensLocationSelector?.create(
+    onboardingQs("onboardingLocationSelector"),
+    { onChange: markOnboardingPreferencesDirty }
+  );
+
   document.querySelectorAll("#onboardingForm input, #onboardingForm textarea").forEach((field) => {
+    if (field.closest("[data-location-selector]")) return;
     field.addEventListener("change", () => {
       renderRequirementStatus({});
+      markOnboardingPreferencesDirty();
     });
+  });
+
+  onboardingQs("onboardingSelectAllRolesBtn")?.addEventListener("click", () => {
+    setOnboardingCheckboxGroup("selected_role_families", true);
+    renderRequirementStatus({});
+    markOnboardingPreferencesDirty();
+  });
+  onboardingQs("onboardingClearAllRolesBtn")?.addEventListener("click", () => {
+    setOnboardingCheckboxGroup("selected_role_families", false);
+    renderRequirementStatus({});
+    markOnboardingPreferencesDirty();
   });
 
   if (form) {

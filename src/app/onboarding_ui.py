@@ -72,6 +72,70 @@ def _role_family_cards_html() -> str:
     return "".join(cards)
 
 
+def _location_preferences_html(*, prefix: str) -> str:
+    safe_prefix = escape(prefix)
+    title_id = f"{safe_prefix}LocationTitle"
+    input_id = f"{safe_prefix}LocationSearch"
+    listbox_id = f"{safe_prefix}LocationListbox"
+    return f"""
+      <div class="preference-location-selector" id="{safe_prefix}LocationSelector" data-location-selector>
+        <div class="preference-location-heading">
+          <div>
+            <h3 id="{title_id}">Preferred locations</h3>
+            <p>Search US cities, states, remote roles, or nationwide jobs.</p>
+          </div>
+          <span class="preference-location-count" data-location-count>0 selected</span>
+        </div>
+
+        <div class="preference-location-combobox" data-location-combobox>
+          <div class="preference-location-chips" data-location-chips aria-live="polite"></div>
+          <input
+            id="{input_id}"
+            class="preference-location-search"
+            type="search"
+            role="combobox"
+            aria-labelledby="{title_id}"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="{listbox_id}"
+            autocomplete="off"
+            placeholder="Try Virginia, Arlington, VA, or Remote"
+            data-location-search
+          />
+          <div
+            class="preference-location-results hidden"
+            id="{listbox_id}"
+            role="listbox"
+            data-location-results
+          ></div>
+        </div>
+        <p class="preference-location-status" data-location-status aria-live="polite">
+          No preferred locations selected.
+        </p>
+
+        <div class="preference-location-policy">
+          <label class="preference-policy-option">
+            <input type="checkbox" name="location_strict_match" data-location-strict />
+            <span>
+              <strong>Only show jobs in preferred locations</strong>
+              <small>When enabled, jobs outside your selected locations will normally be removed.</small>
+            </span>
+          </label>
+          <label class="preference-policy-option preference-policy-option--fallback" data-location-fallback-row>
+            <input type="checkbox" name="location_show_others_if_unmatched" data-location-fallback disabled />
+            <span>
+              <strong>Show other jobs if none match</strong>
+              <small>If no preferred-location jobs are found, keep other US jobs as fallback options.</small>
+            </span>
+          </label>
+        </div>
+        <p class="preference-location-release-note">
+          Saved now. Applied to new pipeline runs after location filtering is enabled.
+        </p>
+      </div>
+"""
+
+
 @router.get("/onboarding", response_class=HTMLResponse)
 def onboarding_page() -> str:
     return f"""
@@ -89,13 +153,17 @@ def onboarding_page() -> str:
   {render_top_shell("/onboarding")}
 
   <main class="page onboarding-page" id="onboardingPage">
-    <header class="page-header onboarding-header">
+    <header class="page-header onboarding-header preferences-command-header">
       <div>
         <div class="onboarding-kicker">First setup</div>
         <h1>Choose your job search focus.</h1>
         <p class="subtext">ApplyLens will use these preferences to tune your job queue and resume matching.</p>
+        <div class="preferences-configuration-summary" id="onboardingConfigurationSummary">Loading your configuration...</div>
       </div>
-      <a class="ghost-btn onboarding-profile-link" href="/profile?onboarding=resume_upload">Manage resumes</a>
+      <div class="preferences-header-actions">
+        <span class="preferences-save-state is-loading" id="onboardingChangeState">Loading preferences</span>
+        <a class="ghost-btn onboarding-profile-link" href="/profile?onboarding=resume_upload">Manage resumes</a>
+      </div>
     </header>
 
     <form class="onboarding-layout" id="onboardingForm">
@@ -105,7 +173,11 @@ def onboarding_page() -> str:
             <h2>Role interests</h2>
             <div class="subtext">Select at least one IT role family.</div>
           </div>
-          <span class="onboarding-required-pill">Required</span>
+          <div class="preferences-section-actions">
+            <button type="button" class="ghost-btn btn-sm" id="onboardingSelectAllRolesBtn">Select all</button>
+            <button type="button" class="ghost-btn btn-sm" id="onboardingClearAllRolesBtn">Clear all</button>
+            <span class="onboarding-required-pill">Required</span>
+          </div>
         </div>
         <div class="onboarding-role-grid" id="onboardingRoleGrid">
           {_role_family_cards_html()}
@@ -115,8 +187,8 @@ def onboarding_page() -> str:
       <section class="card onboarding-panel">
         <div class="section-header">
           <div>
-            <h2>Seniority and location</h2>
-            <div class="subtext">These preferences are saved as selections only.</div>
+            <h2>Seniority</h2>
+            <div class="subtext">Choose every level that fits your current search.</div>
           </div>
         </div>
         <div class="onboarding-field-grid">
@@ -130,10 +202,10 @@ def onboarding_page() -> str:
 
         </div>
 
-        <label class="onboarding-text-field">
-          <span>Preferred locations</span>
-          <textarea id="preferredLocationsInput" rows="3" placeholder="New York, Remote, Boston"></textarea>
-        </label>
+      </section>
+
+      <section class="card onboarding-panel preference-location-panel">
+        {_location_preferences_html(prefix="onboarding")}
       </section>
 
       <section class="card onboarding-panel onboarding-resume-panel" id="onboardingResumePanel">
@@ -184,7 +256,8 @@ def onboarding_page() -> str:
   </main>
 
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/onboarding.js?v=role_onboarding_r10"></script>
+  <script src="/static/preference_location_selector.js?v=location_preferences_b2"></script>
+  <script src="/static/onboarding.js?v=location_preferences_b2"></script>
 </body>
 </html>
 """

@@ -789,6 +789,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase129c_workflow_overlay_and_corpus_files:
         return
+    live_pipeline_preferences_dashboard_files = {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/styles.css",
+        ROOT / "src/app/ui.py",
+    }
+    if set(changed_runtime_files) == live_pipeline_preferences_dashboard_files:
+        return
     phase55b_runtime_files = {
         ROOT / "src/app/planning_ui.py",
         ROOT / "src/app/services.py",

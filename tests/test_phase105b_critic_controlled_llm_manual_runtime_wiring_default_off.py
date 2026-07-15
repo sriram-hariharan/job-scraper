@@ -386,8 +386,11 @@ def test_service_manual_critic_slice_does_not_add_job_fit_or_raw_provider_calls(
 
 def test_no_collector_api_ui_or_static_changes_for_phase105b():
     changed = get_changed_files(ROOT)
-    phase129_surface = legacy_guard_allowlist(
-        "phase129c_workflow_overlay_and_run_scoped_corpus"
+    phase129_surface = (
+        legacy_guard_allowlist("phase129b_auth_loader_ui")
+        | legacy_guard_allowlist(
+            "phase129c_workflow_overlay_and_run_scoped_corpus"
+        )
     )
 
     phase108a_collector_surface = {

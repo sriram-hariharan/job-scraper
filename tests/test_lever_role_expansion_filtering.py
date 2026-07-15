@@ -84,6 +84,22 @@ def test_lever_early_filter_accepts_selected_backend_role(monkeypatch):
     assert jobs[0]["job_id"] == "lv_posting-123"
 
 
+def test_lever_early_filter_accepts_resolved_role_argument_without_env(monkeypatch):
+    monkeypatch.delenv("JOB_STACK_SELECTED_ROLE_FAMILIES", raising=False)
+    monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
+    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: True)
+
+    jobs = asyncio.run(
+        lever_scraper.fetch_company_jobs(
+            _FakeSession([_lever_job("Backend Engineer")]),
+            "acme",
+            selected_role_families=["backend_engineering"],
+        )
+    )
+
+    assert [job["title"] for job in jobs] == ["Backend Engineer"]
+
+
 def test_lever_early_filter_accepts_selected_software_role(monkeypatch):
     monkeypatch.setenv("JOB_STACK_SELECTED_ROLE_FAMILIES", '["software_engineering"]')
     monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)

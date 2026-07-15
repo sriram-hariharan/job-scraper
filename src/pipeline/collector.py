@@ -3,13 +3,24 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 import asyncio
+import hashlib
 import json
 import os
 import time
 from uuid import uuid4
 from pathlib import Path
 
-from src.pipeline.runtime_status import complete_stage, start_stage, update_counts
+from src.pipeline.runtime_status import (
+    PREFERENCE_RUNTIME_SCHEMA_VERSION,
+    complete_stage,
+    start_stage,
+    update_config,
+    update_counts,
+)
+from src.storage.onboarding_preferences.store import (
+    PREFERENCE_LIST_FIELDS,
+    validate_onboarding_preferences_payload,
+)
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
@@ -209,12 +220,26 @@ def _is_user_pipeline_mode() -> bool:
     }
 
 
-def _selected_role_families_from_env() -> List[str]:
-    return _json_list_from_env("JOB_STACK_SELECTED_ROLE_FAMILIES")
+_PREFERENCE_ENV_NAMES = {
+    "selected_role_families": "JOB_STACK_SELECTED_ROLE_FAMILIES",
+    "target_seniority": "JOB_STACK_TARGET_SENIORITY",
+    "preferred_locations": "JOB_STACK_PREFERRED_LOCATIONS",
+    "preferred_skills": "JOB_STACK_PREFERRED_SKILLS",
+    "excluded_keywords": "JOB_STACK_EXCLUDED_KEYWORDS",
+}
 
 
-def _json_list_from_env(env_name: str) -> List[str]:
-    raw = str(os.environ.get(env_name, "") or "").strip()
+def _empty_pipeline_preferences() -> Dict[str, List[str]]:
+    return {field_name: [] for field_name in PREFERENCE_LIST_FIELDS}
+
+
+def _json_list_from_env(
+    env_name: str,
+    *,
+    env: Dict[str, str] | None = None,
+) -> List[str]:
+    env_map = env if env is not None else os.environ
+    raw = str(env_map.get(env_name, "") or "").strip()
     if not raw:
         return []
 
@@ -236,13 +261,149 @@ def _json_list_from_env(env_name: str) -> List[str]:
     return values
 
 
-def _pipeline_preferences_from_env() -> Dict[str, List[str]]:
+def _pipeline_preferences_from_env(
+    *,
+    env: Dict[str, str] | None = None,
+) -> Dict[str, List[str]]:
     return {
-        "selected_role_families": _json_list_from_env("JOB_STACK_SELECTED_ROLE_FAMILIES"),
-        "target_seniority": _json_list_from_env("JOB_STACK_TARGET_SENIORITY"),
-        "preferred_locations": _json_list_from_env("JOB_STACK_PREFERRED_LOCATIONS"),
-        "preferred_skills": _json_list_from_env("JOB_STACK_PREFERRED_SKILLS"),
-        "excluded_keywords": _json_list_from_env("JOB_STACK_EXCLUDED_KEYWORDS"),
+        field_name: _json_list_from_env(env_name, env=env)
+        for field_name, env_name in _PREFERENCE_ENV_NAMES.items()
+    }
+
+
+def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:
+    if not isinstance(preferences, dict):
+        raise ValueError("Preference snapshot must be an object.")
+
+    for field_name in PREFERENCE_LIST_FIELDS:
+        if field_name not in preferences:
+            continue
+        field_value = preferences[field_name]
+        if not isinstance(field_value, list) or any(
+            not isinstance(item, str) for item in field_value
+        ):
+            raise ValueError(f"Preference field {field_name} must be a list of strings.")
+
+    normalized = validate_onboarding_preferences_payload(
+        {
+            "onboarding_completed": False,
+            **{
+                field_name: preferences.get(field_name)
+                for field_name in PREFERENCE_LIST_FIELDS
+            },
+        }
+    )
+    return {
+        field_name: list(normalized.get(field_name, []) or [])
+        for field_name in PREFERENCE_LIST_FIELDS
+    }
+
+
+def _preference_snapshot_sha256(preferences: Dict[str, List[str]]) -> str:
+    canonical_json = json.dumps(
+        preferences,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def _load_launch_config_preference_snapshot(
+    *,
+    env: Dict[str, str] | None = None,
+) -> tuple[Dict[str, List[str]], set[str], str]:
+    env_map = env if env is not None else os.environ
+    launch_config_path = str(
+        env_map.get("JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH", "") or ""
+    ).strip()
+    if not launch_config_path:
+        return _empty_pipeline_preferences(), set(), "missing_path"
+
+    try:
+        launch_config = json.loads(
+            Path(launch_config_path).read_text(encoding="utf-8")
+        )
+    except json.JSONDecodeError:
+        logger.warning(
+            "Unable to load launch preference snapshot reason=invalid_json; using explicit overrides/defaults."
+        )
+        return _empty_pipeline_preferences(), set(), "invalid_json"
+    except OSError:
+        logger.warning(
+            "Unable to load launch preference snapshot reason=unavailable; using explicit overrides/defaults."
+        )
+        return _empty_pipeline_preferences(), set(), "unavailable"
+
+    try:
+        options = launch_config.get("options")
+        if not isinstance(options, dict):
+            raise ValueError("Launch options must be an object.")
+        raw_preferences = options.get("preferences")
+        normalized = _normalized_preference_snapshot(raw_preferences)
+    except (AttributeError, TypeError, ValueError):
+        logger.warning(
+            "Unable to load launch preference snapshot reason=invalid_preferences; using explicit overrides/defaults."
+        )
+        return _empty_pipeline_preferences(), set(), "invalid_preferences"
+
+    present_fields = {
+        field_name
+        for field_name in PREFERENCE_LIST_FIELDS
+        if field_name in raw_preferences
+    }
+    item_counts = {
+        field_name: len(normalized[field_name])
+        for field_name in PREFERENCE_LIST_FIELDS
+    }
+    logger.info(
+        "Launch preference snapshot loaded fields=%s item_counts=%s",
+        sorted(present_fields),
+        item_counts,
+    )
+    return normalized, present_fields, "loaded"
+
+
+def resolve_pipeline_preference_runtime(
+    *,
+    env: Dict[str, str] | None = None,
+) -> Dict[str, Any]:
+    env_map = env if env is not None else os.environ
+    requested, launch_fields, launch_status = _load_launch_config_preference_snapshot(
+        env=env_map
+    )
+    explicit = _pipeline_preferences_from_env(env=env_map)
+    effective = _empty_pipeline_preferences()
+    sources: Dict[str, str] = {}
+
+    for field_name, env_name in _PREFERENCE_ENV_NAMES.items():
+        if env_name in env_map:
+            effective[field_name] = explicit[field_name]
+            sources[field_name] = "explicit_override"
+        elif launch_status == "loaded" and field_name in launch_fields:
+            effective[field_name] = requested[field_name]
+            sources[field_name] = "launch_config"
+        else:
+            sources[field_name] = "defaults"
+
+    effective_sha256 = _preference_snapshot_sha256(effective)
+    item_counts = {
+        field_name: len(effective[field_name])
+        for field_name in PREFERENCE_LIST_FIELDS
+    }
+    source_counts = dict(Counter(sources.values()))
+    logger.info(
+        "Effective preferences resolved item_counts=%s sources=%s sha256=%s",
+        item_counts,
+        source_counts,
+        effective_sha256[:12],
+    )
+    return {
+        "schema_version": PREFERENCE_RUNTIME_SCHEMA_VERSION,
+        "requested": requested,
+        "effective": effective,
+        "effective_sha256": effective_sha256,
+        "sources": sources,
     }
 
 
@@ -1895,10 +2056,29 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
     from src.utils.pipeline_metrics import log_stage_metrics
 
+    preference_runtime = resolve_pipeline_preference_runtime()
+    pipeline_preferences = preference_runtime["effective"]
+    selected_role_families = pipeline_preferences["selected_role_families"]
+    update_config(
+        preferences=pipeline_preferences,
+        selected_role_families=selected_role_families,
+        preference_runtime=preference_runtime,
+    )
+    logger.info(
+        "Effective preference hash attached to run sha256=%s schema_version=%s",
+        preference_runtime["effective_sha256"][:12],
+        preference_runtime["schema_version"],
+    )
+
     scrapers = [
         ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),
-        ("lever", scrape_all_lever),
+        (
+            "lever",
+            lambda: scrape_all_lever(
+                selected_role_families=selected_role_families,
+            ),
+        ),
         ("ashby", scrape_all_ashby),
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
@@ -1908,8 +2088,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     all_jobs: List[Dict[str, Any]] = []
     seen_job_ids = load_seen_job_ids()
-    pipeline_preferences = _pipeline_preferences_from_env()
-    selected_role_families = pipeline_preferences["selected_role_families"]
     corpus_path = str(
         os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
         or "postgres://rag_job_documents"

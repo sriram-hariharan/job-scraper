@@ -108,10 +108,11 @@ def seed_valid_lever_companies(slugs, *, source="manual_lever_validation"):
     )
 
 
-async def fetch_company_jobs(session, company):
+async def fetch_company_jobs(session, company, *, selected_role_families=None):
 
     url = _lever_company_url(company)
-    selected_role_families = _selected_role_families_from_env()
+    if selected_role_families is None:
+        selected_role_families = _selected_role_families_from_env()
 
     try:
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
@@ -165,7 +166,7 @@ async def fetch_company_jobs(session, company):
     return jobs
 
 
-async def scrape_all_lever_async():
+async def scrape_all_lever_async(*, selected_role_families=None):
 
     companies = load_lines("discovery://ats/lever")
     schedule = load_schedule()
@@ -187,7 +188,11 @@ async def scrape_all_lever_async():
         sem = asyncio.Semaphore(100)
         async def limited_fetch(company):
             async with sem:
-                return await fetch_company_jobs(session, company)
+                return await fetch_company_jobs(
+                    session,
+                    company,
+                    selected_role_families=selected_role_families,
+                )
 
         async def run_company(company):
             jobs = await limited_fetch(company)
@@ -214,8 +219,12 @@ async def scrape_all_lever_async():
     return all_jobs
 
 
-def scrape_all_lever():
+def scrape_all_lever(*, selected_role_families=None):
 
-    jobs = asyncio.run(scrape_all_lever_async())
+    jobs = asyncio.run(
+        scrape_all_lever_async(
+            selected_role_families=selected_role_families,
+        )
+    )
 
     return jobs

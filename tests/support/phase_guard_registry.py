@@ -499,6 +499,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/app/static/styles.css",
             "src/app/api.py",
             "src/app/services.py",
+            "src/pipeline/collector.py",
             "src/app/static/media/Login_page_BG_img.jpg",
             "src/app/static/media/Login_page_BG_img.LICENSE.txt",
             "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
@@ -747,7 +748,7 @@ def assert_protected_hashes(
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "d216bb1464e9a2ccf9e7f6eab3c1eaa25385c162a6c0e88afb123c8a905a8c6d",
+        ): "a026f479843276e2060d93ec4eab37a1ddc183614bccc4f7bf57ee9732891e72",
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
@@ -783,7 +784,7 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
-        ): "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+        ): "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",
         (
             "src/app/static/agentic_review.js",
             "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",

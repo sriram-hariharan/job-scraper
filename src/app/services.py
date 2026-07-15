@@ -19,6 +19,7 @@ import tempfile
 import shutil
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
+from src.pipeline.runtime_status import PREFERENCE_RUNTIME_SCHEMA_VERSION
 
 from src.config.consts import (
     _ALLOWED_REWRITE_REVIEW_STATES,
@@ -8823,6 +8824,15 @@ def run_live_pipeline_payload(
         run_id=run_id,
         options=launch_options,
     )
+    preference_item_counts = {
+        field_name: len(values)
+        for field_name, values in pipeline_preferences.items()
+    }
+    logger.info(
+        "Launch preference snapshot written fields=%s item_counts=%s",
+        sorted(pipeline_preferences),
+        preference_item_counts,
+    )
 
     ja = _job_app()
     effective_generate_llm_adjudication = bool(generate_llm_adjudication)
@@ -8897,6 +8907,10 @@ def run_live_pipeline_payload(
             "launch_config_contains_large_payloads": False,
             "preferences": pipeline_preferences,
             "selected_role_families": selected_role_families,
+            "preference_runtime": {
+                "schema_version": PREFERENCE_RUNTIME_SCHEMA_VERSION,
+                "requested": deepcopy(pipeline_preferences),
+            },
         },
     }
     canonical_status_path.write_text(

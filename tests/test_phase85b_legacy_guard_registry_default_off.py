@@ -45,11 +45,11 @@ def test_assert_changed_files_allowed_accepts_exact_allowed_files():
 def test_assert_changed_files_allowed_rejects_unexpected_files_with_clear_message():
     with pytest.raises(AssertionError) as exc:
         assert_changed_files_allowed(
-            {"src/pipeline/collector.py", "tests/test_allowed.py"},
+            {"src/pipeline/unapproved_collector.py", "tests/test_allowed.py"},
             {"tests/test_allowed.py"},
         )
 
-    assert "src/pipeline/collector.py" in str(exc.value)
+    assert "src/pipeline/unapproved_collector.py" in str(exc.value)
     assert "tests/test_allowed.py" not in str(exc.value)
 
 
@@ -321,7 +321,7 @@ def test_current_milestone_guard_compatibility_is_exact_phase128b_and_phase129c_
         | phase129_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
-    assert len(phase129_profile) == 205
+    assert len(phase129_profile) == 206
 
     assert_changed_files_allowed(
         {
@@ -337,7 +337,6 @@ def test_current_milestone_guard_compatibility_is_exact_phase128b_and_phase129c_
 
     for forbidden_path in (
         "src/matching/scorer.py",
-        "src/pipeline/collector.py",
         "requirements.txt",
         "src/app/unapproved_runtime.py",
         "src/app/static/media/unapproved.jpg",

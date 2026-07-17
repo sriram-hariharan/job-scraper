@@ -83,6 +83,51 @@ def test_valid_onboarding_preferences_save():
     assert captured["owner_user_id"] == "user_123"
 
 
+def test_onboarding_save_canonicalizes_location_policy_without_changing_owner_scope():
+    captured, *originals = _patch_onboarding_storage(resume_count=1)
+    try:
+        payload = services.save_onboarding_preferences_payload(
+            {
+                "selected_role_families": ["backend_engineering"],
+                "preferred_locations": ["VA", "Arlington, Virginia"],
+                "location_strict_match": True,
+                "location_show_others_if_unmatched": True,
+            },
+            owner_user_id="user_123",
+        )
+    finally:
+        _restore_onboarding_storage(originals)
+
+    assert captured["owner_user_id"] == "user_123"
+    assert payload["preferences"]["preferred_locations"] == ["Virginia", "Arlington, VA"]
+    assert [
+        spec["id"] for spec in payload["preferences"]["preferred_location_specs"]
+    ] == ["us:va", "us:va:arlington"]
+    assert payload["preferences"]["location_strict_match"] is True
+    assert payload["preferences"]["location_show_others_if_unmatched"] is True
+
+
+def test_onboarding_save_rejects_malformed_location_policy_before_storage():
+    captured, *originals = _patch_onboarding_storage(resume_count=1)
+    try:
+        try:
+            services.save_onboarding_preferences_payload(
+                {
+                    "selected_role_families": ["backend_engineering"],
+                    "location_strict_match": "true",
+                },
+                owner_user_id="user_123",
+            )
+        except ValueError as exc:
+            assert "location_strict_match must be a boolean" in str(exc)
+        else:
+            raise AssertionError("Expected malformed location policy to be rejected.")
+    finally:
+        _restore_onboarding_storage(originals)
+
+    assert captured == {}
+
+
 def test_onboarding_preferences_readback_exposes_selected_role_options_only():
     captured, *originals = _patch_onboarding_storage(resume_count=1)
     original_get = services.get_onboarding_preferences_postgres_payload

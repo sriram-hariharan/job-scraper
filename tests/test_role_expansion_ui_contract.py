@@ -1,4 +1,7 @@
+import re
 from pathlib import Path
+
+from src.app.profile_ui import _preferences_section_html
 
 
 def test_onboarding_role_cards_use_display_safe_tool_labels():
@@ -14,9 +17,10 @@ def test_onboarding_role_cards_use_display_safe_tool_labels():
 def test_onboarding_copy_is_user_facing_and_cache_busted():
     source = Path("src/app/onboarding_ui.py").read_text(encoding="utf-8")
 
-    assert "ApplyLens will use these preferences to tune your job queue and resume matching." in source
+    assert "Build a focused search profile for the roles, seniority, locations, and signals that matter to you." in source
     assert "without changing the pipeline defaults" not in source
-    assert "role_onboarding_r10" in source
+    assert 'href="/static/styles.css?v=preferences_toolbar_ownership_r11"' in source
+    assert 'src="/static/onboarding.js?v=preferences_guided_parity_r9"' in source
 
 
 def test_onboarding_resume_satisfied_copy_contract():
@@ -42,6 +46,8 @@ def test_profile_preferences_menu_page_reuses_onboarding_preferences_contract():
     profile_ui = Path("src/app/profile_ui.py").read_text(encoding="utf-8")
     shell = Path("src/app/ui_shell.py").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    preferences_css = Path("src/app/static/preferences.css").read_text(encoding="utf-8")
+    preferences_section = _preferences_section_html()
 
     assert '@router.get("/profile/preferences", response_class=HTMLResponse)' in profile_ui
     assert 'href="/profile/preferences"' in shell
@@ -49,12 +55,13 @@ def test_profile_preferences_menu_page_reuses_onboarding_preferences_contract():
     assert 'src="/static/media/preferences_icon.svg"' in shell
     assert 'src="/static/media/profile_icon.svg"' in profile_ui
     assert 'src="/static/media/scan_icon.svg"' in profile_ui
-    assert 'id="profilePreferencesForm"' in profile_ui
+    assert 'id="profilePreferencesForm"' in preferences_section
     assert '"/onboarding/preferences"' in profile_js
     assert "loadProfilePreferences" in profile_js
     assert "saveProfilePreferences" in profile_js
     assert "isProfilePreferencesPage" in profile_js
-    assert ".profile-preferences-section" in css
+    assert ".profile-preferences-section" in preferences_css
+    assert re.search(r"(?m)^\s*\.profile-preferences-section(?:\s|,|\{)", css) is None
     assert ".profile-dropdown-nav-icon--preferences" in css
 
 

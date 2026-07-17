@@ -56,6 +56,9 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
         ":not(.sort-header-btn):not(.scheduler-tab-btn)"
         ":not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn)"
         ":not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option)"
+        ":not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button)"
+        ":not(.preference-location-chip-remove):not(.preferences-utility-button)"
+        ":not(.preferences-back-button):not(.preferences-secondary-action)"
     )
     assert primary_selector in css
     assert f"{primary_selector},\n.app-shell-primary-link" in css

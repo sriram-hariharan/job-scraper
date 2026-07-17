@@ -14,6 +14,9 @@ DEFAULT_USER_INITIAL = "A"
 
 def render_top_shell(active_href: str) -> str:
     nav_links = []
+    toolbar_classes = "app-shell-top-right"
+    if active_href in {"/onboarding", "/profile/preferences"}:
+        toolbar_classes += " app-shell-top-right--flow"
 
     for label, href, short_label in NAV_ITEMS:
         active_class = "app-shell-nav-link active" if href == active_href else "app-shell-nav-link"
@@ -60,7 +63,7 @@ def render_top_shell(active_href: str) -> str:
   </nav>
 </aside>
 
-<div class="app-shell-top-right">
+<div class="{toolbar_classes}">
   <div class="notification-shell" id="notificationShell">
     <button
       type="button"

@@ -1,0 +1,1557 @@
+:root {
+  --preferences-command-header-columns: 190px minmax(0, 1fr) 230px;
+  --preferences-command-header-align: end;
+  --preferences-header-copy-column: 1 / 3;
+  --preferences-header-actions-column: 3;
+  --preferences-header-actions-justify: end;
+  --preferences-workflow-columns: 190px minmax(0, 1fr) 230px;
+  --preferences-step-navigation-position: sticky;
+  --preferences-step-navigation-display: grid;
+  --preferences-step-navigation-overflow: visible;
+  --preferences-step-navigation-padding-bottom: 0;
+  --preferences-step-navigation-snap: none;
+  --preferences-step-button-flex: 0 1 auto;
+  --preferences-step-button-min-height: 50px;
+  --preferences-step-button-snap: none;
+  --preferences-step-detail-display: inline;
+  --preferences-role-grid-columns: repeat(3, minmax(0, 1fr));
+  --preferences-step-panel-min-height: 518px;
+  --preferences-step-panel-padding: clamp(20px, 2vw, 28px);
+  --preferences-location-search-width: clamp(420px, 52%, 680px);
+  --preferences-location-heading-align: end;
+  --preferences-location-heading-direction: row;
+  --preferences-location-selected-align: baseline;
+  --preferences-location-selected-direction: row;
+  --preferences-location-selected-gap: 12px;
+  --preferences-actions-margin-inline: clamp(20px, 2vw, 28px);
+  --preferences-actions-padding-left: 0;
+  --preferences-footer-columns: auto minmax(0, 1fr) auto;
+  --preferences-footer-control-height: 44px;
+  --preferences-footer-action-gap: 12px;
+  --preferences-save-status-width: 184px;
+  --preferences-primary-action-width: 168px;
+  --preferences-right-action-columns:
+    minmax(0, auto)
+    var(--preferences-save-status-width)
+    var(--preferences-primary-action-width);
+  --preferences-final-actions-width: auto;
+  --preferences-back-column: 1;
+  --preferences-mobile-completion-column: 2;
+  --preferences-final-actions-column: 3;
+  --preferences-secondary-action-column: 1;
+  --preferences-save-state-column: 2;
+  --preferences-primary-action-column: 3;
+  --preferences-mobile-completion-display: none;
+  --preferences-mobile-completion-order: 0;
+  --preferences-mobile-completion-width: auto;
+  --preferences-live-summary-display: grid;
+  --preferences-progress-transition: width 180ms ease;
+  --preferences-canvas-pad-block-start: clamp(28px, 2.2vw, 36px);
+  --preferences-canvas-pad-inline: clamp(36px, 3vw, 48px);
+  --preferences-canvas-pad-block-end: clamp(36px, 3vw, 44px);
+}
+
+body.preferences-page-shell {
+  --preferences-canvas-max: 1600px;
+  --preferences-canvas-half: 800px;
+  --preferences-page-gutter: clamp(20px, 2vw, 32px);
+  --preferences-chat-safe-area: 112px;
+  --preferences-shell-offset: var(--app-shell-width, 268px);
+  --preferences-shell-offset-half: 134px;
+  --preferences-toolbar-width: min(
+    var(--preferences-canvas-max),
+    calc(
+      100vw - var(--preferences-shell-offset) -
+      var(--preferences-page-gutter) - var(--preferences-page-gutter)
+    )
+  );
+  --preferences-toolbar-min-height: 50px;
+  --preferences-toolbar-margin:
+    14px 0 12px
+    calc(
+      var(--preferences-shell-offset) +
+      max(
+        var(--preferences-page-gutter),
+        calc(50vw - var(--preferences-shell-offset-half) - var(--preferences-canvas-half))
+      )
+    );
+}
+
+body.preferences-page-shell.app-shell-collapsed {
+  --preferences-shell-offset: var(--app-shell-collapsed-width, 68px);
+  --preferences-shell-offset-half: 34px;
+}
+
+.preferences-workflow {
+  --preferences-bg: color-mix(in srgb, var(--app-surface) 96%, transparent);
+  --preferences-bg-subtle: color-mix(in srgb, var(--app-surface-2) 92%, transparent);
+  --preferences-bg-raised: color-mix(in srgb, var(--app-surface-3) 94%, transparent);
+  --preferences-border: color-mix(in srgb, var(--app-border) 84%, transparent);
+  --preferences-border-strong: color-mix(in srgb, var(--app-primary) 45%, var(--app-border));
+  --preferences-text: var(--app-text);
+  --preferences-text-secondary: var(--app-text-2);
+  --preferences-muted: var(--app-muted);
+  --preferences-primary: var(--app-primary);
+  --preferences-primary-strong: var(--app-primary-strong);
+  --preferences-focus: color-mix(in srgb, var(--app-primary) 34%, transparent);
+  --preferences-success: #34d399;
+  --preferences-warning: #fbbf24;
+  --preferences-danger: #fb7185;
+  --preferences-shadow: 0 18px 48px rgba(2, 8, 23, 0.22);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+html[data-theme="light"] .preferences-workflow {
+  --preferences-bg: #ffffff;
+  --preferences-bg-subtle: #f8fafc;
+  --preferences-bg-raised: #ffffff;
+  --preferences-border: #d8e1ed;
+  --preferences-border-strong: #93b4f9;
+  --preferences-text: #0f172a;
+  --preferences-text-secondary: #334155;
+  --preferences-muted: #64748b;
+  --preferences-primary: #2563eb;
+  --preferences-primary-strong: #1d4ed8;
+  --preferences-focus: rgba(37, 99, 235, 0.24);
+  --preferences-success: #047857;
+  --preferences-warning: #a16207;
+  --preferences-danger: #be123c;
+  --preferences-shadow: 0 18px 44px rgba(15, 23, 42, 0.1);
+}
+
+.profile-preferences-section.preferences-workflow {
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  contain: none;
+}
+
+body.preferences-page-shell .app-shell ~ .page.preferences-workflow,
+body.preferences-page-shell .app-shell ~ .page.preferences-page {
+  width: calc(100% - var(--preferences-shell-offset));
+  max-width: none;
+  min-height: calc(100dvh - 76px);
+  margin: 0 0 0 var(--preferences-shell-offset);
+  padding: 0 var(--preferences-page-gutter) var(--preferences-chat-safe-area);
+  overflow-x: clip;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.preferences-canvas {
+  box-sizing: border-box;
+  width: min(100%, var(--preferences-canvas-max));
+  max-width: var(--preferences-canvas-max);
+  margin-inline: auto;
+  padding:
+    var(--preferences-canvas-pad-block-start)
+    var(--preferences-canvas-pad-inline)
+    var(--preferences-canvas-pad-block-end);
+}
+
+body.preferences-page-shell > .app-shell-top-right--flow {
+  position: static;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: var(--preferences-toolbar-width);
+  max-width: var(--preferences-canvas-max);
+  min-height: var(--preferences-toolbar-min-height);
+  margin: var(--preferences-toolbar-margin);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  outline: 0;
+  backdrop-filter: none;
+}
+
+.preferences-workflow .preferences-canvas > .preferences-command-header {
+  display: grid;
+  grid-template-columns: var(--preferences-command-header-columns);
+  align-items: var(--preferences-command-header-align);
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.preferences-workflow .preferences-header-copy {
+  grid-column: var(--preferences-header-copy-column);
+  justify-self: start;
+  width: auto;
+  max-width: 760px;
+  margin: 0;
+  overflow: visible;
+  min-width: 0;
+}
+
+.preferences-workflow .preferences-header-actions {
+  grid-column: var(--preferences-header-actions-column);
+  justify-self: var(--preferences-header-actions-justify);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.preferences-workflow .onboarding-profile-link,
+.preferences-workflow .onboarding-solid-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 13px;
+  text-decoration: none;
+}
+
+body .preferences-workflow .preferences-command-header h1,
+body .preferences-workflow .preferences-command-header h2 {
+  max-width: none;
+  margin: 0 0 8px;
+  overflow: visible;
+  color: var(--preferences-text);
+  font-size: clamp(26px, 2vw, 34px);
+  line-height: 1.05;
+  letter-spacing: 0;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+body .preferences-workflow .preferences-command-header .subtext {
+  max-width: 720px;
+  margin: 0;
+  color: var(--preferences-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.preferences-workflow .preferences-configuration-summary {
+  color: var(--preferences-muted);
+  margin-top: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.preferences-workflow .preferences-eyebrow,
+.preferences-workflow .onboarding-kicker {
+  color: var(--preferences-primary-strong);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preferences-workflow .preferences-workflow-layout {
+  display: grid;
+  grid-template-columns: var(--preferences-workflow-columns);
+  align-items: start;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-width: 0;
+}
+
+.preferences-workflow .preferences-step-navigation {
+  position: var(--preferences-step-navigation-position);
+  top: 88px;
+  display: var(--preferences-step-navigation-display);
+  align-self: start;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: var(--preferences-step-navigation-overflow);
+  padding-bottom: var(--preferences-step-navigation-padding-bottom);
+  scroll-snap-type: var(--preferences-step-navigation-snap);
+}
+
+.preferences-workflow :is(
+  .preferences-step-button,
+  .preferences-edit-button,
+  .preference-location-option,
+  .preference-location-chip-remove,
+  .preferences-utility-button,
+  .preferences-back-button,
+  .preferences-secondary-action
+) {
+  appearance: none;
+  background-image: none;
+  box-shadow: none;
+  font: inherit;
+  text-transform: none;
+}
+
+.preferences-workflow .preferences-step-button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  justify-content: initial;
+  width: 100%;
+  flex: var(--preferences-step-button-flex);
+  min-height: var(--preferences-step-button-min-height);
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  background-image: none;
+  color: var(--preferences-text-secondary);
+  box-shadow: none;
+  text-align: left;
+  transform: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  scroll-snap-align: var(--preferences-step-button-snap);
+  cursor: pointer;
+}
+
+.preferences-workflow .preferences-step-button:hover {
+  border-color: var(--preferences-border-strong);
+  background: var(--preferences-bg-subtle);
+  background-image: none;
+  color: var(--preferences-text);
+  box-shadow: none;
+  transform: none;
+}
+
+.preferences-workflow .preferences-step-button:focus-visible,
+.preferences-workflow .preferences-edit-button:focus-visible,
+.preferences-workflow .preference-location-option:focus-visible,
+.preferences-workflow .preference-location-chip-remove:focus-visible,
+.preferences-workflow .onboarding-role-card:focus-within,
+.preferences-workflow .onboarding-chip-group label:focus-within,
+.preferences-workflow textarea:focus-visible,
+.preferences-workflow .preference-location-search:focus-visible {
+  outline: 3px solid var(--preferences-focus);
+  outline-offset: 2px;
+}
+
+.preferences-workflow .preferences-step-button.is-active {
+  border-color: var(--preferences-border-strong);
+  background: var(--preferences-bg);
+  background-image: none;
+  color: var(--preferences-text);
+  box-shadow: 0 8px 20px rgba(2, 8, 23, 0.1);
+}
+
+.preferences-workflow .preferences-step-button.is-complete {
+  border-color: transparent;
+  background: transparent;
+  background-image: none;
+  color: var(--preferences-text-secondary);
+  box-shadow: none;
+}
+
+.preferences-workflow .preferences-step-button.is-upcoming {
+  border-color: transparent;
+  background: transparent;
+  background-image: none;
+  color: var(--preferences-muted);
+  box-shadow: none;
+}
+
+.preferences-workflow .preferences-step-button.is-complete .preferences-step-number {
+  border-color: color-mix(in srgb, var(--preferences-success) 60%, var(--preferences-border));
+  background: var(--preferences-success);
+  color: #ffffff;
+  font-size: 0;
+}
+
+.preferences-workflow .preferences-step-button.is-complete .preferences-step-number::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 12px;
+  border: solid currentColor;
+  border-width: 0 3px 3px 0;
+  content: "";
+  transform: translate(-50%, -58%) rotate(45deg);
+}
+
+.preferences-workflow .preferences-step-number {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 50%;
+  background: var(--preferences-bg);
+  color: var(--preferences-primary-strong);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.preferences-workflow .preferences-step-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.preferences-workflow .preferences-step-copy strong {
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+.preferences-workflow .preferences-step-copy small {
+  display: var(--preferences-step-detail-display);
+  color: var(--preferences-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.preferences-workflow .preferences-step-button.is-active .preferences-step-copy small {
+  color: var(--preferences-text-secondary);
+}
+
+.preferences-workflow .preferences-step-button.is-complete .preferences-step-copy small {
+  color: var(--preferences-muted);
+}
+
+.preferences-workflow .preferences-editor-shell {
+  align-self: start;
+  overflow: visible;
+  min-width: 0;
+  min-height: 590px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 8px;
+  background: var(--preferences-bg);
+  box-shadow: var(--preferences-shadow);
+}
+
+.preferences-workflow .preferences-step-panel {
+  min-height: var(--preferences-step-panel-min-height);
+  padding: var(--preferences-step-panel-padding);
+}
+
+.preferences-workflow .preferences-step-panel[hidden] {
+  display: none;
+}
+
+.preferences-workflow .preferences-step-panel.is-active {
+  animation: preferences-panel-enter 150ms ease-out;
+}
+
+@keyframes preferences-panel-enter {
+  from { opacity: 0.4; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.preferences-workflow .preferences-step-heading {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 20px;
+}
+
+.preferences-workflow .preferences-step-heading > span {
+  color: var(--preferences-primary-strong);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.preferences-workflow .preferences-step-heading h2 {
+  margin: 0;
+  color: var(--preferences-text);
+  font-size: clamp(21px, 2vw, 28px);
+  line-height: 1.2;
+}
+
+.preferences-workflow .preferences-step-heading p {
+  margin: 0;
+  color: var(--preferences-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.preferences-workflow .preferences-section-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.preferences-workflow :is(
+  .preferences-utility-button,
+  .preferences-back-button,
+  .preferences-secondary-action
+) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.preferences-workflow :is(
+  .preferences-utility-button,
+  .preferences-back-button,
+  .preferences-secondary-action
+):not(:disabled):hover {
+  border-color: var(--preferences-border-strong);
+  background: var(--preferences-bg-raised);
+  color: var(--preferences-text);
+}
+
+.preferences-workflow :is(
+  .preferences-utility-button,
+  .preferences-back-button,
+  .preferences-secondary-action
+):disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.preferences-workflow .onboarding-required-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--preferences-warning) 45%, var(--preferences-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--preferences-warning) 10%, transparent);
+  color: var(--preferences-warning);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.preferences-workflow .onboarding-role-grid {
+  display: grid;
+  grid-template-columns: var(--preferences-role-grid-columns);
+  gap: 10px;
+}
+
+.preferences-workflow .onboarding-role-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  margin: 0;
+  padding: 10px 34px 10px 10px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-text);
+  cursor: pointer;
+  box-shadow: none;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.preferences-workflow .onboarding-role-card:hover {
+  border-color: var(--preferences-border-strong);
+  background: var(--preferences-bg-raised);
+  transform: none;
+}
+
+.preferences-workflow .onboarding-role-card:has(input:checked) {
+  border-color: var(--preferences-border-strong);
+  background: color-mix(in srgb, var(--preferences-primary) 10%, var(--preferences-bg));
+  box-shadow: inset 3px 0 0 var(--preferences-primary);
+}
+
+.preferences-workflow .onboarding-role-card > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.preferences-workflow .onboarding-role-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--preferences-primary) 20%, var(--preferences-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--preferences-primary) 8%, var(--preferences-bg));
+  color: var(--preferences-primary-strong);
+}
+
+.preferences-workflow .onboarding-role-icon-svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.preferences-workflow .onboarding-role-card-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.preferences-workflow .onboarding-role-card-title {
+  color: var(--preferences-text);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.preferences-workflow .onboarding-role-card-subtitle {
+  color: var(--preferences-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.preferences-workflow .preferences-role-check {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 50%;
+  color: transparent;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.preferences-workflow .onboarding-role-card:has(input:checked) .preferences-role-check {
+  border-color: var(--preferences-primary);
+  background: var(--preferences-primary);
+  color: #ffffff;
+}
+
+.preferences-workflow .preferences-seniority-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.preferences-workflow .preferences-seniority-group label {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 1 1 130px;
+  min-width: 130px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-text);
+  cursor: pointer;
+}
+
+.preferences-workflow .preferences-seniority-group label:has(input:checked) {
+  border-color: var(--preferences-border-strong);
+  background: color-mix(in srgb, var(--preferences-primary) 11%, var(--preferences-bg));
+  box-shadow: inset 0 -2px 0 var(--preferences-primary);
+}
+
+.preferences-workflow .preferences-seniority-group input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.preferences-workflow .preferences-seniority-group span {
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.preferences-workflow .preference-location-selector {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.preferences-workflow .preference-location-search-region {
+  position: relative;
+  width: var(--preferences-location-search-width);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.preferences-workflow .preference-location-heading {
+  display: flex;
+  align-items: var(--preferences-location-heading-align);
+  flex-direction: var(--preferences-location-heading-direction);
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.preferences-workflow .preference-location-heading h3 {
+  margin: 0;
+  color: var(--preferences-text);
+  font-size: 14px;
+}
+
+.preferences-workflow .preference-location-heading p,
+.preferences-workflow .preference-location-release-note,
+.preferences-workflow .preference-location-status,
+.preferences-workflow .preference-location-empty-selection {
+  margin: 3px 0 0;
+  color: var(--preferences-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.preferences-workflow .preference-location-count {
+  flex: 0 0 auto;
+  color: var(--preferences-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.preferences-workflow .preference-location-combobox,
+.preferences-workflow .preference-location-dropdown-region {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.preferences-workflow .preference-location-search {
+  display: block;
+  width: 100%;
+  height: 46px;
+  margin: 0;
+  padding: 0 13px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-text);
+  font: inherit;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.preferences-workflow .preference-location-search::placeholder {
+  color: var(--preferences-muted);
+}
+
+.preferences-workflow .preference-location-results {
+  position: absolute;
+  z-index: 30;
+  top: 6px;
+  right: auto;
+  bottom: auto;
+  left: 0;
+  display: grid;
+  width: 100%;
+  max-height: var(--preference-location-results-max-height, 320px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-raised);
+  box-shadow: 0 16px 34px rgba(2, 8, 23, 0.22);
+}
+
+.preferences-workflow .preference-location-results.opens-upward {
+  top: auto;
+  bottom: 50px;
+}
+
+.preferences-workflow .preference-location-results.hidden {
+  display: none;
+}
+
+.preferences-workflow .preference-location-option {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: initial;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  height: auto;
+  margin: 0;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  color: var(--preferences-text);
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-align: left;
+  text-transform: none;
+  transform: none;
+  transition: background-color 120ms ease, color 120ms ease;
+  cursor: pointer;
+}
+
+.preferences-workflow .preference-location-option:hover,
+.preferences-workflow .preference-location-option.is-active {
+  background: color-mix(in srgb, var(--preferences-primary) 10%, var(--preferences-bg));
+  background-image: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.preferences-workflow .preference-location-option.is-selected {
+  background: color-mix(in srgb, var(--preferences-success) 8%, var(--preferences-bg));
+  background-image: none;
+}
+
+.preferences-workflow .preference-location-option-check {
+  color: transparent;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.preferences-workflow .preference-location-option.is-selected .preference-location-option-check {
+  color: var(--preferences-success);
+}
+
+.preferences-workflow .preference-location-option-label {
+  overflow: hidden;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preferences-workflow .preference-location-option-type {
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preferences-workflow .preference-location-empty {
+  padding: 16px 12px;
+  color: var(--preferences-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.preferences-workflow .preference-location-selected-region {
+  display: grid;
+  gap: 9px;
+  width: 100%;
+  min-height: 53px;
+  padding: 11px;
+  border: 1px dashed var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+}
+
+.preferences-workflow .preference-location-selected-heading {
+  display: flex;
+  align-items: var(--preferences-location-selected-align);
+  flex-direction: var(--preferences-location-selected-direction);
+  justify-content: space-between;
+  gap: var(--preferences-location-selected-gap);
+}
+
+.preferences-workflow .preference-location-selected-heading strong {
+  color: var(--preferences-text-secondary);
+  font-size: 12px;
+}
+
+.preferences-workflow .preference-location-selected-heading span {
+  color: var(--preferences-muted);
+  font-size: 10px;
+}
+
+.preferences-workflow .preference-location-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+}
+
+.preferences-workflow .preference-location-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 31px;
+  padding: 3px 5px 3px 10px;
+  border: 1px solid var(--preferences-border-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--preferences-primary) 9%, var(--preferences-bg));
+  color: var(--preferences-text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.preferences-workflow .preference-location-chip-remove {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  min-width: 23px;
+  min-height: 23px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  background-image: none;
+  color: var(--preferences-muted);
+  box-shadow: none;
+  font: inherit;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.preferences-workflow .preference-location-chip-remove:hover {
+  background: color-mix(in srgb, var(--preferences-danger) 13%, transparent);
+  color: var(--preferences-danger);
+}
+
+.preferences-workflow .preference-location-empty-selection.hidden {
+  display: none;
+}
+
+.preferences-workflow .preference-location-policy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.preferences-workflow .preference-policy-option {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 54px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-text);
+  cursor: pointer;
+}
+
+.preferences-workflow .preference-policy-option:focus-within {
+  outline: 2px solid var(--preferences-focus);
+  outline-offset: 2px;
+}
+
+.preferences-workflow .preference-policy-option.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.preferences-workflow .preference-policy-option input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
+}
+
+.preferences-workflow .preference-policy-option input:focus-visible {
+  outline: 0;
+}
+
+.preferences-workflow .preference-policy-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.preferences-workflow .preference-policy-switch {
+  position: relative;
+  display: block;
+  width: 32px;
+  height: 18px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 999px;
+  background: var(--preferences-bg-raised);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.preferences-workflow .preference-policy-switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--preferences-muted);
+  content: "";
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.preferences-workflow .preference-policy-option:has(input:checked) .preference-policy-switch {
+  border-color: var(--preferences-primary);
+  background: var(--preferences-primary);
+}
+
+.preferences-workflow .preference-policy-option:has(input:checked) .preference-policy-switch::after {
+  background: #ffffff;
+  transform: translateX(14px);
+}
+
+.preferences-workflow .preference-policy-option:focus-within .preference-policy-switch {
+  outline: 2px solid var(--preferences-primary);
+  outline-offset: 2px;
+}
+
+.preferences-workflow .preference-policy-option strong {
+  color: var(--preferences-text);
+  font-size: 13px;
+}
+
+.preferences-workflow .preference-policy-option small {
+  color: var(--preferences-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preferences-workflow .preference-location-release-note {
+  margin: -4px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--preferences-primary);
+  background: color-mix(in srgb, var(--preferences-primary) 7%, transparent);
+}
+
+.preferences-workflow .preference-location-status {
+  min-height: 18px;
+  margin-top: -8px;
+}
+
+.preferences-workflow .preferences-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.preferences-workflow .onboarding-text-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.preferences-workflow .onboarding-text-field > span {
+  margin: 0;
+  color: var(--preferences-text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.preferences-workflow .onboarding-text-field textarea {
+  width: 100%;
+  min-height: 142px;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.preferences-workflow .onboarding-text-field small {
+  color: var(--preferences-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preferences-workflow .preferences-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.preferences-workflow .preferences-review-item {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+}
+
+.preferences-workflow .preferences-review-item div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.preferences-workflow .preferences-review-item span {
+  color: var(--preferences-muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.preferences-workflow .preferences-review-item strong {
+  overflow-wrap: anywhere;
+  color: var(--preferences-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.preferences-workflow .preferences-edit-button {
+  min-width: auto;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--preferences-primary-strong);
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.preferences-workflow .preferences-resume-requirement {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 7px;
+  background: var(--preferences-bg-subtle);
+}
+
+.preferences-workflow .preferences-resume-requirement h3,
+.preferences-workflow .preferences-resume-requirement p {
+  margin: 3px 0 0;
+}
+
+.preferences-workflow .onboarding-resume-callout {
+  display: grid;
+  gap: 3px;
+  color: var(--preferences-text-secondary);
+  font-size: 12px;
+}
+
+.preferences-workflow .preferences-role-error {
+  margin: 12px 20px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--preferences-danger) 45%, var(--preferences-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--preferences-danger) 9%, var(--preferences-bg));
+  color: var(--preferences-danger);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.preferences-workflow .preferences-final-status {
+  margin: 20px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--preferences-primary);
+  background: color-mix(in srgb, var(--preferences-primary) 7%, transparent);
+  color: var(--preferences-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.preferences-workflow .preferences-save-confirmation {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--preferences-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.preferences-workflow .preferences-save-confirmation.success {
+  color: var(--preferences-success);
+}
+
+.preferences-workflow .preferences-save-confirmation.info {
+  color: var(--preferences-text-secondary);
+}
+
+.preferences-workflow .preferences-save-confirmation.error {
+  color: var(--preferences-danger);
+}
+
+.preferences-workflow .preferences-role-error.hidden,
+.preferences-workflow .preferences-save-confirmation.hidden {
+  display: none;
+}
+
+.preferences-workflow .preferences-workflow-actions {
+  display: grid;
+  grid-template-columns: var(--preferences-footer-columns);
+  align-items: center;
+  column-gap: var(--preferences-footer-action-gap);
+  min-height: 64px;
+  margin: 24px var(--preferences-actions-margin-inline) 0;
+  padding: 16px 0 20px var(--preferences-actions-padding-left);
+  border-top: 1px solid var(--preferences-border);
+  background: transparent;
+}
+
+.preferences-workflow .preferences-workflow-actions .preferences-back-button {
+  grid-column: var(--preferences-back-column);
+  align-self: center;
+  min-height: var(--preferences-footer-control-height);
+}
+
+.preferences-workflow .preferences-final-actions {
+  display: grid;
+  grid-column: var(--preferences-final-actions-column);
+  grid-template-columns: var(--preferences-right-action-columns);
+  align-items: center;
+  gap: var(--preferences-footer-action-gap);
+  width: var(--preferences-final-actions-width);
+}
+
+.preferences-workflow .preferences-review-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  grid-template-columns: var(--preferences-right-action-columns);
+  align-items: center;
+  gap: var(--preferences-footer-action-gap);
+  pointer-events: none;
+}
+
+.preferences-workflow .preferences-review-actions > button {
+  pointer-events: auto;
+}
+
+.preferences-workflow .preferences-final-actions .preferences-save-confirmation,
+.preferences-workflow .preferences-final-actions .preferences-secondary-action {
+  grid-column: var(--preferences-secondary-action-column);
+  grid-row: 1;
+}
+
+.preferences-workflow .preferences-final-actions .preferences-save-state {
+  grid-column: var(--preferences-save-state-column);
+  grid-row: 1;
+}
+
+.preferences-workflow .preferences-primary-action {
+  display: inline-flex;
+  grid-column: var(--preferences-primary-action-column);
+  grid-row: 1;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--preferences-primary-action-width);
+  min-width: var(--preferences-primary-action-width);
+  height: var(--preferences-footer-control-height);
+  min-height: var(--preferences-footer-control-height);
+  padding: 0 20px;
+  border-radius: var(--app-radius-md);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+  text-align: center;
+}
+
+.preferences-workflow .preferences-review-actions.hidden,
+.preferences-workflow [data-preferences-next].hidden {
+  display: none;
+}
+
+.preferences-workflow .preferences-mobile-completion {
+  display: var(--preferences-mobile-completion-display);
+  grid-column: var(--preferences-mobile-completion-column);
+  order: var(--preferences-mobile-completion-order);
+  width: var(--preferences-mobile-completion-width);
+  color: var(--preferences-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.preferences-workflow .preferences-live-summary-column {
+  position: sticky;
+  top: 88px;
+  display: var(--preferences-live-summary-display);
+  justify-items: stretch;
+  gap: 12px;
+  align-self: start;
+  min-width: 0;
+}
+
+.preferences-workflow .preferences-summary-completion {
+  display: inline-flex;
+  align-items: baseline;
+  justify-self: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 7px 14px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 999px;
+  background: var(--preferences-bg);
+  color: var(--preferences-muted);
+  box-shadow: 0 8px 22px rgba(2, 8, 23, 0.08);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.preferences-workflow .preferences-summary-completion strong {
+  color: var(--preferences-primary-strong);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.preferences-workflow .preferences-live-summary {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 8px;
+  background: var(--preferences-bg);
+  box-shadow: var(--preferences-shadow);
+}
+
+.preferences-workflow .preferences-summary-heading h2 {
+  margin: 5px 0 13px;
+  color: var(--preferences-text);
+  font-size: 18px;
+}
+
+.preferences-workflow .preferences-summary-list {
+  display: grid;
+  gap: 0;
+  margin: 0 0 16px;
+}
+
+.preferences-workflow .preferences-summary-list > div {
+  display: grid;
+  gap: 3px;
+  padding: 9px 0;
+  border-top: 1px solid var(--preferences-border);
+}
+
+.preferences-workflow .preferences-summary-list dt {
+  color: var(--preferences-muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preferences-workflow .preferences-summary-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--preferences-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.preferences-workflow .preferences-summary-progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--preferences-border);
+}
+
+.preferences-workflow .preferences-summary-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--preferences-primary), #7c3aed);
+  transition: var(--preferences-progress-transition);
+}
+
+.preferences-workflow .preferences-save-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--preferences-save-status-width);
+  min-width: var(--preferences-save-status-width);
+  height: var(--preferences-footer-control-height);
+  min-height: var(--preferences-footer-control-height);
+  padding: 0 16px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 999px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.preferences-workflow .preferences-save-state.is-saved {
+  border-color: color-mix(in srgb, var(--preferences-success) 42%, var(--preferences-border));
+  color: var(--preferences-success);
+}
+
+.preferences-workflow .preferences-save-state.is-dirty,
+.preferences-workflow .preferences-save-state.is-saving {
+  border-color: color-mix(in srgb, var(--preferences-warning) 42%, var(--preferences-border));
+  color: var(--preferences-warning);
+}
+
+.preferences-workflow .preferences-save-state.is-error {
+  border-color: color-mix(in srgb, var(--preferences-danger) 42%, var(--preferences-border));
+  color: var(--preferences-danger);
+}
+
+@media (min-width: 1720px) {
+  :root {
+    --preferences-role-grid-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  :root {
+    --preferences-command-header-columns: minmax(0, 1fr) auto;
+    --preferences-header-copy-column: 1;
+    --preferences-header-actions-column: 2;
+    --preferences-workflow-columns: minmax(0, 1fr);
+    --preferences-step-navigation-position: static;
+    --preferences-step-navigation-display: flex;
+    --preferences-step-navigation-overflow: auto;
+    --preferences-step-navigation-padding-bottom: 4px;
+    --preferences-step-navigation-snap: x proximity;
+    --preferences-step-button-flex: 0 0 168px;
+    --preferences-step-button-min-height: 52px;
+    --preferences-step-button-snap: start;
+    --preferences-step-detail-display: none;
+    --preferences-live-summary-display: none;
+    --preferences-mobile-completion-display: inline;
+    --preferences-step-panel-min-height: 0;
+    --preferences-footer-control-height: 42px;
+    --preferences-footer-action-gap: 10px;
+    --preferences-save-status-width: 170px;
+    --preferences-primary-action-width: 156px;
+    --preferences-canvas-pad-block-start: 24px;
+    --preferences-canvas-pad-inline: 24px;
+    --preferences-canvas-pad-block-end: 28px;
+  }
+
+  body.preferences-page-shell,
+  body.preferences-page-shell.app-shell-collapsed {
+    --preferences-shell-offset: 0px;
+    --preferences-shell-offset-half: 0px;
+    --preferences-page-gutter: 14px;
+    --preferences-toolbar-width: calc(100% - 86px);
+    --preferences-toolbar-min-height: 58px;
+    --preferences-toolbar-margin: 0 14px 10px 72px;
+  }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --preferences-command-header-columns: minmax(0, 1fr);
+    --preferences-command-header-align: flex-start;
+    --preferences-header-actions-column: 1;
+    --preferences-header-actions-justify: start;
+    --preferences-role-grid-columns: minmax(0, 1fr);
+    --preferences-location-search-width: 100%;
+    --preferences-actions-margin-inline: 18px;
+    --preferences-mobile-completion-order: -1;
+    --preferences-mobile-completion-width: 100%;
+    --preferences-footer-columns: minmax(0, 1fr);
+    --preferences-footer-control-height: 44px;
+    --preferences-footer-action-gap: 10px;
+    --preferences-save-status-width: 100%;
+    --preferences-primary-action-width: 100%;
+    --preferences-right-action-columns: minmax(0, 1fr);
+    --preferences-final-actions-width: 100%;
+    --preferences-back-column: 1;
+    --preferences-mobile-completion-column: 1;
+    --preferences-final-actions-column: 1;
+    --preferences-secondary-action-column: 1;
+    --preferences-save-state-column: 1;
+    --preferences-primary-action-column: 1;
+  }
+
+  .preferences-workflow .preferences-editor-grid,
+  .preferences-workflow .preferences-review-grid,
+  .preferences-workflow .preferences-resume-requirement {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  :root {
+    --preferences-step-panel-padding: 18px 14px;
+    --preferences-actions-padding-left: 14px;
+    --preferences-location-heading-align: flex-start;
+    --preferences-location-heading-direction: column;
+    --preferences-location-selected-align: flex-start;
+    --preferences-location-selected-direction: column;
+    --preferences-location-selected-gap: 2px;
+    --preferences-canvas-pad-block-start: 18px;
+    --preferences-canvas-pad-inline: 16px;
+    --preferences-canvas-pad-block-end: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --preferences-progress-transition: none;
+  }
+
+  .preferences-workflow *,
+  .preferences-workflow *::before,
+  .preferences-workflow *::after {
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+  }
+
+}

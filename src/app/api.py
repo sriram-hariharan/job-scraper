@@ -3713,6 +3713,19 @@ def onboarding_preferences(http_request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/onboarding/location-search")
+def onboarding_location_search(
+    http_request: Request,
+    q: str = Query(default="", max_length=80),
+    limit: int = Query(default=15, ge=1, le=20),
+):
+    _require_auth_owner_user_id(http_request)
+    try:
+        return services.onboarding_location_search_payload(q, limit=limit)
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/onboarding/preferences")
 def save_onboarding_preferences(
     http_request: Request,

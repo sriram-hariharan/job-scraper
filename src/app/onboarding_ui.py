@@ -66,10 +66,289 @@ def _role_family_cards_html() -> str:
               <span class="onboarding-role-card-title">{display_name}</span>
               <span class="onboarding-role-card-subtitle">{escape(subtitle)}</span>
             </span>
+            <span class="preferences-role-check" aria-hidden="true">✓</span>
           </label>
 """
         )
     return "".join(cards)
+
+
+def _location_preferences_html(*, prefix: str) -> str:
+    safe_prefix = escape(prefix)
+    title_id = f"{safe_prefix}LocationTitle"
+    input_id = f"{safe_prefix}LocationSearch"
+    listbox_id = f"{safe_prefix}LocationListbox"
+    return f"""
+      <div class="preference-location-selector" id="{safe_prefix}LocationSelector" data-location-selector>
+        <div class="preference-location-search-region" data-location-search-region>
+          <div class="preference-location-heading">
+            <div>
+              <h3 id="{title_id}">Find preferred locations</h3>
+              <p>Search US cities, states, Remote (US), or United States.</p>
+            </div>
+            <span class="preference-location-count" data-location-count>0 selected</span>
+          </div>
+          <div class="preference-location-combobox" data-location-combobox>
+          <input
+            id="{input_id}"
+            class="preference-location-search"
+            type="search"
+            role="combobox"
+            aria-labelledby="{title_id}"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="{listbox_id}"
+            autocomplete="off"
+            placeholder="Try Virginia, Arlington, VA, or Remote"
+            data-location-search
+          />
+          </div>
+          <div class="preference-location-dropdown-region" data-location-dropdown-region>
+          <div
+            class="preference-location-results hidden"
+            id="{listbox_id}"
+            role="listbox"
+            data-location-results
+          ></div>
+          </div>
+        </div>
+
+        <div class="preference-location-selected-region" data-location-selected-region>
+          <div class="preference-location-selected-heading">
+            <strong>Selected locations</strong>
+            <span>Selection order preserved</span>
+          </div>
+          <div class="preference-location-chips" data-location-chips></div>
+          <p class="preference-location-empty-selection" data-location-selection-empty>No preferred locations selected yet.</p>
+        </div>
+
+        <div class="preference-location-policy" data-location-policy-region>
+          <label class="preference-policy-option">
+            <input type="checkbox" name="location_strict_match" data-location-strict />
+            <span class="preference-policy-switch" aria-hidden="true"></span>
+            <span class="preference-policy-copy">
+              <strong>Only show jobs in preferred locations</strong>
+              <small>When enabled, jobs outside your selected locations are removed.</small>
+            </span>
+          </label>
+          <label class="preference-policy-option preference-policy-option--fallback" data-location-fallback-row>
+            <input type="checkbox" name="location_show_others_if_unmatched" data-location-fallback disabled />
+            <span class="preference-policy-switch" aria-hidden="true"></span>
+            <span class="preference-policy-copy">
+              <strong>Show other jobs if none match</strong>
+              <small>If no preferred-location jobs are found, keep other US jobs as fallback options.</small>
+            </span>
+          </label>
+        </div>
+        <p class="preference-location-release-note">
+          Saved now. Applied to new pipeline runs after location filtering is enabled.
+        </p>
+        <p class="preference-location-status" data-location-status-region data-location-status aria-live="polite">
+          No preferred locations selected.
+        </p>
+      </div>
+"""
+
+
+def _workflow_step_navigation_html(*, prefix: str) -> str:
+    safe_prefix = escape(prefix)
+    labels = ("Role interests", "Seniority", "Preferred locations", "Skills and exclusions", "Review")
+    return "".join(
+        f"""
+          <button type="button" class="preferences-step-button{' is-active' if index == 0 else ' is-upcoming'}" data-preferences-step-target="{index}" aria-controls="{safe_prefix}PreferenceStep{index}" aria-current="{'step' if index == 0 else 'false'}">
+            <span class="preferences-step-number" aria-hidden="true">{index + 1}</span>
+            <span class="preferences-step-copy"><strong>{escape(label)}</strong><small data-preferences-step-summary="{index}">{'In progress' if index == 0 else 'Not started'}</small></span>
+          </button>
+"""
+        for index, label in enumerate(labels)
+    )
+
+
+def _workflow_summary_html(*, prefix: str) -> str:
+    safe_prefix = escape(prefix)
+    return f"""
+      <div class="preferences-live-summary-column">
+        <div class="preferences-summary-completion" aria-label="Search profile completion">
+          <strong data-preferences-summary-completion>75%</strong><span>complete</span>
+        </div>
+        <aside class="preferences-live-summary" aria-labelledby="{safe_prefix}PreferenceSummaryTitle">
+          <div class="preferences-summary-heading">
+            <span class="preferences-eyebrow">Live summary</span>
+            <h2 id="{safe_prefix}PreferenceSummaryTitle">Your search profile</h2>
+          </div>
+          <dl class="preferences-summary-list">
+            <div><dt>Role interests</dt><dd data-preferences-summary="roles">None selected</dd></div>
+            <div><dt>Seniority</dt><dd data-preferences-summary="seniority">Not selected</dd></div>
+            <div><dt>Locations</dt><dd data-preferences-summary="locations">No preferred locations</dd></div>
+            <div><dt>Location policy</dt><dd data-preferences-summary="policy">Flexible matching</dd></div>
+            <div><dt>Preferred skills</dt><dd data-preferences-summary="skills">None added</dd></div>
+            <div><dt>Excluded keywords</dt><dd data-preferences-summary="excluded">None added</dd></div>
+          </dl>
+          <div class="preferences-summary-progress" aria-hidden="true">
+            <span data-preferences-completion-bar style="width: 75%"></span>
+          </div>
+        </aside>
+      </div>
+"""
+
+
+def _workflow_review_html(*, prefix: str, include_resume: bool) -> str:
+    safe_prefix = escape(prefix)
+    groups = (
+        ("roles", "Role interests", 0),
+        ("seniority", "Seniority", 1),
+        ("locations", "Preferred locations", 2),
+        ("policy", "Location policy", 2),
+        ("skills", "Preferred skills", 3),
+        ("excluded", "Excluded keywords", 3),
+    )
+    review_groups = "".join(
+        f"""
+              <article class="preferences-review-item">
+                <div><span>{escape(label)}</span><strong data-preferences-review="{key}">Not configured</strong></div>
+                <button type="button" class="preferences-edit-button" data-preferences-edit-step="{step}">Edit</button>
+              </article>
+"""
+        for key, label, step in groups
+    )
+    resume = (
+        """
+            <section class="preferences-resume-requirement onboarding-resume-panel" id="onboardingResumePanel">
+              <div>
+                <span class="preferences-eyebrow">Onboarding requirement</span>
+                <h3>Profile resume</h3>
+                <p id="onboardingResumeStatus">Checking profile resumes...</p>
+              </div>
+              <div class="onboarding-resume-callout" id="onboardingResumeCallout">
+                <strong>Upload at least one profile resume.</strong>
+                <span>Resume files stay in the existing profile resume storage and are not stored locally by onboarding.</span>
+              </div>
+              <a class="onboarding-solid-link" href="/profile?onboarding=resume_upload">Open profile resume upload</a>
+            </section>
+"""
+        if include_resume
+        else ""
+    )
+    return f"""
+          <div class="preferences-review-grid" id="{safe_prefix}PreferenceReview">
+{review_groups}
+          </div>
+{resume}
+"""
+
+
+def _preferences_workflow_form_html(*, prefix: str, mode: str) -> str:
+    safe_prefix = escape(prefix)
+    is_onboarding = mode == "onboarding"
+    form_id = "onboardingForm" if is_onboarding else "profilePreferencesForm"
+    role_grid_id = "onboardingRoleGrid" if is_onboarding else "profilePreferencesRoleGrid"
+    select_all_id = "onboardingSelectAllRolesBtn" if is_onboarding else "profilePreferencesSelectAllRolesBtn"
+    clear_all_id = "onboardingClearAllRolesBtn" if is_onboarding else "profilePreferencesClearAllRolesBtn"
+    skills_id = "preferredSkillsInput" if is_onboarding else "profilePreferredSkillsInput"
+    excluded_id = "excludedKeywordsInput" if is_onboarding else "profileExcludedKeywordsInput"
+    final_actions = (
+        """
+              <button type="button" class="preferences-secondary-action" id="onboardingSaveDraftBtn">Save preferences</button>
+              <button type="submit" class="preferences-primary-action" id="onboardingCompleteBtn">Complete onboarding</button>
+"""
+        if is_onboarding
+        else '<button type="submit" class="preferences-primary-action" id="profilePreferencesSaveBtn">Save preferences</button>'
+    )
+    final_status = (
+        '<p class="preferences-final-status" id="onboardingSaveStatus">Complete setup after selecting a role family and confirming a profile resume exists.</p>'
+        if is_onboarding
+        else ""
+    )
+    save_state_id = "onboardingChangeState" if is_onboarding else "profilePreferencesChangeState"
+    transient_status = (
+        ""
+        if is_onboarding
+        else '<div class="preferences-save-confirmation hidden" id="profilePreferencesStatusBanner" role="status" aria-live="polite"></div>'
+    )
+    return f"""
+      <form class="preferences-workflow-layout {'onboarding-layout' if is_onboarding else 'profile-preferences-form'}" id="{form_id}" data-preferences-form novalidate>
+        <nav class="preferences-step-navigation" aria-label="Preference setup steps">
+{_workflow_step_navigation_html(prefix=safe_prefix)}
+        </nav>
+
+        <div class="preferences-editor-shell">
+          <div class="preferences-role-error hidden" id="{safe_prefix}RoleError" data-preferences-role-error tabindex="-1">Select at least one role family before saving.</div>
+
+          <section class="preferences-step-panel is-active" id="{safe_prefix}PreferenceStep0" data-preferences-step="0" aria-labelledby="{safe_prefix}PreferenceStep0Title">
+            <div class="preferences-step-heading"><span>Step 1 of 5</span><h2 id="{safe_prefix}PreferenceStep0Title" tabindex="-1">Which roles are you targeting?</h2><p>Select at least one role family to guide your job queue.</p></div>
+            <div class="preferences-section-actions">
+              <button type="button" class="preferences-utility-button" id="{select_all_id}">Select all</button>
+              <button type="button" class="preferences-utility-button" id="{clear_all_id}">Clear all</button>
+              <span class="onboarding-required-pill">Required</span>
+            </div>
+            <div class="onboarding-role-grid" id="{role_grid_id}">{_role_family_cards_html()}</div>
+          </section>
+
+          <section class="preferences-step-panel" id="{safe_prefix}PreferenceStep1" data-preferences-step="1" aria-labelledby="{safe_prefix}PreferenceStep1Title" hidden>
+            <div class="preferences-step-heading"><span>Step 2 of 5</span><h2 id="{safe_prefix}PreferenceStep1Title" tabindex="-1">Which seniority levels fit?</h2><p>Choose every level that belongs in your current search.</p></div>
+            <fieldset class="onboarding-chip-group preferences-seniority-group">
+              <legend class="sr-only">Seniority levels</legend>
+              <label><input type="checkbox" name="target_seniority" value="entry" /><span>Entry</span></label>
+              <label><input type="checkbox" name="target_seniority" value="mid" /><span>Mid</span></label>
+              <label><input type="checkbox" name="target_seniority" value="senior" /><span>Senior</span></label>
+              <label><input type="checkbox" name="target_seniority" value="staff" /><span>Staff</span></label>
+            </fieldset>
+          </section>
+
+          <section class="preferences-step-panel preference-location-panel" id="{safe_prefix}PreferenceStep2" data-preferences-step="2" aria-labelledby="{safe_prefix}PreferenceStep2Title" hidden>
+            <div class="preferences-step-heading"><span>Step 3 of 5</span><h2 id="{safe_prefix}PreferenceStep2Title" tabindex="-1">Where do you want to work?</h2><p>Add cities, states, remote roles, or nationwide jobs.</p></div>
+            {_location_preferences_html(prefix=safe_prefix)}
+          </section>
+
+          <section class="preferences-step-panel" id="{safe_prefix}PreferenceStep3" data-preferences-step="3" aria-labelledby="{safe_prefix}PreferenceStep3Title" hidden>
+            <div class="preferences-step-heading"><span>Step 4 of 5</span><h2 id="{safe_prefix}PreferenceStep3Title" tabindex="-1">Refine your matching signals.</h2><p>Optional keywords preserve the existing preference payload behavior.</p></div>
+            <div class="preferences-editor-grid">
+              <label class="onboarding-text-field"><span>Preferred skills/tools</span><textarea id="{skills_id}" rows="5" placeholder="Python, AWS, React, Kubernetes"></textarea><small>Skills and tools that should strengthen relevance.</small></label>
+              <label class="onboarding-text-field"><span>Excluded keywords</span><textarea id="{excluded_id}" rows="5" placeholder="intern, unpaid, commission only"></textarea><small>Terms that should lower a role's relevance.</small></label>
+            </div>
+          </section>
+
+          <section class="preferences-step-panel" id="{safe_prefix}PreferenceStep4" data-preferences-step="4" aria-labelledby="{safe_prefix}PreferenceStep4Title" hidden>
+            <div class="preferences-step-heading"><span>Step 5 of 5</span><h2 id="{safe_prefix}PreferenceStep4Title" tabindex="-1">Review your preferences.</h2><p>Check every group before saving. Edit actions preserve all unsaved values.</p></div>
+            {_workflow_review_html(prefix=safe_prefix, include_resume=is_onboarding)}
+            {final_status}
+          </section>
+
+          <div class="preferences-workflow-actions">
+            <button type="button" class="preferences-back-button" data-preferences-back disabled>Back</button>
+            <span class="preferences-mobile-completion" data-preferences-mobile-completion>Step 1 of 5</span>
+            <div class="preferences-final-actions">
+              {transient_status}
+              <span class="preferences-save-state is-loading" id="{save_state_id}" role="status" aria-live="polite">Loading preferences</span>
+              <button type="button" class="preferences-primary-action" data-preferences-next>Next</button>
+              <div class="preferences-review-actions hidden" data-preferences-final-actions>{final_actions}</div>
+            </div>
+          </div>
+        </div>
+
+        {_workflow_summary_html(prefix=safe_prefix)}
+      </form>
+"""
+
+
+def _preferences_header_html(*, summary_id: str, include_resume_link: bool = False) -> str:
+    resume_link = (
+        '<a class="ghost-btn onboarding-profile-link" href="/profile?onboarding=resume_upload">Manage resumes</a>'
+        if include_resume_link
+        else ""
+    )
+    header_actions = f'<div class="preferences-header-actions">{resume_link}</div>' if resume_link else ""
+    return f"""
+    <header class="page-header onboarding-header preferences-command-header">
+      <div class="preferences-header-copy">
+        <span class="preferences-eyebrow">Job search profile</span>
+        <h1>Guided preferences</h1>
+        <p class="subtext">Build a focused search profile for the roles, seniority, locations, and signals that matter to you.</p>
+        <div class="preferences-configuration-summary" id="{escape(summary_id)}">Loading your configuration...</div>
+      </div>
+      {header_actions}
+    </header>
+"""
 
 
 @router.get("/onboarding", response_class=HTMLResponse)
@@ -82,109 +361,25 @@ def onboarding_page() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Onboarding · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=role_onboarding_r10_spacing" />
+  <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=preferences_toolbar_ownership_r11" />
+  <link rel="stylesheet" href="/static/preferences.css?v=preferences_footer_compact_r15" />
 </head>
-<body>
+<body class="preferences-page-shell">
   {render_top_shell("/onboarding")}
 
-  <main class="page onboarding-page" id="onboardingPage">
-    <header class="page-header onboarding-header">
-      <div>
-        <div class="onboarding-kicker">First setup</div>
-        <h1>Choose your job search focus.</h1>
-        <p class="subtext">ApplyLens will use these preferences to tune your job queue and resume matching.</p>
-      </div>
-      <a class="ghost-btn onboarding-profile-link" href="/profile?onboarding=resume_upload">Manage resumes</a>
-    </header>
+  <main class="page onboarding-page preferences-workflow" id="onboardingPage" data-preferences-workflow data-preferences-mode="onboarding">
+    <div class="preferences-canvas">
+      {_preferences_header_html(summary_id="onboardingConfigurationSummary", include_resume_link=True)}
 
-    <form class="onboarding-layout" id="onboardingForm">
-      <section class="card onboarding-panel">
-        <div class="section-header">
-          <div>
-            <h2>Role interests</h2>
-            <div class="subtext">Select at least one IT role family.</div>
-          </div>
-          <span class="onboarding-required-pill">Required</span>
-        </div>
-        <div class="onboarding-role-grid" id="onboardingRoleGrid">
-          {_role_family_cards_html()}
-        </div>
-      </section>
-
-      <section class="card onboarding-panel">
-        <div class="section-header">
-          <div>
-            <h2>Seniority and location</h2>
-            <div class="subtext">These preferences are saved as selections only.</div>
-          </div>
-        </div>
-        <div class="onboarding-field-grid">
-          <fieldset class="onboarding-chip-group">
-            <legend>Seniority</legend>
-            <label><input type="checkbox" name="target_seniority" value="entry" /> Entry</label>
-            <label><input type="checkbox" name="target_seniority" value="mid" /> Mid</label>
-            <label><input type="checkbox" name="target_seniority" value="senior" /> Senior</label>
-            <label><input type="checkbox" name="target_seniority" value="staff" /> Staff</label>
-          </fieldset>
-
-        </div>
-
-        <label class="onboarding-text-field">
-          <span>Preferred locations</span>
-          <textarea id="preferredLocationsInput" rows="3" placeholder="New York, Remote, Boston"></textarea>
-        </label>
-      </section>
-
-      <section class="card onboarding-panel onboarding-resume-panel" id="onboardingResumePanel">
-        <div class="section-header">
-          <div>
-            <h2>Resume requirement</h2>
-            <div class="subtext" id="onboardingResumeStatus">Checking profile resumes...</div>
-          </div>
-          <span class="onboarding-required-pill">Required</span>
-        </div>
-        <div class="onboarding-resume-callout" id="onboardingResumeCallout">
-          <strong>Upload at least one profile resume.</strong>
-          <span>Resume files stay in the existing profile resume storage and are not stored locally by onboarding.</span>
-        </div>
-        <a class="onboarding-solid-link" href="/profile?onboarding=resume_upload">Open profile resume upload</a>
-      </section>
-
-      <section class="card onboarding-panel">
-        <div class="section-header">
-          <div>
-            <h2>Skills and exclusions</h2>
-            <div class="subtext">Optional keywords to guide future role expansion steps.</div>
-          </div>
-        </div>
-        <div class="onboarding-field-grid">
-          <label class="onboarding-text-field">
-            <span>Preferred skills/tools</span>
-            <textarea id="preferredSkillsInput" rows="4" placeholder="Python, AWS, React, Kubernetes"></textarea>
-          </label>
-          <label class="onboarding-text-field">
-            <span>Excluded keywords</span>
-            <textarea id="excludedKeywordsInput" rows="4" placeholder="intern, unpaid, commission only"></textarea>
-          </label>
-        </div>
-      </section>
-
-      <section class="card onboarding-panel onboarding-confirm-panel">
-        <div>
-          <h2>Confirm setup</h2>
-          <p class="subtext" id="onboardingSaveStatus">Complete setup after selecting a role family and confirming a profile resume exists.</p>
-        </div>
-        <div class="onboarding-actions">
-          <button type="button" class="ghost-btn" id="onboardingSaveDraftBtn">Save preferences</button>
-          <button type="submit" id="onboardingCompleteBtn">Complete onboarding</button>
-        </div>
-      </section>
-    </form>
+      {_preferences_workflow_form_html(prefix="onboarding", mode="onboarding")}
+    </div>
   </main>
 
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/onboarding.js?v=role_onboarding_r10"></script>
+  <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
+  <script src="/static/preferences_workflow.js?v=preferences_guided_parity_r9"></script>
+  <script src="/static/onboarding.js?v=preferences_guided_parity_r9"></script>
 </body>
 </html>
 """

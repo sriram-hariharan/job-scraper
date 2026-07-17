@@ -23,6 +23,9 @@ const profileState = {
 
 const PROFILE_PLANNING_OUTPUT_DIR = "outputs/application_planning";
 const PROFILE_PLANNING_LOG_PATH = `${PROFILE_PLANNING_OUTPUT_DIR}/live_pipeline_run.log`;
+let profileLocationSelector = null;
+let profilePreferencesWorkflow = null;
+let profilePreferencesSaving = false;
 
 function qs(id) {
   return document.getElementById(id);
@@ -175,27 +178,57 @@ function setProfilePreferencesStatus(message, tone = "info") {
   const banner = qs("profilePreferencesStatusBanner");
   if (!banner) return;
   banner.textContent = message || "";
-  banner.className = `profile-inline-status ${tone}`;
+  banner.className = `preferences-save-confirmation ${tone}`;
   if (!message) {
     banner.classList.add("hidden");
   }
 }
 
+function updateProfilePreferencesSummary() {
+  const summary = qs("profilePreferencesConfigurationSummary");
+  if (!summary) return;
+  const roleCount = profilePreferenceCheckedValues("selected_role_families").length;
+  const locationCount = profileLocationSelector?.serialize().preferred_location_specs.length || 0;
+  summary.textContent = `${roleCount} role ${roleCount === 1 ? "family" : "families"} · ${locationCount} preferred location${locationCount === 1 ? "" : "s"}`;
+  profilePreferencesWorkflow?.update();
+}
+
+function setProfilePreferencesChangeState(label, state = "saved") {
+  const indicator = qs("profilePreferencesChangeState");
+  if (!indicator) return;
+  indicator.textContent = label;
+  indicator.className = `preferences-save-state is-${state}`;
+  profilePreferencesWorkflow?.update();
+}
+
+function markProfilePreferencesDirty() {
+  if (profilePreferenceCheckedValues("selected_role_families").length) profilePreferencesWorkflow?.clearValidationError();
+  setProfilePreferencesStatus("");
+  updateProfilePreferencesSummary();
+  setProfilePreferencesChangeState("Unsaved changes", "dirty");
+}
+
 function hydrateProfilePreferencesForm(preferences) {
   setProfilePreferenceCheckedValues("selected_role_families", preferences?.selected_role_families || []);
   setProfilePreferenceCheckedValues("target_seniority", preferences?.target_seniority || []);
-  setProfilePreferenceTextareaList("profilePreferredLocationsInput", preferences?.preferred_locations || []);
+  profileLocationSelector?.setPreferences(preferences || {});
   setProfilePreferenceTextareaList("profilePreferredSkillsInput", preferences?.preferred_skills || []);
   setProfilePreferenceTextareaList("profileExcludedKeywordsInput", preferences?.excluded_keywords || []);
 }
 
 function collectProfilePreferences() {
   const current = profileState.onboardingPreferences || {};
+  const locationPreferences = profileLocationSelector?.serialize() || {
+    preferred_locations: [],
+    preferred_location_specs: [],
+    location_strict_match: false,
+    location_show_others_if_unmatched: false,
+  };
   return {
     onboarding_completed: Boolean(current.onboarding_completed),
     selected_role_families: profilePreferenceCheckedValues("selected_role_families"),
     target_seniority: profilePreferenceCheckedValues("target_seniority"),
-    preferred_locations: splitProfilePreferenceList(qs("profilePreferredLocationsInput")?.value),
+    ...locationPreferences,
     preferred_skills: splitProfilePreferenceList(qs("profilePreferredSkillsInput")?.value),
     excluded_keywords: splitProfilePreferenceList(qs("profileExcludedKeywordsInput")?.value),
   };
@@ -204,34 +237,44 @@ function collectProfilePreferences() {
 async function loadProfilePreferences() {
   const form = qs("profilePreferencesForm");
   if (!form) return;
-  setProfilePreferencesStatus("Loading preferences...");
   const payload = await fetchJson("/onboarding/preferences");
   profileState.onboardingPreferences = payload.preferences || {};
   profileState.onboardingRequirements = payload.requirements || {};
   hydrateProfilePreferencesForm(profileState.onboardingPreferences);
   profileState.preferencesLoaded = true;
+  updateProfilePreferencesSummary();
+  setProfilePreferencesChangeState("All changes saved", "saved");
   setProfilePreferencesStatus("");
 }
 
 async function saveProfilePreferences() {
   const saveBtn = qs("profilePreferencesSaveBtn");
+  if (profilePreferencesSaving) return;
   const preferences = collectProfilePreferences();
   if (!preferences.selected_role_families.length) {
     setProfilePreferencesStatus("Select at least one role family before saving.", "error");
+    profilePreferencesWorkflow?.showValidationError("Select at least one role family before saving.", 0);
     return;
   }
+  profilePreferencesWorkflow?.clearValidationError();
+  profilePreferencesSaving = true;
 
   if (saveBtn) saveBtn.disabled = true;
-  setProfilePreferencesStatus("Saving preferences...");
+  setProfilePreferencesStatus("");
+  setProfilePreferencesChangeState("Saving...", "saving");
   try {
     const payload = await postJson("/onboarding/preferences", preferences);
     profileState.onboardingPreferences = payload.preferences || preferences;
     profileState.onboardingRequirements = payload.requirements || profileState.onboardingRequirements || {};
     hydrateProfilePreferencesForm(profileState.onboardingPreferences);
+    updateProfilePreferencesSummary();
+    setProfilePreferencesChangeState("All changes saved", "saved");
     setProfilePreferencesStatus("Preferences saved.", "success");
   } catch (err) {
     setProfilePreferencesStatus(err.message, "error");
+    setProfilePreferencesChangeState("Save failed", "error");
   } finally {
+    profilePreferencesSaving = false;
     if (saveBtn) saveBtn.disabled = false;
   }
 }
@@ -1950,15 +1993,33 @@ function bindProfilePreferencesInteractions() {
   const form = qs("profilePreferencesForm");
   if (!form) return;
 
+  profileLocationSelector = window.ApplyLensLocationSelector?.create(
+    qs("profilePreferencesLocationSelector"),
+    { onChange: markProfilePreferencesDirty }
+  );
+  profilePreferencesWorkflow = window.ApplyLensPreferencesWorkflow?.create(
+    qs("profilePreferencesSection"),
+    { getValues: collectProfilePreferences }
+  );
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     saveProfilePreferences();
   });
   qs("profilePreferencesSelectAllRolesBtn")?.addEventListener("click", () => {
     setProfilePreferenceCheckboxGroup("selected_role_families", true);
+    markProfilePreferencesDirty();
   });
   qs("profilePreferencesClearAllRolesBtn")?.addEventListener("click", () => {
     setProfilePreferenceCheckboxGroup("selected_role_families", false);
+    markProfilePreferencesDirty();
+  });
+  form.querySelectorAll("input, textarea").forEach((field) => {
+    if (field.closest("[data-location-selector]")) return;
+    field.addEventListener("change", markProfilePreferencesDirty);
+  });
+  form.querySelectorAll("textarea").forEach((field) => {
+    field.addEventListener("input", markProfilePreferencesDirty);
   });
 }
 

@@ -690,6 +690,30 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_vector_evidence_service_pgvector_store_flagged_default_off.py",
             "tests/test_vector_evidence_ui_no_db_readonly.py",
         },
+        "phase132b_premium_preferences_ui": {
+            "src/app/api.py",
+            "src/app/onboarding_ui.py",
+            "src/app/profile_ui.py",
+            "src/app/services.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/onboarding.js",
+            "src/app/static/preferences.css",
+            "src/app/static/preference_location_selector.js",
+            "src/app/static/preferences_workflow.js",
+            "src/app/static/profile.js",
+            "src/app/static/styles.css",
+            "src/app/ui_shell.py",
+            "src/pipeline/location_preferences.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_location_preference_search_api.py",
+            "tests/test_onboarding_ui_contract.py",
+            "tests/test_phase132b2r3_guided_preferences_workflow.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_role_expansion_ui_contract.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -703,6 +727,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | legacy_guard_allowlist("phase129c_workflow_overlay_and_run_scoped_corpus")
+        | legacy_guard_allowlist("phase132b_premium_preferences_ui")
     )
 
 
@@ -744,15 +769,15 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "dbfefcdabc0fa41b41c83007cabd8679d4fa97fd69a5d5277fc7b80ca1edb91b",
+        ): "27d0e1209bd3b74c544a1d3a7fec5ad353a7d05368e6afae754deba50a65530f",
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "a026f479843276e2060d93ec4eab37a1ddc183614bccc4f7bf57ee9732891e72",
+        ): "15e052a39da9fb08f7beefbdb67aa88d885138e4353e39cd2e0eb86f86dd4b86",
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-        ): "ffd5d85260e279c851d970db6c05d83d6a3b31fdfd5849e259aa4fe1babf7e24",
+        ): "c182c6a97be482e8543eecf6eb2dd28d7230a41ee718c2281f4eb67cd244c1c2",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",

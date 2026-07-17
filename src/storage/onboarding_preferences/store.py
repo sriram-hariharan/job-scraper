@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
 from src.config.role_taxonomy import ROLE_TAXONOMY
+from src.pipeline.location_preferences import normalize_location_specs
 
 
 DEFAULT_ONBOARDING_PREFERENCES_SCHEMA_SQL_PATH = Path(
@@ -241,6 +242,25 @@ def validate_onboarding_preferences_payload(preferences: Any) -> Dict[str, Any]:
             continue
         normalized[field_name] = _normalize_string_list(preferences.get(field_name))
 
+    for field_name in (
+        "location_strict_match",
+        "location_show_others_if_unmatched",
+    ):
+        raw_value = preferences.get(field_name, False)
+        if not isinstance(raw_value, bool):
+            raise ValueError(f"{field_name} must be a boolean.")
+        normalized[field_name] = raw_value
+
+    location_specs = normalize_location_specs(
+        preferences.get("preferred_location_specs"),
+        legacy_locations=normalized["preferred_locations"],
+    )
+    normalized["preferred_location_specs"] = location_specs
+    if location_specs:
+        normalized["preferred_locations"] = [
+            location_spec["display_name"] for location_spec in location_specs
+        ]
+
     return normalized
 
 
@@ -250,6 +270,11 @@ def _row_to_preferences_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "selected_role_families": row.get("selected_role_families") or [],
         "target_seniority": row.get("target_seniority") or [],
         "preferred_locations": row.get("preferred_locations") or [],
+        "preferred_location_specs": row.get("preferred_location_specs") or [],
+        "location_strict_match": row.get("location_strict_match", False),
+        "location_show_others_if_unmatched": row.get(
+            "location_show_others_if_unmatched", False
+        ),
         "preferred_skills": row.get("preferred_skills") or [],
         "excluded_keywords": row.get("excluded_keywords") or [],
     }
@@ -301,6 +326,9 @@ SELECT COALESCE(
             'selected_role_families', selected_role_families,
             'target_seniority', target_seniority,
             'preferred_locations', preferred_locations,
+            'preferred_location_specs', preferred_location_specs,
+            'location_strict_match', location_strict_match,
+            'location_show_others_if_unmatched', location_show_others_if_unmatched,
             'preferred_skills', preferred_skills,
             'excluded_keywords', excluded_keywords,
             'created_at', created_at,
@@ -363,6 +391,9 @@ WITH upserted AS (
         selected_role_families,
         target_seniority,
         preferred_locations,
+        preferred_location_specs,
+        location_strict_match,
+        location_show_others_if_unmatched,
         preferred_skills,
         excluded_keywords
     )
@@ -372,6 +403,9 @@ WITH upserted AS (
         {_sql_quote_jsonb(normalized["selected_role_families"])},
         {_sql_quote_jsonb(normalized["target_seniority"])},
         {_sql_quote_jsonb(normalized["preferred_locations"])},
+        {_sql_quote_jsonb(normalized["preferred_location_specs"])},
+        {_sql_bool_literal(normalized["location_strict_match"])},
+        {_sql_bool_literal(normalized["location_show_others_if_unmatched"])},
         {_sql_quote_jsonb(normalized["preferred_skills"])},
         {_sql_quote_jsonb(normalized["excluded_keywords"])}
     )
@@ -380,6 +414,9 @@ WITH upserted AS (
         selected_role_families = EXCLUDED.selected_role_families,
         target_seniority = EXCLUDED.target_seniority,
         preferred_locations = EXCLUDED.preferred_locations,
+        preferred_location_specs = EXCLUDED.preferred_location_specs,
+        location_strict_match = EXCLUDED.location_strict_match,
+        location_show_others_if_unmatched = EXCLUDED.location_show_others_if_unmatched,
         preferred_skills = EXCLUDED.preferred_skills,
         excluded_keywords = EXCLUDED.excluded_keywords,
         updated_at = NOW()
@@ -389,6 +426,9 @@ WITH upserted AS (
         selected_role_families,
         target_seniority,
         preferred_locations,
+        preferred_location_specs,
+        location_strict_match,
+        location_show_others_if_unmatched,
         preferred_skills,
         excluded_keywords,
         created_at,
@@ -401,6 +441,9 @@ SELECT json_build_object(
     'selected_role_families', selected_role_families,
     'target_seniority', target_seniority,
     'preferred_locations', preferred_locations,
+    'preferred_location_specs', preferred_location_specs,
+    'location_strict_match', location_strict_match,
+    'location_show_others_if_unmatched', location_show_others_if_unmatched,
     'preferred_skills', preferred_skills,
     'excluded_keywords', excluded_keywords,
     'created_at', created_at,

@@ -119,13 +119,13 @@ body {
   color: var(--text);
 }
 
-.page {
+.page:not(.preferences-workflow):not(.preferences-page) {
   max-width: 1500px;
   margin: 0 auto;
   padding: 24px;
 }
 
-.page-header {
+.page-header:not(.preferences-command-header) {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -938,7 +938,7 @@ tbody tr:hover {
 }
 
 @media (max-width: 700px) {
-  .page {
+  .page:not(.preferences-workflow):not(.preferences-page) {
     padding: 16px;
   }
 
@@ -946,7 +946,7 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .page-header,
+  .page-header:not(.preferences-command-header),
   .section-header {
     flex-direction: column;
     align-items: flex-start;
@@ -4026,7 +4026,7 @@ html:not([data-theme="light"]) .workflow-overlay__panel.is-empty-result .pipelin
   justify-content: flex-start;
 }
 
-.profile-section-card {
+.profile-section-card:not(.profile-preferences-section) {
   padding: 20px;
 }
 
@@ -7522,7 +7522,7 @@ body.tailoring-workspace-resizing * {
   transition: width 0.18s ease, padding 0.18s ease;
 }
 
-.app-shell ~ .page {
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   max-width: none;
   width: auto;
   margin: 0 0 0 var(--app-shell-width);
@@ -7621,7 +7621,7 @@ body.tailoring-workspace-resizing * {
   display: none !important;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   position: absolute;
   top: 18px;
   right: 24px;
@@ -7807,7 +7807,7 @@ body.tailoring-workspace-resizing * {
   color: #ffffff;
 }
 
-.page-header {
+.page-header:not(.preferences-command-header) {
   padding-right: var(--profile-safe-zone);
 }
 
@@ -7822,7 +7822,7 @@ body.app-shell-collapsed .app-shell {
   padding-right: 6px;
 }
 
-body.app-shell-collapsed .app-shell ~ .page {
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   margin-left: var(--app-shell-collapsed-width);
 }
 
@@ -8045,7 +8045,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
     padding-right: 8px;
   }
 
-  .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: var(--app-shell-collapsed-width);
     padding: 18px;
   }
@@ -8054,7 +8054,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
     width: 220px;
   }
 
-  body:not(.app-shell-collapsed) .app-shell ~ .page {
+  body:not(.app-shell-collapsed) .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 220px;
   }
 
@@ -8068,7 +8068,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
     --profile-safe-zone: 0px;
   }
 
-  .page-header {
+  .page-header:not(.preferences-command-header) {
     padding-right: var(--profile-safe-zone);
   }
 
@@ -8095,7 +8095,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
     top: 14px;
   }
 
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     top: 14px;
     right: 14px;
     gap: 10px;
@@ -8106,7 +8106,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
     padding: 76px 6px 14px;
   }
 
-  .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 56px;
     padding: 16px;
   }
@@ -8115,7 +8115,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
     width: 188px;
   }
 
-  body:not(.app-shell-collapsed) .app-shell ~ .page {
+  body:not(.app-shell-collapsed) .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 188px;
   }
 
@@ -8145,7 +8145,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
 }
 
 @media (max-width: 700px) {
-  .page-header {
+  .page-header:not(.preferences-command-header) {
     padding-right: 0;
   }
 
@@ -8392,7 +8392,7 @@ body.table-column-resizing * {
 
 /* === restore notification dropdown base layout === */
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   z-index: 220;
 }
 
@@ -8772,12 +8772,12 @@ html[data-theme="light"] body {
   outline-offset: 2px;
 }
 
-.page {
+.page:not(.preferences-workflow):not(.preferences-page) {
   max-width: 1520px;
   padding: 24px;
 }
 
-.page-header {
+.page-header:not(.preferences-command-header) {
   align-items: center;
   gap: var(--space-5);
   margin-bottom: 22px;
@@ -8836,7 +8836,7 @@ h2 {
   font-weight: 850;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .ghost-btn,
 .primary-btn,
 .danger-btn,
@@ -8855,13 +8855,13 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     opacity var(--motion-fast) var(--ease-standard);
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(:disabled):active,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(:disabled):active,
 .ghost-btn:not(:disabled):active,
 .primary-btn:not(:disabled):active {
   transform: translateY(1px);
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):disabled,
 .ghost-btn:disabled,
 .primary-btn:disabled,
 .danger-btn:disabled {
@@ -9115,7 +9115,7 @@ tbody tr:hover {
   box-shadow: inset 3px 0 0 var(--accent-solid);
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   top: 14px;
   right: 18px;
   align-items: center;
@@ -9300,7 +9300,7 @@ html[data-theme="dark"] .notification-btn-icon {
 }
 
 @media (max-width: 900px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     position: static;
     margin: 14px 16px 0 auto;
     justify-content: flex-end;
@@ -9317,11 +9317,11 @@ html[data-theme="dark"] .notification-btn-icon {
 }
 
 @media (max-width: 640px) {
-  .page {
+  .page:not(.preferences-workflow):not(.preferences-page) {
     padding: 18px 14px;
   }
 
-  .page-header {
+  .page-header:not(.preferences-command-header) {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -9875,13 +9875,13 @@ html[data-theme="light"] {
   --readable-measure: 76ch;
 }
 
-.app-shell ~ .page {
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   max-width: var(--content-max-width);
   margin-left: var(--app-shell-width);
   padding: 76px var(--page-gutter) 30px;
 }
 
-body.app-shell-collapsed .app-shell ~ .page {
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   margin-left: var(--app-shell-collapsed-width);
 }
 
@@ -9904,7 +9904,7 @@ body.app-shell-collapsed .app-shell ~ .page {
   font-weight: 800;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   position: fixed;
   top: 14px;
   right: 22px;
@@ -9917,14 +9917,14 @@ body.app-shell-collapsed .app-shell ~ .page {
   box-shadow: var(--shadow-sm);
 }
 
-.page-header {
+.page-header:not(.preferences-command-header) {
   min-height: 54px;
   padding-right: 0;
   margin-bottom: 24px;
 }
 
 .page-header-main,
-.page-header > div:first-child {
+.page-header:not(.preferences-command-header) > div:first-child {
   max-width: min(var(--readable-measure), calc(100vw - 440px));
 }
 
@@ -9976,7 +9976,7 @@ body.app-shell-collapsed .app-shell ~ .page {
   min-width: 0;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .ghost-btn,
 .primary-btn,
 .danger-btn,
@@ -10080,26 +10080,26 @@ tbody tr {
 }
 
 @media (max-width: 1220px) {
-  .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     padding-top: 92px;
   }
 
   .page-header-main,
-  .page-header > div:first-child {
+  .page-header:not(.preferences-command-header) > div:first-child {
     max-width: 100%;
   }
 }
 
 @media (max-width: 900px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     position: sticky;
     top: 10px;
     margin: 10px 12px 0 auto;
     width: fit-content;
   }
 
-  .app-shell ~ .page,
-  body.app-shell-collapsed .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 0;
     padding: 18px 14px 24px;
   }
@@ -10110,7 +10110,7 @@ tbody tr {
 }
 
 @media (max-width: 640px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     border-radius: 18px;
     flex-wrap: wrap;
     justify-content: flex-end;
@@ -10358,7 +10358,7 @@ tbody tr:hover {
   box-shadow: inset 4px 0 0 var(--accent-solid);
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   border: 2px solid var(--border-strong);
   background:
     linear-gradient(120deg, color-mix(in srgb, var(--brand-gold) 10%, transparent), color-mix(in srgb, var(--brand-coral) 8%, transparent)),
@@ -10618,7 +10618,7 @@ html[data-theme="light"] .app-shell-nav-link.active {
   border-color: #93c5fd;
 }
 
-html[data-theme="light"] .app-shell-top-right {
+html[data-theme="light"] .app-shell-top-right:not(.app-shell-top-right--flow) {
   background: #ffffff;
   border: 1px solid var(--border-default);
 }
@@ -10852,14 +10852,14 @@ h2 {
   color: var(--app-muted) !important;
 }
 
-.app-shell ~ .page {
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   max-width: none;
   margin-left: var(--app-shell-width);
   padding: 88px 32px 36px;
   background: var(--app-bg) !important;
 }
 
-body.app-shell-collapsed .app-shell ~ .page {
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   margin-left: var(--app-shell-collapsed-width);
 }
 
@@ -10928,7 +10928,7 @@ html[data-theme="dark"] .app-shell-nav-link.active {
   color: var(--app-text) !important;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   position: fixed;
   top: 16px;
   right: 24px;
@@ -11042,7 +11042,7 @@ html[data-theme="dark"] .notification-btn-icon {
 .scan-workspace-rescan-btn,
 .scan-workspace-action-btn,
 .scan-workspace-sample-btn,
-button:not(.primary-btn):not(.app-shell-primary-link):not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab) {
+button:not(.primary-btn):not(.app-shell-primary-link):not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action) {
   border: 1px solid var(--app-border) !important;
   background: var(--app-panel) !important;
   color: var(--app-text) !important;
@@ -11063,7 +11063,7 @@ button:not(.primary-btn):not(.app-shell-primary-link):not(.agentic-review-tab):n
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):disabled,
 .ghost-btn:disabled,
 .primary-btn:disabled,
 .danger-btn:disabled {
@@ -11081,7 +11081,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: #ffffff !important;
 }
 
-.page-header {
+.page-header:not(.preferences-command-header) {
   min-height: 62px;
   margin-bottom: 22px;
   padding-right: 360px;
@@ -11089,7 +11089,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
 }
 
 .page-header-main,
-.page-header > div:first-child {
+.page-header:not(.preferences-command-header) > div:first-child {
   max-width: min(880px, 100%);
 }
 
@@ -11346,11 +11346,11 @@ html[data-theme="light"] .scan-workspace-status-pill--pending {
 }
 
 @media (max-width: 1180px) {
-  .page-header {
+  .page-header:not(.preferences-command-header) {
     padding-right: 0;
   }
 
-  .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     padding-top: 96px;
   }
 }
@@ -11364,15 +11364,15 @@ html[data-theme="light"] .scan-workspace-status-pill--pending {
     display: none;
   }
 
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     position: sticky;
     top: 10px;
     margin: 10px 12px 0 auto;
     width: fit-content;
   }
 
-  .app-shell ~ .page,
-  body.app-shell-collapsed .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 0;
     padding: 18px 14px 24px;
   }
@@ -11579,7 +11579,7 @@ html[data-theme="light"] .scan-workspace-status-pill--pending {
 }
 
 .profile-summary-card,
-.profile-section-card,
+.profile-section-card:not(.profile-preferences-section),
 .saved-scans-card,
 .saved-scan-table-card {
   border: 1px solid var(--app-border) !important;
@@ -11691,7 +11691,7 @@ tr[data-openable="true"] {
     white-space: nowrap;
   }
 
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     position: sticky;
     top: 10px;
     z-index: 260;
@@ -11699,13 +11699,13 @@ tr[data-openable="true"] {
     width: fit-content;
   }
 
-  .app-shell ~ .page,
-  body.app-shell-collapsed .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 0;
     padding: 16px 14px 24px;
   }
 
-  .page-header {
+  .page-header:not(.preferences-command-header) {
     padding-right: 0;
   }
 
@@ -11715,7 +11715,7 @@ tr[data-openable="true"] {
 }
 
 @media (max-width: 640px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     width: calc(100vw - 24px);
     justify-content: space-between;
   }
@@ -12012,7 +12012,7 @@ html[data-bs-theme="light"] {
 
 /* ui_redesign_v5 interaction and accessibility finish. */
 a:focus-visible,
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):focus-visible,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
@@ -12026,7 +12026,7 @@ textarea:focus-visible,
   box-shadow: 0 0 0 3px var(--app-focus) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 a,
 input,
 select,
@@ -12046,7 +12046,7 @@ textarea,
     transform var(--motion-fast, 120ms) var(--ease-standard, ease);
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):active:not(:disabled),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):active:not(:disabled),
 a:active,
 .resume-choice-card:active:not(:disabled),
 .app-shell-nav-link:active {
@@ -12540,17 +12540,17 @@ html[data-theme="light"] .job-link {
 }
 
 /* ui_redesign_v5 final viewport and document-surface guards. */
-.page {
+.page:not(.preferences-workflow):not(.preferences-page) {
   width: auto;
   min-width: 0;
 }
 
-.app-shell ~ .page {
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   min-height: 100vh;
   overflow-x: clip;
 }
 
-.page-header,
+.page-header:not(.preferences-command-header),
 .section-header,
 .application-table-header,
 .planning-table-header,
@@ -12569,7 +12569,7 @@ html[data-theme="light"] .job-link {
 }
 
 .header-actions,
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   flex-shrink: 0;
 }
 
@@ -12586,17 +12586,17 @@ html[data-theme="light"] .job-link {
   overflow-wrap: anywhere;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   max-width: calc(100vw - var(--app-shell-width) - 48px);
 }
 
-body.app-shell-collapsed .app-shell-top-right {
+body.app-shell-collapsed .app-shell-top-right:not(.app-shell-top-right--flow) {
   max-width: calc(100vw - 48px);
 }
 
 .table-card,
 .controls-card,
-.profile-section-card,
+.profile-section-card:not(.profile-preferences-section),
 .saved-scans-card,
 .scheduler-table-card,
 .intelligence-card {
@@ -12633,13 +12633,13 @@ body.app-shell-collapsed .app-shell-top-right {
 }
 
 @media (max-width: 1180px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     max-width: calc(100vw - 48px);
   }
 }
 
 @media (max-width: 760px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     height: auto;
     min-height: 52px;
     border-radius: 18px;
@@ -12676,9 +12676,9 @@ body.app-shell-collapsed .app-shell-top-right {
     display: none !important;
   }
 
-  .app-shell ~ .page,
-  body.app-shell-collapsed .app-shell ~ .page,
-  .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  .page:not(.preferences-workflow):not(.preferences-page) {
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -12759,7 +12759,7 @@ tbody tr:hover td.apply-cell {
   margin-top: 18px;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   padding: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -12790,7 +12790,7 @@ tbody tr:hover td.apply-cell {
 }
 
 @media (max-width: 760px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     min-height: 0;
   }
 }
@@ -13618,13 +13618,13 @@ html[data-theme="light"] body {
   outline-offset: 2px;
 }
 
-.page {
+.page:not(.preferences-workflow):not(.preferences-page) {
   width: min(100%, 1720px);
   max-width: none;
   padding: clamp(20px, 2vw, 34px);
 }
 
-.page-header {
+.page-header:not(.preferences-command-header) {
   align-items: flex-start;
   gap: 22px;
   margin-bottom: 28px;
@@ -13702,7 +13702,7 @@ html[data-theme="light"] .notification-dropdown {
     var(--app-shadow-md) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .btn,
 .ghost-btn,
 .primary-btn,
@@ -13728,7 +13728,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     opacity var(--app-fast) var(--app-ease);
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(:disabled):hover,
 .btn:not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .application-pagination-btn:not(:disabled):hover,
@@ -13739,7 +13739,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(:disabled):active,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(:disabled):active,
 .btn:not(:disabled):active,
 .ghost-btn:not(:disabled):active,
 .application-pagination-btn:not(:disabled):active,
@@ -13749,7 +13749,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   transform: translateY(0);
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .primary-btn,
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-violet) 100%) !important;
@@ -13766,7 +13766,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):disabled,
 .btn:disabled,
 .ghost-btn:disabled,
 .application-pagination-btn:disabled,
@@ -14044,11 +14044,11 @@ table a:hover {
 }
 
 @media (max-width: 900px) {
-  .page {
+  .page:not(.preferences-workflow):not(.preferences-page) {
     padding: 18px 14px;
   }
 
-  .page-header {
+  .page-header:not(.preferences-command-header) {
     flex-direction: column;
   }
 
@@ -14093,7 +14093,7 @@ html[data-theme="light"] .app-shell {
   box-shadow: 18px 0 46px rgba(15, 23, 42, 0.08) !important;
 }
 
-.app-shell ~ .page {
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   margin-left: var(--app-shell-width) !important;
   padding-top: 104px !important;
 }
@@ -14102,7 +14102,7 @@ body.app-shell-collapsed .app-shell {
   width: var(--app-shell-collapsed-width) !important;
 }
 
-body.app-shell-collapsed .app-shell ~ .page {
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   margin-left: var(--app-shell-collapsed-width) !important;
 }
 
@@ -14183,7 +14183,7 @@ body.app-shell-collapsed .app-shell ~ .page {
   font-weight: 900;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   position: fixed !important;
   top: 18px !important;
   right: 22px !important;
@@ -14202,11 +14202,11 @@ body.app-shell-collapsed .app-shell ~ .page {
   box-shadow: var(--app-shadow-md) !important;
 }
 
-body.app-shell-collapsed .app-shell-top-right {
+body.app-shell-collapsed .app-shell-top-right:not(.app-shell-top-right--flow) {
   max-width: min(760px, calc(100vw - var(--app-shell-collapsed-width) - 56px)) !important;
 }
 
-html[data-theme="light"] .app-shell-top-right {
+html[data-theme="light"] .app-shell-top-right:not(.app-shell-top-right--flow) {
   background: rgba(255, 255, 255, 0.86) !important;
 }
 
@@ -14337,8 +14337,8 @@ html[data-theme="dark"] .notification-btn-icon {
     transform: translateX(0);
   }
 
-  .app-shell ~ .page,
-  body.app-shell-collapsed .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 0 !important;
     padding-top: 112px !important;
   }
@@ -14348,14 +14348,14 @@ html[data-theme="dark"] .notification-btn-icon {
     top: 18px !important;
   }
 
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     right: 14px !important;
     max-width: calc(100vw - 72px) !important;
   }
 }
 
 @media (max-width: 680px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     top: 12px !important;
     gap: 6px !important;
     padding: 6px !important;
@@ -14380,7 +14380,7 @@ html[data-theme="dark"] .notification-btn-icon {
 }
 
 /* ui_redesign_v6 profile and saved scans polish. */
-.profile-section-card {
+.profile-section-card:not(.profile-preferences-section) {
   padding: clamp(18px, 2vw, 28px) !important;
 }
 

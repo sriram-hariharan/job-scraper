@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from html import escape
 
-from src.app.onboarding_ui import _location_preferences_html, _role_family_cards_html
+from src.app.onboarding_ui import _preferences_header_html, _preferences_workflow_form_html
 from src.app.ui_shell import render_top_shell
 from src.auth.runtime import current_user_from_request
 
@@ -15,85 +15,11 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
     hidden_class = " hidden" if hidden else ""
     tab_attr = " data-profile-tab-panel" if tab_panel else ""
     return f"""
-    <section class="card profile-section-card profile-preferences-section{hidden_class}" id="profilePreferencesSection"{tab_attr}>
-      <div class="section-header preferences-command-header">
-        <div>
-          <h2>Preferences</h2>
-          <div class="subtext">Update the same role and matching preferences you selected during onboarding.</div>
-          <div class="preferences-configuration-summary" id="profilePreferencesConfigurationSummary">Loading your configuration...</div>
-        </div>
-        <span class="preferences-save-state is-loading" id="profilePreferencesChangeState">Loading preferences</span>
+    <section class="profile-section-card profile-preferences-section preferences-workflow{hidden_class}" id="profilePreferencesSection" data-preferences-workflow data-preferences-mode="profile"{tab_attr}>
+      <div class="preferences-canvas">
+        {_preferences_header_html(summary_id="profilePreferencesConfigurationSummary")}
+        {_preferences_workflow_form_html(prefix="profilePreferences", mode="profile")}
       </div>
-
-      <div class="profile-inline-status hidden" id="profilePreferencesStatusBanner"></div>
-
-      <form class="profile-preferences-form" id="profilePreferencesForm">
-        <section class="profile-preferences-group">
-          <div class="profile-preferences-group-header">
-            <div>
-              <h3 class="profile-preferences-required-title">
-                <span>Role interests</span>
-                <span class="onboarding-required-pill">Required</span>
-              </h3>
-              <p class="subtext">Select at least one role family to guide your job queue.</p>
-            </div>
-            <div class="profile-preferences-header-actions">
-              <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--select" id="profilePreferencesSelectAllRolesBtn">Select all</button>
-              <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--clear" id="profilePreferencesClearAllRolesBtn">Clear all</button>
-            </div>
-          </div>
-          <div class="onboarding-role-grid" id="profilePreferencesRoleGrid">
-            {_role_family_cards_html()}
-          </div>
-        </section>
-
-        <section class="profile-preferences-group">
-          <div class="profile-preferences-group-header">
-            <div>
-              <h3>Seniority</h3>
-              <p class="subtext">Choose every level that fits your current search.</p>
-            </div>
-          </div>
-          <div class="onboarding-field-grid">
-            <fieldset class="onboarding-chip-group">
-              <legend>Seniority</legend>
-              <label><input type="checkbox" name="target_seniority" value="entry" /> Entry</label>
-              <label><input type="checkbox" name="target_seniority" value="mid" /> Mid</label>
-              <label><input type="checkbox" name="target_seniority" value="senior" /> Senior</label>
-              <label><input type="checkbox" name="target_seniority" value="staff" /> Staff</label>
-            </fieldset>
-
-          </div>
-
-        </section>
-
-        <section class="profile-preferences-group preference-location-panel">
-          {_location_preferences_html(prefix="profilePreferences")}
-        </section>
-
-        <section class="profile-preferences-group">
-          <div class="profile-preferences-group-header">
-            <div>
-              <h3>Skills and exclusions</h3>
-              <p class="subtext">Optional keywords to tune future role expansion and matching.</p>
-            </div>
-          </div>
-          <div class="onboarding-field-grid">
-            <label class="onboarding-text-field">
-              <span>Preferred skills/tools</span>
-              <textarea id="profilePreferredSkillsInput" rows="4" placeholder="Python, AWS, React, Kubernetes"></textarea>
-            </label>
-            <label class="onboarding-text-field">
-              <span>Excluded keywords</span>
-              <textarea id="profileExcludedKeywordsInput" rows="4" placeholder="intern, unpaid, commission only"></textarea>
-            </label>
-          </div>
-        </section>
-
-        <div class="profile-preferences-actions">
-          <button type="submit" id="profilePreferencesSaveBtn">Save preferences</button>
-        </div>
-      </form>
     </section>
 """
 
@@ -689,27 +615,22 @@ def profile_preferences_page() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Preferences · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=profile_preferences_bulk_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_preferences_bulk_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=preferences_toolbar_ownership_r11" />
+  <link rel="stylesheet" href="/static/preferences.css?v=preferences_footer_compact_r15" />
 </head>
-<body>
+<body class="preferences-page-shell">
   {render_top_shell("/profile/preferences")}
 
-  <div class="page">
-    <header class="page-header">
-      <div>
-        <h1>Preferences</h1>
-        <p class="subtext">Tune role interests, locations, seniority, and matching keywords.</p>
-      </div>
-    </header>
-
+  <div class="page preferences-page">
     {_preferences_section_html()}
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/preference_location_selector.js?v=location_preferences_b2"></script>
-  <script src="/static/profile.js?v=location_preferences_b2"></script>
+  <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
+  <script src="/static/preferences_workflow.js?v=preferences_guided_parity_r9"></script>
+  <script src="/static/profile.js?v=preferences_guided_parity_r9"></script>
 </body>
 </html>
     """.strip()

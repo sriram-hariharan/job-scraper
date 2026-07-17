@@ -114,7 +114,7 @@ html[data-theme="light"] body {
   outline-offset: 2px;
 }
 
-.page {
+.page:not(.preferences-workflow):not(.preferences-page) {
   width: min(100%, 1720px) !important;
   max-width: none !important;
   padding: clamp(20px, 2vw, 34px) !important;
@@ -149,7 +149,7 @@ h2 {
 .controls-card,
 .scheduler-ops-card,
 .scheduler-table-card,
-.profile-section-card,
+.profile-section-card:not(.profile-preferences-section),
 .saved-scans-card,
 .saved-scans-table-card,
 .application-view-card,
@@ -185,7 +185,7 @@ html[data-theme="light"] .notification-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -208,7 +208,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
   color: #ffffff !important;
@@ -227,7 +227,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .job-apply-btn:not(:disabled):hover,
 .apply-btn:not(:disabled):hover,
@@ -237,7 +237,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: var(--app-shadow-sm) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):disabled,
 [aria-disabled="true"] {
   cursor: not-allowed !important;
   opacity: 0.58 !important;
@@ -380,12 +380,12 @@ html[data-theme="light"] .app-shell-nav-short {
   filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.1)) !important;
 }
 
-.app-shell ~ .page {
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   margin-left: var(--app-shell-width, 268px) !important;
   padding-top: 104px !important;
 }
 
-body.app-shell-collapsed .app-shell ~ .page {
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   margin-left: var(--app-shell-collapsed-width, 68px) !important;
 }
 
@@ -481,7 +481,7 @@ body.app-shell-collapsed .app-shell ~ .page {
   white-space: nowrap !important;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   position: fixed !important;
   top: 18px !important;
   right: 22px !important;
@@ -499,7 +499,7 @@ body.app-shell-collapsed .app-shell ~ .page {
   box-shadow: var(--app-shadow-md) !important;
 }
 
-html[data-theme="light"] .app-shell-top-right {
+html[data-theme="light"] .app-shell-top-right:not(.app-shell-top-right--flow) {
   background: rgba(255, 255, 255, 0.86) !important;
 }
 
@@ -1242,13 +1242,13 @@ html[data-theme="light"] .apply-cell {
 }
 
 @media (max-width: 980px) {
-  .app-shell ~ .page,
-  body.app-shell-collapsed .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     margin-left: 0 !important;
     padding-top: 112px !important;
   }
 
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     right: 14px !important;
     max-width: calc(100vw - 72px) !important;
   }
@@ -1297,17 +1297,17 @@ body {
   overflow-x: clip;
 }
 
-.page,
+.page:not(.preferences-workflow):not(.preferences-page),
 .card,
 .table-card,
 .controls-card,
-.profile-section-card,
+.profile-section-card:not(.profile-preferences-section),
 .scan-workspace-page,
 .tailoring-workspace-page {
   min-width: 0;
 }
 
-.page-header,
+.page-header:not(.preferences-command-header),
 .section-header,
 .application-table-header,
 .planning-table-header,
@@ -1316,7 +1316,7 @@ body {
 }
 
 .page-header-main,
-.page-header > div:first-child,
+.page-header:not(.preferences-command-header) > div:first-child,
 .application-table-header h2,
 .planning-table-header h2,
 .scheduler-table-title-wrap,
@@ -1334,7 +1334,7 @@ body {
   overscroll-behavior-x: contain;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .ghost-btn,
 .app-shell-primary-link,
 .job-apply-btn,
@@ -1355,7 +1355,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   display: grid !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):focus-visible,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):focus-visible,
 .ghost-btn:focus-visible,
 .app-shell-primary-link:focus-visible,
 .app-shell-nav-link:focus-visible,
@@ -1389,7 +1389,7 @@ html[data-theme="light"] .table-wrap-loading-overlay {
 }
 
 @media (max-width: 1180px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     max-width: min(680px, calc(100vw - 92px)) !important;
   }
 
@@ -1399,13 +1399,13 @@ html[data-theme="light"] .table-wrap-loading-overlay {
 }
 
 /* ui_redesign_v21: compact page controls/cards and scheduler polish. */
-body .app-shell ~ .page,
-body.app-shell-collapsed .app-shell ~ .page {
+body .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   padding-top: 16px !important;
 }
 
-body .app-shell ~ .page > .page-header,
-body.app-shell-collapsed .app-shell ~ .page > .page-header,
+body .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .page-header,
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .page-header,
 body .page > .page-header {
   justify-content: flex-start !important;
   align-items: flex-start !important;
@@ -1503,7 +1503,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -1938,8 +1938,8 @@ body .scheduler-page .scheduler-run-badge--muted {
 }
 
 /* ui_redesign_v20: final compact title owner for every page header. */
-body .app-shell ~ .page > .page-header,
-body.app-shell-collapsed .app-shell ~ .page > .page-header,
+body .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .page-header,
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .page-header,
 body .page > .page-header {
   justify-content: flex-start !important;
   align-items: flex-start !important;
@@ -2007,7 +2007,7 @@ body .page > .page-header .subtext {
     flex: 1 1 auto;
   }
 
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     top: 10px !important;
     right: 10px !important;
     max-width: calc(100vw - 64px) !important;
@@ -2030,15 +2030,15 @@ body {
   overflow-x: hidden;
 }
 
-.page,
-.app-shell ~ .page,
-body.app-shell-collapsed .app-shell ~ .page {
+.page:not(.preferences-workflow):not(.preferences-page),
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   width: auto !important;
   max-width: none !important;
   box-sizing: border-box !important;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   position: absolute !important;
 }
 
@@ -3033,7 +3033,7 @@ html[data-theme="light"] .table-wrap tbody td a.job-link {
 }
 
 @media (max-width: 1180px) {
-  .app-shell-top-right {
+  .app-shell-top-right:not(.app-shell-top-right--flow) {
     position: static !important;
     margin: 0 0 18px auto;
   }
@@ -3357,7 +3357,7 @@ body.app-shell-collapsed .app-shell-menu-btn {
   top: 24px !important;
 }
 
-.app-shell-top-right {
+.app-shell-top-right:not(.app-shell-top-right--flow) {
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
@@ -3366,7 +3366,7 @@ body.app-shell-collapsed .app-shell-menu-btn {
   gap: 12px !important;
 }
 
-html[data-theme="light"] .app-shell-top-right {
+html[data-theme="light"] .app-shell-top-right:not(.app-shell-top-right--flow) {
   background: transparent !important;
 }
 
@@ -3377,7 +3377,7 @@ html[data-theme="light"] .app-shell-top-right {
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14) !important;
 }
 
-.page-header h1,
+.page-header:not(.preferences-command-header) h1,
 .scan-workspace-page .page-header h1,
 .tailoring-workspace-page .page-header h1 {
   font-size: clamp(42px, 5.2vw, 78px) !important;
@@ -3544,7 +3544,7 @@ body.app-shell-collapsed .app-shell-menu-btn {
   z-index: 180 !important;
 }
 
-.page-header h1,
+.page-header:not(.preferences-command-header) h1,
 .scan-workspace-page .page-header h1,
 .tailoring-workspace-page .page-header h1 {
   font-size: clamp(34px, 4.2vw, 58px) !important;
@@ -3915,12 +3915,12 @@ html[data-theme="dark"] .stats-grid .stat-card .stat-value {
 }
 
 /* ui_redesign_v18: align page titles with the fixed top-right app controls. */
-.app-shell ~ .page,
-body.app-shell-collapsed .app-shell ~ .page {
+.app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   padding-top: 18px !important;
 }
 
-.page-header {
+.page-header:not(.preferences-command-header) {
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
@@ -3933,7 +3933,7 @@ body.app-shell-collapsed .app-shell ~ .page {
   text-align: left !important;
 }
 
-.page-header h1,
+.page-header:not(.preferences-command-header) h1,
 .scan-workspace-page .page-header h1,
 .tailoring-workspace-page .page-header h1 {
   font-size: clamp(28px, 2.8vw, 44px) !important;
@@ -3945,12 +3945,12 @@ body.app-shell-collapsed .app-shell ~ .page {
 }
 
 @media (max-width: 1180px) {
-  .app-shell ~ .page,
-  body.app-shell-collapsed .app-shell ~ .page {
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
     padding-top: 86px !important;
   }
 
-  .page-header {
+  .page-header:not(.preferences-command-header) {
     min-height: auto !important;
     padding-right: 0 !important;
     flex-wrap: wrap !important;
@@ -3958,13 +3958,13 @@ body.app-shell-collapsed .app-shell ~ .page {
 }
 
 /* ui_redesign_v22: final end-of-file compact owner after legacy blocks. */
-body .app-shell ~ .page,
-body.app-shell-collapsed .app-shell ~ .page {
+body .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
   padding-top: 16px !important;
 }
 
-body .app-shell ~ .page > .page-header,
-body.app-shell-collapsed .app-shell ~ .page > .page-header,
+body .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .page-header,
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .page-header,
 body .page > .page-header {
   justify-content: flex-start !important;
   align-items: flex-start !important;
@@ -4036,7 +4036,7 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -4251,7 +4251,7 @@ body .theme-toggle-label {
 
 /* ui_redesign_v29: dark page titles and Scheduler Ops dark surfaces. */
 html[data-theme="dark"] body .page > .page-header h1,
-html[data-theme="dark"] body .page-header h1 {
+html[data-theme="dark"] body .page-header:not(.preferences-command-header) h1 {
   color: #f8fafc !important;
   opacity: 1 !important;
   filter: none !important;
@@ -5087,97 +5087,6 @@ html[data-theme="dark"] .first-run-prompt-secondary {
 
 .profile-admin-users-section {
   margin-top: 24px;
-}
-
-.profile-preferences-section {
-  margin-top: 24px;
-  overflow: visible;
-  border-color: color-mix(in srgb, var(--app-primary) 24%, var(--app-border)) !important;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--app-surface) 96%, transparent), color-mix(in srgb, var(--app-surface-2) 90%, transparent)) !important;
-}
-
-.profile-preferences-form {
-  display: grid;
-  gap: 22px;
-}
-
-.profile-preferences-group {
-  display: grid;
-  gap: 18px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--app-border);
-}
-
-.profile-preferences-group.preference-location-panel {
-  overflow: visible;
-}
-
-.profile-preferences-group:last-of-type {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.profile-preferences-group-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.profile-preferences-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.profile-preferences-group-header h3 {
-  margin: 0 0 4px;
-  color: var(--app-text);
-  font-size: 22px;
-  font-weight: 950;
-}
-
-.profile-preferences-required-title {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.profile-preferences-group-header p {
-  margin: 0;
-}
-
-.profile-preferences-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.profile-preferences-actions button {
-  min-height: 46px;
-  padding: 0 20px;
-  border-color: rgba(34, 211, 238, 0.46) !important;
-  background: linear-gradient(135deg, #0f766e, #155e75) !important;
-  color: #ffffff !important;
-  box-shadow: 0 14px 30px rgba(20, 184, 166, 0.18) !important;
-}
-
-.profile-preferences-actions button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0d9488, #0e7490) !important;
-}
-
-html[data-theme="light"] .profile-preferences-actions button {
-  border-color: rgba(37, 99, 235, 0.36) !important;
-  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
-  color: #ffffff !important;
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.16) !important;
-}
-
-html[data-theme="light"] .profile-preferences-actions button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1d4ed8, #0e7490) !important;
 }
 
 /* profile_admin_users_v3: flatten resume manager panels; keep only useful controls framed. */
@@ -7690,759 +7599,6 @@ html[data-theme="light"] .pipeline-count-empty {
   color: #64748b !important;
 }
 
-/* role_onboarding_r6: authenticated role preference setup. */
-.onboarding-page {
-  max-width: 1280px !important;
-}
-
-.onboarding-header {
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 18px;
-}
-
-.preferences-command-header {
-  padding: clamp(18px, 2vw, 26px);
-  border: 1px solid color-mix(in srgb, var(--app-primary) 22%, var(--app-border));
-  border-radius: var(--app-radius-xl);
-  background:
-    radial-gradient(circle at 85% 10%, rgba(37, 99, 235, 0.13), transparent 38%),
-    color-mix(in srgb, var(--app-surface) 94%, transparent);
-  box-shadow: var(--app-shadow-sm);
-}
-
-.preferences-configuration-summary {
-  margin-top: 12px;
-  color: var(--app-text-2);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.preferences-header-actions,
-.preferences-section-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.preferences-save-state {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-pill);
-  background: var(--app-surface-2);
-  color: var(--app-muted);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.preferences-save-state.is-saved {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.1);
-  color: #6ee7b7;
-}
-
-.preferences-save-state.is-dirty {
-  border-color: rgba(245, 158, 11, 0.42);
-  background: rgba(245, 158, 11, 0.12);
-  color: #fcd34d;
-}
-
-.preferences-save-state.is-error {
-  border-color: rgba(248, 113, 113, 0.4);
-  background: rgba(248, 113, 113, 0.1);
-  color: #fca5a5;
-}
-
-html[data-theme="light"] .preferences-save-state.is-saved {
-  color: #047857;
-}
-
-html[data-theme="light"] .preferences-save-state.is-dirty {
-  color: #a16207;
-}
-
-html[data-theme="light"] .preferences-save-state.is-error {
-  color: #b91c1c;
-}
-
-.onboarding-kicker {
-  color: var(--app-primary-strong);
-  font-size: 14px;
-  font-weight: 950;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.onboarding-profile-link,
-.onboarding-solid-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 0 16px;
-  text-decoration: none;
-}
-
-.onboarding-solid-link {
-  width: fit-content;
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  border-radius: var(--app-radius-md);
-  background: linear-gradient(135deg, #2563eb, #0f7ea8);
-  color: #ffffff;
-  font-weight: 900;
-  box-shadow: var(--app-shadow-sm);
-}
-
-.onboarding-solid-link:hover {
-  border-color: rgba(37, 99, 235, 0.5);
-  background: linear-gradient(135deg, #1d4ed8, #0e7490);
-}
-
-.onboarding-resume-panel.is-complete .onboarding-solid-link {
-  border-color: var(--app-border-2);
-  background: var(--app-surface-2);
-  color: var(--app-text);
-  box-shadow: none;
-}
-
-html[data-theme="light"] .onboarding-resume-panel.is-complete .onboarding-solid-link {
-  background: #ffffff;
-  color: #1e293b;
-}
-
-.onboarding-layout {
-  display: grid;
-  gap: 20px;
-}
-
-.onboarding-panel {
-  padding: clamp(20px, 2vw, 28px) !important;
-  border-color: color-mix(in srgb, var(--app-primary) 16%, var(--app-border)) !important;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--app-surface) 96%, transparent), color-mix(in srgb, var(--app-surface-2) 91%, transparent)) !important;
-}
-
-.preference-location-panel {
-  overflow: visible !important;
-}
-
-.onboarding-panel .section-header {
-  margin-bottom: 22px;
-}
-
-.onboarding-required-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  border-radius: var(--app-radius-pill);
-  background: rgba(245, 158, 11, 0.13);
-  color: #fcd34d;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-html[data-theme="light"] .onboarding-required-pill {
-  border-color: #fbbf24;
-  color: #9a3412;
-  background: #fffbeb;
-}
-
-.onboarding-role-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
-}
-
-.onboarding-role-card {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 13px;
-  align-items: flex-start;
-  min-height: 88px;
-  padding: 15px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: color-mix(in srgb, var(--app-surface-2) 86%, transparent);
-  cursor: pointer;
-  box-shadow: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-.onboarding-role-card:hover {
-  border-color: color-mix(in srgb, var(--app-primary) 48%, var(--app-border));
-  transform: translateY(-1px);
-}
-
-.onboarding-role-card:focus-within {
-  outline: 3px solid color-mix(in srgb, var(--app-primary) 26%, transparent);
-  outline-offset: 2px;
-}
-
-.onboarding-role-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
-  border-radius: 14px;
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--app-primary-strong);
-  flex: 0 0 auto;
-}
-
-.onboarding-role-icon-svg {
-  width: 24px;
-  height: 24px;
-  display: block;
-}
-
-html[data-theme="light"] .onboarding-role-card {
-  background: #ffffff;
-}
-
-html[data-theme="light"] .onboarding-role-icon {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.onboarding-role-card:has(input:checked) {
-  border-color: rgba(37, 99, 235, 0.72);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(20, 184, 166, 0.10));
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
-}
-
-.onboarding-role-card:has(input:checked) .onboarding-role-icon {
-  border-color: rgba(37, 99, 235, 0.38);
-  background: rgba(37, 99, 235, 0.18);
-  color: var(--app-primary-strong);
-}
-
-.onboarding-role-card input {
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
-  accent-color: var(--app-primary);
-}
-
-.onboarding-role-card-copy {
-  display: grid;
-  gap: 6px;
-}
-
-.onboarding-role-card-title {
-  color: var(--app-text);
-  font-size: 15px;
-  font-weight: 950;
-  line-height: 1.22;
-}
-
-.onboarding-role-card-subtitle {
-  color: var(--app-muted);
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.35;
-}
-
-.onboarding-field-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 22px;
-  margin-bottom: 24px;
-}
-
-.onboarding-chip-group {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 10px;
-  row-gap: 12px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.onboarding-chip-group legend,
-.onboarding-text-field span {
-  width: 100%;
-  margin-bottom: 12px;
-  color: var(--app-text-2);
-  font-size: 13px;
-  font-weight: 950;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.onboarding-chip-group label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 14px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-pill);
-  background: color-mix(in srgb, var(--app-surface-2) 88%, transparent);
-  color: var(--app-text);
-  font-weight: 850;
-}
-
-.onboarding-chip-group label:hover {
-  border-color: color-mix(in srgb, var(--app-primary) 46%, var(--app-border));
-}
-
-.onboarding-chip-group label:focus-within {
-  outline: 3px solid color-mix(in srgb, var(--app-primary) 24%, transparent);
-  outline-offset: 2px;
-}
-
-html[data-theme="light"] .onboarding-chip-group label {
-  background: #ffffff;
-}
-
-.onboarding-chip-group label:has(input:checked) {
-  border-color: rgba(37, 99, 235, 0.42);
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--app-text);
-}
-
-html[data-theme="light"] .onboarding-chip-group label:has(input:checked) {
-  background: #eff6ff;
-  color: #1e3a8a;
-}
-
-.onboarding-chip-group input {
-  accent-color: var(--app-primary);
-}
-
-.onboarding-text-field {
-  display: grid;
-  gap: 10px;
-}
-
-.onboarding-field-grid + .onboarding-text-field {
-  margin-top: 4px;
-}
-
-.onboarding-text-field textarea {
-  width: 100%;
-  min-height: 104px;
-  padding: 16px;
-  border: 1px solid var(--app-border-2);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-inset);
-  color: var(--app-text);
-  font: inherit;
-  font-weight: 750;
-  resize: vertical;
-}
-
-html[data-theme="light"] .onboarding-text-field textarea {
-  background: #f8fbff;
-}
-
-.preference-location-selector {
-  position: relative;
-  display: grid;
-  gap: 14px;
-}
-
-.preference-location-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.preference-location-heading h3 {
-  margin: 0 0 5px;
-  color: var(--app-text);
-  font-size: 20px;
-  font-weight: 950;
-}
-
-.preference-location-heading p,
-.preference-location-status,
-.preference-location-release-note {
-  margin: 0;
-  color: var(--app-muted);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.preference-location-count {
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-pill);
-  background: var(--app-surface-2);
-  color: var(--app-text-2);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.preference-location-combobox {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 54px;
-  padding: 8px 12px;
-  border: 1px solid var(--app-border-2);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-inset);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.preference-location-combobox:focus-within {
-  border-color: color-mix(in srgb, var(--app-primary) 70%, var(--app-border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-primary) 16%, transparent);
-}
-
-.preference-location-chips {
-  display: contents;
-}
-
-.preference-location-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 34px;
-  padding: 0 7px 0 11px;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 42%, var(--app-border));
-  border-radius: var(--app-radius-pill);
-  background: color-mix(in srgb, var(--app-primary) 14%, var(--app-surface-2));
-  color: var(--app-text);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.preference-location-chip.is-legacy {
-  border-style: dashed;
-}
-
-.preference-location-chip-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-height: 28px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 50% !important;
-  background: transparent !important;
-  color: var(--app-muted) !important;
-  box-shadow: none !important;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.preference-location-chip-remove:hover,
-.preference-location-chip-remove:focus-visible {
-  background: color-mix(in srgb, var(--app-primary) 16%, transparent) !important;
-  color: var(--app-text) !important;
-}
-
-.preference-location-search {
-  flex: 1 1 250px;
-  width: auto !important;
-  min-width: min(250px, 100%);
-  min-height: 36px !important;
-  padding: 4px 2px !important;
-  border: 0 !important;
-  background: transparent !important;
-  color: var(--app-text) !important;
-  box-shadow: none !important;
-  font: inherit;
-  font-weight: 750;
-  outline: 0;
-}
-
-.preference-location-results {
-  position: absolute;
-  z-index: 80;
-  top: calc(100% + 8px);
-  right: 0;
-  left: 0;
-  max-height: min(330px, 45vh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 7px;
-  border: 1px solid var(--app-border-2);
-  border-radius: var(--app-radius-lg);
-  background: color-mix(in srgb, var(--app-surface) 97%, transparent);
-  box-shadow: var(--app-shadow-lg);
-  backdrop-filter: blur(18px);
-}
-
-.preference-location-option {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  min-height: 44px !important;
-  padding: 8px 11px !important;
-  border: 0 !important;
-  border-radius: var(--app-radius-md) !important;
-  background: transparent !important;
-  color: var(--app-text) !important;
-  box-shadow: none !important;
-  text-align: left;
-}
-
-.preference-location-option:hover,
-.preference-location-option.is-active {
-  background: color-mix(in srgb, var(--app-primary) 14%, var(--app-surface-2)) !important;
-}
-
-.preference-location-option:focus-visible {
-  outline: 2px solid var(--app-primary);
-  outline-offset: -2px;
-}
-
-.preference-location-option-label {
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.preference-location-option-type {
-  color: var(--app-muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.preference-location-empty {
-  padding: 18px 14px;
-  color: var(--app-muted);
-  font-size: 13px;
-  font-weight: 750;
-  text-align: center;
-}
-
-.preference-location-policy {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.preference-policy-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  min-height: 96px;
-  padding: 15px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: color-mix(in srgb, var(--app-surface-2) 88%, transparent);
-  cursor: pointer;
-}
-
-.preference-policy-option:focus-within {
-  outline: 3px solid color-mix(in srgb, var(--app-primary) 22%, transparent);
-  outline-offset: 2px;
-}
-
-.preference-policy-option input {
-  width: 19px;
-  height: 19px;
-  margin-top: 2px;
-  accent-color: var(--app-primary);
-}
-
-.preference-policy-option span {
-  display: grid;
-  gap: 5px;
-}
-
-.preference-policy-option strong {
-  color: var(--app-text);
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.preference-policy-option small {
-  color: var(--app-muted);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.preference-policy-option.is-disabled {
-  cursor: not-allowed;
-  filter: saturate(0.55);
-  opacity: 0.58;
-}
-
-.preference-location-release-note {
-  padding: 10px 12px;
-  border-left: 3px solid color-mix(in srgb, var(--app-primary) 65%, transparent);
-  background: color-mix(in srgb, var(--app-primary) 7%, transparent);
-}
-
-html[data-theme="light"] .preferences-command-header,
-html[data-theme="light"] .onboarding-panel,
-html[data-theme="light"] .profile-preferences-section {
-  background: linear-gradient(145deg, #ffffff, #f8fbff) !important;
-}
-
-html[data-theme="light"] .preference-location-combobox {
-  background: #f8fbff;
-}
-
-html[data-theme="light"] .preference-location-results {
-  background: rgba(255, 255, 255, 0.98);
-}
-
-html[data-theme="light"] .preference-policy-option {
-  background: #f8fbff;
-}
-
-.onboarding-resume-callout {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-  border: 1px solid rgba(245, 158, 11, 0.38);
-  border-radius: var(--app-radius-lg);
-  background: rgba(245, 158, 11, 0.10);
-  color: var(--app-text-2);
-  font-weight: 780;
-}
-
-.onboarding-resume-callout + .onboarding-solid-link {
-  margin-top: 16px;
-}
-
-.onboarding-resume-panel.is-complete .onboarding-resume-callout {
-  border-color: rgba(16, 185, 129, 0.38);
-  background: rgba(16, 185, 129, 0.10);
-}
-
-html[data-theme="light"] .onboarding-resume-panel.is-complete .onboarding-resume-callout {
-  border-color: #86efac;
-  background: #ecfdf5;
-}
-
-.onboarding-resume-callout strong {
-  color: var(--app-text);
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.onboarding-confirm-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 178px;
-}
-
-.onboarding-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.onboarding-actions button {
-  min-height: 48px;
-  padding: 0 20px;
-}
-
-#onboardingSaveDraftBtn {
-  border-color: rgba(34, 211, 238, 0.34) !important;
-  background: rgba(14, 116, 144, 0.18) !important;
-  color: #e0f2fe !important;
-  box-shadow: 0 10px 22px rgba(8, 145, 178, 0.12) !important;
-}
-
-#onboardingSaveDraftBtn:hover:not(:disabled) {
-  border-color: rgba(37, 99, 235, 0.35) !important;
-  background: rgba(37, 99, 235, 0.10) !important;
-}
-
-#onboardingCompleteBtn {
-  border-color: rgba(37, 99, 235, 0.38) !important;
-  background: linear-gradient(135deg, #2563eb, #0f7ea8) !important;
-  color: #ffffff !important;
-  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.18) !important;
-}
-
-#onboardingCompleteBtn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1d4ed8, #0e7490) !important;
-}
-
-html[data-theme="light"] #onboardingSaveDraftBtn {
-  border-color: rgba(37, 99, 235, 0.28) !important;
-  background: #eff6ff !important;
-  color: #1e3a8a !important;
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.10) !important;
-}
-
-.onboarding-actions button:disabled {
-  cursor: not-allowed;
-  filter: grayscale(0.5);
-  opacity: 0.58;
-}
-
-@media (max-width: 760px) {
-  .onboarding-header,
-  .onboarding-confirm-panel {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .onboarding-profile-link,
-  .onboarding-solid-link,
-  .onboarding-actions button {
-    width: 100%;
-  }
-
-  .preferences-header-actions,
-  .preferences-section-actions {
-    align-items: stretch;
-    justify-content: flex-start;
-  }
-
-  .preferences-save-state {
-    justify-content: center;
-  }
-
-  .preference-location-policy {
-    grid-template-columns: 1fr;
-  }
-
-  .preference-location-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .preference-location-search {
-    flex-basis: 100%;
-    min-width: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .onboarding-role-card {
-    transition: none;
-  }
-
-  .onboarding-role-card:hover {
-    transform: none;
-  }
-}
 
 html[data-theme="light"] .pipeline-step {
   border-color: #cbd5e1 !important;

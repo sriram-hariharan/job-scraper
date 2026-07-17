@@ -24,6 +24,8 @@ const profileState = {
 const PROFILE_PLANNING_OUTPUT_DIR = "outputs/application_planning";
 const PROFILE_PLANNING_LOG_PATH = `${PROFILE_PLANNING_OUTPUT_DIR}/live_pipeline_run.log`;
 let profileLocationSelector = null;
+let profilePreferencesWorkflow = null;
+let profilePreferencesSaving = false;
 
 function qs(id) {
   return document.getElementById(id);
@@ -176,7 +178,7 @@ function setProfilePreferencesStatus(message, tone = "info") {
   const banner = qs("profilePreferencesStatusBanner");
   if (!banner) return;
   banner.textContent = message || "";
-  banner.className = `profile-inline-status ${tone}`;
+  banner.className = `preferences-save-confirmation ${tone}`;
   if (!message) {
     banner.classList.add("hidden");
   }
@@ -188,6 +190,7 @@ function updateProfilePreferencesSummary() {
   const roleCount = profilePreferenceCheckedValues("selected_role_families").length;
   const locationCount = profileLocationSelector?.serialize().preferred_location_specs.length || 0;
   summary.textContent = `${roleCount} role ${roleCount === 1 ? "family" : "families"} · ${locationCount} preferred location${locationCount === 1 ? "" : "s"}`;
+  profilePreferencesWorkflow?.update();
 }
 
 function setProfilePreferencesChangeState(label, state = "saved") {
@@ -195,9 +198,12 @@ function setProfilePreferencesChangeState(label, state = "saved") {
   if (!indicator) return;
   indicator.textContent = label;
   indicator.className = `preferences-save-state is-${state}`;
+  profilePreferencesWorkflow?.update();
 }
 
 function markProfilePreferencesDirty() {
+  if (profilePreferenceCheckedValues("selected_role_families").length) profilePreferencesWorkflow?.clearValidationError();
+  setProfilePreferencesStatus("");
   updateProfilePreferencesSummary();
   setProfilePreferencesChangeState("Unsaved changes", "dirty");
 }
@@ -231,7 +237,6 @@ function collectProfilePreferences() {
 async function loadProfilePreferences() {
   const form = qs("profilePreferencesForm");
   if (!form) return;
-  setProfilePreferencesStatus("Loading preferences...");
   const payload = await fetchJson("/onboarding/preferences");
   profileState.onboardingPreferences = payload.preferences || {};
   profileState.onboardingRequirements = payload.requirements || {};
@@ -244,14 +249,18 @@ async function loadProfilePreferences() {
 
 async function saveProfilePreferences() {
   const saveBtn = qs("profilePreferencesSaveBtn");
+  if (profilePreferencesSaving) return;
   const preferences = collectProfilePreferences();
   if (!preferences.selected_role_families.length) {
     setProfilePreferencesStatus("Select at least one role family before saving.", "error");
+    profilePreferencesWorkflow?.showValidationError("Select at least one role family before saving.", 0);
     return;
   }
+  profilePreferencesWorkflow?.clearValidationError();
+  profilePreferencesSaving = true;
 
   if (saveBtn) saveBtn.disabled = true;
-  setProfilePreferencesStatus("Saving preferences...");
+  setProfilePreferencesStatus("");
   setProfilePreferencesChangeState("Saving...", "saving");
   try {
     const payload = await postJson("/onboarding/preferences", preferences);
@@ -265,6 +274,7 @@ async function saveProfilePreferences() {
     setProfilePreferencesStatus(err.message, "error");
     setProfilePreferencesChangeState("Save failed", "error");
   } finally {
+    profilePreferencesSaving = false;
     if (saveBtn) saveBtn.disabled = false;
   }
 }
@@ -1987,6 +1997,10 @@ function bindProfilePreferencesInteractions() {
     qs("profilePreferencesLocationSelector"),
     { onChange: markProfilePreferencesDirty }
   );
+  profilePreferencesWorkflow = window.ApplyLensPreferencesWorkflow?.create(
+    qs("profilePreferencesSection"),
+    { getValues: collectProfilePreferences }
+  );
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -2003,6 +2017,9 @@ function bindProfilePreferencesInteractions() {
   form.querySelectorAll("input, textarea").forEach((field) => {
     if (field.closest("[data-location-selector]")) return;
     field.addEventListener("change", markProfilePreferencesDirty);
+  });
+  form.querySelectorAll("textarea").forEach((field) => {
+    field.addEventListener("input", markProfilePreferencesDirty);
   });
 }
 

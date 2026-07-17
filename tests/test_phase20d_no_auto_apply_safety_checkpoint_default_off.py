@@ -1049,6 +1049,24 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase132b2r3_guided_preferences_runtime_files = {
+        ROOT / "src/app/onboarding_ui.py",
+        ROOT / "src/app/profile_ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/onboarding.js",
+        ROOT / "src/app/static/preference_location_selector.js",
+        ROOT / "src/app/static/preferences.css",
+        ROOT / "src/app/static/preferences_workflow.js",
+        ROOT / "src/app/static/profile.js",
+        ROOT / "src/app/static/styles.css",
+        ROOT / "src/app/ui_shell.py",
+    }
+    if set(changed_runtime_files) == phase132b2r3_guided_preferences_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     assert changed_runtime_files in (
         [],
         [

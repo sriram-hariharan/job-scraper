@@ -29,6 +29,7 @@
     const input = root.querySelector("[data-location-search]");
     const results = root.querySelector("[data-location-results]");
     const chips = root.querySelector("[data-location-chips]");
+    const selectionEmpty = root.querySelector("[data-location-selection-empty]");
     const status = root.querySelector("[data-location-status]");
     const count = root.querySelector("[data-location-count]");
     const strict = root.querySelector("[data-location-strict]");
@@ -41,6 +42,37 @@
     let activeIndex = -1;
     let searchTimer = null;
     let searchRequest = null;
+    let placementListenersActive = false;
+
+    function updateResultsPlacement() {
+      if (results.classList.contains("hidden")) return;
+      const inputRect = input.getBoundingClientRect();
+      const viewportHeight = global.innerHeight || document.documentElement.clientHeight;
+      const spaceBelow = Math.max(0, viewportHeight - inputRect.bottom - 16);
+      const spaceAbove = Math.max(0, inputRect.top - 16);
+      const opensUpward = spaceBelow < 180 && spaceAbove > spaceBelow;
+      const availableSpace = opensUpward ? spaceAbove : spaceBelow;
+      const boundedHeight = Math.max(120, Math.min(320, availableSpace - 8));
+      results.classList.toggle("opens-upward", opensUpward);
+      results.style.setProperty(
+        "--preference-location-results-max-height",
+        `${Math.floor(boundedHeight)}px`
+      );
+    }
+
+    function startPlacementTracking() {
+      if (placementListenersActive) return;
+      global.addEventListener("resize", updateResultsPlacement);
+      global.addEventListener("scroll", updateResultsPlacement, true);
+      placementListenersActive = true;
+    }
+
+    function stopPlacementTracking() {
+      if (!placementListenersActive) return;
+      global.removeEventListener("resize", updateResultsPlacement);
+      global.removeEventListener("scroll", updateResultsPlacement, true);
+      placementListenersActive = false;
+    }
 
     function announce(message) {
       status.textContent = message;
@@ -51,7 +83,10 @@
     }
 
     function closeResults() {
+      stopPlacementTracking();
       results.classList.add("hidden");
+      results.classList.remove("opens-upward");
+      results.style.removeProperty("--preference-location-results-max-height");
       results.replaceChildren();
       input.setAttribute("aria-expanded", "false");
       input.removeAttribute("aria-activedescendant");
@@ -64,7 +99,7 @@
       optionNodes.forEach((node, index) => {
         const active = index === activeIndex;
         node.classList.toggle("is-active", active);
-        node.setAttribute("aria-selected", active ? "true" : "false");
+        node.setAttribute("aria-selected", node.dataset.locationSelected === "true" ? "true" : "false");
       });
       const activeNode = optionNodes[activeIndex];
       if (activeNode) {
@@ -77,7 +112,7 @@
 
     function renderSuggestions(items) {
       const selectedIds = new Set(selected.map((item) => item.id));
-      suggestions = items.filter((item) => item && !selectedIds.has(String(item.id || "")));
+      suggestions = items.filter(Boolean);
       results.replaceChildren();
       activeIndex = suggestions.length ? 0 : -1;
 
@@ -89,21 +124,27 @@
         announce("No matching locations found.");
       } else {
         suggestions.forEach((item, index) => {
+          const isSelected = selectedIds.has(String(item.id || ""));
           const optionNode = document.createElement("button");
           optionNode.type = "button";
           optionNode.id = `${results.id}-option-${index}`;
-          optionNode.className = "preference-location-option";
+          optionNode.className = `preference-location-option${isSelected ? " is-selected" : ""}`;
           optionNode.setAttribute("role", "option");
-          optionNode.setAttribute("aria-selected", index === activeIndex ? "true" : "false");
+          optionNode.setAttribute("aria-selected", isSelected ? "true" : "false");
           optionNode.dataset.locationOptionIndex = String(index);
+          optionNode.dataset.locationSelected = isSelected ? "true" : "false";
 
+          const check = document.createElement("span");
+          check.className = "preference-location-option-check";
+          check.setAttribute("aria-hidden", "true");
+          check.textContent = "✓";
           const label = document.createElement("span");
           label.className = "preference-location-option-label";
           label.textContent = String(item.display_name || "");
           const type = document.createElement("span");
           type.className = "preference-location-option-type";
           type.textContent = item.type === "city" ? "City" : item.type === "state" ? "State" : "US";
-          optionNode.append(label, type);
+          optionNode.append(check, label, type);
           results.appendChild(optionNode);
         });
         announce(`${suggestions.length} location suggestion${suggestions.length === 1 ? "" : "s"} available.`);
@@ -111,6 +152,8 @@
 
       results.classList.remove("hidden");
       input.setAttribute("aria-expanded", "true");
+      startPlacementTracking();
+      updateResultsPlacement();
       updateActiveOption();
     }
 
@@ -130,6 +173,7 @@
         chip.append(label, remove);
         chips.appendChild(chip);
       });
+      selectionEmpty?.classList.toggle("hidden", selected.length > 0);
       count.textContent = `${selected.length} selected`;
       if (!input.value.trim()) {
         announce(
@@ -150,7 +194,11 @@
 
     function addSelection(item) {
       const id = String(item?.id || "");
-      if (!id || selected.some((existing) => existing.id === id)) return;
+      if (!id) return;
+      if (selected.some((existing) => existing.id === id)) {
+        announce(`${String(item.display_name || "Location")} is already selected.`);
+        return;
+      }
       selected.push({ ...item });
       input.value = "";
       closeResults();
@@ -268,13 +316,23 @@
     });
     strict.addEventListener("change", () => updatePolicyState({ notify: true }));
     fallback.addEventListener("change", notifyChange);
-    document.addEventListener("pointerdown", (event) => {
+    function handleDocumentPointerDown(event) {
       if (!root.contains(event.target)) closeResults();
-    });
+    }
+
+    document.addEventListener("pointerdown", handleDocumentPointerDown);
 
     updatePolicyState();
     renderSelected();
-    return { setPreferences, serialize };
+    function destroy() {
+      global.clearTimeout(searchTimer);
+      searchRequest?.abort();
+      stopPlacementTracking();
+      document.removeEventListener("pointerdown", handleDocumentPointerDown);
+      closeResults();
+    }
+
+    return { setPreferences, serialize, destroy };
   }
 
   global.ApplyLensLocationSelector = { create };

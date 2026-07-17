@@ -1,18 +1,22 @@
 from pathlib import Path
 
+from src.app.onboarding_ui import _preferences_workflow_form_html
+from src.app.profile_ui import _preferences_section_html
+
 
 def test_onboarding_page_defines_authenticated_flow():
     source = Path("src/app/onboarding_ui.py").read_text(encoding="utf-8")
+    form = _preferences_workflow_form_html(prefix="onboarding", mode="onboarding")
 
     assert '@router.get("/onboarding", response_class=HTMLResponse)' in source
-    assert 'id="onboardingForm"' in source
-    assert 'name="selected_role_families"' in source
+    assert 'id="onboardingForm"' in form
+    assert 'name="selected_role_families"' in form
     assert "/profile?onboarding=resume_upload" in source
 
 
 def test_onboarding_role_cards_render_decorative_icons():
     source = Path("src/app/onboarding_ui.py").read_text(encoding="utf-8")
-    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    css = Path("src/app/static/preferences.css").read_text(encoding="utf-8")
 
     assert "ROLE_FAMILY_ICON_SVGS" in source
     assert 'class="onboarding-role-icon"' in source
@@ -46,10 +50,14 @@ def test_onboarding_and_profile_share_accessible_location_selector_contract():
     onboarding_js = Path("src/app/static/onboarding.js").read_text(encoding="utf-8")
     profile_js = Path("src/app/static/profile.js").read_text(encoding="utf-8")
     selector_js = Path("src/app/static/preference_location_selector.js").read_text(encoding="utf-8")
+    onboarding_form = _preferences_workflow_form_html(prefix="onboarding", mode="onboarding")
+    profile_form = _preferences_workflow_form_html(prefix="profilePreferences", mode="profile")
 
     assert "_location_preferences_html" in onboarding_ui
-    assert '_location_preferences_html(prefix="onboarding")' in onboarding_ui
-    assert '_location_preferences_html(prefix="profilePreferences")' in profile_ui
+    assert 'id="onboardingLocationSelector"' in onboarding_form
+    assert 'id="profilePreferencesLocationSelector"' in profile_form
+    assert '_preferences_workflow_form_html' in profile_ui
+    assert '_preferences_workflow_form_html(prefix="profilePreferences", mode="profile")' in profile_ui
     assert onboarding_ui.count('role="combobox"') == 1
     assert onboarding_ui.count('role="listbox"') == 1
     assert 'aria-activedescendant' in selector_js
@@ -64,8 +72,8 @@ def test_onboarding_and_profile_share_accessible_location_selector_contract():
     assert "location_strict_match" in onboarding_js
     assert "preferred_location_specs" in profile_js
     assert "location_show_others_if_unmatched" in profile_js
-    assert "preferredLocationsInput" not in onboarding_ui
-    assert "profilePreferredLocationsInput" not in profile_ui
+    assert "preferredLocationsInput" not in onboarding_form
+    assert "profilePreferredLocationsInput" not in profile_form
 
 
 def test_location_selector_preserves_legacy_chips_and_strict_fallback_semantics():
@@ -82,20 +90,20 @@ def test_location_selector_preserves_legacy_chips_and_strict_fallback_semantics(
 
 
 def test_preferences_premium_responsive_and_reduced_motion_contract():
-    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    css = Path("src/app/static/preferences.css").read_text(encoding="utf-8")
     onboarding_ui = Path("src/app/onboarding_ui.py").read_text(encoding="utf-8")
     profile_ui = Path("src/app/profile_ui.py").read_text(encoding="utf-8")
 
     assert "preferences-command-header" in onboarding_ui
-    assert "preferences-command-header" in profile_ui
+    assert "preferences-command-header" in _preferences_section_html()
     assert "onboardingConfigurationSummary" in onboarding_ui
     assert "profilePreferencesConfigurationSummary" in profile_ui
     assert "onboardingSelectAllRolesBtn" in onboarding_ui
     assert "onboardingClearAllRolesBtn" in onboarding_ui
     assert ".preference-location-results" in css
-    assert "max-height: min(330px, 45vh)" in css
+    assert "max-height: var(--preference-location-results-max-height, 320px)" in css
     assert ".preference-location-policy" in css
-    assert "@media (max-width: 760px)" in css
+    assert "@media (max-width: 720px)" in css
     assert "@media (prefers-reduced-motion: reduce)" in css
 
 

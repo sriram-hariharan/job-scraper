@@ -18,6 +18,8 @@ function checkedValues(name) {
 
 let onboardingRequirementState = {};
 let onboardingLocationSelector = null;
+let onboardingPreferencesWorkflow = null;
+let onboardingPreferencesSaving = false;
 
 function setCheckedValues(name, values) {
   const selected = new Set(Array.isArray(values) ? values.map(String) : []);
@@ -38,6 +40,7 @@ function updateOnboardingConfigurationSummary() {
   const roleCount = checkedValues("selected_role_families").length;
   const locationCount = onboardingLocationSelector?.serialize().preferred_location_specs.length || 0;
   summary.textContent = `${roleCount} role ${roleCount === 1 ? "family" : "families"} · ${locationCount} preferred location${locationCount === 1 ? "" : "s"}`;
+  onboardingPreferencesWorkflow?.update();
 }
 
 function setOnboardingChangeState(label, state = "saved") {
@@ -45,9 +48,11 @@ function setOnboardingChangeState(label, state = "saved") {
   if (!indicator) return;
   indicator.textContent = label;
   indicator.className = `preferences-save-state is-${state}`;
+  onboardingPreferencesWorkflow?.update();
 }
 
 function markOnboardingPreferencesDirty() {
+  if (checkedValues("selected_role_families").length) onboardingPreferencesWorkflow?.clearValidationError();
   updateOnboardingConfigurationSummary();
   setOnboardingChangeState("Unsaved changes", "dirty");
 }
@@ -176,11 +181,15 @@ async function saveOnboardingPreferences(onboardingCompleted) {
   const completeBtn = onboardingQs("onboardingCompleteBtn");
   const draftBtn = onboardingQs("onboardingSaveDraftBtn");
 
+  if (onboardingPreferencesSaving) return;
   const preferences = collectOnboardingPreferences(onboardingCompleted);
   if (onboardingCompleted && preferences.selected_role_families.length === 0) {
+    onboardingPreferencesWorkflow?.showValidationError("Select at least one role family before completing onboarding.", 0);
     renderRequirementStatus({});
     return;
   }
+  onboardingPreferencesWorkflow?.clearValidationError();
+  onboardingPreferencesSaving = true;
 
   if (completeBtn) completeBtn.disabled = true;
   if (draftBtn) draftBtn.disabled = true;
@@ -206,6 +215,7 @@ async function saveOnboardingPreferences(onboardingCompleted) {
     setOnboardingChangeState("Save failed", "error");
     renderRequirementStatus({});
   } finally {
+    onboardingPreferencesSaving = false;
     if (draftBtn) draftBtn.disabled = false;
     renderRequirementStatus({});
   }
@@ -219,6 +229,10 @@ document.addEventListener("DOMContentLoaded", () => {
     onboardingQs("onboardingLocationSelector"),
     { onChange: markOnboardingPreferencesDirty }
   );
+  onboardingPreferencesWorkflow = window.ApplyLensPreferencesWorkflow?.create(
+    onboardingQs("onboardingPage"),
+    { getValues: () => collectOnboardingPreferences(false) }
+  );
 
   document.querySelectorAll("#onboardingForm input, #onboardingForm textarea").forEach((field) => {
     if (field.closest("[data-location-selector]")) return;
@@ -226,6 +240,9 @@ document.addEventListener("DOMContentLoaded", () => {
       renderRequirementStatus({});
       markOnboardingPreferencesDirty();
     });
+  });
+  document.querySelectorAll("#onboardingForm textarea").forEach((field) => {
+    field.addEventListener("input", markOnboardingPreferencesDirty);
   });
 
   onboardingQs("onboardingSelectAllRolesBtn")?.addEventListener("click", () => {

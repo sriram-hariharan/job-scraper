@@ -697,15 +697,22 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/app/services.py",
             "src/app/static/app_redesign.css",
             "src/app/static/onboarding.js",
+            "src/app/static/preferences.css",
             "src/app/static/preference_location_selector.js",
+            "src/app/static/preferences_workflow.js",
             "src/app/static/profile.js",
+            "src/app/static/styles.css",
+            "src/app/ui_shell.py",
             "src/pipeline/location_preferences.py",
             "tests/support/phase_guard_registry.py",
             "tests/test_location_preference_search_api.py",
             "tests/test_onboarding_ui_contract.py",
+            "tests/test_phase132b2r3_guided_preferences_workflow.py",
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
             "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_role_expansion_ui_contract.py",
         },
     }
     try:
@@ -770,7 +777,7 @@ def assert_protected_hashes(
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-        ): "d6955cda3c2bc94ec1d9e83774aa508eda674325eb6c433335a95eb344310f01",
+        ): "c182c6a97be482e8543eecf6eb2dd28d7230a41ee718c2281f4eb67cd244c1c2",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",

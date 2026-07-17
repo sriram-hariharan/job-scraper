@@ -1,0 +1,35 @@
+{
+  "name": "applylens-executive-kpi",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "npm run typecheck && vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "1.25.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "3.9.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "@types/node": "26.1.1",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "@vitejs/plugin-react": "6.0.3",
+    "autoprefixer": "10.5.4",
+    "jsdom": "29.1.1",
+    "postcss": "8.5.19",
+    "tailwindcss": "3.4.19",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

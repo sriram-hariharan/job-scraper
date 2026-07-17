@@ -18,6 +18,7 @@ def executive_dashboard() -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=pipeline_options_controls_v4" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=pipeline_options_controls_v4" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133a" />
 </head>
 <body>
   {render_top_shell("/")}
@@ -36,23 +37,14 @@ def executive_dashboard() -> str:
             <button id="runPipelineBtn" type="button">Run Live Pipeline</button>
           </div>
         </header>
-    <section class="stats-grid">
-      <section class="card stat-card">
-        <div class="stat-label">Queue Rows</div>
-        <div class="stat-value" id="statQueueRows">-</div>
-      </section>
-      <section class="card stat-card">
-        <div class="stat-label">Next Steps</div>
-        <div class="stat-value" id="statDecisionRows">-</div>
-      </section>
-      <section class="card stat-card">
-        <div class="stat-label">Undecided Job Reviews</div>
-        <div class="stat-value" id="statUndecidedApplyReview">-</div>
-      </section>
-      <section class="card stat-card">
-        <div class="stat-label">Undecided Maybe Tailor</div>
-        <div class="stat-value" id="statUndecidedMaybeTailor">-</div>
-      </section>
+    <section
+      id="executiveKpiRoot"
+      class="executive-kpi-root"
+      aria-label="Executive queue metrics"
+      aria-live="polite"
+    >
+      <div class="executive-kpi-server-fallback">Loading dashboard metrics...</div>
+      <noscript>Enable JavaScript to view the Executive queue metrics.</noscript>
     </section>
 
     <section class="card controls-card">
@@ -619,6 +611,7 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133a_fix1"></script>
   <script src="/static/app.js?v=pipeline_options_controls_v4"></script>
   </body>
 </html>

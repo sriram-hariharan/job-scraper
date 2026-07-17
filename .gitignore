@@ -17,6 +17,10 @@ venv/
 job_scrap/
 job_scrap312/
 
+# scoped frontend build dependencies
+frontend/executive-kpi/node_modules/
+frontend/executive-kpi/coverage/
+
 # local env / secrets
 .env
 service_account.json

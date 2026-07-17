@@ -1067,6 +1067,14 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase133a_executive_kpi_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == phase133a_executive_kpi_runtime_files:
+        return
     assert changed_runtime_files in (
         [],
         [

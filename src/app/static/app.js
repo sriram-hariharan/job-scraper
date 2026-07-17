@@ -34,6 +34,7 @@ const PIPELINE_PENDING_SUCCESS_KEY = "job_operator_pipeline_pending_success";
 const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
 const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
+const EXECUTIVE_KPI_EVENT_NAME = "applylens:executive-kpi-state";
 let pipelinePollTimer = null;
 
 const DEFAULT_OUTPUT_DIR = "outputs/application_planning";
@@ -1446,14 +1447,29 @@ function applyPipelinePreset(name) {
   syncPipelinePathPreview();
 }
 
+function publishExecutiveKpiState(detail) {
+  window.__APPLYLENS_EXECUTIVE_KPI_STATE__ = detail;
+  window.dispatchEvent(new CustomEvent(EXECUTIVE_KPI_EVENT_NAME, { detail }));
+}
+
+function normalizeExecutiveKpiValue(value, fallback = null) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
 function renderStats(statusData) {
   const summary = statusData.summary || {};
   const undecided = statusData.undecided_review_counts || {};
 
-  qs("statQueueRows").textContent = summary.execution_queue_rows ?? "-";
-  qs("statDecisionRows").textContent = summary.operator_decisions_rows ?? "-";
-  qs("statUndecidedApplyReview").textContent = undecided.APPLY_REVIEW_VARIANTS ?? 0;
-  qs("statUndecidedMaybeTailor").textContent = undecided.MAYBE_TAILOR ?? 0;
+  publishExecutiveKpiState({
+    status: "ready",
+    metrics: {
+      queueRows: normalizeExecutiveKpiValue(summary.execution_queue_rows),
+      nextSteps: normalizeExecutiveKpiValue(summary.operator_decisions_rows),
+      undecidedJobReviews: normalizeExecutiveKpiValue(undecided.APPLY_REVIEW_VARIANTS, 0),
+      undecidedMaybeTailor: normalizeExecutiveKpiValue(undecided.MAYBE_TAILOR, 0),
+    },
+  });
 }
 
 function formatWorkflowSummaryCounts(counts = {}) {
@@ -2656,8 +2672,17 @@ function buildBrowseUrl(pageOverride = null) {
 }
 
 async function loadStatus() {
-  const data = await fetchJson("/status");
-  renderStats(data);
+  publishExecutiveKpiState({ status: "loading" });
+  try {
+    const data = await fetchJson("/status");
+    renderStats(data);
+  } catch (err) {
+    publishExecutiveKpiState({
+      status: "error",
+      message: err?.message || "Dashboard status is unavailable.",
+    });
+    throw err;
+  }
 }
 
 async function loadBrowse(pageOverride = null) {

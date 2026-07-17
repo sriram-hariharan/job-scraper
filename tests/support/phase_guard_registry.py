@@ -714,6 +714,32 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_queue_ui_metadata_contract.py",
             "tests/test_role_expansion_ui_contract.py",
         },
+        "phase133a_executive_kpi_react_island": {
+            ".gitignore",
+            "Dockerfile",
+            "README.md",
+            "frontend/executive-kpi/package-lock.json",
+            "frontend/executive-kpi/package.json",
+            "frontend/executive-kpi/postcss.config.cjs",
+            "frontend/executive-kpi/src/AnalyticsDashboard.test.tsx",
+            "frontend/executive-kpi/src/AnalyticsDashboard.tsx",
+            "frontend/executive-kpi/src/main.tsx",
+            "frontend/executive-kpi/src/main.test.tsx",
+            "frontend/executive-kpi/src/styles.css",
+            "frontend/executive-kpi/src/test/setup.ts",
+            "frontend/executive-kpi/tailwind.config.cjs",
+            "frontend/executive-kpi/tsconfig.json",
+            "frontend/executive-kpi/vite.config.ts",
+            "src/app/static/app.js",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "src/app/ui.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase133a_executive_kpi_react_island.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -728,6 +754,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | legacy_guard_allowlist("phase129c_workflow_overlay_and_run_scoped_corpus")
         | legacy_guard_allowlist("phase132b_premium_preferences_ui")
+        | legacy_guard_allowlist("phase133a_executive_kpi_react_island")
     )
 
 

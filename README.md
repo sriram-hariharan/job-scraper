@@ -418,6 +418,20 @@ http://127.0.0.1:8000
 python run_api.py --reload
 ```
 
+The Executive Dashboard KPI cards are a scoped React island. Its deterministic
+production bundle is checked in under `src/app/static/build/executive-kpi` so the
+normal Python runtime does not require Node or a frontend development server.
+Rebuild that bundle after changing `frontend/executive-kpi`:
+
+```bash
+cd frontend/executive-kpi
+npm ci
+npm run build
+```
+
+The production Docker build performs the same locked frontend build in a Node
+build stage, then copies only the generated browser assets into the Python image.
+
 ### Health Check
 
 ```bash

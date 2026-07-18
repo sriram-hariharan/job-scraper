@@ -4440,6 +4440,11 @@ body .notification-dropdown.hidden {
 }
 
 /* Floating Job Assistant launcher. */
+body.executive-dashboard-page {
+  --floating-chat-launcher-bottom: max(8px, env(safe-area-inset-bottom));
+  --floating-chat-launcher-bottom-mobile: max(8px, env(safe-area-inset-bottom));
+}
+
 #floatingIntelligenceChat {
   position: static !important;
 }
@@ -4447,7 +4452,7 @@ body .notification-dropdown.hidden {
 #floatingIntelligenceChatButton {
   position: fixed !important;
   right: 28px !important;
-  bottom: 28px !important;
+  bottom: var(--floating-chat-launcher-bottom, max(28px, env(safe-area-inset-bottom))) !important;
   z-index: 900 !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -4809,7 +4814,7 @@ html[data-theme="light"] .floating-intelligence-chat-message--error .floating-in
 @media (max-width: 560px) {
   #floatingIntelligenceChatButton {
     right: 16px !important;
-    bottom: 16px !important;
+    bottom: var(--floating-chat-launcher-bottom-mobile, max(16px, env(safe-area-inset-bottom))) !important;
     width: 58px !important;
     height: 58px !important;
   }

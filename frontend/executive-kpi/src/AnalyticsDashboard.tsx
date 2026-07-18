@@ -60,7 +60,7 @@ type SnapshotTooltipProps = {
   payload?: Array<{ payload?: { current?: number; baseline?: number } }>;
 };
 
-function SnapshotTooltip({ active, payload }: SnapshotTooltipProps) {
+export function SnapshotTooltip({ active, payload }: SnapshotTooltipProps) {
   if (!active || !payload?.length) return null;
 
   const point = payload[0]?.payload;
@@ -97,7 +97,12 @@ function SnapshotChart({ value, queueRows, label }: { value: number; queueRows: 
         <BarChart data={chartData} layout="vertical" margin={{ top: 6, right: 0, bottom: 6, left: 0 }}>
           <XAxis type="number" domain={[0, baseline]} hide />
           <YAxis type="category" dataKey="name" hide />
-          <Tooltip content={<SnapshotTooltip />} cursor={false} />
+          <Tooltip
+            allowEscapeViewBox={{ x: false, y: true }}
+            content={<SnapshotTooltip />}
+            cursor={false}
+            wrapperStyle={{ zIndex: 30, pointerEvents: "none" }}
+          />
           <Bar
             dataKey="current"
             stackId="snapshot"

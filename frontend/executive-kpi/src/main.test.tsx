@@ -5,6 +5,7 @@ beforeEach(() => {
   vi.resetModules();
   document.body.innerHTML = '<section id="executiveKpiRoot"></section>';
   delete window.__APPLYLENS_EXECUTIVE_KPI_STATE__;
+  delete window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__;
 });
 
 it("updates the mounted KPI island when the existing status owner publishes refresh states", async () => {
@@ -57,4 +58,42 @@ it("hydrates from the latest state when status was published before the island m
   await waitFor(() => expect(screen.getByText("77")).toBeInTheDocument());
   expect(screen.getByText("0")).toBeInTheDocument();
   expect(screen.queryByLabelText("Loading executive queue metrics")).not.toBeInTheDocument();
+});
+
+it("hydrates and updates the queue island from the existing bridge state", async () => {
+  document.body.innerHTML = '<section id="executiveQueueRoot"></section>';
+  window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ = {
+    status: "ready",
+    rows: [{ job_doc_id: "job-one", job_title: "Initial Queue Job" }],
+    metaLabel: "Browse view · 1 total job",
+    viewMode: "simple",
+    filters: { actions: [], preferenceIds: [], undecidedOnly: false, limit: 15 },
+    preferenceOptions: [],
+    pagination: {
+      page: 1,
+      pageSize: 15,
+      totalCount: 1,
+      totalPages: 1,
+      hasPrevPage: false,
+      hasNextPage: false,
+    },
+  };
+
+  await act(async () => {
+    await import("./main");
+  });
+
+  await waitFor(() => expect(screen.getByText("Initial Queue Job")).toBeInTheDocument());
+
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("applylens:executive-queue-state", {
+      detail: {
+        ...window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__,
+        rows: [{ job_doc_id: "job-two", job_title: "Refreshed Queue Job" }],
+      },
+    }));
+  });
+
+  await waitFor(() => expect(screen.getByText("Refreshed Queue Job")).toBeInTheDocument());
+  expect(screen.queryByText("Initial Queue Job")).not.toBeInTheDocument();
 });

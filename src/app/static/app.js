@@ -15,18 +15,24 @@ const state = {
 };
 
 const queueTableState = {
+  status: "loading",
+  message: "",
   rows: [],
   metaLabel: "Loading...",
+  preferenceOptions: [],
   page: 1,
   pageSize: 15,
   totalCount: 0,
   totalPages: 1,
   hasPrevPage: false,
   hasNextPage: false,
-  sort: {
-    key: "",
-    direction: "asc",
-  },
+};
+
+const queueFilterState = {
+  actions: [],
+  preferenceIds: [],
+  undecidedOnly: false,
+  limit: 15,
 };
 
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
@@ -35,6 +41,8 @@ const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
 const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
 const EXECUTIVE_KPI_EVENT_NAME = "applylens:executive-kpi-state";
+const EXECUTIVE_QUEUE_STATE_EVENT_NAME = "applylens:executive-queue-state";
+const EXECUTIVE_QUEUE_ACTION_EVENT_NAME = "applylens:executive-queue-action";
 let pipelinePollTimer = null;
 
 const DEFAULT_OUTPUT_DIR = "outputs/application_planning";
@@ -843,6 +851,21 @@ async function loadPreferenceFilterOptions(rootId) {
   }
 }
 
+async function loadExecutiveQueuePreferenceOptions() {
+  try {
+    const payload = await fetchJson("/onboarding/preferences");
+    const options = Array.isArray(payload.preference_options) ? payload.preference_options : [];
+    queueTableState.preferenceOptions = options.map((option) => ({
+      role_family_id: String(option.role_family_id || "").trim(),
+      display_name: String(option.display_name || option.role_family_id || "").trim(),
+    })).filter((option) => option.role_family_id);
+  } catch (error) {
+    queueTableState.preferenceOptions = [];
+    console.warn("Could not load Executive queue preference options.", error);
+  }
+  publishExecutiveQueueState();
+}
+
 function normalizeExecutiveViewMode(value) {
   return String(value || "").trim().toLowerCase() === "simple" ? "simple" : "detailed";
 }
@@ -853,8 +876,6 @@ function loadExecutiveViewMode() {
 
 function syncExecutiveViewModeControls() {
   const mode = normalizeExecutiveViewMode(state.executiveViewMode);
-  const radio = document.querySelector(`input[name='executiveViewMode'][value='${mode}']`);
-  if (radio) radio.checked = true;
   document.body.classList.toggle("executive-simple-mode", mode === "simple");
   document.body.classList.toggle("executive-detailed-mode", mode !== "simple");
 }
@@ -863,7 +884,7 @@ function setExecutiveViewMode(mode) {
   state.executiveViewMode = normalizeExecutiveViewMode(mode);
   localStorage.setItem(EXECUTIVE_VIEW_MODE_STORAGE_KEY, state.executiveViewMode);
   syncExecutiveViewModeControls();
-  renderQueueRows(queueTableState.rows, queueTableState.metaLabel);
+  publishExecutiveQueueState();
 }
 
 function renderQueueHeaders() {
@@ -994,18 +1015,10 @@ function renderTableLoading(colspan, label) {
 }
 
 function setQueueLoadingState(label) {
-  const tbody = qs("queueTableBody");
-  if (!tbody) return;
-
-  tbody.innerHTML = "";
-  renderQueueHeaders();
-  window.setTableWrapLoading?.(tbody, label);
-  qs("tableMeta").textContent = "Loading...";
-
-  const paginationMeta = qs("queuePaginationMeta");
-  const paginationActions = qs("queuePaginationActions");
-  if (paginationMeta) paginationMeta.textContent = "Loading...";
-  if (paginationActions) paginationActions.innerHTML = "";
+  queueTableState.status = "loading";
+  queueTableState.message = "";
+  queueTableState.metaLabel = label || "Loading...";
+  publishExecutiveQueueState();
 }
 
 async function postJson(url, payload) {
@@ -1450,6 +1463,37 @@ function applyPipelinePreset(name) {
 function publishExecutiveKpiState(detail) {
   window.__APPLYLENS_EXECUTIVE_KPI_STATE__ = detail;
   window.dispatchEvent(new CustomEvent(EXECUTIVE_KPI_EVENT_NAME, { detail }));
+}
+
+function buildExecutiveQueueBridgeState() {
+  return {
+    status: queueTableState.status,
+    rows: Array.isArray(queueTableState.rows) ? queueTableState.rows.slice() : [],
+    metaLabel: queueTableState.metaLabel,
+    message: queueTableState.message,
+    viewMode: normalizeExecutiveViewMode(state.executiveViewMode),
+    filters: {
+      actions: queueFilterState.actions.slice(),
+      preferenceIds: queueFilterState.preferenceIds.slice(),
+      undecidedOnly: queueFilterState.undecidedOnly,
+      limit: queueFilterState.limit,
+    },
+    preferenceOptions: queueTableState.preferenceOptions.slice(),
+    pagination: {
+      page: queueTableState.page,
+      pageSize: queueTableState.pageSize,
+      totalCount: queueTableState.totalCount,
+      totalPages: queueTableState.totalPages,
+      hasPrevPage: queueTableState.hasPrevPage,
+      hasNextPage: queueTableState.hasNextPage,
+    },
+  };
+}
+
+function publishExecutiveQueueState() {
+  const detail = buildExecutiveQueueBridgeState();
+  window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ = detail;
+  window.dispatchEvent(new CustomEvent(EXECUTIVE_QUEUE_STATE_EVENT_NAME, { detail }));
 }
 
 function normalizeExecutiveKpiValue(value, fallback = null) {
@@ -2626,39 +2670,18 @@ function renderQueuePagination() {
 }
 
 function renderQueueRows(rows, metaLabel) {
+  queueTableState.status = "ready";
+  queueTableState.message = "";
   queueTableState.rows = Array.isArray(rows) ? rows.slice() : [];
   queueTableState.metaLabel = metaLabel;
-
-  const tbody = qs("queueTableBody");
-  const displayRows = sortRows(queueTableState.rows, QUEUE_SORT_COLUMNS, queueTableState.sort);
-  const modeLabel = state.executiveViewMode === "simple" ? "Simple mode" : "Detailed mode";
-
-  renderQueueHeaders();
-
-  if (!displayRows.length) {
-    const colspan = state.executiveViewMode === "simple" ? 8 : 15;
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="${colspan}" class="empty-state">No rows found.</td>
-      </tr>
-    `;
-  } else if (state.executiveViewMode === "simple") {
-    tbody.innerHTML = displayRows.map(buildQueueRowSimpleHtml).join("");
-  } else {
-    tbody.innerHTML = displayRows.map(buildQueueRowDetailedHtml).join("");
-  }
-
-  qs("tableMeta").textContent = `${queueTableState.metaLabel} · ${modeLabel}`;
-  renderQueuePagination();
-  window.clearTableWrapLoading?.(tbody);
-  initResizableTableColumns("queueTable", "queueTableColumnWidths");
+  publishExecutiveQueueState();
 }
 
 function buildBrowseUrl(pageOverride = null) {
-  const actions = getMultiSelectValues("actionFilter");
-  const preferenceIds = getMultiSelectValues("preferenceFilter");
-  const undecidedOnly = getBinaryToggleBool("executiveUndecidedOnly") ? "true" : "";
-  const limit = qs("limitInput").value || "15";
+  const actions = queueFilterState.actions;
+  const preferenceIds = queueFilterState.preferenceIds;
+  const undecidedOnly = queueFilterState.undecidedOnly ? "true" : "";
+  const limit = queueFilterState.limit || 15;
   const page = pageOverride ?? queueTableState.page ?? 1;
 
   const params = new URLSearchParams();
@@ -2706,7 +2729,9 @@ async function loadBrowse(pageOverride = null) {
       `Browse view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
     );
   } catch (err) {
-    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    queueTableState.status = "error";
+    queueTableState.message = err?.message || "Executive queue data is unavailable.";
+    publishExecutiveQueueState();
     throw err;
   }
 }
@@ -2719,7 +2744,7 @@ async function loadWorkflow(view) {
   await new Promise((resolve) => window.requestAnimationFrame(resolve));
 
   try {
-    const limit = qs("limitInput").value || "25";
+    const limit = queueFilterState.limit || 25;
     const params = new URLSearchParams({
       view,
       limit,
@@ -2735,7 +2760,9 @@ async function loadWorkflow(view) {
       `Workflow view: ${view} · ${count} row${count === 1 ? "" : "s"}`
     );
   } catch (err) {
-    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    queueTableState.status = "error";
+    queueTableState.message = err?.message || "Workflow queue data is unavailable.";
+    publishExecutiveQueueState();
     throw err;
   }
 }
@@ -2749,7 +2776,7 @@ async function loadAppliedJobs(pageOverride = null) {
 
   try {
     const targetPage = pageOverride ?? queueTableState.page ?? 1;
-    const limit = qs("limitInput").value || "15";
+    const limit = queueFilterState.limit || 15;
     const data = await fetchJson(
       `/applied-jobs?limit=${encodeURIComponent(limit)}&page=${encodeURIComponent(targetPage)}`
     );
@@ -2763,7 +2790,9 @@ async function loadAppliedJobs(pageOverride = null) {
       `Applied jobs · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
     );
   } catch (err) {
-    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    queueTableState.status = "error";
+    queueTableState.message = err?.message || "Applied job data is unavailable.";
+    publishExecutiveQueueState();
     throw err;
   }
 }
@@ -2779,11 +2808,12 @@ async function reloadCurrentTable(pageOverride = null) {
 }
 
 function clearFilters() {
-  clearMultiSelect("actionFilter");
-  resetMultiSelectToAll("preferenceFilter");
-  setBinaryToggleValue("executiveUndecidedOnly", false);
-  qs("limitInput").value = "15";
+  queueFilterState.actions = [];
+  queueFilterState.preferenceIds = [];
+  queueFilterState.undecidedOnly = false;
+  queueFilterState.limit = 15;
   queueTableState.page = 1;
+  publishExecutiveQueueState();
 }
 
 function getApplicationModal() {
@@ -2818,12 +2848,12 @@ async function submitApplicationStatus(status) {
   await reloadCurrentTable();
 }
 
-async function handleApplyClick(button) {
+async function handleQueueReview(row) {
   const payload = {
-    job_doc_id: button.dataset.jobDocId || "",
-    job_url: button.dataset.jobUrl || "",
-    job_company: button.dataset.jobCompany || "",
-    job_title: button.dataset.jobTitle || "",
+    job_doc_id: row?.job_doc_id || "",
+    job_url: row?.job_url || "",
+    job_company: row?.job_company || "",
+    job_title: row?.job_title || "",
     source_view: state.currentMode === "workflow" && state.workflowView
       ? `executive:${state.workflowView}`
       : "executive:browse",
@@ -2843,17 +2873,6 @@ async function handleApplyClick(button) {
 }
 
 function attachApplicationHandlers() {
-  qs("queueTableBody").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-apply-job='true']");
-    if (!button || button.disabled) return;
-
-    try {
-      await handleApplyClick(button);
-    } catch (err) {
-      showAppError("Failed to open apply workflow", err);
-    }
-  });
-
   qs("closeApplicationModalBtn").addEventListener("click", () => {
     clearPendingApplication();
     closeApplicationModal();
@@ -3032,51 +3051,47 @@ function attachPipelineConfigHandlers() {
   });
 }
 
-function attachEventHandlers() {
-  initMultiSelect("actionFilter");
-  initMultiSelect("preferenceFilter");
-  qs("applyFiltersBtn").addEventListener("click", async () => {
-    queueTableState.page = 1;
-    try {
+function normalizeQueueFilters(filters = {}) {
+  const actions = Array.isArray(filters.actions) ? filters.actions : [];
+  const preferenceIds = Array.isArray(filters.preferenceIds) ? filters.preferenceIds : [];
+  return {
+    actions: actions.map((value) => String(value || "").trim()).filter(Boolean),
+    preferenceIds: preferenceIds.map((value) => String(value || "").trim()).filter(Boolean),
+    undecidedOnly: Boolean(filters.undecidedOnly),
+    limit: Math.min(200, Math.max(1, Number(filters.limit) || 15)),
+  };
+}
+
+async function handleExecutiveQueueAction(event) {
+  const action = event?.detail || {};
+  try {
+    if (action.type === "apply_filters") {
+      Object.assign(queueFilterState, normalizeQueueFilters(action.filters));
+      queueTableState.page = 1;
+      publishExecutiveQueueState();
       await loadBrowse(1);
-    } catch (err) {
-      showAppError("Failed to load browse data", err);
-    }
-  });
-
-  qs("clearFiltersBtn").addEventListener("click", async () => {
-    clearFilters();
-    try {
+    } else if (action.type === "clear_filters") {
+      clearFilters();
       await loadBrowse(1);
-    } catch (err) {
-      showAppError("Failed to reload browse data", err);
-    }
-  });
-
-  const queuePaginationActions = qs("queuePaginationActions");
-  if (queuePaginationActions) {
-    queuePaginationActions.addEventListener("click", async (event) => {
-      const button = event.target.closest("[data-page-target]");
-      if (!button || button.disabled) return;
-
-      const nextPage = Number(button.dataset.pageTarget || "");
-      if (!Number.isFinite(nextPage) || nextPage < 1 || nextPage === queueTableState.page) {
-        return;
-      }
-
-      try {
+    } else if (action.type === "page_change") {
+      const nextPage = Number(action.page);
+      if (Number.isFinite(nextPage) && nextPage >= 1 && nextPage !== queueTableState.page) {
         await reloadCurrentTable(nextPage);
-      } catch (err) {
-        showAppError("Failed to change queue page", err);
       }
-    });
+    } else if (action.type === "retry") {
+      await reloadCurrentTable(queueTableState.page);
+    } else if (action.type === "view_mode_change") {
+      setExecutiveViewMode(action.viewMode);
+    } else if (action.type === "review" && action.row && !action.row.is_applied) {
+      await handleQueueReview(action.row);
+    }
+  } catch (err) {
+    showAppError("Executive queue action failed", err);
   }
+}
 
-  document.querySelectorAll("input[name='executiveViewMode']").forEach((input) => {
-    input.addEventListener("change", () => {
-      setExecutiveViewMode(input.value);
-    });
-  });
+function attachEventHandlers() {
+  window.addEventListener(EXECUTIVE_QUEUE_ACTION_EVENT_NAME, handleExecutiveQueueAction);
 
   document.addEventListener("click", (event) => {
     document.querySelectorAll(".multi-select").forEach((root) => {
@@ -3108,7 +3123,6 @@ function attachEventHandlers() {
 
 async function init() {
   try {
-    await loadPreferenceFilterOptions("preferenceFilter");
     attachEventHandlers();
     attachApplicationHandlers();
     attachPipelineConfigHandlers();
@@ -3117,12 +3131,8 @@ async function init() {
 
     state.executiveViewMode = loadExecutiveViewMode();
     syncExecutiveViewModeControls();
-
-    bindTableSorting("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort, () => {
-      renderQueueRows(queueTableState.rows, queueTableState.metaLabel);
-    });
-
     setQueueLoadingState("Loading executive jobs...");
+    await loadExecutiveQueuePreferenceOptions();
 
     await loadStatus();
     await loadPipelineStatus();

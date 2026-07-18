@@ -2,6 +2,12 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
 import type { ExecutiveKpiState } from "./AnalyticsDashboard";
+import {
+  DEFAULT_QUEUE_STATE,
+  ExecutiveQueue,
+  QUEUE_STATE_EVENT,
+  type ExecutiveQueueState,
+} from "./ExecutiveQueue";
 import "./styles.css";
 
 const KPI_EVENT_NAME = "applylens:executive-kpi-state";
@@ -31,11 +37,38 @@ function ExecutiveKpiIsland() {
   return <AnalyticsDashboard state={state} />;
 }
 
+function ExecutiveQueueIsland() {
+  const [state, setState] = useState<ExecutiveQueueState>(
+    () => window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ || DEFAULT_QUEUE_STATE,
+  );
+
+  useEffect(() => {
+    const handleState = (event: Event) => {
+      const nextState = (event as CustomEvent<ExecutiveQueueState>).detail;
+      if (nextState?.status) setState(nextState);
+    };
+
+    window.addEventListener(QUEUE_STATE_EVENT, handleState);
+    return () => window.removeEventListener(QUEUE_STATE_EVENT, handleState);
+  }, []);
+
+  return <ExecutiveQueue state={state} />;
+}
+
 const mount = document.getElementById("executiveKpiRoot");
 if (mount) {
   createRoot(mount).render(
     <StrictMode>
       <ExecutiveKpiIsland />
+    </StrictMode>,
+  );
+}
+
+const queueMount = document.getElementById("executiveQueueRoot");
+if (queueMount) {
+  createRoot(queueMount).render(
+    <StrictMode>
+      <ExecutiveQueueIsland />
     </StrictMode>,
   );
 }

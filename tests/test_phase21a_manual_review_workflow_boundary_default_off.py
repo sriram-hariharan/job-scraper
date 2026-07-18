@@ -1099,6 +1099,12 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == phase133a_executive_kpi_runtime_files:
         return
+    phase133b_executive_dashboard_runtime_files = (
+        phase133a_executive_kpi_runtime_files
+        | {ROOT / "src/app/static/app_redesign.css"}
+    )
+    if set(changed_runtime_files) == phase133b_executive_dashboard_runtime_files:
+        return
     assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],

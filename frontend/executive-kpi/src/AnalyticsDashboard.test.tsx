@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { AnalyticsDashboard } from "./AnalyticsDashboard";
+import { AnalyticsDashboard, SnapshotTooltip } from "./AnalyticsDashboard";
 
 const metrics = {
   queueRows: 128,
@@ -41,6 +41,20 @@ describe("AnalyticsDashboard", () => {
 
     expect(screen.getAllByText("0")).toHaveLength(4);
     expect(screen.queryByText("—")).not.toBeInTheDocument();
+  });
+
+  it("renders the current tooltip only while active and preserves a zero value", () => {
+    const { rerender } = render(
+      <SnapshotTooltip active payload={[{ payload: { current: 0, baseline: 0 } }]} />,
+    );
+
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.queryByText(/queue baseline/i)).not.toBeInTheDocument();
+
+    rerender(<SnapshotTooltip active={false} payload={[{ payload: { current: 22, baseline: 128 } }]} />);
+    expect(screen.queryByText("Current")).not.toBeInTheDocument();
+    expect(screen.queryByText("22")).not.toBeInTheDocument();
   });
 
   it("renders a restrained unavailable state without crashing", () => {

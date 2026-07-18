@@ -14,7 +14,7 @@ LOCK_PATH = ROOT / "frontend/executive-kpi/package-lock.json"
 BUNDLE_DIR = ROOT / "src/app/static/build/executive-kpi"
 
 
-def test_executive_route_has_one_react_kpi_mount_and_keeps_queue_workflow():
+def test_executive_route_keeps_kpi_mount_and_uses_one_react_queue_mount():
     markup = executive_dashboard()
 
     assert markup.count('id="executiveKpiRoot"') == 1
@@ -37,13 +37,19 @@ def test_executive_route_has_one_react_kpi_mount_and_keeps_queue_workflow():
         "Executive Queue",
         "Refresh Status",
         "Run Live Pipeline",
+        'id="executiveQueueRoot"',
+    ):
+        assert preserved_marker in markup
+
+    assert markup.count('id="executiveQueueRoot"') == 1
+    for retired_legacy_id in (
         'id="actionFilter"',
         'id="preferenceFilter"',
         'name="executiveViewMode"',
         'id="queueTable"',
         'id="queuePaginationActions"',
     ):
-        assert preserved_marker in markup
+        assert retired_legacy_id not in markup
 
 
 def test_react_component_preserves_four_metric_meanings_and_real_snapshot_only():
@@ -108,6 +114,7 @@ def test_frontend_build_is_locked_scoped_and_available_to_fastapi():
     assert '"react"' in package
     assert '"recharts"' in package
     assert '"lucide-react"' in package
+    assert '"@tanstack/react-table"' in package
     assert '"tailwindcss"' in package
     assert '"vite"' in package
     assert "https://" not in package
@@ -149,6 +156,9 @@ def test_rendered_asset_urls_resolve_to_complete_production_bundle():
 
     assert "executiveKpiRoot" in bundle
     assert "applylens:executive-kpi-state" in bundle
+    assert "executiveQueueRoot" in bundle
+    assert "applylens:executive-queue-state" in bundle
+    assert "applylens:executive-queue-action" in bundle
     assert "process.env" not in bundle
     assert "localhost" not in bundle
     assert "/assets/" not in bundle
@@ -162,4 +172,19 @@ def test_tailwind_is_scoped_and_does_not_reset_the_server_rendered_page():
     assert "preflight: false" in config
     assert "@tailwind base" not in styles
     assert "#executiveKpiRoot" in styles
+    assert "#executiveQueueRoot" in styles
     assert "html[data-theme=\"dark\"] #executiveKpiRoot" in styles
+    assert "html[data-theme=\"dark\"] #executiveQueueRoot" in styles
+
+
+def test_kpi_tooltip_escapes_vertically_without_global_overflow_or_fake_history():
+    component = COMPONENT_PATH.read_text(encoding="utf-8")
+    styles = (ROOT / "frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+
+    assert "allowEscapeViewBox={{ x: false, y: true }}" in component
+    assert 'wrapperStyle={{ zIndex: 30, pointerEvents: "none" }}' in component
+    assert "export function SnapshotTooltip" in component
+    assert ".executive-kpi-card:hover" in styles
+    assert ".executive-kpi-chart .recharts-tooltip-wrapper" in styles
+    assert "pointer-events: none" in styles
+    assert "fake history" not in component.lower()

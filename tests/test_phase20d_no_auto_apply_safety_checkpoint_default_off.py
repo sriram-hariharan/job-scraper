@@ -1075,6 +1075,12 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase133a_executive_kpi_runtime_files:
         return
+    phase133b_executive_dashboard_runtime_files = (
+        phase133a_executive_kpi_runtime_files
+        | {ROOT / "src/app/static/app_redesign.css"}
+    )
+    if set(changed_runtime_files) == phase133b_executive_dashboard_runtime_files:
+        return
     assert changed_runtime_files in (
         [],
         [

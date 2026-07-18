@@ -33,6 +33,7 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
     shell_source = Path("src/app/ui_shell.py").read_text(encoding="utf-8")
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
     for class_name in (
@@ -47,7 +48,8 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
     assert "New Scan" in shell_source
     assert "Run Live Pipeline" in app_markup
     assert "Refresh Status" in app_markup
-    assert "multi-select-trigger-icon" in app_markup
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert "function MultiSelect" in executive_queue
     assert "multi-select-trigger-icon" in planning_markup
 
     primary_selector = (
@@ -175,6 +177,7 @@ def test_queue_ui_uses_simplified_job_seeker_columns():
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
     for source in (app_source, planning_source):
@@ -197,12 +200,15 @@ def test_queue_ui_uses_simplified_job_seeker_columns():
         assert "Priority reason" in source
         assert "A packet is a review bundle for this job." in source
 
-    for markup in (app_markup, planning_markup):
+    for markup in (planning_markup, executive_queue):
         assert "Recommendation" in markup
         assert "Posted at" in markup
         assert "Selected Resume" in markup
         assert "Review" in markup
         assert ">Apply<" not in markup
+
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert 'id="queueTable"' not in app_markup
 
     assert ".queue-job-summary" in css
     assert ".queue-status-stack" in css
@@ -214,6 +220,7 @@ def test_phase77b_executive_detail_and_packet_help_contract():
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
 
     assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
     assert 'key: "runner_up_resume", label: "Runner-up resume"' in app_source
@@ -221,23 +228,20 @@ def test_phase77b_executive_detail_and_packet_help_contract():
     assert 'key: "missing_requirement_count", label: "Missing req count"' in app_source
     assert 'key: "next_step", label: "Next step"' in app_source
     assert 'key: "queue_priority_reason", label: "Priority reason"' in app_source
-    assert 'data-col-key="runner_up_resume"' in app_markup
-    assert 'data-col-key="score_gap"' in app_markup
-    assert 'data-col-key="missing_requirement_count"' in app_markup
-    assert 'data-col-key="next_step"' in app_markup
-    assert 'data-col-key="queue_priority_reason"' in app_markup
+    assert 'id: "runner_up_resume"' in executive_queue
+    assert 'accessorKey: "score_gap"' in executive_queue
+    assert 'accessorKey: "missing_requirement_count"' in executive_queue
+    assert 'id: "next_step"' in executive_queue
+    assert 'id: "queue_priority_reason"' in executive_queue
 
-    for source in (app_source, planning_source, app_markup, planning_markup):
+    for source in (app_source, planning_source, executive_queue, planning_markup):
         assert "A packet is a review bundle for this job." in source
         assert "It does not apply to the job." in source
 
-    assert "executive-view-mode-row--table" in app_markup
-    queue_header_index = app_markup.index("<h2>Queue Table</h2>")
-    toggle_index = app_markup.index("executive-view-mode-row--table")
-    controls_start = app_markup.index('<section class="card controls-card">')
-    controls_end = app_markup.index('<div class="subtext pipeline-run-meta"')
-    assert toggle_index > queue_header_index
-    assert "executive-view-mode-row--table" not in app_markup[controls_start:controls_end]
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert '<h2>Queue Table</h2>' in executive_queue
+    assert 'className="executive-queue-view-toggle"' in executive_queue
+    assert executive_queue.index('<h2>Queue Table</h2>') < executive_queue.index('className="executive-queue-view-toggle"')
 
 
 def test_phase77b_recommendation_has_single_why_control_per_cell():
@@ -257,14 +261,16 @@ def test_phase77c_table_polish_contract():
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
 
-    assert "binary-toggle--small" in app_markup
-    assert "application-table-title-row" in app_markup
-    assert "executive-view-mode-row--table" in app_markup
-    title_row_index = app_markup.index("application-table-title-row")
-    toggle_index = app_markup.index("executive-view-mode-row--table")
-    header_right_index = app_markup.index("application-table-header-right")
-    assert title_row_index < toggle_index < header_right_index
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert "executive-queue-title-line" in executive_queue
+    assert "executive-queue-view-toggle" in executive_queue
+    assert "executive-queue-table-header" in executive_queue
+    title_row_index = executive_queue.index("executive-queue-title-line")
+    toggle_index = executive_queue.index("executive-queue-view-toggle")
+    header_right_index = executive_queue.index("executive-queue-table-header")
+    assert header_right_index < title_row_index < toggle_index
     assert "Posted:" not in app_source
     assert "Posted:" not in planning_source
     assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
@@ -934,10 +940,15 @@ def test_executive_and_planning_preferences_filters_use_backend_ids_and_search()
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     api_source = Path("src/app/api.py").read_text(encoding="utf-8")
     services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
 
-    assert 'id="preferenceFilter"' in executive_markup
+    assert 'id="executiveQueueRoot"' in executive_markup
+    assert 'label="Preferences"' in executive_queue
+    assert 'placeholder="All Preferences"' in executive_queue
+    assert 'placeholder={`Search ${label.toLowerCase()}`}' in executive_queue
+    assert "No preferences found" in executive_queue
     assert 'id="planningPreferenceFilter"' in planning_markup
-    for markup in (executive_markup, planning_markup):
+    for markup in (planning_markup,):
         assert 'data-all-value="__all__"' in markup
         assert 'data-searchable="true"' in markup
         assert "All Preferences" in markup
@@ -965,8 +976,17 @@ def test_shared_multi_select_contract_supports_dynamic_preference_options():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
 
-    for markup in (executive_markup, planning_markup):
+    assert 'id="executiveQueueRoot"' in executive_markup
+    assert "function MultiSelect" in executive_queue
+    assert "options={preferenceOptions}" in executive_queue
+    assert "values={filters.preferenceIds}" in executive_queue
+    assert "All Preferences" in executive_queue
+    assert 'placeholder={`Search ${label.toLowerCase()}`}' in executive_queue
+    assert "No preferences found" in executive_queue
+
+    for markup in (planning_markup,):
         preference_markup = markup[markup.index('data-placeholder="All Preferences"'):]
         assert 'class="multi-select-option is-selected" data-value="__all__" aria-checked="true"' in preference_markup
         assert preference_markup.count('placeholder="Search preferences"') == 1

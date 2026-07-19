@@ -2,23 +2,27 @@ import {
   type ColumnDef,
   type ColumnSizingState,
   type SortingState,
-  flexRender,
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import {
-  AlertCircle,
   Check,
   ChevronDown,
-  ChevronRight,
-  ChevronUp,
   Info,
   LoaderCircle,
   RotateCcw,
   Search,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  SHARED_NEUTRAL_CONTROL_CLASS,
+  SharedExpandedDetail,
+  SharedExpansionButton,
+  SharedInfoPopover,
+  SharedMatchMeter,
+  SharedTableCard,
+} from "./table/TablePrimitives";
 
 /**
  * Adapted from Origin UI Table by Origin UI.
@@ -37,7 +41,7 @@ export const QUEUE_COLUMN_WIDTH_STORAGE_KEY = "queueTableColumnWidths";
 export const QUEUE_REVIEW_COLUMN_WIDTH = 128;
 export const QUEUE_SELECTED_RESUME_MIN_WIDTH = 220;
 
-const NEUTRAL_CONTROL_CLASS = "preferences-secondary-action";
+const NEUTRAL_CONTROL_CLASS = SHARED_NEUTRAL_CONTROL_CLASS;
 
 export type QueueViewMode = "detailed" | "simple";
 
@@ -428,23 +432,10 @@ function QueueFiltersToolbar({ state }: { state: ExecutiveQueueState }) {
   );
 }
 
-function MatchScore({ value }: { value: unknown }) {
-  const score = numericScore(value);
-  if (score === null) return <span className="executive-queue-muted">—</span>;
-  const bounded = Math.max(0, Math.min(100, score));
-  return (
-    <div className="executive-queue-match" aria-label={`Match score ${score.toFixed(2)}`}>
-      <span>{score.toFixed(2)}</span>
-      <span className="executive-queue-match-track" aria-hidden="true">
-        <span style={{ width: `${bounded}%` }} />
-      </span>
-    </div>
-  );
-}
-
 function QueueDetails({ row }: { row: QueueRow }) {
   return (
-    <div className="executive-queue-details executive-queue-details--neutral">
+    <SharedExpandedDetail>
+      <div className="executive-queue-details executive-queue-details--neutral">
       <div><span>Priority reason</span><strong>{formatDiagnostic(row.queue_priority_reason) || "—"}</strong></div>
       <div><span>Next step</span><strong>{formatNextStep(row)}</strong></div>
       <div><span>Selected resume</span><strong>{formatResume(row.operator_selected_resume || row.winner_resume)}</strong></div>
@@ -452,7 +443,8 @@ function QueueDetails({ row }: { row: QueueRow }) {
       <div><span>Score gap</span><strong>{cleanText(row.score_gap) || "—"}</strong></div>
       <div><span>Missing requirements</span><strong>{cleanText(row.missing_requirement_count) || "0"}</strong></div>
       <p><Info size={14} aria-hidden="true" /> {PACKET_HELP}</p>
-    </div>
+      </div>
+    </SharedExpandedDetail>
   );
 }
 
@@ -466,17 +458,13 @@ function buildColumns(mode: QueueViewMode): ColumnDef<QueueRow>[] {
     enableSorting: false,
     enableResizing: false,
     cell: ({ row }) => (
-      <button
-        type="button"
-        className={`${NEUTRAL_CONTROL_CLASS} executive-queue-expand-btn`}
-        aria-label={`${row.getIsExpanded() ? "Collapse" : "Expand"} details for ${cleanText(row.original.job_title) || "job"}`}
-        aria-expanded={row.getIsExpanded()}
+      <SharedExpansionButton
+        expanded={row.getIsExpanded()}
+        label={`${row.getIsExpanded() ? "Collapse" : "Expand"} details for ${cleanText(row.original.job_title) || "job"}`}
+        controls={`executive-queue-detail-${row.id}`}
+        className="executive-queue-expand-btn"
         onClick={row.getToggleExpandedHandler()}
-      >
-        {row.getIsExpanded()
-          ? <ChevronDown size={15} aria-hidden="true" />
-          : <ChevronRight size={15} aria-hidden="true" />}
-      </button>
+      />
     ),
   };
   const review: ColumnDef<QueueRow> = {
@@ -545,7 +533,7 @@ function buildColumns(mode: QueueViewMode): ColumnDef<QueueRow>[] {
     },
     {
       id: "packet_status",
-      header: () => <span className="executive-queue-packet-head">Packet <Info size={13} aria-label={PACKET_HELP} /></span>,
+      header: () => <span className="executive-queue-packet-head">Packet <SharedInfoPopover label="About review packets">{PACKET_HELP}</SharedInfoPopover></span>,
       size: 138,
       minSize: 120,
       accessorFn: (row) => formatPacket(row.packet_generation_allowed),
@@ -562,7 +550,7 @@ function buildColumns(mode: QueueViewMode): ColumnDef<QueueRow>[] {
       minSize: 112,
       accessorFn: (row) => numericScore(row.winner_score),
       sortUndefined: "last",
-      cell: ({ row }) => <MatchScore value={row.original.winner_score} />,
+      cell: ({ row }) => <SharedMatchMeter value={row.original.winner_score} unavailableLabel="—" className="executive-queue-match" />,
     },
     {
       id: "selected_resume",
@@ -598,28 +586,14 @@ function buildColumns(mode: QueueViewMode): ColumnDef<QueueRow>[] {
   return base;
 }
 
-function Pagination({ state }: { state: ExecutiveQueueState }) {
-  const { page, pageSize, totalCount, totalPages, hasPrevPage, hasNextPage } = state.pagination;
-  const start = totalCount ? (page - 1) * pageSize + 1 : 0;
-  const end = totalCount ? Math.min(start + state.rows.length - 1, totalCount) : 0;
-  return (
-    <div className="executive-queue-pagination">
-      <span>{totalCount ? `Showing ${start}-${end} of ${totalCount} jobs` : "0 jobs"}</span>
-      <div>
-        <button type="button" className={NEUTRAL_CONTROL_CLASS} disabled={!hasPrevPage} aria-label="Previous queue page" onClick={() => publishQueueAction({ type: "page_change", page: page - 1 })}>Previous</button>
-        <span aria-current="page">{page} / {Math.max(totalPages, 1)}</span>
-        <button type="button" className={NEUTRAL_CONTROL_CLASS} disabled={!hasNextPage} aria-label="Next queue page" onClick={() => publishQueueAction({ type: "page_change", page: page + 1 })}>Next</button>
-      </div>
-    </div>
-  );
-}
-
 function QueueTable({ state }: { state: ExecutiveQueueState }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(readColumnSizing);
   const [expandedId, setExpandedId] = useState<string>("");
   const columns = useMemo(() => buildColumns(state.viewMode), [state.viewMode]);
   const rows = useMemo(() => state.rows.slice(), [state.rows]);
+
+  useEffect(() => setExpandedId(""), [state.rows, state.pagination.page, state.viewMode]);
 
   const table = useReactTable({
     data: rows,
@@ -652,112 +626,49 @@ function QueueTable({ state }: { state: ExecutiveQueueState }) {
     columnResizeMode: "onChange",
   });
 
-  return (
-    <section className={`executive-queue-table-card executive-queue-table-card--${state.viewMode}`} aria-label="Executive queue table">
-      <header className="executive-queue-table-header">
-        <div>
-          <div className="executive-queue-title-line">
-            <h2>Queue Table</h2>
-            <span>{state.pagination.totalCount}</span>
-          </div>
-          <p>{state.metaLabel}</p>
-        </div>
-        <div className="executive-queue-view-toggle" role="radiogroup" aria-label="Executive view mode">
-          {(["detailed", "simple"] as QueueViewMode[]).map((mode) => (
-            <button
-              type="button"
-              role="radio"
-              aria-checked={state.viewMode === mode}
-              className={`${NEUTRAL_CONTROL_CLASS} ${state.viewMode === mode ? "is-active" : ""}`}
-              key={mode}
-              onClick={() => publishQueueAction({ type: "view_mode_change", viewMode: mode })}
-            >{mode === "detailed" ? "Detailed" : "Simple"}</button>
-          ))}
-        </div>
-      </header>
+  const viewToggle = (
+    <div className="executive-queue-view-toggle" role="radiogroup" aria-label="Executive view mode">
+      {(["detailed", "simple"] as QueueViewMode[]).map((mode) => (
+        <button
+          type="button"
+          role="radio"
+          aria-checked={state.viewMode === mode}
+          className={`${NEUTRAL_CONTROL_CLASS} ${state.viewMode === mode ? "is-active" : ""}`}
+          key={mode}
+          onClick={() => publishQueueAction({ type: "view_mode_change", viewMode: mode })}
+        >{mode === "detailed" ? "Detailed" : "Simple"}</button>
+      ))}
+    </div>
+  );
 
-      {state.status === "error" ? (
-        <div className="executive-queue-error" role="alert">
-          <AlertCircle size={20} aria-hidden="true" />
-          <div><strong>Queue data is unavailable</strong><span>{state.message || "Try the request again."}</span></div>
-          <button type="button" className={NEUTRAL_CONTROL_CLASS} onClick={() => publishQueueAction({ type: "retry" })}>Retry</button>
-        </div>
-      ) : (
-        <div className="executive-queue-table-viewport" aria-busy={state.status === "loading"}>
-          <table style={{ width: table.getTotalSize() }}>
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    const sorted = header.column.getIsSorted();
-                    return (
-                      <th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        className={`executive-queue-column--${header.column.id} ${header.column.id === "review" ? "is-sticky-action" : ""} ${sorted ? "is-sorted" : ""}`.trim()}
-                        aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : header.column.getCanSort() ? "none" : undefined}
-                      >
-                        {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                          <button type="button" className={`${NEUTRAL_CONTROL_CLASS} executive-queue-sort-btn ${sorted ? "is-sorted" : ""}`} onClick={header.column.getToggleSortingHandler()}>
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {sorted === "asc" ? <ChevronUp size={14} /> : sorted === "desc" ? <ChevronDown size={14} /> : <span className="executive-queue-sort-placeholder" />}
-                          </button>
-                        ) : flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getCanResize() ? (
-                          <span
-                            className={`executive-queue-resize-handle ${header.column.getIsResizing() ? "is-resizing" : ""}`}
-                            onMouseDown={header.getResizeHandler()}
-                            onTouchStart={header.getResizeHandler()}
-                            role="separator"
-                            aria-orientation="vertical"
-                            aria-label={`Resize ${cleanText(header.column.columnDef.header) || header.column.id} column`}
-                          />
-                        ) : null}
-                      </th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {state.status === "loading" ? Array.from({ length: 5 }, (_, index) => (
-                <tr className="executive-queue-skeleton-row" key={`skeleton-${index}`}>
-                  <td colSpan={columns.length}><span /></td>
-                </tr>
-              )) : table.getRowModel().rows.length ? table.getRowModel().rows.flatMap((row) => [
-                <tr key={row.id} className={`executive-queue-row ${row.getIsExpanded() ? "is-expanded" : ""}`.trim()}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      style={{ width: cell.column.getSize() }}
-                      className={`executive-queue-column--${cell.column.id} ${cell.column.id === "review" ? "is-sticky-action" : ""}`.trim()}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>,
-                row.getIsExpanded() ? (
-                  <tr className="executive-queue-detail-row" key={`${row.id}-details`}>
-                    <td colSpan={row.getVisibleCells().length}><QueueDetails row={row.original} /></td>
-                  </tr>
-                ) : null,
-              ]) : (
-                <tr>
-                  <td colSpan={columns.length}>
-                    <div className="executive-queue-empty">
-                      <strong>No jobs match these filters</strong>
-                      <span>Clear filters to return to the complete Executive queue.</span>
-                      <button type="button" className={NEUTRAL_CONTROL_CLASS} onClick={() => publishQueueAction({ type: "clear_filters" })}>Clear Filters</button>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+  return (
+    <SharedTableCard
+      className={`executive-queue-table-card executive-queue-table-card--${state.viewMode}`}
+      ariaLabel="Executive queue table"
+      title="Queue Table"
+      subtitle={state.metaLabel}
+      count={state.pagination.totalCount}
+      table={table}
+      columns={columns}
+      status={state.status}
+      error={state.message}
+      headerActions={viewToggle}
+      pagination={state.pagination}
+      paginationLabel="Executive queue"
+      stickyColumnId="review"
+      rowClassName={(row) => `executive-queue-row ${row.getIsExpanded() ? "is-expanded" : ""}`.trim()}
+      detailId={(row) => `executive-queue-detail-${row.id}`}
+      renderDetails={(row) => <QueueDetails row={row.original} />}
+      empty={(
+        <div className="executive-queue-empty">
+          <strong>No jobs match these filters</strong>
+          <span>Clear filters to return to the complete Executive queue.</span>
+          <button type="button" className={NEUTRAL_CONTROL_CLASS} onClick={() => publishQueueAction({ type: "clear_filters" })}>Clear Filters</button>
         </div>
       )}
-      <Pagination state={state} />
-    </section>
+      onPageChange={(page) => publishQueueAction({ type: "page_change", page })}
+      onRetry={() => publishQueueAction({ type: "retry" })}
+    />
   );
 }
 

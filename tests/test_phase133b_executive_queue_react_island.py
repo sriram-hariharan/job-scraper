@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UI_PATH = ROOT / "src/app/ui.py"
 APP_JS_PATH = ROOT / "src/app/static/app.js"
 QUEUE_COMPONENT_PATH = ROOT / "frontend/executive-kpi/src/ExecutiveQueue.tsx"
+SHARED_TABLE_PATH = ROOT / "frontend/executive-kpi/src/table/TablePrimitives.tsx"
 MAIN_PATH = ROOT / "frontend/executive-kpi/src/main.tsx"
 BUNDLE_DIR = ROOT / "src/app/static/build/executive-kpi"
 
@@ -124,6 +125,7 @@ def test_origin_ui_attribution_and_scoped_styles_are_present():
 
 def test_queue_visual_hierarchy_and_pinned_review_contract_are_scoped():
     source = QUEUE_COMPONENT_PATH.read_text(encoding="utf-8")
+    shared = SHARED_TABLE_PATH.read_text(encoding="utf-8")
     styles = (ROOT / "frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
 
     assert 'export const QUEUE_REVIEW_COLUMN_WIDTH = 128' in source
@@ -133,10 +135,10 @@ def test_queue_visual_hierarchy_and_pinned_review_contract_are_scoped():
     assert 'maxSize: QUEUE_REVIEW_COLUMN_WIDTH' in source
     assert 'className="executive-queue-selected-resume-value"' in source
     assert 'row.original.is_applied ? "Reviewed" : "Review"' in source
-    assert "<ChevronDown size={15}" in source
-    assert "<ChevronRight size={15}" in source
-    assert 'executive-queue-table-card--${state.viewMode}' in source
-    assert 'className={`executive-queue-row ${row.getIsExpanded() ? "is-expanded" : ""}`.trim()}' in source
+    assert "<ChevronDown size={15}" in shared
+    assert "<ChevronRight size={15}" in shared
+    assert 'className={`executive-queue-table-card executive-queue-table-card--${state.viewMode}`}' in source
+    assert 'rowClassName={(row) => `executive-queue-row ${row.getIsExpanded() ? "is-expanded" : ""}`.trim()}' in source
     assert 'executive-queue-details executive-queue-details--neutral' in source
 
     assert "--queue-review-column-width: 128px" in styles
@@ -165,6 +167,7 @@ def test_queue_visual_hierarchy_and_pinned_review_contract_are_scoped():
 def test_executive_chat_offset_and_pagination_clearance_are_scoped_without_behavior_changes():
     markup = executive_dashboard()
     queue_source = QUEUE_COMPONENT_PATH.read_text(encoding="utf-8")
+    shared = SHARED_TABLE_PATH.read_text(encoding="utf-8")
     queue_styles = (ROOT / "frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
     app_styles = (ROOT / "src/app/static/app_redesign.css").read_text(encoding="utf-8")
     shell = (ROOT / "src/app/ui_shell.py").read_text(encoding="utf-8")
@@ -178,8 +181,9 @@ def test_executive_chat_offset_and_pagination_clearance_are_scoped_without_behav
     assert "bottom: var(--floating-chat-launcher-bottom, max(28px, env(safe-area-inset-bottom)))" in app_styles
     assert 'id="floatingIntelligenceChatButton"' in shell
     assert 'aria-label="Open Job Assistant"' in shell
-    assert "Previous queue page" in queue_source
-    assert "Next queue page" in queue_source
+    assert 'paginationLabel="Executive queue"' in queue_source
+    assert 'aria-label={`Previous ${ariaLabel.toLowerCase()}`}' in shared
+    assert 'aria-label={`Next ${ariaLabel.toLowerCase()}`}' in shared
 
 
 def test_canonical_production_assets_are_the_only_generated_queue_assets():

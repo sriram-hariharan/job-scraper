@@ -170,24 +170,37 @@ def planning_dashboard() -> str:
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Planning Detail Dashboard</title>
+  <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g-r4" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g-r4" />
 </head>
-<body>
+<body class="planning-dashboard-page">
 {render_top_shell("/planning")}
-  <div class="page">
-    <header class="page-header">
+  <main class="page planning-dashboard-shell">
+    <header class="page-header planning-dashboard-header">
       <div>
-        <h1>Planning Detail Dashboard</h1>
-        <p class="subtext">Wide planning view with queue, selector state, fallback, and operator decision fields.</p>
+        <div class="planning-dashboard-eyebrow">Application planning</div>
+        <h1>Planning</h1>
+        <p class="subtext">Review resume selection, planning readiness, and the recommended next step for every shortlisted job.</p>
       </div>
     </header>
 
-    <section class="card controls-card">
-      <div class="dashboard-toolbar dashboard-toolbar--planning">
-        <div class="dashboard-toolbar-left dashboard-toolbar-left--planning">
+    <div id="planningSummaryRoot" aria-live="polite">
+      <div class="planning-react-server-fallback">Loading planning summary...</div>
+    </div>
+
+    <section class="card controls-card planning-filter-card" aria-labelledby="planningFiltersHeading">
+      <div class="planning-filter-heading">
+        <div>
+          <h2 id="planningFiltersHeading">Filter planning work</h2>
+          <p>Refine the operational queue without changing planning results.</p>
+        </div>
+        <span class="planning-active-filter-count"><strong id="planningActiveFilters">0</strong> active</span>
+      </div>
+      <div class="planning-filter-grid">
           <div class="control-group dashboard-field dashboard-field--action">
             <label>Action</label>
             <div class="multi-select" id="planningActionFilter" data-placeholder="All">
@@ -321,106 +334,21 @@ def planning_dashboard() -> str:
             </div>
           </div>
 
-          <div class="control-group dashboard-field dashboard-field--limit">
+          <div class="control-group dashboard-field dashboard-field--limit planning-filter-limit">
             <label for="planningLimitInput">Limit</label>
             <input type="number" id="planningLimitInput" value="15" min="1" max="100" />
           </div>
-        </div>
-
-        <div class="dashboard-toolbar-right dashboard-toolbar-right--planning">
-          <div class="control-group button-group dashboard-toolbar-actions">
-            <button id="planningApplyFiltersBtn">Apply Filters</button>
-            <button class="ghost-btn" id="planningClearFiltersBtn">Clear</button>
+          <div class="planning-filter-actions">
+            <button class="planning-filter-apply" id="planningApplyFiltersBtn">Apply Filters</button>
+            <button class="ghost-btn planning-filter-clear" id="planningClearFiltersBtn">Clear</button>
           </div>
-        </div>
       </div>
     </section>
 
-    <section class="stats-grid">
-      <section class="card stat-card">
-        <div class="stat-label">Jobs Shown</div>
-        <div class="stat-value" id="planningJobsShown">0</div>
-      </section>
-      <section class="card stat-card">
-        <div class="stat-label">Active Filters</div>
-        <div class="stat-value" id="planningActiveFilters">0</div>
-      </section>
-    </section>
-
-    <section class="card table-card">
-      <div class="section-header planning-table-header">
-        <h2>Planning Detail Table</h2>
-
-        <div class="planning-table-header-right">
-          <div class="planning-pagination-inline" id="planningPaginationBar">
-            <div class="subtext planning-pagination-meta" id="planningPaginationMeta">
-              Page 1 of 1
-            </div>
-            <div class="planning-pagination-actions" id="planningPaginationActions"></div>
-          </div>
-
-          <div class="subtext" id="planningTableMeta">Loading...</div>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table id="planningTable" class="resizable-table">
-          <colgroup id="planningTableColgroup">
-            <col data-col-key="queue_rank" style="width: 110px;" />
-            <col data-col-key="job_title" style="width: 320px;" />
-            <col data-col-key="posted_at" style="width: 150px;" />
-            <col data-col-key="recommendation" style="width: 260px;" />
-            <col data-col-key="packet_status" style="width: 170px;" />
-            <col data-col-key="winner_score" style="width: 120px;" />
-            <col data-col-key="selected_resume" style="width: 240px;" />
-            <col class="table-static-col" data-static-col-key="review" style="width: 150px;" />
-          </colgroup>
-
-          <thead>
-            <tr>
-              <th data-col-key="queue_rank">
-                <div class="resizable-col-content"><span class="resizable-col-label">Rank</span></div>
-                <span class="col-resize-handle" data-resize-key="queue_rank"></span>
-              </th>
-              <th data-col-key="job_title">
-                <div class="resizable-col-content"><span class="resizable-col-label">Job title</span></div>
-                <span class="col-resize-handle" data-resize-key="job_title"></span>
-              </th>
-              <th data-col-key="posted_at">
-                <div class="resizable-col-content"><span class="resizable-col-label">Posted at</span></div>
-                <span class="col-resize-handle" data-resize-key="posted_at"></span>
-              </th>
-              <th data-col-key="recommendation">
-                <div class="resizable-col-content"><span class="resizable-col-label">Recommendation</span></div>
-                <span class="col-resize-handle" data-resize-key="recommendation"></span>
-              </th>
-              <th data-col-key="packet_status">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Packet / Workspace</span>
-                  <span class="packet-info-icon" title="A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job." aria-label="A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.">ⓘ</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="packet_status"></span>
-              </th>
-              <th data-col-key="winner_score">
-                <div class="resizable-col-content"><span class="resizable-col-label">Match</span></div>
-                <span class="col-resize-handle" data-resize-key="winner_score"></span>
-              </th>
-              <th data-col-key="selected_resume">
-                <div class="resizable-col-content"><span class="resizable-col-label">Selected Resume</span></div>
-                <span class="col-resize-handle" data-resize-key="selected_resume"></span>
-              </th>
-              <th class="sticky-apply-col apply-col-fixed">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Review</span>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody id="planningTableBody"></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
+    <div id="planningWorklistRoot" aria-live="polite">
+      <div class="planning-react-server-fallback">Loading planning worklist...</div>
+    </div>
+  </main>
 
   <section class="modal-backdrop hidden" id="applicationActionModal">
     <div class="modal-card">
@@ -839,7 +767,8 @@ def planning_dashboard() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g-r4"></script>
+  <script src="/static/planning.js?v=phase133g-r4"></script>
 </body>
 </html>
     """.strip()

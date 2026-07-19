@@ -1266,7 +1266,8 @@ def test_planning_table_workspace_button_allows_review_only_no_safe_rewrite_arti
     assert "LLM tailoring generation is off for this row." in planning_js
     assert "data-workspace-blocked-reason" in planning_js
     assert 'const canGenerateSuggestions = !hasArtifacts && canGenerateSuggestionsForRow(row);' in planning_js
-    assert 'const disabledAttr = (hasArtifacts && !blockedReason) || canGenerateSuggestions ? "" : "disabled";' in planning_js
+    assert 'disabled: !((hasArtifacts && !blockedReason) || canGenerateSuggestions)' in planning_js
+    assert 'const disabledAttr = actionState.disabled ? "disabled" : "";' in planning_js
     assert 'showAppError("Workspace unavailable", new Error(blockedReason))' not in planning_js
     assert "actionableCount <= 0" in planning_js
     assert '"review"' in planning_js

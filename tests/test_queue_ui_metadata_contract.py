@@ -177,10 +177,11 @@ def test_queue_ui_uses_simplified_job_seeker_columns():
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    planning_react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
     executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
-    for source in (app_source, planning_source):
+    for source in (app_source,):
         assert 'label: "Rank"' in source
         assert 'label: "Job title"' in source
         assert 'label: "Posted at"' in source
@@ -200,12 +201,38 @@ def test_queue_ui_uses_simplified_job_seeker_columns():
         assert "Priority reason" in source
         assert "A packet is a review bundle for this job." in source
 
-    for markup in (planning_markup, executive_queue):
-        assert "Recommendation" in markup
-        assert "Posted at" in markup
-        assert "Selected Resume" in markup
-        assert "Review" in markup
-        assert ">Apply<" not in markup
+    for label in (
+        "Rank",
+        "Job",
+        "Posted at",
+        "Review readiness",
+        "Match score",
+        "Resume selection",
+        "Packet / workspace",
+        "Next step",
+    ):
+        assert label in planning_react
+    assert "Review job" in planning_source
+    assert "Review later" in planning_source
+    assert "Choose resume" in planning_source
+    assert "Close resume match" in planning_source
+    assert "Runner-up resume" in planning_source
+    assert "Score gap" in planning_source
+    assert "Missing requirements" in planning_source
+    assert "Priority reason" in planning_source
+    assert "A packet is a review bundle for this job." in planning_source
+
+    assert 'id="planningWorklistRoot"' in planning_markup
+    assert "Review readiness" in planning_react
+    assert "Resume selection" in planning_react
+    assert "Next step" in planning_react
+    assert ">Apply<" not in planning_markup
+    assert "Recommendation" in executive_queue
+    assert "Selected Resume" in executive_queue
+    assert "Review" in executive_queue
+    assert ">Apply<" not in executive_queue
+    assert "Posted at" in planning_source
+    assert "Posted at" in executive_queue
 
     assert 'id="executiveQueueRoot"' in app_markup
     assert 'id="queueTable"' not in app_markup
@@ -220,6 +247,7 @@ def test_phase77b_executive_detail_and_packet_help_contract():
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    planning_react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
     executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
 
     assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
@@ -234,14 +262,15 @@ def test_phase77b_executive_detail_and_packet_help_contract():
     assert 'id: "next_step"' in executive_queue
     assert 'id: "queue_priority_reason"' in executive_queue
 
-    for source in (app_source, planning_source, executive_queue, planning_markup):
+    for source in (app_source, planning_source, executive_queue, planning_react):
         assert "A packet is a review bundle for this job." in source
         assert "It does not apply to the job." in source
 
     assert 'id="executiveQueueRoot"' in app_markup
-    assert '<h2>Queue Table</h2>' in executive_queue
+    assert 'title="Queue Table"' in executive_queue
     assert 'className="executive-queue-view-toggle"' in executive_queue
-    assert executive_queue.index('<h2>Queue Table</h2>') < executive_queue.index('className="executive-queue-view-toggle"')
+    assert "headerActions={viewToggle}" in executive_queue
+    assert 'id="planningWorklistRoot"' in planning_markup
 
 
 def test_phase77b_recommendation_has_single_why_control_per_cell():
@@ -262,15 +291,16 @@ def test_phase77c_table_polish_contract():
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
     executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    shared_table = Path("frontend/executive-kpi/src/table/TablePrimitives.tsx").read_text(encoding="utf-8")
 
     assert 'id="executiveQueueRoot"' in app_markup
-    assert "executive-queue-title-line" in executive_queue
+    assert "shared-table-title-line" in shared_table
     assert "executive-queue-view-toggle" in executive_queue
-    assert "executive-queue-table-header" in executive_queue
-    title_row_index = executive_queue.index("executive-queue-title-line")
-    toggle_index = executive_queue.index("executive-queue-view-toggle")
-    header_right_index = executive_queue.index("executive-queue-table-header")
-    assert header_right_index < title_row_index < toggle_index
+    assert "shared-table-header" in shared_table
+    title_row_index = shared_table.index("shared-table-title-line")
+    header_right_index = shared_table.index("shared-table-header")
+    header_actions_index = shared_table.index("shared-table-header-actions")
+    assert header_right_index < title_row_index < header_actions_index
     assert "Posted:" not in app_source
     assert "Posted:" not in planning_source
     assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source

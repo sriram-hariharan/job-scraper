@@ -758,6 +758,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "semantic_similarity_diagnostic_only",
             "semantic_alignment_weighted_score_component",
             "llm_adjudicator_readback_default_off",
+            "phase133g_premium_planning_dashboard",
         ),
     )
 
@@ -1124,6 +1125,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/app/static/styles.css",
     }
     if set(changed_runtime_files) == phase133d_s1_pipeline_launch_runtime_files:
+        return
+    phase133g_premium_planning_runtime_files = {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/planning_dashboard.css",
+    }
+    if set(changed_runtime_files) == phase133g_premium_planning_runtime_files:
         return
     assert changed_runtime_files in (
         [],

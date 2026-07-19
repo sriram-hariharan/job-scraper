@@ -36,6 +36,8 @@ const PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY = "planningTableLastResponse_v4";
 const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
 const PLANNING_TABLE_REQUEST_TIMEOUT_MS = 0;
 const PLANNING_TABLE_PREFETCH_TIMEOUT_MS = 12000;
+const PLANNING_WORKLIST_STATE_EVENT_NAME = "applylens:planning-worklist-state";
+const PLANNING_WORKLIST_ACTION_EVENT_NAME = "applylens:planning-worklist-action";
 
 const planningTableState = {
   rows: [],
@@ -53,6 +55,15 @@ const planningTableState = {
     hasNextPage: false,
   },
   isLoading: false,
+  status: "loading",
+  message: "",
+  resultKey: 0,
+  metrics: {
+    total: 0,
+    readyForReview: 0,
+    packetReady: 0,
+    needsDecision: 0,
+  },
   requestSeq: 0,
   activeController: null,
   responseCache: new Map(),
@@ -165,34 +176,67 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function loadTableColumnWidths(storageKey) {
+function clampTableColumnWidth(key, width, bounds = {}) {
+  const parsed = Number(width);
+  const limit = bounds[key];
+  if (!Number.isFinite(parsed) || !limit) return null;
+  return Math.min(limit.max, Math.max(limit.min, Math.round(parsed)));
+}
+
+function loadTableColumnWidths(storageKey, { schemaVersion = null, bounds = null } = {}) {
   try {
     const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    const rawWidths = schemaVersion === null
+      ? parsed
+      : parsed.version === schemaVersion && parsed.widths && typeof parsed.widths === "object"
+        ? parsed.widths
+        : {};
+
+    if (!bounds) return rawWidths;
+
+    return Object.entries(rawWidths).reduce((validWidths, [key, width]) => {
+      const bounded = clampTableColumnWidth(key, width, bounds);
+      if (bounded !== null) validWidths[key] = bounded;
+      return validWidths;
+    }, {});
   } catch {
     return {};
   }
 }
 
-function saveTableColumnWidths(storageKey, widths) {
-  localStorage.setItem(storageKey, JSON.stringify(widths));
+function saveTableColumnWidths(storageKey, widths, { schemaVersion = null } = {}) {
+  const payload = schemaVersion === null ? widths : { version: schemaVersion, widths };
+  localStorage.setItem(storageKey, JSON.stringify(payload));
 }
 
 function getTableColumnElement(table, key) {
   return table.querySelector(`col[data-col-key="${key}"]`);
 }
 
-function applyTableColumnWidths(tableId, storageKey) {
+function syncResizableTableWidth(table) {
+  if (!table) return;
+  const totalWidth = Array.from(table.querySelectorAll("colgroup col")).reduce((total, col) => {
+    const width = Number.parseFloat(col.style.width || "0");
+    return total + (Number.isFinite(width) ? width : 0);
+  }, 0);
+  const viewportWidth = table.parentElement?.clientWidth || 0;
+  table.style.width = `${Math.max(totalWidth, viewportWidth)}px`;
+}
+
+function applyTableColumnWidths(tableId, storageKey, options = {}) {
   const table = document.getElementById(tableId);
   if (!table) return;
 
-  const widths = loadTableColumnWidths(storageKey);
+  const widths = loadTableColumnWidths(storageKey, options);
   Object.entries(widths).forEach(([key, width]) => {
     const col = getTableColumnElement(table, key);
     if (col && Number(width) > 0) {
       col.style.width = `${Number(width)}px`;
     }
   });
+  syncResizableTableWidth(table);
 }
 
 function getTableColumnIndex(th) {
@@ -248,13 +292,13 @@ function measureAutoFitColumnWidth(table, th) {
   return Math.min(Math.max(maxWidth, 140), 900);
 }
 
-function initResizableTableColumns(tableId, storageKey) {
+function initResizableTableColumns(tableId, storageKey, options = {}) {
   const table = document.getElementById(tableId);
   if (!table) return;
 
-  applyTableColumnWidths(tableId, storageKey);
+  applyTableColumnWidths(tableId, storageKey, options);
 
-  const handles = Array.from(table.querySelectorAll(".col-resize-handle"));
+  const handles = Array.from(table.querySelectorAll("[data-resize-key]"));
 
   handles.forEach((handle) => {
     if (handle.dataset.resizeBound === "true") return;
@@ -273,15 +317,20 @@ function initResizableTableColumns(tableId, storageKey) {
       const col = getTableColumnElement(table, key);
       if (!col) return;
 
-      const nextWidth = measureAutoFitColumnWidth(table, th);
+      const measuredWidth = measureAutoFitColumnWidth(table, th);
+      const nextWidth = options.bounds
+        ? clampTableColumnWidth(key, measuredWidth, options.bounds)
+        : measuredWidth;
+      if (nextWidth === null) return;
       col.style.width = `${nextWidth}px`;
+      syncResizableTableWidth(table);
 
-      const widths = loadTableColumnWidths(storageKey);
+      const widths = loadTableColumnWidths(storageKey, options);
       widths[key] = nextWidth;
-      saveTableColumnWidths(storageKey, widths);
+      saveTableColumnWidths(storageKey, widths, options);
     });
 
-    handle.addEventListener("mousedown", (event) => {
+    handle.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       event.stopPropagation();
 
@@ -294,28 +343,37 @@ function initResizableTableColumns(tableId, storageKey) {
       const col = getTableColumnElement(table, key);
       if (!col) return;
 
-      const widths = loadTableColumnWidths(storageKey);
+      const widths = loadTableColumnWidths(storageKey, options);
       const startX = event.clientX;
       const startWidth = th.getBoundingClientRect().width;
 
       document.body.classList.add("table-column-resizing");
+      handle.classList.add("is-resizing");
 
-      function onMouseMove(moveEvent) {
+      function onPointerMove(moveEvent) {
         const delta = moveEvent.clientX - startX;
-        const nextWidth = Math.max(90, Math.round(startWidth + delta));
+        const requestedWidth = Math.round(startWidth + delta);
+        const nextWidth = options.bounds
+          ? clampTableColumnWidth(key, requestedWidth, options.bounds)
+          : Math.max(90, requestedWidth);
+        if (nextWidth === null) return;
         col.style.width = `${nextWidth}px`;
         widths[key] = nextWidth;
+        syncResizableTableWidth(table);
       }
 
-      function onMouseUp() {
+      function onPointerUp() {
         document.body.classList.remove("table-column-resizing");
-        saveTableColumnWidths(storageKey, widths);
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
+        handle.classList.remove("is-resizing");
+        saveTableColumnWidths(storageKey, widths, options);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerUp);
       }
 
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
     });
   });
 }
@@ -452,7 +510,7 @@ function renderSortableHeaders(tableId, columns, sortState) {
     const indicatorEl = th.querySelector(".sort-header-indicator");
 
     if (column.sortable === false) {
-      if (!th.querySelector(".col-resize-handle")) {
+      if (!th.querySelector(".resizable-col-content")) {
         setResizableHeaderCell(th, column);
       }
       th.classList.remove("sortable-col");
@@ -1696,14 +1754,15 @@ function planningUndecidedOnlyEnabled() {
 }
 
 const PLANNING_SORT_COLUMNS = [
+  { key: "expand", label: "", sortable: false },
   { key: "queue_rank", label: "Rank", type: "number" },
-  { key: "job_title", label: "Job title", type: "text", getValue: (row) => row.job_title || "" },
+  { key: "job_title", label: "Job", type: "text", getValue: (row) => row.job_title || "" },
   { key: "posted_at", label: "Posted at", type: "date", getValue: (row) => row.posted_at || "" },
-  { key: "recommendation", label: "Recommendation", type: "text", getValue: (row) => formatQueueActionLabel(row.action) },
-  { key: "packet_status", label: "Packet / Workspace", type: "text", getValue: (row) => `${formatPacketStatusLabel(row.packet_generation_allowed)} ${row.tailoring_workspace_state || ""}` },
-  { key: "winner_score", label: "Match", type: "number" },
-  { key: "selected_resume", label: "Selected Resume", type: "text", getValue: (row) => row.operator_selected_resume || row.winner_resume || "" },
-  { key: "review", label: "Review", sortable: false },
+  { key: "recommendation", label: "Review readiness", type: "text", getValue: (row) => formatQueueActionLabel(row.action) },
+  { key: "winner_score", label: "Match score", type: "number" },
+  { key: "selected_resume", label: "Resume selection", type: "text", getValue: (row) => row.operator_selected_resume || row.winner_resume || "" },
+  { key: "packet_status", label: "Packet / workspace", type: "text", getValue: (row) => `${formatPacketStatusLabel(row.packet_generation_allowed)} ${row.tailoring_workspace_state || ""}` },
+  { key: "review", label: "Next step", sortable: false },
 ];
 
 const PACKET_HELP_TEXT = "A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.";
@@ -1796,8 +1855,24 @@ function countPlanningActiveFilters() {
   return count;
 }
 
-function updatePlanningStats(totalCount) {
-  setTextIfPresent("planningJobsShown", totalCount ?? 0);
+function updatePlanningStats(totalCount, rows = []) {
+  const visibleRows = Array.isArray(rows) ? rows : [];
+  const readyForReview = visibleRows.filter(
+    (row) => String(row?.action || "").trim().toUpperCase() === "APPLY"
+  ).length;
+  const packetReady = visibleRows.filter(
+    (row) => normalizeBool(row?.packet_generation_allowed)
+  ).length;
+  const needsDecision = visibleRows.filter(
+    (row) => !String(row?.operator_decision || "").trim()
+  ).length;
+
+  planningTableState.metrics = {
+    total: Number(totalCount ?? 0),
+    readyForReview,
+    packetReady,
+    needsDecision,
+  };
   setTextIfPresent("planningActiveFilters", countPlanningActiveFilters());
 }
 
@@ -1806,95 +1881,26 @@ function setPlanningRequestedPage(page) {
   planningTableState.pagination.page = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
 }
 
-function buildPlanningPaginationSequence(currentPage, totalPages) {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const pages = [1];
-  const windowStart = Math.max(2, currentPage - 1);
-  const windowEnd = Math.min(totalPages - 1, currentPage + 1);
-
-  if (windowStart > 2) {
-    pages.push("ellipsis-left");
-  }
-
-  for (let page = windowStart; page <= windowEnd; page += 1) {
-    pages.push(page);
-  }
-
-  if (windowEnd < totalPages - 1) {
-    pages.push("ellipsis-right");
-  }
-
-  pages.push(totalPages);
-  return pages;
+function buildPlanningWorklistBridgeState() {
+  return {
+    status: planningTableState.status,
+    rows: planningTableState.rows.map((row) => ({
+      ...row,
+      __planning_action: resolvePlanningWorklistAction(row),
+    })),
+    metaLabel: planningTableState.metaLabel,
+    message: planningTableState.message,
+    pagination: { ...planningTableState.pagination },
+    sort: { ...planningTableState.sort },
+    resultKey: String(planningTableState.resultKey),
+    metrics: { ...planningTableState.metrics },
+  };
 }
 
-function renderPlanningPagination() {
-  const metaEl = qs("planningPaginationMeta");
-  const actionsEl = qs("planningPaginationActions");
-  if (!metaEl || !actionsEl) return;
-
-  const {
-    page,
-    pageSize,
-    totalCount,
-    totalPages,
-    hasPrevPage,
-    hasNextPage,
-  } = planningTableState.pagination;
-
-  if (!totalCount) {
-    metaEl.textContent = "Page 1 of 1 · 0 jobs";
-    actionsEl.innerHTML = "";
-    return;
-  }
-
-  const startRow = (page - 1) * pageSize + 1;
-  const endRow = Math.min(page * pageSize, totalCount);
-
-  metaEl.textContent = `Page ${page} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount} jobs`;
-
-  const sequence = buildPlanningPaginationSequence(page, totalPages);
-
-  actionsEl.innerHTML = `
-    <button
-      type="button"
-      class="ghost-btn planning-pagination-btn"
-      data-planning-page="${page - 1}"
-      ${hasPrevPage ? "" : "disabled"}
-    >
-      Prev
-    </button>
-
-    ${sequence.map((item) => {
-      if (typeof item !== "number") {
-        return `<span class="planning-pagination-ellipsis">…</span>`;
-      }
-
-      return `
-        <button
-          type="button"
-          class="ghost-btn planning-pagination-btn ${item === page ? "is-active" : ""}"
-          data-planning-page="${item}"
-          ${item === page ? "disabled" : ""}
-        >
-          ${item}
-        </button>
-      `;
-    }).join("")}
-
-    <button
-      type="button"
-      class="ghost-btn planning-pagination-btn"
-      data-planning-page="${page + 1}"
-      ${hasNextPage ? "" : "disabled"}
-    >
-      Next
-    </button>
-  `;
-
+function publishPlanningWorklistState() {
+  const state = buildPlanningWorklistBridgeState();
+  window.__APPLYLENS_PLANNING_WORKLIST_STATE__ = state;
+  window.dispatchEvent(new CustomEvent(PLANNING_WORKLIST_STATE_EVENT_NAME, { detail: state }));
 }
 
 async function fetchJson(url, options = {}) {
@@ -2079,6 +2085,7 @@ function capturePlanningTableSnapshot() {
   return {
     rows: planningTableState.rows.slice(),
     metaLabel: planningTableState.metaLabel,
+    metrics: { ...planningTableState.metrics },
     pagination: {
       ...planningTableState.pagination,
     },
@@ -2091,13 +2098,9 @@ function restorePlanningTableSnapshot(snapshot, { note = "" } = {}) {
   planningTableState.pagination = {
     ...snapshot.pagination,
   };
+  planningTableState.metrics = { ...snapshot.metrics };
 
-  renderPlanningRows(snapshot.rows, snapshot.metaLabel);
-
-  const tableMeta = qs("planningTableMeta");
-  if (tableMeta && note) {
-    tableMeta.textContent = `${snapshot.metaLabel} · ${note}`;
-  }
+  renderPlanningRows(snapshot.rows, note ? `${snapshot.metaLabel} · ${note}` : snapshot.metaLabel);
 
   syncPlanningBrowserUrl({ mode: "replace" });
   return true;
@@ -2110,8 +2113,6 @@ function applyPlanningTableResponse(data, { historyMode = "replace" } = {}) {
   const totalCount = Number(data.total_count ?? data.count ?? 0);
   const totalPages = Number(data.total_pages ?? 1);
   const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
-
-  updatePlanningStats(totalCount);
 
   planningTableState.pagination = {
     page: currentPage,
@@ -2129,6 +2130,8 @@ function applyPlanningTableResponse(data, { historyMode = "replace" } = {}) {
     pipeline_run_id: row.pipeline_run_id || data.pipeline_run_id || "",
     planning_output_dir: row.planning_output_dir || data.planning_output_dir || "",
   }));
+
+  updatePlanningStats(totalCount, contextualRows);
 
   renderPlanningRows(
     contextualRows,
@@ -12448,7 +12451,7 @@ function getWorkspaceBlockedReason(row) {
   return "";
 }
 
-function buildTailoringButtonHtml(row) {
+function resolvePlanningWorklistAction(row) {
   const hasArtifacts = hasTailoringWorkspaceArtifacts(row);
   const canGenerateSuggestions = !hasArtifacts && canGenerateSuggestionsForRow(row);
 
@@ -12458,7 +12461,6 @@ function buildTailoringButtonHtml(row) {
   const blockedReason = hasArtifacts ? getWorkspaceBlockedReason(row) : "";
 
   const label = hasArtifacts ? "Open Workspace" : (canGenerateSuggestions ? "Generate Suggestions" : "Unavailable");
-  const disabledAttr = (hasArtifacts && !blockedReason) || canGenerateSuggestions ? "" : "disabled";
 
   let stateClass = "planning-tailoring-btn--empty";
   let reviewActionStateClass = "review-action-button--disabled";
@@ -12497,8 +12499,38 @@ function buildTailoringButtonHtml(row) {
     titleText = blockedReason;
   }
 
+  return {
+    kind: hasArtifacts && !blockedReason
+      ? "open_workspace"
+      : canGenerateSuggestions
+        ? "generate_suggestions"
+        : "unavailable",
+    label,
+    disabled: !((hasArtifacts && !blockedReason) || canGenerateSuggestions),
+    title: titleText,
+    blockedReason,
+    hasArtifacts,
+    canGenerateSuggestions,
+    stateClass,
+    reviewActionStateClass,
+  };
+}
+
+function buildTailoringButtonHtml(row) {
+  const actionState = resolvePlanningWorklistAction(row);
+  const {
+    blockedReason,
+    canGenerateSuggestions,
+    hasArtifacts,
+    label,
+    reviewActionStateClass,
+    stateClass,
+    title: titleText,
+  } = actionState;
+
   const buttonClass = `ghost-btn planning-tailoring-btn review-action-button ${stateClass} ${reviewActionStateClass}`.trim();
   const titleAttr = `title="${escapeHtml(titleText)}"`;
+  const disabledAttr = actionState.disabled ? "disabled" : "";
   const blockedAttr = blockedReason
     ? `data-workspace-blocked-reason="${escapeHtml(blockedReason)}" aria-disabled="true"`
     : "";
@@ -12778,6 +12810,40 @@ function getPlanningRowFromTailoringDataset(button) {
   };
 }
 
+function buildPlanningTailoringDataset(row, actionState = resolvePlanningWorklistAction(row)) {
+  return {
+    queueRank: row.queue_rank || "",
+    jobDocId: row.job_doc_id || "",
+    jobUrl: row.job_url || row.job_doc_id || "",
+    jobCompany: row.job_company || "",
+    jobTitle: row.job_title || "",
+    winnerResume: row.winner_resume || "",
+    runnerUpResume: row.runner_up_resume || "",
+    runnerupResume: row.runnerup_resume || "",
+    operatorSelectedResume: row.operator_selected_resume || "",
+    selectedResume: row.selected_resume || "",
+    packetResume: row.packet_resume || "",
+    resolvedResume: row.resolved_resume || "",
+    selectorWinnerResume: row.selector_winner_resume || "",
+    llmTailoringStatus: row.llm_tailoring_status || "",
+    tailoringJson: row.tailoring_json || "",
+    tailoringJsonKey: row.tailoring_json_key || "",
+    tailoringMd: row.tailoring_md || "",
+    tailoringLlmJson: row.tailoring_llm_json || "",
+    packetJson: row.packet_json || "",
+    packetJsonKey: row.packet_json_key || "",
+    planningOutputDir: row.planning_output_dir || "",
+    outputDir: row.output_dir || "",
+    packetOutputDir: row.packet_output_dir || "",
+    artifactOutputDir: row.artifact_output_dir || "",
+    pipelineRunId: row.pipeline_run_id || row.run_id || "",
+    tailoringWorkspaceState: row.tailoring_workspace_state || "",
+    tailoringActionableReplacementCount: row.tailoring_actionable_replacement_count || "",
+    tailoringReviewReplacementCount: row.tailoring_review_replacement_count || "",
+    workspaceBlockedReason: actionState.blockedReason || "",
+  };
+}
+
 function buildGenerateSuggestionsWorkspaceRow(row, payload = {}) {
   const artifactPath =
     payload.tailoring_json ||
@@ -12991,40 +13057,42 @@ function buildPlanningJobSummaryHtml(row) {
     ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
     : title;
   const company = escapeHtml(row.job_company || "");
-  const location = escapeHtml(row.job_location || "");
+  const location = String(row?.job_location || "").trim();
 
   return `
-    <div class="queue-job-summary">
-      <div class="queue-simple-company">${company || "-"}</div>
+    <div class="queue-job-summary planning-job-cell">
       <div class="queue-simple-title">${titleHtml}</div>
-      ${location ? `<div class="queue-job-location">${location}</div>` : ""}
+      <div class="planning-job-meta">
+        <span>${company || "Company unavailable"}</span>
+        ${location ? `<span title="${escapeHtml(location)}">${escapeHtml(truncateText(location, 42))}</span>` : ""}
+      </div>
     </div>
   `;
+}
+
+function buildPlanningPostedCellHtml(row) {
+  const postedAt = String(row?.posted_at || "").trim();
+  if (!postedAt) return '<span class="planning-unavailable">Unavailable</span>';
+  const parsed = new Date(postedAt);
+  const label = Number.isNaN(parsed.getTime()) ? postedAt : DATE_ONLY_FORMATTER.format(parsed);
+  return `<time class="planning-posted-date" datetime="${escapeHtml(postedAt)}">${escapeHtml(label)}</time>`;
+}
+
+function buildPlanningAdvisoryIndicatorHtml(row) {
+  if (!isLlmAdjudicatorReadbackEnabled(row?.llm_adjudicator_readback_enabled)) return "";
+  const status = String(row?.llm_adjudicator_readback_status || "").trim().toLowerCase();
+  if (!status || status === "disabled") return "";
+  return '<span class="planning-advisory-badge">AI notes · advisory</span>';
 }
 
 function buildPlanningRecommendationCellHtml(row) {
   const action = escapeHtml(formatQueueActionLabel(row.action) || "-");
   const tone = escapeHtml(getRecommendationTone(row.action));
-  const details = buildRecommendationDetailsHtml([
-    { label: "Runner-up resume", value: row.runner_up_resume || "" },
-    { label: "Runner-up score", value: row.runner_up_score || "" },
-    { label: "Score gap", value: row.score_gap || "" },
-    { label: "Match strength", value: row.winner_bucket || "" },
-    { label: "Review state", value: deriveReviewStateLabel(row) },
-    { label: "Missing requirements", value: row.missing_requirement_count || "" },
-    { label: "Fallback resume", value: row.llm_fallback_best_resume || "" },
-    { label: "Fallback status", value: humanizeFallbackStatus(row.llm_fallback_status || "") },
-    { label: "LLM review hint", value: row.llm_adjudication_resume || "" },
-    { label: "Next step", value: formatOperatorDecisionLabel(row.operator_decision) || row.operator_decision || "" },
-    { label: "Raw operator decision", value: row.operator_decision || "" },
-    { label: "Priority reason", value: buildPlanningPriorityReason(row) },
-  ]);
 
   return `
-    <div class="queue-recommendation-summary">
+    <div class="queue-recommendation-summary planning-readiness-cell">
       <span class="pill recommendation-chip recommendation-chip--${tone}">${action}</span>
-      ${details}
-      ${buildLlmAdjudicatorReadbackHtml(row)}
+      ${buildPlanningAdvisoryIndicatorHtml(row)}
     </div>
   `;
 }
@@ -13118,10 +13186,11 @@ function buildPlanningPacketWorkspaceStatusHtml(row) {
   const workspaceState = String(row.tailoring_workspace_state || "").trim();
   const workspaceLabel = workspaceState
     ? humanizeUnderscoreLabel(workspaceState)
-    : "Workspace pending";
+    : "Workspace unavailable";
+  const packetStatus = buildPacketStatusChipHtml(row);
   return `
     <div class="queue-status-stack">
-      ${buildPacketStatusChipHtml(row) || ""}
+      ${packetStatus || '<span class="planning-unavailable">Packet status unavailable</span>'}
       <span class="queue-workspace-pill">${escapeHtml(workspaceLabel)}</span>
     </div>
   `;
@@ -13129,53 +13198,143 @@ function buildPlanningPacketWorkspaceStatusHtml(row) {
 
 function buildPlanningSelectedResumeHtml(row) {
   return buildCompactTextHtml(resolvePlanningRowSelectedResume(row), {
-    emptyLabel: "-",
+    emptyLabel: "Not selected",
     truncate: false,
     wrap: true,
   });
 }
 
-function renderPlanningRows(rows, metaLabel) {
-  planningTableState.rows = Array.isArray(rows) ? rows.slice() : [];
-  planningTableState.metaLabel = metaLabel;
+function buildPlanningResumeSelectionHtml(row) {
+  const selectedResume = resolvePlanningRowSelectedResume(row);
+  return `
+    <div class="planning-resume-selection">
+      <div class="planning-selected-resume" title="${escapeHtml(selectedResume ? humanizeResumeDisplayName(selectedResume) : "Not selected")}">${buildPlanningSelectedResumeHtml(row)}</div>
+    </div>
+  `;
+}
 
-  const tbody = qs("planningTableBody");
-  const displayRows = sortRows(planningTableState.rows, PLANNING_SORT_COLUMNS, planningTableState.sort);
+function resolvePlanningNextStep(row) {
+  const explicitNextStep = String(row?.next_step || "").trim();
+  if (explicitNextStep) return humanizeUnderscoreLabel(explicitNextStep);
+  const operatorDecision = String(row?.operator_decision || "").trim();
+  if (operatorDecision) return formatOperatorDecisionLabel(operatorDecision);
+  return "Operator decision needed";
+}
 
-  if (!displayRows.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="empty-state">No rows found.</td>
-      </tr>
-    `;
-    qs("planningTableMeta").textContent = planningTableState.metaLabel;
-    updatePlanningStats(0);
-    renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
-    renderPlanningPagination();
-    window.clearTableWrapLoading?.(tbody);
-    return;
+function buildPlanningNextStepHtml(row) {
+  const priorityReason = buildPlanningPriorityReason(row);
+  return `
+    <div class="planning-next-step">
+      <strong>${escapeHtml(resolvePlanningNextStep(row))}</strong>
+      ${priorityReason
+        ? `<span title="${escapeHtml(priorityReason)}">${escapeHtml(truncateText(priorityReason, 112))}</span>`
+        : '<span class="planning-unavailable">Priority reason unavailable</span>'}
+    </div>
+  `;
+}
+
+function normalizePlanningMatchScore(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const parsed = Number(String(value).replaceAll(",", "").trim());
+  if (!Number.isFinite(parsed)) return null;
+  return Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+}
+
+function buildPlanningMatchCellHtml(row) {
+  const score = normalizePlanningMatchScore(row?.winner_score);
+  const bucket = humanizeWinnerBucket(row?.winner_bucket);
+  if (score === null) {
+    return '<span class="planning-unavailable">Unavailable</span>';
   }
 
-  tbody.innerHTML = displayRows.map((row) => {
-    return `
-      <tr>
-        <td>${escapeHtml(row.queue_rank || "")}</td>
-        <td class="title-cell">${buildPlanningJobSummaryHtml(row)}</td>
-        <td>${buildDateTimeCellHtml(row.posted_at)}</td>
-        <td>${buildPlanningRecommendationCellHtml(row)}</td>
-        <td>${buildPlanningPacketWorkspaceStatusHtml(row)}</td>
-        <td>${escapeHtml(formatScore100(row.winner_score))}</td>
-        <td>${buildPlanningSelectedResumeHtml(row)}</td>
-        <td class="apply-cell sticky-apply-col">${buildTailoringButtonHtml(row)}</td>
-      </tr>
-    `;
-  }).join("");
+  const formattedScore = score.toFixed(2);
+  const boundedScore = Math.min(100, Math.max(0, score));
+  const formattedBoundedScore = boundedScore.toFixed(2);
+  return `
+    <div class="planning-match-cell" aria-label="Match score ${escapeHtml(formattedScore)} out of 100">
+      <strong>${escapeHtml(formattedScore)}</strong>
+      ${bucket && bucket !== "-" ? `<span>${escapeHtml(bucket)}</span>` : ""}
+      <span
+        class="planning-match-meter"
+        role="progressbar"
+        aria-label="Match score ${escapeHtml(formattedScore)} out of 100"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="${escapeHtml(formattedBoundedScore)}"
+      ><span style="width: ${escapeHtml(formattedBoundedScore)}%"></span></span>
+    </div>
+  `;
+}
 
-  qs("planningTableMeta").textContent = planningTableState.metaLabel;
-  renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
-  renderPlanningPagination();
-  window.clearTableWrapLoading?.(tbody);
-  initResizableTableColumns("planningTable", "planningTableColumnWidths");
+function getPlanningRowKey(row, index) {
+  const stableKey = String(row?.job_doc_id || row?.job_url || row?.queue_rank || "").trim();
+  return stableKey || `planning-row-${index}`;
+}
+
+function buildPlanningRowDetailsHtml(row) {
+  const missingValue = row?.missing_requirement_count;
+  const missingRequirements = missingValue === undefined || missingValue === null || String(missingValue).trim() === ""
+    ? "Unavailable"
+    : String(missingValue);
+  const selectionSignal = String(row?.selection_signal || "").trim();
+  const llmEvaluation = String(
+    row?.llm_adjudication_resume || row?.llm_adjudicator_readback_status || ""
+  ).trim();
+  const runnerUp = normalizeResumeName(row?.runner_up_resume || row?.runnerup_resume);
+  const runnerScore = String(row?.runner_up_score ?? "").trim();
+  const scoreGap = String(row?.score_gap ?? "").trim();
+  const location = String(row?.job_location || "").trim();
+  const priorityReason = buildPlanningPriorityReason(row);
+  const nextStep = resolvePlanningNextStep(row);
+
+  return `
+    <div class="planning-row-details">
+      <dl class="planning-row-detail-grid">
+        <div><dt>Location</dt><dd>${escapeHtml(location || "Unavailable")}</dd></div>
+        <div><dt>Prefilter relevance</dt><dd>${escapeHtml(selectionSignal ? humanizeUnderscoreLabel(selectionSignal) : "Unavailable")}</dd></div>
+        <div><dt>AI evaluation</dt><dd>${escapeHtml(llmEvaluation ? humanizeUnderscoreLabel(llmEvaluation) : "Unavailable")}</dd></div>
+        <div><dt>Runner-up resume</dt><dd title="${escapeHtml(runnerUp ? humanizeResumeDisplayName(runnerUp) : "Unavailable")}">${escapeHtml(runnerUp ? humanizeResumeDisplayName(runnerUp) : "Unavailable")}</dd></div>
+        <div><dt>Runner-up score</dt><dd>${runnerScore ? escapeHtml(formatScore100(runnerScore)) : "Unavailable"}</dd></div>
+        <div><dt>Score gap</dt><dd>${scoreGap ? escapeHtml(scoreGap) : "Unavailable"}</dd></div>
+        <div><dt>Operator decision</dt><dd>${escapeHtml(String(row?.operator_decision || "").trim() ? formatOperatorDecisionLabel(row.operator_decision) : "Not decided")}</dd></div>
+        <div><dt>Next step</dt><dd>${escapeHtml(nextStep)}</dd></div>
+        <div><dt>Priority reason</dt><dd>${escapeHtml(priorityReason || "Unavailable")}</dd></div>
+        <div><dt>Missing requirements</dt><dd>${escapeHtml(missingRequirements)}</dd></div>
+      </dl>
+      ${buildLlmAdjudicatorReadbackHtml(row)}
+    </div>
+  `;
+}
+
+/* Planning JavaScript owns data and actions; the shared React island owns presentation. */
+function renderPlanningRows(rows, metaLabel) {
+  const sourceRows = Array.isArray(rows) ? rows.slice() : [];
+  planningTableState.rows = sortRows(sourceRows, PLANNING_SORT_COLUMNS, planningTableState.sort);
+  planningTableState.metaLabel = metaLabel;
+  planningTableState.status = "ready";
+  planningTableState.message = "";
+  planningTableState.resultKey += 1;
+  publishPlanningWorklistState();
+}
+
+function setPlanningWorklistBusy(isBusy) {
+  planningTableState.isLoading = Boolean(isBusy);
+}
+
+function renderPlanningLoadingState() {
+  setPlanningWorklistBusy(true);
+  planningTableState.status = "loading";
+  planningTableState.message = "Reading the latest planning results and operator state.";
+  publishPlanningWorklistState();
+}
+
+function renderPlanningErrorState(error) {
+  setPlanningWorklistBusy(false);
+  planningTableState.status = "error";
+  planningTableState.message = extractErrorMessage(error) || "Planning results are temporarily unavailable.";
+  planningTableState.rows = [];
+  planningTableState.resultKey += 1;
+  publishPlanningWorklistState();
 }
 
 async function loadPlanningTable({
@@ -13183,13 +13342,10 @@ async function loadPlanningTable({
   requestedPage = null,
   historyMode = "replace",
 } = {}) {
-  const tbody = qs("planningTableBody");
-  if (!tbody) return;
+  const worklistRoot = qs("planningWorklistRoot");
+  if (!worklistRoot) return;
   const pipelineVersionChanged = invalidatePlanningTableCacheIfPipelineChanged();
   const shouldForceNetwork = forceNetwork || pipelineVersionChanged;
-
-  const paginationMeta = qs("planningPaginationMeta");
-  const tableMeta = qs("planningTableMeta");
 
   const resolvedPage =
     Number.isFinite(Number(requestedPage)) && Number(requestedPage) > 0
@@ -13201,26 +13357,20 @@ async function loadPlanningTable({
   const stableSnapshot = capturePlanningTableSnapshot();
 
   planningTableState.requestSeq += 1;
+  planningTableState.resultKey += 1;
   const requestSeq = planningTableState.requestSeq;
 
   if (cachedData) {
     applyPlanningTableResponse(cachedData, { historyMode });
-    if (tableMeta) {
-      tableMeta.textContent = "Showing cached rows while refreshing...";
-    }
+    setPlanningWorklistBusy(true);
+    planningTableState.metaLabel = "Showing cached rows while refreshing...";
+    publishPlanningWorklistState();
   } else if (stableSnapshot) {
-    window.setTableWrapLoading?.(tbody, "Loading planning rows...");
-    if (tableMeta) {
-      tableMeta.textContent = `${stableSnapshot.metaLabel} · Loading...`;
-    }
-    if (paginationMeta) {
-      paginationMeta.textContent = "Loading...";
-    }
+    setPlanningWorklistBusy(true);
+    planningTableState.metaLabel = `${stableSnapshot.metaLabel} · Loading...`;
+    publishPlanningWorklistState();
   } else {
-    tbody.innerHTML = "";
-    window.setTableWrapLoading?.(tbody, "Loading planning rows...");
-    if (tableMeta) tableMeta.textContent = "Loading...";
-    if (paginationMeta) paginationMeta.textContent = "Loading...";
+    renderPlanningLoadingState();
     await new Promise((resolve) => window.requestAnimationFrame(resolve));
   }
 
@@ -13254,9 +13404,8 @@ async function loadPlanningTable({
     }
 
     if (cachedData) {
-      if (tableMeta) {
-        tableMeta.textContent = `${planningTableState.metaLabel} · refresh failed`;
-      }
+      planningTableState.metaLabel = `${planningTableState.metaLabel} · refresh failed`;
+      publishPlanningWorklistState();
       return;
     }
 
@@ -13269,13 +13418,16 @@ async function loadPlanningTable({
       return;
     }
 
-    throw err;
+    renderPlanningErrorState(err);
+    planningTableState.metaLabel = "Planning results unavailable";
+    planningTableState.pagination = normalizePlanningPagination({}, 0);
+    publishPlanningWorklistState();
+    return;
   } finally {
     if (planningTableState.activeController === controller) {
       planningTableState.activeController = null;
     }
     planningTableState.isLoading = false;
-    window.clearTableWrapLoading?.(tbody);
   }
 }
 
@@ -13291,7 +13443,9 @@ function clearPlanningFilters() {
   }
 
   qs("planningLimitInput").value = "15";
-  updatePlanningStats(0);
+  updatePlanningStats(0, []);
+  planningTableState.resultKey += 1;
+  publishPlanningWorklistState();
 }
 
 function attachPlanningHandlers() {
@@ -13323,70 +13477,44 @@ function attachPlanningHandlers() {
     }
   });
 
-  qs("planningPaginationActions").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-planning-page]");
-    if (!button || button.disabled) return;
-
-    const nextPage = Number(button.dataset.planningPage || "");
-    if (!Number.isFinite(nextPage) || nextPage < 1) return;
-
+  window.addEventListener(PLANNING_WORKLIST_ACTION_EVENT_NAME, async (event) => {
+    const action = event.detail || {};
     try {
-      await loadPlanningTable({
-        requestedPage: nextPage,
-        historyMode: "push",
-      });
-    } catch (err) {
-      showAppError("Failed to change planning page", err);
-    }
-  });
-
-  qs("planningTableBody").addEventListener("click", async (event) => {
-    const resumeChoiceButton = event.target.closest("[data-view-resume-choices='true']");
-    if (resumeChoiceButton && !resumeChoiceButton.disabled) {
-      openResumeChoiceModal({
-        queue_rank: resumeChoiceButton.dataset.queueRank || "",
-        job_doc_id: resumeChoiceButton.dataset.jobDocId || "",
-        job_url: resumeChoiceButton.dataset.jobUrl || "",
-        job_company: resumeChoiceButton.dataset.jobCompany || "",
-        job_title: resumeChoiceButton.dataset.jobTitle || "",
-        action: resumeChoiceButton.dataset.action || "",
-        score_gap: resumeChoiceButton.dataset.scoreGap || "",
-        winner_resume: resumeChoiceButton.dataset.winnerResume || "",
-        winner_score: resumeChoiceButton.dataset.winnerScore || "",
-        runner_up_resume: resumeChoiceButton.dataset.runnerUpResume || "",
-        runner_up_score: resumeChoiceButton.dataset.runnerUpScore || "",
-        operator_selected_resume: resumeChoiceButton.dataset.operatorSelectedResume || "",
-      });
-      return;
-    }
-
-    const tailoringButton = event.target.closest("[data-view-tailoring='true']");
-    if (tailoringButton && !tailoringButton.disabled) {
-      try {
-        await handleTailoringClick(tailoringButton);
-      } catch (err) {
-        showAppError("Failed to load tailoring artifacts", err);
+      if (action.type === "page_change") {
+        await loadPlanningTable({ requestedPage: action.page, historyMode: "push" });
+        return;
       }
-      return;
-    }
-
-    const generateSuggestionsButton = event.target.closest("[data-generate-suggestions='true']");
-    if (generateSuggestionsButton && !generateSuggestionsButton.disabled) {
-      try {
-        await handleGenerateSuggestionsClick(generateSuggestionsButton);
-      } catch (err) {
-        showAppError("Failed to generate suggestions", err);
+      if (action.type === "sort_change") {
+        const column = PLANNING_SORT_COLUMNS.find((item) => item.key === action.key && item.sortable !== false);
+        if (!column) return;
+        planningTableState.sort = {
+          key: column.key,
+          direction: action.direction === "desc" ? "desc" : "asc",
+        };
+        syncPlanningBrowserUrl({ mode: "push" });
+        renderPlanningRows(planningTableState.rows, planningTableState.metaLabel);
+        return;
       }
-      return;
-    }
+      if (action.type === "retry") {
+        await loadPlanningTable({ forceNetwork: true });
+        return;
+      }
+      if (action.type === "clear_filters") {
+        qs("planningClearFiltersBtn")?.click();
+        return;
+      }
+      if (action.type !== "next_step" || !action.row) return;
 
-    const applyButton = event.target.closest("[data-apply-job='true']");
-    if (!applyButton || applyButton.disabled) return;
-
-    try {
-      await handleApplyClick(applyButton);
+      const actionState = resolvePlanningWorklistAction(action.row);
+      if (actionState.disabled) return;
+      const buttonLike = { dataset: buildPlanningTailoringDataset(action.row, actionState) };
+      if (actionState.kind === "open_workspace") {
+        await handleTailoringClick(buttonLike);
+      } else if (actionState.kind === "generate_suggestions") {
+        await handleGenerateSuggestionsClick(buttonLike);
+      }
     } catch (err) {
-      showAppError("Failed to open apply workflow", err);
+      showAppError("Failed to complete planning action", err);
     }
   });
 
@@ -13529,7 +13657,7 @@ function attachPlanningHandlers() {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
-  const isPlanningPage = Boolean(qs("planningTable"));
+  const isPlanningPage = Boolean(qs("planningWorklistRoot"));
   const isTailoringWorkspacePage = Boolean(document.querySelector(".tailoring-workspace-page"));
   const isScanWorkspacePage = Boolean(document.querySelector(".scan-workspace-page"));
 
@@ -13538,10 +13666,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     await loadPreferenceFilterOptions("planningPreferenceFilter");
     applyPlanningUrlState(window.location.search);
     attachPlanningHandlers();
-    bindTableSorting("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort, () => {
-      syncPlanningBrowserUrl({ mode: "push" });
-      renderPlanningRows(planningTableState.rows, planningTableState.metaLabel);
-    });
+    publishPlanningWorklistState();
 
     try {
       await loadPlanningTable();

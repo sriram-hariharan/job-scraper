@@ -132,14 +132,14 @@ describe("ExecutiveQueue", () => {
       expect(screen.getByRole("button", { name: new RegExp(`^${heading}$`, "i") })).toBeInTheDocument();
     }
     expect(screen.getByRole("columnheader", { name: "Review" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Match score 0.00")).toHaveTextContent("0.00");
+    expect(screen.getByRole("progressbar", { name: "Match score 0.00 out of 100" })).toHaveAttribute("aria-valuenow", "0");
     expect(within(screen.getByText("Alpha Data Engineer").closest("tr") as HTMLElement).getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText(/keyword|cpc|traffic/i)).not.toBeInTheDocument();
   });
 
   it("renders loading, empty, and inline retryable error states", () => {
     const { rerender } = render(<ExecutiveQueue state={queueState({ status: "loading", rows: [] })} />);
-    expect(screen.getByLabelText("Executive queue table").querySelectorAll(".executive-queue-skeleton-row")).toHaveLength(5);
+    expect(screen.getByLabelText("Executive queue table").querySelectorAll(".shared-table-skeleton-row")).toHaveLength(5);
 
     rerender(<ExecutiveQueue state={queueState({ rows: [], pagination: { ...queueState().pagination, totalCount: 0 } })} />);
     expect(screen.getByText("No jobs match these filters")).toBeInTheDocument();
@@ -208,8 +208,8 @@ describe("ExecutiveQueue", () => {
     fireEvent.click(alphaExpand);
     expect(alphaExpand).toHaveAttribute("aria-expanded", "true");
     expect(alphaExpand.querySelector(".lucide-chevron-down")).toBeInTheDocument();
-    expect(container.querySelectorAll(".executive-queue-detail-row")).toHaveLength(1);
-    const detailRow = container.querySelector(".executive-queue-detail-row") as HTMLElement;
+    expect(container.querySelectorAll(".shared-table-detail-row")).toHaveLength(1);
+    const detailRow = container.querySelector(".shared-table-detail-row") as HTMLElement;
     expect(detailRow.querySelector(".executive-queue-details--neutral")).toBeInTheDocument();
     expect(within(detailRow).getByText(/does not apply to the job/i)).toBeInTheDocument();
     for (const label of ["Priority reason", "Next step", "Selected resume", "Runner-up", "Score gap", "Missing requirements"]) {
@@ -217,8 +217,8 @@ describe("ExecutiveQueue", () => {
     }
 
     fireEvent.click(screen.getByRole("button", { name: "Expand details for Beta ML Engineer" }));
-    expect(container.querySelectorAll(".executive-queue-detail-row")).toHaveLength(1);
-    expect(within(container.querySelector(".executive-queue-detail-row") as HTMLElement).getByText("Borderline match")).toBeInTheDocument();
+    expect(container.querySelectorAll(".shared-table-detail-row")).toHaveLength(1);
+    expect(within(container.querySelector(".shared-table-detail-row") as HTMLElement).getByText("Borderline match")).toBeInTheDocument();
   });
 
   it("publishes view, pagination, and Review actions through the one bridge", () => {
@@ -228,7 +228,7 @@ describe("ExecutiveQueue", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Simple" }));
     expect(listener.actions[listener.actions.length - 1]).toEqual({ type: "view_mode_change", viewMode: "simple" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Next queue page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next executive queue top pagination" }));
     expect(listener.actions[listener.actions.length - 1]).toEqual({ type: "page_change", page: 2 });
 
     const reviewButton = screen.getByRole("button", { name: "Review Beta ML Engineer" });
@@ -250,16 +250,16 @@ describe("ExecutiveQueue", () => {
   it("pins a fixed Review column after a protected Selected Resume column", () => {
     const { container } = render(<ExecutiveQueue state={queueState()} />);
     const reviewHeader = screen.getByRole("columnheader", { name: "Review" });
-    const selectedHeader = container.querySelector("th.executive-queue-column--selected_resume") as HTMLElement;
+    const selectedHeader = container.querySelector("th.shared-table-column--selected_resume") as HTMLElement;
 
-    expect(reviewHeader).toHaveClass("is-sticky-action", "executive-queue-column--review");
+    expect(reviewHeader).toHaveClass("is-sticky-action", "shared-table-column--review");
     expect(reviewHeader).toHaveStyle({ width: "128px" });
-    expect(selectedHeader).toHaveClass("executive-queue-column--selected_resume");
+    expect(selectedHeader).toHaveClass("shared-table-column--selected_resume");
     expect(selectedHeader).toHaveStyle({ width: "240px" });
-    expect(container.querySelectorAll("td.executive-queue-column--selected_resume")).toHaveLength(rows.length);
+    expect(container.querySelectorAll("td.shared-table-column--selected_resume")).toHaveLength(rows.length);
     expect(container.querySelectorAll("td.is-sticky-action")).toHaveLength(rows.length);
     expect(container.querySelector(".executive-queue-selected-resume-value")).toHaveAttribute("title", "Sriram_AI2.pdf");
-    expect(container.querySelector(".executive-queue-table-viewport")).toContainElement(reviewHeader.closest("table"));
+    expect(container.querySelector(".shared-table-viewport")).toContainElement(reviewHeader.closest("table"));
     expect(reviewHeader.querySelector("[role='separator']")).not.toBeInTheDocument();
     for (const reviewCell of container.querySelectorAll("td.is-sticky-action")) {
       expect(reviewCell).toHaveStyle({ width: "128px" });
@@ -280,17 +280,18 @@ describe("ExecutiveQueue", () => {
 
   it("keeps Packet and pagination available around the horizontally scrollable queue", () => {
     const { container } = render(<ExecutiveQueue state={queueState()} />);
-    const packetHeader = container.querySelector("th.executive-queue-column--packet_status") as HTMLElement;
+    const packetHeader = container.querySelector("th.shared-table-column--packet_status") as HTMLElement;
     expect(packetHeader).toHaveTextContent("Packet");
     expect(packetHeader).toHaveStyle({ width: "138px" });
-    expect(container.querySelectorAll("td.executive-queue-column--packet_status .executive-queue-badge--packet")).toHaveLength(rows.length);
+    expect(container.querySelectorAll("td.shared-table-column--packet_status .executive-queue-badge--packet")).toHaveLength(rows.length);
 
-    const viewport = container.querySelector(".executive-queue-table-viewport") as HTMLElement;
-    const pagination = container.querySelector(".executive-queue-pagination") as HTMLElement;
-    expect(viewport.contains(pagination)).toBe(false);
-    expect(pagination).toHaveTextContent("Showing 1-2 of 31 jobs");
-    expect(screen.getByRole("button", { name: "Previous queue page" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Next queue page" })).toBeEnabled();
+    const viewport = container.querySelector(".shared-table-viewport") as HTMLElement;
+    const pagination = Array.from(container.querySelectorAll(".shared-table-pagination"));
+    expect(pagination).toHaveLength(2);
+    expect(pagination.every((control) => !viewport.contains(control))).toBe(true);
+    expect(pagination[0]).toHaveTextContent("Showing 1-2 of 31 jobs");
+    expect(screen.getByRole("button", { name: "Previous executive queue top pagination" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next executive queue bottom pagination" })).toBeEnabled();
   });
 
   it("renders detailed and simple density contracts without changing row meanings", () => {

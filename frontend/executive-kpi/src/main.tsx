@@ -9,6 +9,13 @@ import {
   type ExecutiveQueueState,
 } from "./ExecutiveQueue";
 import { PipelineDashboard } from "./pipeline/PipelineDashboard";
+import {
+  DEFAULT_PLANNING_STATE,
+  PLANNING_STATE_EVENT,
+  PlanningSummary,
+  PlanningWorklist,
+  type PlanningWorklistState,
+} from "./PlanningWorklist";
 import "./styles.css";
 
 const KPI_EVENT_NAME = "applylens:executive-kpi-state";
@@ -56,6 +63,23 @@ function ExecutiveQueueIsland() {
   return <ExecutiveQueue state={state} />;
 }
 
+function PlanningIsland({ summary = false }: { summary?: boolean }) {
+  const [state, setState] = useState<PlanningWorklistState>(
+    () => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || DEFAULT_PLANNING_STATE,
+  );
+
+  useEffect(() => {
+    const handleState = (event: Event) => {
+      const nextState = (event as CustomEvent<PlanningWorklistState>).detail;
+      if (nextState?.status) setState(nextState);
+    };
+    window.addEventListener(PLANNING_STATE_EVENT, handleState);
+    return () => window.removeEventListener(PLANNING_STATE_EVENT, handleState);
+  }, []);
+
+  return summary ? <PlanningSummary state={state} /> : <PlanningWorklist state={state} />;
+}
+
 const mount = document.getElementById("executiveKpiRoot");
 if (mount) {
   createRoot(mount).render(
@@ -80,5 +104,19 @@ if (pipelineMount) {
     <StrictMode>
       <PipelineDashboard />
     </StrictMode>,
+  );
+}
+
+const planningSummaryMount = document.getElementById("planningSummaryRoot");
+if (planningSummaryMount) {
+  createRoot(planningSummaryMount).render(
+    <StrictMode><PlanningIsland summary /></StrictMode>,
+  );
+}
+
+const planningWorklistMount = document.getElementById("planningWorklistRoot");
+if (planningWorklistMount) {
+  createRoot(planningWorklistMount).render(
+    <StrictMode><PlanningIsland /></StrictMode>,
   );
 }

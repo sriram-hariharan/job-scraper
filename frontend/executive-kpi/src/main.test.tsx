@@ -6,6 +6,7 @@ beforeEach(() => {
   document.body.innerHTML = '<section id="executiveKpiRoot"></section>';
   delete window.__APPLYLENS_EXECUTIVE_KPI_STATE__;
   delete window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__;
+  delete window.__APPLYLENS_PLANNING_WORKLIST_STATE__;
 });
 
 it("updates the mounted KPI island when the existing status owner publishes refresh states", async () => {
@@ -111,4 +112,36 @@ it("mounts the Pipeline dashboard only when its dedicated server root exists", a
   await waitFor(() => expect(screen.getByText("Pipeline is idle")).toBeInTheDocument());
   expect(fetchMock).toHaveBeenCalledWith("/pipeline/status", expect.objectContaining({ method: "GET" }));
   expect(document.querySelectorAll("#pipelineDashboardRoot")).toHaveLength(1);
+});
+
+it("hydrates and updates both Planning islands from the existing Planning bridge state", async () => {
+  document.body.innerHTML = '<section id="planningSummaryRoot"></section><section id="planningWorklistRoot"></section>';
+  window.__APPLYLENS_PLANNING_WORKLIST_STATE__ = {
+    status: "ready",
+    rows: [{ job_doc_id: "planning-one", queue_rank: 1, job_title: "Initial Planning Job" }],
+    metaLabel: "Planning view · 1 total job",
+    pagination: { page: 1, pageSize: 15, totalCount: 1, totalPages: 1, hasPrevPage: false, hasNextPage: false },
+    sort: { key: "queue_rank", direction: "asc" },
+    resultKey: "planning-one",
+    metrics: { total: 1, readyForReview: 0, packetReady: 0, needsDecision: 1 },
+  };
+
+  await act(async () => {
+    await import("./main");
+  });
+  await waitFor(() => expect(screen.getByRole("link", { name: "Initial Planning Job" })).toBeInTheDocument());
+  expect(screen.getByLabelText("Planning summary")).toBeInTheDocument();
+
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("applylens:planning-worklist-state", {
+      detail: {
+        ...window.__APPLYLENS_PLANNING_WORKLIST_STATE__,
+        rows: [{ job_doc_id: "planning-two", queue_rank: 1, job_title: "Refreshed Planning Job" }],
+        resultKey: "planning-two",
+      },
+    }));
+  });
+
+  await waitFor(() => expect(screen.getByRole("link", { name: "Refreshed Planning Job" })).toBeInTheDocument());
+  expect(screen.queryByRole("link", { name: "Initial Planning Job" })).not.toBeInTheDocument();
 });

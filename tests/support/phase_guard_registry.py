@@ -783,6 +783,32 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_user_pipeline_status_reconciliation.py",
         },
+        "phase133g_premium_planning_dashboard": {
+            "frontend/executive-kpi/src/ExecutiveQueue.test.tsx",
+            "frontend/executive-kpi/src/ExecutiveQueue.tsx",
+            "frontend/executive-kpi/src/PlanningWorklist.test.tsx",
+            "frontend/executive-kpi/src/PlanningWorklist.tsx",
+            "frontend/executive-kpi/src/main.test.tsx",
+            "frontend/executive-kpi/src/main.tsx",
+            "frontend/executive-kpi/src/styles.css",
+            "frontend/executive-kpi/src/table/TablePrimitives.tsx",
+            "src/app/planning_ui.py",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "src/app/static/planning.js",
+            "src/app/static/planning_dashboard.css",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+            "tests/test_phase133b_executive_queue_react_island.py",
+            "tests/test_phase133g_premium_planning_dashboard.py",
+            "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
+            "tests/test_phase126b_planning_ai_review_copy_polish_static_only.py",
+            "tests/test_phase71a_tailoring_workspace_artifact_path_preload_repair_default_off.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_queue_ui_metadata_contract.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -800,6 +826,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase133a_executive_kpi_react_island")
         | legacy_guard_allowlist("phase133b_executive_queue_react_island")
         | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
+        | legacy_guard_allowlist("phase133g_premium_planning_dashboard")
     )
 
 

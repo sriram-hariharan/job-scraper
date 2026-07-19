@@ -849,7 +849,7 @@ def assert_protected_hashes(
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-        ): "2fb9e43596a7accde8bd813274002d54c9f5f13f1aef43e2dfd046dd8f47d411",
+        ): "5ed77536082a5005f2febe663b700c27502fadc75806caf9161c08dae9472a57",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",

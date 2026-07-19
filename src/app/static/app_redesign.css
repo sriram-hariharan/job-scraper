@@ -7192,7 +7192,7 @@ html[data-theme="light"] .pipeline-run-stage-chip.is-complete {
 
 /* ui_redesign_v37: Live pipeline modal readability and theme parity. */
 .pipeline-modal-card {
-  width: min(1120px, calc(100vw - 40px)) !important;
+  width: min(980px, calc(100vw - 40px)) !important;
 }
 
 .pipeline-modal-card .modal-header {
@@ -7251,6 +7251,11 @@ html[data-theme="light"] body .ghost-btn.pipeline-bulk-action-btn--clear {
 .pipeline-toggle-item {
   border-color: var(--app-border-2) !important;
   background: var(--app-surface-2) !important;
+}
+
+.pipeline-launch-modal .pipeline-form-grid {
+  border: 0 !important;
+  background: transparent !important;
 }
 
 .pipeline-form-grid {
@@ -7670,7 +7675,7 @@ html[data-theme="light"] .pipeline-success-actions {
 
 @media (max-width: 760px) {
   .pipeline-modal-card {
-    width: min(100vw - 16px, 1120px) !important;
+    width: min(100vw - 16px, 980px) !important;
   }
 
   .pipeline-confirm-card {

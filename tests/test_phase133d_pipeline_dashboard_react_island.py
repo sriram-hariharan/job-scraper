@@ -28,7 +28,7 @@ def test_pipeline_route_renders_one_react_mount_and_shared_pipeline_navigation()
     assert 'aria-label="Pipeline monitoring dashboard"' in markup
     assert '/static/build/executive-kpi/executive-kpi.css?v=phase133d' in markup
     assert '/static/build/executive-kpi/executive-kpi.js?v=phase133d' in markup
-    assert 'src="/static/app.js?v=phase133d_r2"' in markup
+    assert 'src="/static/app.js?v=phase133d_s1"' in markup
     assert 'src="/static/shell.js?v=role_onboarding_r6"' in markup
     assert '<body class="pipeline-dashboard-page">' in markup
     assert 'id="executiveKpiRoot"' not in markup

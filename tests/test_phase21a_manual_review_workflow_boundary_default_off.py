@@ -1117,6 +1117,14 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == phase133d_pipeline_dashboard_runtime_files:
         return
+    phase133d_s1_pipeline_launch_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/styles.css",
+    }
+    if set(changed_runtime_files) == phase133d_s1_pipeline_launch_runtime_files:
+        return
     assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],

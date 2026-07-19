@@ -28,6 +28,7 @@ const queueTableState = {
   totalPages: 1,
   hasPrevPage: false,
   hasNextPage: false,
+  sort: { key: "", direction: "asc" },
 };
 
 const queueFilterState = {
@@ -1491,6 +1492,7 @@ function buildExecutiveQueueBridgeState() {
       hasPrevPage: queueTableState.hasPrevPage,
       hasNextPage: queueTableState.hasNextPage,
     },
+    sort: { ...queueTableState.sort },
   };
 }
 
@@ -2729,6 +2731,10 @@ function buildBrowseUrl(pageOverride = null) {
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
   params.set("limit", limit);
   params.set("page", String(page));
+  if (queueTableState.sort.key) {
+    params.set("sort_key", queueTableState.sort.key);
+    params.set("sort_dir", queueTableState.sort.direction === "desc" ? "desc" : "asc");
+  }
 
   return `/browse?${params.toString()}`;
 }
@@ -3147,6 +3153,14 @@ async function handleExecutiveQueueAction(event) {
       if (Number.isFinite(nextPage) && nextPage >= 1 && nextPage !== queueTableState.page) {
         await reloadCurrentTable(nextPage);
       }
+    } else if (action.type === "sort_change") {
+      queueTableState.sort = {
+        key: String(action.key || "").trim(),
+        direction: action.direction === "desc" ? "desc" : "asc",
+      };
+      queueTableState.page = 1;
+      publishExecutiveQueueState();
+      await loadBrowse(1);
     } else if (action.type === "retry") {
       await reloadCurrentTable(queueTableState.page);
     } else if (action.type === "view_mode_change") {

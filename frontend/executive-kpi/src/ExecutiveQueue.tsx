@@ -3,18 +3,15 @@ import {
   type ColumnSizingState,
   type SortingState,
   getCoreRowModel,
-  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import {
-  Check,
-  ChevronDown,
   Info,
   LoaderCircle,
   RotateCcw,
-  Search,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { SharedFilterSelect, type SharedFilterOption } from "./filter/FilterSelect";
 import {
   SHARED_NEUTRAL_CONTROL_CLASS,
   SharedExpandedDetail,
@@ -103,12 +100,14 @@ export type ExecutiveQueueState = {
   filters: QueueFilters;
   preferenceOptions: PreferenceOption[];
   pagination: QueuePagination;
+  sort: { key: string; direction: "asc" | "desc" };
 };
 
 export type ExecutiveQueueAction =
   | { type: "apply_filters"; filters: QueueFilters }
   | { type: "clear_filters" }
   | { type: "page_change"; page: number }
+  | { type: "sort_change"; key: string; direction: "asc" | "desc" }
   | { type: "retry" }
   | { type: "view_mode_change"; viewMode: QueueViewMode }
   | { type: "review"; row: QueueRow };
@@ -135,13 +134,14 @@ export const DEFAULT_QUEUE_STATE: ExecutiveQueueState = {
     hasPrevPage: false,
     hasNextPage: false,
   },
+  sort: { key: "", direction: "asc" },
 };
 
-const ACTION_OPTIONS = [
-  { value: "APPLY", label: "Ready for review" },
-  { value: "APPLY_REVIEW_VARIANTS", label: "Review resume choice" },
-  { value: "MAYBE_TAILOR", label: "Tailor first" },
-  { value: "SKIP_FOR_NOW", label: "Review later" },
+const ACTION_OPTIONS: SharedFilterOption[] = [
+  { value: "APPLY", label: "Ready for review", tone: "ready" },
+  { value: "APPLY_REVIEW_VARIANTS", label: "Review resume choice", tone: "choice" },
+  { value: "MAYBE_TAILOR", label: "Tailor first", tone: "tailor" },
+  { value: "SKIP_FOR_NOW", label: "Review later", tone: "later" },
 ];
 
 const PACKET_HELP = "A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.";
@@ -254,107 +254,6 @@ function readColumnSizing(): ColumnSizingState {
   }
 }
 
-function MultiSelect({
-  label,
-  options,
-  values,
-  onChange,
-  placeholder,
-  searchable = false,
-  allLabel,
-}: {
-  label: string;
-  options: Array<{ value: string; label: string }>;
-  values: string[];
-  onChange: (values: string[]) => void;
-  placeholder: string;
-  searchable?: boolean;
-  allLabel?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-
-  const normalized = query.trim().toLowerCase().replace(/[\/_-]+/g, " ").replace(/\s+/g, " ");
-  const visible = options.filter((option) =>
-    option.label.toLowerCase().replace(/[\/_-]+/g, " ").replace(/\s+/g, " ").includes(normalized),
-  );
-  const triggerLabel = values.length === 0 ? placeholder : values.length === 1
-    ? options.find((option) => option.value === values[0])?.label || placeholder
-    : `${values.length} selected`;
-
-  return (
-    <div className="executive-queue-multiselect" ref={rootRef}>
-      <span className="executive-queue-field-label">{label}</span>
-      <button
-        type="button"
-        className={`${NEUTRAL_CONTROL_CLASS} executive-queue-select-trigger`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span>{triggerLabel}</span>
-        <ChevronDown size={15} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="executive-queue-select-menu" role="menu">
-          {searchable ? (
-            <label className="executive-queue-select-search">
-              <span className="sr-only">Search {label.toLowerCase()}</span>
-              <Search size={15} aria-hidden="true" />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={`Search ${label.toLowerCase()}`}
-              />
-            </label>
-          ) : null}
-          {allLabel && !normalized ? (
-            <button
-              type="button"
-              className={`${NEUTRAL_CONTROL_CLASS} executive-queue-select-option ${values.length === 0 ? "is-selected" : ""}`}
-              role="menuitemcheckbox"
-              aria-checked={values.length === 0}
-              onClick={() => onChange([])}
-            >
-              <Check size={15} aria-hidden="true" />
-              <span>{allLabel}</span>
-            </button>
-          ) : null}
-          {visible.map((option) => {
-            const selected = values.includes(option.value);
-            return (
-              <button
-                type="button"
-                className={`${NEUTRAL_CONTROL_CLASS} executive-queue-select-option ${selected ? "is-selected" : ""}`}
-                key={option.value}
-                role="menuitemcheckbox"
-                aria-checked={selected}
-                onClick={() => onChange(
-                  selected ? values.filter((value) => value !== option.value) : [...values, option.value],
-                )}
-              >
-                <Check size={15} aria-hidden="true" />
-                <span>{option.label}</span>
-              </button>
-            );
-          })}
-          {!visible.length ? <div className="executive-queue-select-empty">No preferences found</div> : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function QueueFiltersToolbar({ state }: { state: ExecutiveQueueState }) {
   const [filters, setFilters] = useState<QueueFilters>(state.filters);
 
@@ -368,14 +267,17 @@ function QueueFiltersToolbar({ state }: { state: ExecutiveQueueState }) {
   return (
     <section className="executive-queue-filter-card" aria-label="Queue filters">
       <div className="executive-queue-filter-grid">
-        <MultiSelect
+        <SharedFilterSelect
+          id="executiveActionFilter"
           label="Action"
           options={ACTION_OPTIONS}
           values={filters.actions}
           onChange={(actions) => setFilters((current) => ({ ...current, actions }))}
           placeholder="All actions"
+          mode="single"
         />
-        <MultiSelect
+        <SharedFilterSelect
+          id="executivePreferenceFilter"
           label="Preferences"
           options={preferenceOptions}
           values={filters.preferenceIds}
@@ -383,6 +285,7 @@ function QueueFiltersToolbar({ state }: { state: ExecutiveQueueState }) {
           placeholder="All Preferences"
           allLabel="All Preferences"
           searchable
+          mode="multiple"
         />
         <label className="executive-queue-limit-field">
           <span className="executive-queue-field-label">Limit</span>
@@ -578,8 +481,8 @@ function buildColumns(mode: QueueViewMode): ColumnDef<QueueRow>[] {
       },
       { accessorKey: "score_gap", header: "Score gap", size: 108, minSize: 94, sortUndefined: "last" },
       { accessorKey: "missing_requirement_count", header: "Missing req count", size: 138, minSize: 120, sortUndefined: "last" },
-      { id: "next_step", header: "Next step", size: 160, minSize: 130, accessorFn: (row: QueueRow) => formatNextStep(row) },
-      { id: "queue_priority_reason", header: "Priority reason", size: 180, minSize: 150, accessorFn: (row: QueueRow) => formatDiagnostic(row.queue_priority_reason) || "—" },
+      { id: "next_step", header: "Next step", size: 160, minSize: 130, accessorFn: (row: QueueRow) => formatNextStep(row), enableSorting: false },
+      { id: "queue_priority_reason", header: "Priority reason", size: 180, minSize: 150, accessorFn: (row: QueueRow) => formatDiagnostic(row.queue_priority_reason) || "—", enableSorting: false },
     ] as ColumnDef<QueueRow>[] : []),
     review,
   ];
@@ -587,11 +490,14 @@ function buildColumns(mode: QueueViewMode): ColumnDef<QueueRow>[] {
 }
 
 function QueueTable({ state }: { state: ExecutiveQueueState }) {
-  const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(readColumnSizing);
   const [expandedId, setExpandedId] = useState<string>("");
   const columns = useMemo(() => buildColumns(state.viewMode), [state.viewMode]);
   const rows = useMemo(() => state.rows.slice(), [state.rows]);
+  const sorting = useMemo<SortingState>(
+    () => state.sort.key ? [{ id: state.sort.key, desc: state.sort.direction === "desc" }] : [],
+    [state.sort],
+  );
 
   useEffect(() => setExpandedId(""), [state.rows, state.pagination.page, state.viewMode]);
 
@@ -604,7 +510,13 @@ function QueueTable({ state }: { state: ExecutiveQueueState }) {
       expanded: expandedId ? { [expandedId]: true } : {},
     },
     getRowId: (row, index) => rowKey(row, index),
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      const selected = next[0];
+      if (!selected) return;
+      setExpandedId("");
+      publishQueueAction({ type: "sort_change", key: selected.id, direction: selected.desc ? "desc" : "asc" });
+    },
     onColumnSizingChange: (updater) => {
       setColumnSizing((current) => {
         const next = typeof updater === "function" ? updater(current) : updater;
@@ -621,7 +533,7 @@ function QueueTable({ state }: { state: ExecutiveQueueState }) {
     },
     getRowCanExpand: () => true,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    manualSorting: true,
     enableSortingRemoval: false,
     columnResizeMode: "onChange",
   });

@@ -6,6 +6,7 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import {
+  ArrowUpDown,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -260,7 +261,7 @@ export function SharedResizableHeader<T>({
               aria-label={label}
               onClick={header.column.getToggleSortingHandler()}
             >
-              {sorted === "asc" ? <ChevronUp size={14} aria-hidden="true" /> : sorted === "desc" ? <ChevronDown size={14} aria-hidden="true" /> : <span className="shared-table-sort-placeholder" />}
+              {sorted === "asc" ? <ChevronUp size={14} aria-hidden="true" /> : sorted === "desc" ? <ChevronDown size={14} aria-hidden="true" /> : <ArrowUpDown className="shared-table-sort-placeholder" size={13} aria-hidden="true" />}
             </button>
           ) : null}
         </div>

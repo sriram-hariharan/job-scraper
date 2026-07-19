@@ -12,6 +12,7 @@ import { PipelineDashboard } from "./pipeline/PipelineDashboard";
 import {
   DEFAULT_PLANNING_STATE,
   PLANNING_STATE_EVENT,
+  PlanningFiltersToolbar,
   PlanningSummary,
   PlanningWorklist,
   type PlanningWorklistState,
@@ -63,7 +64,7 @@ function ExecutiveQueueIsland() {
   return <ExecutiveQueue state={state} />;
 }
 
-function PlanningIsland({ summary = false }: { summary?: boolean }) {
+function PlanningIsland({ view }: { view: "filters" | "summary" | "worklist" }) {
   const [state, setState] = useState<PlanningWorklistState>(
     () => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || DEFAULT_PLANNING_STATE,
   );
@@ -77,7 +78,9 @@ function PlanningIsland({ summary = false }: { summary?: boolean }) {
     return () => window.removeEventListener(PLANNING_STATE_EVENT, handleState);
   }, []);
 
-  return summary ? <PlanningSummary state={state} /> : <PlanningWorklist state={state} />;
+  if (view === "filters") return <PlanningFiltersToolbar state={state} />;
+  if (view === "summary") return <PlanningSummary state={state} />;
+  return <PlanningWorklist state={state} />;
 }
 
 const mount = document.getElementById("executiveKpiRoot");
@@ -110,13 +113,20 @@ if (pipelineMount) {
 const planningSummaryMount = document.getElementById("planningSummaryRoot");
 if (planningSummaryMount) {
   createRoot(planningSummaryMount).render(
-    <StrictMode><PlanningIsland summary /></StrictMode>,
+    <StrictMode><PlanningIsland view="summary" /></StrictMode>,
+  );
+}
+
+const planningFiltersMount = document.getElementById("planningFiltersRoot");
+if (planningFiltersMount) {
+  createRoot(planningFiltersMount).render(
+    <StrictMode><PlanningIsland view="filters" /></StrictMode>,
   );
 }
 
 const planningWorklistMount = document.getElementById("planningWorklistRoot");
 if (planningWorklistMount) {
   createRoot(planningWorklistMount).render(
-    <StrictMode><PlanningIsland /></StrictMode>,
+    <StrictMode><PlanningIsland view="worklist" /></StrictMode>,
   );
 }

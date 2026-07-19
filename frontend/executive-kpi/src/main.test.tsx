@@ -78,6 +78,7 @@ it("hydrates and updates the queue island from the existing bridge state", async
       hasPrevPage: false,
       hasNextPage: false,
     },
+    sort: { key: "", direction: "asc" },
   };
 
   await act(async () => {
@@ -114,8 +115,8 @@ it("mounts the Pipeline dashboard only when its dedicated server root exists", a
   expect(document.querySelectorAll("#pipelineDashboardRoot")).toHaveLength(1);
 });
 
-it("hydrates and updates both Planning islands from the existing Planning bridge state", async () => {
-  document.body.innerHTML = '<section id="planningSummaryRoot"></section><section id="planningWorklistRoot"></section>';
+it("hydrates and updates all Planning islands from the existing Planning bridge state", async () => {
+  document.body.innerHTML = '<section id="planningFiltersRoot"></section><section id="planningSummaryRoot"></section><section id="planningWorklistRoot"></section>';
   window.__APPLYLENS_PLANNING_WORKLIST_STATE__ = {
     status: "ready",
     rows: [{ job_doc_id: "planning-one", queue_rank: 1, job_title: "Initial Planning Job" }],
@@ -124,6 +125,8 @@ it("hydrates and updates both Planning islands from the existing Planning bridge
     sort: { key: "queue_rank", direction: "asc" },
     resultKey: "planning-one",
     metrics: { total: 1, readyForReview: 0, packetReady: 0, needsDecision: 1 },
+    filters: { actions: [], winnerBuckets: [], tailoringStates: [], preferenceIds: [], undecidedOnly: false, limit: 15 },
+    preferenceOptions: [],
   };
 
   await act(async () => {
@@ -131,6 +134,7 @@ it("hydrates and updates both Planning islands from the existing Planning bridge
   });
   await waitFor(() => expect(screen.getByRole("link", { name: "Initial Planning Job" })).toBeInTheDocument());
   expect(screen.getByLabelText("Planning summary")).toBeInTheDocument();
+  expect(screen.getByLabelText("Planning filters")).toBeInTheDocument();
 
   await act(async () => {
     window.dispatchEvent(new CustomEvent("applylens:planning-worklist-state", {

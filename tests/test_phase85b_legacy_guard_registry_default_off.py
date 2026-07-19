@@ -426,15 +426,21 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "frontend/executive-kpi/src/ExecutiveQueue.tsx",
         "frontend/executive-kpi/src/PlanningWorklist.test.tsx",
         "frontend/executive-kpi/src/PlanningWorklist.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.test.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.tsx",
         "frontend/executive-kpi/src/main.test.tsx",
         "frontend/executive-kpi/src/main.tsx",
         "frontend/executive-kpi/src/styles.css",
         "frontend/executive-kpi/src/table/TablePrimitives.tsx",
+        "src/app/api.py",
         "src/app/planning_ui.py",
+        "src/app/services.py",
+        "src/app/static/app.js",
         "src/app/static/build/executive-kpi/executive-kpi.css",
         "src/app/static/build/executive-kpi/executive-kpi.js",
         "src/app/static/planning.js",
         "src/app/static/planning_dashboard.css",
+        "src/app/ui.py",
         "tests/support/phase_guard_registry.py",
         "tests/test_phase110b_generate_suggestions_loader_static_only.py",
         "tests/test_phase133b_executive_queue_react_island.py",
@@ -447,7 +453,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
         "tests/test_queue_ui_metadata_contract.py",
     }
-    assert len(phase133g_profile) == 24
+    assert len(phase133g_profile) == 30
     assert not any("*" in path for path in phase133g_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (

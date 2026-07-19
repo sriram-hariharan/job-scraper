@@ -18,10 +18,10 @@ def test_executive_route_keeps_kpi_mount_and_uses_one_react_queue_mount():
     markup = executive_dashboard()
 
     assert markup.count('id="executiveKpiRoot"') == 1
-    assert "/static/build/executive-kpi/executive-kpi.css?v=phase133a" in markup
+    assert "/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1" in markup
     assert (
         '<script type="module" '
-        'src="/static/build/executive-kpi/executive-kpi.js?v=phase133a_fix1"></script>'
+        'src="/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1"></script>'
         in markup
     )
 

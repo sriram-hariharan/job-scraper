@@ -247,57 +247,6 @@ body.planning-dashboard-page {
   font-size: 12px;
 }
 
-.planning-dashboard-page .planning-filter-grid {
-  display: grid;
-  grid-template-columns:
-    minmax(140px, 1fr)
-    minmax(170px, 1.15fr)
-    minmax(140px, 1fr)
-    minmax(140px, 1fr)
-    minmax(142px, 0.9fr)
-    92px
-    minmax(246px, auto);
-  gap: 10px;
-  align-items: end;
-}
-
-.planning-dashboard-page .planning-filter-grid > * {
-  min-width: 0;
-}
-
-.planning-dashboard-page .dashboard-field,
-.planning-dashboard-page .planning-toolbar-toggle {
-  min-width: 0;
-}
-
-.planning-dashboard-page .planning-toolbar-toggle .control-help {
-  display: none;
-}
-
-.planning-dashboard-page .planning-filter-apply,
-.planning-dashboard-page .planning-filter-clear {
-  position: static;
-  min-width: 0;
-  min-height: 42px;
-  align-self: end;
-  margin: 0;
-  transform: none;
-}
-
-.planning-dashboard-page .planning-filter-actions {
-  display: grid;
-  grid-template-columns: minmax(138px, 1fr) minmax(82px, auto);
-  min-width: 0;
-  align-items: end;
-  gap: 8px;
-}
-
-.planning-dashboard-page .planning-filter-limit input {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-}
-
 .planning-dashboard-page .planning-worklist-card {
   --planning-chat-clearance: calc(64px + 28px + 18px);
   --planning-action-column-width: 190px;
@@ -766,41 +715,9 @@ button.planning-row-expand-btn:focus-visible {
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 1180px) {
-  .planning-dashboard-page .planning-filter-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .planning-dashboard-page .planning-toolbar-toggle {
-    grid-column: 1;
-  }
-
-  .planning-dashboard-page .planning-filter-limit {
-    grid-column: 2;
-  }
-
-  .planning-dashboard-page .planning-filter-actions {
-    grid-column: 3 / -1;
-  }
-}
-
 @media (max-width: 760px) {
   .planning-dashboard-page .planning-dashboard-shell {
     padding: 20px 12px 108px;
-  }
-
-  .planning-dashboard-page .planning-filter-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .planning-dashboard-page .planning-filter-actions {
-    grid-column: auto;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .planning-dashboard-page .planning-toolbar-toggle,
-  .planning-dashboard-page .planning-filter-limit {
-    grid-column: auto;
   }
 
   .planning-filter-heading,
@@ -808,11 +725,6 @@ button.planning-row-expand-btn:focus-visible {
   .planning-pagination-footer {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .planning-dashboard-page .planning-filter-apply,
-  .planning-dashboard-page .planning-filter-clear {
-    width: 100%;
   }
 
   .planning-dashboard-page .planning-worklist-wrap {

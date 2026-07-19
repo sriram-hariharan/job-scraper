@@ -64,6 +64,15 @@ const planningTableState = {
     packetReady: 0,
     needsDecision: 0,
   },
+  filters: {
+    actions: [],
+    winnerBuckets: [],
+    tailoringStates: [],
+    preferenceIds: [],
+    undecidedOnly: false,
+    limit: 15,
+  },
+  preferenceOptions: [],
   requestSeq: 0,
   activeController: null,
   responseCache: new Map(),
@@ -563,293 +572,41 @@ function qs(id) {
   return document.getElementById(id);
 }
 
-function getMultiSelectRoot(id) {
-  return qs(id);
-}
-
-function getMultiSelectMenu(root) {
-  return root?._multiSelectMenu || root?.querySelector(".multi-select-menu") || null;
-}
-
-function getMultiSelectOptions(root, selector = ".multi-select-option") {
-  const menu = getMultiSelectMenu(root);
-  return Array.from((menu || root)?.querySelectorAll(selector) || []);
-}
-
-function getMultiSelectValues(id) {
-  const root = getMultiSelectRoot(id);
-  if (!root) return [];
-
-  return getMultiSelectOptions(root, ".multi-select-option.is-selected")
-    .map((option) => String(option.dataset.value || "").trim())
-    .filter((value) => Boolean(value) && value !== (root.dataset.allValue || ""));
-}
-
-function setMultiSelectOptionSelected(option, isSelected) {
-  if (!option) return;
-  option.classList.toggle("is-selected", isSelected);
-  option.setAttribute("aria-checked", isSelected ? "true" : "false");
-}
-
-function resetMultiSelectToAll(id) {
-  const root = getMultiSelectRoot(id);
-  if (!root) return;
-  const allValue = root.dataset.allValue || "";
-  getMultiSelectOptions(root).forEach((option) => {
-    setMultiSelectOptionSelected(option, Boolean(allValue) && option.dataset.value === allValue);
-  });
-  updateMultiSelectLabel(root);
-}
-
 function appendMultiValueParams(params, key, values) {
   values.forEach((value) => params.append(key, value));
 }
 
-function updateMultiSelectLabel(root) {
-  if (!root) return;
-
-  const label = root.querySelector(".multi-select-trigger-label");
-  if (!label) return;
-
-  const selected = getMultiSelectOptions(root, ".multi-select-option.is-selected");
-  const placeholder = root.dataset.placeholder || "All";
-
-  if (!selected.length) {
-    label.textContent = placeholder;
-  } else if (selected.length === 1) {
-    const text = selected[0].querySelector(".multi-select-option-label")?.textContent?.trim();
-    label.textContent = text || selected[0].dataset.value || placeholder;
-  } else {
-    label.textContent = `${selected.length} selected`;
-  }
-}
-
-function setMultiSelectOpen(root, isOpen) {
-  if (!root) return;
-
-  const trigger = root.querySelector(".multi-select-trigger");
-  const menu = getMultiSelectMenu(root);
-  if (!trigger || !menu) return;
-
-  root.classList.toggle("is-open", isOpen);
-  trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
-  if (isOpen) {
-    menu.hidden = false;
-    menu.dataset.multiSelectOwner = root.id || "";
-    if (menu.parentElement !== document.body) {
-      document.body.appendChild(menu);
-    }
-    positionMultiSelectMenu(root);
-    menu.querySelector(".multi-select-search-input")?.focus({ preventScroll: true });
-  } else {
-    const searchInput = menu.querySelector(".multi-select-search-input");
-    if (searchInput) {
-      searchInput.value = "";
-      filterMultiSelectOptions(root, "");
-    }
-    menu.hidden = true;
-    root.classList.remove("opens-upward");
-    delete menu.dataset.placement;
-    resetMultiSelectMenuPosition(menu);
-    if (menu.parentElement !== root) {
-      root.appendChild(menu);
-    }
-  }
-}
-
-function resetMultiSelectMenuPosition(menu) {
-  if (!menu) return;
-
-  ["position", "left", "right", "top", "bottom", "width", "max-height", "z-index"].forEach((name) => {
-    menu.style.removeProperty(name);
-  });
-}
-
-function positionMultiSelectMenu(root) {
-  if (!root) return;
-
-  const trigger = root.querySelector(".multi-select-trigger");
-  const menu = getMultiSelectMenu(root);
-  if (!trigger || !menu || menu.hidden) return;
-
-  const rect = trigger.getBoundingClientRect();
-  const viewportPadding = 16;
-  const preferredWidth = Math.max(rect.width, 280);
-  const width = Math.min(preferredWidth, window.innerWidth - viewportPadding * 2);
-  const left = Math.min(
-    Math.max(rect.left, viewportPadding),
-    window.innerWidth - width - viewportPadding
-  );
-  const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
-  const availableAbove = rect.top - viewportPadding;
-  const openAbove = availableBelow < 190 && availableAbove > availableBelow;
-  const availableSpace = openAbove ? availableAbove : availableBelow;
-  const maxHeight = Math.max(168, Math.min(380, availableSpace - 8));
-
-  root.classList.toggle("opens-upward", openAbove);
-  menu.dataset.placement = openAbove ? "top" : "bottom";
-
-  menu.style.setProperty("position", "fixed", "important");
-  menu.style.setProperty("left", `${left}px`, "important");
-  menu.style.setProperty("right", "auto", "important");
-  menu.style.setProperty("width", `${width}px`, "important");
-  menu.style.setProperty("max-height", `${maxHeight}px`, "important");
-  menu.style.setProperty("z-index", "10000", "important");
-  menu.style.setProperty("top", openAbove ? "auto" : `${rect.bottom + 8}px`, "important");
-  menu.style.setProperty(
-    "bottom",
-    openAbove ? `${window.innerHeight - rect.top + 8}px` : "auto",
-    "important"
-  );
-}
-
-function clearMultiSelect(id) {
-  const root = getMultiSelectRoot(id);
-  if (!root) return;
-
-  if (root.dataset.allValue) {
-    resetMultiSelectToAll(id);
-    return;
-  }
-
-  getMultiSelectOptions(root).forEach((option) => setMultiSelectOptionSelected(option, false));
-
-  updateMultiSelectLabel(root);
-}
-
-function normalizeMultiSelectSearchText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[\/_-]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function filterMultiSelectOptions(root, query) {
-  const normalizedQuery = normalizeMultiSelectSearchText(query);
-  let visibleCount = 0;
-  getMultiSelectOptions(root).forEach((option) => {
-    const label = option.querySelector(".multi-select-option-label")?.textContent || "";
-    const isVisible = !normalizedQuery || normalizeMultiSelectSearchText(label).includes(normalizedQuery);
-    option.hidden = !isVisible;
-    if (isVisible) visibleCount += 1;
-  });
-  const empty = getMultiSelectMenu(root)?.querySelector(".multi-select-empty");
-  if (empty) empty.hidden = visibleCount > 0;
-}
-
-function bindMultiSelectSearch(root) {
-  const searchInput = getMultiSelectMenu(root)?.querySelector(".multi-select-search-input");
-  if (!searchInput || searchInput.dataset.bound === "true") return;
-  searchInput.dataset.bound = "true";
-  searchInput.addEventListener("click", (event) => event.stopPropagation());
-  searchInput.addEventListener("input", () => filterMultiSelectOptions(root, searchInput.value));
-}
-
-function handleMultiSelectOptionSelection(root, option) {
-  const allValue = root.dataset.allValue || "";
-  const optionValue = String(option.dataset.value || "");
-  if (allValue && optionValue === allValue) {
-    getMultiSelectOptions(root).forEach((candidate) => {
-      setMultiSelectOptionSelected(candidate, candidate === option);
-    });
-  } else {
-    const isSelected = !option.classList.contains("is-selected");
-    setMultiSelectOptionSelected(option, isSelected);
-    if (allValue && isSelected) {
-      const allOption = getMultiSelectOptions(root).find(
-        (candidate) => candidate.dataset.value === allValue
-      );
-      setMultiSelectOptionSelected(allOption, false);
-    }
-    if (allValue && !getMultiSelectValues(root.id).length) {
-      resetMultiSelectToAll(root.id);
-    }
-  }
-  updateMultiSelectLabel(root);
-}
-
-function setMultiSelectValues(id, values) {
-  const root = getMultiSelectRoot(id);
-  if (!root) return;
-
-  const selectedValues = new Set(
+function normalizePlanningFilterValues(values) {
+  return Array.from(new Set(
     (Array.isArray(values) ? values : [])
       .map((value) => String(value || "").trim())
       .filter(Boolean)
-  );
-  const allValue = root.dataset.allValue || "";
-  if (allValue && selectedValues.size === 0) selectedValues.add(allValue);
-
-  getMultiSelectOptions(root).forEach((option) => {
-    const optionValue = String(option.dataset.value || "").trim();
-    const isSelected = selectedValues.has(optionValue);
-
-    option.classList.toggle("is-selected", isSelected);
-    option.setAttribute("aria-checked", isSelected ? "true" : "false");
-  });
-
-  updateMultiSelectLabel(root);
+  ));
 }
 
-function initMultiSelect(id) {
-  const root = getMultiSelectRoot(id);
-  if (!root || root.dataset.bound === "true") return;
-
-  const trigger = root.querySelector(".multi-select-trigger");
-  const menu = root.querySelector(".multi-select-menu");
-  if (!trigger || !menu) return;
-
-  root._multiSelectMenu = menu;
-  root.dataset.bound = "true";
-  bindMultiSelectSearch(root);
-  updateMultiSelectLabel(root);
-
-  trigger.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const willOpen = menu.hidden;
-    document.querySelectorAll(".multi-select").forEach((node) => {
-      if (node !== root) {
-        setMultiSelectOpen(node, false);
-      }
-    });
-    setMultiSelectOpen(root, willOpen);
-  });
-
-  menu.addEventListener("click", (event) => {
-    const option = event.target.closest(".multi-select-option");
-    if (!option || !menu.contains(option)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    handleMultiSelectOptionSelection(root, option);
-  });
+function normalizePlanningFilters(filters = {}) {
+  const parsedLimit = Number(filters.limit ?? 15);
+  return {
+    actions: normalizePlanningFilterValues(filters.actions),
+    winnerBuckets: normalizePlanningFilterValues(filters.winnerBuckets),
+    tailoringStates: normalizePlanningFilterValues(filters.tailoringStates),
+    preferenceIds: normalizePlanningFilterValues(filters.preferenceIds),
+    undecidedOnly: Boolean(filters.undecidedOnly),
+    limit: Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, Math.floor(parsedLimit))) : 15,
+  };
 }
 
-function renderPreferenceOptions(rootId, payload = {}) {
-  const root = getMultiSelectRoot(rootId);
-  const optionsRoot = getMultiSelectMenu(root)?.querySelector(".multi-select-options");
-  if (!root || !optionsRoot) return;
-  const options = Array.isArray(payload.preference_options) ? payload.preference_options : [];
-  optionsRoot.innerHTML = `
-    <button type="button" class="multi-select-option is-selected" data-value="__all__" aria-checked="true">
-      <span class="multi-select-option-check">✓</span>
-      <span class="multi-select-option-label">All Preferences</span>
-    </button>
-    ${options.map((option) => `
-      <button type="button" class="multi-select-option" data-value="${escapeHtml(option.role_family_id || "")}" aria-checked="false">
-        <span class="multi-select-option-check">✓</span>
-        <span class="multi-select-option-label">${escapeHtml(option.display_name || option.role_family_id || "")}</span>
-      </button>
-    `).join("")}
-  `;
-}
-
-async function loadPreferenceFilterOptions(rootId) {
+async function loadPlanningPreferenceFilterOptions() {
   try {
     const payload = await fetchJson("/onboarding/preferences");
-    renderPreferenceOptions(rootId, payload);
+    const options = Array.isArray(payload.preference_options) ? payload.preference_options : [];
+    planningTableState.preferenceOptions = options
+      .map((option) => ({
+        role_family_id: String(option?.role_family_id || "").trim(),
+        display_name: String(option?.display_name || option?.role_family_id || "").trim(),
+      }))
+      .filter((option) => option.role_family_id && option.display_name);
+    publishPlanningWorklistState();
   } catch (error) {
     console.warn("Could not load preference filter options.", error);
   }
@@ -1749,8 +1506,7 @@ function renderTailoringPatchSelectionSummary(artifact) {
 }
 
 function planningUndecidedOnlyEnabled() {
-  const selected = document.querySelector("input[name='planningUndecidedOnlyToggle']:checked");
-  return selected ? selected.value === "yes" : false;
+  return Boolean(planningTableState.filters.undecidedOnly);
 }
 
 const PLANNING_SORT_COLUMNS = [
@@ -1846,12 +1602,13 @@ function setTextIfPresent(id, value) {
 }
 
 function countPlanningActiveFilters() {
+  const filters = planningTableState.filters;
   let count = 0;
-  if (getMultiSelectValues("planningActionFilter").length) count += 1;
-  if (getMultiSelectValues("planningWinnerBucket").length) count += 1;
-  if (getMultiSelectValues("planningTailoringFilter").length) count += 1;
-  if (getMultiSelectValues("planningPreferenceFilter").length) count += 1;
-  if (planningUndecidedOnlyEnabled()) count += 1;
+  if (filters.actions.length) count += 1;
+  if (filters.winnerBuckets.length) count += 1;
+  if (filters.tailoringStates.length) count += 1;
+  if (filters.preferenceIds.length) count += 1;
+  if (filters.undecidedOnly) count += 1;
   return count;
 }
 
@@ -1894,6 +1651,14 @@ function buildPlanningWorklistBridgeState() {
     sort: { ...planningTableState.sort },
     resultKey: String(planningTableState.resultKey),
     metrics: { ...planningTableState.metrics },
+    filters: {
+      ...planningTableState.filters,
+      actions: planningTableState.filters.actions.slice(),
+      winnerBuckets: planningTableState.filters.winnerBuckets.slice(),
+      tailoringStates: planningTableState.filters.tailoringStates.slice(),
+      preferenceIds: planningTableState.filters.preferenceIds.slice(),
+    },
+    preferenceOptions: planningTableState.preferenceOptions.map((option) => ({ ...option })),
   };
 }
 
@@ -2013,12 +1778,8 @@ async function postJsonWithTimeout(url, payload, timeoutMs = 20000) {
 
 function buildPlanningUrl(pageOverride = null) {
   const params = new URLSearchParams();
-  const actions = getMultiSelectValues("planningActionFilter");
-  const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
-  const tailoringStates = getMultiSelectValues("planningTailoringFilter");
-  const preferenceIds = getMultiSelectValues("planningPreferenceFilter");
+  const { actions, winnerBuckets, tailoringStates, preferenceIds, limit } = planningTableState.filters;
   const undecidedOnly = planningUndecidedOnlyEnabled() ? "true" : "";
-  const limit = qs("planningLimitInput").value || "15";
   const page =
     Number.isFinite(Number(pageOverride)) && Number(pageOverride) > 0
       ? Math.floor(Number(pageOverride))
@@ -2029,8 +1790,12 @@ function buildPlanningUrl(pageOverride = null) {
   appendMultiValueParams(params, "tailoring_state", tailoringStates);
   appendMultiValueParams(params, "preference_id", preferenceIds);
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
-  params.set("limit", limit);
+  params.set("limit", String(limit));
   params.set("page", String(page));
+  if (isValidPlanningSortKey(planningTableState.sort.key)) {
+    params.set("sort_key", planningTableState.sort.key);
+    params.set("sort_dir", planningTableState.sort.direction === "desc" ? "desc" : "asc");
+  }
 
   return `/browse?${params.toString()}`;
 }
@@ -2207,8 +1972,10 @@ function readPlanningUrlState(search = window.location.search) {
   const parsedPage = Number(params.get("page") || "1");
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
-  const limitValue = String(params.get("limit") || "15").trim();
-  const limit = limitValue || "15";
+  const parsedLimit = Number(params.get("limit") || "15");
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(100, Math.max(1, Math.floor(parsedLimit)))
+    : 15;
 
   const rawSortKey = String(params.get("sort_key") || "").trim();
   const sortKey = isValidPlanningSortKey(rawSortKey) ? rawSortKey : "";
@@ -2228,25 +1995,7 @@ function readPlanningUrlState(search = window.location.search) {
 
 function applyPlanningUrlState(search = window.location.search) {
   const state = readPlanningUrlState(search);
-
-  setMultiSelectValues("planningActionFilter", state.actions);
-  setMultiSelectValues("planningWinnerBucket", state.winnerBuckets);
-  setMultiSelectValues("planningTailoringFilter", state.tailoringStates);
-  setMultiSelectValues("planningPreferenceFilter", state.preferenceIds);
-
-  const undecidedYes = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='yes']");
-  const undecidedNo = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='no']");
-
-  if (state.undecidedOnly && undecidedYes) {
-    undecidedYes.checked = true;
-  } else if (undecidedNo) {
-    undecidedNo.checked = true;
-  }
-
-  const limitInput = qs("planningLimitInput");
-  if (limitInput) {
-    limitInput.value = state.limit;
-  }
+  planningTableState.filters = normalizePlanningFilters(state);
 
   planningTableState.sort.key = state.sortKey;
   planningTableState.sort.direction = state.sortDirection;
@@ -2257,12 +2006,7 @@ function applyPlanningUrlState(search = window.location.search) {
 
 function buildPlanningBrowserUrl() {
   const params = new URLSearchParams();
-  const actions = getMultiSelectValues("planningActionFilter");
-  const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
-  const tailoringStates = getMultiSelectValues("planningTailoringFilter");
-  const preferenceIds = getMultiSelectValues("planningPreferenceFilter");
-  const undecidedOnly = planningUndecidedOnlyEnabled();
-  const limit = String(qs("planningLimitInput")?.value || "15").trim() || "15";
+  const { actions, winnerBuckets, tailoringStates, preferenceIds, undecidedOnly, limit } = planningTableState.filters;
   const page = Number(planningTableState.pagination.page || 1);
 
   appendMultiValueParams(params, "action", actions);
@@ -2271,7 +2015,7 @@ function buildPlanningBrowserUrl() {
   appendMultiValueParams(params, "preference_id", preferenceIds);
 
   if (undecidedOnly) params.set("undecided_only", "true");
-  if (limit !== "15") params.set("limit", limit);
+  if (limit !== 15) params.set("limit", String(limit));
   if (Number.isFinite(page) && page > 1) params.set("page", String(page));
 
   if (isValidPlanningSortKey(planningTableState.sort.key)) {
@@ -13309,7 +13053,7 @@ function buildPlanningRowDetailsHtml(row) {
 /* Planning JavaScript owns data and actions; the shared React island owns presentation. */
 function renderPlanningRows(rows, metaLabel) {
   const sourceRows = Array.isArray(rows) ? rows.slice() : [];
-  planningTableState.rows = sortRows(sourceRows, PLANNING_SORT_COLUMNS, planningTableState.sort);
+  planningTableState.rows = sourceRows;
   planningTableState.metaLabel = metaLabel;
   planningTableState.status = "ready";
   planningTableState.message = "";
@@ -13432,54 +13176,28 @@ async function loadPlanningTable({
 }
 
 function clearPlanningFilters() {
-  clearMultiSelect("planningActionFilter");
-  clearMultiSelect("planningWinnerBucket");
-  clearMultiSelect("planningTailoringFilter");
-  resetMultiSelectToAll("planningPreferenceFilter");
-
-  const defaultUndecided = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='no']");
-  if (defaultUndecided) {
-    defaultUndecided.checked = true;
-  }
-
-  qs("planningLimitInput").value = "15";
-  updatePlanningStats(0, []);
+  planningTableState.filters = normalizePlanningFilters();
+  setTextIfPresent("planningActiveFilters", 0);
   planningTableState.resultKey += 1;
   publishPlanningWorklistState();
 }
 
 function attachPlanningHandlers() {
-  initMultiSelect("planningActionFilter");
-  initMultiSelect("planningWinnerBucket");
-  initMultiSelect("planningTailoringFilter");
-  initMultiSelect("planningPreferenceFilter");
-
-  qs("planningApplyFiltersBtn").addEventListener("click", async () => {
-    try {
-      await loadPlanningTable({
-        requestedPage: 1,
-        historyMode: "push",
-      });
-    } catch (err) {
-      showAppError("Failed to load planning table", err);
-    }
-  });
-
-  qs("planningClearFiltersBtn").addEventListener("click", async () => {
-    clearPlanningFilters();
-    try {
-      await loadPlanningTable({
-        requestedPage: 1,
-        historyMode: "push",
-      });
-    } catch (err) {
-      showAppError("Failed to reload planning table", err);
-    }
-  });
-
   window.addEventListener(PLANNING_WORKLIST_ACTION_EVENT_NAME, async (event) => {
     const action = event.detail || {};
     try {
+      if (action.type === "filters_change") {
+        planningTableState.filters = normalizePlanningFilters(action.filters);
+        setTextIfPresent("planningActiveFilters", countPlanningActiveFilters());
+        publishPlanningWorklistState();
+        return;
+      }
+      if (action.type === "apply_filters") {
+        planningTableState.filters = normalizePlanningFilters(action.filters);
+        setTextIfPresent("planningActiveFilters", countPlanningActiveFilters());
+        await loadPlanningTable({ requestedPage: 1, historyMode: "push" });
+        return;
+      }
       if (action.type === "page_change") {
         await loadPlanningTable({ requestedPage: action.page, historyMode: "push" });
         return;
@@ -13491,8 +13209,7 @@ function attachPlanningHandlers() {
           key: column.key,
           direction: action.direction === "desc" ? "desc" : "asc",
         };
-        syncPlanningBrowserUrl({ mode: "push" });
-        renderPlanningRows(planningTableState.rows, planningTableState.metaLabel);
+        await loadPlanningTable({ requestedPage: 1, historyMode: "push", forceNetwork: true });
         return;
       }
       if (action.type === "retry") {
@@ -13500,7 +13217,8 @@ function attachPlanningHandlers() {
         return;
       }
       if (action.type === "clear_filters") {
-        qs("planningClearFiltersBtn")?.click();
+        clearPlanningFilters();
+        await loadPlanningTable({ requestedPage: 1, historyMode: "push" });
         return;
       }
       if (action.type !== "next_step" || !action.row) return;
@@ -13606,22 +13324,6 @@ function attachPlanningHandlers() {
     }
   });
 
-  document.addEventListener("click", (event) => {
-    document.querySelectorAll(".multi-select").forEach((root) => {
-      if (!root.contains(event.target)) {
-        setMultiSelectOpen(root, false);
-      }
-    });
-  });
-
-  const repositionOpenMultiSelects = () => {
-    document.querySelectorAll(".multi-select.is-open").forEach((root) => {
-      positionMultiSelectMenu(root);
-    });
-  };
-  window.addEventListener("resize", repositionOpenMultiSelects);
-  window.addEventListener("scroll", repositionOpenMultiSelects, true);
-
   window.addEventListener("focus", () => {
     const pending = loadPendingApplicationFromStorage();
     if (pending && getApplicationModal().classList.contains("hidden")) {
@@ -13663,10 +13365,10 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   if (isPlanningPage) {
     bindAppErrorModal();
-    await loadPreferenceFilterOptions("planningPreferenceFilter");
     applyPlanningUrlState(window.location.search);
     attachPlanningHandlers();
     publishPlanningWorklistState();
+    await loadPlanningPreferenceFilterOptions();
 
     try {
       await loadPlanningTable();

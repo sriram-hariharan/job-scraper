@@ -173,9 +173,9 @@ def planning_dashboard() -> str:
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
-  <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g-r4" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g-r4" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133g_s1" />
+  <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1" />
 </head>
 <body class="planning-dashboard-page">
 {render_top_shell("/planning")}
@@ -200,148 +200,8 @@ def planning_dashboard() -> str:
         </div>
         <span class="planning-active-filter-count"><strong id="planningActiveFilters">0</strong> active</span>
       </div>
-      <div class="planning-filter-grid">
-          <div class="control-group dashboard-field dashboard-field--action">
-            <label>Action</label>
-            <div class="multi-select" id="planningActionFilter" data-placeholder="All">
-              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
-                <span class="multi-select-trigger-label">All</span>
-                <span class="multi-select-trigger-icon">▾</span>
-              </button>
-
-              <div class="multi-select-menu" role="menu" hidden>
-                <button type="button" class="multi-select-option" data-value="APPLY" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Ready for review</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="APPLY_REVIEW_VARIANTS" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Review resume choice</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="MAYBE_TAILOR" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Tailor first</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="SKIP_FOR_NOW" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Review later</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="control-group dashboard-field dashboard-field--preferences">
-            <label>Preferences</label>
-            <div class="multi-select" id="planningPreferenceFilter" data-placeholder="All Preferences" data-all-value="__all__" data-searchable="true">
-              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
-                <span class="multi-select-trigger-label">All Preferences</span>
-                <span class="multi-select-trigger-icon">▾</span>
-              </button>
-              <div class="multi-select-menu" role="menu" hidden>
-                <label class="multi-select-search">
-                  <input type="search" class="multi-select-search-input" placeholder="Search preferences" aria-label="Search preferences" autocomplete="off" />
-                </label>
-                <div class="multi-select-options">
-                  <button type="button" class="multi-select-option is-selected" data-value="__all__" aria-checked="true">
-                    <span class="multi-select-option-check">✓</span>
-                    <span class="multi-select-option-label">All Preferences</span>
-                  </button>
-                </div>
-                <div class="multi-select-empty" hidden>No preferences found</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="control-group dashboard-field planning-field--winner-bucket">
-            <label>Match Strength</label>
-            <div class="multi-select" id="planningWinnerBucket" data-placeholder="All">
-              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
-                <span class="multi-select-trigger-label">All</span>
-                <span class="multi-select-trigger-icon">▾</span>
-              </button>
-
-
-              <div class="multi-select-menu" role="menu" hidden>
-                <button type="button" class="multi-select-option" data-value="strong" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Excellent match</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="solid" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Strong match</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="moderate" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Moderate match</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="weak" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Weak match</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="filtered_out" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">No credible match</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="control-group dashboard-field planning-field--tailoring">
-            <label>Tailoring</label>
-            <div class="multi-select" id="planningTailoringFilter" data-placeholder="All">
-              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
-                <span class="multi-select-trigger-label">All</span>
-                <span class="multi-select-trigger-icon">▾</span>
-              </button>
-
-              <div class="multi-select-menu" role="menu" hidden>
-                <button type="button" class="multi-select-option" data-value="ready" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Ready</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="review" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Review</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="no_safe_rewrites" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">No safe rewrites</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="unavailable" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Unavailable</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="control-group dashboard-toggle-group planning-toolbar-toggle">
-            <label>Undecided only</label>
-
-            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Planning undecided only">
-              <label class="binary-toggle-option">
-                <input type="radio" name="planningUndecidedOnlyToggle" value="no" checked />
-                <span>No</span>
-              </label>
-              <label class="binary-toggle-option">
-                <input type="radio" name="planningUndecidedOnlyToggle" value="yes" />
-                <span>Yes</span>
-              </label>
-            </div>
-
-            <div class="control-help field-help-wide">
-              Yes shows only planning rows that do not have an operator decision yet.
-            </div>
-          </div>
-
-          <div class="control-group dashboard-field dashboard-field--limit planning-filter-limit">
-            <label for="planningLimitInput">Limit</label>
-            <input type="number" id="planningLimitInput" value="15" min="1" max="100" />
-          </div>
-          <div class="planning-filter-actions">
-            <button class="planning-filter-apply" id="planningApplyFiltersBtn">Apply Filters</button>
-            <button class="ghost-btn planning-filter-clear" id="planningClearFiltersBtn">Clear</button>
-          </div>
+      <div id="planningFiltersRoot" aria-live="polite">
+        <div class="planning-react-server-fallback">Loading planning filters...</div>
       </div>
     </section>
 
@@ -767,8 +627,8 @@ def planning_dashboard() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g-r4"></script>
-  <script src="/static/planning.js?v=phase133g-r4"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1"></script>
+  <script src="/static/planning.js?v=phase133g_s1_r1"></script>
 </body>
 </html>
     """.strip()

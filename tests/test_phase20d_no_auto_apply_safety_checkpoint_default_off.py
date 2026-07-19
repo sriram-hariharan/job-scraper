@@ -1111,6 +1111,19 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase133g_premium_planning_runtime_files:
         return
+    phase133g_s1_shared_filter_runtime_files = phase133g_premium_planning_runtime_files | {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+    }
+    if set(changed_runtime_files) == phase133g_s1_shared_filter_runtime_files:
+        return
+    phase133g_s1r1_sort_runtime_files = phase133g_s1_shared_filter_runtime_files | {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app.js",
+    }
+    if set(changed_runtime_files) == phase133g_s1r1_sort_runtime_files:
+        return
     assert changed_runtime_files in (
         [],
         [

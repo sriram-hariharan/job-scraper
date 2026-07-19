@@ -94,7 +94,8 @@ def test_queue_component_preserves_existing_filters_views_and_row_meanings():
         assert marker in source
 
     assert "useReactTable" in source
-    assert "getSortedRowModel" in source
+    assert "manualSorting: true" in source
+    assert 'type: "sort_change"' in source
     assert "enableSorting: false" in source
     assert 'columnResizeMode: "onChange"' in source
     assert "queueTableColumnWidths" in source

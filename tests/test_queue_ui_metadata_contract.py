@@ -3,6 +3,34 @@ from pathlib import Path
 from src.app import services
 
 
+def test_browse_sort_allowlist_is_deterministic_and_keeps_missing_values_last():
+    rows = [
+        {"queue_rank": "3", "job_doc_id": "c", "job_title": "Gamma", "winner_score": "", "posted_at": ""},
+        {"queue_rank": "2", "job_doc_id": "b", "job_title": "Beta", "winner_score": "0.91", "posted_at": "2026-06-30T23:00:00-04:00"},
+        {"queue_rank": "1", "job_doc_id": "a", "job_title": "Alpha", "winner_score": "0.72", "posted_at": "2026-07-02T12:00:00Z"},
+    ]
+
+    assert [row["job_doc_id"] for row in services._sort_browse_rows(rows, sort_key="winner_score", sort_dir="desc")] == ["b", "a", "c"]
+    assert [row["job_doc_id"] for row in services._sort_browse_rows(rows, sort_key="job_title", sort_dir="asc")] == ["a", "b", "c"]
+    assert [row["job_doc_id"] for row in services._sort_browse_rows(rows, sort_key="posted_at", sort_dir="asc")] == ["b", "a", "c"]
+    assert services._sort_browse_rows(rows, sort_key="not_allowed", sort_dir="desc") is rows
+
+
+def test_shared_sort_bridges_use_browse_query_parameters_before_server_pagination():
+    app_js = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_js = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    api = Path("src/app/api.py").read_text(encoding="utf-8")
+    service = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    for source in (app_js, planning_js):
+        assert 'params.set("sort_key"' in source
+        assert 'params.set("sort_dir"' in source
+    assert 'sort_key: str = ""' in api
+    assert 'sort_dir: str = "asc"' in api
+    assert "selected = _sort_browse_rows(" in service
+    assert service.index("selected = _sort_browse_rows(") < service.index("selected = selected[:requested_limit]")
+
+
 def _css_block(css: str, selector: str) -> str:
     start = css.index(selector)
     end = css.index("}", start) + 1
@@ -34,6 +62,7 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
     executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
     for class_name in (
@@ -49,8 +78,9 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
     assert "Run Live Pipeline" in app_markup
     assert "Refresh Status" in app_markup
     assert 'id="executiveQueueRoot"' in app_markup
-    assert "function MultiSelect" in executive_queue
-    assert "multi-select-trigger-icon" in planning_markup
+    assert "SharedFilterSelect" in executive_queue
+    assert "export function SharedFilterSelect" in shared_filter
+    assert 'id="planningFiltersRoot"' in planning_markup
 
     primary_selector = (
         "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn)"
@@ -58,6 +88,7 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
         ":not(.sort-header-btn):not(.scheduler-tab-btn)"
         ":not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn)"
         ":not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option)"
+        ":not(.shared-filter-select__trigger):not(.shared-filter-select__option)"
         ":not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button)"
         ":not(.preference-location-chip-remove):not(.preferences-utility-button)"
         ":not(.preferences-back-button):not(.preferences-secondary-action)"
@@ -971,26 +1002,22 @@ def test_executive_and_planning_preferences_filters_use_backend_ids_and_search()
     api_source = Path("src/app/api.py").read_text(encoding="utf-8")
     services_source = Path("src/app/services.py").read_text(encoding="utf-8")
     executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    planning_worklist = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
 
     assert 'id="executiveQueueRoot"' in executive_markup
     assert 'label="Preferences"' in executive_queue
     assert 'placeholder="All Preferences"' in executive_queue
-    assert 'placeholder={`Search ${label.toLowerCase()}`}' in executive_queue
-    assert "No preferences found" in executive_queue
-    assert 'id="planningPreferenceFilter"' in planning_markup
-    for markup in (planning_markup,):
-        assert 'data-all-value="__all__"' in markup
-        assert 'data-searchable="true"' in markup
-        assert "All Preferences" in markup
-        assert "Search preferences" in markup
-        assert "No preferences found" in markup
+    assert 'placeholder={`Search ${label.toLowerCase()}`}' in shared_filter
+    assert "No options found" in shared_filter
+    assert 'id="planningFiltersRoot"' in planning_markup
+    assert 'id="planningPreferenceFilter"' in planning_worklist
+    assert 'allLabel="All Preferences"' in planning_worklist
+    assert 'searchable' in planning_worklist
 
     for source in (app_source, planning_source):
         assert 'fetchJson("/onboarding/preferences")' in source
         assert 'appendMultiValueParams(params, "preference_id", preferenceIds)' in source
-        assert 'value !== (root.dataset.allValue || "")' in source
-        assert "filterMultiSelectOptions" in source
-        assert "resetMultiSelectToAll" in source
 
     assert "preference_id: list[str] | None = Query(default=None)" in api_source
     assert "preference_id=preference_id or []" in api_source
@@ -1007,70 +1034,53 @@ def test_shared_multi_select_contract_supports_dynamic_preference_options():
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
     executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    planning_worklist = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
+    frontend_css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
 
     assert 'id="executiveQueueRoot"' in executive_markup
-    assert "function MultiSelect" in executive_queue
+    assert "SharedFilterSelect" in executive_queue
     assert "options={preferenceOptions}" in executive_queue
     assert "values={filters.preferenceIds}" in executive_queue
     assert "All Preferences" in executive_queue
-    assert 'placeholder={`Search ${label.toLowerCase()}`}' in executive_queue
-    assert "No preferences found" in executive_queue
-
-    for markup in (planning_markup,):
-        preference_markup = markup[markup.index('data-placeholder="All Preferences"'):]
-        assert 'class="multi-select-option is-selected" data-value="__all__" aria-checked="true"' in preference_markup
-        assert preference_markup.count('placeholder="Search preferences"') == 1
-        assert preference_markup.count('aria-label="Search preferences"') == 1
-        assert 'class="multi-select-empty" hidden' in preference_markup
-
-    for source in (app_source, planning_source):
-        engine = source[source.index("function handleMultiSelectOptionSelection"):source.index("function normalize", source.index("function handleMultiSelectOptionSelection"))]
-        assert 'menu.addEventListener("click", (event) =>' in engine
-        assert 'event.target.closest(".multi-select-option")' in engine
-        assert "handleMultiSelectOptionSelection(root, option)" in engine
-        assert 'setMultiSelectOptionSelected(candidate, candidate === option)' in engine
-        assert "setMultiSelectOptionSelected(allOption, false)" in engine
-        assert "resetMultiSelectToAll(root.id)" in engine
-        assert 'getMultiSelectMenu(root)?.querySelector(".multi-select-options")' in engine
-        assert 'option.addEventListener("click"' not in engine
-        assert 'root.classList.toggle("opens-upward", openAbove)' in source
-        assert 'menu.dataset.placement = openAbove ? "top" : "bottom"' in source
-
-    canonical_css = css[css.index("body .multi-select {"):css.index("body .application-tabs {")]
-    assert "background: var(--app-surface-2) !important" in canonical_css
-    assert "position: sticky" in canonical_css
-    assert "overflow-y: auto !important" in canonical_css
-    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in canonical_css
+    assert "SharedFilterSelect" in planning_worklist
+    assert planning_worklist.count("<SharedFilterSelect") == 4
+    assert "state.preferenceOptions.map" in planning_worklist
+    assert 'loadPlanningPreferenceFilterOptions()' in planning_source
+    assert "planningTableState.preferenceOptions = options" in planning_source
+    assert 'createPortal(' in shared_filter
+    assert 'placement = below < 190 && above > below ? "top" : "bottom"' in shared_filter
+    assert 'window.addEventListener("resize", handleViewportChange)' in shared_filter
+    assert 'window.addEventListener("scroll", handleViewportChange, true)' in shared_filter
+    assert ".shared-filter-select__menu" in frontend_css
+    assert "position: fixed" in frontend_css
+    assert "overflow-y: auto" in frontend_css
+    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in frontend_css[frontend_css.index(".shared-filter-select__trigger"):frontend_css.index(".shared-filter-select__empty")]
     assert ":not(.multi-select-option)" in css
 
 
 def test_shared_preference_search_filters_current_portaled_options_without_mutating_selection():
-    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
-    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
-
-    for source in (app_source, planning_source):
-        search_engine = source[
-            source.index("function normalizeMultiSelectSearchText"):
-            source.index("function handleMultiSelectOptionSelection")
-        ]
-        assert '.addEventListener("input", () => filterMultiSelectOptions' in search_engine
-        assert '.toLowerCase()' in search_engine
-        assert '.replace(/[\\/_-]+/g, " ")' in search_engine
-        assert '.replace(/\\s+/g, " ")' in search_engine
-        assert "normalizeMultiSelectSearchText(label).includes(normalizedQuery)" in search_engine
-        assert "getMultiSelectOptions(root).forEach((option) =>" in search_engine
-        assert 'getMultiSelectMenu(root)?.querySelector(".multi-select-search-input")' in search_engine
-        assert "option.hidden = !isVisible" in search_engine
-        assert "empty.hidden = visibleCount > 0" in search_engine
-        assert "setMultiSelectOptionSelected" not in search_engine
-        assert "aria-checked" not in search_engine
-        assert "fetch(" not in search_engine
-        assert "fetchJson(" not in search_engine
-
-    assert "body .multi-select-option[hidden]" in css
-    assert "body .multi-select-empty[hidden]" in css
-    assert "display: none !important" in css
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
+    search_engine = shared_filter[
+        shared_filter.index("function normalizeSearchText"):
+        shared_filter.index("export function SharedFilterSelect")
+    ]
+    assert ".toLowerCase()" in search_engine
+    assert '.replace(/[\\/_-]+/g, " ")' in search_engine
+    assert '.replace(/\\s+/g, " ")' in search_engine
+    assert "normalizeSearchText(option.label).includes(normalizedQuery)" in shared_filter
+    assert "setQuery(event.target.value)" in shared_filter
+    assert "onChange(values.includes(value)" in shared_filter
+    assert 'aria-selected={selected}' in shared_filter
+    assert "fetch(" not in shared_filter
+    assert "fetchJson(" not in shared_filter
+    assert 'action.type === "filters_change"' in planning_source
+    filters_change = planning_source[
+        planning_source.index('action.type === "filters_change"'):
+        planning_source.index('action.type === "apply_filters"')
+    ]
+    assert "loadPlanningTable" not in filters_change
 
 
 def test_preference_filter_rejects_ids_outside_authenticated_owner_preferences(monkeypatch):

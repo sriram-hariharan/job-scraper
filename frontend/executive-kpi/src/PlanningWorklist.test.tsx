@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   PLANNING_ACTION_EVENT,
   PLANNING_COLUMN_WIDTH_STORAGE_KEY,
+  PlanningFiltersToolbar,
   PlanningSummary,
   PlanningWorklist,
   type PlanningWorklistAction,
@@ -61,6 +62,18 @@ function planningState(overrides: Partial<PlanningWorklistState> = {}): Planning
     sort: { key: "queue_rank", direction: "asc" },
     resultKey: "result-one",
     metrics: { total: 31, readyForReview: 1, packetReady: 1, needsDecision: 2 },
+    filters: {
+      actions: [],
+      winnerBuckets: [],
+      tailoringStates: [],
+      preferenceIds: [],
+      undecidedOnly: false,
+      limit: 15,
+    },
+    preferenceOptions: [
+      { role_family_id: "applied_ai", display_name: "Applied AI" },
+      { role_family_id: "data_engineering", display_name: "Data Engineering" },
+    ],
     ...overrides,
   };
 }
@@ -154,4 +167,35 @@ it("renders compact summary information popovers without changing metric values"
   const help = screen.getByRole("button", { name: "About total results" });
   fireEvent.click(help);
   expect(screen.getByRole("tooltip")).toHaveTextContent("All planning rows matching the applied filters.");
+});
+
+it("uses the shared controlled filters without requesting until Apply", () => {
+  const listener = listenForActions();
+  render(<PlanningFiltersToolbar state={planningState()} />);
+
+  fireEvent.click(screen.getByRole("button", { name: /action all$/i }));
+  fireEvent.click(screen.getByRole("option", { name: "Ready for review" }));
+  expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  expect(lastAction(listener.actions)).toEqual(expect.objectContaining({
+    type: "filters_change",
+    filters: expect.objectContaining({ actions: ["APPLY"] }),
+  }));
+  expect(listener.actions.some((action) => action.type === "apply_filters")).toBe(false);
+
+  fireEvent.click(screen.getByRole("button", { name: /preferences all preferences/i }));
+  fireEvent.click(screen.getByRole("option", { name: "Applied AI" }));
+  expect(screen.getByRole("listbox")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("option", { name: "Data Engineering" }));
+  expect(screen.getByRole("button", { name: "Preferences 2 selected" })).toHaveAttribute("aria-expanded", "true");
+  expect(listener.actions.some((action) => action.type === "apply_filters")).toBe(false);
+
+  fireEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
+  expect(lastAction(listener.actions)).toEqual(expect.objectContaining({
+    type: "apply_filters",
+    filters: expect.objectContaining({ actions: ["APPLY"], preferenceIds: ["applied_ai", "data_engineering"], limit: 15 }),
+  }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+  expect(lastAction(listener.actions)).toEqual({ type: "clear_filters" });
+  listener.stop();
 });

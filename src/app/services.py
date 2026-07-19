@@ -27912,6 +27912,102 @@ def _filter_browse_rows_by_preference_ids(
     ]
 
 
+_BROWSE_SORT_KEYS = {
+    "queue_rank",
+    "job_title",
+    "job_company",
+    "job_location",
+    "posted_at",
+    "recommendation",
+    "winner_score",
+    "selected_resume",
+    "runner_up_resume",
+    "score_gap",
+    "missing_requirement_count",
+    "packet_status",
+}
+
+_BROWSE_RECOMMENDATION_ORDER = {
+    "APPLY": 0,
+    "APPLY_REVIEW_VARIANTS": 1,
+    "MAYBE_TAILOR": 2,
+    "SKIP_FOR_NOW": 3,
+}
+
+
+def _browse_numeric_sort_value(value: Any) -> float | None:
+    clean_value = _clean_text(value).replace(",", "")
+    if not clean_value:
+        return None
+    try:
+        return float(clean_value)
+    except ValueError:
+        return None
+
+
+def _browse_posted_at_sort_value(value: Any) -> float | None:
+    posted_at = _clean_text(value)
+    if not posted_at:
+        return None
+    try:
+        parsed = datetime.fromisoformat(posted_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _browse_sort_value(row: Dict[str, Any], sort_key: str) -> Any:
+    if sort_key in {"queue_rank", "winner_score", "score_gap", "missing_requirement_count"}:
+        return _browse_numeric_sort_value(row.get(sort_key))
+    if sort_key == "posted_at":
+        return _browse_posted_at_sort_value(row.get("posted_at"))
+    if sort_key == "recommendation":
+        action = _clean_text(row.get("action")).upper()
+        return _BROWSE_RECOMMENDATION_ORDER.get(action, len(_BROWSE_RECOMMENDATION_ORDER))
+    if sort_key == "selected_resume":
+        return _clean_text(row.get("operator_selected_resume") or row.get("winner_resume")).casefold() or None
+    if sort_key == "packet_status":
+        allowed = _clean_text(row.get("packet_generation_allowed")).lower()
+        return 0 if allowed in {"true", "1", "yes", "y", "on"} else 1
+    return _clean_text(row.get(sort_key)).casefold() or None
+
+
+def _browse_tie_breaker(row: Dict[str, Any]) -> tuple[Any, ...]:
+    rank = _browse_numeric_sort_value(row.get("queue_rank"))
+    return (
+        rank if rank is not None else float("inf"),
+        _clean_text(row.get("job_company")).casefold(),
+        _clean_text(row.get("job_title")).casefold(),
+        _clean_text(row.get("job_doc_id") or row.get("job_url")).casefold(),
+    )
+
+
+def _sort_browse_rows(
+    rows: List[Dict[str, Any]],
+    *,
+    sort_key: str,
+    sort_dir: str,
+) -> List[Dict[str, Any]]:
+    normalized_key = _clean_text(sort_key)
+    if normalized_key not in _BROWSE_SORT_KEYS:
+        return rows
+
+    populated: List[Dict[str, Any]] = []
+    missing: List[Dict[str, Any]] = []
+    for row in rows:
+        (missing if _browse_sort_value(row, normalized_key) is None else populated).append(row)
+
+    populated.sort(key=_browse_tie_breaker)
+    populated.sort(
+        key=lambda row: _browse_sort_value(row, normalized_key),
+        reverse=_clean_text(sort_dir).lower() == "desc",
+    )
+    missing.sort(key=_browse_tie_breaker)
+    return populated + missing
+
+
 def browse_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     owner_user_id: str = "",
@@ -27931,6 +28027,8 @@ def browse_payload(
         "title_contains": "",
         "limit": 15,
         "undecided_only": "",
+        "sort_key": "",
+        "sort_dir": "asc",
         "page": 1,
     }
     resolved_filters.update(filters)
@@ -28025,6 +28123,12 @@ def browse_payload(
                 if matches:
                     enriched_selected.append(enriched_row)
             selected = enriched_selected
+
+        selected = _sort_browse_rows(
+            selected,
+            sort_key=resolved_filters.get("sort_key", ""),
+            sort_dir=resolved_filters.get("sort_dir", "asc"),
+        )
 
         selected = selected[:requested_limit]
 

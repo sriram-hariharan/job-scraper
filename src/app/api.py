@@ -3074,6 +3074,8 @@ def browse(
     company_contains: str = "",
     title_contains: str = "",
     undecided_only: str = "",
+    sort_key: str = "",
+    sort_dir: str = "asc",
     page: int = 1,
     limit: int = 15,
 ):
@@ -3089,6 +3091,8 @@ def browse(
         company_contains=company_contains,
         title_contains=title_contains,
         undecided_only=undecided_only,
+        sort_key=sort_key,
+        sort_dir=sort_dir,
         limit=limit,
         page=page,
         owner_user_id=_auth_owner_user_id(http_request),

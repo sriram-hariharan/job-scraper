@@ -1251,7 +1251,7 @@ def test_browser_readback_code_passes_run_scoped_output_dir_to_guarded_endpoints
 
 def test_planning_table_workspace_button_allows_review_only_no_safe_rewrite_artifacts():
     planning_js = Path("src/app/static/planning.js").read_text(encoding="utf-8")
-    planning_ui_source = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    planning_filter_source = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
     blocked_source = planning_js.split("function getWorkspaceBlockedReason(row)", 1)[1].split(
         "function buildTailoringButtonHtml", 1
     )[0]
@@ -1259,8 +1259,8 @@ def test_planning_table_workspace_button_allows_review_only_no_safe_rewrite_arti
     assert "function getWorkspaceBlockedReason(row)" in planning_js
     assert "No safe bullet-level rewrites were found for this row." in planning_js
     assert 'workspaceState === "no_safe_rewrites"' in planning_js
-    assert 'data-value="no_safe_rewrites"' in planning_ui_source
-    assert "No safe rewrites" in planning_ui_source
+    assert '{ value: "no_safe_rewrites", label: "No safe rewrites"' in planning_filter_source
+    assert "PLANNING_TAILORING_OPTIONS" in planning_filter_source
     assert 'appendMultiValueParams(params, "tailoring_state", tailoringStates)' in planning_js
     assert 'params.getAll("tailoring_state")' in planning_js
     assert "LLM tailoring generation is off for this row." in planning_js

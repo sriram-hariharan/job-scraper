@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-table";
 import { CheckCircle2, ClipboardList, FileText, UserRoundCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { SharedFilterSelect, type SharedFilterOption } from "./filter/FilterSelect";
 import {
   SHARED_NEUTRAL_CONTROL_CLASS,
   SharedExpandedDetail,
@@ -73,6 +74,20 @@ export type PlanningMetrics = {
   needsDecision: number;
 };
 
+export type PlanningFilters = {
+  actions: string[];
+  winnerBuckets: string[];
+  tailoringStates: string[];
+  preferenceIds: string[];
+  undecidedOnly: boolean;
+  limit: number;
+};
+
+export type PlanningPreferenceOption = {
+  role_family_id: string;
+  display_name: string;
+};
+
 export type PlanningWorklistState = {
   status: "loading" | "ready" | "error";
   rows: PlanningRow[];
@@ -82,12 +97,16 @@ export type PlanningWorklistState = {
   sort: { key: string; direction: "asc" | "desc" };
   resultKey: string;
   metrics: PlanningMetrics;
+  filters: PlanningFilters;
+  preferenceOptions: PlanningPreferenceOption[];
 };
 
 export type PlanningWorklistAction =
   | { type: "page_change"; page: number }
   | { type: "sort_change"; key: string; direction: "asc" | "desc" }
   | { type: "retry" }
+  | { type: "filters_change"; filters: PlanningFilters }
+  | { type: "apply_filters"; filters: PlanningFilters }
   | { type: "clear_filters" }
   | { type: "next_step"; row: PlanningRow };
 
@@ -106,7 +125,38 @@ export const DEFAULT_PLANNING_STATE: PlanningWorklistState = {
   sort: { key: "", direction: "asc" },
   resultKey: "initial",
   metrics: { total: 0, readyForReview: 0, packetReady: 0, needsDecision: 0 },
+  filters: {
+    actions: [],
+    winnerBuckets: [],
+    tailoringStates: [],
+    preferenceIds: [],
+    undecidedOnly: false,
+    limit: 15,
+  },
+  preferenceOptions: [],
 };
+
+const PLANNING_ACTION_OPTIONS: SharedFilterOption[] = [
+  { value: "APPLY", label: "Ready for review", tone: "ready" },
+  { value: "APPLY_REVIEW_VARIANTS", label: "Review resume choice", tone: "choice" },
+  { value: "MAYBE_TAILOR", label: "Tailor first", tone: "tailor" },
+  { value: "SKIP_FOR_NOW", label: "Review later", tone: "later" },
+];
+
+const PLANNING_MATCH_OPTIONS: SharedFilterOption[] = [
+  { value: "strong", label: "Excellent match", tone: "strong" },
+  { value: "solid", label: "Strong match", tone: "solid" },
+  { value: "moderate", label: "Moderate match", tone: "moderate" },
+  { value: "weak", label: "Weak match", tone: "weak" },
+  { value: "filtered_out", label: "No credible match", tone: "unavailable" },
+];
+
+const PLANNING_TAILORING_OPTIONS: SharedFilterOption[] = [
+  { value: "ready", label: "Ready", tone: "ready" },
+  { value: "review", label: "Review", tone: "choice" },
+  { value: "no_safe_rewrites", label: "No safe rewrites", tone: "later" },
+  { value: "unavailable", label: "Unavailable", tone: "unavailable" },
+];
 
 const WIDTH_BOUNDS: Record<string, { min: number; max: number }> = {
   queue_rank: { min: 72, max: 110 },
@@ -352,7 +402,7 @@ function buildPlanningColumns(): ColumnDef<PlanningRow>[] {
       size: 188,
       minSize: 160,
       maxSize: 280,
-      enableSorting: false,
+      accessorFn: (row) => packetLabel(row.packet_generation_allowed),
       cell: ({ row }) => (
         <span className="planning-react-status-stack">
           <span className={`planning-react-badge ${packetLabel(row.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`}>
@@ -386,6 +436,109 @@ function buildPlanningColumns(): ColumnDef<PlanningRow>[] {
   ];
 }
 
+export function PlanningFiltersToolbar({ state }: { state: PlanningWorklistState }) {
+  const [filters, setFilters] = useState<PlanningFilters>(state.filters);
+
+  useEffect(() => setFilters(state.filters), [state.filters]);
+
+  const updateFilters = (next: PlanningFilters) => {
+    setFilters(next);
+    publishPlanningAction({ type: "filters_change", filters: next });
+  };
+  const preferenceOptions = state.preferenceOptions.map((option) => ({
+    value: option.role_family_id,
+    label: option.display_name || option.role_family_id,
+  }));
+
+  return (
+    <div className="planning-react-filter-grid" aria-label="Planning filters">
+      <SharedFilterSelect
+        id="planningActionFilter"
+        label="Action"
+        options={PLANNING_ACTION_OPTIONS}
+        values={filters.actions}
+        onChange={(actions) => updateFilters({ ...filters, actions })}
+        placeholder="All"
+        mode="single"
+      />
+      <SharedFilterSelect
+        id="planningPreferenceFilter"
+        label="Preferences"
+        options={preferenceOptions}
+        values={filters.preferenceIds}
+        onChange={(preferenceIds) => updateFilters({ ...filters, preferenceIds })}
+        placeholder="All Preferences"
+        allLabel="All Preferences"
+        searchable
+        mode="multiple"
+      />
+      <SharedFilterSelect
+        id="planningWinnerBucket"
+        label="Match Strength"
+        options={PLANNING_MATCH_OPTIONS}
+        values={filters.winnerBuckets}
+        onChange={(winnerBuckets) => updateFilters({ ...filters, winnerBuckets })}
+        placeholder="All"
+        mode="single"
+      />
+      <SharedFilterSelect
+        id="planningTailoringFilter"
+        label="Tailoring"
+        options={PLANNING_TAILORING_OPTIONS}
+        values={filters.tailoringStates}
+        onChange={(tailoringStates) => updateFilters({ ...filters, tailoringStates })}
+        placeholder="All"
+        mode="single"
+      />
+      <fieldset className="planning-react-undecided-field">
+        <legend>Undecided only</legend>
+        <div className="planning-react-segmented" role="radiogroup" aria-label="Planning undecided only">
+          <button
+            type="button"
+            aria-pressed={!filters.undecidedOnly}
+            className={`${SHARED_NEUTRAL_CONTROL_CLASS} ${!filters.undecidedOnly ? "is-active" : ""}`.trim()}
+            onClick={() => updateFilters({ ...filters, undecidedOnly: false })}
+          >No</button>
+          <button
+            type="button"
+            aria-pressed={filters.undecidedOnly}
+            className={`${SHARED_NEUTRAL_CONTROL_CLASS} ${filters.undecidedOnly ? "is-active" : ""}`.trim()}
+            onClick={() => updateFilters({ ...filters, undecidedOnly: true })}
+          >Yes</button>
+        </div>
+      </fieldset>
+      <label className="planning-react-limit-field" htmlFor="planningLimitInput">
+        <span>Limit</span>
+        <input
+          id="planningLimitInput"
+          type="number"
+          min={1}
+          max={100}
+          value={filters.limit}
+          onChange={(event) => updateFilters({
+            ...filters,
+            limit: Math.min(100, Math.max(1, Number(event.target.value) || 15)),
+          })}
+        />
+      </label>
+      <div className="planning-react-filter-actions">
+        <button
+          type="button"
+          className="planning-filter-apply"
+          id="planningApplyFiltersBtn"
+          onClick={() => publishPlanningAction({ type: "apply_filters", filters })}
+        >Apply Filters</button>
+        <button
+          type="button"
+          className="planning-filter-clear"
+          id="planningClearFiltersBtn"
+          onClick={() => publishPlanningAction({ type: "clear_filters" })}
+        >Clear</button>
+      </div>
+    </div>
+  );
+}
+
 export function PlanningWorklist({ state }: { state: PlanningWorklistState }) {
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(readPlanningColumnSizing);
   const [expandedId, setExpandedId] = useState<string>("");
@@ -408,6 +561,7 @@ export function PlanningWorklist({ state }: { state: PlanningWorklistState }) {
       const next = typeof updater === "function" ? updater(sorting) : updater;
       const selected = next[0];
       if (!selected) return;
+      setExpandedId("");
       publishPlanningAction({ type: "sort_change", key: selected.id, direction: selected.desc ? "desc" : "asc" });
     },
     onColumnSizingChange: (updater) => {

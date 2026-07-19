@@ -10,6 +10,7 @@ PLANNING_CSS = ROOT / "src/app/static/planning_dashboard.css"
 PLANNING_REACT = ROOT / "frontend/executive-kpi/src/PlanningWorklist.tsx"
 EXECUTIVE_REACT = ROOT / "frontend/executive-kpi/src/ExecutiveQueue.tsx"
 SHARED_TABLE = ROOT / "frontend/executive-kpi/src/table/TablePrimitives.tsx"
+SHARED_FILTER = ROOT / "frontend/executive-kpi/src/filter/FilterSelect.tsx"
 FRONTEND_MAIN = ROOT / "frontend/executive-kpi/src/main.tsx"
 FRONTEND_CSS = ROOT / "frontend/executive-kpi/src/styles.css"
 API = ROOT / "src/app/api.py"
@@ -26,13 +27,14 @@ def test_planning_route_mounts_the_scoped_react_islands_and_canonical_bundle() -
     assert '<body class="planning-dashboard-page">' in html
     assert 'class="page planning-dashboard-shell"' in html
     assert html.count('id="planningSummaryRoot"') == 1
+    assert html.count('id="planningFiltersRoot"') == 1
     assert html.count('id="planningWorklistRoot"') == 1
     assert 'id="planningTable"' not in html
     assert 'id="planningTableBody"' not in html
-    assert '/static/planning_dashboard.css?v=phase133g-r4' in html
-    assert '/static/build/executive-kpi/executive-kpi.css?v=phase133g-r4' in html
-    assert '/static/build/executive-kpi/executive-kpi.js?v=phase133g-r4' in html
-    assert '/static/planning.js?v=phase133g-r4' in html
+    assert '/static/planning_dashboard.css?v=phase133g_s1_r1' in html
+    assert '/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1' in html
+    assert '/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1' in html
+    assert '/static/planning.js?v=phase133g_s1_r1' in html
 
 
 def test_executive_and_planning_import_the_same_real_table_primitives() -> None:
@@ -190,8 +192,11 @@ def test_planning_bridge_mounts_summary_and_worklist_from_one_state_event() -> N
 
 def test_filter_toolbar_preserves_all_controls_and_uses_a_dedicated_actions_group() -> None:
     html = planning_dashboard()
-    css = _read(PLANNING_CSS)
+    planning = _read(PLANNING_REACT)
+    shared_filter = _read(SHARED_FILTER)
+    css = _read(FRONTEND_CSS)
 
+    assert 'id="planningFiltersRoot"' in html
     for filter_id in (
         "planningActionFilter",
         "planningPreferenceFilter",
@@ -201,27 +206,28 @@ def test_filter_toolbar_preserves_all_controls_and_uses_a_dedicated_actions_grou
         "planningApplyFiltersBtn",
         "planningClearFiltersBtn",
     ):
-        assert f'id="{filter_id}"' in html
-    assert 'name="planningUndecidedOnlyToggle" value="no" checked' in html
-    assert 'dashboard-field--limit planning-filter-limit' in html
-    assert 'class="planning-filter-actions"' in html
-    actions_start = css.index(".planning-dashboard-page .planning-filter-actions")
-    actions = css[actions_start:css.index(".planning-dashboard-page .planning-worklist-card", actions_start)]
+        assert f'id="{filter_id}"' in planning
+    assert planning.count("<SharedFilterSelect") == 4
+    assert 'className="planning-react-segmented"' in planning
+    assert 'className="planning-react-filter-actions"' in planning
+    assert "export function SharedFilterSelect" in shared_filter
+    actions_start = css.index(".planning-react-filter-actions {")
+    actions = css[actions_start:css.index("}", actions_start) + 1]
     assert "display: grid" in actions
-    assert "grid-template-columns: minmax(138px, 1fr) minmax(82px, auto)" in actions
+    assert "grid-template-columns: minmax(132px, 1fr) minmax(78px, auto)" in actions
     assert "min-width: 0" in actions
     assert "position: absolute" not in actions
     assert "margin: -" not in actions
     assert "transform:" not in actions
 
-    responsive_start = css.index("@media (max-width: 1180px)")
+    responsive_start = css.index("@media (max-width: 1180px)", css.index(".planning-react-filter-grid"))
     responsive = css[responsive_start:css.index("@media (max-width: 760px)", responsive_start)]
     assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in responsive
-    assert ".planning-dashboard-page .planning-filter-limit" in responsive
+    assert ".planning-react-limit-field" in responsive
     assert "grid-column: 2" in responsive
     assert "grid-column: 3 / -1" in responsive
 
-    limit_start = css.index(".planning-dashboard-page .planning-filter-limit input")
+    limit_start = css.index(".planning-react-limit-field input")
     limit_rule = css[limit_start:css.index("}", limit_start)]
     assert "width: 100%" in limit_rule
     assert "min-width: 0" in limit_rule

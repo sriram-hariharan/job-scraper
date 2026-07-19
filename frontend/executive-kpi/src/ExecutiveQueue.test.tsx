@@ -66,6 +66,7 @@ function queueState(overrides: Partial<ExecutiveQueueState> = {}): ExecutiveQueu
       hasPrevPage: false,
       hasNextPage: true,
     },
+    sort: { key: "", direction: "asc" },
     ...overrides,
   };
 }
@@ -111,13 +112,13 @@ describe("ExecutiveQueue", () => {
   it("keeps form controls neutral and Apply Filters as the sole primary toolbar action", () => {
     render(<ExecutiveQueue state={queueState()} />);
 
-    const actionTrigger = screen.getByRole("button", { name: "All actions" });
-    const preferenceTrigger = screen.getByRole("button", { name: "All Preferences" });
+    const actionTrigger = screen.getByRole("button", { name: "Action All actions" });
+    const preferenceTrigger = screen.getByRole("button", { name: "Preferences All Preferences" });
     const clearButton = screen.getByRole("button", { name: /clear/i });
     const applyButton = screen.getByRole("button", { name: "Apply Filters" });
 
-    expect(actionTrigger).toHaveClass("executive-queue-select-trigger", "preferences-secondary-action");
-    expect(preferenceTrigger).toHaveClass("executive-queue-select-trigger", "preferences-secondary-action");
+    expect(actionTrigger).toHaveClass("shared-filter-select__trigger");
+    expect(preferenceTrigger).toHaveClass("shared-filter-select__trigger");
     expect(clearButton).toHaveClass("executive-queue-clear-btn", "preferences-secondary-action");
     expect(applyButton).toHaveClass("executive-queue-apply-btn");
     expect(applyButton).not.toHaveClass("preferences-secondary-action");
@@ -128,9 +129,10 @@ describe("ExecutiveQueue", () => {
 
     expect(screen.getByText("Beta ML Engineer")).toBeInTheDocument();
     expect(screen.getByText("Alpha Data Engineer")).toBeInTheDocument();
-    for (const heading of ["Rank", "Company", "Location", "Runner-up resume", "Score gap", "Missing req count", "Priority reason"]) {
+    for (const heading of ["Rank", "Company", "Location", "Runner-up resume", "Score gap", "Missing req count"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${heading}$`, "i") })).toBeInTheDocument();
     }
+    expect(screen.queryByRole("button", { name: /^priority reason$/i })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Review" })).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Match score 0.00 out of 100" })).toHaveAttribute("aria-valuenow", "0");
     expect(within(screen.getByText("Alpha Data Engineer").closest("tr") as HTMLElement).getAllByText("—").length).toBeGreaterThan(0);
@@ -154,13 +156,14 @@ describe("ExecutiveQueue", () => {
     render(<ExecutiveQueue state={queueState()} />);
 
     fireEvent.click(screen.getByRole("button", { name: /all actions/i }));
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Ready for review" }));
-    fireEvent.mouseDown(document.body);
+    fireEvent.click(screen.getByRole("option", { name: "Ready for review" }));
 
     fireEvent.click(screen.getByRole("button", { name: /all preferences/i }));
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "data eng" } });
-    expect(screen.queryByRole("menuitemcheckbox", { name: "Applied AI" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Data Engineering" }));
+    expect(screen.queryByRole("option", { name: "Applied AI" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "Data Engineering" }));
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    expect(listener.actions).toHaveLength(0);
     fireEvent.change(screen.getByRole("spinbutton", { name: "Limit" }), { target: { value: "40" } });
     fireEvent.click(screen.getByRole("button", { name: "Yes" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
@@ -180,25 +183,14 @@ describe("ExecutiveQueue", () => {
     listener.stop();
   });
 
-  it("sorts text, numeric, and date columns deterministically and expands one row", () => {
+  it("publishes server sort state without reordering the current page and expands one row", () => {
+    const listener = listenForActions();
     const { container } = render(<ExecutiveQueue state={queueState()} />);
     const rankSort = screen.getByRole("button", { name: /^rank$/i });
     fireEvent.click(rankSort);
-
-    let dataRows = screen.getAllByRole("row").filter((row) => row.querySelector(".executive-queue-job-cell"));
-    expect(dataRows[0]).toHaveTextContent("Beta ML Engineer");
-    fireEvent.click(rankSort);
-    dataRows = screen.getAllByRole("row").filter((row) => row.querySelector(".executive-queue-job-cell"));
-    expect(dataRows[0]).toHaveTextContent("Alpha Data Engineer");
-    expect(dataRows[1]).toHaveTextContent("Beta ML Engineer");
-
-    fireEvent.click(screen.getByRole("button", { name: /^job title$/i }));
-    dataRows = screen.getAllByRole("row").filter((row) => row.querySelector(".executive-queue-job-cell"));
-    expect(dataRows[0]).toHaveTextContent("Alpha Data Engineer");
-    expect(dataRows[1]).toHaveTextContent("Beta ML Engineer");
-
-    fireEvent.click(screen.getByRole("button", { name: /^posted at$/i }));
-    dataRows = screen.getAllByRole("row").filter((row) => row.querySelector(".executive-queue-job-cell"));
+    expect(listener.actions).toHaveLength(1);
+    expect(listener.actions[0]).toEqual({ type: "sort_change", key: "queue_rank", direction: "desc" });
+    const dataRows = screen.getAllByRole("row").filter((row) => row.querySelector(".executive-queue-job-cell"));
     expect(dataRows[0]).toHaveTextContent("Beta ML Engineer");
     expect(dataRows[1]).toHaveTextContent("Alpha Data Engineer");
 
@@ -219,6 +211,14 @@ describe("ExecutiveQueue", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand details for Beta ML Engineer" }));
     expect(container.querySelectorAll(".shared-table-detail-row")).toHaveLength(1);
     expect(within(container.querySelector(".shared-table-detail-row") as HTMLElement).getByText("Borderline match")).toBeInTheDocument();
+    listener.stop();
+  });
+
+  it("reflects server sort state accessibly and keeps action-only columns unsortable", () => {
+    render(<ExecutiveQueue state={queueState({ sort: { key: "posted_at", direction: "desc" } })} />);
+    expect(screen.getByRole("columnheader", { name: /posted at/i })).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByRole("columnheader", { name: "Review" })).not.toHaveAttribute("aria-sort");
+    expect(screen.getByRole("columnheader", { name: /next step/i })).not.toHaveAttribute("aria-sort");
   });
 
   it("publishes view, pagination, and Review actions through the one bridge", () => {

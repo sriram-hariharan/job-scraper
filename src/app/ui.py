@@ -17,8 +17,8 @@ def executive_dashboard() -> str:
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133a" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133g_s1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1" />
 </head>
 <body class="executive-dashboard-page">
   {render_top_shell("/")}
@@ -208,7 +208,7 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133a_fix1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
 </html>

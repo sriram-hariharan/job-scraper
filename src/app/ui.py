@@ -387,8 +387,166 @@ def executive_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133a_fix1"></script>
-  <script src="/static/app.js?v=pipeline_options_controls_v4"></script>
+  <script src="/static/app.js?v=phase133d_r2"></script>
   </body>
+</html>
+    """.strip()
+
+
+def _pipeline_dashboard_launch_dialogs() -> str:
+    """Reuse the reviewed Live Pipeline launch contract on the monitoring page."""
+    return """
+  <section class="modal-backdrop hidden" id="pipelineConfigModal">
+    <div class="modal-card pipeline-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>Run live pipeline</h3>
+          <div class="subtext">Choose limits and options before starting the run.</div>
+        </div>
+      </div>
+
+      <div class="pipeline-modal-scroll">
+        <div class="pipeline-option-sections compact-option-sections">
+          <div class="pipeline-option-section">
+            <div class="pipeline-option-section-header"><div class="pipeline-option-title">Run size</div></div>
+            <div class="pipeline-form-grid pipeline-form-grid--compact">
+              <div class="control-group pipeline-limit-group">
+                <label for="pipelineJobLimitInput">Job limit <span class="packet-info-icon pipeline-help-icon" title="Maximum jobs allowed into this run." aria-label="Maximum jobs allowed into this run.">?</span></label>
+                <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" />
+                <div class="pipeline-inline-helper">
+                  <span class="pipeline-inline-helper-label">Quick presets</span>
+                  <div class="pipeline-chip-row pipeline-chip-row--compact">
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
+                  </div>
+                </div>
+              </div>
+              <div class="control-group">
+                <label for="pipelineJobPacketLimitInput">Packet limit <span class="packet-info-icon pipeline-help-icon" title="Maximum detailed planning packets to build. 0 means all selected jobs." aria-label="Maximum detailed planning packets to build. 0 means all selected jobs.">?</span></label>
+                <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
+              </div>
+              <div class="control-group pipeline-toggle-group pipeline-toggle-group--inline">
+                <label>Rerun seen jobs <span class="packet-info-icon pipeline-help-icon" title="Include jobs that were already seen before." aria-label="Include jobs that were already seen before.">?</span></label>
+                <div class="binary-toggle" role="radiogroup" aria-label="Rerun seen jobs">
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineDeleteSeenData" value="no" checked /><span>No</span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineDeleteSeenData" value="yes" /><span>Yes</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pipeline-option-section">
+            <div class="pipeline-option-section-header"><div class="pipeline-option-title">Run mode</div></div>
+            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
+              <div class="pipeline-toggle-item pipeline-toggle-item--mode">
+                <div class="pipeline-toggle-copy"><div class="pipeline-toggle-name">Scan + Plan <span class="packet-info-icon pipeline-help-icon" title="Scrape jobs, score them, and build planning outputs." aria-label="Scrape jobs, score them, and build planning outputs.">?</span></div></div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Run mode">
+                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="no" checked /><span>Scan + Plan</span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="yes" /><span>Plan only</span></label>
+                </div>
+                <div class="pipeline-toggle-copy"><div class="pipeline-toggle-name pipeline-toggle-name--secondary">Plan only <span class="packet-info-icon pipeline-help-icon" title="Skip scraping and rebuild planning from existing jobs." aria-label="Skip scraping and rebuild planning from existing jobs.">?</span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pipeline-option-section">
+            <div class="pipeline-option-section-header"><div class="pipeline-option-title">AI planning</div></div>
+            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy"><div class="pipeline-toggle-name">AI review <span class="packet-info-icon pipeline-help-icon" title="Use AI to review planning decisions and borderline fits. This does not tailor resumes." aria-label="Use AI to review planning decisions and borderline fits. This does not tailor resumes.">?</span></div></div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="AI review">
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmAdjudication" value="no" /><span>No</span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmAdjudication" value="yes" checked /><span>Yes</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pipeline-option-section pipeline-option-section--advanced">
+            <div class="pipeline-option-section-header"><div class="pipeline-option-title">Advanced</div></div>
+            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy"><div class="pipeline-toggle-name">Backup ranking <span class="packet-info-icon pipeline-help-icon" title="Use fallback ranking when normal ranking signals are incomplete." aria-label="Use fallback ranking when normal ranking signals are incomplete.">?</span></div></div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Backup ranking">
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmFallback" value="no" checked /><span>No</span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmFallback" value="yes" /><span>Yes</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions pipeline-modal-actions">
+        <button type="button" class="ghost-btn" id="cancelPipelineConfigBtn">Cancel</button>
+        <button type="button" id="openPipelineConfirmBtn">Continue</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop hidden" id="pipelineConfirmModal">
+    <div class="modal-card pipeline-confirm-card">
+      <div class="modal-header pipeline-confirm-header">
+        <div><h3>Confirm pipeline run</h3><div class="subtext">Final review before launching the live pipeline.</div></div>
+        <button class="ghost-btn modal-close-btn" id="closePipelineConfirmModalBtn" type="button">Close</button>
+      </div>
+      <div class="pipeline-confirm-scroll"><div class="confirm-summary-block" id="pipelineConfirmSummary"></div></div>
+      <div class="modal-actions pipeline-confirm-actions">
+        <button type="button" class="ghost-btn" id="backToPipelineConfigBtn">Back</button>
+        <button type="button" id="confirmPipelineRunBtn">Run pipeline</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop hidden" id="appErrorModal">
+    <div class="modal-card app-error-modal-card">
+      <div class="modal-header app-error-modal-header">
+        <div><h3 id="appErrorTitle">Something went wrong</h3><div class="subtext" id="appErrorSubtitle">Review the message below.</div></div>
+        <button class="ghost-btn modal-close-btn" id="closeAppErrorModalBtn" type="button">Close</button>
+      </div>
+      <div class="app-error-panel">
+        <div class="app-error-icon-wrap" aria-hidden="true"><img class="app-error-icon-img" src="/static/media/error_img.png" alt="" /></div>
+        <div class="app-error-copy"><div class="app-error-badge">Warning</div><div class="app-error-message" id="appErrorMessage"></div></div>
+      </div>
+      <div class="modal-actions app-error-actions"><button type="button" id="appErrorOkBtn">OK</button></div>
+    </div>
+  </section>
+    """.strip()
+
+
+@router.get("/pipeline", response_class=HTMLResponse)
+def pipeline_dashboard() -> str:
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline Dashboard</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=pipeline_options_controls_v4" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=pipeline_options_controls_v4" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133d" />
+</head>
+<body class="pipeline-dashboard-page">
+  {render_top_shell("/pipeline")}
+  <main class="page pipeline-dashboard-shell">
+    <section
+      id="pipelineDashboardRoot"
+      aria-label="Pipeline monitoring dashboard"
+      aria-live="polite"
+    >
+      <div class="pipeline-dashboard-server-fallback">Loading pipeline status...</div>
+      <noscript>Enable JavaScript to monitor Pipeline status.</noscript>
+    </section>
+  </main>
+  {_pipeline_dashboard_launch_dialogs()}
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/app.js?v=phase133d_r2"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133d"></script>
+</body>
 </html>
     """.strip()
 

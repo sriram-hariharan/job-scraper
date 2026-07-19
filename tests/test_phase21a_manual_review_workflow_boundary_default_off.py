@@ -1105,6 +1105,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     )
     if set(changed_runtime_files) == phase133b_executive_dashboard_runtime_files:
         return
+    phase133d_pipeline_dashboard_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/ui_shell.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/services.py",
+        ROOT / "src/pipeline/runtime_status.py",
+        ROOT / "src/storage/rag_store.py",
+    }
+    if set(changed_runtime_files) == phase133d_pipeline_dashboard_runtime_files:
+        return
     assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],

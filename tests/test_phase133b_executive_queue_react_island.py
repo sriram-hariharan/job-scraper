@@ -171,6 +171,8 @@ def test_executive_chat_offset_and_pagination_clearance_are_scoped_without_behav
 
     assert '<body class="executive-dashboard-page">' in markup
     assert "--queue-chat-clearance: calc(64px + 28px + 18px)" in queue_styles
+    table_card_rule = queue_styles.split(".executive-queue-table-card {", 2)[2].split("}", 1)[0]
+    assert "margin-right" not in table_card_rule
     assert "padding: 9px var(--queue-chat-clearance) 9px 16px" in queue_styles
     assert "--floating-chat-launcher-bottom: max(8px, env(safe-area-inset-bottom))" in app_styles
     assert "bottom: var(--floating-chat-launcher-bottom, max(28px, env(safe-area-inset-bottom)))" in app_styles

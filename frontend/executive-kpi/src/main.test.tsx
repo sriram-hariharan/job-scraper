@@ -97,3 +97,18 @@ it("hydrates and updates the queue island from the existing bridge state", async
   await waitFor(() => expect(screen.getByText("Refreshed Queue Job")).toBeInTheDocument());
   expect(screen.queryByText("Initial Queue Job")).not.toBeInTheDocument();
 });
+
+it("mounts the Pipeline dashboard only when its dedicated server root exists", async () => {
+  document.body.innerHTML = '<section id="pipelineDashboardRoot"></section>';
+  const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ pipeline: { status: "idle" } }), { status: 200 }),
+  );
+
+  await act(async () => {
+    await import("./main");
+  });
+
+  await waitFor(() => expect(screen.getByText("Pipeline is idle")).toBeInTheDocument());
+  expect(fetchMock).toHaveBeenCalledWith("/pipeline/status", expect.objectContaining({ method: "GET" }));
+  expect(document.querySelectorAll("#pipelineDashboardRoot")).toHaveLength(1);
+});

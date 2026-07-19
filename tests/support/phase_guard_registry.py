@@ -759,6 +759,30 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_queue_ui_metadata_contract.py",
         },
+        "phase133d_pipeline_dashboard_react_island": {
+            "frontend/executive-kpi/src/main.test.tsx",
+            "frontend/executive-kpi/src/main.tsx",
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.test.tsx",
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+            "frontend/executive-kpi/src/pipeline/pipelineModel.ts",
+            "frontend/executive-kpi/src/styles.css",
+            "src/app/static/app.js",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "src/app/services.py",
+            "src/app/ui.py",
+            "src/app/ui_shell.py",
+            "src/pipeline/runtime_status.py",
+            "src/storage/rag_store.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase129d_pipeline_persistence_and_suggestions_error_layout.py",
+            "tests/test_phase133d_pipeline_dashboard_react_island.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase71a_live_pipeline_argument_list_too_long_guard_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_user_pipeline_status_reconciliation.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -775,6 +799,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase132b_premium_preferences_ui")
         | legacy_guard_allowlist("phase133a_executive_kpi_react_island")
         | legacy_guard_allowlist("phase133b_executive_queue_react_island")
+        | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
     )
 
 
@@ -820,7 +845,7 @@ def assert_protected_hashes(
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "15e052a39da9fb08f7beefbdb67aa88d885138e4353e39cd2e0eb86f86dd4b86",
+        ): "6e13bb4d44574d562cb51726525990126f8bf8209c69746a53cf2c81b8cbc82c",
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",

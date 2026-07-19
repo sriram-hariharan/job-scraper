@@ -2,6 +2,7 @@ from html import escape
 
 NAV_ITEMS = [
     ("Executive", "/", "E"),
+    ("Pipeline", "/pipeline", "L"),
     ("Planning", "/planning", "P"),
     ("Decisions", "/decisions-ui", "D"),
     ("Applications", "/applications", "A"),

@@ -39,6 +39,8 @@ const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 const PIPELINE_PENDING_SUCCESS_KEY = "job_operator_pipeline_pending_success";
 const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
 const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
+const PIPELINE_ACCEPTED_RUN_STORAGE_KEY = "applylens_pipeline_accepted_run_id";
+const PIPELINE_ACCEPTED_RUN_EVENT_NAME = "applylens:pipeline-run-accepted";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
 const EXECUTIVE_KPI_EVENT_NAME = "applylens:executive-kpi-state";
 const EXECUTIVE_QUEUE_STATE_EVENT_NAME = "applylens:executive-queue-state";
@@ -2022,7 +2024,9 @@ function renderPipelineSuccessSummary(pipeline = {}) {
 }
 
 function renderPipelineFailureSummary(pipeline = {}) {
-  const currentStage = pipeline.current_stage ? titleCaseStage(pipeline.current_stage) : "";
+  const rawStage = String(pipeline.current_stage || "").trim();
+  const currentStage = rawStage && rawStage.toLowerCase() !== "unknown" ? titleCaseStage(rawStage) : "";
+  const exactError = String(pipeline.error || "").trim();
   const metaBits = [
     pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
     pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
@@ -2036,10 +2040,11 @@ function renderPipelineFailureSummary(pipeline = {}) {
     ? `<div class="pipeline-success-summary-text">${escapeHtml(metaBits.join(" · "))}</div>`
     : "";
 
-  qs("pipelineFailureTitle").textContent = "Pipeline could not finish";
+  qs("pipelineFailureTitle").textContent = currentStage ? `Pipeline failed in ${currentStage}` : "Pipeline failed";
   qs("pipelineFailureText").textContent = "The run stopped before completion. Review diagnostics for technical details.";
   qs("pipelineFailureSummary").innerHTML = metaLine;
   qs("pipelineFailureReason").innerHTML = `
+    ${exactError ? `<div class="pipeline-success-summary-text">${escapeHtml(exactError)}</div>` : ""}
     <div class="pipeline-success-summary-text">
       No application actions were taken. Technical details remain available in pipeline diagnostics.
     </div>
@@ -2137,7 +2142,7 @@ function hidePageLoadingOverlay() {
   state.currentPipelineSuccessKey = null;
   state.pipelineFailureVisible = false;
   state.currentPipelineFailureKey = null;
-  qs("pageLoadingOverlay").classList.add("hidden");
+  qs("pageLoadingOverlay")?.classList.add("hidden");
   document.body.classList.remove("pipeline-workflow-open");
 }
 
@@ -2151,56 +2156,27 @@ function renderPipelineStatus(payload) {
   const status = pipeline.status || "idle";
   meta.textContent = buildPipelineMetaText(pipeline);
   const overlayEl = qs("pageLoadingOverlay");
-  const pendingStart = hasPipelinePendingSuccess();
 
   const terminalFailure = ["failed", "cancelled", "canceled", "stopped"].includes(status);
   const runningLike = ["queued", "starting", "running"].includes(status);
 
-  if (pendingStart && status !== "succeeded" && !terminalFailure) {
-    showPageLoadingOverlay(
-      "Running live pipeline...",
-      pipeline.stage_message || "Starting pipeline run...",
-      {
-        ...pipeline,
-        status: "running",
-        current_stage: pipeline.current_stage || "startup",
-        stage_message: pipeline.stage_message || "Launching pipeline subprocess",
-        stage_order: pipeline.stage_order || DEFAULT_STAGE_ORDER,
-        completed_stages: pipeline.completed_stages || [],
-        counts: pipeline.counts || {},
-      }
-    );
-    runBtn.disabled = true;
-    runBtn.textContent = "Pipeline Running...";
-    return;
-  }
-
   if (runningLike) {
-    runBtn.disabled = true;
-    runBtn.textContent = "Pipeline Running...";
-
-    showPageLoadingOverlay(
-      `Running · ${titleCaseStage(pipeline.current_stage || "startup")}`,
-      pipeline.stage_message || "Pipeline is running.",
-      pipeline
-    );
-
+    runBtn.disabled = false;
+    runBtn.dataset.pipelineActive = "true";
+    runBtn.textContent = "View Pipeline";
+    hidePageLoadingOverlay();
     return;
   }
+
+  delete runBtn.dataset.pipelineActive;
 
   if (status === "succeeded") {
     runBtn.disabled = false;
     runBtn.textContent = "Run Live Pipeline";
     refreshTablesAfterPipelineSuccess(pipeline);
 
-    const successKey = getPipelineSuccessKey(pipeline);
-    const overlayIsVisible = !overlayEl.classList.contains("hidden");
-    if (hasPipelinePendingSuccess() || overlayIsVisible || state.pipelineSuccessVisible) {
-      markPipelineSuccessShown(successKey);
-      clearPipelinePendingSuccess();
-      showPipelineSuccessOverlay(pipeline);
-    }
-
+    clearPipelinePendingSuccess();
+    hidePageLoadingOverlay();
     return;
   }
 
@@ -2208,15 +2184,8 @@ function renderPipelineStatus(payload) {
     runBtn.disabled = false;
     runBtn.textContent = "Run Live Pipeline";
 
-    const overlayIsVisible = !qs("pageLoadingOverlay").classList.contains("hidden");
-    const shouldShowFailure =
-      hasPipelinePendingSuccess() || overlayIsVisible || state.pipelineFailureVisible;
-
-    if (shouldShowFailure) {
-      clearPipelinePendingSuccess();
-      showPipelineFailureOverlay(pipeline);
-    }
-
+    clearPipelinePendingSuccess();
+    hidePageLoadingOverlay();
     return;
   }
 
@@ -2872,18 +2841,42 @@ async function handleQueueReview(row) {
   }
 }
 
-function attachApplicationHandlers() {
-  qs("closeApplicationModalBtn").addEventListener("click", () => {
-    clearPendingApplication();
-    closeApplicationModal();
-  });
-
-  const runPipelineBtn = qs("runPipelineBtn");
-    if (runPipelineBtn) {
-      runPipelineBtn.addEventListener("click", () => {
-        openPipelineConfigModal();
-      });
+function handoffAcceptedPipelineRun(payload = {}) {
+  const pipeline = payload.pipeline || {};
+  const runId = String(pipeline.run_id || "").trim();
+  if (runId) {
+    try {
+      window.sessionStorage.setItem(PIPELINE_ACCEPTED_RUN_STORAGE_KEY, runId);
+    } catch {
+      // The accepted payload and immediate status event still complete the in-page handoff.
     }
+  }
+
+  hidePageLoadingOverlay();
+  closePipelineConfigModal();
+  closePipelineConfirmModal();
+
+  if (window.location.pathname === "/pipeline") {
+    window.dispatchEvent(new CustomEvent(PIPELINE_ACCEPTED_RUN_EVENT_NAME, {
+      detail: { runId, pipeline },
+    }));
+    return;
+  }
+
+  window.location.assign("/pipeline");
+}
+
+function attachPipelineLaunchHandlers() {
+  const runPipelineBtn = qs("runPipelineBtn");
+  if (runPipelineBtn) {
+    runPipelineBtn.addEventListener("click", () => {
+      if (runPipelineBtn.dataset.pipelineActive === "true") {
+        window.location.assign("/pipeline");
+        return;
+      }
+      openPipelineConfigModal();
+    });
+  }
 
   qs("closePipelineConfigModalBtn")?.addEventListener("click", closePipelineConfigModal);
   qs("cancelPipelineConfigBtn").addEventListener("click", closePipelineConfigModal);
@@ -2908,43 +2901,49 @@ function attachApplicationHandlers() {
   });
 
   qs("confirmPipelineRunBtn").addEventListener("click", async () => {
-    let pipelineStarted = false;
     try {
       const config = state.pendingPipelineConfig || collectPipelineConfig();
       closePipelineConfirmModal();
-      markPipelinePendingSuccess();
       window.localStorage.removeItem("applylens_new_user_empty_state");
       document.body.classList.remove("app-new-user-empty");
-
-      showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
-        status: "running",
-        current_stage: "startup",
-        stage_message: "Launching pipeline subprocess",
-        stage_order: DEFAULT_STAGE_ORDER,
-        completed_stages: [],
-        counts: {},
-      });
-
-      await postJson("/pipeline/run", config);
-      pipelineStarted = true;
-      startPipelinePolling();
-      try {
-        await loadPipelineStatus();
-      } catch (statusErr) {
-        console.error(statusErr);
-        qs("pipelineLoadingMeta").textContent = "Pipeline started. Waiting for the latest status…";
-      }
+      const payload = await postJson("/pipeline/run", config);
+      handoffAcceptedPipelineRun(payload);
     } catch (err) {
-      if (!pipelineStarted) {
-        clearPipelinePendingSuccess();
-        showPipelineFailureOverlay({
-          status: "failed",
-          current_stage: "startup",
-          error: extractErrorMessage(err),
-        });
-      }
+      clearPipelinePendingSuccess();
+      hidePageLoadingOverlay();
+      showAppError("Pipeline launch failed", err, "The run was not accepted. Review the message and try again.");
     }
   });
+
+  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
+  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
+
+  getAppErrorModal().addEventListener("click", (event) => {
+    if (event.target === getAppErrorModal()) {
+      closeAppErrorModal();
+    }
+  });
+
+  getPipelineConfigModal().addEventListener("click", (event) => {
+    if (event.target === getPipelineConfigModal()) {
+      closePipelineConfigModal();
+    }
+  });
+
+  getPipelineConfirmModal().addEventListener("click", (event) => {
+    if (event.target === getPipelineConfirmModal()) {
+      closePipelineConfirmModal();
+    }
+  });
+}
+
+function attachApplicationHandlers() {
+  qs("closeApplicationModalBtn").addEventListener("click", () => {
+    clearPendingApplication();
+    closeApplicationModal();
+  });
+
+  attachPipelineLaunchHandlers();
 
   qs("pipelineSuccessOkBtn").addEventListener("click", () => {
     state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
@@ -2968,31 +2967,10 @@ function attachApplicationHandlers() {
     openPipelineConfigModal();
   });
 
-  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
-  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
-
-  getAppErrorModal().addEventListener("click", (event) => {
-    if (event.target === getAppErrorModal()) {
-      closeAppErrorModal();
-    }
-  });
-
   getApplicationModal().addEventListener("click", (event) => {
     if (event.target === getApplicationModal()) {
       clearPendingApplication();
       closeApplicationModal();
-    }
-  });
-
-  getPipelineConfigModal().addEventListener("click", (event) => {
-    if (event.target === getPipelineConfigModal()) {
-      closePipelineConfigModal();
-    }
-  });
-
-  getPipelineConfirmModal().addEventListener("click", (event) => {
-    if (event.target === getPipelineConfirmModal()) {
-      closePipelineConfirmModal();
     }
   });
 
@@ -3153,7 +3131,30 @@ async function init() {
   }
 }
 
-window.addEventListener("DOMContentLoaded", init);
+function initPipelineLaunchPage() {
+  try {
+    attachPipelineLaunchHandlers();
+    attachPipelineConfigHandlers();
+    applyPipelinePreset("full");
+    syncPipelinePathPreview();
+
+    if (window.sessionStorage.getItem("applylens_open_live_pipeline") === "1") {
+      window.sessionStorage.removeItem("applylens_open_live_pipeline");
+      openPipelineConfigModal();
+    }
+  } catch (err) {
+    console.error(err);
+    showAppError("Failed to initialize pipeline launch", err);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  if (document.body.classList.contains("pipeline-dashboard-page")) {
+    initPipelineLaunchPage();
+    return;
+  }
+  void init();
+});
 
 function getPipelineGate() {
   return state.pipelineGate || {};

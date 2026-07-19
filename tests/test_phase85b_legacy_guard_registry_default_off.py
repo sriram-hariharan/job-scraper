@@ -305,6 +305,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     phase132_profile = legacy_guard_allowlist("phase132b_premium_preferences_ui")
     phase133_profile = legacy_guard_allowlist("phase133a_executive_kpi_react_island")
     phase133b_profile = legacy_guard_allowlist("phase133b_executive_queue_react_island")
+    phase133d_profile = legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
     expected_phase132_profile = {
         "src/app/api.py",
         "src/app/onboarding_ui.py",
@@ -393,6 +394,32 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }
     assert len(phase133b_profile) == 17
     assert not any("*" in path for path in phase133b_profile)
+    assert phase133d_profile == {
+        "frontend/executive-kpi/src/main.test.tsx",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.test.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+        "frontend/executive-kpi/src/pipeline/pipelineModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/static/app.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/services.py",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "src/pipeline/runtime_status.py",
+        "src/storage/rag_store.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase129d_pipeline_persistence_and_suggestions_error_layout.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase71a_live_pipeline_argument_list_too_long_guard_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_user_pipeline_status_reconciliation.py",
+    }
+    assert len(phase133d_profile) == 22
+    assert not any("*" in path for path in phase133d_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
@@ -401,6 +428,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase132_profile
         | phase133_profile
         | phase133b_profile
+        | phase133d_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

@@ -8,6 +8,7 @@ import {
   QUEUE_STATE_EVENT,
   type ExecutiveQueueState,
 } from "./ExecutiveQueue";
+import { PipelineDashboard } from "./pipeline/PipelineDashboard";
 import "./styles.css";
 
 const KPI_EVENT_NAME = "applylens:executive-kpi-state";
@@ -69,6 +70,15 @@ if (queueMount) {
   createRoot(queueMount).render(
     <StrictMode>
       <ExecutiveQueueIsland />
+    </StrictMode>,
+  );
+}
+
+const pipelineMount = document.getElementById("pipelineDashboardRoot");
+if (pipelineMount) {
+  createRoot(pipelineMount).render(
+    <StrictMode>
+      <PipelineDashboard />
     </StrictMode>,
   );
 }

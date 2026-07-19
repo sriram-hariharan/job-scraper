@@ -6,7 +6,10 @@ import json
 import sys
 import tempfile
 import types
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import pytest
 
 
 class _FakeTqdm:
@@ -27,6 +30,7 @@ sys.modules.setdefault(
 )
 
 from src.app import services
+from src.pipeline import runtime_status
 
 
 def _terminal_status_payload(run_id="run_terminal"):
@@ -356,3 +360,478 @@ def test_latest_owner_status_exposes_run_scoped_output_status_and_log_paths():
     assert payload["log_path"] == log_path
     assert payload["status_path"] == status_path
     assert payload["status_json"]["config"]["storage_mode"] == "run_scoped_scratch"
+
+
+def _interrupted_running_payload(run_id="run_interrupted"):
+    return {
+        "run_id": run_id,
+        "child_pid": 424242,
+        "status": "running",
+        "started_at": "2026-07-18T10:00:00Z",
+        "updated_at_utc": "2026-07-18T10:01:00Z",
+        "current_stage": "resume_matching",
+        "completed_stages": ["startup", "scraping", "filtering"],
+        "stage_started_at": "2026-07-18T10:00:50Z",
+        "stage_message": "Matching resumes",
+        "counts": {"scraped_jobs": 32, "filtered_jobs": 11},
+        "summary_message": "",
+        "return_code": None,
+        "error": "",
+    }
+
+
+def _seconds_ago(seconds):
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat().replace("+00:00", "Z")
+
+
+def test_live_child_pid_keeps_stale_persisted_run_running(monkeypatch):
+    payload = _interrupted_running_payload("run_alive")
+    payload["child_process_identity"] = "child-start"
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: int(pid) == 424242)
+    monkeypatch.setattr(services, "_process_start_identity", lambda pid: "child-start")
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {"process_is_running": False, "run_id": "run_alive"},
+        payload,
+    )
+
+    assert reconciled == payload
+    assert reconciled["status"] == "running"
+
+
+def test_authoritative_worker_identity_alive_keeps_run_running(monkeypatch):
+    payload = _interrupted_running_payload("run_worker_alive")
+    payload.pop("child_pid")
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: int(pid) == 8181)
+    monkeypatch.setattr(services, "_process_start_identity", lambda pid: "a1b2c3d4")
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {
+            "process_is_running": False,
+            "run_id": payload["run_id"],
+            "worker_id": "pid:8181;start:a1b2c3d4",
+        },
+        payload,
+    )
+
+    assert reconciled == payload
+    assert reconciled["status"] == "running"
+
+
+def test_dead_authoritative_worker_with_verified_live_child_keeps_run_running(monkeypatch):
+    payload = _interrupted_running_payload("run_child_survived")
+    payload["child_process_identity"] = "child-start"
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: int(pid) == 424242)
+    monkeypatch.setattr(services, "_process_start_identity", lambda pid: "child-start")
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {
+            "process_is_running": False,
+            "run_id": payload["run_id"],
+            "worker_id": "pid:8181;start:a1b2c3d4",
+        },
+        payload,
+    )
+
+    assert reconciled == payload
+    assert reconciled["status"] == "running"
+
+
+def test_dead_stale_child_reconciles_without_losing_run_progress(monkeypatch, tmp_path):
+    status_path = tmp_path / "live_pipeline_status.json"
+    payload = _interrupted_running_payload()
+    payload["status_path"] = str(status_path)
+    status_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {
+            "process_is_running": False,
+            "run_id": payload["run_id"],
+            "status_path": str(status_path),
+        },
+        payload,
+    )
+
+    assert reconciled["status"] == "failed"
+    assert reconciled["is_running"] is False
+    assert reconciled["run_id"] == "run_interrupted"
+    assert reconciled["current_stage"] == "resume_matching"
+    assert reconciled["completed_stages"] == ["startup", "scraping", "filtering"]
+    assert reconciled["counts"] == {"scraped_jobs": 32, "filtered_jobs": 11}
+    assert reconciled["started_at"] == "2026-07-18T10:00:00Z"
+    assert reconciled["error"] == (
+        "Pipeline run was interrupted because its owning process stopped before completion."
+    )
+    assert json.loads(status_path.read_text(encoding="utf-8"))["status"] == "failed"
+    assert services._heal_stale_running_runtime_status({}, reconciled) == reconciled
+
+
+def test_uncertain_fresh_liveness_is_not_falsely_terminal(monkeypatch):
+    payload = _interrupted_running_payload("run_uncertain")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = services._utc_now()
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {"process_is_running": False, "run_id": "run_uncertain", "worker_id": "pid:8181"},
+        payload,
+    )
+
+    assert reconciled["status"] == "running"
+    assert "finished_at" not in reconciled
+
+
+def test_dead_authoritative_worker_with_missing_child_uses_short_grace(monkeypatch):
+    payload = _interrupted_running_payload("run_dead_worker_missing_child")
+    payload.pop("child_pid")
+    payload["current_stage"] = "scraping"
+    payload["stage_message"] = "Collecting jobs"
+    payload["updated_at_utc"] = _seconds_ago(31)
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {
+            "process_is_running": False,
+            "run_id": payload["run_id"],
+            "worker_id": "pid:26860",
+        },
+        payload,
+    )
+
+    assert reconciled["status"] == "failed"
+    assert reconciled["run_id"] == payload["run_id"]
+    assert reconciled["current_stage"] == "scraping"
+    assert reconciled["completed_stages"] == payload["completed_stages"]
+    assert reconciled["counts"] == payload["counts"]
+    assert reconciled["started_at"] == payload["started_at"]
+    assert reconciled["updated_at_utc"] == payload["updated_at_utc"]
+    assert reconciled["error"] == (
+        "Pipeline run was interrupted because its owning process stopped before completion."
+    )
+    evidence = reconciled["interruption_reconciliation"]
+    assert evidence["liveness_evidence"] == "worker_pid_not_running:26860;child_pid_missing"
+    assert evidence["last_update_age_seconds"] < 60
+
+
+def test_dead_authoritative_worker_with_dead_child_uses_short_grace(monkeypatch):
+    payload = _interrupted_running_payload("run_dead_worker_dead_child")
+    payload["updated_at_utc"] = _seconds_ago(31)
+    payload["child_process_identity"] = "dead-child-start"
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {
+            "process_is_running": False,
+            "run_id": payload["run_id"],
+            "worker_id": "pid:26860;start:a1b2c3d4",
+        },
+        payload,
+    )
+
+    assert reconciled["status"] == "failed"
+    assert reconciled["interruption_reconciliation"]["last_update_age_seconds"] < 60
+    assert "child_pid_not_running:424242" in reconciled["interruption_reconciliation"]["liveness_evidence"]
+
+
+def test_dead_authoritative_worker_with_malformed_child_uses_short_grace(monkeypatch):
+    payload = _interrupted_running_payload("run_dead_worker_malformed_child")
+    payload["child_pid"] = "not-a-pid"
+    payload["updated_at_utc"] = _seconds_ago(31)
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {"run_id": payload["run_id"], "worker_id": "pid:26860"},
+        payload,
+    )
+
+    assert reconciled["status"] == "failed"
+    assert reconciled["interruption_reconciliation"]["liveness_evidence"] == (
+        "worker_pid_not_running:26860;child_pid_malformed"
+    )
+
+
+def test_fresh_dead_authoritative_worker_is_protected_by_short_grace(monkeypatch):
+    payload = _interrupted_running_payload("run_dead_worker_fresh")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = _seconds_ago(10)
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {"run_id": payload["run_id"], "worker_id": "pid:26860"},
+        payload,
+    )
+
+    assert reconciled == payload
+    assert reconciled["status"] == "running"
+
+
+def test_legacy_run_without_owner_evidence_retains_long_uncertainty_policy(monkeypatch):
+    payload = _interrupted_running_payload("run_legacy_uncertain")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = _seconds_ago(60)
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {"run_id": payload["run_id"]},
+        payload,
+    )
+
+    assert reconciled == payload
+    assert reconciled["status"] == "running"
+
+
+def test_worker_pid_reuse_identity_mismatch_reconciles_after_short_grace(monkeypatch):
+    payload = _interrupted_running_payload("run_worker_pid_reused")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = _seconds_ago(31)
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: True)
+    monkeypatch.setattr(services, "_process_start_identity", lambda pid: "different1")
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {
+            "run_id": payload["run_id"],
+            "worker_id": "pid:26860;start:a1b2c3d4",
+        },
+        payload,
+    )
+
+    assert reconciled["status"] == "failed"
+    assert reconciled["interruption_reconciliation"]["liveness_evidence"] == (
+        "worker_identity_mismatch:26860;child_pid_missing"
+    )
+
+
+def test_legacy_worker_pid_reuse_is_not_claimed_alive_or_dead(monkeypatch):
+    payload = _interrupted_running_payload("run_worker_pid_unverified")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = _seconds_ago(60)
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: True)
+
+    reconciled = services._heal_stale_running_runtime_status(
+        {"run_id": payload["run_id"], "worker_id": "pid:26860"},
+        payload,
+    )
+
+    assert reconciled == payload
+    assert reconciled["status"] == "running"
+
+
+def test_unchanged_deferred_reconciliation_is_logged_only_once(monkeypatch):
+    payload = _interrupted_running_payload("run_deferred_log_throttle")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = _seconds_ago(10)
+    info_logs = []
+    warning_logs = []
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+    monkeypatch.setattr(services.logger, "info", lambda *args, **kwargs: info_logs.append(args))
+    monkeypatch.setattr(services.logger, "warning", lambda *args, **kwargs: warning_logs.append(args))
+
+    snapshot = {"run_id": payload["run_id"], "worker_id": "pid:26860"}
+    assert services._heal_stale_running_runtime_status(snapshot, payload) == payload
+    assert services._heal_stale_running_runtime_status(snapshot, payload) == payload
+
+    assert len(info_logs) == 1
+    assert len(warning_logs) == 1
+    assert "deferred" in warning_logs[0][0]
+
+
+def test_changed_liveness_evidence_is_logged_again(monkeypatch):
+    payload = _interrupted_running_payload("run_evidence_changed")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = _seconds_ago(10)
+    pid_exists = {26860: False}
+    info_logs = []
+    warning_logs = []
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: pid_exists.get(int(pid), False))
+    monkeypatch.setattr(services.logger, "info", lambda *args, **kwargs: info_logs.append(args))
+    monkeypatch.setattr(services.logger, "warning", lambda *args, **kwargs: warning_logs.append(args))
+
+    snapshot = {"run_id": payload["run_id"], "worker_id": "pid:26860"}
+    services._heal_stale_running_runtime_status(snapshot, payload)
+    pid_exists[26860] = True
+    services._heal_stale_running_runtime_status(snapshot, payload)
+    services._heal_stale_running_runtime_status(snapshot, payload)
+
+    assert len(info_logs) == 2
+    assert len(warning_logs) == 2
+
+
+def test_terminal_reconciliation_logs_and_writes_only_once(monkeypatch, tmp_path):
+    payload = _interrupted_running_payload("run_terminal_log_once")
+    payload.pop("child_pid")
+    payload["updated_at_utc"] = _seconds_ago(31)
+    status_path = tmp_path / "live_pipeline_status.json"
+    writes = []
+    warning_logs = []
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+    monkeypatch.setattr(
+        services,
+        "_write_runtime_status_file",
+        lambda path, value: writes.append((path, dict(value))),
+    )
+    monkeypatch.setattr(services.logger, "info", lambda *args, **kwargs: None)
+    monkeypatch.setattr(services.logger, "warning", lambda *args, **kwargs: warning_logs.append(args))
+
+    snapshot = {
+        "run_id": payload["run_id"],
+        "worker_id": "pid:26860",
+        "status_path": str(status_path),
+    }
+    first = services._heal_stale_running_runtime_status(snapshot, payload)
+    second = services._heal_stale_running_runtime_status(snapshot, payload)
+
+    assert first == second
+    assert first["status"] == "failed"
+    assert len(writes) == 1
+    assert len(warning_logs) == 1
+    assert "completed" in warning_logs[0][0]
+
+
+@pytest.mark.parametrize("terminal_status", ["succeeded", "failed"])
+def test_interruption_reconciliation_never_modifies_terminal_run(terminal_status):
+    payload = {
+        **_interrupted_running_payload(f"run_{terminal_status}"),
+        "status": terminal_status,
+        "finished_at": "2026-07-18T10:03:00Z",
+    }
+
+    assert services._heal_stale_running_runtime_status({}, payload) == payload
+
+
+def test_stale_db_run_reconciliation_releases_launch_and_is_idempotent(monkeypatch):
+    captured = {"updates": [], "releases": [], "clears": []}
+    payload = _interrupted_running_payload("run_db_interrupted")
+    row = {
+        "run_id": "run_db_interrupted",
+        "owner_user_id": "owner-7",
+        "status": "running",
+        "started_at": payload["started_at"],
+        "updated_at": payload["updated_at_utc"],
+        "current_stage": payload["current_stage"],
+        "status_json": payload,
+        "config_json": {"child_pid": payload["child_pid"]},
+    }
+    monkeypatch.setattr(services, "_pid_exists", lambda pid: False)
+    monkeypatch.setattr(
+        services,
+        "update_user_pipeline_run_status_postgres_payload",
+        lambda **kwargs: captured["updates"].append(dict(kwargs)) or {"ok": True},
+    )
+    monkeypatch.setattr(
+        services,
+        "get_user_pipeline_active_run_postgres_payload",
+        lambda **kwargs: {"found": True, "active_run": {"metadata_json": {}}},
+    )
+    monkeypatch.setattr(
+        services,
+        "release_user_pipeline_active_run_postgres_payload",
+        lambda **kwargs: captured["releases"].append(dict(kwargs)) or {"ok": True},
+    )
+    monkeypatch.setattr(services, "_release_user_pipeline_redis_admission_lock_payload", lambda payload: {})
+    monkeypatch.setattr(
+        services,
+        "_clear_owner_active_pipeline_state",
+        lambda owner_user_id, run_id="": captured["clears"].append((owner_user_id, run_id)),
+    )
+
+    reconciled = services._reconciled_user_pipeline_run_record("owner-7", row)
+
+    assert reconciled["status"] == "failed"
+    assert reconciled["current_stage"] == "resume_matching"
+    assert reconciled["status_json"]["counts"] == payload["counts"]
+    assert captured["updates"][0]["run_id"] == "run_db_interrupted"
+    assert captured["releases"][0]["terminal_status"] == "failed"
+    assert captured["clears"] == [("owner-7", "run_db_interrupted")]
+
+    terminal_row = {**reconciled, "status": "failed"}
+    assert services._reconciled_user_pipeline_run_record("owner-7", terminal_row) == terminal_row
+    assert len(captured["updates"]) == 1
+
+
+def test_runtime_initialize_preserves_launcher_pid_and_writes_heartbeat(monkeypatch, tmp_path):
+    status_path = tmp_path / "live_pipeline_status.json"
+    status_path.write_text(
+        json.dumps(
+            {
+                "child_pid": 7331,
+                "child_process_identity": "child-process-start",
+                "worker_id": "pid:8181;start:a1b2c3d4",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(runtime_status.ENV_STATUS_PATH, str(status_path))
+    monkeypatch.setenv(runtime_status.ENV_RUN_ID, "run_pid_preserved")
+
+    runtime_status.initialize_run(
+        output_dir=str(tmp_path),
+        log_path=str(tmp_path / "run.log"),
+        status_path=str(status_path),
+        planning_only=False,
+        job_limit=10,
+        job_packet_limit=3,
+        llm_actions=["APPLY"],
+        generate_tailoring=False,
+        generate_llm_tailoring=False,
+        refresh_llm_tailoring=False,
+        generate_llm_fallback=False,
+        generate_llm_adjudication=False,
+        delete_seen_data="no",
+    )
+
+    persisted = json.loads(status_path.read_text(encoding="utf-8"))
+    assert persisted["child_pid"] == 7331
+    assert persisted["child_process_identity"] == "child-process-start"
+    assert persisted["worker_id"] == "pid:8181;start:a1b2c3d4"
+    assert persisted["updated_at_utc"]
+
+
+def test_server_shutdown_stops_owner_scoped_run_and_preserves_runtime_progress(monkeypatch, tmp_path):
+    class FakeProcess:
+        def __init__(self):
+            self.terminated = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            assert timeout == 5
+            return -15
+
+    status_path = tmp_path / "live_pipeline_status.json"
+    runtime_payload = _interrupted_running_payload("run_shutdown")
+    status_path.write_text(json.dumps(runtime_payload), encoding="utf-8")
+    process = FakeProcess()
+    owner_state = {
+        "run_id": "run_shutdown",
+        "status": "running",
+        "process": process,
+        "child_pid": runtime_payload["child_pid"],
+        "status_path": str(status_path),
+        "log_handle": None,
+    }
+    monkeypatch.setattr(services, "_PIPELINE_ACTIVE_RUNS", {"owner-shutdown": owner_state})
+    monkeypatch.setattr(
+        services,
+        "_PIPELINE_RUN_STATE",
+        {"status": "idle", "process": None, "log_handle": None},
+    )
+
+    result = services.stop_live_pipeline_for_server_shutdown()
+
+    persisted = json.loads(status_path.read_text(encoding="utf-8"))
+    assert result["stopped"] is True
+    assert result["stopped_count"] == 1
+    assert process.terminated is True
+    assert owner_state["status"] == "failed"
+    assert owner_state["process"] is None
+    assert persisted["status"] == "failed"
+    assert persisted["run_id"] == "run_shutdown"
+    assert persisted["current_stage"] == runtime_payload["current_stage"]
+    assert persisted["completed_stages"] == runtime_payload["completed_stages"]
+    assert persisted["counts"] == runtime_payload["counts"]
+    assert persisted["error"] == "Pipeline run was interrupted before completion."

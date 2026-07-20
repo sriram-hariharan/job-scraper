@@ -112,7 +112,7 @@ Guidance for Claude Code when working in this repository.
 # Git workflow
 - Confirm branch and worktree state before editing.
 - Current branch: phase133-premium-dashboard-redesign.
-- Current approved checkpoint: d1ee0b69.
+- Current approved checkpoint: c045bf20.
 - Do not commit or push unless explicitly requested.
 - Before commit, verify there are no numbered duplicate generated assets.
 - Stage only exact approved files.
@@ -133,10 +133,11 @@ Guidance for Claude Code when working in this repository.
 
 # Current checkpoint
 - The following facts were manually verified and approved by the user:
-  - Commit d1ee0b69 was pushed.
-  - Phase 133EF premium Decisions and Applications dashboards is complete.
-  - The Decisions authenticated zero-record empty state works.
-  - The Applied and Saved application views work (Saved uses authenticated GET /saved-jobs).
-- Operational legacy bridge scripts use IIFEs to prevent classic-script identifier collisions.
-- Next planned checkpoint: Phase 133H shared dashboard shell consistency.
+  - Phase 133H premium responsive shared dashboard shell is complete.
+  - Approved feature checkpoint commit: c045bf20.
+  - The compact ApplyLens AI branding, grouped navigation, semantic route icons,
+    active-route behavior, desktop collapse behavior, and narrow-window drawer fallback work.
+  - Phase 133EF Decisions and Applications behavior remains approved.
+- Operational classic-script isolation and existing page request ownership boundaries remain preserved.
+- Next planned checkpoint: Phase 133I hardening.
 - Update this Current checkpoint section after every approved checkpoint commit.

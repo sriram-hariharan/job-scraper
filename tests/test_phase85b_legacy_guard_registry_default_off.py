@@ -307,6 +307,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     phase133b_profile = legacy_guard_allowlist("phase133b_executive_queue_react_island")
     phase133d_profile = legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
     phase133g_profile = legacy_guard_allowlist("phase133g_premium_planning_dashboard")
+    phase133ef_profile = legacy_guard_allowlist("phase133ef_decisions_applications_dashboards")
     expected_phase132_profile = {
         "src/app/api.py",
         "src/app/onboarding_ui.py",
@@ -455,6 +456,27 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }
     assert len(phase133g_profile) == 30
     assert not any("*" in path for path in phase133g_profile)
+    assert phase133ef_profile == {
+        "frontend/executive-kpi/src/OperationalBridges.test.ts",
+        "frontend/executive-kpi/src/OperationalDashboards.test.tsx",
+        "frontend/executive-kpi/src/OperationalDashboards.tsx",
+        "frontend/executive-kpi/src/main.test.tsx",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/table/TablePrimitives.tsx",
+        "src/app/application_hub_ui.py",
+        "src/app/api.py",
+        "src/app/decisions_ui.py",
+        "src/app/static/application_views.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/static/decisions.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase133ef_decisions_applications_dashboards.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(phase133ef_profile) == 17
+    assert not any("*" in path for path in phase133ef_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
@@ -465,6 +487,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133b_profile
         | phase133d_profile
         | phase133g_profile
+        | phase133ef_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

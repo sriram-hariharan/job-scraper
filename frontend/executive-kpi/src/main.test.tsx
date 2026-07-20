@@ -7,6 +7,10 @@ beforeEach(() => {
   delete window.__APPLYLENS_EXECUTIVE_KPI_STATE__;
   delete window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__;
   delete window.__APPLYLENS_PLANNING_WORKLIST_STATE__;
+  delete window.__APPLYLENS_DECISIONS_STATE__;
+  delete window.__APPLYLENS_APPLICATIONS_STATE__;
+  delete window.__APPLYLENS_DECISIONS_REACT_READY__;
+  delete window.__APPLYLENS_APPLICATIONS_REACT_READY__;
 });
 
 it("updates the mounted KPI island when the existing status owner publishes refresh states", async () => {
@@ -148,4 +152,44 @@ it("hydrates and updates all Planning islands from the existing Planning bridge 
 
   await waitFor(() => expect(screen.getByRole("link", { name: "Refreshed Planning Job" })).toBeInTheDocument());
   expect(screen.queryByRole("link", { name: "Initial Planning Job" })).not.toBeInTheDocument();
+});
+
+it("replays operational snapshots published before mount and announces both page-ready handshakes", async () => {
+  document.body.innerHTML = '<section id="decisionsDashboardRoot"></section><section id="applicationsDashboardRoot"></section>';
+  window.__APPLYLENS_DECISIONS_STATE__ = {
+    status: "ready",
+    rows: [{ job_doc_id: "decision-one", job_title: "Decision Snapshot Job", job_company: "Example", decision: "APPLY" }],
+    metaLabel: "Decision history · 1 total record",
+    resultKey: "decision-snapshot",
+    pagination: { page: 1, pageSize: 15, totalCount: 1, totalPages: 1, hasPrevPage: false, hasNextPage: false },
+    sort: { key: "", direction: "asc" },
+    filters: { decisions: [], companyContains: "", limit: 15 },
+  };
+  window.__APPLYLENS_APPLICATIONS_STATE__ = {
+    status: "ready",
+    rows: [{ action_key: "application-one", job_title: "Application Snapshot Job", job_company: "Example", application_status: "APPLIED" }],
+    metaLabel: "Applied Jobs · 1 total job",
+    resultKey: "application-snapshot",
+    activeTab: "APPLIED",
+    pagination: { page: 1, pageSize: 15, totalCount: 1, totalPages: 1, hasPrevPage: false, hasNextPage: false },
+    sort: { key: "", direction: "asc" },
+    filters: { companyContains: "", titleContains: "", limit: 15 },
+  };
+  const decisionsReady = vi.fn();
+  const applicationsReady = vi.fn();
+  window.addEventListener("applylens:decisions-dashboard-ready", decisionsReady);
+  window.addEventListener("applylens:applications-dashboard-ready", applicationsReady);
+
+  await act(async () => { await import("./main"); });
+
+  await waitFor(() => expect(screen.getByText("Decision Snapshot Job")).toBeInTheDocument());
+  expect(screen.getByText("Application Snapshot Job")).toBeInTheDocument();
+  expect(window.__APPLYLENS_DECISIONS_REACT_READY__).toBe(true);
+  expect(window.__APPLYLENS_APPLICATIONS_REACT_READY__).toBe(true);
+  expect(decisionsReady).toHaveBeenCalled();
+  expect(applicationsReady).toHaveBeenCalled();
+  expect(screen.queryByText("Loading records...")).not.toBeInTheDocument();
+  expect(screen.queryByText("Loading jobs...")).not.toBeInTheDocument();
+  window.removeEventListener("applylens:decisions-dashboard-ready", decisionsReady);
+  window.removeEventListener("applylens:applications-dashboard-ready", applicationsReady);
 });

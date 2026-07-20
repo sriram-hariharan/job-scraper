@@ -18,6 +18,18 @@ import {
   type PlanningWorklistState,
 } from "./PlanningWorklist";
 import "./styles.css";
+import {
+  APPLICATIONS_STATE_EVENT,
+  APPLICATIONS_READY_EVENT,
+  ApplicationsDashboard,
+  DECISIONS_STATE_EVENT,
+  DECISIONS_READY_EVENT,
+  DecisionsDashboard,
+  DEFAULT_APPLICATIONS_STATE,
+  DEFAULT_DECISIONS_STATE,
+  type ApplicationsState,
+  type DecisionsState,
+} from "./OperationalDashboards";
 
 const KPI_EVENT_NAME = "applylens:executive-kpi-state";
 const DEFAULT_STATE: ExecutiveKpiState = { status: "loading" };
@@ -83,6 +95,32 @@ function PlanningIsland({ view }: { view: "filters" | "summary" | "worklist" }) 
   return <PlanningWorklist state={state} />;
 }
 
+function DecisionsIsland() {
+  const [state, setState] = useState<DecisionsState>(() => window.__APPLYLENS_DECISIONS_STATE__ || DEFAULT_DECISIONS_STATE);
+  useEffect(() => {
+    const handle = (event: Event) => setState((event as CustomEvent<DecisionsState>).detail);
+    window.addEventListener(DECISIONS_STATE_EVENT, handle);
+    window.__APPLYLENS_DECISIONS_REACT_READY__ = true;
+    if (window.__APPLYLENS_DECISIONS_STATE__) setState(window.__APPLYLENS_DECISIONS_STATE__);
+    window.dispatchEvent(new CustomEvent(DECISIONS_READY_EVENT));
+    return () => window.removeEventListener(DECISIONS_STATE_EVENT, handle);
+  }, []);
+  return <DecisionsDashboard state={state} />;
+}
+
+function ApplicationsIsland() {
+  const [state, setState] = useState<ApplicationsState>(() => window.__APPLYLENS_APPLICATIONS_STATE__ || DEFAULT_APPLICATIONS_STATE);
+  useEffect(() => {
+    const handle = (event: Event) => setState((event as CustomEvent<ApplicationsState>).detail);
+    window.addEventListener(APPLICATIONS_STATE_EVENT, handle);
+    window.__APPLYLENS_APPLICATIONS_REACT_READY__ = true;
+    if (window.__APPLYLENS_APPLICATIONS_STATE__) setState(window.__APPLYLENS_APPLICATIONS_STATE__);
+    window.dispatchEvent(new CustomEvent(APPLICATIONS_READY_EVENT));
+    return () => window.removeEventListener(APPLICATIONS_STATE_EVENT, handle);
+  }, []);
+  return <ApplicationsDashboard state={state} />;
+}
+
 const mount = document.getElementById("executiveKpiRoot");
 if (mount) {
   createRoot(mount).render(
@@ -130,3 +168,9 @@ if (planningWorklistMount) {
     <StrictMode><PlanningIsland view="worklist" /></StrictMode>,
   );
 }
+
+const decisionsMount = document.getElementById("decisionsDashboardRoot");
+if (decisionsMount) createRoot(decisionsMount).render(<StrictMode><DecisionsIsland /></StrictMode>);
+
+const applicationsMount = document.getElementById("applicationsDashboardRoot");
+if (applicationsMount) createRoot(applicationsMount).render(<StrictMode><ApplicationsIsland /></StrictMode>);

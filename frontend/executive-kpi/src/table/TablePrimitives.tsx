@@ -307,6 +307,8 @@ export function SharedTableCard<T>({
   empty,
   onPageChange,
   onRetry,
+  fillAvailableWidth = false,
+  deferPaginationWhileLoading = false,
 }: {
   className: string;
   ariaLabel: string;
@@ -328,8 +330,14 @@ export function SharedTableCard<T>({
   empty: ReactNode;
   onPageChange: (page: number) => void;
   onRetry: () => void;
+  fillAvailableWidth?: boolean;
+  deferPaginationWhileLoading?: boolean;
 }) {
-  const pageControls = (placement: "top" | "bottom") => (
+  const pageControls = (placement: "top" | "bottom") => deferPaginationWhileLoading && status === "loading" ? (
+    <div className="shared-table-pagination shared-table-pagination--loading" role="status">
+      <span>Loading {paginationNoun}...</span>
+    </div>
+  ) : (
     <SharedPagination
       pagination={pagination}
       visibleCount={table.getRowModel().rows.length}
@@ -343,8 +351,8 @@ export function SharedTableCard<T>({
     <section className={`shared-table-card ${className}`} aria-label={ariaLabel}>
       <header className="shared-table-header">
         <div className="shared-table-heading">
-          <div className="shared-table-title-line"><h2>{title}</h2><span>{count}</span></div>
-          <p>{subtitle}</p>
+          <div className="shared-table-title-line"><h2>{title}</h2><span>{deferPaginationWhileLoading && status === "loading" ? "-" : count}</span></div>
+          <p>{deferPaginationWhileLoading && status === "loading" ? `Loading ${paginationNoun}...` : subtitle}</p>
         </div>
         <div className="shared-table-header-actions">
           {headerActions}
@@ -358,7 +366,7 @@ export function SharedTableCard<T>({
         </div>
       ) : (
         <div className="shared-table-viewport" aria-busy={status === "loading"}>
-          <table style={{ width: table.getTotalSize() }}>
+          <table style={{ width: fillAvailableWidth ? "100%" : table.getTotalSize(), minWidth: table.getTotalSize() }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>

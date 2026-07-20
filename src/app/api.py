@@ -3347,7 +3347,7 @@ def decisions(
         title_contains=title_contains,
         limit=limit,
         page=page,
-        owner_user_id=_auth_owner_user_id(http_request),
+        owner_user_id=_require_auth_owner_user_id(http_request),
     )
 
 @app.post("/planning/select-resume")
@@ -3594,7 +3594,25 @@ def applied_jobs(
         title_contains=title_contains,
         limit=limit,
         page=page,
-        owner_user_id=_auth_owner_user_id(http_request),
+        owner_user_id=_require_auth_owner_user_id(http_request),
+    )
+
+
+@app.get("/saved-jobs")
+def saved_jobs(
+    http_request: Request,
+    company_contains: str = "",
+    title_contains: str = "",
+    page: int = 1,
+    limit: int = 15,
+):
+    return services.application_actions_payload(
+        application_status="SAVED",
+        company_contains=company_contains,
+        title_contains=title_contains,
+        limit=limit,
+        page=page,
+        owner_user_id=_require_auth_owner_user_id(http_request),
     )
 
 @app.get("/rag/search")

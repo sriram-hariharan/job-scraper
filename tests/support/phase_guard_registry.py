@@ -815,6 +815,25 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_queue_ui_metadata_contract.py",
         },
+        "phase133ef_decisions_applications_dashboards": {
+            "frontend/executive-kpi/src/OperationalBridges.test.ts",
+            "frontend/executive-kpi/src/OperationalDashboards.test.tsx",
+            "frontend/executive-kpi/src/OperationalDashboards.tsx",
+            "frontend/executive-kpi/src/main.test.tsx",
+            "frontend/executive-kpi/src/main.tsx",
+            "frontend/executive-kpi/src/styles.css",
+            "frontend/executive-kpi/src/table/TablePrimitives.tsx",
+            "src/app/application_hub_ui.py",
+            "src/app/api.py",
+            "src/app/decisions_ui.py",
+            "src/app/static/application_views.js",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "src/app/static/decisions.js",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase133ef_decisions_applications_dashboards.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -833,6 +852,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase133b_executive_queue_react_island")
         | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
         | legacy_guard_allowlist("phase133g_premium_planning_dashboard")
+        | legacy_guard_allowlist("phase133ef_decisions_applications_dashboards")
     )
 
 
@@ -874,7 +894,7 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "7ac2770da8f344d5d05007299bb90e373640557ea706a07fb1fc71cc41205d13",
+        ): "688ce76b2ecbdf6451ee2227fc68cf57a00647ec120fa0dc74952a8f131553d4",
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
@@ -886,7 +906,7 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-        ): "7ac2770da8f344d5d05007299bb90e373640557ea706a07fb1fc71cc41205d13",
+        ): "688ce76b2ecbdf6451ee2227fc68cf57a00647ec120fa0dc74952a8f131553d4",
         (
             "src/app/services.py",
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",

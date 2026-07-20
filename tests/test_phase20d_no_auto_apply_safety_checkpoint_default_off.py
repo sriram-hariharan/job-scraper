@@ -1124,6 +1124,17 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase133g_s1r1_sort_runtime_files:
         return
+    phase133ef_decisions_applications_runtime_files = {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/static/application_views.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/static/decisions.js",
+    }
+    if set(changed_runtime_files) == phase133ef_decisions_applications_runtime_files:
+        return
     assert changed_runtime_files in (
         [],
         [

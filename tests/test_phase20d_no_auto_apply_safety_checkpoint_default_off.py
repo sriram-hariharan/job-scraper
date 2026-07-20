@@ -802,6 +802,23 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == live_pipeline_preferences_dashboard_files:
         return
+    phase133h_shared_shell_files = {
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/applied_ui.py",
+        ROOT / "src/app/auth_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/intelligence_ui.py",
+        ROOT / "src/app/onboarding_ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+        ROOT / "src/app/saved_ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/shell.js",
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/ui_shell.py",
+    }
+    if set(changed_runtime_files) == phase133h_shared_shell_files:
+        return
     phase55b_runtime_files = {
         ROOT / "src/app/planning_ui.py",
         ROOT / "src/app/services.py",

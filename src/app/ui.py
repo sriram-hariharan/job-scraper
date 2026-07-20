@@ -17,7 +17,7 @@ def executive_dashboard() -> str:
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133g_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1" />
 </head>
 <body class="executive-dashboard-page">
@@ -207,7 +207,7 @@ def executive_dashboard() -> str:
   </div>
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
@@ -383,7 +383,7 @@ def pipeline_dashboard() -> str:
   <title>Pipeline Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133d_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133d" />
 </head>
 <body class="pipeline-dashboard-page">
@@ -401,7 +401,7 @@ def pipeline_dashboard() -> str:
   {_pipeline_dashboard_launch_dialogs()}
   {_pipeline_dashboard_error_dialog()}
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133d"></script>
 </body>
@@ -419,7 +419,7 @@ def scheduler_dashboard() -> str:
   <title>Scheduler Ops Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
 </head>
 <body>
   {render_top_shell("/scheduler")}
@@ -482,7 +482,7 @@ def scheduler_dashboard() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script>
     (function () {{
       const summaryUrl = "/scheduler/summary?limit=25";

@@ -29,7 +29,7 @@ def test_pipeline_route_renders_one_react_mount_and_shared_pipeline_navigation()
     assert '/static/build/executive-kpi/executive-kpi.css?v=phase133d' in markup
     assert '/static/build/executive-kpi/executive-kpi.js?v=phase133d' in markup
     assert 'src="/static/app.js?v=phase133d_s1"' in markup
-    assert 'src="/static/shell.js?v=role_onboarding_r6"' in markup
+    assert 'src="/static/shell.js?v=phase133h_r1"' in markup
     assert '<body class="pipeline-dashboard-page">' in markup
     assert 'id="executiveKpiRoot"' not in markup
     assert 'id="executiveQueueRoot"' not in markup
@@ -39,7 +39,7 @@ def test_pipeline_route_renders_one_react_mount_and_shared_pipeline_navigation()
     assert 'id="executiveKpiRoot"' in executive_markup
     assert 'id="executiveQueueRoot"' in executive_markup
 
-    assert ("Pipeline", "/pipeline", "L") in NAV_ITEMS
+    assert ("Pipeline", "/pipeline", "pipeline") in NAV_ITEMS
     assert 'href="/pipeline"' in render_top_shell("/pipeline")
     assert 'aria-current="page"' in render_top_shell("/pipeline")
 

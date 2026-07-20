@@ -478,6 +478,32 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert len(phase133ef_profile) == 17
     assert not any("*" in path for path in phase133ef_profile)
 
+    phase133h_profile = legacy_guard_allowlist("phase133h_premium_responsive_sidebar")
+    assert phase133h_profile == {
+        "src/app/application_hub_ui.py",
+        "src/app/applied_ui.py",
+        "src/app/auth_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/intelligence_ui.py",
+        "src/app/onboarding_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/saved_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/shell.js",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase133h_shared_shell_navigation.py",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }
+    assert len(phase133h_profile) == 20
+    assert not any("*" in path for path in phase133h_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -488,6 +514,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133d_profile
         | phase133g_profile
         | phase133ef_profile
+        | phase133h_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

@@ -362,7 +362,7 @@ def onboarding_page() -> str:
   <title>Onboarding · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=preferences_toolbar_ownership_r11" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
   <link rel="stylesheet" href="/static/preferences.css?v=preferences_footer_compact_r15" />
 </head>
 <body class="preferences-page-shell">
@@ -376,7 +376,7 @@ def onboarding_page() -> str:
     </div>
   </main>
 
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/preferences_workflow.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/onboarding.js?v=preferences_guided_parity_r9"></script>

@@ -854,7 +854,7 @@ def test_agentic_review_dedicated_page_contract():
     assert "pipeline-run-icon-btn pipeline-run-agentic-review-btn" in profile_source
     assert "pipeline-run-action-icon--view" in profile_source
     assert "pipeline-run-action-icon--agentic" in profile_source
-    assert '("Scheduler", "/scheduler", "S")' in shell_source
+    assert '("Scheduler", "/scheduler", "scheduler")' in shell_source
     assert '("Agentic Review", "/agentic-review", "AR")' not in shell_source
 
     assert '@router.get("/agentic-review"' not in profile_ui_source

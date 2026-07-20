@@ -6,6 +6,20 @@ const APPLYLENS_OPEN_PIPELINE_KEY = "applylens_open_live_pipeline";
 const APPLYLENS_DEFAULT_IDLE_TIMEOUT_SECONDS = 1800;
 const APPLYLENS_DEFAULT_IDLE_WARNING_SECONDS = 60;
 
+// Desktop sidebar collapse-control icons (Lucide PanelLeftClose / PanelLeftOpen),
+// mirroring the inline geometry rendered server-side in src/app/ui_shell.py so the
+// icon family stays consistent without a runtime dependency.
+const APP_SHELL_ICON_SVG_HEAD =
+  '<svg class="app-shell-icon" viewBox="0 0 24 24" width="20" height="20" ' +
+  'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+  'stroke-linejoin="round" aria-hidden="true" focusable="false">';
+const APP_SHELL_COLLAPSE_SVG =
+  APP_SHELL_ICON_SVG_HEAD +
+  '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>';
+const APP_SHELL_EXPAND_SVG =
+  APP_SHELL_ICON_SVG_HEAD +
+  '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></svg>';
+
 function qs(id) {
   return document.getElementById(id);
 }
@@ -61,9 +75,17 @@ applyJobstackTheme(getStoredJobstackTheme(), { persist: false });
 function setShellCollapsed(isCollapsed, { persist = true } = {}) {
   document.body.classList.toggle("app-shell-collapsed", isCollapsed);
 
-  const menuBtn = qs("appShellMenuBtn");
-  if (menuBtn) {
-    menuBtn.setAttribute("aria-pressed", isCollapsed ? "true" : "false");
+  const collapseBtn = qs("appShellCollapseBtn");
+  if (collapseBtn) {
+    collapseBtn.setAttribute("aria-pressed", isCollapsed ? "true" : "false");
+    const label = isCollapsed ? "Expand sidebar" : "Collapse sidebar";
+    collapseBtn.setAttribute("aria-label", label);
+    collapseBtn.title = label;
+
+    const iconWrap = collapseBtn.querySelector(".app-shell-collapse-icon");
+    if (iconWrap) {
+      iconWrap.innerHTML = isCollapsed ? APP_SHELL_EXPAND_SVG : APP_SHELL_COLLAPSE_SVG;
+    }
   }
 
   if (persist) {
@@ -438,6 +460,7 @@ function initAuthInactivityLogout() {
 
 window.addEventListener("DOMContentLoaded", () => {
   const menuBtn = qs("appShellMenuBtn");
+  const collapseBtn = qs("appShellCollapseBtn");
   const themeToggleBtn = qs("themeToggleBtn");
 
   applyJobstackTheme(getStoredJobstackTheme(), { persist: false });
@@ -446,13 +469,132 @@ window.addEventListener("DOMContentLoaded", () => {
   const defaultCollapsed = saved === null ? window.innerWidth < 1220 : saved === "true";
   setShellCollapsed(defaultCollapsed, { persist: false });
 
-  if (menuBtn) {
-    menuBtn.addEventListener("click", (event) => {
+  // Desktop: sidebar collapse/expand toggle (deterministic, persisted).
+  if (collapseBtn) {
+    collapseBtn.addEventListener("click", (event) => {
       event.preventDefault();
       const next = !document.body.classList.contains("app-shell-collapsed");
       setShellCollapsed(next);
     });
   }
+
+  // Mobile: left Sheet/drawer. Single owner for open/close, overlay, Escape,
+  // focus trap, route-close, and focus restoration. Body scroll lock is applied
+  // by the CSS `body.app-shell-mobile-open` rule.
+  const appShell = qs("appShell");
+  const appShellOverlay = qs("appShellOverlay");
+  const appShellCloseBtn = qs("appShellCloseBtn");
+
+  function isMobileDrawerOpen() {
+    return document.body.classList.contains("app-shell-mobile-open");
+  }
+
+  function drawerFocusableElements() {
+    if (!appShell) return [];
+    const selector =
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(appShell.querySelectorAll(selector)).filter(
+      (el) => el.offsetParent !== null
+    );
+  }
+
+  function openMobileDrawer() {
+    if (!appShell || isMobileDrawerOpen()) return;
+    document.body.classList.add("app-shell-mobile-open");
+    if (appShellOverlay) appShellOverlay.hidden = false;
+    if (menuBtn) {
+      menuBtn.setAttribute("aria-expanded", "true");
+      menuBtn.setAttribute("aria-label", "Close navigation");
+      menuBtn.title = "Close navigation";
+    }
+    const focusables = drawerFocusableElements();
+    const target = appShellCloseBtn || focusables[0] || appShell;
+    if (target && typeof target.focus === "function") target.focus();
+  }
+
+  function closeMobileDrawer({ restoreFocus = true } = {}) {
+    if (!isMobileDrawerOpen()) return;
+    document.body.classList.remove("app-shell-mobile-open");
+    if (appShellOverlay) appShellOverlay.hidden = true;
+    if (menuBtn) {
+      menuBtn.setAttribute("aria-expanded", "false");
+      menuBtn.setAttribute("aria-label", "Open navigation");
+      menuBtn.title = "Open navigation";
+    }
+    if (restoreFocus && menuBtn && typeof menuBtn.focus === "function") {
+      menuBtn.focus();
+    }
+  }
+
+  if (menuBtn) {
+    menuBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (isMobileDrawerOpen()) {
+        closeMobileDrawer();
+      } else {
+        openMobileDrawer();
+      }
+    });
+  }
+
+  if (appShellCloseBtn) {
+    appShellCloseBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeMobileDrawer();
+    });
+  }
+
+  if (appShellOverlay) {
+    appShellOverlay.addEventListener("click", () => {
+      closeMobileDrawer();
+    });
+  }
+
+  if (appShell) {
+    appShell.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".app-shell-nav-link")) {
+        closeMobileDrawer({ restoreFocus: false });
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (!isMobileDrawerOpen()) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMobileDrawer();
+      return;
+    }
+
+    if (event.key === "Tab") {
+      const focusables = drawerFocusableElements();
+      if (focusables.length === 0) return;
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+
+      if (appShell && !appShell.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 980 && isMobileDrawerOpen()) {
+      closeMobileDrawer({ restoreFocus: false });
+    }
+  });
 
   if (themeToggleBtn) {
     themeToggleBtn.addEventListener("click", (event) => {

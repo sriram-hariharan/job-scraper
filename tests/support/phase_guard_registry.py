@@ -834,6 +834,28 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase133ef_decisions_applications_dashboards.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
+        "phase133h_premium_responsive_sidebar": {
+            "src/app/application_hub_ui.py",
+            "src/app/applied_ui.py",
+            "src/app/auth_ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/intelligence_ui.py",
+            "src/app/onboarding_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/profile_ui.py",
+            "src/app/saved_ui.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/shell.js",
+            "src/app/ui.py",
+            "src/app/ui_shell.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase132b2r3_guided_preferences_workflow.py",
+            "tests/test_phase133d_pipeline_dashboard_react_island.py",
+            "tests/test_phase133h_shared_shell_navigation.py",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -853,6 +875,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
         | legacy_guard_allowlist("phase133g_premium_planning_dashboard")
         | legacy_guard_allowlist("phase133ef_decisions_applications_dashboards")
+        | legacy_guard_allowlist("phase133h_premium_responsive_sidebar")
     )
 
 
@@ -902,7 +925,7 @@ def assert_protected_hashes(
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-        ): "d1274c6ca3fffa262b95e574290d431500ef3985e5f11ee4a323634269d9ae09",
+        ): "e1970be40bf2c7b0d4aea2180d933cade315050059f8b71f7f9dcdbd02e18f07",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",

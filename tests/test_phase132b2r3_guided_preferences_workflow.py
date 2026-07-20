@@ -366,14 +366,16 @@ def test_existing_save_paths_own_persistence_and_prevent_duplicate_submission():
 def test_preferences_assets_are_scoped_ordered_and_cache_busted_consistently():
     for source in (ONBOARDING_UI, PROFILE_UI):
         styles = source.index('/static/styles.css?v=preferences_toolbar_ownership_r11')
-        redesign = source.index('/static/app_redesign.css?v=preferences_toolbar_ownership_r11')
+        # app_redesign.css is bumped uniformly to the Phase 133H shell marker; it
+        # now recurs across routes, so anchor the preferences-page ordering check
+        # to the app_redesign link that follows this page's styles.css link.
+        redesign = source.index('/static/app_redesign.css?v=phase133h_s1', styles)
         preferences = source.index('/static/preferences.css?v=preferences_footer_compact_r15')
         selector = source.index('/static/preference_location_selector.js?v=preferences_guided_parity_r9')
         workflow = source.index('/static/preferences_workflow.js?v=preferences_guided_parity_r9')
         assert styles < redesign
         assert redesign < preferences < selector < workflow
-        for asset in ("styles.css", "app_redesign.css"):
-            assert source.count(f'/static/{asset}?v=preferences_toolbar_ownership_r11') == 1
+        assert source.count('/static/styles.css?v=preferences_toolbar_ownership_r11') == 1
         assert source.count('/static/preferences.css?v=preferences_footer_compact_r15') == 1
         for asset in ("preference_location_selector.js", "preferences_workflow.js"):
             assert source.count(f'/static/{asset}?v=preferences_guided_parity_r9') == 1

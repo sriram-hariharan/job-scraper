@@ -173,7 +173,7 @@ def planning_dashboard() -> str:
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133g_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1" />
 </head>
@@ -626,7 +626,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1"></script>
   <script src="/static/planning.js?v=phase133g_s1_r1"></script>
 </body>
@@ -726,7 +726,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
   <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
 </head>
 <body>
@@ -1044,7 +1044,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -1754,7 +1754,7 @@ def advanced_diagnostics(
   <title>Advanced Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
   <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" />
 </head>
 <body>
@@ -1775,7 +1775,7 @@ def advanced_diagnostics(
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script>
     (() => {{
       const select = document.getElementById("advancedDiagnosticsScanSelect");
@@ -1965,7 +1965,7 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
   <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" />
 </head>
 <body>
@@ -2840,7 +2840,7 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll"></script>
 </body>

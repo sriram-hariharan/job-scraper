@@ -928,6 +928,30 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
+        "phase133i_advanced_diagnostics_react_command_center": {
+            "frontend/executive-kpi/src/main.tsx",
+            "frontend/executive-kpi/src/styles.css",
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+            "frontend/executive-kpi/src/filter/FilterSelect.tsx",
+            "frontend/executive-kpi/src/filter/FilterSelect.test.tsx",
+            "src/app/planning_ui.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_advanced_diagnostics_react_redesign.py",
+            "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+            "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+            "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
+            "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
+            "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
+            "tests/test_phase70a_ux_polish_agentic_workflow_demo_readiness_default_off.py",
+            "tests/test_phase70b_ux_polish_agentic_workflow_demo_readiness_readback_default_off.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -951,6 +975,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("scheduler_admin_health_redesign")
         | legacy_guard_allowlist("scheduler_health_visual_correction")
         | legacy_guard_allowlist("scheduler_health_final_visual_polish")
+        | legacy_guard_allowlist("phase133i_advanced_diagnostics_react_command_center")
     )
 
 
@@ -1000,7 +1025,7 @@ def assert_protected_hashes(
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-        ): "ecd49db5526c8f59413c86ceae6974e3ab5047713bfdb273415d3ff427a8098c",
+        ): "749bfb1c88d953963dfc2061d0b5fc9f54212533bceacb57f2fdc1d6fd357e3a",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",

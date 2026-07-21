@@ -149,7 +149,12 @@ def test_planning_workspace_next_actions_surface_without_artifact_creation(monke
 
 
 def test_ui_readback_display_uses_existing_data_and_is_passive():
-    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    # id="scanWorkspaceAgenticWorkflowIntegrationReadback" moved from
+    # src/app/planning_ui.py into the React Advanced Diagnostics Command
+    # Center (Item 1 Phase 3).
+    html = (
+        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+    ).read_text(encoding="utf-8")
     script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
     getter = script.split(
         "function getScanWorkspaceAgenticWorkflowIntegrationPayload",
@@ -160,7 +165,7 @@ def test_ui_readback_display_uses_existing_data_and_is_passive():
         1,
     )[1].split("function getScanWorkspaceHasTailoringPreviewContext", 1)[0]
 
-    assert 'id="scanWorkspaceAgenticWorkflowIntegrationReadback"' in html
+    assert '"scanWorkspaceAgenticWorkflowIntegrationReadback"' in html
     assert "agentic_workflow_integration_readback" in getter
     assert "skills_extraction_status" in renderer
     assert "requirements_extraction_status" in renderer

@@ -49,6 +49,11 @@ export type SharedFilterSelectProps = {
   mode: "single" | "multiple";
   searchable?: boolean;
   disabled?: boolean;
+  /** Extra class applied to the portaled menu only, alongside
+   * shared-filter-select__menu. Lets a caller add page-scoped menu styling
+   * without forking this component — existing callers omit it and keep
+   * identical behavior. */
+  portalClassName?: string;
 };
 
 function normalizeSearchText(value: string): string {
@@ -66,6 +71,7 @@ export function SharedFilterSelect({
   mode,
   searchable = false,
   disabled = false,
+  portalClassName,
 }: SharedFilterSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -225,7 +231,7 @@ export function SharedFilterSelect({
 
   const menu = open && position ? createPortal(
     <div
-      className="shared-filter-select__menu"
+      className={`shared-filter-select__menu ${portalClassName || ""}`.trim()}
       id={menuId}
       ref={menuRef}
       role="listbox"
@@ -273,6 +279,7 @@ export function SharedFilterSelect({
               onFocus={() => setActiveIndex(index)}
               onKeyDown={(event) => handleOptionKeyDown(event, index)}
               onClick={() => selectOption(option.value, option.isAll)}
+              title={option.label}
             >
               <Check className="shared-filter-select__check" size={15} aria-hidden="true" />
               {"tone" in option && option.tone ? (

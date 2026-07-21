@@ -10,6 +10,7 @@ import {
 } from "./ExecutiveQueue";
 import { PipelineDashboard } from "./pipeline/PipelineDashboard";
 import { SchedulerHealthDashboard } from "./scheduler/SchedulerHealthDashboard";
+import { AdvancedDiagnosticsDashboard, DEFAULT_ADVANCED_DIAGNOSTICS_STATE } from "./diagnostics/AdvancedDiagnosticsDashboard";
 import {
   DEFAULT_PLANNING_STATE,
   PLANNING_STATE_EVENT,
@@ -181,6 +182,17 @@ if (schedulerHealthMount) {
   createRoot(schedulerHealthMount).render(
     <StrictMode>
       <SchedulerHealthDashboard />
+    </StrictMode>,
+  );
+}
+
+const advancedDiagnosticsMount = document.getElementById("advancedDiagnosticsRoot");
+if (advancedDiagnosticsMount) {
+  createRoot(advancedDiagnosticsMount).render(
+    <StrictMode>
+      <AdvancedDiagnosticsDashboard
+        state={window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || DEFAULT_ADVANCED_DIAGNOSTICS_STATE}
+      />
     </StrictMode>,
   );
 }

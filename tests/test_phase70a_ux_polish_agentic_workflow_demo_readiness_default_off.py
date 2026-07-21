@@ -44,7 +44,11 @@ def _production_renderer() -> str:
 
 
 def test_demo_readiness_labels_are_present():
-    html = PLANNING_UI.read_text(encoding="utf-8")
+    # These readback labels moved from src/app/planning_ui.py into the React
+    # Advanced Diagnostics Command Center (Item 1 Phase 3).
+    html = (
+        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+    ).read_text(encoding="utf-8")
     script = SCAN_WORKSPACE_JS.read_text(encoding="utf-8")
 
     assert "Agentic workflow demo readiness" in html

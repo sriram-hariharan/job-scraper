@@ -559,6 +559,34 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert len(scheduler_visual_correction_profile) == 21
     assert not any("*" in path for path in scheduler_visual_correction_profile)
 
+    phase133i_profile = legacy_guard_allowlist("phase133i_advanced_diagnostics_react_command_center")
+    assert phase133i_profile == {
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.test.tsx",
+        "src/app/planning_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_advanced_diagnostics_react_redesign.py",
+        "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+        "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
+        "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
+        "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
+        "tests/test_phase70a_ux_polish_agentic_workflow_demo_readiness_default_off.py",
+        "tests/test_phase70b_ux_polish_agentic_workflow_demo_readiness_readback_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(phase133i_profile) == 22
+    assert not any("*" in path for path in phase133i_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -572,6 +600,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133h_profile
         | scheduler_admin_health_profile
         | scheduler_visual_correction_profile
+        | phase133i_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

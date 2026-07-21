@@ -208,14 +208,19 @@ def test_phase56_59_60_67_68_and_69a_readbacks_remain_intact(monkeypatch):
 
 
 def test_ui_readback_exposes_completion_without_fetch_or_creation():
-    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    # id="scanWorkspaceProductionReadinessCheckpointReadback" moved from
+    # src/app/planning_ui.py into the React Advanced Diagnostics Command
+    # Center (Item 1 Phase 3).
+    html = (
+        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+    ).read_text(encoding="utf-8")
     script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
     renderer = script.split(
         "function renderScanWorkspaceProductionReadinessCheckpoint",
         1,
     )[1].split("function getScanWorkspaceHasTailoringPreviewContext", 1)[0]
 
-    assert 'id="scanWorkspaceProductionReadinessCheckpointReadback"' in html
+    assert '"scanWorkspaceProductionReadinessCheckpointReadback"' in html
     assert "backend_agentic_workflow_complete" in renderer
     assert "workflow_ready_for_ux_polish" in renderer
     assert "guarded_resume_artifact_path_available" in renderer

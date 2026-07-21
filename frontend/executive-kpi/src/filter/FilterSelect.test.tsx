@@ -14,11 +14,13 @@ function ControlledSelect({
   searchable = true,
   disabled = false,
   mode = "single",
+  portalClassName,
 }: {
   id?: string;
   searchable?: boolean;
   disabled?: boolean;
   mode?: "single" | "multiple";
+  portalClassName?: string;
 }) {
   const [values, setValues] = useState<string[]>([]);
   return (
@@ -33,6 +35,7 @@ function ControlledSelect({
       searchable={searchable}
       disabled={disabled}
       mode={mode}
+      portalClassName={portalClassName}
     />
   );
 }
@@ -74,6 +77,22 @@ it("normalizes searchable text and keeps the menu viewport-bounded", () => {
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "data-eng" } });
   expect(screen.getByRole("option", { name: "Data Engineering" })).toBeInTheDocument();
   expect(screen.queryByRole("option", { name: "Ready for review" })).not.toBeInTheDocument();
+});
+
+it("applies an optional portalClassName to the portaled menu without changing default behavior", () => {
+  render(<ControlledSelect portalClassName="advanced-diagnostics-scan-menu" />);
+  fireEvent.click(screen.getByRole("button", { name: "Action All actions" }));
+  const menu = screen.getByRole("listbox");
+  expect(menu).toHaveClass("shared-filter-select__menu");
+  expect(menu).toHaveClass("advanced-diagnostics-scan-menu");
+});
+
+it("omits the portal class entirely when a caller does not supply portalClassName", () => {
+  render(<ControlledSelect />);
+  fireEvent.click(screen.getByRole("button", { name: "Action All actions" }));
+  const menu = screen.getByRole("listbox");
+  expect(menu).toHaveClass("shared-filter-select__menu");
+  expect(menu.className.trim()).toBe("shared-filter-select__menu");
 });
 
 it("supports keyboard navigation, Escape, outside close, and one open menu", async () => {

@@ -8145,6 +8145,30 @@ body.app-shell-mobile-open {
   }
 }
 
+/* Advanced Diagnostics page title — same fix as Scheduler Health above: the
+   global h1 rule sizes every <h1> for hero-style pages, so the compact scale
+   for this page's title has to be forced here too. The React component only
+   sets margin for this element; sizing lives here because the React
+   stylesheet is a forced-declaration-free zone by convention. */
+.scan-workspace-diagnostics-page #advancedDiagnosticsRoot h1 {
+  font-size: clamp(34px, 3vw, 44px) !important;
+  font-weight: 800 !important;
+  line-height: 1.05 !important;
+  letter-spacing: -0.02em !important;
+}
+
+@media (max-width: 1024px) {
+  .scan-workspace-diagnostics-page #advancedDiagnosticsRoot h1 {
+    font-size: 36px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .scan-workspace-diagnostics-page #advancedDiagnosticsRoot h1 {
+    font-size: 30px !important;
+  }
+}
+
 /* Scheduler diagnostics close fill authority r1 */
 
 body

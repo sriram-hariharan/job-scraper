@@ -1209,6 +1209,32 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == phase133ef_decisions_applications_runtime_files:
         return
+    phase133i_advanced_diagnostics_runtime_files = {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == phase133i_advanced_diagnostics_runtime_files:
+        advanced_diagnostics_source = (
+            ROOT
+            / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+        )
+        source = advanced_diagnostics_source.read_text(encoding="utf-8")
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in source
+        return
+    phase133i_visual_correction_runtime_files = phase133i_advanced_diagnostics_runtime_files | {
+        ROOT / "src/app/static/app_redesign.css",
+    }
+    if set(changed_runtime_files) == phase133i_visual_correction_runtime_files:
+        advanced_diagnostics_source = (
+            ROOT
+            / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+        )
+        source = advanced_diagnostics_source.read_text(encoding="utf-8")
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in source
+        return
     assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],

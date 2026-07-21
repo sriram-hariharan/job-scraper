@@ -8126,3 +8126,125 @@ body.app-shell-mobile-open {
     transition: none !important;
   }
 }
+
+/* Scheduler Health page title — overrides the global h1 rule above (which
+   sizes every <h1> for hero-style pages) down to the same compact scale as
+   Executive/Pipeline/Planning/Decisions/Applications titles. The React
+   component only sets margin for this element; sizing lives here because the
+   React stylesheet is a forced-declaration-free zone by convention. */
+.scheduler-health-page #schedulerHealthDashboardRoot h1 {
+  font-size: 38px !important;
+  font-weight: 800 !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.02em !important;
+}
+
+@media (max-width: 680px) {
+  .scheduler-health-page #schedulerHealthDashboardRoot h1 {
+    font-size: 30px !important;
+  }
+}
+
+/* Scheduler diagnostics close fill authority r1 */
+
+body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"] {
+  position: absolute !important;
+  top: 20px !important;
+  right: 20px !important;
+  z-index: 20 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  width: 48px !important;
+  min-width: 48px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border-radius: 14px !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  transform: none !important;
+}
+
+body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  > .modal-header {
+  padding-right: 108px !important;
+}
+
+/* Light theme: unmistakable solid blue fill. */
+html[data-theme="light"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"] {
+  border: 1px solid #1d4ed8 !important;
+  background: #2563eb !important;
+  background-color: #2563eb !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.32) !important;
+}
+
+html[data-theme="light"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:hover {
+  border-color: #1e3a8a !important;
+  background: #1d4ed8 !important;
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+/* Dark theme: unmistakable solid violet fill. */
+html[data-theme="dark"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"],
+html:not([data-theme="light"])
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"] {
+  border: 1px solid #8b5cf6 !important;
+  background: #6d28d9 !important;
+  background-color: #6d28d9 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(76, 29, 149, 0.48) !important;
+}
+
+html[data-theme="dark"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:hover,
+html:not([data-theme="light"])
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:hover {
+  border-color: #c4b5fd !important;
+  background: #7c3aed !important;
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:focus-visible {
+  outline: 3px solid rgba(96, 165, 250, 0.58) !important;
+  outline-offset: 3px !important;
+}

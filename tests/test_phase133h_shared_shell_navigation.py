@@ -16,14 +16,15 @@ SHELL_JS = ROOT / "src/app/static/shell.js"
 SHELL_CSS = ROOT / "src/app/static/app_redesign.css"
 
 # Visible label -> existing route. "/" keeps its Executive route; only the
-# visible label changes to "Overview".
+# visible label changes to "Overview". Scheduler was removed from normal
+# navigation (Scheduler Health redesign) and is intentionally excluded here —
+# see test_scheduler_is_absent_from_normal_navigation_but_pipeline_remains.
 MAIN_ROUTES = [
     ("/", "Overview"),
     ("/pipeline", "Pipeline"),
     ("/planning", "Planning"),
     ("/decisions-ui", "Decisions"),
     ("/applications", "Applications"),
-    ("/scheduler", "Scheduler"),
 ]
 
 # Distinctive geometry per icon so each nav item's Lucide icon is verifiable.
@@ -33,7 +34,6 @@ ICON_SIGNATURES = {
     "Decisions": '<path d="M13 6h8"/>',                                    # list-checks
     "Applications": '<path d="M22 13a18.15 18.15 0 0 1-20 0"/>',           # briefcase-business
     "Pipeline": '<rect width="8" height="8" x="13" y="13" rx="2"/>',       # workflow
-    "Scheduler": '<circle cx="16" cy="16" r="6"/>',                        # calendar-clock
 }
 
 
@@ -67,7 +67,6 @@ def test_all_route_hrefs_are_unchanged() -> None:
         "/decisions-ui",
         "/applications",
         "/pipeline",
-        "/scheduler",
     }
 
 
@@ -76,9 +75,23 @@ def test_navigation_groups_map_only_to_existing_routes() -> None:
     workspace = {label for group, items in NAV_GROUPS if group == "Workspace" for (label, _h, _i) in items}
     operations = {label for group, items in NAV_GROUPS if group == "Operations" for (label, _h, _i) in items}
     assert workspace == {"Overview", "Planning", "Decisions", "Applications"}
-    assert operations == {"Pipeline", "Scheduler"}
+    assert operations == {"Pipeline"}
     assert labels["Overview"] == ("/", "Workspace")
     assert labels["Pipeline"] == ("/pipeline", "Operations")
+
+
+def test_scheduler_is_absent_from_normal_navigation_but_pipeline_remains() -> None:
+    labels = {label for _group, items in NAV_GROUPS for (label, _h, _i) in items}
+    hrefs = {href for _label, href, _icon in NAV_ITEMS}
+    assert "Scheduler" not in labels
+    assert "/scheduler" not in hrefs
+    assert "Pipeline" in labels
+    assert "/pipeline" in hrefs
+    # The route itself is preserved (backward compatibility) even though it is
+    # no longer a shared-sidebar nav item; it renders zero active nav items.
+    html = render_top_shell("/scheduler")
+    assert html.count('aria-current="page"') == 0
+    assert html.count('class="app-shell-nav-link active"') == 0
 
 
 def test_group_labels_are_rendered_with_group_semantics() -> None:

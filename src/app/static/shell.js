@@ -622,6 +622,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const profileDropdownEmail = qs("profileDropdownEmail");
   const profileLogoutBtn = qs("profileLogoutBtn");
   const profileAdvancedDiagnosticsLink = qs("profileAdvancedDiagnosticsLink");
+  const profileSchedulerHealthLink = qs("profileSchedulerHealthLink");
 
   function storageGet(storage, key) {
     try {
@@ -846,6 +847,12 @@ window.addEventListener("DOMContentLoaded", () => {
       profileAdvancedDiagnosticsLink.classList.toggle("hidden", !isAdmin);
       profileAdvancedDiagnosticsLink.setAttribute("aria-hidden", isAdmin ? "false" : "true");
       profileAdvancedDiagnosticsLink.tabIndex = isAdmin ? 0 : -1;
+    }
+
+    if (profileSchedulerHealthLink) {
+      profileSchedulerHealthLink.classList.toggle("hidden", !isAdmin);
+      profileSchedulerHealthLink.setAttribute("aria-hidden", isAdmin ? "false" : "true");
+      profileSchedulerHealthLink.tabIndex = isAdmin ? 0 : -1;
     }
   }
 

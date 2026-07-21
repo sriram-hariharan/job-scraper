@@ -2199,3 +2199,324 @@ html[data-theme="dark"] .operational-dashboard-heading p { color: #9eaac0; }
 @media (max-width: 1050px) { .operational-filter-grid, .applications-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .operational-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .operational-dashboard-page .page.operational-dashboard-shell { width: min(100% - 28px, 720px); } .operational-filter-grid, .applications-filter-grid, .operational-summary-grid, .operational-detail-grid { grid-template-columns: 1fr; } .operational-filter-actions { grid-template-columns: 1fr 1fr; } .operational-detail-grid .is-wide { grid-column: auto; } .operational-table-card > .shared-table-pagination { padding-right: calc(58px + 16px + 14px); } }
 @media (prefers-reduced-motion: reduce) { .operational-table-card .shared-table-skeleton-row span { animation: none; } }
+
+/* ============================================================================
+   Scheduler Health — premium admin operations dashboard (React island).
+   Reuses .shared-table-card / SharedTableCard, .modal-backdrop/.modal-card
+   (classic global modal primitives), and the applications-tab visual recipe;
+   adds only the compact overview panel, badge, and diagnostics-modal styling
+   this page needs. Adapted from reui's card-container data-grid table,
+   hextaui's system-status-block, isaiahbjork's dashboard-card-with-modal, and
+   moumensoliman's interactive-logs-table (21st.dev references).
+
+   The --queue-* tokens below are the SAME shared-table design tokens Decisions
+   and Applications define on their own root ids — SharedTableCard/
+   SharedFilterSelect read them directly, so without a scheduler-scoped
+   definition those rules fall back to transparent/unset and let the page's
+   own gradient bleed through the table (the "pastel row" visual bug). Defining
+   them here is what makes the table/toolbar match Executive/Planning/
+   Decisions/Applications rather than inventing a parallel look.
+   ============================================================================ */
+
+#schedulerHealthDashboardRoot {
+  --queue-ink: #101828;
+  --queue-muted: #667085;
+  --queue-border: #dbe3ef;
+  --queue-border-strong: #c7d2e3;
+  --queue-surface: #ffffff;
+  --queue-surface-strong: #ffffff;
+  --queue-surface-muted: #f6f8fb;
+  --queue-row-default: #ffffff;
+  --queue-row-alternate: #fbfcfe;
+  --queue-row-hover: #f5f8fd;
+  --queue-row-expanded: #f4f7fc;
+  --queue-row-focus: #eef4ff;
+  --queue-details-surface: #f8fafc;
+  --queue-accent: #2563eb;
+  --queue-accent-violet: #6d3df2;
+  --scheduler-ink: #101828;
+  --scheduler-muted: #667085;
+  --scheduler-border: #dbe3ef;
+  --scheduler-surface: #ffffff;
+  --scheduler-surface-muted: #f6f8fb;
+  --scheduler-blue: #2563eb;
+  --scheduler-blue-soft: #eaf1ff;
+  --scheduler-green: #07855f;
+  --scheduler-green-soft: #e9f8f2;
+  --scheduler-red: #c2414f;
+  --scheduler-red-soft: #fff0f1;
+  --scheduler-amber: #a15c06;
+  --scheduler-amber-soft: #fff7e6;
+  width: 100%;
+  min-width: 0;
+  color: var(--scheduler-ink);
+}
+
+html[data-theme="dark"] #schedulerHealthDashboardRoot {
+  --queue-ink: #eef2f8;
+  --queue-muted: #9eaac0;
+  --queue-border: #2d374a;
+  --queue-border-strong: #3a465c;
+  --queue-surface: #161d2b;
+  --queue-surface-strong: #182132;
+  --queue-surface-muted: #111827;
+  --queue-row-default: #111827;
+  --queue-row-alternate: #141d2c;
+  --queue-row-hover: #1b273a;
+  --queue-row-expanded: #1d2d49;
+  --queue-row-focus: #203452;
+  --queue-details-surface: #172033;
+  --queue-accent: #7aa2ff;
+  --queue-accent-violet: #8b6df2;
+  --scheduler-ink: #eef2f8;
+  --scheduler-muted: #9eaac0;
+  --scheduler-border: #2d374a;
+  --scheduler-surface: #161d2b;
+  --scheduler-surface-muted: #111827;
+  --scheduler-blue: #7aa2ff;
+  --scheduler-blue-soft: #1a2b51;
+  --scheduler-green: #58d4aa;
+  --scheduler-green-soft: #14372f;
+  --scheduler-red: #ff8e98;
+  --scheduler-red-soft: #48252c;
+  --scheduler-amber: #f5c26b;
+  --scheduler-amber-soft: #42351e;
+}
+
+.scheduler-health-page .page.scheduler-health-shell {
+  width: min(1360px, calc(100% - 56px));
+  max-width: none;
+  padding-bottom: 96px;
+}
+
+.scheduler-health-server-fallback {
+  min-height: 220px;
+  display: grid;
+  place-content: center;
+  color: var(--queue-muted, #667085);
+}
+
+.scheduler-health-dashboard {
+  display: grid;
+  gap: 16px;
+}
+
+/* Title row on top, compact right-aligned action group below it — never on
+   the same horizontal band as the shared-shell's fixed top-right controls. */
+.scheduler-health-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scheduler-health-header-copy h1 {
+  /* Sizing/weight/line-height/letter-spacing are forced in the classic
+     app_redesign.css, which already owns overriding the global h1 rule there;
+     this stylesheet stays free of forced declarations, so only margin lives
+     here. */
+  margin: 0 0 4px;
+}
+.scheduler-health-header-copy p { margin: 0; max-width: 620px; color: var(--scheduler-muted); font-size: 13px; line-height: 1.5; }
+.scheduler-health-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.scheduler-health-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.scheduler-last-refreshed { color: var(--scheduler-muted); font-size: 12px; white-space: nowrap; }
+.scheduler-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--scheduler-border);
+  border-radius: 8px;
+  background: var(--scheduler-surface);
+  color: var(--scheduler-ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.scheduler-refresh-btn:hover { background: var(--scheduler-surface-muted); }
+.scheduler-refresh-btn:disabled { opacity: 0.6; cursor: default; }
+.scheduler-refresh-btn .is-spinning { animation: scheduler-spin 0.9s linear infinite; }
+@keyframes scheduler-spin { to { transform: rotate(360deg); } }
+
+.scheduler-error-banner {
+  padding: 10px 14px;
+  border: 1px solid var(--scheduler-red);
+  border-radius: 8px;
+  background: var(--scheduler-red-soft);
+  color: var(--scheduler-red);
+  font-size: 13px;
+}
+
+.scheduler-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: var(--scheduler-surface-muted);
+  color: var(--scheduler-muted);
+}
+.scheduler-badge--succeeded { background: var(--scheduler-green-soft); color: var(--scheduler-green); }
+.scheduler-badge--failed { background: var(--scheduler-red-soft); color: var(--scheduler-red); }
+.scheduler-badge--running,
+.scheduler-badge--starting { background: var(--scheduler-blue-soft); color: var(--scheduler-blue); }
+.scheduler-badge--queued { background: var(--scheduler-amber-soft); color: var(--scheduler-amber); }
+.scheduler-badge--muted,
+.scheduler-badge--unknown { background: var(--scheduler-surface-muted); color: var(--scheduler-muted); }
+
+/* --- Operations Overview panel: one cohesive asymmetric surface, not four
+   equal cards. Primary block is capped so it can't stretch into empty
+   horizontal space; metrics/diagnostics-link sit close behind it. --------- */
+.scheduler-overview-panel {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 96px;
+  padding: 16px 20px;
+  border: 1px solid var(--scheduler-border);
+  border-radius: 12px;
+  background: var(--scheduler-surface);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+.scheduler-overview-primary { display: flex; align-items: center; gap: 14px; flex: 0 1 420px; min-width: 0; }
+.scheduler-overview-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  flex: 0 0 40px;
+}
+.scheduler-overview-icon.is-success { background: var(--scheduler-green-soft); color: var(--scheduler-green); }
+.scheduler-overview-icon.is-danger { background: var(--scheduler-red-soft); color: var(--scheduler-red); }
+.scheduler-overview-icon.is-muted { background: var(--scheduler-surface-muted); color: var(--scheduler-muted); }
+.scheduler-overview-kicker { margin: 0; color: var(--scheduler-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.scheduler-overview-primary h2 { margin: 2px 0; font-size: 18px; line-height: 1.2; }
+.scheduler-overview-explanation { margin: 0; color: var(--scheduler-muted); font-size: 12px; line-height: 1.4; }
+.scheduler-overview-divider { width: 1px; align-self: stretch; background: var(--scheduler-border); flex: 0 0 1px; }
+.scheduler-overview-metrics { display: flex; align-items: center; gap: 24px; flex: 1 1 auto; }
+.scheduler-overview-metric { display: grid; gap: 2px; text-align: center; min-width: 64px; }
+.scheduler-overview-metric span { color: var(--scheduler-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+.scheduler-overview-metric strong { font-size: 18px; font-weight: 800; }
+.scheduler-overview-metric strong.is-success { color: var(--scheduler-green); }
+.scheduler-overview-metric strong.is-danger { color: var(--scheduler-red); }
+.scheduler-diagnostics-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--scheduler-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--scheduler-ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.scheduler-diagnostics-link:hover { background: var(--scheduler-surface-muted); }
+
+/* --- Scheduler Runs — one premium card-container table with segmented tabs.
+   Populated tables follow content height; only the shared loading skeleton
+   (5 rows, from SharedTableCard itself) keeps a natural minimum. ---------- */
+.scheduler-shared-table-card .shared-table-viewport { min-height: 0; }
+.scheduler-shared-table-card .is-sticky-action {
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  width: 150px;
+  min-width: 150px;
+  background: var(--queue-row-default);
+}
+.scheduler-run-id-cell { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+.scheduler-run-row.is-attention { box-shadow: inset 3px 0 0 var(--scheduler-red); }
+.scheduler-empty { display: grid; min-height: 132px; place-content: center; justify-items: center; gap: 8px; padding: 20px; color: var(--scheduler-muted); text-align: center; }
+.scheduler-empty strong { color: var(--scheduler-ink); }
+.scheduler-empty--compact { min-height: 72px; padding: 14px; }
+
+/* One pagination location: keep the footer summary + controls, drop the
+   header/top duplicate, and collapse the Prev/page/Next cluster to just the
+   "Showing X-Y of Z" text when there is only one page (both nav buttons
+   disabled). Scoped to the scheduler table only — other pages keep both. */
+.scheduler-shared-table-card .shared-table-header-actions > .shared-table-pagination { display: none; }
+.scheduler-shared-table-card .shared-table-viewport ~ .shared-table-pagination > div:has(> button:first-child:disabled):has(> button:last-child:disabled) {
+  display: none;
+}
+
+.scheduler-runs-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.scheduler-runs-filters { display: flex; align-items: center; gap: 8px; }
+.scheduler-runs-tabs { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--scheduler-border); border-radius: 8px; padding: 3px; background: var(--scheduler-surface-muted); }
+.scheduler-runs-tabs .scheduler-runs-tab { display: inline-flex; align-items: center; height: 32px; border: 1px solid transparent; border-radius: 6px; padding: 0 14px; background: transparent; color: var(--scheduler-muted); font: inherit; font-size: 12px; font-weight: 750; }
+.scheduler-runs-tabs .scheduler-runs-tab.is-active { border-color: transparent; background: linear-gradient(115deg, var(--scheduler-blue), #6d3df2); color: #fff; box-shadow: 0 2px 7px rgba(37, 99, 235, 0.2); }
+.scheduler-runs-tabs .scheduler-runs-tab.is-inactive:hover { border-color: var(--queue-border-strong); background: var(--scheduler-surface); color: var(--scheduler-ink); }
+
+/* --- Diagnostics modal: reuses global .modal-backdrop/.modal-card --------- */
+.scheduler-diagnostics-modal-card { width: min(820px, calc(100vw - 48px)); max-height: min(680px, calc(100vh - 96px)); display: flex; flex-direction: column; }
+.scheduler-diagnostics-tabs { display: flex; gap: 6px; padding: 0 20px; border-bottom: 1px solid var(--scheduler-border, #dbe3ef); }
+.scheduler-diagnostics-tabs .scheduler-diagnostics-tab { padding: 8px 4px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--scheduler-muted, #667085); font-size: 13px; font-weight: 700; cursor: pointer; }
+.scheduler-diagnostics-tabs .scheduler-diagnostics-tab.is-active { border-bottom-color: var(--scheduler-blue, #2563eb); color: var(--scheduler-ink, #101828); }
+.scheduler-diagnostics-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 20px; }
+.scheduler-diagnostics-tab-subtitle { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--scheduler-muted, #667085); font-size: 12px; }
+.scheduler-diagnostics-table-viewport { overflow-x: auto; overscroll-behavior: contain; border: 1px solid var(--scheduler-border, #dbe3ef); border-radius: 8px; }
+.scheduler-diagnostics-table-viewport table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 12px; }
+.scheduler-diagnostics-table-viewport th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--scheduler-border, #dbe3ef);
+  text-align: left;
+  color: var(--scheduler-muted, #667085);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.scheduler-diagnostics-table-viewport td {
+  max-width: 220px;
+  padding: 8px 10px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--scheduler-border, #dbe3ef);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.scheduler-diagnostics-table-viewport td.scheduler-run-id-cell { min-width: 140px; }
+
+.scheduler-config-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.scheduler-config-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--scheduler-border, #dbe3ef);
+  border-radius: 8px;
+}
+.scheduler-config-row.is-ok { color: var(--scheduler-green, #07855f); }
+.scheduler-config-row.is-issue { color: var(--scheduler-red, #c2414f); }
+.scheduler-config-row-label { grid-column: 2; color: var(--scheduler-ink, #101828); font-size: 13px; font-weight: 700; }
+.scheduler-config-row-explanation { grid-column: 1 / -1; color: var(--scheduler-muted, #667085); font-size: 12px; }
+
+@media (max-width: 900px) {
+  .scheduler-overview-panel { flex-wrap: wrap; }
+  .scheduler-overview-primary { flex-basis: 100%; }
+  .scheduler-overview-divider { display: none; }
+  .scheduler-overview-metrics { flex-wrap: wrap; gap: 14px; }
+}
+@media (max-width: 680px) {
+  .scheduler-health-page .page.scheduler-health-shell { width: min(100% - 28px, 720px); }
+  .scheduler-runs-header-actions { align-items: flex-start; }
+}
+
+/* Scheduler final spacing polish r4 */
+
+/* Keep the populated-table summary away from the card edge. */
+.scheduler-shared-table-card
+  .shared-table-viewport
+  ~ .shared-table-pagination {
+  box-sizing: border-box;
+  padding-inline: 24px;
+}

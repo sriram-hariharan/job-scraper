@@ -324,12 +324,19 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         "src/app/static/scan_workspace_review.css",
         "src/app/static/styles.css",
     }
+    scheduler_static_surface = {
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/static/shell.js",
+    }
+
     unexpected_static = {
         path
         for path in changed
         if path.startswith("src/app/static/")
         and path not in historical_static_surface
         and path not in phase129_surface
+        and path not in scheduler_static_surface
     }
     assert not unexpected_static
 

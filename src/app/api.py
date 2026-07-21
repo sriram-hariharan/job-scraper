@@ -2934,11 +2934,13 @@ def scheduler_launchd_agent_status(
     
 @app.get("/scheduler/history")
 def scheduler_history(
+    http_request: Request,
     history_path: str = str(services.DEFAULT_SCHEDULER_RUN_HISTORY_PATH),
     job_name: str = "",
     status: str = "",
     limit: int = 20,
 ):
+    _require_admin_user(http_request)
     return services.scheduler_history_payload(
         history_path=Path(history_path),
         job_name=job_name,
@@ -2960,10 +2962,12 @@ def scheduler_storage_contract(
 
 @app.get("/scheduler/postgres-status")
 def scheduler_postgres_status(
+    http_request: Request,
     limit: int = 10,
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
 ):
+    _require_admin_user(http_request)
     try:
         return services.scheduler_postgres_status_payload(
             limit=limit,
@@ -2975,10 +2979,12 @@ def scheduler_postgres_status(
 
 @app.get("/scheduler/summary")
 def scheduler_summary(
+    http_request: Request,
     limit: int = 5,
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
 ):
+    _require_admin_user(http_request)
     try:
         return services.scheduler_operator_summary_payload(
             limit=limit,

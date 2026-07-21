@@ -9,6 +9,7 @@ import {
   type ExecutiveQueueState,
 } from "./ExecutiveQueue";
 import { PipelineDashboard } from "./pipeline/PipelineDashboard";
+import { SchedulerHealthDashboard } from "./scheduler/SchedulerHealthDashboard";
 import {
   DEFAULT_PLANNING_STATE,
   PLANNING_STATE_EVENT,
@@ -174,3 +175,12 @@ if (decisionsMount) createRoot(decisionsMount).render(<StrictMode><DecisionsIsla
 
 const applicationsMount = document.getElementById("applicationsDashboardRoot");
 if (applicationsMount) createRoot(applicationsMount).render(<StrictMode><ApplicationsIsland /></StrictMode>);
+
+const schedulerHealthMount = document.getElementById("schedulerHealthDashboardRoot");
+if (schedulerHealthMount) {
+  createRoot(schedulerHealthMount).render(
+    <StrictMode>
+      <SchedulerHealthDashboard />
+    </StrictMode>,
+  );
+}

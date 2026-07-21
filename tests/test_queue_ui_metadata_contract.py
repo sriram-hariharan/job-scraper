@@ -410,80 +410,15 @@ def test_phase77d_stateful_table_header_and_review_styling_contract():
     assert "reviewActionStateClass = \"review-action-button--available\";" in planning_source
 
 
-def test_phase77e_scheduler_tabs_are_underline_style():
-    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
-    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
-
-    assert "Contract Health" in app_markup
-    assert "JSONL Rows" in app_markup
-    assert "Postgres Rows" in app_markup
-    assert "Latest Runs by Job" in app_markup
-    scheduler_section = app_markup[
-        app_markup.index('<div class="scheduler-table-tabs">'):
-        app_markup.index('<div class="scheduler-table-header">')
-    ]
-    assert "scheduler-tab-btn" in scheduler_section
-    assert "ghost-btn scheduler-tab-btn" not in scheduler_section
-    assert "body .scheduler-page .scheduler-tab-btn::after" in css
-    assert "body .scheduler-page .scheduler-tab-btn.active::after" in css
-    assert "html[data-theme=\"light\"] body .scheduler-page .scheduler-table-tabs" in css
-    assert "background: transparent !important" in css
-    scheduler_css = css[
-        css.index("body .scheduler-page .scheduler-table-tabs,"):
-        css.index("/* ui_redesign_v25: remove remaining tab button chrome on concrete pages. */")
-    ]
-    for boxed_property in (
-        "border-radius: 12px",
-        "background: #e0f2fe",
-        "background: linear-gradient(135deg, var(--app-primary), var(--app-violet))",
-        "box-shadow: var(--app-shadow-sm)",
-    ):
-        assert boxed_property not in scheduler_css
-    assert "border-radius: 0 !important" in scheduler_css
-    assert "background-color: transparent !important" in scheduler_css
-    assert "background-image: none !important" in scheduler_css
-    assert "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab]" in scheduler_css
-    concrete_state_selector = (
-        "body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > "
-        "button.scheduler-tab-btn[data-tab][role=\"tab\"].active"
-    )
-    assert concrete_state_selector in scheduler_css
-    concrete_tab_css = _css_block(
-        css, "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab],"
-    )
-    active_tab_css = _css_block(
-        css, "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].active,"
-    )
-    for block in (concrete_tab_css, active_tab_css):
-        assert "border: 0 !important" in block
-        assert "border-width: 0 !important" in block
-        assert "border-style: none !important" in block
-        assert "border-color: transparent !important" in block
-        assert "border-radius: 0 !important" in block
-        assert "background: transparent !important" in block
-        assert "background-color: transparent !important" in block
-        assert "background-image: none !important" in block
-        assert "box-shadow: none !important" in block
-        assert "background: var(--app-panel)" not in block
-        assert "background: #ffffff" not in block
-        assert "border: 1px solid" not in block
-        assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in block
-    assert "button.scheduler-tab-btn[data-tab].active::after" in scheduler_css
-    assert "background: linear-gradient(90deg, #2563eb, #06b6d4) !important" in scheduler_css
-
-
 def test_phase77h_dark_tabs_keep_underline_style_with_readable_text():
-    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    # Scheduler Health migrated to a React island (Scheduler Health Visual
+    # Correction); the classic scheduler-page tab markup this test previously
+    # read from src/app/ui.py no longer exists there. The underline-tab CSS
+    # itself is untouched (still relied on by Planning's tailoring-selected
+    # tabs, which reuse .scheduler-tab-btn under a different page scope), so
+    # only the now-obsolete markup assertions are removed; see
+    # tests/test_scheduler_admin_health_redesign.py for the current contract.
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
-
-    scheduler_section = app_markup[
-        app_markup.index('<div class="scheduler-table-tabs">'):
-        app_markup.index('<div class="scheduler-table-header">')
-    ]
-    assert 'class="scheduler-tab-btn active"' in scheduler_section
-    assert 'class="scheduler-tab-btn"' in scheduler_section
-    assert 'data-tab="contract"' in scheduler_section
-    assert 'role="tab"' in scheduler_section
 
     dark_tab_css = css[
         css.index('html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs,'):
@@ -854,7 +789,7 @@ def test_agentic_review_dedicated_page_contract():
     assert "pipeline-run-icon-btn pipeline-run-agentic-review-btn" in profile_source
     assert "pipeline-run-action-icon--view" in profile_source
     assert "pipeline-run-action-icon--agentic" in profile_source
-    assert '("Scheduler", "/scheduler", "scheduler")' in shell_source
+    assert '("Scheduler", "/scheduler", "scheduler")' not in shell_source
     assert '("Agentic Review", "/agentic-review", "AR")' not in shell_source
 
     assert '@router.get("/agentic-review"' not in profile_ui_source

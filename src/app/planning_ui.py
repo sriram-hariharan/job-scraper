@@ -173,9 +173,9 @@ def planning_dashboard() -> str:
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
 </head>
 <body class="planning-dashboard-page">
 {render_top_shell("/planning")}
@@ -627,7 +627,7 @@ def planning_dashboard() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
   <script src="/static/planning.js?v=phase133g_s1_r1"></script>
 </body>
 </html>
@@ -726,7 +726,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
 </head>
 <body>
@@ -1754,7 +1754,7 @@ def advanced_diagnostics(
   <title>Advanced Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" />
 </head>
 <body>
@@ -1965,7 +1965,7 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" />
 </head>
 <body>

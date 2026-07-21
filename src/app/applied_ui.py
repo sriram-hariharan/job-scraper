@@ -17,7 +17,7 @@ def applied_jobs_dashboard() -> str:
   <title>Applied Jobs</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
 </head>
 <body>
   {render_top_shell("/applied")}

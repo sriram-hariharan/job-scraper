@@ -1,9 +1,30 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from src.app.ui_shell import render_top_shell
+from src.auth.runtime import current_user_from_request
 
 router = APIRouter()
+
+
+def _is_admin_user(user: dict) -> bool:
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    return bool(user.get("is_admin", False)) or access_level == "admin"
+
+
+def _auth_user_from_request(request: Request | None) -> dict:
+    if request is None:
+        return {}
+    return dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+
+
+def _require_admin_user(request: Request) -> dict:
+    user = _auth_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -17,8 +38,8 @@ def executive_dashboard() -> str:
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133g_s1_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
 </head>
 <body class="executive-dashboard-page">
   {render_top_shell("/")}
@@ -208,7 +229,7 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133g_s1_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
 </html>
@@ -383,8 +404,8 @@ def pipeline_dashboard() -> str:
   <title>Pipeline Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133d" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
 </head>
 <body class="pipeline-dashboard-page">
   {render_top_shell("/pipeline")}
@@ -403,332 +424,42 @@ def pipeline_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133d"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
 </body>
 </html>
     """.strip()
 
 @router.get("/scheduler", response_class=HTMLResponse)
-def scheduler_dashboard() -> str:
+def scheduler_dashboard(request: Request) -> str:
+    _require_admin_user(request)
     return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scheduler Ops Dashboard</title>
+  <title>Scheduler Health</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_close_fill_r2" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
 </head>
-<body>
+<body class="scheduler-health-page">
   {render_top_shell("/scheduler")}
-  <div class="page scheduler-page">
-    <header class="page-header">
-      <div class="page-header-main">
-        <h1>Scheduler Ops</h1>
-        <p class="subtext">Operational view for scheduler health, persistence status, and recent runs.</p>
-      </div>
-
-    </header>
-
-    <div class="subtext pipeline-run-meta" id="schedulerOpsMeta" hidden aria-hidden="true">
-      Loading scheduler summary...
-    </div>
-
-    <section class="card table-card scheduler-table-card">
-      <div class="scheduler-table-tabs">
-        <div class="scheduler-tab-row" role="tablist" aria-label="Scheduler views">
-          <button type="button" class="scheduler-tab-btn active" data-tab="contract" role="tab" aria-selected="true">
-            Contract Health
-          </button>
-          <button type="button" class="scheduler-tab-btn" data-tab="jsonl" role="tab" aria-selected="false">
-            JSONL Rows
-          </button>
-          <button type="button" class="scheduler-tab-btn" data-tab="postgres" role="tab" aria-selected="false">
-            Postgres Rows
-          </button>
-          <button type="button" class="scheduler-tab-btn" data-tab="latest" role="tab" aria-selected="false">
-            Latest Runs by Job
-          </button>
-        </div>
-      </div>
-
-      <div class="scheduler-table-header">
-        <div class="scheduler-table-title-wrap">
-          <h2 id="schedulerTableTitle">Contract Health</h2>
-          <div class="subtext" id="schedulerTableSubtitle">Artifact drift and scheduler contract checks.</div>
-        </div>
-        <div class="scheduler-table-header-right">
-          <button class="ghost-btn" id="refreshSchedulerSummaryBtn" type="button">Refresh</button>
-        </div>
-      </div>
-
-      <div class="table-wrap scheduler-attached-table-wrap">
-        <table id="schedulerTable">
-          <thead id="schedulerTableHead">
-            <tr>
-              <th>Check</th>
-              <th>Value</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="schedulerTableBody">
-            <tr><td colspan="3" class="empty-state">Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
+  <main class="page scheduler-health-shell">
+    <section
+      id="schedulerHealthDashboardRoot"
+      aria-label="Scheduler health dashboard"
+      aria-live="polite"
+    >
+      <div class="scheduler-health-server-fallback">Loading scheduler health...</div>
+      <noscript>Enable JavaScript to monitor Scheduler Health.</noscript>
     </section>
-  </div>
+  </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script>
-    (function () {{
-      const summaryUrl = "/scheduler/summary?limit=25";
-
-      const metaEl = document.getElementById("schedulerOpsMeta");
-      const refreshBtn = document.getElementById("refreshSchedulerSummaryBtn");
-      const tableTitleEl = document.getElementById("schedulerTableTitle");
-      const tableSubtitleEl = document.getElementById("schedulerTableSubtitle");
-      const tableHeadEl = document.getElementById("schedulerTableHead");
-      const tableBodyEl = document.getElementById("schedulerTableBody");
-
-      const tabButtons = Array.from(document.querySelectorAll(".scheduler-tab-btn"));
-
-      let currentPayload = null;
-      let activeTab = "contract";
-
-      if (!metaEl || !refreshBtn || !tableTitleEl || !tableSubtitleEl || !tableHeadEl || !tableBodyEl || !tabButtons.length) {{
-        return;
-      }}
-
-      function escapeHtml(value) {{
-        return String(value ?? "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#39;");
-      }}
-
-      const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {{
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }});
-
-      const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {{
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-      }});
-
-      function buildDateTimeCellHtml(value) {{
-        if (!value) {{
-          return "-";
-        }}
-
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) {{
-          return escapeHtml(String(value));
-        }}
-
-        return `
-          <div class="datetime-cell">
-            <div class="datetime-cell-date">${{escapeHtml(DATE_ONLY_FORMATTER.format(date))}}</div>
-            <div class="datetime-cell-time">${{escapeHtml(TIME_ONLY_FORMATTER.format(date))}}</div>
-          </div>
-        `;
-      }}
-
-      function statusBadgeClass(status) {{
-        const normalized = String(status || "").toLowerCase();
-        if (normalized === "succeeded") return "scheduler-run-badge scheduler-run-badge--success";
-        if (normalized === "failed") return "scheduler-run-badge scheduler-run-badge--danger";
-        return "scheduler-run-badge scheduler-run-badge--muted";
-      }}
-
-      function yesNoBadgeClass(value) {{
-        return value
-          ? "scheduler-run-badge scheduler-run-badge--success"
-          : "scheduler-run-badge scheduler-run-badge--danger";
-      }}
-
-      function renderEmptyRow(colspan, message) {{
-        return `<tr><td colspan="${{colspan}}" class="empty-state">${{escapeHtml(message)}}</td></tr>`;
-      }}
-
-      function renderContractRows(contractHealth) {{
-        const checks = contractHealth?.checks || {{}};
-        const overall = Boolean(contractHealth?.all_checks_pass);
-
-        const rows = [
-          {{
-            label: "Overall Contract Health",
-            value: overall ? "Healthy" : "Drift",
-            ok: overall,
-          }},
-          {{
-            label: "Seed SQL matches artifact",
-            value: checks.seed_sql_matches_artifact ? "Yes" : "No",
-            ok: Boolean(checks.seed_sql_matches_artifact),
-          }},
-          {{
-            label: "Init SQL matches artifact",
-            value: checks.init_sql_matches_artifact ? "Yes" : "No",
-            ok: Boolean(checks.init_sql_matches_artifact),
-          }},
-        ];
-
-        return rows.map((row) => {{
-          return `
-            <tr>
-              <td>${{escapeHtml(row.label)}}</td>
-              <td>${{escapeHtml(row.value)}}</td>
-              <td><span class="${{yesNoBadgeClass(row.ok)}}">${{row.ok ? "OK" : "Issue"}}</span></td>
-            </tr>
-          `;
-        }}).join("");
-      }}
-
-      function renderRunRows(rows) {{
-        if (!Array.isArray(rows) || rows.length === 0) {{
-          return renderEmptyRow(6, "No rows found.");
-        }}
-
-        return rows.map((row) => {{
-          return `
-            <tr>
-              <td>${{escapeHtml(row.run_id || "-")}}</td>
-              <td>${{escapeHtml(row.job_name || "-")}}</td>
-              <td><span class="${{statusBadgeClass(row.status)}}">${{escapeHtml(row.status || "-")}}</span></td>
-              <td>${{escapeHtml(row.return_code ?? "-")}}</td>
-              <td>${{buildDateTimeCellHtml(row.started_at)}}</td>
-              <td>${{buildDateTimeCellHtml(row.finished_at)}}</td>
-            </tr>
-          `;
-        }}).join("");
-      }}
-
-      const tabConfig = {{
-        contract: {{
-          title: "Contract Health",
-          subtitle: "Artifact drift and scheduler contract checks.",
-          columns: ["Check", "Value", "Status"],
-          renderRows(payload) {{
-            return renderContractRows(payload?.contract_health || {{}});
-          }},
-        }},
-        jsonl: {{
-          title: "JSONL Rows",
-          subtitle: "Recent scheduler runs from the JSONL audit trail.",
-          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
-          renderRows(payload) {{
-            return renderRunRows(payload?.recent_jsonl_runs || []);
-          }},
-        }},
-        postgres: {{
-          title: "Postgres Rows",
-          subtitle: "Recent scheduler runs currently mirrored into Postgres.",
-          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
-          renderRows(payload) {{
-            return renderRunRows(payload?.recent_postgres_runs || []);
-          }},
-        }},
-        latest: {{
-          title: "Latest Runs by Job",
-          subtitle: "Most recent run per scheduler job.",
-          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
-          renderRows(payload) {{
-            return renderRunRows(payload?.latest_runs_by_job || []);
-          }},
-        }},
-      }};
-
-      function activateTab(tabName) {{
-        if (!tabConfig[tabName]) {{
-          return;
-        }}
-
-        activeTab = tabName;
-
-        tabButtons.forEach((btn) => {{
-          const isActive = btn.dataset.tab === tabName;
-          btn.classList.toggle("active", isActive);
-          btn.setAttribute("aria-selected", isActive ? "true" : "false");
-        }});
-
-        renderActiveTable();
-      }}
-
-      function renderActiveTable() {{
-        const config = tabConfig[activeTab];
-        if (!config) {{
-          return;
-        }}
-
-        tableTitleEl.textContent = config.title;
-        tableSubtitleEl.textContent = config.subtitle;
-
-        tableHeadEl.innerHTML = `
-          <tr>
-            ${{config.columns.map((column) => `<th>${{escapeHtml(column)}}</th>`).join("")}}
-          </tr>
-        `;
-
-        if (!currentPayload) {{
-          tableBodyEl.innerHTML = renderEmptyRow(config.columns.length, "Loading...");
-          return;
-        }}
-
-        tableBodyEl.innerHTML = config.renderRows(currentPayload);
-      }}
-
-      async function loadSchedulerSummary() {{
-        metaEl.textContent = "Loading scheduler summary...";
-        refreshBtn.disabled = true;
-
-        try {{
-          const response = await fetch(summaryUrl, {{ cache: "no-store" }});
-          const payload = await response.json();
-
-          if (!response.ok) {{
-            throw new Error(payload.detail || "Failed to load scheduler summary.");
-          }}
-
-          currentPayload = payload;
-
-          const countsMatch = Boolean(payload?.history?.count_matches);
-          const countsMatchBadge = `<span class="${{yesNoBadgeClass(countsMatch)}}">${{countsMatch ? "Yes" : "No"}}</span>`;
-
-          metaEl.innerHTML =
-            `Job defs: ${{payload?.postgres_summary?.job_definition_count ?? 0}} · ` +
-            `Active jobs: ${{payload?.postgres_summary?.active_job_count ?? 0}} · ` +
-            `Success: ${{payload?.postgres_summary?.success_count ?? 0}} · ` +
-            `Failure: ${{payload?.postgres_summary?.failure_count ?? 0}} · ` +
-            `Counts Match: ${{countsMatchBadge}}`;
-
-          renderActiveTable();
-        }} catch (error) {{
-          currentPayload = null;
-          renderActiveTable();
-          metaEl.textContent = error?.message || "Failed to load scheduler summary.";
-        }} finally {{
-          refreshBtn.disabled = false;
-        }}
-      }}
-
-      tabButtons.forEach((btn) => {{
-        btn.addEventListener("click", () => activateTab(btn.dataset.tab));
-      }});
-
-      refreshBtn.addEventListener("click", loadSchedulerSummary);
-
-      activateTab("contract");
-      loadSchedulerSummary();
-    }})();
-  </script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
 </body>
 </html>
     """.strip()

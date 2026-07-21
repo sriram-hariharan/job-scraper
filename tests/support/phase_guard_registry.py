@@ -16,7 +16,6 @@ KNOWN_LEGACY_DUPLICATE_TEST_PATHS = {
     "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off 2.py",
 }
 
-
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
     value = str(path).strip().replace("\\", "/")
@@ -62,7 +61,9 @@ def duplicate_artifact_paths(changed: Iterable[str | Path]) -> set[str]:
     return duplicates
 
 
-def reject_duplicate_artifact_paths(changed: Iterable[str | Path]) -> None:
+def reject_duplicate_artifact_paths(
+    changed: Iterable[str | Path],
+) -> None:
     duplicates = duplicate_artifact_paths(changed)
     assert not duplicates, "Duplicate artifact paths are not allowed: " + ", ".join(
         sorted(duplicates)
@@ -856,6 +857,77 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
             "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         },
+        "scheduler_admin_health_redesign": {
+            "src/app/api.py",
+            "src/app/application_hub_ui.py",
+            "src/app/applied_ui.py",
+            "src/app/auth_ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/intelligence_ui.py",
+            "src/app/onboarding_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/profile_ui.py",
+            "src/app/saved_ui.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/shell.js",
+            "src/app/ui.py",
+            "src/app/ui_shell.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase132b2r3_guided_preferences_workflow.py",
+            "tests/test_phase133h_shared_shell_navigation.py",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_scheduler_admin_health_redesign.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+
+        },
+        "scheduler_health_visual_correction": {
+            "frontend/executive-kpi/src/main.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+            "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+            "frontend/executive-kpi/src/styles.css",
+            "src/app/api.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "src/app/ui.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase132b2r3_guided_preferences_workflow.py",
+            "tests/test_phase133a_executive_kpi_react_island.py",
+            "tests/test_phase133d_pipeline_dashboard_react_island.py",
+            "tests/test_phase133ef_decisions_applications_dashboards.py",
+            "tests/test_phase133g_premium_planning_dashboard.py",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_scheduler_admin_health_redesign.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
+        "scheduler_health_final_visual_polish": {
+            "frontend/executive-kpi/src/main.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+            "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+            "frontend/executive-kpi/src/styles.css",
+            "src/app/api.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "src/app/ui.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase132b2r3_guided_preferences_workflow.py",
+            "tests/test_phase133a_executive_kpi_react_island.py",
+            "tests/test_phase133d_pipeline_dashboard_react_island.py",
+            "tests/test_phase133ef_decisions_applications_dashboards.py",
+            "tests/test_phase133g_premium_planning_dashboard.py",
+            "tests/test_queue_ui_metadata_contract.py",
+            "tests/test_scheduler_admin_health_redesign.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -876,6 +948,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase133g_premium_planning_dashboard")
         | legacy_guard_allowlist("phase133ef_decisions_applications_dashboards")
         | legacy_guard_allowlist("phase133h_premium_responsive_sidebar")
+        | legacy_guard_allowlist("scheduler_admin_health_redesign")
+        | legacy_guard_allowlist("scheduler_health_visual_correction")
+        | legacy_guard_allowlist("scheduler_health_final_visual_polish")
     )
 
 
@@ -917,7 +992,7 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "688ce76b2ecbdf6451ee2227fc68cf57a00647ec120fa0dc74952a8f131553d4",
+        ): "cf11fdbb368ee350613dcae9647573201c26de0aaabf76b5436b71178e0b6f20",
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
@@ -925,11 +1000,11 @@ def assert_protected_hashes(
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-        ): "e1970be40bf2c7b0d4aea2180d933cade315050059f8b71f7f9dcdbd02e18f07",
+        ): "ecd49db5526c8f59413c86ceae6974e3ab5047713bfdb273415d3ff427a8098c",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-        ): "688ce76b2ecbdf6451ee2227fc68cf57a00647ec120fa0dc74952a8f131553d4",
+        ): "cf11fdbb368ee350613dcae9647573201c26de0aaabf76b5436b71178e0b6f20",
         (
             "src/app/services.py",
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",

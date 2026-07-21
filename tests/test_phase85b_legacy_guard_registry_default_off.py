@@ -504,6 +504,61 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert len(phase133h_profile) == 20
     assert not any("*" in path for path in phase133h_profile)
 
+    scheduler_admin_health_profile = legacy_guard_allowlist("scheduler_admin_health_redesign")
+    assert scheduler_admin_health_profile == {
+        "src/app/api.py",
+        "src/app/application_hub_ui.py",
+        "src/app/applied_ui.py",
+        "src/app/auth_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/intelligence_ui.py",
+        "src/app/onboarding_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/saved_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/shell.js",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133h_shared_shell_navigation.py",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(scheduler_admin_health_profile) == 22
+    assert not any("*" in path for path in scheduler_admin_health_profile)
+
+    scheduler_visual_correction_profile = legacy_guard_allowlist("scheduler_health_visual_correction")
+    assert scheduler_visual_correction_profile == {
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+        "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/api.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/ui.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133a_executive_kpi_react_island.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase133ef_decisions_applications_dashboards.py",
+        "tests/test_phase133g_premium_planning_dashboard.py",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(scheduler_visual_correction_profile) == 21
+    assert not any("*" in path for path in scheduler_visual_correction_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -515,6 +570,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133g_profile
         | phase133ef_profile
         | phase133h_profile
+        | scheduler_admin_health_profile
+        | scheduler_visual_correction_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

@@ -26,8 +26,8 @@ def test_pipeline_route_renders_one_react_mount_and_shared_pipeline_navigation()
 
     assert markup.count('id="pipelineDashboardRoot"') == 1
     assert 'aria-label="Pipeline monitoring dashboard"' in markup
-    assert '/static/build/executive-kpi/executive-kpi.css?v=phase133d' in markup
-    assert '/static/build/executive-kpi/executive-kpi.js?v=phase133d' in markup
+    assert '/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1' in markup
+    assert '/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1' in markup
     assert 'src="/static/app.js?v=phase133d_s1"' in markup
     assert 'src="/static/shell.js?v=phase133h_r1"' in markup
     assert '<body class="pipeline-dashboard-page">' in markup

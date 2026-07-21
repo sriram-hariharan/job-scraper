@@ -17,8 +17,8 @@ def applications_dashboard() -> str:
   <title>Applications</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=phase133h_s1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=phase133ef_r3" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
 </head>
 <body class="operational-dashboard-page applications-dashboard-page">
   {render_top_shell("/applications")}
@@ -65,7 +65,7 @@ def applications_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/application_views.js?v=phase133ef_r5"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=phase133ef_r3"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
 </body>
 </html>
     """.strip()

@@ -18,7 +18,6 @@ NAV_GROUPS = [
         "Operations",
         [
             ("Pipeline", "/pipeline", "pipeline"),
-            ("Scheduler", "/scheduler", "scheduler"),
         ],
     ),
 ]
@@ -365,6 +364,22 @@ def render_top_shell(active_href: str) -> str:
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">Advanced Diagnostics</span>
             <span class="profile-dropdown-nav-subtitle">Admin workflow diagnostics</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
+        <a
+          class="profile-dropdown-nav-btn hidden"
+          href="/scheduler"
+          id="profileSchedulerHealthLink"
+          data-admin-only="true"
+        >
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scheduler" aria-hidden="true">
+            {_icon_svg("scheduler")}
+          </span>
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">Scheduler Health</span>
+            <span class="profile-dropdown-nav-subtitle">Scheduled jobs, run outcomes, and persistence integrity</span>
           </span>
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>

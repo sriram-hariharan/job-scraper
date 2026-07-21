@@ -118,29 +118,23 @@ function OverviewPanel({
   diagnosticsTriggerRef: React.RefObject<HTMLButtonElement>;
 }) {
   const contractOk = Boolean(payload?.contract_health?.all_checks_pass);
-  const countsMatch = Boolean(payload?.history?.count_matches);
-  const overallHealthy = Boolean(payload) && contractOk && countsMatch;
+  const overallHealthy = Boolean(payload) && contractOk;
   const issues: string[] = [];
   if (payload && !contractOk) issues.push("configuration integrity");
-  if (payload && !countsMatch) issues.push("storage sync");
 
   const explanation = loading
     ? "Loading scheduler status..."
     : !payload
       ? "Scheduler status is unavailable."
       : overallHealthy
-        ? "Configuration integrity and storage persistence are both consistent."
+        ? "Configuration integrity is consistent."
         : `Needs attention: ${issues.join(" and ")}.`;
 
   const metrics = [
     { label: "Active jobs", value: loading || !payload ? "-" : String(payload.postgres_summary?.active_job_count ?? 0) },
     { label: "Successful runs", value: loading || !payload ? "-" : String(payload.postgres_summary?.success_count ?? 0) },
     { label: "Failed runs", value: loading || !payload ? "-" : String(payload.postgres_summary?.failure_count ?? 0) },
-    {
-      label: "Storage sync",
-      value: loading || !payload ? "-" : countsMatch ? "In sync" : "Mismatch",
-      tone: loading || !payload ? "" : countsMatch ? "success" : "danger",
-    },
+    { label: "Recorded runs", value: loading || !payload ? "-" : String(payload.postgres_summary?.run_history_count ?? 0) },
   ];
 
   return (
@@ -163,7 +157,7 @@ function OverviewPanel({
         {metrics.map((metric) => (
           <div className="scheduler-overview-metric" key={metric.label}>
             <span>{metric.label}</span>
-            <strong className={metric.tone ? `is-${metric.tone}` : ""}>{metric.value}</strong>
+            <strong>{metric.value}</strong>
           </div>
         ))}
       </div>
@@ -480,7 +474,7 @@ function SchedulerRunsCard({
   );
 }
 
-type DiagnosticsTab = "configuration" | "file_audit" | "database_history";
+type DiagnosticsTab = "configuration" | "database_history";
 
 function ConfigStatusRow({
   icon: Icon,
@@ -624,7 +618,7 @@ function DiagnosticsModal({
           <div>
             <h3 id="schedulerDiagnosticsModalTitle">Scheduler diagnostics</h3>
             <div className="subtext" id="schedulerDiagnosticsModalDescription">
-              Configuration integrity, file audit, and database history.
+              Configuration integrity and database history.
             </div>
           </div>
           <button
@@ -641,7 +635,6 @@ function DiagnosticsModal({
         <div className="scheduler-diagnostics-tabs" role="tablist" aria-label="Diagnostics views">
           {([
             ["configuration", "Configuration Integrity"],
-            ["file_audit", "File Audit"],
             ["database_history", "Database History"],
           ] as const).map(([value, label]) => (
             <button
@@ -678,14 +671,6 @@ function DiagnosticsModal({
                 explanation="Generated init SQL matches the committed artifact."
               />
             </ul>
-          ) : null}
-          {tab === "file_audit" ? (
-            <>
-              <p className="scheduler-diagnostics-tab-subtitle">
-                <Database size={13} aria-hidden="true" /> Recent scheduler runs from the JSONL audit trail.
-              </p>
-              <CompactRunsTable rows={payload?.recent_jsonl_runs || []} emptyMessage="No JSONL audit rows recorded yet." />
-            </>
           ) : null}
           {tab === "database_history" ? (
             <>

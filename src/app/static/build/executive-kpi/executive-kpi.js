@@ -25621,26 +25621,25 @@ function eR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 	});
 }
 function tR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRef: r }) {
-	var i, a, o, s, c, l, u, d;
-	let f = !!(!(e == null || (i = e.contract_health) == null) && i.all_checks_pass), p = !!(!(e == null || (a = e.history) == null) && a.count_matches), m = !!e && f && p, h = [];
-	e && !f && h.push("configuration integrity"), e && !p && h.push("storage sync");
-	let g = t ? "Loading scheduler status..." : e ? m ? "Configuration integrity and storage persistence are both consistent." : `Needs attention: ${h.join(" and ")}.` : "Scheduler status is unavailable.", _ = [
+	var i, a, o, s, c, l, u, d, f;
+	let p = !!(!(e == null || (i = e.contract_health) == null) && i.all_checks_pass), m = !!e && p, h = [];
+	e && !p && h.push("configuration integrity");
+	let g = t ? "Loading scheduler status..." : e ? m ? "Configuration integrity is consistent." : `Needs attention: ${h.join(" and ")}.` : "Scheduler status is unavailable.", _ = [
 		{
 			label: "Active jobs",
-			value: t || !e ? "-" : String((o = (s = e.postgres_summary) == null ? void 0 : s.active_job_count) == null ? 0 : o)
+			value: t || !e ? "-" : String((a = (o = e.postgres_summary) == null ? void 0 : o.active_job_count) == null ? 0 : a)
 		},
 		{
 			label: "Successful runs",
-			value: t || !e ? "-" : String((c = (l = e.postgres_summary) == null ? void 0 : l.success_count) == null ? 0 : c)
+			value: t || !e ? "-" : String((s = (c = e.postgres_summary) == null ? void 0 : c.success_count) == null ? 0 : s)
 		},
 		{
 			label: "Failed runs",
-			value: t || !e ? "-" : String((u = (d = e.postgres_summary) == null ? void 0 : d.failure_count) == null ? 0 : u)
+			value: t || !e ? "-" : String((l = (u = e.postgres_summary) == null ? void 0 : u.failure_count) == null ? 0 : l)
 		},
 		{
-			label: "Storage sync",
-			value: t || !e ? "-" : p ? "In sync" : "Mismatch",
-			tone: t || !e ? "" : p ? "success" : "danger"
+			label: "Recorded runs",
+			value: t || !e ? "-" : String((d = (f = e.postgres_summary) == null ? void 0 : f.run_history_count) == null ? 0 : d)
 		}
 	];
 	return /* @__PURE__ */ (0, Y.jsxs)("section", {
@@ -25673,10 +25672,7 @@ function tR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRe
 				className: "scheduler-overview-metrics",
 				children: _.map((e) => /* @__PURE__ */ (0, Y.jsxs)("div", {
 					className: "scheduler-overview-metric",
-					children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: e.label }), /* @__PURE__ */ (0, Y.jsx)("strong", {
-						className: e.tone ? `is-${e.tone}` : "",
-						children: e.value
-					})]
+					children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: e.label }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: e.value })]
 				}, e.label))
 			}),
 			/* @__PURE__ */ (0, Y.jsxs)("button", {
@@ -26059,7 +26055,7 @@ function sR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 					}), /* @__PURE__ */ (0, Y.jsx)("div", {
 						className: "subtext",
 						id: "schedulerDiagnosticsModalDescription",
-						children: "Configuration integrity, file audit, and database history."
+						children: "Configuration integrity and database history."
 					})] }), /* @__PURE__ */ (0, Y.jsx)("button", {
 						type: "button",
 						className: "ghost-btn scheduler-diagnostics-close-btn",
@@ -26076,11 +26072,7 @@ function sR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 					className: "scheduler-diagnostics-tabs",
 					role: "tablist",
 					"aria-label": "Diagnostics views",
-					children: [
-						["configuration", "Configuration Integrity"],
-						["file_audit", "File Audit"],
-						["database_history", "Database History"]
-					].map(([e, t]) => /* @__PURE__ */ (0, Y.jsx)("button", {
+					children: [["configuration", "Configuration Integrity"], ["database_history", "Database History"]].map(([e, t]) => /* @__PURE__ */ (0, Y.jsx)("button", {
 						role: "tab",
 						"aria-selected": o === e,
 						className: `${DI} scheduler-diagnostics-tab ${o === e ? "is-active" : "is-inactive"}`,
@@ -26090,51 +26082,38 @@ function sR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 				}),
 				/* @__PURE__ */ (0, Y.jsxs)("div", {
 					className: "modal-body scheduler-diagnostics-body",
-					children: [
-						o === "configuration" ? /* @__PURE__ */ (0, Y.jsxs)("ul", {
-							className: "scheduler-config-list",
-							children: [
-								/* @__PURE__ */ (0, Y.jsx)(aR, {
-									icon: d ? ye : be,
-									label: "Overall configuration integrity",
-									ok: d,
-									explanation: d ? "All configuration checks pass." : "One or more configuration checks failed."
-								}),
-								/* @__PURE__ */ (0, Y.jsx)(aR, {
-									icon: u.seed_sql_matches_artifact ? ee : te,
-									label: "Seed SQL artifact match",
-									ok: !!u.seed_sql_matches_artifact,
-									explanation: "Generated seed SQL matches the committed artifact."
-								}),
-								/* @__PURE__ */ (0, Y.jsx)(aR, {
-									icon: u.init_sql_matches_artifact ? ee : te,
-									label: "Init SQL artifact match",
-									ok: !!u.init_sql_matches_artifact,
-									explanation: "Generated init SQL matches the committed artifact."
-								})
-							]
-						}) : null,
-						o === "file_audit" ? /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [/* @__PURE__ */ (0, Y.jsxs)("p", {
-							className: "scheduler-diagnostics-tab-subtitle",
-							children: [/* @__PURE__ */ (0, Y.jsx)(oe, {
-								size: 13,
-								"aria-hidden": "true"
-							}), " Recent scheduler runs from the JSONL audit trail."]
-						}), /* @__PURE__ */ (0, Y.jsx)(oR, {
-							rows: (t == null ? void 0 : t.recent_jsonl_runs) || [],
-							emptyMessage: "No JSONL audit rows recorded yet."
-						})] }) : null,
-						o === "database_history" ? /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [/* @__PURE__ */ (0, Y.jsxs)("p", {
-							className: "scheduler-diagnostics-tab-subtitle",
-							children: [/* @__PURE__ */ (0, Y.jsx)(oe, {
-								size: 13,
-								"aria-hidden": "true"
-							}), " Recent scheduler runs currently mirrored into Postgres."]
-						}), /* @__PURE__ */ (0, Y.jsx)(oR, {
-							rows: (t == null ? void 0 : t.recent_postgres_runs) || [],
-							emptyMessage: "No Postgres run rows recorded yet."
-						})] }) : null
-					]
+					children: [o === "configuration" ? /* @__PURE__ */ (0, Y.jsxs)("ul", {
+						className: "scheduler-config-list",
+						children: [
+							/* @__PURE__ */ (0, Y.jsx)(aR, {
+								icon: d ? ye : be,
+								label: "Overall configuration integrity",
+								ok: d,
+								explanation: d ? "All configuration checks pass." : "One or more configuration checks failed."
+							}),
+							/* @__PURE__ */ (0, Y.jsx)(aR, {
+								icon: u.seed_sql_matches_artifact ? ee : te,
+								label: "Seed SQL artifact match",
+								ok: !!u.seed_sql_matches_artifact,
+								explanation: "Generated seed SQL matches the committed artifact."
+							}),
+							/* @__PURE__ */ (0, Y.jsx)(aR, {
+								icon: u.init_sql_matches_artifact ? ee : te,
+								label: "Init SQL artifact match",
+								ok: !!u.init_sql_matches_artifact,
+								explanation: "Generated init SQL matches the committed artifact."
+							})
+						]
+					}) : null, o === "database_history" ? /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [/* @__PURE__ */ (0, Y.jsxs)("p", {
+						className: "scheduler-diagnostics-tab-subtitle",
+						children: [/* @__PURE__ */ (0, Y.jsx)(oe, {
+							size: 13,
+							"aria-hidden": "true"
+						}), " Recent scheduler runs currently mirrored into Postgres."]
+					}), /* @__PURE__ */ (0, Y.jsx)(oR, {
+						rows: (t == null ? void 0 : t.recent_postgres_runs) || [],
+						emptyMessage: "No Postgres run rows recorded yet."
+					})] }) : null]
 				})
 			]
 		})

@@ -809,6 +809,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == scheduler_health_final_visual_polish_runtime_files:
         return
+    scheduler_health_jsonl_removal_runtime_files = {
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == scheduler_health_jsonl_removal_runtime_files:
+        scheduler_health_source = (
+            ROOT
+            / "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx"
+        )
+        source = scheduler_health_source.read_text(encoding="utf-8")
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in source
+        return
     phase55b_runtime_files = {
         ROOT / "src/app/planning_ui.py",
         ROOT / "src/app/services.py",

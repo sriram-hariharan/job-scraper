@@ -95,15 +95,34 @@ describe("SchedulerHealthDashboard", () => {
     expect(within(activeJobsMetric as HTMLElement).getByText("2")).toBeInTheDocument();
   });
 
-  it("does not render a fake healthy state when contract or storage checks fail", async () => {
+  it("shows a Recorded runs metric backed by postgres_summary.run_history_count, and no Storage sync metric", async () => {
+    render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+    await screen.findByText("Healthy");
+    const recordedRunsMetric = screen.getByText("Recorded runs").closest(".scheduler-overview-metric");
+    expect(recordedRunsMetric).not.toBeNull();
+    expect(within(recordedRunsMetric as HTMLElement).getByText("2")).toBeInTheDocument();
+    expect(screen.queryByText("Storage sync")).not.toBeInTheDocument();
+  });
+
+  it("does not render a fake healthy state when contract checks fail", async () => {
     const mismatched: SchedulerSummaryPayload = {
       ...READY_PAYLOAD,
       contract_health: { ...READY_PAYLOAD.contract_health, all_checks_pass: false },
-      history: { ...READY_PAYLOAD.history, count_matches: false },
     };
     render(<SchedulerHealthDashboard readSummary={async () => mismatched} />);
     expect(await screen.findByText("Attention")).toBeInTheDocument();
-    expect(screen.getByText("Needs attention: configuration integrity and storage sync.")).toBeInTheDocument();
+    expect(screen.getByText("Needs attention: configuration integrity.")).toBeInTheDocument();
+  });
+
+  it("stays healthy when history.count_matches is false and JSONL data is missing", async () => {
+    const jsonlMissing: SchedulerSummaryPayload = {
+      ...READY_PAYLOAD,
+      history: { ...READY_PAYLOAD.history, count_matches: false, jsonl_row_count: 0 },
+      recent_jsonl_runs: [],
+    };
+    render(<SchedulerHealthDashboard readSummary={async () => jsonlMissing} />);
+    expect(await screen.findByText("Healthy")).toBeInTheDocument();
+    expect(screen.getByText("Configuration integrity is consistent.")).toBeInTheDocument();
   });
 
   it("renders a real error state on fetch failure, not a silent healthy default", async () => {
@@ -184,16 +203,16 @@ describe("SchedulerHealthDashboard", () => {
     expect(screen.queryByRole("table", { name: /configuration/i })).not.toBeInTheDocument();
   });
 
-  it("makes File Audit and Database History reachable inside diagnostics", async () => {
+  it("makes Configuration Integrity and Database History reachable, with no File Audit tab", async () => {
     render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
     await screen.findByText("Healthy");
     fireEvent.click(screen.getByRole("button", { name: "View diagnostics" }));
-    await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
 
-    fireEvent.click(screen.getByRole("tab", { name: "File Audit" }));
-    expect(screen.getByText(/JSONL audit trail/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole("tab", { name: "File Audit" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("tab", { name: "Configuration Integrity" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Database History" }));
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Database History" }));
     expect(screen.getByText(/mirrored into Postgres/)).toBeInTheDocument();
   });
 

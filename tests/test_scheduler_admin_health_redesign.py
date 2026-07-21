@@ -247,9 +247,17 @@ def test_configuration_integrity_checks_remain_available() -> None:
     assert "Configuration Integrity" in SCHEDULER_DASHBOARD_TSX
 
 
-def test_file_audit_rows_remain_available() -> None:
-    assert "recent_jsonl_runs" in SCHEDULER_DASHBOARD_TSX
-    assert "File Audit" in SCHEDULER_DASHBOARD_TSX
+def test_file_audit_tab_is_removed_but_jsonl_fields_remain_backward_compatible() -> None:
+    # File Audit is removed from the UI entirely (dashboard no longer reads
+    # recent_jsonl_runs or renders a File Audit tab)...
+    assert "File Audit" not in SCHEDULER_DASHBOARD_TSX
+    assert "file_audit" not in SCHEDULER_DASHBOARD_TSX
+    assert "recent_jsonl_runs" not in SCHEDULER_DASHBOARD_TSX
+    # ...but the payload typing stays backward-compatible with the unchanged
+    # backend response, which still returns these fields.
+    assert "recent_jsonl_runs" in SCHEDULER_MODEL_TS
+    assert "jsonl_row_count" in SCHEDULER_MODEL_TS
+    assert "count_matches" in SCHEDULER_MODEL_TS
 
 
 def test_database_history_rows_remain_available() -> None:
@@ -263,9 +271,19 @@ def test_job_status_uses_latest_runs_by_job() -> None:
     assert "sortJobStatusRows" in SCHEDULER_DASHBOARD_TSX
 
 
-def test_existing_count_match_signal_is_displayed() -> None:
-    assert "count_matches" in SCHEDULER_DASHBOARD_TSX
-    assert "Storage sync" in SCHEDULER_DASHBOARD_TSX
+def test_storage_sync_and_count_matches_are_removed_from_the_health_calculation() -> None:
+    # count_matches/jsonl_row_count no longer factor into overall health or any
+    # displayed metric; the payload field itself remains typed (see
+    # test_file_audit_tab_is_removed_but_jsonl_fields_remain_backward_compatible).
+    assert "count_matches" not in SCHEDULER_DASHBOARD_TSX
+    assert "Storage sync" not in SCHEDULER_DASHBOARD_TSX
+    assert "storage sync" not in SCHEDULER_DASHBOARD_TSX.lower()
+
+
+def test_overall_health_depends_only_on_contract_health() -> None:
+    assert "const overallHealthy = Boolean(payload) && contractOk;" in SCHEDULER_DASHBOARD_TSX
+    assert "postgres_summary?.run_history_count" in SCHEDULER_DASHBOARD_TSX
+    assert "Recorded runs" in SCHEDULER_DASHBOARD_TSX
 
 
 def test_no_fake_time_period_labels_introduced() -> None:

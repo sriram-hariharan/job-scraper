@@ -1,9 +1,30 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from src.app.ui_shell import render_top_shell
+from src.auth.runtime import current_user_from_request
 
 router = APIRouter()
+
+
+def _is_admin_user(user: dict) -> bool:
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    return bool(user.get("is_admin", False)) or access_level == "admin"
+
+
+def _auth_user_from_request(request: Request | None) -> dict:
+    if request is None:
+        return {}
+    return dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+
+
+def _require_admin_user(request: Request) -> dict:
+    user = _auth_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -16,279 +37,46 @@ def executive_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=pipeline_options_controls_v4" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=pipeline_options_controls_v4" />
+  <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
-<body>
+<body class="executive-dashboard-page">
   {render_top_shell("/")}
   <div class="page">
-        <header class="page-header">
-          <div class="page-header-main">
-            <div class="executive-title-row">
-              <h1>Executive Queue</h1>
+        <header class="page-header app-page-header">
+          <div class="page-header-main app-page-header__main">
+            <div class="executive-title-row app-page-header__title-row">
+              <h1 class="app-page-header__title">Executive Queue</h1>
             </div>
 
-            <p class="subtext">High-signal operator dashboard for direct apply and review decisions.</p>
+            <p class="subtext app-page-header__description">High-signal operator dashboard for direct apply and review decisions.</p>
           </div>
 
-          <div class="header-actions">
+          <div class="header-actions app-page-header__actions">
             <button class="ghost-btn" id="refreshStatusBtn" type="button">Refresh Status</button>
             <button id="runPipelineBtn" type="button">Run Live Pipeline</button>
           </div>
         </header>
-    <section class="stats-grid">
-      <section class="card stat-card">
-        <div class="stat-label">Queue Rows</div>
-        <div class="stat-value" id="statQueueRows">-</div>
-      </section>
-      <section class="card stat-card">
-        <div class="stat-label">Next Steps</div>
-        <div class="stat-value" id="statDecisionRows">-</div>
-      </section>
-      <section class="card stat-card">
-        <div class="stat-label">Undecided Job Reviews</div>
-        <div class="stat-value" id="statUndecidedApplyReview">-</div>
-      </section>
-      <section class="card stat-card">
-        <div class="stat-label">Undecided Maybe Tailor</div>
-        <div class="stat-value" id="statUndecidedMaybeTailor">-</div>
-      </section>
-    </section>
-
-    <section class="card controls-card">
-      <div class="dashboard-toolbar dashboard-toolbar--executive">
-        <div class="dashboard-toolbar-left dashboard-toolbar-left--executive">
-          <div class="control-group dashboard-field dashboard-field--action">
-            <label>Action</label>
-            <div class="multi-select" id="actionFilter" data-placeholder="All">
-              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
-                <span class="multi-select-trigger-label">All</span>
-                <span class="multi-select-trigger-icon">▾</span>
-              </button>
-
-              <div class="multi-select-menu" role="menu" hidden>
-                <button type="button" class="multi-select-option" data-value="APPLY" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Ready for review</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="APPLY_REVIEW_VARIANTS" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Review resume choice</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="MAYBE_TAILOR" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Tailor first</span>
-                </button>
-                <button type="button" class="multi-select-option" data-value="SKIP_FOR_NOW" aria-checked="false">
-                  <span class="multi-select-option-check">✓</span>
-                  <span class="multi-select-option-label">Review later</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="control-group dashboard-field dashboard-field--preferences">
-            <label>Preferences</label>
-            <div class="multi-select" id="preferenceFilter" data-placeholder="All Preferences" data-all-value="__all__" data-searchable="true">
-              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
-                <span class="multi-select-trigger-label">All Preferences</span>
-                <span class="multi-select-trigger-icon">▾</span>
-              </button>
-              <div class="multi-select-menu" role="menu" hidden>
-                <label class="multi-select-search">
-                  <input type="search" class="multi-select-search-input" placeholder="Search preferences" aria-label="Search preferences" autocomplete="off" />
-                </label>
-                <div class="multi-select-options">
-                  <button type="button" class="multi-select-option is-selected" data-value="__all__" aria-checked="true">
-                    <span class="multi-select-option-check">✓</span>
-                    <span class="multi-select-option-label">All Preferences</span>
-                  </button>
-                </div>
-                <div class="multi-select-empty" hidden>No preferences found</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="control-group dashboard-field dashboard-field--limit">
-            <label for="limitInput">Limit</label>
-            <input type="number" id="limitInput" value="15" min="1" max="200" />
-          </div>
-
-          <div class="control-group dashboard-toggle-group executive-toolbar-toggle">
-            <label>Undecided only</label>
-
-            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Undecided only">
-              <label class="binary-toggle-option">
-                <input type="radio" name="executiveUndecidedOnly" value="no" checked />
-                <span>No</span>
-              </label>
-              <label class="binary-toggle-option">
-                <input type="radio" name="executiveUndecidedOnly" value="yes" />
-                <span>Yes</span>
-              </label>
-            </div>
-
-            <div class="control-help field-help-wide">
-              Yes shows only browse rows that do not have an operator decision yet.
-            </div>
-          </div>
-        </div>
-
-        <div class="dashboard-toolbar-right dashboard-toolbar-right--executive">
-          <div class="control-group button-group dashboard-toolbar-actions">
-            <button id="applyFiltersBtn">Apply Filters</button>
-            <button class="ghost-btn" id="clearFiltersBtn">Clear</button>
-          </div>
-        </div>
-      </div>
+    <section
+      id="executiveKpiRoot"
+      class="executive-kpi-root"
+      aria-label="Executive queue metrics"
+      aria-live="polite"
+    >
+      <div class="executive-kpi-server-fallback">Loading dashboard metrics...</div>
+      <noscript>Enable JavaScript to view the Executive queue metrics.</noscript>
     </section>
 
     <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
-
-    <section class="card table-card">
-      <div class="section-header application-table-header">
-        <div class="application-table-title-row">
-          <h2>Queue Table</h2>
-          <div class="executive-view-mode-row executive-view-mode-row--table">
-            <span class="executive-view-mode-label">View mode</span>
-            <div class="binary-toggle binary-toggle--compact binary-toggle--small" role="radiogroup" aria-label="Executive view mode">
-              <label class="binary-toggle-option">
-                <input type="radio" name="executiveViewMode" value="detailed" checked />
-                <span>Detailed</span>
-              </label>
-              <label class="binary-toggle-option">
-                <input type="radio" name="executiveViewMode" value="simple" />
-                <span>Simple</span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="application-table-header-right">
-          <div class="subtext" id="tableMeta">Loading...</div>
-          <div class="application-pagination-inline" id="queuePaginationInline">
-            <div class="application-pagination-meta" id="queuePaginationMeta">Loading...</div>
-            <div class="application-pagination-actions" id="queuePaginationActions"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table id="queueTable" class="resizable-table">
-          <colgroup id="queueTableColgroup">
-            <col data-col-key="queue_rank" style="width: 110px;" />
-            <col data-col-key="job_title" style="width: 260px;" />
-            <col data-col-key="job_company" style="width: 180px;" />
-            <col data-col-key="job_location" style="width: 170px;" />
-            <col data-col-key="posted_at" style="width: 150px;" />
-            <col data-col-key="recommendation" style="width: 240px;" />
-            <col data-col-key="packet_status" style="width: 150px;" />
-            <col data-col-key="winner_score" style="width: 120px;" />
-            <col data-col-key="selected_resume" style="width: 240px;" />
-            <col data-col-key="runner_up_resume" style="width: 220px;" />
-            <col data-col-key="score_gap" style="width: 110px;" />
-            <col data-col-key="missing_requirement_count" style="width: 140px;" />
-            <col data-col-key="next_step" style="width: 170px;" />
-            <col data-col-key="queue_priority_reason" style="width: 190px;" />
-            <col class="table-static-col" data-static-col-key="apply" style="width: 140px;" />
-          </colgroup>
-
-          <thead>
-            <tr id="queueTableHeaderRow">
-              <th data-col-key="queue_rank">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Rank</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="queue_rank"></span>
-              </th>
-              <th data-col-key="job_title">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Job title</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="job_title"></span>
-              </th>
-              <th data-col-key="job_company">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Company</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="job_company"></span>
-              </th>
-              <th data-col-key="job_location">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Location</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="job_location"></span>
-              </th>
-              <th data-col-key="posted_at">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Posted at</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="posted_at"></span>
-              </th>
-              <th data-col-key="recommendation">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Recommendation</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="recommendation"></span>
-              </th>
-              <th data-col-key="packet_status">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Packet</span>
-                  <span class="packet-info-icon" title="A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job." aria-label="A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.">ⓘ</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="packet_status"></span>
-              </th>
-              <th data-col-key="winner_score">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Match</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="winner_score"></span>
-              </th>
-              <th data-col-key="selected_resume">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Selected Resume</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="selected_resume"></span>
-              </th>
-              <th data-col-key="runner_up_resume">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Runner-up resume</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="runner_up_resume"></span>
-              </th>
-              <th data-col-key="score_gap">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Score gap</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="score_gap"></span>
-              </th>
-              <th data-col-key="missing_requirement_count">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Missing req count</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="missing_requirement_count"></span>
-              </th>
-              <th data-col-key="next_step">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Next step</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="next_step"></span>
-              </th>
-              <th data-col-key="queue_priority_reason">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Priority reason</span>
-                </div>
-                <span class="col-resize-handle" data-resize-key="queue_priority_reason"></span>
-              </th>
-              <th class="sticky-apply-col apply-col-fixed">
-                <div class="resizable-col-content">
-                  <span class="resizable-col-label">Review</span>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody id="queueTableBody"></tbody>
-        </table>
-      </div>
+    <section
+      id="executiveQueueRoot"
+      class="executive-queue-root"
+      aria-label="Executive queue"
+      aria-live="polite"
+    >
+      <div class="executive-queue-server-fallback">Loading executive queue...</div>
+      <noscript>Enable JavaScript to view and filter the Executive queue.</noscript>
     </section>
   </div>
 
@@ -322,185 +110,7 @@ def executive_dashboard() -> str:
     </div>
   </section>
 
-  <section class="modal-backdrop hidden" id="pipelineConfigModal">
-    <div class="modal-card pipeline-modal-card">
-      <div class="modal-header">
-        <div>
-          <h3>Run live pipeline</h3>
-          <div class="subtext">Choose limits and options before starting the run.</div>
-        </div>
-      </div>
-
-      <div class="pipeline-modal-scroll">
-        <div class="pipeline-option-sections compact-option-sections">
-          <div class="pipeline-option-section">
-            <div class="pipeline-option-section-header">
-              <div class="pipeline-option-title">Run size</div>
-            </div>
-
-            <div class="pipeline-form-grid pipeline-form-grid--compact">
-              <div class="control-group pipeline-limit-group">
-                <label for="pipelineJobLimitInput">
-                  Job limit
-                  <span class="packet-info-icon pipeline-help-icon" title="Maximum jobs allowed into this run." aria-label="Maximum jobs allowed into this run.">?</span>
-                </label>
-            <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" />
-
-            <div class="pipeline-inline-helper">
-              <span class="pipeline-inline-helper-label">Quick presets</span>
-              <div class="pipeline-chip-row pipeline-chip-row--compact">
-                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
-                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
-                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
-                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
-              </div>
-            </div>
-
-              </div>
-
-              <div class="control-group">
-                <label for="pipelineJobPacketLimitInput">
-                  Packet limit
-                  <span class="packet-info-icon pipeline-help-icon" title="Maximum detailed planning packets to build. 0 means all selected jobs." aria-label="Maximum detailed planning packets to build. 0 means all selected jobs.">?</span>
-                </label>
-                <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
-              </div>
-
-              <div class="control-group pipeline-toggle-group pipeline-toggle-group--inline">
-                <label>
-                  Rerun seen jobs
-                  <span class="packet-info-icon pipeline-help-icon" title="Include jobs that were already seen before." aria-label="Include jobs that were already seen before.">?</span>
-                </label>
-                <div class="binary-toggle" role="radiogroup" aria-label="Rerun seen jobs">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineDeleteSeenData" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineDeleteSeenData" value="yes" />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pipeline-option-section">
-            <div class="pipeline-option-section-header">
-              <div class="pipeline-option-title">Run mode</div>
-            </div>
-
-            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
-              <div class="pipeline-toggle-item pipeline-toggle-item--mode">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">
-                    Scan + Plan
-                    <span class="packet-info-icon pipeline-help-icon" title="Scrape jobs, score them, and build planning outputs." aria-label="Scrape jobs, score them, and build planning outputs.">?</span>
-                  </div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Run mode">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelinePlanningOnly" value="no" checked />
-                    <span>Scan + Plan</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelinePlanningOnly" value="yes" />
-                    <span>Plan only</span>
-                  </label>
-                </div>
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name pipeline-toggle-name--secondary">
-                    Plan only
-                    <span class="packet-info-icon pipeline-help-icon" title="Skip scraping and rebuild planning from existing jobs." aria-label="Skip scraping and rebuild planning from existing jobs.">?</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pipeline-option-section">
-            <div class="pipeline-option-section-header">
-              <div class="pipeline-option-title">AI planning</div>
-            </div>
-
-            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">
-                    AI review
-                    <span class="packet-info-icon pipeline-help-icon" title="Use AI to review planning decisions and borderline fits. This does not tailor resumes." aria-label="Use AI to review planning decisions and borderline fits. This does not tailor resumes.">?</span>
-                  </div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="AI review">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmAdjudication" value="no" />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmAdjudication" value="yes" checked />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pipeline-option-section pipeline-option-section--advanced">
-            <div class="pipeline-option-section-header">
-              <div class="pipeline-option-title">Advanced</div>
-            </div>
-
-            <div class="pipeline-toggle-grid pipeline-toggle-grid--compact">
-              <div class="pipeline-toggle-item">
-                <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">
-                    Backup ranking
-                    <span class="packet-info-icon pipeline-help-icon" title="Use fallback ranking when normal ranking signals are incomplete." aria-label="Use fallback ranking when normal ranking signals are incomplete.">?</span>
-                  </div>
-                </div>
-                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Backup ranking">
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmFallback" value="no" checked />
-                    <span>No</span>
-                  </label>
-                  <label class="binary-toggle-option">
-                    <input type="radio" name="pipelineGenerateLlmFallback" value="yes" />
-                    <span>Yes</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-actions pipeline-modal-actions">
-        <button type="button" class="ghost-btn" id="cancelPipelineConfigBtn">Cancel</button>
-        <button type="button" id="openPipelineConfirmBtn">Continue</button>
-      </div>
-    </div>
-  </section>
-
-  <section class="modal-backdrop hidden" id="pipelineConfirmModal">
-    <div class="modal-card pipeline-confirm-card">
-      <div class="modal-header pipeline-confirm-header">
-        <div>
-          <h3>Confirm pipeline run</h3>
-          <div class="subtext">Final review before launching the live pipeline.</div>
-        </div>
-        <button class="ghost-btn modal-close-btn" id="closePipelineConfirmModalBtn" type="button">Close</button>
-      </div>
-
-      <div class="pipeline-confirm-scroll">
-        <div class="confirm-summary-block" id="pipelineConfirmSummary"></div>
-      </div>
-
-      <div class="modal-actions pipeline-confirm-actions">
-        <button type="button" class="ghost-btn" id="backToPipelineConfigBtn">Back</button>
-        <button type="button" id="confirmPipelineRunBtn">Run pipeline</button>
-      </div>
-    </div>
-  </section>
+  {_pipeline_dashboard_launch_dialogs()}
 
   <section class="page-loading-overlay workflow-overlay workflow-overlay--pipeline hidden" id="pageLoadingOverlay" aria-live="polite" aria-modal="true" role="dialog">
     <div class="page-loading-card pipeline-loading-card workflow-overlay__panel" id="pipelineOverlayCard">
@@ -618,333 +228,238 @@ def executive_dashboard() -> str:
   </div>
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/app.js?v=pipeline_options_controls_v4"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
 </html>
     """.strip()
 
-@router.get("/scheduler", response_class=HTMLResponse)
-def scheduler_dashboard() -> str:
+
+def _pipeline_dashboard_launch_dialogs() -> str:
+    """Render the canonical reviewed Live Pipeline launch flow."""
+    return """
+  <section
+    class="modal-backdrop hidden pipeline-launch-modal"
+    id="pipelineConfigModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="pipelineLaunchTitle"
+    aria-describedby="pipelineLaunchDescription"
+  >
+    <div class="modal-card pipeline-modal-card" data-pipeline-launch-step="configure">
+      <header class="modal-header pipeline-launch-header">
+        <div class="pipeline-launch-heading">
+          <div class="pipeline-launch-eyebrow">Live pipeline</div>
+          <h3 id="pipelineLaunchTitle">Run live pipeline</h3>
+          <div class="subtext" id="pipelineLaunchDescription">Choose limits and options before starting the run.</div>
+        </div>
+        <ol class="pipeline-launch-steps" aria-label="Pipeline launch progress">
+          <li class="pipeline-launch-step-indicator is-active" data-pipeline-step-indicator="configure" aria-current="step">
+            <span>1</span> Configure
+          </li>
+          <li class="pipeline-launch-step-indicator" data-pipeline-step-indicator="review">
+            <span>2</span> Review &amp; launch
+          </li>
+        </ol>
+        <button class="ghost-btn modal-close-btn" id="closePipelineConfigModalBtn" type="button" aria-label="Close pipeline settings">Close</button>
+      </header>
+
+      <div class="pipeline-modal-scroll" id="pipelineLaunchModalBody" tabindex="0">
+        <section class="pipeline-launch-step" id="pipelineConfigureStep" data-pipeline-launch-panel="configure" aria-labelledby="pipelineConfigureHeading">
+          <h4 class="sr-only" id="pipelineConfigureHeading">Configure pipeline run</h4>
+          <div class="pipeline-option-sections compact-option-sections">
+            <section class="pipeline-option-section pipeline-option-section--scope">
+              <div class="pipeline-option-section-header">
+                <div><div class="pipeline-option-kicker">Scope</div><div class="pipeline-option-title">Run scope</div></div>
+                <div class="pipeline-option-description">Control how many jobs enter the run and how many planning packets are produced.</div>
+              </div>
+              <div class="pipeline-form-grid pipeline-form-grid--compact">
+                <div class="control-group pipeline-limit-group">
+                  <label for="pipelineJobLimitInput">Job limit <span class="packet-info-icon pipeline-help-icon" title="Maximum jobs allowed into this run." aria-label="Maximum jobs allowed into this run.">?</span></label>
+                  <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" aria-describedby="pipelineJobLimitError" />
+                  <div class="pipeline-inline-validation" id="pipelineJobLimitError" aria-live="polite"></div>
+                  <div class="pipeline-inline-helper">
+                    <span class="pipeline-inline-helper-label">Quick presets</span>
+                    <div class="pipeline-chip-row pipeline-chip-row--compact">
+                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
+                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
+                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
+                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="control-group">
+                  <label for="pipelineJobPacketLimitInput">Packet limit <span class="packet-info-icon pipeline-help-icon" title="Maximum detailed planning packets to build. 0 means all selected jobs." aria-label="Maximum detailed planning packets to build. 0 means all selected jobs.">?</span></label>
+                  <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" aria-describedby="pipelineJobPacketLimitError" />
+                  <div class="pipeline-inline-validation" id="pipelineJobPacketLimitError" aria-live="polite"></div>
+                  <div class="control-help">Use 0 to build packets for every selected job.</div>
+                </div>
+                <div class="pipeline-setting-row pipeline-setting-row--wide">
+                  <div class="pipeline-toggle-copy">
+                    <div class="pipeline-toggle-name">Rerun seen jobs <span class="packet-info-icon pipeline-help-icon" title="Include jobs that were already seen before." aria-label="Include jobs that were already seen before.">?</span></div>
+                    <div class="pipeline-toggle-help">Include jobs that were processed in an earlier run.</div>
+                  </div>
+                  <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Rerun seen jobs">
+                    <label class="binary-toggle-option"><input type="radio" name="pipelineDeleteSeenData" value="no" checked /><span>No</span></label>
+                    <label class="binary-toggle-option"><input type="radio" name="pipelineDeleteSeenData" value="yes" /><span>Yes</span></label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="pipeline-option-section">
+              <div class="pipeline-option-section-header">
+                <div><div class="pipeline-option-kicker">Processing</div><div class="pipeline-option-title">Run mode</div></div>
+              </div>
+              <div class="pipeline-setting-row pipeline-setting-row--mode">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Pipeline stages</div>
+                  <div class="pipeline-toggle-help">Scan and plan new jobs, or rebuild planning from jobs already collected.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact pipeline-mode-toggle" role="radiogroup" aria-label="Run mode">
+                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="no" checked /><span>Scan + Plan <i class="packet-info-icon pipeline-help-icon" title="Scrape jobs, score them, and build planning outputs." aria-label="Scrape jobs, score them, and build planning outputs.">?</i></span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="yes" /><span>Plan only <i class="packet-info-icon pipeline-help-icon" title="Skip scraping and rebuild planning from existing jobs." aria-label="Skip scraping and rebuild planning from existing jobs.">?</i></span></label>
+                </div>
+              </div>
+            </section>
+
+            <section class="pipeline-option-section">
+              <div class="pipeline-option-section-header">
+                <div><div class="pipeline-option-kicker">Intelligence</div><div class="pipeline-option-title">AI planning</div></div>
+              </div>
+              <div class="pipeline-setting-row">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">AI review <span class="packet-info-icon pipeline-help-icon" title="Use AI to review planning decisions and borderline fits. This does not tailor resumes." aria-label="Use AI to review planning decisions and borderline fits. This does not tailor resumes.">?</span></div>
+                  <div class="pipeline-toggle-help">Review planning decisions and borderline fits without tailoring resumes.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="AI review">
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmAdjudication" value="no" /><span>No</span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmAdjudication" value="yes" checked /><span>Yes</span></label>
+                </div>
+              </div>
+            </section>
+
+            <section class="pipeline-option-section pipeline-option-section--advanced">
+              <div class="pipeline-option-section-header">
+                <div><div class="pipeline-option-kicker">Optional</div><div class="pipeline-option-title">Advanced</div></div>
+              </div>
+              <div class="pipeline-setting-row">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Backup ranking <span class="packet-info-icon pipeline-help-icon" title="Use fallback ranking when normal ranking signals are incomplete." aria-label="Use fallback ranking when normal ranking signals are incomplete.">?</span></div>
+                  <div class="pipeline-toggle-help">Use fallback ranking only when normal ranking signals are incomplete.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Backup ranking">
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmFallback" value="no" checked /><span>No</span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelineGenerateLlmFallback" value="yes" /><span>Yes</span></label>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="pipeline-launch-step hidden" id="pipelineConfirmModal" data-pipeline-launch-panel="review" aria-labelledby="pipelineReviewHeading" aria-live="polite">
+          <h4 class="sr-only" id="pipelineReviewHeading">Review and launch pipeline run</h4>
+          <div class="confirm-summary-block" id="pipelineConfirmSummary"></div>
+        </section>
+      </div>
+
+      <footer class="modal-actions pipeline-modal-actions">
+        <button type="button" class="ghost-btn" id="cancelPipelineConfigBtn">Cancel</button>
+        <button type="button" class="ghost-btn hidden" id="backToPipelineConfigBtn">Back</button>
+        <button type="button" id="openPipelineConfirmBtn">Continue</button>
+        <button type="button" class="hidden" id="confirmPipelineRunBtn">Run Pipeline</button>
+      </footer>
+    </div>
+  </section>
+    """.strip()
+
+
+def _pipeline_dashboard_error_dialog() -> str:
+    return """
+  <section class="modal-backdrop hidden" id="appErrorModal">
+    <div class="modal-card app-error-modal-card">
+      <div class="modal-header app-error-modal-header">
+        <div><h3 id="appErrorTitle">Something went wrong</h3><div class="subtext" id="appErrorSubtitle">Review the message below.</div></div>
+        <button class="ghost-btn modal-close-btn" id="closeAppErrorModalBtn" type="button">Close</button>
+      </div>
+      <div class="app-error-panel">
+        <div class="app-error-icon-wrap" aria-hidden="true"><img class="app-error-icon-img" src="/static/media/error_img.png" alt="" /></div>
+        <div class="app-error-copy"><div class="app-error-badge">Warning</div><div class="app-error-message" id="appErrorMessage"></div></div>
+      </div>
+      <div class="modal-actions app-error-actions"><button type="button" id="appErrorOkBtn">OK</button></div>
+    </div>
+  </section>
+    """.strip()
+
+
+@router.get("/pipeline", response_class=HTMLResponse)
+def pipeline_dashboard() -> str:
     return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scheduler Ops Dashboard</title>
+  <title>Pipeline Dashboard</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+</head>
+<body class="pipeline-dashboard-page">
+  {render_top_shell("/pipeline")}
+  <main class="page pipeline-dashboard-shell">
+    <section
+      id="pipelineDashboardRoot"
+      aria-label="Pipeline monitoring dashboard"
+      aria-live="polite"
+    >
+      <div class="pipeline-dashboard-server-fallback">Loading pipeline status...</div>
+      <noscript>Enable JavaScript to monitor Pipeline status.</noscript>
+    </section>
+  </main>
+  {_pipeline_dashboard_launch_dialogs()}
+  {_pipeline_dashboard_error_dialog()}
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/app.js?v=phase133d_s1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+</body>
+</html>
+    """.strip()
+
+@router.get("/scheduler", response_class=HTMLResponse)
+def scheduler_dashboard(request: Request) -> str:
+    _require_admin_user(request)
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scheduler Health</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
-<body>
+<body class="scheduler-health-page">
   {render_top_shell("/scheduler")}
-  <div class="page scheduler-page">
-    <header class="page-header">
-      <div class="page-header-main">
-        <h1>Scheduler Ops</h1>
-        <p class="subtext">Operational view for scheduler health, persistence status, and recent runs.</p>
-      </div>
-
-    </header>
-
-    <div class="subtext pipeline-run-meta" id="schedulerOpsMeta" hidden aria-hidden="true">
-      Loading scheduler summary...
-    </div>
-
-    <section class="card table-card scheduler-table-card">
-      <div class="scheduler-table-tabs">
-        <div class="scheduler-tab-row" role="tablist" aria-label="Scheduler views">
-          <button type="button" class="scheduler-tab-btn active" data-tab="contract" role="tab" aria-selected="true">
-            Contract Health
-          </button>
-          <button type="button" class="scheduler-tab-btn" data-tab="jsonl" role="tab" aria-selected="false">
-            JSONL Rows
-          </button>
-          <button type="button" class="scheduler-tab-btn" data-tab="postgres" role="tab" aria-selected="false">
-            Postgres Rows
-          </button>
-          <button type="button" class="scheduler-tab-btn" data-tab="latest" role="tab" aria-selected="false">
-            Latest Runs by Job
-          </button>
-        </div>
-      </div>
-
-      <div class="scheduler-table-header">
-        <div class="scheduler-table-title-wrap">
-          <h2 id="schedulerTableTitle">Contract Health</h2>
-          <div class="subtext" id="schedulerTableSubtitle">Artifact drift and scheduler contract checks.</div>
-        </div>
-        <div class="scheduler-table-header-right">
-          <button class="ghost-btn" id="refreshSchedulerSummaryBtn" type="button">Refresh</button>
-        </div>
-      </div>
-
-      <div class="table-wrap scheduler-attached-table-wrap">
-        <table id="schedulerTable">
-          <thead id="schedulerTableHead">
-            <tr>
-              <th>Check</th>
-              <th>Value</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="schedulerTableBody">
-            <tr><td colspan="3" class="empty-state">Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
+  <main class="page scheduler-health-shell">
+    <section
+      id="schedulerHealthDashboardRoot"
+      aria-label="Scheduler health dashboard"
+      aria-live="polite"
+    >
+      <div class="scheduler-health-server-fallback">Loading scheduler health...</div>
+      <noscript>Enable JavaScript to monitor Scheduler Health.</noscript>
     </section>
-  </div>
+  </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script>
-    (function () {{
-      const summaryUrl = "/scheduler/summary?limit=25";
-
-      const metaEl = document.getElementById("schedulerOpsMeta");
-      const refreshBtn = document.getElementById("refreshSchedulerSummaryBtn");
-      const tableTitleEl = document.getElementById("schedulerTableTitle");
-      const tableSubtitleEl = document.getElementById("schedulerTableSubtitle");
-      const tableHeadEl = document.getElementById("schedulerTableHead");
-      const tableBodyEl = document.getElementById("schedulerTableBody");
-
-      const tabButtons = Array.from(document.querySelectorAll(".scheduler-tab-btn"));
-
-      let currentPayload = null;
-      let activeTab = "contract";
-
-      if (!metaEl || !refreshBtn || !tableTitleEl || !tableSubtitleEl || !tableHeadEl || !tableBodyEl || !tabButtons.length) {{
-        return;
-      }}
-
-      function escapeHtml(value) {{
-        return String(value ?? "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#39;");
-      }}
-
-      const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {{
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }});
-
-      const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {{
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-      }});
-
-      function buildDateTimeCellHtml(value) {{
-        if (!value) {{
-          return "-";
-        }}
-
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) {{
-          return escapeHtml(String(value));
-        }}
-
-        return `
-          <div class="datetime-cell">
-            <div class="datetime-cell-date">${{escapeHtml(DATE_ONLY_FORMATTER.format(date))}}</div>
-            <div class="datetime-cell-time">${{escapeHtml(TIME_ONLY_FORMATTER.format(date))}}</div>
-          </div>
-        `;
-      }}
-
-      function statusBadgeClass(status) {{
-        const normalized = String(status || "").toLowerCase();
-        if (normalized === "succeeded") return "scheduler-run-badge scheduler-run-badge--success";
-        if (normalized === "failed") return "scheduler-run-badge scheduler-run-badge--danger";
-        return "scheduler-run-badge scheduler-run-badge--muted";
-      }}
-
-      function yesNoBadgeClass(value) {{
-        return value
-          ? "scheduler-run-badge scheduler-run-badge--success"
-          : "scheduler-run-badge scheduler-run-badge--danger";
-      }}
-
-      function renderEmptyRow(colspan, message) {{
-        return `<tr><td colspan="${{colspan}}" class="empty-state">${{escapeHtml(message)}}</td></tr>`;
-      }}
-
-      function renderContractRows(contractHealth) {{
-        const checks = contractHealth?.checks || {{}};
-        const overall = Boolean(contractHealth?.all_checks_pass);
-
-        const rows = [
-          {{
-            label: "Overall Contract Health",
-            value: overall ? "Healthy" : "Drift",
-            ok: overall,
-          }},
-          {{
-            label: "Seed SQL matches artifact",
-            value: checks.seed_sql_matches_artifact ? "Yes" : "No",
-            ok: Boolean(checks.seed_sql_matches_artifact),
-          }},
-          {{
-            label: "Init SQL matches artifact",
-            value: checks.init_sql_matches_artifact ? "Yes" : "No",
-            ok: Boolean(checks.init_sql_matches_artifact),
-          }},
-        ];
-
-        return rows.map((row) => {{
-          return `
-            <tr>
-              <td>${{escapeHtml(row.label)}}</td>
-              <td>${{escapeHtml(row.value)}}</td>
-              <td><span class="${{yesNoBadgeClass(row.ok)}}">${{row.ok ? "OK" : "Issue"}}</span></td>
-            </tr>
-          `;
-        }}).join("");
-      }}
-
-      function renderRunRows(rows) {{
-        if (!Array.isArray(rows) || rows.length === 0) {{
-          return renderEmptyRow(6, "No rows found.");
-        }}
-
-        return rows.map((row) => {{
-          return `
-            <tr>
-              <td>${{escapeHtml(row.run_id || "-")}}</td>
-              <td>${{escapeHtml(row.job_name || "-")}}</td>
-              <td><span class="${{statusBadgeClass(row.status)}}">${{escapeHtml(row.status || "-")}}</span></td>
-              <td>${{escapeHtml(row.return_code ?? "-")}}</td>
-              <td>${{buildDateTimeCellHtml(row.started_at)}}</td>
-              <td>${{buildDateTimeCellHtml(row.finished_at)}}</td>
-            </tr>
-          `;
-        }}).join("");
-      }}
-
-      const tabConfig = {{
-        contract: {{
-          title: "Contract Health",
-          subtitle: "Artifact drift and scheduler contract checks.",
-          columns: ["Check", "Value", "Status"],
-          renderRows(payload) {{
-            return renderContractRows(payload?.contract_health || {{}});
-          }},
-        }},
-        jsonl: {{
-          title: "JSONL Rows",
-          subtitle: "Recent scheduler runs from the JSONL audit trail.",
-          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
-          renderRows(payload) {{
-            return renderRunRows(payload?.recent_jsonl_runs || []);
-          }},
-        }},
-        postgres: {{
-          title: "Postgres Rows",
-          subtitle: "Recent scheduler runs currently mirrored into Postgres.",
-          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
-          renderRows(payload) {{
-            return renderRunRows(payload?.recent_postgres_runs || []);
-          }},
-        }},
-        latest: {{
-          title: "Latest Runs by Job",
-          subtitle: "Most recent run per scheduler job.",
-          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
-          renderRows(payload) {{
-            return renderRunRows(payload?.latest_runs_by_job || []);
-          }},
-        }},
-      }};
-
-      function activateTab(tabName) {{
-        if (!tabConfig[tabName]) {{
-          return;
-        }}
-
-        activeTab = tabName;
-
-        tabButtons.forEach((btn) => {{
-          const isActive = btn.dataset.tab === tabName;
-          btn.classList.toggle("active", isActive);
-          btn.setAttribute("aria-selected", isActive ? "true" : "false");
-        }});
-
-        renderActiveTable();
-      }}
-
-      function renderActiveTable() {{
-        const config = tabConfig[activeTab];
-        if (!config) {{
-          return;
-        }}
-
-        tableTitleEl.textContent = config.title;
-        tableSubtitleEl.textContent = config.subtitle;
-
-        tableHeadEl.innerHTML = `
-          <tr>
-            ${{config.columns.map((column) => `<th>${{escapeHtml(column)}}</th>`).join("")}}
-          </tr>
-        `;
-
-        if (!currentPayload) {{
-          tableBodyEl.innerHTML = renderEmptyRow(config.columns.length, "Loading...");
-          return;
-        }}
-
-        tableBodyEl.innerHTML = config.renderRows(currentPayload);
-      }}
-
-      async function loadSchedulerSummary() {{
-        metaEl.textContent = "Loading scheduler summary...";
-        refreshBtn.disabled = true;
-
-        try {{
-          const response = await fetch(summaryUrl, {{ cache: "no-store" }});
-          const payload = await response.json();
-
-          if (!response.ok) {{
-            throw new Error(payload.detail || "Failed to load scheduler summary.");
-          }}
-
-          currentPayload = payload;
-
-          const countsMatch = Boolean(payload?.history?.count_matches);
-          const countsMatchBadge = `<span class="${{yesNoBadgeClass(countsMatch)}}">${{countsMatch ? "Yes" : "No"}}</span>`;
-
-          metaEl.innerHTML =
-            `Job defs: ${{payload?.postgres_summary?.job_definition_count ?? 0}} · ` +
-            `Active jobs: ${{payload?.postgres_summary?.active_job_count ?? 0}} · ` +
-            `Success: ${{payload?.postgres_summary?.success_count ?? 0}} · ` +
-            `Failure: ${{payload?.postgres_summary?.failure_count ?? 0}} · ` +
-            `Counts Match: ${{countsMatchBadge}}`;
-
-          renderActiveTable();
-        }} catch (error) {{
-          currentPayload = null;
-          renderActiveTable();
-          metaEl.textContent = error?.message || "Failed to load scheduler summary.";
-        }} finally {{
-          refreshBtn.disabled = false;
-        }}
-      }}
-
-      tabButtons.forEach((btn) => {{
-        btn.addEventListener("click", () => activateTab(btn.dataset.tab));
-      }});
-
-      refreshBtn.addEventListener("click", loadSchedulerSummary);
-
-      activateTab("contract");
-      loadSchedulerSummary();
-    }})();
-  </script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
 </html>
     """.strip()

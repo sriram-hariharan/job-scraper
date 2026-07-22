@@ -1,39 +1,140 @@
 from html import escape
 
+# Navigation source of truth. Grouped for presentation only; hrefs, ordering of
+# destinations, and internal ownership are unchanged. The visible label
+# "Overview" maps to the existing Executive route ("/") — this is a
+# presentation-label change only, not a route/API/storage rename.
+NAV_GROUPS = [
+    (
+        "Workspace",
+        [
+            ("Overview", "/", "overview"),
+            ("Planning", "/planning", "planning"),
+            ("Decisions", "/decisions-ui", "decisions"),
+            ("Applications", "/applications", "applications"),
+        ],
+    ),
+    (
+        "Operations",
+        [
+            ("Pipeline", "/pipeline", "pipeline"),
+        ],
+    ),
+]
+
+# Flat view retained for callers/tests that reason about the full route set.
 NAV_ITEMS = [
-    ("Executive", "/", "E"),
-    ("Planning", "/planning", "P"),
-    ("Decisions", "/decisions-ui", "D"),
-    ("Applications", "/applications", "A"),
-    ("Scheduler", "/scheduler", "S"),
+    (label, href, icon)
+    for _group, items in NAV_GROUPS
+    for (label, href, icon) in items
 ]
 
 DEFAULT_USER_NAME = "Account"
 DEFAULT_USER_INITIAL = "A"
 
+# Inline icon geometry mirrors the Lucide icon family already vendored for the
+# React workspace (lucide-react). The shared shell is server-rendered classic
+# HTML, not React, so the equivalent Lucide paths are embedded inline to keep a
+# single consistent icon family without adding a dependency or a runtime.
+_ICON_PATHS = {
+    "overview": (
+        '<rect width="7" height="9" x="3" y="3" rx="1"/>'
+        '<rect width="7" height="5" x="14" y="3" rx="1"/>'
+        '<rect width="7" height="9" x="14" y="12" rx="1"/>'
+        '<rect width="7" height="5" x="3" y="16" rx="1"/>'
+    ),
+    "planning": (
+        '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>'
+        '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>'
+        '<path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>'
+    ),
+    "decisions": (
+        '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/>'
+        '<path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>'
+    ),
+    "applications": (
+        '<path d="M12 12h.01"/>'
+        '<path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>'
+        '<path d="M22 13a18.15 18.15 0 0 1-20 0"/>'
+        '<rect width="20" height="14" x="2" y="6" rx="2"/>'
+    ),
+    "pipeline": (
+        '<rect width="8" height="8" x="3" y="3" rx="2"/>'
+        '<path d="M7 11v4a2 2 0 0 0 2 2h4"/>'
+        '<rect width="8" height="8" x="13" y="13" rx="2"/>'
+    ),
+    "scheduler": (
+        '<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/>'
+        '<path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/>'
+        '<path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/>'
+    ),
+    "diagnostics": (
+        '<path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/>'
+        '<path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/>'
+        '<path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/>'
+        '<path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/>'
+    ),
+    "menu": (
+        '<line x1="4" x2="20" y1="6" y2="6"/>'
+        '<line x1="4" x2="20" y1="12" y2="12"/>'
+        '<line x1="4" x2="20" y1="18" y2="18"/>'
+    ),
+    "close": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    "collapse": (
+        '<rect width="18" height="18" x="3" y="3" rx="2"/>'
+        '<path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>'
+    ),
+    "expand": (
+        '<rect width="18" height="18" x="3" y="3" rx="2"/>'
+        '<path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>'
+    ),
+}
+
+
+def _icon_svg(name: str) -> str:
+    paths = _ICON_PATHS.get(name, "")
+    return (
+        '<svg class="app-shell-icon" viewBox="0 0 24 24" width="20" height="20" '
+        'fill="none" stroke="currentColor" stroke-width="2" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" '
+        f'focusable="false">{paths}</svg>'
+    )
+
 
 def render_top_shell(active_href: str) -> str:
-    nav_links = []
     toolbar_classes = "app-shell-top-right"
     if active_href in {"/onboarding", "/profile/preferences"}:
         toolbar_classes += " app-shell-top-right--flow"
 
-    for label, href, short_label in NAV_ITEMS:
-        active_class = "app-shell-nav-link active" if href == active_href else "app-shell-nav-link"
-        active_current = ' aria-current="page"' if href == active_href else ""
-        nav_links.append(
+    groups_html = []
+    for group_label, items in NAV_GROUPS:
+        links = []
+        for label, href, icon in items:
+            is_active = href == active_href
+            active_class = " active" if is_active else ""
+            active_current = ' aria-current="page"' if is_active else ""
+            links.append(
+                f"""
+                <a
+                  class="app-shell-nav-link{active_class}"
+                  href="{escape(href)}"
+                  data-nav-label="{escape(label)}"
+                  aria-label="{escape(label)}"
+                  {active_current}
+                  title="{escape(label)}"
+                >
+                  <span class="app-shell-nav-icon" aria-hidden="true">{_icon_svg(icon)}</span>
+                  <span class="app-shell-nav-label">{escape(label)}</span>
+                </a>
+                """.strip()
+            )
+
+        groups_html.append(
             f"""
-            <a
-              class="{active_class}"
-              href="{escape(href)}"
-              data-nav-label="{escape(label)}"
-              aria-label="{escape(label)}"
-              {active_current}
-              title="{escape(label)}"
-            >
-              <span class="app-shell-nav-short" aria-hidden="true">{escape(short_label)}</span>
-              <span class="app-shell-nav-label">{escape(label)}</span>
-            </a>
+            <div class="app-shell-nav-group" role="group" aria-label="{escape(group_label)}">
+              <div class="app-shell-nav-group-label" aria-hidden="true">{escape(group_label)}</div>
+              {''.join(links)}
+            </div>
             """.strip()
         )
 
@@ -42,24 +143,46 @@ def render_top_shell(active_href: str) -> str:
   type="button"
   class="app-shell-menu-btn"
   id="appShellMenuBtn"
-  aria-label="Toggle sidebar"
-  title="Toggle sidebar"
-  aria-pressed="false"
+  aria-label="Open navigation"
+  aria-controls="appShell"
+  aria-expanded="false"
+  title="Open navigation"
 >
-  <span class="app-shell-menu-btn-line" aria-hidden="true"></span>
-  <span class="app-shell-menu-btn-line" aria-hidden="true"></span>
-  <span class="app-shell-menu-btn-line" aria-hidden="true"></span>
+  <span class="app-shell-menu-btn-icon" aria-hidden="true">{_icon_svg("menu")}</span>
 </button>
 
-<aside class="app-shell" id="appShell">
+<div class="app-shell-overlay" id="appShellOverlay" hidden></div>
+
+<aside class="app-shell" id="appShell" aria-label="Primary">
   <div class="app-shell-brand-row">
     <a class="app-shell-brand" href="/" aria-label="ApplyLens AI home">
       <img class="app-shell-brand-logo" src="/static/media/app-logo.svg" alt="ApplyLens AI" />
     </a>
+
+    <button
+      type="button"
+      class="app-shell-collapse-btn"
+      id="appShellCollapseBtn"
+      aria-label="Collapse sidebar"
+      aria-pressed="false"
+      title="Collapse sidebar"
+    >
+      <span class="app-shell-collapse-icon" aria-hidden="true">{_icon_svg("collapse")}</span>
+    </button>
+
+    <button
+      type="button"
+      class="app-shell-close-btn"
+      id="appShellCloseBtn"
+      aria-label="Close navigation"
+      title="Close navigation"
+    >
+      <span class="app-shell-close-icon" aria-hidden="true">{_icon_svg("close")}</span>
+    </button>
   </div>
 
   <nav class="app-shell-nav" aria-label="Dashboard navigation">
-    {''.join(nav_links)}
+    {''.join(groups_html)}
   </nav>
 </aside>
 
@@ -242,11 +365,27 @@ def render_top_shell(active_href: str) -> str:
           data-admin-only="true"
         >
           <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
-            <img src="/static/media/adv_diagnostics_img.svg" alt="" />
+            {_icon_svg("diagnostics")}
           </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">Advanced Diagnostics</span>
             <span class="profile-dropdown-nav-subtitle">Admin workflow diagnostics</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
+        <a
+          class="profile-dropdown-nav-btn hidden"
+          href="/scheduler"
+          id="profileSchedulerHealthLink"
+          data-admin-only="true"
+        >
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scheduler" aria-hidden="true">
+            {_icon_svg("scheduler")}
+          </span>
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">Scheduler Health</span>
+            <span class="profile-dropdown-nav-subtitle">Scheduled jobs, run outcomes, and persistence integrity</span>
           </span>
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>

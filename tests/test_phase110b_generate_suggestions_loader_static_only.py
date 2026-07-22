@@ -78,6 +78,7 @@ def _evaluate_generate_suggestions_cases():
         "resolvePlanningRowOutputDir",
         "buildGenerateSuggestionsEndpoint",
         "getWorkspaceBlockedReason",
+        "resolvePlanningWorklistAction",
         "buildTailoringButtonHtml",
     ]
     functions = "\n\n".join(_function_source(source, name) for name in function_names)
@@ -189,10 +190,12 @@ console.log(JSON.stringify(rows));
 def test_generate_suggestions_button_uses_existing_workspace_when_artifacts_exist():
     source = _source()
     button_source = _function_source(source, "buildTailoringButtonHtml")
+    resolver_source = _function_source(source, "resolvePlanningWorklistAction")
+    action_source = resolver_source + button_source
 
-    assert "hasTailoringWorkspaceArtifacts(row)" in button_source
-    assert 'hasArtifacts ? "Open Workspace"' in button_source
-    assert '"Generate Suggestions"' in button_source
+    assert "hasTailoringWorkspaceArtifacts(row)" in action_source
+    assert 'hasArtifacts ? "Open Workspace"' in action_source
+    assert '"Generate Suggestions"' in action_source
     assert 'data-view-tailoring="true"' in button_source
     assert 'data-generate-suggestions="true"' in button_source
     assert '"Regenerate"' not in button_source
@@ -449,17 +452,18 @@ def test_generate_suggestions_waits_for_workspace_action_after_success():
 
 def test_generate_suggestions_click_is_separate_from_workspace_open_click():
     source = _source()
-    click_source = source.split('qs("planningTableBody").addEventListener("click"', 1)[1].split(
+    click_source = source.split('window.addEventListener(PLANNING_WORKLIST_ACTION_EVENT_NAME', 1)[1].split(
         'qs("closeApplicationModalBtn")',
         1,
     )[0]
 
-    assert 'event.target.closest("[data-view-tailoring=\'true\']")' in click_source
-    assert "handleTailoringClick(tailoringButton)" in click_source
-    assert 'event.target.closest("[data-generate-suggestions=\'true\']")' in click_source
-    assert "handleGenerateSuggestionsClick(generateSuggestionsButton)" in click_source
-    assert click_source.index("handleTailoringClick(tailoringButton)") < click_source.index(
-        "handleGenerateSuggestionsClick(generateSuggestionsButton)"
+    assert 'action.type !== "next_step"' in click_source
+    assert 'actionState.kind === "open_workspace"' in click_source
+    assert "handleTailoringClick(buttonLike)" in click_source
+    assert 'actionState.kind === "generate_suggestions"' in click_source
+    assert "handleGenerateSuggestionsClick(buttonLike)" in click_source
+    assert click_source.index("handleTailoringClick(buttonLike)") < click_source.index(
+        "handleGenerateSuggestionsClick(buttonLike)"
     )
 
 

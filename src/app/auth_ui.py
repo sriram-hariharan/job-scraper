@@ -240,7 +240,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
   <title>{escape(title)} · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <style>
     html,
     body {{
@@ -1193,7 +1193,7 @@ def _admin_registration_requests_page_html(*, selected_request_id: str = "") -> 
   <title>Registration Requests · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <style>
     body {{
       min-height: 100vh;

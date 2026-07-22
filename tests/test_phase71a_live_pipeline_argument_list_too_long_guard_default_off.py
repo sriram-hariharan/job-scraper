@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from src.app import services
+from src.pipeline import runtime_status
+from src.storage import rag_store
 
 
 class _FakeProcess:
@@ -234,12 +236,72 @@ def test_phase71a_live_pipeline_rejects_oversized_argv_before_popen(monkeypatch,
     assert "cmd" not in captured
 
 
+def test_phase71a_rag_export_streams_large_sql_over_stdin_without_truncation(monkeypatch):
+    captured = {}
+    docs = [
+        {
+            "doc_id": f"phase71-rag-{index:03d}",
+            "company": "ApplyLens",
+            "title": f"Role {index}",
+            "retrieval_text": f"phase71-marker-{index:03d}-" + ("evidence " * 1200),
+            "metadata": {"source": "phase71-test"},
+        }
+        for index in range(54)
+    ]
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://phase71.invalid/applylens")
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+    monkeypatch.setattr(rag_store, "_invalidate_rag_document_cache", lambda: None)
+
+    def fake_run(cmd, *, input=None, **kwargs):
+        captured["cmd"] = list(cmd)
+        captured["input"] = input
+        captured["kwargs"] = dict(kwargs)
+        return type("Completed", (), {"stdout": '{"upserted_count":54}\n'})()
+
+    monkeypatch.setattr(rag_store.subprocess, "run", fake_run)
+
+    result = rag_store.upsert_rag_job_documents(docs)
+
+    assert result["upserted_count"] == 54
+    assert "-c" not in captured["cmd"]
+    assert sum(len(str(arg).encode("utf-8")) + 1 for arg in captured["cmd"]) < 1024
+    assert len(captured["input"].encode("utf-8")) > 500_000
+    assert "phase71-marker-000" in captured["input"]
+    assert "phase71-marker-053" in captured["input"]
+    assert all("phase71-marker" not in str(arg) for arg in captured["cmd"])
+    assert captured["kwargs"]["check"] is True
+    assert captured["kwargs"]["capture_output"] is True
+    assert captured["kwargs"]["text"] is True
+
+
+def test_phase71a_failure_keeps_last_real_stage_when_outer_handler_reports_unknown(monkeypatch, tmp_path):
+    status_path = tmp_path / "pipeline_status.json"
+    status_path.write_text(
+        json.dumps({"status": "running", "current_stage": "rag_export", "counts": {"rag_export_count": 0}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(runtime_status.ENV_STATUS_PATH, str(status_path))
+    monkeypatch.setenv(runtime_status.ENV_RUN_ID, "phase71-rag-failure")
+
+    runtime_status.fail_run("unknown", "OSError(7, 'Argument list too long')")
+
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["current_stage"] == "rag_export"
+    assert payload["stage_message"] == "Failed in rag_export"
+    assert payload["error"] == "OSError(7, 'Argument list too long')"
+    assert payload["return_code"] == 1
+
+
 def test_phase71a_no_provider_network_mutation_or_artifact_imports():
     source = "\n".join(
         [
             inspect.getsource(services._validate_pipeline_subprocess_launch),
             inspect.getsource(services._compact_pipeline_child_env),
             inspect.getsource(services._write_live_pipeline_launch_config),
+            inspect.getsource(rag_store._run_psql_statement),
+            inspect.getsource(rag_store._run_psql_json_query),
         ]
     )
     assert "openai" not in source.lower()

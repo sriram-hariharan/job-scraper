@@ -207,6 +207,7 @@ from src.agents.jd_intelligence_planning_artifact_enricher_default_off import (
 )
 
 logger = logging.getLogger(__name__)
+_PROCESS_IDENTITY_POPEN = subprocess.Popen
 
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
 AGENT_FEEDBACK_SUMMARY_MAX_LIMIT = 1000
@@ -244,6 +245,8 @@ _PIPELINE_RUN_STATE: Dict[str, Any] = {
 
 _PIPELINE_ACTIVE_RUNS: Dict[str, Dict[str, Any]] = {}
 _PIPELINE_ACTIVE_RUNS_LOCK = threading.RLock()
+_PIPELINE_RECONCILIATION_DECISIONS: Dict[str, Dict[str, Any]] = {}
+_PIPELINE_RECONCILIATION_DECISIONS_LOCK = threading.RLock()
 
 _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS: set[str] = set()
 _PIPELINE_ARTIFACT_MAX_BYTES = int(
@@ -6192,6 +6195,8 @@ def _new_pipeline_run_state() -> Dict[str, Any]:
         "status_path": str(DEFAULT_PIPELINE_STATUS_PATH),
         "run_id": "",
         "child_pid": None,
+        "child_process_identity": "",
+        "worker_id": "",
         "error": "",
         "owner_user_id": "",
     }
@@ -6214,7 +6219,11 @@ def _active_pipeline_reservation_ttl_seconds() -> int:
 
 
 def _active_pipeline_worker_id() -> str:
-    return f"pid:{os.getpid()}"
+    pid = os.getpid()
+    process_identity = _process_start_identity(pid)
+    if process_identity:
+        return f"pid:{pid};start:{process_identity}"
+    return f"pid:{pid}"
 
 
 def _user_pipeline_redis_admission_lock_enabled() -> bool:
@@ -6454,10 +6463,12 @@ def _pipeline_status_snapshot(state: Any = None) -> Dict[str, Any]:
 
     process = run_state.get("process")
     log_handle = run_state.get("log_handle")
+    process_is_running = False
 
     if process is not None:
         return_code = process.poll()
         if return_code is None:
+            process_is_running = True
             run_state["status"] = "running"
         else:
             run_state["status"] = "succeeded" if return_code == 0 else "failed"
@@ -6485,10 +6496,15 @@ def _pipeline_status_snapshot(state: Any = None) -> Dict[str, Any]:
         "status_path": run_state.get("status_path", str(DEFAULT_PIPELINE_STATUS_PATH)),
         "run_id": run_state.get("run_id", ""),
         "child_pid": run_state.get("child_pid"),
+        "child_process_identity": run_state.get("child_process_identity", ""),
         "error": run_state.get("error", ""),
         "owner_user_id": run_state.get("owner_user_id", ""),
+        "active_run_updated_at": run_state.get("active_run_updated_at", ""),
+        "run_updated_at": run_state.get("run_updated_at", ""),
+        "worker_id": run_state.get("worker_id", ""),
         "config": run_state.get("config") or {},
         "is_running": status == "running",
+        "process_is_running": process_is_running,
     }
 
 def _write_runtime_status_file(path: Path, payload: Dict[str, Any]) -> None:
@@ -6522,32 +6538,294 @@ def _pid_exists(pid: Any) -> bool:
     return True
 
 
+def _positive_pid(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _process_start_identity(pid: Any) -> str:
+    normalized = _positive_pid(pid)
+    if normalized is None:
+        return ""
+
+    process = None
+    try:
+        process = _PROCESS_IDENTITY_POPEN(
+            ["ps", "-p", str(normalized), "-o", "lstart="],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        stdout, _ = process.communicate(timeout=1)
+    except subprocess.TimeoutExpired:
+        if process is not None:
+            process.kill()
+            process.communicate()
+        return ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+    if process is None or process.returncode != 0:
+        return ""
+    started_at = " ".join(str(stdout or "").split())
+    if not started_at:
+        return ""
+    return hashlib.sha256(started_at.encode("utf-8")).hexdigest()[:20]
+
+
+def _process_liveness(pid: Any, expected_identity: Any = "") -> str:
+    normalized = _positive_pid(pid)
+    if normalized is None:
+        return "malformed" if _clean_text(pid) else "missing"
+    if not _pid_exists(normalized):
+        return "dead"
+
+    expected = _clean_text(expected_identity)
+    if not expected:
+        return "exists_unverified"
+    actual = _process_start_identity(normalized)
+    if not actual:
+        return "identity_unavailable"
+    return "alive" if actual == expected else "identity_mismatch"
+
+
+def _pipeline_status_datetime(value: Any) -> datetime | None:
+    raw = _clean_text(value)
+    if not raw:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _pipeline_status_age_seconds(
+    snapshot: Dict[str, Any],
+    runtime_status: Dict[str, Any],
+) -> float | None:
+    candidates = (
+        runtime_status.get("updated_at_utc"),
+        runtime_status.get("updated_at"),
+        snapshot.get("active_run_updated_at"),
+        snapshot.get("run_updated_at"),
+        runtime_status.get("stage_started_at"),
+        runtime_status.get("started_at"),
+        snapshot.get("started_at"),
+    )
+    for value in candidates:
+        parsed = _pipeline_status_datetime(value)
+        if parsed is not None:
+            return max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds())
+
+    status_path = _clean_text(snapshot.get("status_path") or runtime_status.get("status_path"))
+    if status_path:
+        try:
+            modified_at = datetime.fromtimestamp(Path(status_path).stat().st_mtime, tz=timezone.utc)
+            return max(0.0, (datetime.now(timezone.utc) - modified_at).total_seconds())
+        except OSError:
+            pass
+
+    return None
+
+
+def _pipeline_worker_identity(worker_id: Any) -> tuple[int | None, str]:
+    raw = _clean_text(worker_id)
+    match = re.fullmatch(r"pid:(\d+)(?:;start:([a-f0-9]{8,64}))?", raw)
+    if not match:
+        return None, ""
+    return _positive_pid(match.group(1)), _clean_text(match.group(2))
+
+
+def _pipeline_worker_pid(worker_id: Any) -> int | None:
+    pid, _ = _pipeline_worker_identity(worker_id)
+    return pid
+
+
+def _pipeline_reconciliation_decision(
+    run_id: str,
+    *,
+    signature: str,
+) -> tuple[bool, Dict[str, Any]]:
+    safe_run_id = _clean_text(run_id)
+    if not safe_run_id:
+        return True, {}
+    with _PIPELINE_RECONCILIATION_DECISIONS_LOCK:
+        existing = dict(_PIPELINE_RECONCILIATION_DECISIONS.get(safe_run_id) or {})
+        cached_terminal = dict(existing.get("terminal_payload") or {})
+        if cached_terminal:
+            return False, cached_terminal
+
+        changed = _clean_text(existing.get("signature")) != signature
+        record = {"signature": signature}
+        _PIPELINE_RECONCILIATION_DECISIONS[safe_run_id] = record
+        while len(_PIPELINE_RECONCILIATION_DECISIONS) > 256:
+            oldest = next(iter(_PIPELINE_RECONCILIATION_DECISIONS))
+            _PIPELINE_RECONCILIATION_DECISIONS.pop(oldest, None)
+        return changed, {}
+
+
+def _cache_pipeline_terminal_reconciliation(
+    run_id: str,
+    *,
+    signature: str,
+    terminal_payload: Dict[str, Any],
+) -> None:
+    safe_run_id = _clean_text(run_id)
+    if not safe_run_id:
+        return
+    with _PIPELINE_RECONCILIATION_DECISIONS_LOCK:
+        _PIPELINE_RECONCILIATION_DECISIONS[safe_run_id] = {
+            "signature": signature,
+            "terminal_payload": dict(terminal_payload),
+        }
+
+
 def _heal_stale_running_runtime_status(
     snapshot: Dict[str, Any],
     runtime_status: Dict[str, Any],
 ) -> Dict[str, Any]:
-    if snapshot.get("is_running"):
+    if snapshot.get("process_is_running"):
         return runtime_status
 
-    if str(runtime_status.get("status", "") or "").strip().lower() != "running":
+    status = _clean_text(runtime_status.get("status")).lower()
+    if status not in {"starting", "running"}:
         return runtime_status
 
-    child_pid = runtime_status.get("child_pid")
-    if child_pid and _pid_exists(child_pid):
+    run_id = _clean_text(runtime_status.get("run_id") or snapshot.get("run_id"))
+    last_stage = _clean_text(runtime_status.get("current_stage"))
+    child_pid = runtime_status.get("child_pid") or snapshot.get("child_pid")
+    child_identity = _clean_text(
+        runtime_status.get("child_process_identity")
+        or snapshot.get("child_process_identity")
+    )
+    worker_id = runtime_status.get("worker_id") or snapshot.get("worker_id")
+    worker_pid, worker_identity = _pipeline_worker_identity(worker_id)
+    child_liveness = _process_liveness(child_pid, child_identity)
+    worker_liveness = _process_liveness(worker_pid, worker_identity)
+    age_seconds = _pipeline_status_age_seconds(snapshot, runtime_status)
+    known_dead_stale_seconds = 30
+    uncertain_stale_seconds = _active_pipeline_reservation_ttl_seconds()
+
+    if child_liveness == "alive":
+        return runtime_status
+
+    if worker_liveness == "alive":
+        return runtime_status
+
+    authoritative_worker_dead = worker_pid is not None and worker_liveness in {
+        "dead",
+        "identity_mismatch",
+    }
+    verified_child_absent = child_liveness in {
+        "missing",
+        "malformed",
+        "dead",
+        "identity_mismatch",
+    }
+
+    worker_evidence = "worker_pid_missing"
+    if worker_pid is not None:
+        if worker_liveness == "dead":
+            worker_evidence = f"worker_pid_not_running:{worker_pid}"
+        elif worker_liveness == "identity_mismatch":
+            worker_evidence = f"worker_identity_mismatch:{worker_pid}"
+        elif worker_liveness == "exists_unverified":
+            worker_evidence = f"worker_pid_exists_unverified:{worker_pid}"
+        elif worker_liveness == "identity_unavailable":
+            worker_evidence = f"worker_identity_unavailable:{worker_pid}"
+        else:
+            worker_evidence = f"worker_pid_{worker_liveness}:{worker_pid}"
+    elif _clean_text(worker_id):
+        worker_evidence = "worker_metadata_malformed"
+
+    child_evidence = "child_pid_missing"
+    normalized_child_pid = _positive_pid(child_pid)
+    if child_liveness == "malformed":
+        child_evidence = "child_pid_malformed"
+    elif normalized_child_pid is not None:
+        if child_liveness == "dead":
+            child_evidence = f"child_pid_not_running:{normalized_child_pid}"
+        elif child_liveness == "identity_mismatch":
+            child_evidence = f"child_identity_mismatch:{normalized_child_pid}"
+        elif child_liveness == "exists_unverified":
+            child_evidence = f"child_pid_exists_unverified:{normalized_child_pid}"
+        elif child_liveness == "identity_unavailable":
+            child_evidence = f"child_identity_unavailable:{normalized_child_pid}"
+        else:
+            child_evidence = f"child_pid_{child_liveness}:{normalized_child_pid}"
+
+    liveness_evidence = f"{worker_evidence};{child_evidence}"
+    stale_threshold = uncertain_stale_seconds
+    if authoritative_worker_dead and verified_child_absent:
+        stale_threshold = known_dead_stale_seconds
+
+    if age_seconds is None or age_seconds < stale_threshold:
+        signature = f"deferred:{liveness_evidence}:threshold={stale_threshold}"
+        should_log, cached_terminal = _pipeline_reconciliation_decision(
+            run_id,
+            signature=signature,
+        )
+        if cached_terminal:
+            return cached_terminal
+        if should_log:
+            logger.info(
+                "Interrupted pipeline reconciliation start run_id=%s stage=%s age_seconds=%s evidence=%s",
+                run_id,
+                last_stage,
+                round(age_seconds, 3) if age_seconds is not None else "unknown",
+                liveness_evidence,
+            )
+            logger.warning(
+                "Interrupted pipeline reconciliation deferred run_id=%s stage=%s age_seconds=%s "
+                "threshold_seconds=%s evidence=%s result=liveness_uncertain",
+                run_id,
+                last_stage,
+                round(age_seconds, 3) if age_seconds is not None else "unknown",
+                stale_threshold,
+                liveness_evidence,
+            )
         return runtime_status
 
     healed = dict(runtime_status)
     healed["status"] = "failed"
+    healed["is_running"] = False
     healed["finished_at"] = healed.get("finished_at") or _utc_now()
     healed["return_code"] = 1
 
-    reason = (
-        "Live pipeline is no longer running. "
-        "The API server likely restarted or the child process exited unexpectedly."
-    )
-    healed["error"] = healed.get("error") or reason
-    healed["summary_message"] = healed.get("summary_message") or reason
+    reason = "Pipeline run was interrupted because its owning process stopped before completion."
+    healed["error"] = reason
+    healed["summary_message"] = reason
     healed["stage_message"] = reason
+    healed["interruption_reconciliation"] = {
+        "reconciled_at": _utc_now(),
+        "last_update_age_seconds": round(age_seconds, 3),
+        "liveness_evidence": liveness_evidence,
+    }
+
+    signature = f"failed:{liveness_evidence}:threshold={stale_threshold}"
+    should_log, cached_terminal = _pipeline_reconciliation_decision(
+        run_id,
+        signature=signature,
+    )
+    if cached_terminal:
+        return cached_terminal
+
+    if should_log:
+        logger.info(
+            "Interrupted pipeline reconciliation start run_id=%s stage=%s age_seconds=%s evidence=%s",
+            run_id,
+            last_stage,
+            round(age_seconds, 3),
+            liveness_evidence,
+        )
 
     status_path_raw = str(
         snapshot.get("status_path")
@@ -6557,14 +6835,32 @@ def _heal_stale_running_runtime_status(
     if status_path_raw:
         _write_runtime_status_file(Path(status_path_raw), healed)
 
+    _cache_pipeline_terminal_reconciliation(
+        run_id,
+        signature=signature,
+        terminal_payload=healed,
+    )
+
+    if should_log:
+        logger.warning(
+            "Interrupted pipeline reconciliation completed run_id=%s stage=%s age_seconds=%s "
+            "evidence=%s result=failed",
+            run_id,
+            last_stage,
+            round(age_seconds, 3),
+            liveness_evidence,
+        )
+
     return healed
 
-def stop_live_pipeline_for_server_shutdown(
-    reason: str = "Live pipeline stopped because the API server shut down.",
+def _stop_pipeline_state_for_server_shutdown(
+    run_state: Dict[str, Any],
+    *,
+    reason: str,
 ) -> Dict[str, Any]:
-    process = _PIPELINE_RUN_STATE.get("process")
-    log_handle = _PIPELINE_RUN_STATE.get("log_handle")
-    status_path_raw = str(_PIPELINE_RUN_STATE.get("status_path", "") or "").strip()
+    process = run_state.get("process")
+    log_handle = run_state.get("log_handle")
+    status_path_raw = str(run_state.get("status_path", "") or "").strip()
     status_path = Path(status_path_raw).expanduser() if status_path_raw else None
     finished_at = _utc_now()
 
@@ -6574,7 +6870,7 @@ def stop_live_pipeline_for_server_shutdown(
                 log_handle.close()
             except Exception:
                 pass
-            _PIPELINE_RUN_STATE["log_handle"] = None
+            run_state["log_handle"] = None
 
         return {
             "ok": True,
@@ -6599,18 +6895,18 @@ def stop_live_pipeline_for_server_shutdown(
         except Exception:
             pass
 
-    _PIPELINE_RUN_STATE["process"] = None
-    _PIPELINE_RUN_STATE["child_pid"] = None
-    _PIPELINE_RUN_STATE["log_handle"] = None
-    _PIPELINE_RUN_STATE["finished_at"] = finished_at
-    _PIPELINE_RUN_STATE["return_code"] = return_code if return_code is not None else 1
+    run_state["process"] = None
+    run_state["child_pid"] = None
+    run_state["log_handle"] = None
+    run_state["finished_at"] = finished_at
+    run_state["return_code"] = return_code if return_code is not None else 1
 
     if was_running:
-        _PIPELINE_RUN_STATE["status"] = "failed"
-        _PIPELINE_RUN_STATE["error"] = reason
+        run_state["status"] = "failed"
+        run_state["error"] = reason
     else:
-        _PIPELINE_RUN_STATE["status"] = "succeeded" if return_code == 0 else "failed"
-        _PIPELINE_RUN_STATE["error"] = "" if return_code == 0 else reason
+        run_state["status"] = "succeeded" if return_code == 0 else "failed"
+        run_state["error"] = "" if return_code == 0 else reason
 
     if status_path and status_path.exists():
         runtime_payload = _load_runtime_status_file(str(status_path))
@@ -6640,11 +6936,38 @@ def stop_live_pipeline_for_server_shutdown(
     }
 
 
+def stop_live_pipeline_for_server_shutdown(
+    reason: str = "Pipeline run was interrupted before completion.",
+) -> Dict[str, Any]:
+    with _PIPELINE_ACTIVE_RUNS_LOCK:
+        owner_states = list(_PIPELINE_ACTIVE_RUNS.items())
+
+    results = []
+    for owner_user_id, state in owner_states:
+        result = _stop_pipeline_state_for_server_shutdown(state, reason=reason)
+        result["owner_user_id"] = owner_user_id
+        result["run_id"] = _clean_text(state.get("run_id"))
+        results.append(result)
+
+    global_result = _stop_pipeline_state_for_server_shutdown(
+        _PIPELINE_RUN_STATE,
+        reason=reason,
+    )
+    results.append(global_result)
+
+    return {
+        "ok": True,
+        "stopped": any(bool(result.get("stopped")) for result in results),
+        "stopped_count": sum(1 for result in results if result.get("stopped")),
+        "results": results,
+    }
+
+
 def _runtime_status_is_stale_startup(
     snapshot: Dict[str, Any],
     runtime_status: Dict[str, Any],
 ) -> bool:
-    if snapshot.get("is_running"):
+    if snapshot.get("process_is_running"):
         return False
 
     if str(runtime_status.get("status", "") or "").strip().lower() != "running":
@@ -6815,9 +7138,64 @@ def _persist_user_pipeline_terminal_reconciliation(
     _clear_owner_active_pipeline_state(owner, run_id)
 
 
-def _reconciled_user_pipeline_run_record(owner_user_id: str, run: Dict[str, Any]) -> Dict[str, Any]:
+def _reconciled_user_pipeline_run_record(
+    owner_user_id: str,
+    run: Dict[str, Any],
+    *,
+    active_run: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     row = dict(run or {})
     healed_payload = _run_status_json_heal_payload(row)
+    if not healed_payload and _clean_text(row.get("status")).lower() in {"starting", "running"}:
+        status_json = dict(row.get("status_json") or {}) if isinstance(row.get("status_json"), dict) else {}
+        config_json = dict(row.get("config_json") or {}) if isinstance(row.get("config_json"), dict) else {}
+        active = dict(active_run or {})
+        status_path = (
+            _clean_text(config_json.get("status_path"))
+            or _clean_text(status_json.get("status_path"))
+            or _clean_text(active.get("status_path"))
+        )
+        runtime_status = _load_runtime_status_file(status_path) if status_path else {}
+        candidate = dict(runtime_status or status_json)
+        if not candidate:
+            candidate = {
+                "run_id": _clean_text(row.get("run_id")),
+                "status": _clean_text(row.get("status")),
+                "started_at": _clean_text(row.get("started_at")),
+                "current_stage": _clean_text(row.get("current_stage")),
+                "stage_message": _clean_text(row.get("stage_message")),
+                "summary_message": _clean_text(row.get("summary_message")),
+                "return_code": row.get("return_code"),
+                "error": _clean_text(row.get("error")),
+                "status_path": status_path,
+            }
+
+        snapshot = {
+            "is_running": False,
+            "run_id": _clean_text(row.get("run_id")),
+            "started_at": _clean_text(row.get("started_at")),
+            "status_path": status_path,
+            "child_pid": (
+                candidate.get("child_pid")
+                or config_json.get("child_pid")
+                or active.get("process_pid")
+            ),
+            "child_process_identity": _clean_text(
+                candidate.get("child_process_identity")
+                or config_json.get("child_process_identity")
+            ),
+            "active_run_updated_at": _clean_text(active.get("updated_at")),
+            "run_updated_at": _clean_text(row.get("updated_at") or row.get("updated_at_utc")),
+            "worker_id": _clean_text(
+                candidate.get("worker_id")
+                or config_json.get("worker_id")
+                or active.get("worker_id")
+            ),
+        }
+        reconciled = _heal_stale_running_runtime_status(snapshot, candidate)
+        if _clean_text(reconciled.get("status")).lower() in _pipeline_terminal_statuses():
+            healed_payload = reconciled
+
     if not healed_payload:
         return row
 
@@ -7613,8 +7991,11 @@ def _owner_db_active_pipeline_status_payload(*, owner_user_id: str) -> Dict[str,
     state["status_path"] = _clean_text(active_run.get("status_path"))
     state["run_id"] = _clean_text(active_run.get("run_id"))
     state["child_pid"] = _clean_text(active_run.get("process_pid")) or None
+    state["child_process_identity"] = ""
     state["error"] = ""
     state["owner_user_id"] = owner
+    state["active_run_updated_at"] = _clean_text(active_run.get("updated_at"))
+    state["worker_id"] = _clean_text(active_run.get("worker_id"))
 
     payload = pipeline_status_payload(owner_user_id=owner, state=state)
     pipeline = dict(payload.get("pipeline", {}) or {})
@@ -8937,6 +9318,7 @@ def run_live_pipeline_payload(
 
     active_run_reserved = False
     redis_admission_lock: Dict[str, Any] = {}
+    worker_id = _active_pipeline_worker_id()
     if owner_for_pipeline_gate:
         reservation_ttl_seconds = _active_pipeline_reservation_ttl_seconds()
         redis_admission_lock = _user_pipeline_redis_admission_lock_payload(
@@ -8958,7 +9340,7 @@ def run_live_pipeline_payload(
             max_active_runs=_max_concurrent_user_pipeline_runs(),
             ttl_seconds=reservation_ttl_seconds,
             process_pid="",
-            worker_id=_active_pipeline_worker_id(),
+            worker_id=worker_id,
             output_dir=str(output_dir),
             status_path=str(canonical_status_path),
             metadata_json={
@@ -9060,7 +9442,10 @@ def run_live_pipeline_payload(
         )
         raise
     
+    child_process_identity = _process_start_identity(process.pid)
     runtime_payload["child_pid"] = process.pid
+    runtime_payload["child_process_identity"] = child_process_identity
+    runtime_payload["worker_id"] = worker_id
     _write_runtime_status_file(canonical_status_path, runtime_payload)
 
     target_state = _new_pipeline_run_state()
@@ -9076,6 +9461,8 @@ def run_live_pipeline_payload(
     target_state["status_path"] = str(canonical_status_path)
     target_state["run_id"] = run_id
     target_state["child_pid"] = process.pid
+    target_state["child_process_identity"] = child_process_identity
+    target_state["worker_id"] = worker_id
     target_state["error"] = ""
     target_state["owner_user_id"] = owner_for_pipeline_gate
     target_state["config"] = runtime_payload.get("config") or {}
@@ -27525,6 +27912,102 @@ def _filter_browse_rows_by_preference_ids(
     ]
 
 
+_BROWSE_SORT_KEYS = {
+    "queue_rank",
+    "job_title",
+    "job_company",
+    "job_location",
+    "posted_at",
+    "recommendation",
+    "winner_score",
+    "selected_resume",
+    "runner_up_resume",
+    "score_gap",
+    "missing_requirement_count",
+    "packet_status",
+}
+
+_BROWSE_RECOMMENDATION_ORDER = {
+    "APPLY": 0,
+    "APPLY_REVIEW_VARIANTS": 1,
+    "MAYBE_TAILOR": 2,
+    "SKIP_FOR_NOW": 3,
+}
+
+
+def _browse_numeric_sort_value(value: Any) -> float | None:
+    clean_value = _clean_text(value).replace(",", "")
+    if not clean_value:
+        return None
+    try:
+        return float(clean_value)
+    except ValueError:
+        return None
+
+
+def _browse_posted_at_sort_value(value: Any) -> float | None:
+    posted_at = _clean_text(value)
+    if not posted_at:
+        return None
+    try:
+        parsed = datetime.fromisoformat(posted_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _browse_sort_value(row: Dict[str, Any], sort_key: str) -> Any:
+    if sort_key in {"queue_rank", "winner_score", "score_gap", "missing_requirement_count"}:
+        return _browse_numeric_sort_value(row.get(sort_key))
+    if sort_key == "posted_at":
+        return _browse_posted_at_sort_value(row.get("posted_at"))
+    if sort_key == "recommendation":
+        action = _clean_text(row.get("action")).upper()
+        return _BROWSE_RECOMMENDATION_ORDER.get(action, len(_BROWSE_RECOMMENDATION_ORDER))
+    if sort_key == "selected_resume":
+        return _clean_text(row.get("operator_selected_resume") or row.get("winner_resume")).casefold() or None
+    if sort_key == "packet_status":
+        allowed = _clean_text(row.get("packet_generation_allowed")).lower()
+        return 0 if allowed in {"true", "1", "yes", "y", "on"} else 1
+    return _clean_text(row.get(sort_key)).casefold() or None
+
+
+def _browse_tie_breaker(row: Dict[str, Any]) -> tuple[Any, ...]:
+    rank = _browse_numeric_sort_value(row.get("queue_rank"))
+    return (
+        rank if rank is not None else float("inf"),
+        _clean_text(row.get("job_company")).casefold(),
+        _clean_text(row.get("job_title")).casefold(),
+        _clean_text(row.get("job_doc_id") or row.get("job_url")).casefold(),
+    )
+
+
+def _sort_browse_rows(
+    rows: List[Dict[str, Any]],
+    *,
+    sort_key: str,
+    sort_dir: str,
+) -> List[Dict[str, Any]]:
+    normalized_key = _clean_text(sort_key)
+    if normalized_key not in _BROWSE_SORT_KEYS:
+        return rows
+
+    populated: List[Dict[str, Any]] = []
+    missing: List[Dict[str, Any]] = []
+    for row in rows:
+        (missing if _browse_sort_value(row, normalized_key) is None else populated).append(row)
+
+    populated.sort(key=_browse_tie_breaker)
+    populated.sort(
+        key=lambda row: _browse_sort_value(row, normalized_key),
+        reverse=_clean_text(sort_dir).lower() == "desc",
+    )
+    missing.sort(key=_browse_tie_breaker)
+    return populated + missing
+
+
 def browse_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     owner_user_id: str = "",
@@ -27544,6 +28027,8 @@ def browse_payload(
         "title_contains": "",
         "limit": 15,
         "undecided_only": "",
+        "sort_key": "",
+        "sort_dir": "asc",
         "page": 1,
     }
     resolved_filters.update(filters)
@@ -27638,6 +28123,12 @@ def browse_payload(
                 if matches:
                     enriched_selected.append(enriched_row)
             selected = enriched_selected
+
+        selected = _sort_browse_rows(
+            selected,
+            sort_key=resolved_filters.get("sort_key", ""),
+            sort_dir=resolved_filters.get("sort_dir", "asc"),
+        )
 
         selected = selected[:requested_limit]
 

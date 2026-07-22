@@ -39,11 +39,13 @@ def test_ai_review_uses_human_facing_advisory_copy():
 def test_recommendation_and_ai_review_have_distinct_disclosure_labels():
     details = _function_block("buildRecommendationDetailsHtml")
     recommendation = _function_block("buildPlanningRecommendationCellHtml")
+    details_panel = _function_block("buildPlanningRowDetailsHtml")
     renderer = _function_block("buildLlmAdjudicatorReadbackHtml")
 
     assert 'summaryLabel = "Why?"' in details
     assert "escapeHtml(summaryLabel)" in details
-    assert "buildRecommendationDetailsHtml([" in recommendation
+    assert "buildPlanningAdvisoryIndicatorHtml(row)" in recommendation
+    assert "buildLlmAdjudicatorReadbackHtml(row)" in details_panel
     assert '], "View AI review");' in renderer
 
 

@@ -218,7 +218,12 @@ def test_prior_phase_readbacks_remain_intact(monkeypatch):
 
 
 def test_ui_checkpoint_display_is_passive():
-    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    # id="scanWorkspaceProductionReadinessCheckpointReadback" moved from
+    # src/app/planning_ui.py into the React Advanced Diagnostics Command
+    # Center (Item 1 Phase 3).
+    html = (
+        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+    ).read_text(encoding="utf-8")
     script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
     getter = script.split(
         "function getScanWorkspaceProductionReadinessCheckpointPayload",
@@ -229,7 +234,7 @@ def test_ui_checkpoint_display_is_passive():
         1,
     )[1].split("function getScanWorkspaceHasTailoringPreviewContext", 1)[0]
 
-    assert 'id="scanWorkspaceProductionReadinessCheckpointReadback"' in html
+    assert '"scanWorkspaceProductionReadinessCheckpointReadback"' in html
     assert "agentic_workflow_production_readiness_checkpoint" in getter
     assert "production_readiness_checkpoint_performed" in renderer
     assert "workflow_ready_for_ux_polish" in renderer

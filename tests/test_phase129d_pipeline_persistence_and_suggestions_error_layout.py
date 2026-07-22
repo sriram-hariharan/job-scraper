@@ -22,20 +22,34 @@ def _function_source(source: str, name: str) -> str:
     raise AssertionError(f"could not extract {name}")
 
 
-def test_pipeline_status_keeps_running_filtering_and_terminal_overlays_visible():
+def test_pipeline_status_keeps_live_monitoring_non_blocking():
     source = APP_JS.read_text(encoding="utf-8")
     render = _function_source(source, "renderPipelineStatus")
 
     assert '["queued", "starting", "running"]' in render
-    assert "showPageLoadingOverlay" in render
+    assert "showPageLoadingOverlay" not in render
     assert 'status === "succeeded"' in render
-    assert "showPipelineSuccessOverlay" in render
-    assert "showPipelineFailureOverlay" in render
+    assert "showPipelineSuccessOverlay" not in render
+    assert "showPipelineFailureOverlay" not in render
     assert '"cancelled"' in render
     assert '"stopped"' in render
-    assert "hidePageLoadingOverlay()" not in render
+    assert "hidePageLoadingOverlay()" in render
     assert "filtering" in source
     assert "dedupe" in source
+
+
+def test_executive_pipeline_button_navigates_to_monitoring_when_run_is_active():
+    source = APP_JS.read_text(encoding="utf-8")
+    render = _function_source(source, "renderPipelineStatus")
+    attach = _function_source(source, "attachPipelineLaunchHandlers")
+
+    assert 'runBtn.dataset.pipelineActive = "true"' in render
+    assert 'runBtn.textContent = "View Pipeline"' in render
+    assert "runBtn.disabled = false" in render
+    assert "delete runBtn.dataset.pipelineActive" in render
+    assert 'runPipelineBtn.dataset.pipelineActive === "true"' in attach
+    assert 'window.location.assign("/pipeline")' in attach
+    assert attach.index('window.location.assign("/pipeline")') < attach.index("openPipelineConfigModal()")
 
 
 def test_transient_poll_failure_retries_without_dismissal_or_navigation():
@@ -51,16 +65,17 @@ def test_transient_poll_failure_retries_without_dismissal_or_navigation():
     assert "2000" in polling
 
 
-def test_launch_status_refresh_failure_does_not_hide_started_run():
+def test_accepted_launch_hands_monitoring_to_pipeline_dashboard_without_legacy_overlay():
     source = APP_JS.read_text(encoding="utf-8")
     start = source.index('qs("confirmPipelineRunBtn").addEventListener')
     end = source.index('qs("pipelineSuccessOkBtn").addEventListener', start)
     handler = source[start:end]
 
-    assert "pipelineStarted = true" in handler
-    assert "startPipelinePolling()" in handler
-    assert "Pipeline started. Waiting for the latest status" in handler
-    assert "hidePageLoadingOverlay" not in handler
+    assert 'postJson("/pipeline/run", config)' in handler
+    assert "handoffAcceptedPipelineRun(payload)" in handler
+    assert "startPipelinePolling()" not in handler
+    assert "showPageLoadingOverlay" not in handler
+    assert "loadPipelineStatus" not in handler
 
 
 def test_pipeline_navigation_and_dismissal_require_explicit_buttons():

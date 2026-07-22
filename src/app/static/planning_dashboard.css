@@ -1,0 +1,760 @@
+/* Phase 133G: Planning-only dashboard ownership. */
+:root {
+  --planning-surface: rgba(255, 255, 255, 0.96);
+  --planning-surface-muted: #f6f8fc;
+  --planning-row-alternate: #fbfcfe;
+  --planning-row-hover: #f3f7fc;
+  --planning-row-expanded: #eef4ff;
+  --planning-row-focus: #eaf2ff;
+  --planning-detail-surface: #f7f9fc;
+  --planning-border: #dbe3ef;
+  --planning-border-strong: #b8c5d8;
+  --planning-ink: #172033;
+  --planning-muted: #64748b;
+  --planning-blue: #2563eb;
+  --planning-green: #07845f;
+  --planning-cyan: #087f8c;
+  --planning-violet: #6d4aff;
+  --planning-action-shadow: rgba(15, 23, 42, 0.42);
+}
+
+html[data-theme="dark"] {
+  --planning-surface: rgba(22, 29, 43, 0.97);
+  --planning-surface-muted: #111827;
+  --planning-row-alternate: #141d2c;
+  --planning-row-hover: #1b273a;
+  --planning-row-expanded: #1d2d49;
+  --planning-row-focus: #203452;
+  --planning-detail-surface: #172235;
+  --planning-border: #334155;
+  --planning-border-strong: #52627a;
+  --planning-ink: #f1f5f9;
+  --planning-muted: #a7b4c8;
+  --planning-blue: #77a7ff;
+  --planning-green: #56d4ac;
+  --planning-cyan: #58c9d2;
+  --planning-violet: #b4a4ff;
+  --planning-action-shadow: rgba(2, 6, 23, 0.8);
+}
+
+body.planning-dashboard-page {
+  color: var(--planning-ink);
+  background: var(--app-page-bg, #eef3f9);
+}
+
+.planning-dashboard-page .planning-dashboard-shell {
+  width: min(100%, 1800px);
+  max-width: none;
+  margin: 0 auto;
+  padding: 28px clamp(18px, 3vw, 52px) 132px;
+}
+
+.planning-dashboard-page .planning-dashboard-header {
+  margin: 0 0 20px;
+  padding: 0;
+  border: 0;
+}
+
+.planning-dashboard-page .planning-dashboard-header h1 {
+  margin: 4px 0 6px;
+  color: var(--planning-ink);
+  font-size: clamp(28px, 2.4vw, 38px);
+  line-height: 1.1;
+}
+
+.planning-dashboard-page .planning-dashboard-header .subtext {
+  max-width: 760px;
+  margin: 0;
+  color: var(--planning-muted);
+  font-size: 15px;
+}
+
+.planning-dashboard-eyebrow {
+  color: var(--planning-blue);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+#planningSummaryRoot {
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+#planningWorklistRoot {
+  min-width: 0;
+  --queue-chat-clearance: calc(64px + 28px + 18px);
+}
+
+.planning-react-server-fallback {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  color: var(--planning-muted);
+}
+
+.planning-summary-card {
+  position: relative;
+  min-width: 0;
+  padding: 16px 18px;
+  overflow: visible;
+  border: 1px solid var(--planning-border);
+  border-top: 3px solid var(--planning-blue);
+  border-radius: 8px;
+  background: var(--planning-surface);
+  box-shadow: 0 8px 22px rgba(22, 32, 51, 0.06);
+}
+
+.planning-summary-card--review { border-top-color: var(--planning-green); }
+.planning-summary-card--packet { border-top-color: var(--planning-cyan); }
+.planning-summary-card--decision { border-top-color: var(--planning-violet); }
+
+.planning-summary-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.planning-summary-heading {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.planning-summary-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--planning-blue);
+  background: color-mix(in srgb, var(--planning-blue) 11%, transparent);
+}
+
+.planning-summary-card--review .planning-summary-icon { color: var(--planning-green); background: color-mix(in srgb, var(--planning-green) 11%, transparent); }
+.planning-summary-card--packet .planning-summary-icon { color: var(--planning-cyan); background: color-mix(in srgb, var(--planning-cyan) 11%, transparent); }
+.planning-summary-card--decision .planning-summary-icon { color: var(--planning-violet); background: color-mix(in srgb, var(--planning-violet) 11%, transparent); }
+
+.planning-summary-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.planning-summary-label,
+.planning-summary-caption {
+  color: var(--planning-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.planning-summary-value {
+  display: block;
+  margin: 8px 0 2px;
+  color: var(--planning-ink);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.planning-metric-help {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--planning-border);
+  border-radius: 50%;
+  color: var(--planning-muted);
+  background: transparent;
+  font-family: Georgia, serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.planning-metric-tooltip {
+  position: absolute;
+  z-index: 20;
+  top: 44px;
+  right: 12px;
+  width: min(250px, calc(100vw - 48px));
+  padding: 9px 11px;
+  visibility: hidden;
+  border: 1px solid var(--planning-border);
+  border-radius: 6px;
+  color: var(--planning-ink);
+  background: var(--planning-surface);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+}
+
+.planning-metric-help:hover + .planning-metric-tooltip,
+.planning-metric-help:focus-visible + .planning-metric-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.planning-dashboard-page .planning-filter-card,
+.planning-dashboard-page .planning-worklist-card {
+  border: 1px solid var(--planning-border);
+  border-radius: 8px;
+  background: var(--planning-surface);
+  box-shadow: 0 8px 24px rgba(22, 32, 51, 0.055);
+}
+
+.planning-dashboard-page .planning-filter-card {
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.planning-filter-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.planning-filter-heading h2,
+.planning-table-header h2 {
+  margin: 0;
+  color: var(--planning-ink);
+  font-size: 18px;
+}
+
+.planning-filter-heading p {
+  margin: 3px 0 0;
+  color: var(--planning-muted);
+  font-size: 13px;
+}
+
+.planning-active-filter-count {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--planning-border);
+  border-radius: 999px;
+  color: var(--planning-muted);
+  background: var(--planning-surface-muted);
+  font-size: 12px;
+}
+
+.planning-dashboard-page .planning-worklist-card {
+  --planning-chat-clearance: calc(64px + 28px + 18px);
+  --planning-action-column-width: 190px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.planning-dashboard-page .planning-table-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--planning-border);
+}
+
+.planning-dashboard-page .planning-table-header .subtext {
+  margin-top: 3px;
+  color: var(--planning-muted);
+}
+
+.planning-dashboard-page .planning-table-meta {
+  white-space: nowrap;
+}
+
+.planning-dashboard-page .planning-worklist-wrap {
+  isolation: isolate;
+  width: 100%;
+  max-width: 100%;
+  min-height: 286px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding-right: var(--planning-action-column-width);
+  border: 0;
+}
+
+.planning-dashboard-page #planningTable {
+  width: 100%;
+  min-width: 1442px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.planning-dashboard-page #planningTable thead th {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  height: 42px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--planning-border);
+  color: var(--planning-muted);
+  background: var(--planning-surface-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: left;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.planning-dashboard-page #planningTable thead th[data-col-key] {
+  padding-right: 18px;
+}
+
+.planning-dashboard-page #planningTable thead .resizable-col-content,
+.planning-dashboard-page #planningTable thead .resizable-col-label {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.planning-dashboard-page #planningTable .sort-header-btn {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.planning-dashboard-page #planningTable .sort-header-btn:hover,
+.planning-dashboard-page #planningTable .sort-header-btn.is-active,
+.planning-dashboard-page #planningTable th.sortable-col:has(.sort-header-btn.is-active) {
+  color: var(--planning-blue);
+}
+
+.planning-dashboard-page #planningTable .planning-column--expand,
+.planning-dashboard-page #planningTable .planning-expand-cell {
+  width: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  padding-right: 6px;
+  padding-left: 6px;
+  text-align: center;
+}
+
+.planning-dashboard-page #planningTable tbody td {
+  height: 52px;
+  padding: 7px 12px;
+  overflow: hidden;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--planning-border);
+  color: var(--planning-ink);
+  background: var(--planning-surface);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planning-dashboard-page #planningTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row.is-alternate td {
+  background: var(--planning-row-alternate);
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row:hover td {
+  background: var(--planning-row-hover);
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row.is-expanded td {
+  background: var(--planning-row-expanded);
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row:focus-within td {
+  background: var(--planning-row-focus);
+}
+
+.planning-rank-cell span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--planning-border);
+  border-radius: 50%;
+  color: var(--planning-blue);
+  background: var(--planning-surface-muted);
+  font-weight: 800;
+}
+
+.planning-resume-selection,
+.planning-match-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.planning-selected-resume,
+.planning-match-cell strong {
+  color: var(--planning-ink);
+}
+
+.planning-selected-resume {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planning-job-meta {
+  display: flex;
+  min-width: 0;
+  gap: 5px 10px;
+  color: var(--planning-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.planning-job-cell {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.planning-job-cell .queue-simple-title,
+.planning-job-cell .job-link,
+.planning-job-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planning-posted-date {
+  color: var(--planning-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.planning-match-cell > span,
+.planning-unavailable {
+  color: var(--planning-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.planning-match-meter {
+  display: block;
+  width: 72px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--planning-border);
+}
+
+.planning-match-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--planning-green);
+}
+
+.planning-readiness-cell,
+.planning-dashboard-page .queue-status-stack {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.planning-advisory-badge {
+  display: inline-flex;
+  width: fit-content;
+  color: var(--planning-violet);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+button.planning-row-expand-btn {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--planning-border);
+  border-radius: 5px;
+  color: var(--planning-muted);
+  background: var(--planning-surface-muted);
+  background-image: none;
+  box-shadow: none;
+  appearance: none;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+button.planning-row-expand-btn svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+button.planning-row-expand-btn:hover,
+button.planning-row-expand-btn[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--planning-blue) 45%, var(--planning-border));
+  color: var(--planning-blue);
+  background: color-mix(in srgb, var(--planning-blue) 10%, var(--planning-surface));
+}
+
+button.planning-row-expand-btn:focus-visible {
+  outline: 2px solid var(--planning-blue);
+  outline-offset: 3px;
+}
+
+.planning-column-resize-handle {
+  position: absolute;
+  top: 9px;
+  right: -2px;
+  z-index: 8;
+  width: 5px;
+  height: 24px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.planning-column-resize-handle::after {
+  position: absolute;
+  inset: 4px 2px;
+  border-radius: 999px;
+  background: var(--planning-border-strong);
+  content: "";
+}
+
+.planning-column-resize-handle:hover::after,
+.planning-column-resize-handle.is-resizing::after {
+  background: var(--planning-blue);
+}
+
+.planning-detail-row[hidden] {
+  display: none;
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-detail-row td {
+  height: auto;
+  padding: 0;
+  background: var(--planning-surface);
+  white-space: normal;
+  white-space: normal;
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-detail-row.is-alternate td {
+  background: var(--planning-row-alternate);
+}
+
+.planning-row-details {
+  margin: 8px 12px 12px 54px;
+  padding: 14px 16px;
+  border: 1px solid var(--planning-border);
+  border-radius: 7px;
+  color: var(--planning-muted);
+  background: var(--planning-detail-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  font-size: 12px;
+}
+
+.planning-row-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.planning-row-detail-grid dt {
+  color: var(--planning-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.planning-row-detail-grid dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--planning-ink);
+}
+
+.planning-dashboard-page #planningTable th.is-sticky-action,
+.planning-dashboard-page #planningTable td.is-sticky-action {
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  width: var(--planning-action-column-width);
+  min-width: var(--planning-action-column-width);
+  max-width: var(--planning-action-column-width);
+  border-left: 1px solid var(--planning-border);
+  background-clip: padding-box;
+  background: var(--planning-surface);
+  box-shadow: -6px 0 8px -8px var(--planning-action-shadow);
+}
+
+.planning-dashboard-page #planningTable thead th.is-sticky-action {
+  z-index: 6;
+  background: var(--planning-surface-muted);
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row.is-alternate td.is-sticky-action {
+  background: var(--planning-row-alternate);
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row:hover td.is-sticky-action {
+  background: var(--planning-row-hover);
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row.is-expanded td.is-sticky-action {
+  background: var(--planning-row-expanded);
+}
+
+.planning-dashboard-page #planningTable tbody tr.planning-worklist-row:focus-within td.is-sticky-action {
+  background: var(--planning-row-focus);
+}
+
+.planning-dashboard-page #planningTable td.is-sticky-action .planning-tailoring-btn {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 9px;
+}
+
+.planning-pagination-footer {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px var(--planning-chat-clearance) 10px 18px;
+  border-top: 1px solid var(--planning-border);
+}
+
+.planning-pagination-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.planning-worklist-state-cell {
+  padding: 0 !important;
+}
+
+.planning-worklist-state {
+  display: grid;
+  min-height: 260px;
+  padding: 36px;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  color: var(--planning-muted);
+  text-align: center;
+}
+
+.planning-worklist-state h3,
+.planning-worklist-state p {
+  margin: 0;
+}
+
+.planning-worklist-state h3 {
+  color: var(--planning-ink);
+  font-size: 18px;
+}
+
+.planning-worklist-state-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--planning-border);
+  border-radius: 50%;
+  color: var(--planning-blue);
+  background: var(--planning-surface-muted);
+  font-weight: 800;
+}
+
+.planning-worklist-state--loading {
+  grid-template-columns: auto auto;
+  text-align: left;
+}
+
+.planning-loading-skeleton {
+  display: grid;
+  width: min(520px, 70vw);
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.planning-loading-skeleton span {
+  height: 10px;
+  border-radius: 4px;
+  background: var(--planning-border);
+  opacity: 0.7;
+}
+
+.planning-loading-skeleton span:nth-child(2) { width: 82%; }
+.planning-loading-skeleton span:nth-child(3) { width: 64%; }
+
+.planning-loading-ring {
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--planning-border);
+  border-top-color: var(--planning-blue);
+  border-radius: 50%;
+  animation: planning-ring 0.8s linear infinite;
+}
+
+@keyframes planning-ring {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .planning-dashboard-page .planning-dashboard-shell {
+    padding: 20px 12px 108px;
+  }
+
+  .planning-filter-heading,
+  .planning-table-header,
+  .planning-pagination-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planning-dashboard-page .planning-worklist-wrap {
+    overflow: auto;
+  }
+
+  .planning-row-details {
+    margin: 8px 10px 10px 54px;
+    padding: 14px;
+  }
+
+  .planning-row-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-pagination-footer {
+    padding: 14px;
+  }
+
+  .planning-pagination-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planning-loading-ring {
+    animation: none;
+  }
+
+  .planning-row-expand-btn svg {
+    transition: none;
+  }
+}

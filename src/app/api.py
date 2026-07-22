@@ -53,9 +53,6 @@ from src.agents import three_core_approval_preview_service_readback
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
 from src.app.decisions_ui import router as decisions_ui_router
-from src.app.intelligence_ui import router as intelligence_ui_router
-from src.app.applied_ui import router as applied_ui_router
-from src.app.saved_ui import router as saved_ui_router
 from src.app.application_hub_ui import router as application_hub_ui_router
 from src.app.profile_ui import router as profile_ui_router
 from src.app.auth_ui import router as auth_ui_router
@@ -1513,9 +1510,6 @@ def _agentic_production_scheduler_observability_reporting_job_payload(
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
-app.include_router(intelligence_ui_router)
-app.include_router(applied_ui_router)
-app.include_router(saved_ui_router)
 app.include_router(application_hub_ui_router)
 app.include_router(profile_ui_router)
 app.include_router(auth_ui_router)
@@ -2934,11 +2928,13 @@ def scheduler_launchd_agent_status(
     
 @app.get("/scheduler/history")
 def scheduler_history(
+    http_request: Request,
     history_path: str = str(services.DEFAULT_SCHEDULER_RUN_HISTORY_PATH),
     job_name: str = "",
     status: str = "",
     limit: int = 20,
 ):
+    _require_admin_user(http_request)
     return services.scheduler_history_payload(
         history_path=Path(history_path),
         job_name=job_name,
@@ -2960,10 +2956,12 @@ def scheduler_storage_contract(
 
 @app.get("/scheduler/postgres-status")
 def scheduler_postgres_status(
+    http_request: Request,
     limit: int = 10,
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
 ):
+    _require_admin_user(http_request)
     try:
         return services.scheduler_postgres_status_payload(
             limit=limit,
@@ -2975,10 +2973,12 @@ def scheduler_postgres_status(
 
 @app.get("/scheduler/summary")
 def scheduler_summary(
+    http_request: Request,
     limit: int = 5,
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
 ):
+    _require_admin_user(http_request)
     try:
         return services.scheduler_operator_summary_payload(
             limit=limit,
@@ -3074,6 +3074,8 @@ def browse(
     company_contains: str = "",
     title_contains: str = "",
     undecided_only: str = "",
+    sort_key: str = "",
+    sort_dir: str = "asc",
     page: int = 1,
     limit: int = 15,
 ):
@@ -3089,6 +3091,8 @@ def browse(
         company_contains=company_contains,
         title_contains=title_contains,
         undecided_only=undecided_only,
+        sort_key=sort_key,
+        sort_dir=sort_dir,
         limit=limit,
         page=page,
         owner_user_id=_auth_owner_user_id(http_request),
@@ -3343,7 +3347,7 @@ def decisions(
         title_contains=title_contains,
         limit=limit,
         page=page,
-        owner_user_id=_auth_owner_user_id(http_request),
+        owner_user_id=_require_auth_owner_user_id(http_request),
     )
 
 @app.post("/planning/select-resume")
@@ -3590,7 +3594,25 @@ def applied_jobs(
         title_contains=title_contains,
         limit=limit,
         page=page,
-        owner_user_id=_auth_owner_user_id(http_request),
+        owner_user_id=_require_auth_owner_user_id(http_request),
+    )
+
+
+@app.get("/saved-jobs")
+def saved_jobs(
+    http_request: Request,
+    company_contains: str = "",
+    title_contains: str = "",
+    page: int = 1,
+    limit: int = 15,
+):
+    return services.application_actions_payload(
+        application_status="SAVED",
+        company_contains=company_contains,
+        title_contains=title_contains,
+        limit=limit,
+        page=page,
+        owner_user_id=_require_auth_owner_user_id(http_request),
     )
 
 @app.get("/rag/search")

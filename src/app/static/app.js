@@ -12,28 +12,42 @@ const state = {
   acknowledgedPipelineSuccessKey: null,
   lastPipelineTableRefreshKey: "",
   pipelineGate: null,
+  pipelineLaunchReturnFocus: null,
+  pipelineLaunchInFlight: false,
 };
 
 const queueTableState = {
+  status: "loading",
+  message: "",
   rows: [],
   metaLabel: "Loading...",
+  preferenceOptions: [],
   page: 1,
   pageSize: 15,
   totalCount: 0,
   totalPages: 1,
   hasPrevPage: false,
   hasNextPage: false,
-  sort: {
-    key: "",
-    direction: "asc",
-  },
+  sort: { key: "", direction: "asc" },
+};
+
+const queueFilterState = {
+  actions: [],
+  preferenceIds: [],
+  undecidedOnly: false,
+  limit: 15,
 };
 
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 const PIPELINE_PENDING_SUCCESS_KEY = "job_operator_pipeline_pending_success";
 const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
 const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
+const PIPELINE_ACCEPTED_RUN_STORAGE_KEY = "applylens_pipeline_accepted_run_id";
+const PIPELINE_ACCEPTED_RUN_EVENT_NAME = "applylens:pipeline-run-accepted";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
+const EXECUTIVE_KPI_EVENT_NAME = "applylens:executive-kpi-state";
+const EXECUTIVE_QUEUE_STATE_EVENT_NAME = "applylens:executive-queue-state";
+const EXECUTIVE_QUEUE_ACTION_EVENT_NAME = "applylens:executive-queue-action";
 let pipelinePollTimer = null;
 
 const DEFAULT_OUTPUT_DIR = "outputs/application_planning";
@@ -842,6 +856,21 @@ async function loadPreferenceFilterOptions(rootId) {
   }
 }
 
+async function loadExecutiveQueuePreferenceOptions() {
+  try {
+    const payload = await fetchJson("/onboarding/preferences");
+    const options = Array.isArray(payload.preference_options) ? payload.preference_options : [];
+    queueTableState.preferenceOptions = options.map((option) => ({
+      role_family_id: String(option.role_family_id || "").trim(),
+      display_name: String(option.display_name || option.role_family_id || "").trim(),
+    })).filter((option) => option.role_family_id);
+  } catch (error) {
+    queueTableState.preferenceOptions = [];
+    console.warn("Could not load Executive queue preference options.", error);
+  }
+  publishExecutiveQueueState();
+}
+
 function normalizeExecutiveViewMode(value) {
   return String(value || "").trim().toLowerCase() === "simple" ? "simple" : "detailed";
 }
@@ -852,8 +881,6 @@ function loadExecutiveViewMode() {
 
 function syncExecutiveViewModeControls() {
   const mode = normalizeExecutiveViewMode(state.executiveViewMode);
-  const radio = document.querySelector(`input[name='executiveViewMode'][value='${mode}']`);
-  if (radio) radio.checked = true;
   document.body.classList.toggle("executive-simple-mode", mode === "simple");
   document.body.classList.toggle("executive-detailed-mode", mode !== "simple");
 }
@@ -862,7 +889,7 @@ function setExecutiveViewMode(mode) {
   state.executiveViewMode = normalizeExecutiveViewMode(mode);
   localStorage.setItem(EXECUTIVE_VIEW_MODE_STORAGE_KEY, state.executiveViewMode);
   syncExecutiveViewModeControls();
-  renderQueueRows(queueTableState.rows, queueTableState.metaLabel);
+  publishExecutiveQueueState();
 }
 
 function renderQueueHeaders() {
@@ -993,18 +1020,10 @@ function renderTableLoading(colspan, label) {
 }
 
 function setQueueLoadingState(label) {
-  const tbody = qs("queueTableBody");
-  if (!tbody) return;
-
-  tbody.innerHTML = "";
-  renderQueueHeaders();
-  window.setTableWrapLoading?.(tbody, label);
-  qs("tableMeta").textContent = "Loading...";
-
-  const paginationMeta = qs("queuePaginationMeta");
-  const paginationActions = qs("queuePaginationActions");
-  if (paginationMeta) paginationMeta.textContent = "Loading...";
-  if (paginationActions) paginationActions.innerHTML = "";
+  queueTableState.status = "loading";
+  queueTableState.message = "";
+  queueTableState.metaLabel = label || "Loading...";
+  publishExecutiveQueueState();
 }
 
 async function postJson(url, payload) {
@@ -1446,14 +1465,61 @@ function applyPipelinePreset(name) {
   syncPipelinePathPreview();
 }
 
+function publishExecutiveKpiState(detail) {
+  window.__APPLYLENS_EXECUTIVE_KPI_STATE__ = detail;
+  window.dispatchEvent(new CustomEvent(EXECUTIVE_KPI_EVENT_NAME, { detail }));
+}
+
+function buildExecutiveQueueBridgeState() {
+  return {
+    status: queueTableState.status,
+    rows: Array.isArray(queueTableState.rows) ? queueTableState.rows.slice() : [],
+    metaLabel: queueTableState.metaLabel,
+    message: queueTableState.message,
+    viewMode: normalizeExecutiveViewMode(state.executiveViewMode),
+    filters: {
+      actions: queueFilterState.actions.slice(),
+      preferenceIds: queueFilterState.preferenceIds.slice(),
+      undecidedOnly: queueFilterState.undecidedOnly,
+      limit: queueFilterState.limit,
+    },
+    preferenceOptions: queueTableState.preferenceOptions.slice(),
+    pagination: {
+      page: queueTableState.page,
+      pageSize: queueTableState.pageSize,
+      totalCount: queueTableState.totalCount,
+      totalPages: queueTableState.totalPages,
+      hasPrevPage: queueTableState.hasPrevPage,
+      hasNextPage: queueTableState.hasNextPage,
+    },
+    sort: { ...queueTableState.sort },
+  };
+}
+
+function publishExecutiveQueueState() {
+  const detail = buildExecutiveQueueBridgeState();
+  window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ = detail;
+  window.dispatchEvent(new CustomEvent(EXECUTIVE_QUEUE_STATE_EVENT_NAME, { detail }));
+}
+
+function normalizeExecutiveKpiValue(value, fallback = null) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
 function renderStats(statusData) {
   const summary = statusData.summary || {};
   const undecided = statusData.undecided_review_counts || {};
 
-  qs("statQueueRows").textContent = summary.execution_queue_rows ?? "-";
-  qs("statDecisionRows").textContent = summary.operator_decisions_rows ?? "-";
-  qs("statUndecidedApplyReview").textContent = undecided.APPLY_REVIEW_VARIANTS ?? 0;
-  qs("statUndecidedMaybeTailor").textContent = undecided.MAYBE_TAILOR ?? 0;
+  publishExecutiveKpiState({
+    status: "ready",
+    metrics: {
+      queueRows: normalizeExecutiveKpiValue(summary.execution_queue_rows),
+      nextSteps: normalizeExecutiveKpiValue(summary.operator_decisions_rows),
+      undecidedJobReviews: normalizeExecutiveKpiValue(undecided.APPLY_REVIEW_VARIANTS, 0),
+      undecidedMaybeTailor: normalizeExecutiveKpiValue(undecided.MAYBE_TAILOR, 0),
+    },
+  });
 }
 
 function formatWorkflowSummaryCounts(counts = {}) {
@@ -1962,7 +2028,9 @@ function renderPipelineSuccessSummary(pipeline = {}) {
 }
 
 function renderPipelineFailureSummary(pipeline = {}) {
-  const currentStage = pipeline.current_stage ? titleCaseStage(pipeline.current_stage) : "";
+  const rawStage = String(pipeline.current_stage || "").trim();
+  const currentStage = rawStage && rawStage.toLowerCase() !== "unknown" ? titleCaseStage(rawStage) : "";
+  const exactError = String(pipeline.error || "").trim();
   const metaBits = [
     pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
     pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
@@ -1976,10 +2044,11 @@ function renderPipelineFailureSummary(pipeline = {}) {
     ? `<div class="pipeline-success-summary-text">${escapeHtml(metaBits.join(" · "))}</div>`
     : "";
 
-  qs("pipelineFailureTitle").textContent = "Pipeline could not finish";
+  qs("pipelineFailureTitle").textContent = currentStage ? `Pipeline failed in ${currentStage}` : "Pipeline failed";
   qs("pipelineFailureText").textContent = "The run stopped before completion. Review diagnostics for technical details.";
   qs("pipelineFailureSummary").innerHTML = metaLine;
   qs("pipelineFailureReason").innerHTML = `
+    ${exactError ? `<div class="pipeline-success-summary-text">${escapeHtml(exactError)}</div>` : ""}
     <div class="pipeline-success-summary-text">
       No application actions were taken. Technical details remain available in pipeline diagnostics.
     </div>
@@ -2077,7 +2146,7 @@ function hidePageLoadingOverlay() {
   state.currentPipelineSuccessKey = null;
   state.pipelineFailureVisible = false;
   state.currentPipelineFailureKey = null;
-  qs("pageLoadingOverlay").classList.add("hidden");
+  qs("pageLoadingOverlay")?.classList.add("hidden");
   document.body.classList.remove("pipeline-workflow-open");
 }
 
@@ -2091,56 +2160,27 @@ function renderPipelineStatus(payload) {
   const status = pipeline.status || "idle";
   meta.textContent = buildPipelineMetaText(pipeline);
   const overlayEl = qs("pageLoadingOverlay");
-  const pendingStart = hasPipelinePendingSuccess();
 
   const terminalFailure = ["failed", "cancelled", "canceled", "stopped"].includes(status);
   const runningLike = ["queued", "starting", "running"].includes(status);
 
-  if (pendingStart && status !== "succeeded" && !terminalFailure) {
-    showPageLoadingOverlay(
-      "Running live pipeline...",
-      pipeline.stage_message || "Starting pipeline run...",
-      {
-        ...pipeline,
-        status: "running",
-        current_stage: pipeline.current_stage || "startup",
-        stage_message: pipeline.stage_message || "Launching pipeline subprocess",
-        stage_order: pipeline.stage_order || DEFAULT_STAGE_ORDER,
-        completed_stages: pipeline.completed_stages || [],
-        counts: pipeline.counts || {},
-      }
-    );
-    runBtn.disabled = true;
-    runBtn.textContent = "Pipeline Running...";
-    return;
-  }
-
   if (runningLike) {
-    runBtn.disabled = true;
-    runBtn.textContent = "Pipeline Running...";
-
-    showPageLoadingOverlay(
-      `Running · ${titleCaseStage(pipeline.current_stage || "startup")}`,
-      pipeline.stage_message || "Pipeline is running.",
-      pipeline
-    );
-
+    runBtn.disabled = false;
+    runBtn.dataset.pipelineActive = "true";
+    runBtn.textContent = "View Pipeline";
+    hidePageLoadingOverlay();
     return;
   }
+
+  delete runBtn.dataset.pipelineActive;
 
   if (status === "succeeded") {
     runBtn.disabled = false;
     runBtn.textContent = "Run Live Pipeline";
     refreshTablesAfterPipelineSuccess(pipeline);
 
-    const successKey = getPipelineSuccessKey(pipeline);
-    const overlayIsVisible = !overlayEl.classList.contains("hidden");
-    if (hasPipelinePendingSuccess() || overlayIsVisible || state.pipelineSuccessVisible) {
-      markPipelineSuccessShown(successKey);
-      clearPipelinePendingSuccess();
-      showPipelineSuccessOverlay(pipeline);
-    }
-
+    clearPipelinePendingSuccess();
+    hidePageLoadingOverlay();
     return;
   }
 
@@ -2148,15 +2188,8 @@ function renderPipelineStatus(payload) {
     runBtn.disabled = false;
     runBtn.textContent = "Run Live Pipeline";
 
-    const overlayIsVisible = !qs("pageLoadingOverlay").classList.contains("hidden");
-    const shouldShowFailure =
-      hasPipelinePendingSuccess() || overlayIsVisible || state.pipelineFailureVisible;
-
-    if (shouldShowFailure) {
-      clearPipelinePendingSuccess();
-      showPipelineFailureOverlay(pipeline);
-    }
-
+    clearPipelinePendingSuccess();
+    hidePageLoadingOverlay();
     return;
   }
 
@@ -2181,23 +2214,115 @@ function getPipelineConfirmModal() {
   return qs("pipelineConfirmModal");
 }
 
+function getPipelineLaunchBody() {
+  return qs("pipelineLaunchModalBody");
+}
+
+function getPipelineLaunchFocusableElements() {
+  return Array.from(
+    getPipelineConfigModal().querySelectorAll(
+      "button:not([disabled]):not(.hidden), input:not([disabled]), [tabindex]:not([tabindex='-1'])"
+    )
+  ).filter((element) => !element.closest(".hidden"));
+}
+
+function setPipelineLaunchStep(step, { focus = true } = {}) {
+  const normalizedStep = step === "review" ? "review" : "configure";
+  const isReview = normalizedStep === "review";
+  const modalCard = getPipelineConfigModal().querySelector(".pipeline-modal-card");
+
+  modalCard.dataset.pipelineLaunchStep = normalizedStep;
+  qs("pipelineConfigureStep").classList.toggle("hidden", isReview);
+  getPipelineConfirmModal().classList.toggle("hidden", !isReview);
+  qs("backToPipelineConfigBtn").classList.toggle("hidden", !isReview);
+  qs("confirmPipelineRunBtn").classList.toggle("hidden", !isReview);
+  qs("openPipelineConfirmBtn").classList.toggle("hidden", isReview);
+
+  document.querySelectorAll("[data-pipeline-step-indicator]").forEach((indicator) => {
+    const active = indicator.dataset.pipelineStepIndicator === normalizedStep;
+    indicator.classList.toggle("is-active", active);
+    if (active) indicator.setAttribute("aria-current", "step");
+    else indicator.removeAttribute("aria-current");
+  });
+
+  qs("pipelineLaunchTitle").textContent = isReview ? "Review & launch" : "Run live pipeline";
+  qs("pipelineLaunchDescription").textContent = isReview
+    ? "Review the selected configuration before starting the live pipeline."
+    : "Choose limits and options before starting the run.";
+
+  const body = getPipelineLaunchBody();
+  body.scrollTop = 0;
+  if (focus) {
+    window.requestAnimationFrame(() => {
+      const target = isReview ? qs("backToPipelineConfigBtn") : qs("pipelineJobLimitInput");
+      target?.focus({ preventScroll: true });
+    });
+  }
+}
+
 function openPipelineConfigModal() {
+  const modal = getPipelineConfigModal();
+  state.pipelineLaunchReturnFocus = document.activeElement;
   syncPipelinePathPreview();
-  getPipelineConfigModal().classList.remove("hidden");
+  setPipelineLaunchStep("configure", { focus: false });
+  getPipelineLaunchBody().scrollTop = 0;
+  modal.classList.remove("hidden");
+  document.body.classList.add("pipeline-launch-open");
+  window.requestAnimationFrame(() => qs("pipelineJobLimitInput")?.focus({ preventScroll: true }));
 }
 
 window.openApplyLensPipelineConfig = openPipelineConfigModal;
 
 function closePipelineConfigModal() {
+  if (state.pipelineLaunchInFlight) return;
   getPipelineConfigModal().classList.add("hidden");
+  document.body.classList.remove("pipeline-launch-open");
+  setPipelineLaunchStep("configure", { focus: false });
+  getPipelineLaunchBody().scrollTop = 0;
+  const returnTarget = state.pipelineLaunchReturnFocus;
+  state.pipelineLaunchReturnFocus = null;
+  if (returnTarget instanceof HTMLElement && returnTarget.isConnected) {
+    returnTarget.focus({ preventScroll: true });
+  }
 }
 
 function openPipelineConfirmModal() {
-  getPipelineConfirmModal().classList.remove("hidden");
+  setPipelineLaunchStep("review");
 }
 
 function closePipelineConfirmModal() {
-  getPipelineConfirmModal().classList.add("hidden");
+  setPipelineLaunchStep("configure", { focus: false });
+}
+
+function validatePipelineConfig() {
+  const fields = [
+    [qs("pipelineJobLimitInput"), qs("pipelineJobLimitError")],
+    [qs("pipelineJobPacketLimitInput"), qs("pipelineJobPacketLimitError")],
+  ];
+  let valid = true;
+
+  fields.forEach(([field, error]) => {
+    const fieldValid = field.checkValidity();
+    field.setAttribute("aria-invalid", fieldValid ? "false" : "true");
+    error.textContent = fieldValid ? "" : field.validationMessage;
+    valid = valid && fieldValid;
+  });
+
+  if (!valid) {
+    fields.find(([field]) => !field.checkValidity())?.[0].focus();
+  }
+  return valid;
+}
+
+function setPipelineLaunchInFlight(inFlight) {
+  state.pipelineLaunchInFlight = Boolean(inFlight);
+  const modal = getPipelineConfigModal();
+  const runButton = qs("confirmPipelineRunBtn");
+  modal.setAttribute("aria-busy", inFlight ? "true" : "false");
+  modal.querySelectorAll("button").forEach((button) => {
+    button.disabled = Boolean(inFlight);
+  });
+  runButton.textContent = inFlight ? "Starting pipeline…" : "Run Pipeline";
 }
 
 function getAppErrorModal() {
@@ -2271,68 +2396,44 @@ function collectPipelineConfig() {
 }
 
 function renderPipelineConfirmSummary(config) {
-  const buildBoolTile = (label, enabled) => `
-    <div class="pipeline-confirm-flag ${enabled ? "is-enabled" : "is-disabled"}">
-      <div class="pipeline-confirm-flag-copy">
-        <div class="pipeline-confirm-flag-label">${escapeHtml(label)}</div>
-      </div>
-      <div class="pipeline-confirm-flag-pill">${enabled ? "Yes" : "No"}</div>
-    </div>
-  `;
-
-  const buildMetaRow = (label, value, extraClass = "") => `
-    <div class="pipeline-confirm-meta-row">
-      <div class="pipeline-confirm-meta-label">${escapeHtml(label)}</div>
-      <div class="pipeline-confirm-meta-value ${extraClass}">${escapeHtml(String(value ?? "-"))}</div>
+  const buildReviewRow = (label, value, tone = "") => `
+    <div class="pipeline-review-row ${tone}">
+      <span class="pipeline-review-label">${escapeHtml(label)}</span>
+      <strong class="pipeline-review-value">${escapeHtml(String(value))}</strong>
     </div>
   `;
 
   qs("pipelineConfirmSummary").innerHTML = `
     <div class="pipeline-confirm-shell">
-      <section class="pipeline-confirm-hero">
-        <div class="pipeline-confirm-hero-badge">Launch review</div>
-        <div class="pipeline-confirm-hero-title">Ready to start this pipeline run</div>
-        <div class="pipeline-confirm-hero-copy">
-          Review the scope, enabled actions, and run options below before launch.
-        </div>
-
-        <div class="pipeline-confirm-hero-stats">
-          <div class="pipeline-confirm-stat">
-            <div class="pipeline-confirm-stat-label">Job limit</div>
-            <div class="pipeline-confirm-stat-value">${escapeHtml(String(config.job_limit ?? 0))}</div>
-          </div>
-          <div class="pipeline-confirm-stat">
-            <div class="pipeline-confirm-stat-label">Packet limit</div>
-            <div class="pipeline-confirm-stat-value">${escapeHtml(String(config.job_packet_limit ?? 0))}</div>
-          </div>
-          <div class="pipeline-confirm-stat">
-            <div class="pipeline-confirm-stat-label">Run mode</div>
-            <div class="pipeline-confirm-stat-value">${config.planning_only ? "Plan only" : "Scan + Plan"}</div>
-          </div>
+      <section class="pipeline-review-intro">
+        <div class="pipeline-confirm-hero-badge">Final confirmation</div>
+        <div>
+          <div class="pipeline-confirm-hero-title">Ready to start this live pipeline</div>
+          <div class="pipeline-confirm-hero-copy">Confirm the scope and planning options. The run starts only when you choose Run Pipeline.</div>
         </div>
       </section>
 
-      <div class="pipeline-confirm-grid">
-        <section class="pipeline-confirm-panel pipeline-confirm-panel--scope">
-          <div class="pipeline-confirm-panel-title">Run scope</div>
-          ${buildMetaRow("Job limit", config.job_limit)}
-          ${buildMetaRow("Job packet limit", config.job_packet_limit)}
-        </section>
+      <section class="pipeline-review-section" aria-labelledby="pipelineReviewScopeTitle">
+        <div class="pipeline-confirm-panel-title" id="pipelineReviewScopeTitle">Run scope</div>
+        <div class="pipeline-review-primary-grid">
+          ${buildReviewRow("Job limit", config.job_limit)}
+          ${buildReviewRow("Packet limit", config.job_packet_limit === 0 ? "All selected jobs" : config.job_packet_limit)}
+          ${buildReviewRow("Run mode", config.planning_only ? "Plan only" : "Scan + Plan")}
+        </div>
+      </section>
 
-        <section class="pipeline-confirm-panel pipeline-confirm-panel--scope">
-          <div class="pipeline-confirm-panel-title">Planning</div>
-          ${buildMetaRow("Run mode", config.planning_only ? "Plan only" : "Scan + Plan")}
-          ${buildMetaRow("Rerun seen jobs", config.delete_seen_data === "yes" ? "Yes" : "No")}
-        </section>
+      <section class="pipeline-review-section" aria-labelledby="pipelineReviewOptionsTitle">
+        <div class="pipeline-confirm-panel-title" id="pipelineReviewOptionsTitle">Planning options</div>
+        <div class="pipeline-review-option-grid">
+          ${buildReviewRow("Rerun seen jobs", config.delete_seen_data === "yes" ? "Enabled" : "Disabled", config.delete_seen_data === "yes" ? "is-enabled" : "is-disabled")}
+          ${buildReviewRow("AI review", config.generate_llm_adjudication ? "Enabled" : "Disabled", config.generate_llm_adjudication ? "is-enabled" : "is-disabled")}
+          ${buildReviewRow("Backup ranking", config.generate_llm_fallback ? "Enabled" : "Disabled", config.generate_llm_fallback ? "is-enabled" : "is-disabled")}
+        </div>
+      </section>
+
+      <div class="pipeline-review-safety-note" role="note">
+        This launches collection and planning only. It does not apply to jobs or message recruiters.
       </div>
-
-      <section class="pipeline-confirm-panel pipeline-confirm-panel--flags">
-        <div class="pipeline-confirm-panel-title">Run options</div>
-        <div class="pipeline-confirm-flag-grid">
-          ${buildBoolTile("AI review", config.generate_llm_adjudication)}
-          ${buildBoolTile("Backup ranking", config.generate_llm_fallback)}
-        </div>
-      </section>
     </div>
   `;
 }
@@ -2610,39 +2711,18 @@ function renderQueuePagination() {
 }
 
 function renderQueueRows(rows, metaLabel) {
+  queueTableState.status = "ready";
+  queueTableState.message = "";
   queueTableState.rows = Array.isArray(rows) ? rows.slice() : [];
   queueTableState.metaLabel = metaLabel;
-
-  const tbody = qs("queueTableBody");
-  const displayRows = sortRows(queueTableState.rows, QUEUE_SORT_COLUMNS, queueTableState.sort);
-  const modeLabel = state.executiveViewMode === "simple" ? "Simple mode" : "Detailed mode";
-
-  renderQueueHeaders();
-
-  if (!displayRows.length) {
-    const colspan = state.executiveViewMode === "simple" ? 8 : 15;
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="${colspan}" class="empty-state">No rows found.</td>
-      </tr>
-    `;
-  } else if (state.executiveViewMode === "simple") {
-    tbody.innerHTML = displayRows.map(buildQueueRowSimpleHtml).join("");
-  } else {
-    tbody.innerHTML = displayRows.map(buildQueueRowDetailedHtml).join("");
-  }
-
-  qs("tableMeta").textContent = `${queueTableState.metaLabel} · ${modeLabel}`;
-  renderQueuePagination();
-  window.clearTableWrapLoading?.(tbody);
-  initResizableTableColumns("queueTable", "queueTableColumnWidths");
+  publishExecutiveQueueState();
 }
 
 function buildBrowseUrl(pageOverride = null) {
-  const actions = getMultiSelectValues("actionFilter");
-  const preferenceIds = getMultiSelectValues("preferenceFilter");
-  const undecidedOnly = getBinaryToggleBool("executiveUndecidedOnly") ? "true" : "";
-  const limit = qs("limitInput").value || "15";
+  const actions = queueFilterState.actions;
+  const preferenceIds = queueFilterState.preferenceIds;
+  const undecidedOnly = queueFilterState.undecidedOnly ? "true" : "";
+  const limit = queueFilterState.limit || 15;
   const page = pageOverride ?? queueTableState.page ?? 1;
 
   const params = new URLSearchParams();
@@ -2651,13 +2731,26 @@ function buildBrowseUrl(pageOverride = null) {
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
   params.set("limit", limit);
   params.set("page", String(page));
+  if (queueTableState.sort.key) {
+    params.set("sort_key", queueTableState.sort.key);
+    params.set("sort_dir", queueTableState.sort.direction === "desc" ? "desc" : "asc");
+  }
 
   return `/browse?${params.toString()}`;
 }
 
 async function loadStatus() {
-  const data = await fetchJson("/status");
-  renderStats(data);
+  publishExecutiveKpiState({ status: "loading" });
+  try {
+    const data = await fetchJson("/status");
+    renderStats(data);
+  } catch (err) {
+    publishExecutiveKpiState({
+      status: "error",
+      message: err?.message || "Dashboard status is unavailable.",
+    });
+    throw err;
+  }
 }
 
 async function loadBrowse(pageOverride = null) {
@@ -2681,7 +2774,9 @@ async function loadBrowse(pageOverride = null) {
       `Browse view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
     );
   } catch (err) {
-    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    queueTableState.status = "error";
+    queueTableState.message = err?.message || "Executive queue data is unavailable.";
+    publishExecutiveQueueState();
     throw err;
   }
 }
@@ -2694,7 +2789,7 @@ async function loadWorkflow(view) {
   await new Promise((resolve) => window.requestAnimationFrame(resolve));
 
   try {
-    const limit = qs("limitInput").value || "25";
+    const limit = queueFilterState.limit || 25;
     const params = new URLSearchParams({
       view,
       limit,
@@ -2710,7 +2805,9 @@ async function loadWorkflow(view) {
       `Workflow view: ${view} · ${count} row${count === 1 ? "" : "s"}`
     );
   } catch (err) {
-    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    queueTableState.status = "error";
+    queueTableState.message = err?.message || "Workflow queue data is unavailable.";
+    publishExecutiveQueueState();
     throw err;
   }
 }
@@ -2724,7 +2821,7 @@ async function loadAppliedJobs(pageOverride = null) {
 
   try {
     const targetPage = pageOverride ?? queueTableState.page ?? 1;
-    const limit = qs("limitInput").value || "15";
+    const limit = queueFilterState.limit || 15;
     const data = await fetchJson(
       `/applied-jobs?limit=${encodeURIComponent(limit)}&page=${encodeURIComponent(targetPage)}`
     );
@@ -2738,7 +2835,9 @@ async function loadAppliedJobs(pageOverride = null) {
       `Applied jobs · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
     );
   } catch (err) {
-    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    queueTableState.status = "error";
+    queueTableState.message = err?.message || "Applied job data is unavailable.";
+    publishExecutiveQueueState();
     throw err;
   }
 }
@@ -2754,11 +2853,12 @@ async function reloadCurrentTable(pageOverride = null) {
 }
 
 function clearFilters() {
-  clearMultiSelect("actionFilter");
-  resetMultiSelectToAll("preferenceFilter");
-  setBinaryToggleValue("executiveUndecidedOnly", false);
-  qs("limitInput").value = "15";
+  queueFilterState.actions = [];
+  queueFilterState.preferenceIds = [];
+  queueFilterState.undecidedOnly = false;
+  queueFilterState.limit = 15;
   queueTableState.page = 1;
+  publishExecutiveQueueState();
 }
 
 function getApplicationModal() {
@@ -2793,12 +2893,12 @@ async function submitApplicationStatus(status) {
   await reloadCurrentTable();
 }
 
-async function handleApplyClick(button) {
+async function handleQueueReview(row) {
   const payload = {
-    job_doc_id: button.dataset.jobDocId || "",
-    job_url: button.dataset.jobUrl || "",
-    job_company: button.dataset.jobCompany || "",
-    job_title: button.dataset.jobTitle || "",
+    job_doc_id: row?.job_doc_id || "",
+    job_url: row?.job_url || "",
+    job_company: row?.job_company || "",
+    job_title: row?.job_title || "",
     source_view: state.currentMode === "workflow" && state.workflowView
       ? `executive:${state.workflowView}`
       : "executive:browse",
@@ -2817,90 +2917,125 @@ async function handleApplyClick(button) {
   }
 }
 
-function attachApplicationHandlers() {
-  qs("queueTableBody").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-apply-job='true']");
-    if (!button || button.disabled) return;
-
+function handoffAcceptedPipelineRun(payload = {}) {
+  const pipeline = payload.pipeline || {};
+  const runId = String(pipeline.run_id || "").trim();
+  if (runId) {
     try {
-      await handleApplyClick(button);
-    } catch (err) {
-      showAppError("Failed to open apply workflow", err);
+      window.sessionStorage.setItem(PIPELINE_ACCEPTED_RUN_STORAGE_KEY, runId);
+    } catch {
+      // The accepted payload and immediate status event still complete the in-page handoff.
     }
-  });
+  }
 
-  qs("closeApplicationModalBtn").addEventListener("click", () => {
-    clearPendingApplication();
-    closeApplicationModal();
-  });
+  hidePageLoadingOverlay();
+  closePipelineConfigModal();
+  closePipelineConfirmModal();
 
+  if (window.location.pathname === "/pipeline") {
+    window.dispatchEvent(new CustomEvent(PIPELINE_ACCEPTED_RUN_EVENT_NAME, {
+      detail: { runId, pipeline },
+    }));
+    return;
+  }
+
+  window.location.assign("/pipeline");
+}
+
+function attachPipelineLaunchHandlers() {
   const runPipelineBtn = qs("runPipelineBtn");
-    if (runPipelineBtn) {
-      runPipelineBtn.addEventListener("click", () => {
-        openPipelineConfigModal();
-      });
-    }
+  if (runPipelineBtn) {
+    runPipelineBtn.addEventListener("click", () => {
+      if (runPipelineBtn.dataset.pipelineActive === "true") {
+        window.location.assign("/pipeline");
+        return;
+      }
+      openPipelineConfigModal();
+    });
+  }
 
   qs("closePipelineConfigModalBtn")?.addEventListener("click", closePipelineConfigModal);
   qs("cancelPipelineConfigBtn").addEventListener("click", closePipelineConfigModal);
 
   qs("openPipelineConfirmBtn").addEventListener("click", () => {
     try {
+      if (!validatePipelineConfig()) return;
       const config = collectPipelineConfig();
       state.pendingPipelineConfig = config;
       renderPipelineConfirmSummary(config);
-      closePipelineConfigModal();
       openPipelineConfirmModal();
     } catch (err) {
       showAppError("Invalid pipeline configuration", err);
     }
   });
 
-  qs("closePipelineConfirmModalBtn").addEventListener("click", closePipelineConfirmModal);
-
   qs("backToPipelineConfigBtn").addEventListener("click", () => {
-    closePipelineConfirmModal();
-    openPipelineConfigModal();
+    setPipelineLaunchStep("configure");
   });
 
   qs("confirmPipelineRunBtn").addEventListener("click", async () => {
-    let pipelineStarted = false;
+    if (state.pipelineLaunchInFlight) return;
+    setPipelineLaunchInFlight(true);
     try {
       const config = state.pendingPipelineConfig || collectPipelineConfig();
-      closePipelineConfirmModal();
-      markPipelinePendingSuccess();
       window.localStorage.removeItem("applylens_new_user_empty_state");
       document.body.classList.remove("app-new-user-empty");
-
-      showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
-        status: "running",
-        current_stage: "startup",
-        stage_message: "Launching pipeline subprocess",
-        stage_order: DEFAULT_STAGE_ORDER,
-        completed_stages: [],
-        counts: {},
-      });
-
-      await postJson("/pipeline/run", config);
-      pipelineStarted = true;
-      startPipelinePolling();
-      try {
-        await loadPipelineStatus();
-      } catch (statusErr) {
-        console.error(statusErr);
-        qs("pipelineLoadingMeta").textContent = "Pipeline started. Waiting for the latest status…";
-      }
+      const payload = await postJson("/pipeline/run", config);
+      setPipelineLaunchInFlight(false);
+      handoffAcceptedPipelineRun(payload);
     } catch (err) {
-      if (!pipelineStarted) {
-        clearPipelinePendingSuccess();
-        showPipelineFailureOverlay({
-          status: "failed",
-          current_stage: "startup",
-          error: extractErrorMessage(err),
-        });
+      setPipelineLaunchInFlight(false);
+      clearPipelinePendingSuccess();
+      hidePageLoadingOverlay();
+      showAppError("Pipeline launch failed", err, "The run was not accepted. Review the message and try again.");
+    }
+  });
+
+  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
+  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
+
+  getAppErrorModal().addEventListener("click", (event) => {
+    if (event.target === getAppErrorModal()) {
+      closeAppErrorModal();
+    }
+  });
+
+  getPipelineConfigModal().addEventListener("click", (event) => {
+    if (event.target === getPipelineConfigModal()) {
+      closePipelineConfigModal();
+    }
+  });
+
+  getPipelineConfigModal().addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !state.pipelineLaunchInFlight) {
+      event.preventDefault();
+      closePipelineConfigModal();
+      return;
+    }
+
+    if (event.key === "Tab") {
+      const focusable = getPipelineLaunchFocusableElements();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
   });
+}
+
+function attachApplicationHandlers() {
+  qs("closeApplicationModalBtn").addEventListener("click", () => {
+    clearPendingApplication();
+    closeApplicationModal();
+  });
+
+  attachPipelineLaunchHandlers();
 
   qs("pipelineSuccessOkBtn").addEventListener("click", () => {
     state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
@@ -2924,31 +3059,10 @@ function attachApplicationHandlers() {
     openPipelineConfigModal();
   });
 
-  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
-  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
-
-  getAppErrorModal().addEventListener("click", (event) => {
-    if (event.target === getAppErrorModal()) {
-      closeAppErrorModal();
-    }
-  });
-
   getApplicationModal().addEventListener("click", (event) => {
     if (event.target === getApplicationModal()) {
       clearPendingApplication();
       closeApplicationModal();
-    }
-  });
-
-  getPipelineConfigModal().addEventListener("click", (event) => {
-    if (event.target === getPipelineConfigModal()) {
-      closePipelineConfigModal();
-    }
-  });
-
-  getPipelineConfirmModal().addEventListener("click", (event) => {
-    if (event.target === getPipelineConfirmModal()) {
-      closePipelineConfirmModal();
     }
   });
 
@@ -3003,55 +3117,64 @@ function attachPipelineConfigHandlers() {
   document.querySelectorAll("[data-job-limit-preset]").forEach((btn) => {
     btn.addEventListener("click", () => {
       qs("pipelineJobLimitInput").value = btn.dataset.jobLimitPreset || "50";
+      validatePipelineConfig();
     });
+  });
+
+  ["pipelineJobLimitInput", "pipelineJobPacketLimitInput"].forEach((id) => {
+    qs(id)?.addEventListener("input", validatePipelineConfig);
   });
 }
 
-function attachEventHandlers() {
-  initMultiSelect("actionFilter");
-  initMultiSelect("preferenceFilter");
-  qs("applyFiltersBtn").addEventListener("click", async () => {
-    queueTableState.page = 1;
-    try {
+function normalizeQueueFilters(filters = {}) {
+  const actions = Array.isArray(filters.actions) ? filters.actions : [];
+  const preferenceIds = Array.isArray(filters.preferenceIds) ? filters.preferenceIds : [];
+  return {
+    actions: actions.map((value) => String(value || "").trim()).filter(Boolean),
+    preferenceIds: preferenceIds.map((value) => String(value || "").trim()).filter(Boolean),
+    undecidedOnly: Boolean(filters.undecidedOnly),
+    limit: Math.min(200, Math.max(1, Number(filters.limit) || 15)),
+  };
+}
+
+async function handleExecutiveQueueAction(event) {
+  const action = event?.detail || {};
+  try {
+    if (action.type === "apply_filters") {
+      Object.assign(queueFilterState, normalizeQueueFilters(action.filters));
+      queueTableState.page = 1;
+      publishExecutiveQueueState();
       await loadBrowse(1);
-    } catch (err) {
-      showAppError("Failed to load browse data", err);
-    }
-  });
-
-  qs("clearFiltersBtn").addEventListener("click", async () => {
-    clearFilters();
-    try {
+    } else if (action.type === "clear_filters") {
+      clearFilters();
       await loadBrowse(1);
-    } catch (err) {
-      showAppError("Failed to reload browse data", err);
-    }
-  });
-
-  const queuePaginationActions = qs("queuePaginationActions");
-  if (queuePaginationActions) {
-    queuePaginationActions.addEventListener("click", async (event) => {
-      const button = event.target.closest("[data-page-target]");
-      if (!button || button.disabled) return;
-
-      const nextPage = Number(button.dataset.pageTarget || "");
-      if (!Number.isFinite(nextPage) || nextPage < 1 || nextPage === queueTableState.page) {
-        return;
-      }
-
-      try {
+    } else if (action.type === "page_change") {
+      const nextPage = Number(action.page);
+      if (Number.isFinite(nextPage) && nextPage >= 1 && nextPage !== queueTableState.page) {
         await reloadCurrentTable(nextPage);
-      } catch (err) {
-        showAppError("Failed to change queue page", err);
       }
-    });
+    } else if (action.type === "sort_change") {
+      queueTableState.sort = {
+        key: String(action.key || "").trim(),
+        direction: action.direction === "desc" ? "desc" : "asc",
+      };
+      queueTableState.page = 1;
+      publishExecutiveQueueState();
+      await loadBrowse(1);
+    } else if (action.type === "retry") {
+      await reloadCurrentTable(queueTableState.page);
+    } else if (action.type === "view_mode_change") {
+      setExecutiveViewMode(action.viewMode);
+    } else if (action.type === "review" && action.row && !action.row.is_applied) {
+      await handleQueueReview(action.row);
+    }
+  } catch (err) {
+    showAppError("Executive queue action failed", err);
   }
+}
 
-  document.querySelectorAll("input[name='executiveViewMode']").forEach((input) => {
-    input.addEventListener("change", () => {
-      setExecutiveViewMode(input.value);
-    });
-  });
+function attachEventHandlers() {
+  window.addEventListener(EXECUTIVE_QUEUE_ACTION_EVENT_NAME, handleExecutiveQueueAction);
 
   document.addEventListener("click", (event) => {
     document.querySelectorAll(".multi-select").forEach((root) => {
@@ -3083,7 +3206,6 @@ function attachEventHandlers() {
 
 async function init() {
   try {
-    await loadPreferenceFilterOptions("preferenceFilter");
     attachEventHandlers();
     attachApplicationHandlers();
     attachPipelineConfigHandlers();
@@ -3092,12 +3214,8 @@ async function init() {
 
     state.executiveViewMode = loadExecutiveViewMode();
     syncExecutiveViewModeControls();
-
-    bindTableSorting("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort, () => {
-      renderQueueRows(queueTableState.rows, queueTableState.metaLabel);
-    });
-
     setQueueLoadingState("Loading executive jobs...");
+    await loadExecutiveQueuePreferenceOptions();
 
     await loadStatus();
     await loadPipelineStatus();
@@ -3118,7 +3236,30 @@ async function init() {
   }
 }
 
-window.addEventListener("DOMContentLoaded", init);
+function initPipelineLaunchPage() {
+  try {
+    attachPipelineLaunchHandlers();
+    attachPipelineConfigHandlers();
+    applyPipelinePreset("full");
+    syncPipelinePathPreview();
+
+    if (window.sessionStorage.getItem("applylens_open_live_pipeline") === "1") {
+      window.sessionStorage.removeItem("applylens_open_live_pipeline");
+      openPipelineConfigModal();
+    }
+  } catch (err) {
+    console.error(err);
+    showAppError("Failed to initialize pipeline launch", err);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  if (document.body.classList.contains("pipeline-dashboard-page")) {
+    initPipelineLaunchPage();
+    return;
+  }
+  void init();
+});
 
 function getPipelineGate() {
   return state.pipelineGate || {};

@@ -758,6 +758,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "semantic_similarity_diagnostic_only",
             "semantic_alignment_weighted_score_component",
             "llm_adjudicator_readback_default_off",
+            "phase133g_premium_planning_dashboard",
         ),
     )
 
@@ -770,6 +771,56 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    phase133h_shared_shell_files = {
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/applied_ui.py",
+        ROOT / "src/app/auth_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/intelligence_ui.py",
+        ROOT / "src/app/onboarding_ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+        ROOT / "src/app/saved_ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/shell.js",
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/ui_shell.py",
+    }
+    if set(changed_runtime_files) == phase133h_shared_shell_files:
+        return
+    scheduler_admin_health_runtime_files = phase133h_shared_shell_files | {
+        ROOT / "src/app/api.py",
+    }
+    if set(changed_runtime_files) == scheduler_admin_health_runtime_files:
+        return
+    scheduler_health_visual_correction_runtime_files = (
+        scheduler_admin_health_runtime_files
+        - {ROOT / "src/app/static/app_redesign.css"}
+        | {
+            ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+            ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        }
+    )
+    if set(changed_runtime_files) == scheduler_health_visual_correction_runtime_files:
+        return
+    scheduler_health_final_visual_polish_runtime_files = scheduler_admin_health_runtime_files | {
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == scheduler_health_final_visual_polish_runtime_files:
+        return
+    scheduler_health_jsonl_removal_runtime_files = {
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == scheduler_health_jsonl_removal_runtime_files:
+        scheduler_health_source = (
+            ROOT
+            / "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx"
+        )
+        source = scheduler_health_source.read_text(encoding="utf-8")
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in source
+        return
     phase55b_runtime_files = {
         ROOT / "src/app/planning_ui.py",
         ROOT / "src/app/services.py",
@@ -1088,6 +1139,165 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     if set(changed_runtime_files) == phase132b2r3_guided_preferences_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase133a_executive_kpi_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == phase133a_executive_kpi_runtime_files:
+        return
+    phase133b_executive_dashboard_runtime_files = (
+        phase133a_executive_kpi_runtime_files
+        | {ROOT / "src/app/static/app_redesign.css"}
+    )
+    if set(changed_runtime_files) == phase133b_executive_dashboard_runtime_files:
+        return
+    phase133d_pipeline_dashboard_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/ui_shell.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/services.py",
+        ROOT / "src/pipeline/runtime_status.py",
+        ROOT / "src/storage/rag_store.py",
+    }
+    if set(changed_runtime_files) == phase133d_pipeline_dashboard_runtime_files:
+        return
+    phase133d_s1_pipeline_launch_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/styles.css",
+    }
+    if set(changed_runtime_files) == phase133d_s1_pipeline_launch_runtime_files:
+        return
+    phase133g_premium_planning_runtime_files = {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/planning_dashboard.css",
+    }
+    if set(changed_runtime_files) == phase133g_premium_planning_runtime_files:
+        return
+    phase133g_s1_shared_filter_runtime_files = phase133g_premium_planning_runtime_files | {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+    }
+    if set(changed_runtime_files) == phase133g_s1_shared_filter_runtime_files:
+        return
+    phase133g_s1r1_sort_runtime_files = phase133g_s1_shared_filter_runtime_files | {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app.js",
+    }
+    if set(changed_runtime_files) == phase133g_s1r1_sort_runtime_files:
+        return
+    phase133ef_decisions_applications_runtime_files = {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/static/application_views.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/static/decisions.js",
+    }
+    if set(changed_runtime_files) == phase133ef_decisions_applications_runtime_files:
+        return
+    phase133i_advanced_diagnostics_runtime_files = {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == phase133i_advanced_diagnostics_runtime_files:
+        advanced_diagnostics_source = (
+            ROOT
+            / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+        )
+        source = advanced_diagnostics_source.read_text(encoding="utf-8")
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in source
+        return
+    phase133i_visual_correction_runtime_files = phase133i_advanced_diagnostics_runtime_files | {
+        ROOT / "src/app/static/app_redesign.css",
+    }
+    if set(changed_runtime_files) == phase133i_visual_correction_runtime_files:
+        advanced_diagnostics_source = (
+            ROOT
+            / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+        )
+        source = advanced_diagnostics_source.read_text(encoding="utf-8")
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in source
+        return
+    item2_phase3_shared_header_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == item2_phase3_shared_header_runtime_files:
+        for relative_source in (
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        ):
+            source = (ROOT / relative_source).read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    item2_phase4_secondary_headers_runtime_files = item2_phase3_shared_header_runtime_files | {
+        ROOT / "src/app/profile_ui.py",
+        ROOT / "src/app/intelligence_ui.py",
+        ROOT / "src/app/applied_ui.py",
+        ROOT / "src/app/saved_ui.py",
+    }
+    if set(changed_runtime_files) == item2_phase4_secondary_headers_runtime_files:
+        for relative_source in (
+            "src/app/profile_ui.py",
+            "src/app/intelligence_ui.py",
+            "src/app/applied_ui.py",
+            "src/app/saved_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/application_hub_ui.py",
+        ):
+            source = (ROOT / relative_source).read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    item2_phase4_profile_corrections_runtime_files = (
+        item2_phase4_secondary_headers_runtime_files
+        | {
+            ROOT / "src/app/api.py",
+            ROOT / "src/app/static/profile.js",
+            ROOT / "src/app/ui_shell.py",
+            ROOT / "src/auth/runtime.py",
+            ROOT / "src/app/static/intelligence.js",
+        }
+    )
+    if set(changed_runtime_files) == item2_phase4_profile_corrections_runtime_files:
+        for relative_source in (
+            "src/app/profile_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/application_hub_ui.py",
+            "src/app/api.py",
+            "src/app/ui_shell.py",
+            "src/auth/runtime.py",
+            "src/app/static/profile.js",
+        ):
+            source = (ROOT / relative_source).read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return

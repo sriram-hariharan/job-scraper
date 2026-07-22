@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLANNING_JS = ROOT / "src/app/static/planning.js"
+PLANNING_REACT = ROOT / "frontend/executive-kpi/src/PlanningWorklist.tsx"
 
 
 def _source() -> str:
@@ -28,15 +29,20 @@ def _function_block(name: str) -> str:
 
 def test_planning_row_renders_existing_readback_without_new_column():
     source = _source()
-    recommendation = _function_block("buildPlanningRecommendationCellHtml")
+    planning_react = PLANNING_REACT.read_text(encoding="utf-8")
+    details_panel = _function_block("buildPlanningRowDetailsHtml")
     renderer = _function_block("buildLlmAdjudicatorReadbackHtml")
 
-    assert "buildLlmAdjudicatorReadbackHtml(row)" in recommendation
+    assert "buildLlmAdjudicatorReadbackHtml(row)" in details_panel
     assert "AI review notes" in renderer
     assert "LLM adjudicator readback" not in renderer
     assert "<details" not in renderer
     assert "buildRecommendationDetailsHtml" in renderer
-    assert 'colspan="8"' in source
+    assert "function AdvisoryDetails" in planning_react
+    assert "<AdvisoryDetails row={row} />" in planning_react
+    assert "<SharedExpandedDetail>" in planning_react
+    assert 'id: "llm_adjudicator_readback"' not in planning_react
+    assert 'accessorKey: "llm_adjudicator_readback"' not in planning_react
 
 
 def test_readback_is_hidden_when_missing_disabled_or_not_enabled():

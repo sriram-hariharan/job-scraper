@@ -64,6 +64,7 @@ def _write_status(payload: Dict[str, Any]) -> None:
     if path is None:
         return
 
+    payload["updated_at_utc"] = _utc_now()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_text(
@@ -92,8 +93,12 @@ def initialize_run(
     if not is_enabled():
         return
 
+    existing = _read_status()
     payload = {
         "run_id": _run_id(),
+        "child_pid": existing.get("child_pid"),
+        "child_process_identity": existing.get("child_process_identity", ""),
+        "worker_id": existing.get("worker_id", ""),
         "status": "running",
         "started_at": _utc_now(),
         "finished_at": "",
@@ -216,10 +221,16 @@ def fail_run(stage: str, error: str) -> None:
         return
 
     payload = _read_status()
+    requested_stage = str(stage or "").strip()
+    recorded_stage = str(payload.get("current_stage") or "").strip()
+    failure_stage = requested_stage
+    if not failure_stage or failure_stage.lower() == "unknown":
+        failure_stage = recorded_stage if recorded_stage.lower() != "unknown" else ""
+
     payload["status"] = "failed"
     payload["finished_at"] = _utc_now()
     payload["return_code"] = 1
-    payload["current_stage"] = stage
-    payload["stage_message"] = f"Failed in {stage}"
+    payload["current_stage"] = failure_stage
+    payload["stage_message"] = f"Failed in {failure_stage}" if failure_stage else "Pipeline failed"
     payload["error"] = error
     _write_status(payload)

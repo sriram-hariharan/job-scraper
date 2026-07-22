@@ -343,11 +343,16 @@ def test_no_mutation_artifact_approved_plan_application_or_scoring_side_effects(
 
 
 def test_ui_explicit_action_and_readback_surface_are_default_off():
-    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
     script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    diagnostics_tsx = (
+        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+    ).read_text(encoding="utf-8")
 
-    assert "scanWorkspaceLiveTailoringSuggestionToggle" in html
-    assert "scanWorkspaceTailoringLlmReadback" in html
+    # These IDs and their wiring moved from src/app/planning_ui.py into the
+    # React Advanced Diagnostics Command Center; scan_workspace.js keeps the
+    # live-scan readback plumbing that predates the redesign.
+    assert "scanWorkspaceLiveTailoringSuggestionToggle" in diagnostics_tsx
+    assert "scanWorkspaceTailoringLlmReadback" in diagnostics_tsx
     assert "enable_live_tailoring_suggestion" in script
     assert "getScanWorkspaceLiveTailoringSuggestionEnabled()" in script
     assert "renderScanWorkspaceTailoringLlmReadback(response)" in script
@@ -356,6 +361,9 @@ def test_ui_explicit_action_and_readback_surface_are_default_off():
 
 def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
     html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    diagnostics = (
+        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+    ).read_text(encoding="utf-8")
 
     score_card = html[
         html.index("scan-workspace-review-score-card"):
@@ -365,22 +373,24 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
         html.index("scan-workspace-review-main-actions"):
         html.index("scan-workspace-toolbar-context")
     ]
-    diagnostics = html[
-        html.index('id="scanWorkspaceAdvancedDiagnostics"'):
-        html.index('@router.get("/advanced-diagnostics"')
-    ]
     tabs = html[
         html.index('id="scanWorkspaceTabRow"'):
         html.index('</section>', html.index('id="scanWorkspaceControlsShell"'))
     ]
 
-    assert "<h2>Advanced diagnostics</h2>" in diagnostics
+    # The internal workflow surface now lives in the React Advanced
+    # Diagnostics Command Center (frontend/executive-kpi/src/diagnostics/),
+    # rendered only at the standalone /advanced-diagnostics route — it is no
+    # longer inlined into src/app/planning_ui.py's scan-review markup.
+    assert "Advanced Diagnostics" in diagnostics
     assert "These do not apply to jobs automatically." in diagnostics
     assert "Selecting diagnostics does not run them." in diagnostics
     assert "Diagnostics never apply to jobs automatically." in diagnostics
     assert "Run selected diagnostics" in diagnostics
     assert "Execution is not enabled yet. Selections are for admin review only." in diagnostics
     assert "<details" not in diagnostics
+    assert "scanWorkspaceAdvancedDiagnostics" not in html
+    assert "admin-diagnostics-shell" not in html
 
     for label in ("Undo", "Redo", "Accept All", "Export", "Compare", "Continue"):
         assert label in normal_actions

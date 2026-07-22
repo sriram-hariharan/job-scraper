@@ -185,7 +185,7 @@ html[data-theme="light"] .notification-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -208,7 +208,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
   color: #ffffff !important;
@@ -227,7 +227,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .job-apply-btn:not(:disabled):hover,
 .apply-btn:not(:disabled):hover,
@@ -237,7 +237,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: var(--app-shadow-sm) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):disabled,
 [aria-disabled="true"] {
   cursor: not-allowed !important;
   opacity: 0.58 !important;
@@ -796,7 +796,7 @@ html[data-theme="light"] .profile-dropdown-nav-btn:focus-visible {
   width: 44px !important;
   height: 44px !important;
   border-radius: 14px !important;
-  color: #0f172a !important;
+  color: var(--app-text) !important;
 }
 
 .profile-dropdown-nav-icon--scans {
@@ -1503,7 +1503,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -4036,7 +4036,7 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -4440,6 +4440,11 @@ body .notification-dropdown.hidden {
 }
 
 /* Floating Job Assistant launcher. */
+body.executive-dashboard-page {
+  --floating-chat-launcher-bottom: max(8px, env(safe-area-inset-bottom));
+  --floating-chat-launcher-bottom-mobile: max(8px, env(safe-area-inset-bottom));
+}
+
 #floatingIntelligenceChat {
   position: static !important;
 }
@@ -4447,7 +4452,7 @@ body .notification-dropdown.hidden {
 #floatingIntelligenceChatButton {
   position: fixed !important;
   right: 28px !important;
-  bottom: 28px !important;
+  bottom: var(--floating-chat-launcher-bottom, max(28px, env(safe-area-inset-bottom))) !important;
   z-index: 900 !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -4809,7 +4814,7 @@ html[data-theme="light"] .floating-intelligence-chat-message--error .floating-in
 @media (max-width: 560px) {
   #floatingIntelligenceChatButton {
     right: 16px !important;
-    bottom: 16px !important;
+    bottom: var(--floating-chat-launcher-bottom-mobile, max(16px, env(safe-area-inset-bottom))) !important;
     width: 58px !important;
     height: 58px !important;
   }
@@ -7187,7 +7192,7 @@ html[data-theme="light"] .pipeline-run-stage-chip.is-complete {
 
 /* ui_redesign_v37: Live pipeline modal readability and theme parity. */
 .pipeline-modal-card {
-  width: min(1120px, calc(100vw - 40px)) !important;
+  width: min(980px, calc(100vw - 40px)) !important;
 }
 
 .pipeline-modal-card .modal-header {
@@ -7246,6 +7251,11 @@ html[data-theme="light"] body .ghost-btn.pipeline-bulk-action-btn--clear {
 .pipeline-toggle-item {
   border-color: var(--app-border-2) !important;
   background: var(--app-surface-2) !important;
+}
+
+.pipeline-launch-modal .pipeline-form-grid {
+  border: 0 !important;
+  background: transparent !important;
 }
 
 .pipeline-form-grid {
@@ -7665,7 +7675,7 @@ html[data-theme="light"] .pipeline-success-actions {
 
 @media (max-width: 760px) {
   .pipeline-modal-card {
-    width: min(100vw - 16px, 1120px) !important;
+    width: min(100vw - 16px, 980px) !important;
   }
 
   .pipeline-confirm-card {
@@ -7683,4 +7693,697 @@ html[data-theme="light"] .pipeline-success-actions {
   .pipeline-toggle-item {
     align-items: stretch !important;
   }
+}
+
+/* ============================================================================
+   Phase 133H — premium responsive application sidebar + shared shell
+   Authoritative final layer (loaded last). Reuses the established
+   --app-shell-width (268px) / --app-shell-collapsed-width (68px) and existing
+   --app-* theme tokens; does not change the width variables or content-offset
+   math. Neutralizes the oversized brand card + glowing active bar, introduces
+   grouped icon navigation, a compact desktop collapse control, and a decoupled
+   mobile Sheet/drawer driven by body.app-shell-mobile-open.
+   ============================================================================ */
+
+/* --- Compact brand row (removes the oversized floating logo card) --------- */
+.app-shell-brand-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  min-height: 0 !important;
+  height: 60px !important;
+  margin: 0 0 12px !important;
+  padding: 0 6px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--app-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.app-shell-brand {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  padding: 2px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.app-shell-brand::before,
+.app-shell-brand::after {
+  content: none !important;
+  display: none !important;
+}
+.app-shell-brand:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--app-focus) !important;
+}
+.app-shell-brand-logo {
+  display: block !important;
+  width: auto !important;
+  max-width: 160px !important;
+  height: 40px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  filter: none !important;
+}
+html[data-theme="light"] .app-shell-brand {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* --- Shell control buttons: collapse (desktop) + close (mobile) ----------- */
+.app-shell-collapse-btn,
+.app-shell-close-btn {
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  flex: 0 0 34px;
+  padding: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface-2);
+  color: var(--app-text-2);
+  cursor: pointer;
+  transition: background var(--app-fast) var(--app-ease),
+    border-color var(--app-fast) var(--app-ease),
+    color var(--app-fast) var(--app-ease);
+}
+.app-shell-collapse-btn:hover,
+.app-shell-close-btn:hover {
+  border-color: var(--app-border-2);
+  color: var(--app-text);
+}
+.app-shell-collapse-btn:focus-visible,
+.app-shell-close-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--app-focus);
+}
+.app-shell-collapse-icon,
+.app-shell-close-icon,
+.app-shell-menu-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.app-shell-collapse-icon svg,
+.app-shell-close-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* Desktop: collapse control lives in the sidebar; hamburger + close hidden. */
+.app-shell-menu-btn {
+  display: none !important;
+}
+.app-shell-close-btn {
+  display: none !important;
+}
+.app-shell-collapse-btn {
+  display: inline-flex !important;
+}
+
+/* --- Navigation groups + labels ------------------------------------------ */
+.app-shell-nav {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 4px 0 0 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+.app-shell-nav-group {
+  display: grid !important;
+  gap: 4px !important;
+}
+.app-shell-nav-group + .app-shell-nav-group {
+  margin-top: 14px !important;
+}
+.app-shell-nav-group-label {
+  padding: 0 12px 6px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--app-muted) !important;
+}
+
+/* --- Navigation items: restrained, icon-aligned -------------------------- */
+.app-shell-nav-link {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  padding: 0 12px !important;
+  border: 1px solid transparent !important;
+  border-radius: 12px !important;
+  color: var(--app-muted) !important;
+  font-size: 14.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-decoration: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background var(--app-fast) var(--app-ease),
+    border-color var(--app-fast) var(--app-ease),
+    color var(--app-fast) var(--app-ease);
+}
+.app-shell-nav-link:hover {
+  transform: none !important;
+  border-color: var(--app-border) !important;
+  background: rgba(124, 156, 255, 0.08) !important;
+  color: var(--app-text) !important;
+}
+.app-shell-nav-link:focus-visible {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: 0 0 0 3px var(--app-focus) !important;
+}
+.app-shell-nav-link.active,
+.app-shell-nav-link[aria-current="page"] {
+  border-color: transparent !important;
+  background: rgba(37, 99, 235, 0.14) !important;
+  color: var(--app-text) !important;
+  transform: none !important;
+  box-shadow: inset 3px 0 0 var(--app-primary) !important;
+}
+.app-shell-nav-link.active::before,
+.app-shell-nav-link[aria-current="page"]::before,
+.app-shell-nav-link.active::after,
+.app-shell-nav-link[aria-current="page"]::after {
+  content: none !important;
+  display: none !important;
+}
+.app-shell-nav-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 22px !important;
+  min-width: 22px !important;
+  flex: 0 0 22px !important;
+  color: inherit !important;
+}
+.app-shell-nav-icon svg {
+  width: 20px !important;
+  height: 20px !important;
+  display: block !important;
+}
+.app-shell-nav-link.active .app-shell-nav-icon,
+.app-shell-nav-link[aria-current="page"] .app-shell-nav-icon {
+  color: var(--app-primary) !important;
+}
+.app-shell-nav-label {
+  display: block !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  color: inherit !important;
+}
+
+/* Light-theme restrained active state (overrides earlier light gradient). */
+html[data-theme="light"] .app-shell-nav-link.active,
+html[data-theme="light"] .app-shell-nav-link[aria-current="page"] {
+  border-color: transparent !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  color: #0f172a !important;
+  box-shadow: inset 3px 0 0 #2563eb !important;
+}
+html[data-theme="light"] .app-shell-nav-link.active .app-shell-nav-icon,
+html[data-theme="light"] .app-shell-nav-link[aria-current="page"] .app-shell-nav-icon {
+  color: #2563eb !important;
+}
+
+/* --- Collapsed desktop rail: icons only, labels/group titles hidden ------ */
+body.app-shell-collapsed .app-shell-brand-row {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 0 8px !important;
+  padding: 4px 0 10px !important;
+  border-bottom: 0 !important;
+}
+body.app-shell-collapsed .app-shell-brand {
+  display: inline-flex !important;
+  justify-content: center !important;
+  padding: 0 !important;
+}
+body.app-shell-collapsed .app-shell-brand-logo {
+  height: 32px !important;
+  max-width: 32px !important;
+  object-position: center !important;
+}
+body.app-shell-collapsed .app-shell-nav {
+  align-items: stretch !important;
+  padding-top: 4px !important;
+}
+body.app-shell-collapsed .app-shell-nav-group + .app-shell-nav-group {
+  margin-top: 10px !important;
+}
+body.app-shell-collapsed .app-shell-nav-group-label {
+  display: none !important;
+}
+body.app-shell-collapsed .app-shell-nav-link {
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  margin: 0 auto !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  padding: 0 !important;
+}
+body.app-shell-collapsed .app-shell-nav-label {
+  display: none !important;
+}
+body.app-shell-collapsed .app-shell-nav-icon {
+  width: auto !important;
+  min-width: 0 !important;
+  flex: none !important;
+}
+
+/* --- Mobile menu trigger (compact, no glow) ------------------------------ */
+.app-shell-menu-btn-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+/* --- Mobile overlay ------------------------------------------------------- */
+.app-shell-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 990;
+  border: 0;
+  background: rgba(4, 8, 18, 0.55);
+  backdrop-filter: blur(2px);
+}
+.app-shell-overlay[hidden] {
+  display: none;
+}
+body.app-shell-mobile-open {
+  overflow: hidden !important;
+}
+
+@media (min-width: 981px) {
+  .app-shell-overlay {
+    display: none !important;
+  }
+  body.app-shell-mobile-open {
+    overflow: visible !important;
+  }
+}
+
+/* --- Mobile Sheet / drawer (< 980px) ------------------------------------- */
+@media (max-width: 980px) {
+  .app-shell-menu-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    left: 14px !important;
+    right: auto !important;
+    top: 16px !important;
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    border: 1px solid var(--app-border) !important;
+    border-radius: 12px !important;
+    background: var(--app-surface-2) !important;
+    color: var(--app-text) !important;
+    box-shadow: var(--app-shadow-sm) !important;
+    backdrop-filter: none !important;
+  }
+  body:not(.app-shell-collapsed) .app-shell-menu-btn,
+  body.app-shell-collapsed .app-shell-menu-btn {
+    left: 14px !important;
+    top: 16px !important;
+  }
+  .app-shell-menu-btn:hover,
+  .app-shell-menu-btn:focus-visible {
+    border-color: var(--app-border-2) !important;
+    background: var(--app-surface-2) !important;
+    box-shadow: 0 0 0 3px var(--app-focus) !important;
+    outline: none !important;
+  }
+  .app-shell-collapse-btn {
+    display: none !important;
+  }
+  .app-shell-close-btn {
+    display: inline-flex !important;
+  }
+
+  .app-shell,
+  body:not(.app-shell-collapsed) .app-shell,
+  body.app-shell-collapsed .app-shell {
+    width: min(84vw, 320px) !important;
+    padding: 16px 14px !important;
+    transform: translateX(-100%);
+    transition: transform var(--app-normal, 200ms) var(--app-ease);
+    z-index: 1000 !important;
+  }
+  body.app-shell-mobile-open .app-shell,
+  body.app-shell-mobile-open:not(.app-shell-collapsed) .app-shell,
+  body.app-shell-mobile-open.app-shell-collapsed .app-shell {
+    transform: translateX(0) !important;
+  }
+
+  /* In the mobile drawer, always present the full expanded navigation even
+     when the desktop collapsed preference is active. */
+  body.app-shell-collapsed .app-shell-brand-row {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    height: 60px !important;
+    padding: 0 6px !important;
+    margin: 0 0 12px !important;
+    border-bottom: 1px solid var(--app-border) !important;
+  }
+  body.app-shell-collapsed .app-shell-brand {
+    justify-content: flex-start !important;
+  }
+  body.app-shell-collapsed .app-shell-brand-logo {
+    height: 38px !important;
+    max-width: 150px !important;
+    object-position: left center !important;
+  }
+  body.app-shell-collapsed .app-shell-nav {
+    align-items: stretch !important;
+    padding-top: 4px !important;
+  }
+  body.app-shell-collapsed .app-shell-nav-group-label {
+    display: block !important;
+  }
+  body.app-shell-collapsed .app-shell-nav-link {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    justify-content: flex-start !important;
+    gap: 11px !important;
+    padding: 0 12px !important;
+  }
+  body.app-shell-collapsed .app-shell-nav-label {
+    display: block !important;
+  }
+  body.app-shell-collapsed .app-shell-nav-icon {
+    width: 22px !important;
+    min-width: 22px !important;
+    flex: 0 0 22px !important;
+  }
+
+  .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page),
+  body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) {
+    margin-left: 0 !important;
+  }
+}
+
+/* --- Reduced motion ------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell,
+  .app-shell-overlay,
+  .app-shell-nav-link,
+  .app-shell-collapse-btn,
+  .app-shell-close-btn,
+  .app-shell-menu-btn {
+    transition: none !important;
+  }
+}
+
+/* === Item 2 Phase 3: Shared page header foundation =======================
+   One class contract for the primary authenticated surfaces (Overview,
+   Planning, Decisions, Applications, Pipeline, Scheduler Health, Advanced
+   Diagnostics). Placed after the legacy .page-header/global h1 rules above
+   so the canonical migrated-page classes own the final cascade. Selectors
+   are deliberately over-qualified (3-4 classes) to beat the highest-
+   specificity legacy title/description rules found in this file
+   (body .page > .page-header h1 / p, specificity 0,0,2,2) purely on class
+   count, without editing those legacy rules — non-migrated pages (Scan
+   Workspace, Tailoring Workspace, Preferences, onboarding) are unaffected.
+   This replaces the former per-page Scheduler Health / Advanced Diagnostics
+   h1 overrides above, which are now redundant once both pages carry the
+   shared title class. */
+
+.app-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+/* Overview and Planning still carry the legacy .page-header class. Mirror
+   the highest-specificity legacy container selectors (adding .app-page-header
+   alongside .page-header) so the two-row stack wins instead of the old
+   row layout + calculated right padding reserved for the global toolbar. */
+body .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .app-page-header.page-header,
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .app-page-header.page-header,
+body .page > .app-page-header.page-header {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 0 14px !important;
+  padding: 0 !important;
+  text-align: left !important;
+}
+
+.app-page-header__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.app-page-header__main--with-icon { flex-direction: row; align-items: flex-start; gap: 14px; }
+.app-page-header__copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.app-page-header .app-page-header__eyebrow {
+  margin: 0 0 4px;
+  color: var(--app-primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app-page-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.page .app-page-header .app-page-header__title-row .app-page-header__title {
+  margin: 0;
+  color: var(--app-text);
+  font-size: clamp(30px, 2.5vw, 36px) !important;
+  font-weight: 900 !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.02em !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+}
+
+@media (max-width: 1024px) {
+  .page .app-page-header .app-page-header__title-row .app-page-header__title {
+    font-size: 34px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .page .app-page-header .app-page-header__title-row .app-page-header__title {
+    font-size: 30px !important;
+  }
+}
+
+.page .app-page-header .app-page-header__main .app-page-header__description,
+.page .app-page-header .app-page-header__copy .app-page-header__description {
+  margin: 6px 0 0 !important;
+  max-width: 760px;
+  color: var(--app-muted);
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  white-space: normal !important;
+}
+
+.app-page-header__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 680px) {
+  .app-page-header__actions { justify-content: flex-start; }
+}
+
+.app-page-header__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Item 2 Phase 4: Scan Workspace carries an older, higher-specificity title
+   rule in scan_workspace_review.css
+   (body .scan-workspace-page.page > .scan-workspace-header-shell.scan-
+   workspace-header-shell--minimal .scan-workspace-header-copy h1, specificity
+   0,0,5,2) that the base shared-title selector above (0,0,3,0) cannot beat.
+   This selector reuses the identical shared class names and identical shared
+   values (no page-specific size) with enough additional specificity
+   (0,0,6,1) to win without touching scan_workspace_review.css. Tailoring
+   Workspace has no comparable competing rule, so the base selector already
+   applies there unassisted. */
+body .scan-workspace-page.page > .app-page-header.scan-workspace-header-shell .app-page-header__title-row .app-page-header__title {
+  font-size: clamp(30px, 2.5vw, 36px) !important;
+  font-weight: 900 !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.02em !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+}
+
+@media (max-width: 1024px) {
+  body .scan-workspace-page.page > .app-page-header.scan-workspace-header-shell .app-page-header__title-row .app-page-header__title {
+    font-size: 34px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  body .scan-workspace-page.page > .app-page-header.scan-workspace-header-shell .app-page-header__title-row .app-page-header__title {
+    font-size: 30px !important;
+  }
+}
+
+/* Scheduler diagnostics close fill authority r1 */
+
+body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"] {
+  position: absolute !important;
+  top: 20px !important;
+  right: 20px !important;
+  z-index: 20 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  width: 48px !important;
+  min-width: 48px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border-radius: 14px !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  transform: none !important;
+}
+
+body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  > .modal-header {
+  padding-right: 108px !important;
+}
+
+/* Light theme: unmistakable solid blue fill. */
+html[data-theme="light"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"] {
+  border: 1px solid #1d4ed8 !important;
+  background: #2563eb !important;
+  background-color: #2563eb !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.32) !important;
+}
+
+html[data-theme="light"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:hover {
+  border-color: #1e3a8a !important;
+  background: #1d4ed8 !important;
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+/* Dark theme: unmistakable solid violet fill. */
+html[data-theme="dark"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"],
+html:not([data-theme="light"])
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"] {
+  border: 1px solid #8b5cf6 !important;
+  background: #6d28d9 !important;
+  background-color: #6d28d9 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(76, 29, 149, 0.48) !important;
+}
+
+html[data-theme="dark"]
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:hover,
+html:not([data-theme="light"])
+  body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:hover {
+  border-color: #c4b5fd !important;
+  background: #7c3aed !important;
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+body
+  #schedulerHealthDashboardRoot
+  .scheduler-diagnostics-modal-card
+  button[aria-label="Close diagnostics"]:focus-visible {
+  outline: 3px solid rgba(96, 165, 250, 0.58) !important;
+  outline-offset: 3px !important;
 }

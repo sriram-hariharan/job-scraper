@@ -303,6 +303,11 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "phase129c_workflow_overlay_and_run_scoped_corpus"
     )
     phase132_profile = legacy_guard_allowlist("phase132b_premium_preferences_ui")
+    phase133_profile = legacy_guard_allowlist("phase133a_executive_kpi_react_island")
+    phase133b_profile = legacy_guard_allowlist("phase133b_executive_queue_react_island")
+    phase133d_profile = legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
+    phase133g_profile = legacy_guard_allowlist("phase133g_premium_planning_dashboard")
+    phase133ef_profile = legacy_guard_allowlist("phase133ef_decisions_applications_dashboards")
     expected_phase132_profile = {
         "src/app/api.py",
         "src/app/onboarding_ui.py",
@@ -342,12 +347,354 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert phase132_profile == expected_phase132_profile
     assert len(phase132_profile) == 22
     assert not any("*" in path for path in phase132_profile)
+    assert phase133_profile == {
+        ".gitignore",
+        "Dockerfile",
+        "README.md",
+        "frontend/executive-kpi/package-lock.json",
+        "frontend/executive-kpi/package.json",
+        "frontend/executive-kpi/postcss.config.cjs",
+        "frontend/executive-kpi/src/AnalyticsDashboard.test.tsx",
+        "frontend/executive-kpi/src/AnalyticsDashboard.tsx",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/main.test.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/test/setup.ts",
+        "frontend/executive-kpi/tailwind.config.cjs",
+        "frontend/executive-kpi/tsconfig.json",
+        "frontend/executive-kpi/vite.config.ts",
+        "src/app/static/app.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/ui.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase133a_executive_kpi_react_island.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(phase133_profile) == 24
+    assert not any("*" in path for path in phase133_profile)
+    assert phase133b_profile == {
+        "frontend/executive-kpi/package-lock.json",
+        "frontend/executive-kpi/package.json",
+        "frontend/executive-kpi/src/ExecutiveQueue.test.tsx",
+        "frontend/executive-kpi/src/ExecutiveQueue.tsx",
+        "frontend/executive-kpi/src/main.test.tsx",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/test/setup.ts",
+        "src/app/static/app.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/ui.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase133a_executive_kpi_react_island.py",
+        "tests/test_phase133b_executive_queue_react_island.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_queue_ui_metadata_contract.py",
+    }
+    assert len(phase133b_profile) == 17
+    assert not any("*" in path for path in phase133b_profile)
+    assert phase133d_profile == {
+        "frontend/executive-kpi/src/main.test.tsx",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.test.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+        "frontend/executive-kpi/src/pipeline/pipelineModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/static/app.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/services.py",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "src/pipeline/runtime_status.py",
+        "src/storage/rag_store.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase129d_pipeline_persistence_and_suggestions_error_layout.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase71a_live_pipeline_argument_list_too_long_guard_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_user_pipeline_status_reconciliation.py",
+    }
+    assert len(phase133d_profile) == 22
+    assert not any("*" in path for path in phase133d_profile)
+    assert phase133g_profile == {
+        "frontend/executive-kpi/src/ExecutiveQueue.test.tsx",
+        "frontend/executive-kpi/src/ExecutiveQueue.tsx",
+        "frontend/executive-kpi/src/PlanningWorklist.test.tsx",
+        "frontend/executive-kpi/src/PlanningWorklist.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.test.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.tsx",
+        "frontend/executive-kpi/src/main.test.tsx",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/table/TablePrimitives.tsx",
+        "src/app/api.py",
+        "src/app/planning_ui.py",
+        "src/app/services.py",
+        "src/app/static/app.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/static/planning.js",
+        "src/app/static/planning_dashboard.css",
+        "src/app/ui.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase110b_generate_suggestions_loader_static_only.py",
+        "tests/test_phase133b_executive_queue_react_island.py",
+        "tests/test_phase133g_premium_planning_dashboard.py",
+        "tests/test_phase124b_llm_adjudicator_planning_readback_static_only.py",
+        "tests/test_phase126b_planning_ai_review_copy_polish_static_only.py",
+        "tests/test_phase71a_tailoring_workspace_artifact_path_preload_repair_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_queue_ui_metadata_contract.py",
+    }
+    assert len(phase133g_profile) == 30
+    assert not any("*" in path for path in phase133g_profile)
+    assert phase133ef_profile == {
+        "frontend/executive-kpi/src/OperationalBridges.test.ts",
+        "frontend/executive-kpi/src/OperationalDashboards.test.tsx",
+        "frontend/executive-kpi/src/OperationalDashboards.tsx",
+        "frontend/executive-kpi/src/main.test.tsx",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/table/TablePrimitives.tsx",
+        "src/app/application_hub_ui.py",
+        "src/app/api.py",
+        "src/app/decisions_ui.py",
+        "src/app/static/application_views.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/static/decisions.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase133ef_decisions_applications_dashboards.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(phase133ef_profile) == 17
+    assert not any("*" in path for path in phase133ef_profile)
+
+    phase133h_profile = legacy_guard_allowlist("phase133h_premium_responsive_sidebar")
+    assert phase133h_profile == {
+        "src/app/application_hub_ui.py",
+        "src/app/applied_ui.py",
+        "src/app/auth_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/intelligence_ui.py",
+        "src/app/onboarding_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/saved_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/shell.js",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase133h_shared_shell_navigation.py",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }
+    assert len(phase133h_profile) == 20
+    assert not any("*" in path for path in phase133h_profile)
+
+    scheduler_admin_health_profile = legacy_guard_allowlist("scheduler_admin_health_redesign")
+    assert scheduler_admin_health_profile == {
+        "src/app/api.py",
+        "src/app/application_hub_ui.py",
+        "src/app/applied_ui.py",
+        "src/app/auth_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/intelligence_ui.py",
+        "src/app/onboarding_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/saved_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/shell.js",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133h_shared_shell_navigation.py",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(scheduler_admin_health_profile) == 22
+    assert not any("*" in path for path in scheduler_admin_health_profile)
+
+    scheduler_visual_correction_profile = legacy_guard_allowlist("scheduler_health_visual_correction")
+    assert scheduler_visual_correction_profile == {
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+        "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/api.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/ui.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133a_executive_kpi_react_island.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase133ef_decisions_applications_dashboards.py",
+        "tests/test_phase133g_premium_planning_dashboard.py",
+        "tests/test_queue_ui_metadata_contract.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(scheduler_visual_correction_profile) == 21
+    assert not any("*" in path for path in scheduler_visual_correction_profile)
+
+    phase133i_profile = legacy_guard_allowlist("phase133i_advanced_diagnostics_react_command_center")
+    assert phase133i_profile == {
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.tsx",
+        "frontend/executive-kpi/src/filter/FilterSelect.test.tsx",
+        "src/app/planning_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_advanced_diagnostics_react_redesign.py",
+        "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+        "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+        "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
+        "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
+        "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
+        "tests/test_phase70a_ux_polish_agentic_workflow_demo_readiness_default_off.py",
+        "tests/test_phase70b_ux_polish_agentic_workflow_demo_readiness_readback_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(phase133i_profile) == 22
+    assert not any("*" in path for path in phase133i_profile)
+
+    item2_phase3_profile = legacy_guard_allowlist("item2_phase3_shared_page_header_foundation")
+    assert item2_phase3_profile == {
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.test.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/ui.py",
+        "src/app/planning_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/application_hub_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item2_phase3_shared_page_header_foundation.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(item2_phase3_profile) == 20
+    assert not any("*" in path for path in item2_phase3_profile)
+
+    item2_phase4_profile = legacy_guard_allowlist("item2_phase4_secondary_page_headers")
+    assert item2_phase4_profile == {
+        "src/app/profile_ui.py",
+        "src/app/intelligence_ui.py",
+        "src/app/applied_ui.py",
+        "src/app/saved_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/application_hub_ui.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item2_phase3_shared_page_header_foundation.py",
+        "tests/test_item2_phase4_secondary_page_headers.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(item2_phase4_profile) == 15
+    assert not any("*" in path for path in item2_phase4_profile)
+
+    item2_phase4_corrections_profile = legacy_guard_allowlist(
+        "item2_phase4_profile_corrections_legacy_route_retirement"
+    )
+    assert item2_phase4_corrections_profile == {
+        "README.md",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+        "frontend/executive-kpi/src/pipeline/PipelineDashboard.test.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/api.py",
+        "src/app/application_hub_ui.py",
+        "src/app/applied_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/intelligence_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/saved_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/static/intelligence.js",
+        "src/app/static/profile.js",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "src/auth/runtime.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item2_phase3_shared_page_header_foundation.py",
+        "tests/test_item2_phase4_secondary_page_headers.py",
+        "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+        "tests/test_phase133a_executive_kpi_react_island.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase133ef_decisions_applications_dashboards.py",
+        "tests/test_phase133g_premium_planning_dashboard.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+    }
+    assert len(item2_phase4_corrections_profile) == 36
+    assert not any("*" in path for path in item2_phase4_corrections_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | phase129_profile
         | phase132_profile
+        | phase133_profile
+        | phase133b_profile
+        | phase133d_profile
+        | phase133g_profile
+        | phase133ef_profile
+        | phase133h_profile
+        | scheduler_admin_health_profile
+        | scheduler_visual_correction_profile
+        | phase133i_profile
+        | item2_phase3_profile
+        | item2_phase4_profile
+        | item2_phase4_corrections_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

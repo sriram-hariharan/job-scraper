@@ -36,7 +36,6 @@ HTML_NAVIGATION_PATHS = {
     "/",
     "/planning",
     "/decisions-ui",
-    "/intelligence",
     "/applications",
     "/scheduler",
     "/profile",

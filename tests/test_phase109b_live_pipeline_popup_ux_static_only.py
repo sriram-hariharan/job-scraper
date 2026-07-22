@@ -8,6 +8,7 @@ from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
     get_changed_files,
 )
+from src.app.ui import executive_dashboard, pipeline_dashboard
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,11 +28,10 @@ def _between(source: str, start: str, end: str) -> str:
 
 
 def _pipeline_modal_html() -> str:
-    return _between(
-        _source(UI_PATH),
-        '<section class="modal-backdrop hidden" id="pipelineConfigModal">',
-        '<section class="modal-backdrop hidden" id="pipelineConfirmModal">',
-    )
+    markup = pipeline_dashboard()
+    start = markup.index('id="pipelineConfigModal"')
+    end = markup.index('id="appErrorModal"', start)
+    return markup[start:end]
 
 
 def _pipeline_confirm_source() -> str:
@@ -54,7 +54,7 @@ def test_live_pipeline_popup_uses_demo_friendly_sections_and_labels():
     modal = _pipeline_modal_html()
 
     for label in [
-        "Run size",
+        "Run scope",
         "Job limit",
         "Packet limit",
         "Rerun seen jobs",
@@ -200,3 +200,101 @@ def test_pipeline_modal_uses_existing_compact_helper_icon_only():
     assert modal.count("packet-info-icon pipeline-help-icon") >= 7
     assert "data-popover" not in modal
     assert "position: fixed" not in modal
+
+
+def test_pipeline_launch_uses_one_shared_two_step_dialog_on_both_entrypoints():
+    for markup in (executive_dashboard(), pipeline_dashboard()):
+        assert markup.count('role="dialog"') >= 1
+        assert markup.count('id="pipelineConfigModal"') == 1
+        assert markup.count('id="pipelineConfirmModal"') == 1
+        assert '<section class="modal-backdrop hidden" id="pipelineConfirmModal">' not in markup
+        assert 'data-pipeline-launch-panel="configure"' in markup
+        assert 'data-pipeline-launch-panel="review"' in markup
+        assert 'data-pipeline-step-indicator="configure"' in markup
+        assert 'data-pipeline-step-indicator="review"' in markup
+
+    source = _source(UI_PATH)
+    assert source.count("def _pipeline_dashboard_launch_dialogs()") == 1
+    assert source.count("{_pipeline_dashboard_launch_dialogs()}") == 2
+
+
+def test_pipeline_launch_preserves_defaults_constraints_and_supported_controls():
+    modal = _pipeline_modal_html()
+
+    for marker in [
+        'id="pipelineJobLimitInput" value="50" min="1" max="500"',
+        'id="pipelineJobPacketLimitInput" value="0" min="0" max="500"',
+        'name="pipelineDeleteSeenData" value="no" checked',
+        'name="pipelinePlanningOnly" value="no" checked',
+        'name="pipelineGenerateLlmAdjudication" value="yes" checked',
+        'name="pipelineGenerateLlmFallback" value="no" checked',
+        'data-job-limit-preset="25"',
+        'data-job-limit-preset="50"',
+        'data-job-limit-preset="100"',
+        'data-job-limit-preset="200"',
+    ]:
+        assert marker in modal
+
+    assert 'id="pipelineJobLimitError" aria-live="polite"' in modal
+    assert 'id="pipelineJobPacketLimitError" aria-live="polite"' in modal
+
+
+def test_pipeline_continue_validates_without_launch_and_review_resets_scroll():
+    source = _source(APP_JS_PATH)
+    handler = source.split('qs("openPipelineConfirmBtn").addEventListener', 1)[1].split(
+        'qs("backToPipelineConfigBtn")', 1
+    )[0]
+    step_owner = _between(source, "function setPipelineLaunchStep", "function openPipelineConfigModal")
+
+    assert "validatePipelineConfig()" in handler
+    assert "collectPipelineConfig()" in handler
+    assert "renderPipelineConfirmSummary(config)" in handler
+    assert "openPipelineConfirmModal()" in handler
+    assert 'postJson("/pipeline/run"' not in handler
+    assert "body.scrollTop = 0" in step_owner
+    assert 'setPipelineLaunchStep("review")' in source
+    assert 'setPipelineLaunchStep("configure")' in source
+
+
+def test_pipeline_final_launch_is_explicit_single_submit_and_preserves_handoff():
+    source = _source(APP_JS_PATH)
+    handler = source.split('qs("confirmPipelineRunBtn").addEventListener', 1)[1].split(
+        'qs("closeAppErrorModalBtn")', 1
+    )[0]
+
+    assert "if (state.pipelineLaunchInFlight) return" in handler
+    assert "setPipelineLaunchInFlight(true)" in handler
+    assert handler.count('postJson("/pipeline/run", config)') == 1
+    assert "handoffAcceptedPipelineRun(payload)" in handler
+    assert "setPipelineLaunchInFlight(false)" in handler
+    assert "startPipelinePolling" not in handler
+    assert "showPageLoadingOverlay" not in handler
+
+
+def test_pipeline_dialog_focus_escape_scroll_and_responsive_contracts():
+    js = _source(APP_JS_PATH)
+    css = _source(ROOT / "src/app/static/styles.css")
+
+    for marker in [
+        "pipelineLaunchReturnFocus",
+        "getPipelineLaunchFocusableElements",
+        'event.key === "Escape"',
+        'event.key === "Tab"',
+        "pipelineLaunchInFlight",
+        'document.body.classList.add("pipeline-launch-open")',
+        'document.body.classList.remove("pipeline-launch-open")',
+        "focus({ preventScroll: true })",
+    ]:
+        assert marker in js
+
+    for marker in [
+        "body.pipeline-launch-open",
+        "max-height: min(88dvh, 860px)",
+        "overflow-y: auto",
+        ".pipeline-launch-header",
+        ".pipeline-modal-actions",
+        "@media (max-width: 820px)",
+        "@media (max-width: 600px)",
+        "@media (prefers-reduced-motion: reduce)",
+    ]:
+        assert marker in css

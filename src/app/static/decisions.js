@@ -1,897 +1,157 @@
+(() => {
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
+const DECISIONS_STATE_EVENT_NAME = "applylens:decisions-dashboard-state";
+const DECISIONS_ACTION_EVENT_NAME = "applylens:decisions-dashboard-action";
+const DECISIONS_READY_EVENT_NAME = "applylens:decisions-dashboard-ready";
 
-const decisionsTableState = {
+const decisionsState = {
+  status: "loading",
   rows: [],
   metaLabel: "Loading...",
-  page: 1,
-  pageSize: 15,
-  totalCount: 0,
-  totalPages: 1,
-  hasPrevPage: false,
-  hasNextPage: false,
-  sort: {
-    key: "",
-    direction: "asc",
-  },
+  message: "",
+  resultKey: "initial",
+  filters: { decisions: [], companyContains: "", limit: 15 },
+  sort: { key: "", direction: "asc" },
+  pagination: { page: 1, pageSize: 15, totalCount: 0, totalPages: 1, hasPrevPage: false, hasNextPage: false },
 };
-
-function escapeHtml(value) {
-  if (value === null || value === undefined) return "";
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function normalizeSortValue(value, type = "text") {
-  if (value === null || value === undefined) return null;
-
-  if (type === "number") {
-    const parsed = Number(String(value).replaceAll(",", "").trim());
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  if (type === "date") {
-    const parsed = new Date(value).getTime();
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  if (type === "boolean") {
-    if (value === true) return 1;
-    if (value === false) return 0;
-
-    const normalized = String(value).trim().toLowerCase();
-    if (["true", "yes", "1"].includes(normalized)) return 1;
-    if (["false", "no", "0"].includes(normalized)) return 0;
-    return null;
-  }
-
-  return String(value).trim().toLowerCase();
-}
-
-function compareSortValues(left, right) {
-  if (left === right) return 0;
-  if (left === null || left === "") return 1;
-  if (right === null || right === "") return -1;
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
-}
-
-function sortRows(rows, columns, sortState) {
-  const safeRows = Array.isArray(rows) ? rows.slice() : [];
-  if (!sortState.key) return safeRows;
-
-  const column = columns.find((item) => item.key === sortState.key && item.sortable !== false);
-  if (!column) return safeRows;
-
-  const direction = sortState.direction === "desc" ? -1 : 1;
-  const getValue = column.getValue || ((row) => row[column.key]);
-  const type = column.type || "text";
-
-  return safeRows
-    .map((row, index) => ({ row, index }))
-    .sort((a, b) => {
-      const cmp = compareSortValues(
-        normalizeSortValue(getValue(a.row), type),
-        normalizeSortValue(getValue(b.row), type)
-      );
-      return cmp === 0 ? a.index - b.index : cmp * direction;
-    })
-    .map((item) => item.row);
-}
-
-function getSortIndicator(sortState, key) {
-  if (sortState.key !== key) return "↕";
-  return sortState.direction === "desc" ? "↓" : "↑";
-}
-
-function renderSortableHeaders(tableId, columns, sortState) {
-  const table = qs(tableId);
-  if (!table) return;
-
-  const cells = table.querySelectorAll("thead th");
-  columns.forEach((column, index) => {
-    const th = cells[index];
-    if (!th) return;
-
-    const label = column.label || th.dataset.originalLabel || th.textContent.trim();
-    th.dataset.originalLabel = label;
-
-    if (column.sortable === false) {
-      th.innerHTML = escapeHtml(label);
-      th.classList.remove("sortable-col");
-      return;
-    }
-
-    th.classList.add("sortable-col");
-    th.innerHTML = `
-      <button
-        type="button"
-        class="sort-header-btn ${sortState.key === column.key ? "is-active" : ""}"
-        data-sort-key="${escapeHtml(column.key)}"
-        aria-label="Sort by ${escapeHtml(label)}"
-      >
-        <span class="sort-header-label">${escapeHtml(label)}</span>
-        <span class="sort-header-indicator">${getSortIndicator(sortState, column.key)}</span>
-      </button>
-    `;
-  });
-}
-
-function bindTableSorting(tableId, columns, sortState, rerender) {
-  const table = qs(tableId);
-  if (!table || table.dataset.sortBound === "true") return;
-
-  table.dataset.sortBound = "true";
-  renderSortableHeaders(tableId, columns, sortState);
-
-  table.querySelector("thead").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-sort-key]");
-    if (!button) return;
-
-    const key = button.dataset.sortKey;
-    if (!key) return;
-
-    if (sortState.key === key) {
-      sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
-    } else {
-      sortState.key = key;
-      sortState.direction = "asc";
-    }
-
-    rerender();
-  });
-}
-
-function qs(id) {
-  return document.getElementById(id);
-}
-
-function getMultiSelectRoot(id) {
-  return qs(id);
-}
-
-function getMultiSelectMenu(root) {
-  return root?._multiSelectMenu || root?.querySelector(".multi-select-menu") || null;
-}
-
-function getMultiSelectOptions(root, selector = ".multi-select-option") {
-  const menu = getMultiSelectMenu(root);
-  return Array.from((menu || root)?.querySelectorAll(selector) || []);
-}
-
-function getMultiSelectValues(id) {
-  const root = getMultiSelectRoot(id);
-  if (!root) return [];
-
-  return getMultiSelectOptions(root, ".multi-select-option.is-selected")
-    .map((option) => String(option.dataset.value || "").trim())
-    .filter(Boolean);
-}
-
-function appendMultiValueParams(params, key, values) {
-  values.forEach((value) => params.append(key, value));
-}
-
-function updateMultiSelectLabel(root) {
-  if (!root) return;
-
-  const label = root.querySelector(".multi-select-trigger-label");
-  if (!label) return;
-
-  const selected = getMultiSelectOptions(root, ".multi-select-option.is-selected");
-  const placeholder = root.dataset.placeholder || "All";
-
-  if (!selected.length) {
-    label.textContent = placeholder;
-  } else if (selected.length === 1) {
-    const text = selected[0].querySelector(".multi-select-option-label")?.textContent?.trim();
-    label.textContent = text || selected[0].dataset.value || placeholder;
-  } else {
-    label.textContent = `${selected.length} selected`;
-  }
-}
-
-function setMultiSelectOpen(root, isOpen) {
-  if (!root) return;
-
-  const trigger = root.querySelector(".multi-select-trigger");
-  const menu = getMultiSelectMenu(root);
-  if (!trigger || !menu) return;
-
-  root.classList.toggle("is-open", isOpen);
-  trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
-  if (isOpen) {
-    menu.hidden = false;
-    menu.dataset.multiSelectOwner = root.id || "";
-    if (menu.parentElement !== document.body) {
-      document.body.appendChild(menu);
-    }
-    positionMultiSelectMenu(root);
-  } else {
-    menu.hidden = true;
-    resetMultiSelectMenuPosition(menu);
-    if (menu.parentElement !== root) {
-      root.appendChild(menu);
-    }
-  }
-}
-
-function resetMultiSelectMenuPosition(menu) {
-  if (!menu) return;
-
-  ["position", "left", "right", "top", "bottom", "width", "max-height", "z-index"].forEach((name) => {
-    menu.style.removeProperty(name);
-  });
-}
-
-function positionMultiSelectMenu(root) {
-  if (!root) return;
-
-  const trigger = root.querySelector(".multi-select-trigger");
-  const menu = getMultiSelectMenu(root);
-  if (!trigger || !menu || menu.hidden) return;
-
-  const rect = trigger.getBoundingClientRect();
-  const viewportPadding = 16;
-  const preferredWidth = Math.max(rect.width, 280);
-  const width = Math.min(preferredWidth, window.innerWidth - viewportPadding * 2);
-  const left = Math.min(
-    Math.max(rect.left, viewportPadding),
-    window.innerWidth - width - viewportPadding
-  );
-  const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
-  const availableAbove = rect.top - viewportPadding;
-  const openAbove = availableBelow < 190 && availableAbove > availableBelow;
-  const availableSpace = openAbove ? availableAbove : availableBelow;
-  const maxHeight = Math.max(168, Math.min(380, availableSpace - 8));
-
-  menu.style.setProperty("position", "fixed", "important");
-  menu.style.setProperty("left", `${left}px`, "important");
-  menu.style.setProperty("right", "auto", "important");
-  menu.style.setProperty("width", `${width}px`, "important");
-  menu.style.setProperty("max-height", `${maxHeight}px`, "important");
-  menu.style.setProperty("z-index", "10000", "important");
-  menu.style.setProperty("top", openAbove ? "auto" : `${rect.bottom + 8}px`, "important");
-  menu.style.setProperty(
-    "bottom",
-    openAbove ? `${window.innerHeight - rect.top + 8}px` : "auto",
-    "important"
-  );
-}
-
-function clearMultiSelect(id) {
-  const root = getMultiSelectRoot(id);
-  if (!root) return;
-
-  getMultiSelectOptions(root).forEach((option) => {
-    option.classList.remove("is-selected");
-    option.setAttribute("aria-checked", "false");
-  });
-
-  updateMultiSelectLabel(root);
-}
-
-function initMultiSelect(id) {
-  const root = getMultiSelectRoot(id);
-  if (!root || root.dataset.bound === "true") return;
-
-  const trigger = root.querySelector(".multi-select-trigger");
-  const menu = root.querySelector(".multi-select-menu");
-  if (!trigger || !menu) return;
-
-  root._multiSelectMenu = menu;
-  root.dataset.bound = "true";
-  updateMultiSelectLabel(root);
-
-  trigger.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const willOpen = menu.hidden;
-    document.querySelectorAll(".multi-select").forEach((node) => {
-      if (node !== root) {
-        setMultiSelectOpen(node, false);
-      }
-    });
-    setMultiSelectOpen(root, willOpen);
-  });
-
-  getMultiSelectOptions(root).forEach((option) => {
-    option.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const isSelected = option.classList.toggle("is-selected");
-      option.setAttribute("aria-checked", isSelected ? "true" : "false");
-      updateMultiSelectLabel(root);
-    });
-  });
-}
-
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZoneName: "short",
-});
-
-function formatDateTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return DATE_TIME_FORMATTER.format(date);
-}
-
-const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
-const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  hour: "numeric",
-  minute: "2-digit",
-  timeZoneName: "short",
-});
-
-function buildDateTimeCellHtml(value) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return escapeHtml(String(value));
-  }
-
-  return `
-    <div class="datetime-cell">
-      <div class="datetime-cell-date">${escapeHtml(DATE_ONLY_FORMATTER.format(date))}</div>
-      <div class="datetime-cell-time">${escapeHtml(TIME_ONLY_FORMATTER.format(date))}</div>
-    </div>
-  `;
-}
-
-function formatScore100(value) {
-  if (value === null || value === undefined || String(value).trim() === "") return "-";
-  const parsed = Number(String(value).replaceAll(",", "").trim());
-  if (!Number.isFinite(parsed)) return String(value);
-  const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
-  return normalized.toFixed(2);
-}
-
-function getAppErrorModal() {
-  return qs("appErrorModal");
-}
-
-function closeAppErrorModal() {
-  getAppErrorModal().classList.add("hidden");
-}
-
-function extractErrorMessage(err) {
-  let message = err?.message || String(err || "Unknown error");
-
-  const httpMatch = message.match(/^HTTP \d+:\s*(.*)$/s);
-  if (httpMatch) {
-    message = httpMatch[1];
-  }
-
-  try {
-    const parsed = JSON.parse(message);
-    if (Array.isArray(parsed.detail)) {
-      message = parsed.detail
-        .map((item) => {
-          if (item && item.msg && item.input !== undefined) {
-            return `${item.msg} (input: ${item.input})`;
-          }
-          if (item && item.msg) {
-            return item.msg;
-          }
-          return JSON.stringify(item);
-        })
-        .join("\n");
-    } else if (parsed.detail) {
-      message = typeof parsed.detail === "string"
-        ? parsed.detail
-        : JSON.stringify(parsed.detail, null, 2);
-    }
-  } catch {
-    // leave message as-is
-  }
-
-  return message;
-}
-
-function showAppError(title, err, subtitle = "Review the message below.") {
-  qs("appErrorTitle").textContent = title || "Something went wrong";
-  qs("appErrorSubtitle").textContent = subtitle;
-  qs("appErrorMessage").textContent = extractErrorMessage(err);
-  getAppErrorModal().classList.remove("hidden");
-}
-
-function bindAppErrorModal() {
-  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
-  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
-
-  getAppErrorModal().addEventListener("click", (event) => {
-    if (event.target === getAppErrorModal()) {
-      closeAppErrorModal();
-    }
-  });
-}
-
-function setTextIfPresent(id, value) {
-  const el = qs(id);
-  if (el) {
-    el.textContent = String(value);
-  }
-}
-
-function distinctDecisionJobCount(rows) {
-  const safeRows = Array.isArray(rows) ? rows : [];
-  const keys = new Set();
-
-  for (const row of safeRows) {
-    const key = [
-      row.job_doc_id || row.job_url || "",
-      row.job_company || "",
-      row.job_title || "",
-    ].join("||");
-    if (key !== "||||") keys.add(key);
-  }
-
-  return keys.size;
-}
-
-const DECISIONS_SORT_COLUMNS = [
-  { key: "decision_timestamp", label: "Date / Time", type: "date" },
-  { key: "queue_rank", label: "Queue Rank", type: "number" },
-  { key: "decision", label: "Decision", type: "text" },
-  { key: "job_company", label: "Company", type: "text" },
-  { key: "job_title", label: "Title", type: "text" },
-  { key: "posted_at", label: "Posted At", type: "date" },
-  { key: "planning_action", label: "Planning Action", type: "text" },
-  { key: "selected_resume", label: "Selected Resume", type: "text" },
-  { key: "winner_resume", label: "Winner Resume", type: "text" },
-  { key: "runner_up_resume", label: "Runner-Up Resume", type: "text" },
-  { key: "note", label: "Note", type: "text" },
-  { key: "apply", label: "Apply", sortable: false },
-];
-
-function updateDecisionStats(shownCount, jobsTouched = null) {
-  const safeShown = Number.isFinite(Number(shownCount)) ? Number(shownCount) : 0;
-  const safeTouched = Number.isFinite(Number(jobsTouched)) ? Number(jobsTouched) : safeShown;
-
-  setTextIfPresent("decisionsShownCount", safeShown);
-  setTextIfPresent("decisionsJobsTouched", safeTouched);
-}
-
-function buildPaginationSequence(currentPage, totalPages) {
-  const pages = [];
-  if (totalPages <= 7) {
-    for (let page = 1; page <= totalPages; page += 1) {
-      pages.push(page);
-    }
-    return pages;
-  }
-
-  pages.push(1);
-
-  const start = Math.max(2, currentPage - 1);
-  const end = Math.min(totalPages - 1, currentPage + 1);
-
-  if (start > 2) pages.push("ellipsis-left");
-  for (let page = start; page <= end; page += 1) {
-    pages.push(page);
-  }
-  if (end < totalPages - 1) pages.push("ellipsis-right");
-
-  pages.push(totalPages);
-  return pages;
-}
-
-function renderDecisionsPagination() {
-  const metaEl = qs("decisionsPaginationMeta");
-  const actionsEl = qs("decisionsPaginationActions");
-  if (!metaEl || !actionsEl) return;
-
-  const totalCount = decisionsTableState.totalCount || 0;
-  const totalPages = Math.max(decisionsTableState.totalPages || 1, 1);
-  const currentPage = Math.min(Math.max(decisionsTableState.page || 1, 1), totalPages);
-  const pageSize = Math.max(decisionsTableState.pageSize || 15, 1);
-
-  if (totalCount === 0) {
-    metaEl.textContent = "No pages";
-    actionsEl.innerHTML = "";
-    return;
-  }
-
-  const startRow = (currentPage - 1) * pageSize + 1;
-  const endRow = Math.min(startRow + (decisionsTableState.rows?.length || 0) - 1, totalCount);
-
-  metaEl.textContent = `Showing ${startRow}-${endRow} of ${totalCount} · Page ${currentPage} of ${totalPages}`;
-
-  const sequence = buildPaginationSequence(currentPage, totalPages);
-
-  const buttons = [];
-
-  buttons.push(`
-    <button
-      type="button"
-      class="application-pagination-btn"
-      data-page-target="${currentPage - 1}"
-      ${decisionsTableState.hasPrevPage ? "" : "disabled"}
-    >
-      Prev
-    </button>
-  `);
-
-  sequence.forEach((item) => {
-    if (typeof item === "string" && item.startsWith("ellipsis")) {
-      buttons.push(`<span class="application-pagination-ellipsis">…</span>`);
-      return;
-    }
-
-    buttons.push(`
-      <button
-        type="button"
-        class="application-pagination-btn ${item === currentPage ? "is-active" : ""}"
-        data-page-target="${item}"
-      >
-        ${item}
-      </button>
-    `);
-  });
-
-  buttons.push(`
-    <button
-      type="button"
-      class="application-pagination-btn"
-      data-page-target="${currentPage + 1}"
-      ${decisionsTableState.hasNextPage ? "" : "disabled"}
-    >
-      Next
-    </button>
-  `);
-
-  actionsEl.innerHTML = buttons.join("");
-}
-
-function applyDecisionsPaginationPayload(data) {
-  decisionsTableState.page = Number(data.page || 1);
-  decisionsTableState.pageSize = Number(data.page_size || data.limit || 15);
-  decisionsTableState.totalCount = Number(data.total_count || 0);
-  decisionsTableState.totalPages = Number(data.total_pages || 1);
-  decisionsTableState.hasPrevPage = Boolean(data.has_prev_page);
-  decisionsTableState.hasNextPage = Boolean(data.has_next_page);
+let decisionsRequestId = 0;
+let decisionsDashboardInitialized = false;
+
+const qs = (id) => document.getElementById(id);
+
+function publishDecisionsState() {
+  const payload = { ...decisionsState, rows: decisionsState.rows.slice(), filters: { ...decisionsState.filters, decisions: decisionsState.filters.decisions.slice() }, pagination: { ...decisionsState.pagination }, sort: { ...decisionsState.sort } };
+  window.__APPLYLENS_DECISIONS_STATE__ = payload;
+  window.dispatchEvent(new CustomEvent(DECISIONS_STATE_EVENT_NAME, { detail: payload }));
 }
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`HTTP ${response.status}: ${text}`);
-  }
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   return response.json();
 }
 
-async function postJson(url, payload) {
-  return fetchJson(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+function postJson(url, payload) {
+  return fetchJson(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+}
+
+function extractErrorMessage(error) {
+  let message = error?.message || String(error || "Unknown error");
+  const match = message.match(/^HTTP \d+:\s*(.*)$/s);
+  if (match) message = match[1];
+  try { const parsed = JSON.parse(message); if (parsed.detail) message = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail); } catch { /* keep safe text */ }
+  return message;
+}
+
+function showAppError(title, error) {
+  qs("appErrorTitle").textContent = title;
+  qs("appErrorSubtitle").textContent = "Review the message below.";
+  qs("appErrorMessage").textContent = extractErrorMessage(error);
+  qs("appErrorModal").classList.remove("hidden");
 }
 
 function buildDecisionsUrl(pageOverride = null) {
   const params = new URLSearchParams();
-  const decisions = getMultiSelectValues("decisionFilter");
-  const companyContains = qs("decisionCompanyFilter").value.trim();
-  const limit = qs("decisionLimitInput").value || "15";
-  const page = pageOverride ?? decisionsTableState.page ?? 1;
-
-  appendMultiValueParams(params, "decision", decisions);
-  if (companyContains) params.set("company_contains", companyContains);
-  params.set("limit", limit);
-  params.set("page", String(page));
-
+  decisionsState.filters.decisions.forEach((value) => params.append("decision", value));
+  if (decisionsState.filters.companyContains.trim()) params.set("company_contains", decisionsState.filters.companyContains.trim());
+  params.set("limit", String(decisionsState.filters.limit || 15));
+  params.set("page", String(pageOverride ?? decisionsState.pagination.page ?? 1));
   return `/decisions?${params.toString()}`;
 }
 
-function buildApplicationButtonHtml(row) {
-  const isApplied = Boolean(row.is_applied);
-  const label = escapeHtml(row.application_label || (isApplied ? "Applied" : "Apply"));
-  const buttonClass = isApplied ? "job-apply-btn applied-btn" : "job-apply-btn apply-btn";
-  const disabledAttr = isApplied ? "disabled" : "";
-
-  return `
-    <button
-      type="button"
-      class="${buttonClass}"
-      ${disabledAttr}
-      data-apply-job="true"
-      data-job-doc-id="${escapeHtml(row.job_doc_id || "")}"
-      data-job-url="${escapeHtml(row.job_url || row.job_doc_id || "")}"
-      data-job-company="${escapeHtml(row.job_company || "")}"
-      data-job-title="${escapeHtml(row.job_title || "")}"
-    >
-      ${label}
-    </button>
-  `;
-}
-
-function persistPendingApplication(job) {
-  sessionStorage.setItem(PENDING_APPLICATION_STORAGE_KEY, JSON.stringify(job));
-}
-
-function loadPendingApplicationFromStorage() {
-  const raw = sessionStorage.getItem(PENDING_APPLICATION_STORAGE_KEY);
-  if (!raw) return null;
-
+async function loadDecisionsTable(pageOverride = null) {
+  const requestId = ++decisionsRequestId;
+  decisionsState.status = "loading";
+  decisionsState.message = "";
+  publishDecisionsState();
   try {
-    return JSON.parse(raw);
-  } catch {
-    sessionStorage.removeItem(PENDING_APPLICATION_STORAGE_KEY);
-    return null;
+    const data = await fetchJson(buildDecisionsUrl(pageOverride));
+    if (requestId !== decisionsRequestId) return;
+    const totalCount = Number(data.total_count ?? data.count ?? 0);
+    decisionsState.rows = Array.isArray(data.rows) ? data.rows : [];
+    decisionsState.pagination = {
+      page: Number(data.page || 1), pageSize: Number(data.page_size || 15), totalCount,
+      totalPages: Number(data.total_pages || 1), hasPrevPage: Boolean(data.has_prev_page), hasNextPage: Boolean(data.has_next_page),
+    };
+    decisionsState.metaLabel = `Decision history · ${totalCount} total record${totalCount === 1 ? "" : "s"}`;
+    decisionsState.status = "ready";
+    decisionsState.resultKey = `${requestId}:${decisionsState.pagination.page}:${totalCount}`;
+    publishDecisionsState();
+  } catch (error) {
+    if (requestId !== decisionsRequestId) return;
+    decisionsState.status = "error";
+    decisionsState.message = extractErrorMessage(error);
+    publishDecisionsState();
   }
 }
 
-function clearPendingApplication() {
-  sessionStorage.removeItem(PENDING_APPLICATION_STORAGE_KEY);
-}
+function persistPendingApplication(job) { sessionStorage.setItem(PENDING_APPLICATION_STORAGE_KEY, JSON.stringify(job)); }
+function clearPendingApplication() { sessionStorage.removeItem(PENDING_APPLICATION_STORAGE_KEY); }
+function pendingApplication() { try { return JSON.parse(sessionStorage.getItem(PENDING_APPLICATION_STORAGE_KEY) || "null"); } catch { clearPendingApplication(); return null; } }
+function closeApplicationModal() { qs("applicationActionModal").classList.add("hidden"); }
+function openApplicationModal(job) { if (!job) return; qs("applicationModalCompany").textContent = job.job_company || "-"; qs("applicationModalTitle").textContent = job.job_title || "-"; qs("applicationActionModal").classList.remove("hidden"); }
 
-function getApplicationModal() {
-  return qs("applicationActionModal");
-}
-
-function openApplicationModal(job) {
-  if (!job) return;
-  qs("applicationModalCompany").textContent = job.job_company || "-";
-  qs("applicationModalTitle").textContent = job.job_title || "-";
-  getApplicationModal().classList.remove("hidden");
-}
-
-function closeApplicationModal() {
-  getApplicationModal().classList.add("hidden");
+async function openManualApplication(row) {
+  const payload = { job_doc_id: String(row.job_doc_id || ""), job_url: String(row.job_url || row.job_doc_id || ""), job_company: String(row.job_company || ""), job_title: String(row.job_title || ""), source_view: "decisions" };
+  await postJson("/application-actions", { ...payload, application_status: "OPENED" });
+  persistPendingApplication(payload);
+  const target = payload.job_url || payload.job_doc_id;
+  if (target) window.open(target, "_blank", "noopener,noreferrer");
 }
 
 async function submitApplicationStatus(status) {
-  const job = loadPendingApplicationFromStorage();
-  if (!job) return;
-
-  await postJson("/application-actions", {
-    ...job,
-    application_status: status,
-  });
-
-  clearPendingApplication();
-  closeApplicationModal();
-  await loadDecisionsTable();
+  const job = pendingApplication(); if (!job) return;
+  await postJson("/application-actions", { ...job, application_status: status });
+  clearPendingApplication(); closeApplicationModal(); await loadDecisionsTable();
 }
 
-async function handleApplyClick(button) {
-  const payload = {
-    job_doc_id: button.dataset.jobDocId || "",
-    job_url: button.dataset.jobUrl || "",
-    job_company: button.dataset.jobCompany || "",
-    job_title: button.dataset.jobTitle || "",
-    source_view: "decisions",
-  };
-
-  await postJson("/application-actions", {
-    ...payload,
-    application_status: "OPENED",
-  });
-
-  persistPendingApplication(payload);
-
-  const targetUrl = payload.job_url || payload.job_doc_id;
-  if (targetUrl) {
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
-  }
+async function handleDecisionsAction(event) {
+  const action = event.detail || {};
+  if (action.type === "sort_change") { decisionsState.sort = { key: String(action.key || ""), direction: action.direction === "desc" ? "desc" : "asc" }; publishDecisionsState(); return; }
+  if (action.type === "apply_filters") { decisionsState.filters = { decisions: Array.isArray(action.filters?.decisions) ? action.filters.decisions : [], companyContains: String(action.filters?.companyContains || ""), limit: Number(action.filters?.limit || 15) }; decisionsState.pagination.page = 1; await loadDecisionsTable(1); return; }
+  if (action.type === "clear_filters") { decisionsState.filters = { decisions: [], companyContains: "", limit: 15 }; decisionsState.pagination.page = 1; await loadDecisionsTable(1); return; }
+  if (action.type === "page_change") { await loadDecisionsTable(Number(action.page || 1)); return; }
+  if (action.type === "retry") { await loadDecisionsTable(); return; }
+  if (action.type === "open_application") { try { await openManualApplication(action.row || {}); } catch (error) { showAppError("Failed to open application workflow", error); } }
 }
 
-function renderDecisionRows(rows, metaLabel) {
-  decisionsTableState.rows = Array.isArray(rows) ? rows.slice() : [];
-  decisionsTableState.metaLabel = metaLabel;
+window.__APPLYLENS_DECISIONS_STATE__ = { ...decisionsState };
+window.addEventListener(DECISIONS_ACTION_EVENT_NAME, (event) => { handleDecisionsAction(event).catch((error) => showAppError("Failed to update decisions", error)); });
+function initializeDecisionsDashboard() {
+  if (decisionsDashboardInitialized) { publishDecisionsState(); return; }
 
-  const tbody = qs("decisionsTableBody");
-  const displayRows = sortRows(decisionsTableState.rows, DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
-
-  if (!displayRows.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="12" class="empty-state">No decisions found.</td>
-      </tr>
-    `;
-    qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
-    updateDecisionStats(0, 0);
-    renderDecisionsPagination();
-    renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
-    window.clearTableWrapLoading?.(tbody);
-    return;
-  }
-
-  tbody.innerHTML = displayRows.map((row) => {
-    const title = escapeHtml(row.job_title || "");
-    const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
-    const titleHtml = jobUrl
-      ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
-      : title;
-
-    return `
-      <tr>
-        <td>${buildDateTimeCellHtml(row.decision_timestamp)}</td>
-        <td>${escapeHtml(row.queue_rank || "")}</td>
-        <td><span class="pill">${escapeHtml(row.decision || "")}</span></td>
-        <td>${escapeHtml(row.job_company || "")}</td>
-        <td class="title-cell">${titleHtml}</td>
-        <td>${buildDateTimeCellHtml(row.posted_at)}</td>
-        <td>${escapeHtml(row.planning_action || "")}</td>
-        <td>${escapeHtml(row.selected_resume || "")}</td>
-        <td>${escapeHtml(row.winner_resume || "")}</td>
-        <td>${escapeHtml(row.runner_up_resume || "")}</td>
-        <td class="reason-cell">${escapeHtml(row.note || "")}</td>
-        <td class="apply-cell sticky-apply-col">${buildApplicationButtonHtml(row)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
-  renderDecisionsPagination();
-  renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
-  window.clearTableWrapLoading?.(tbody);
-}
-
-async function loadDecisionsTable(pageOverride = null) {
-  const tbody = qs("decisionsTableBody");
-  window.setTableWrapLoading?.(tbody, "Loading decisions...");
-  qs("decisionsTableMeta").textContent = "Loading...";
-  const paginationMeta = qs("decisionsPaginationMeta");
-  const paginationActions = qs("decisionsPaginationActions");
-  if (paginationMeta) paginationMeta.textContent = "Loading...";
-  if (paginationActions) paginationActions.innerHTML = "";
-
-  try {
-    const targetPage = pageOverride ?? decisionsTableState.page ?? 1;
-    const url = buildDecisionsUrl(targetPage);
-    const data = await fetchJson(url);
-
-    applyDecisionsPaginationPayload(data);
-
-    const totalCount = data.total_count ?? data.count ?? 0;
-    updateDecisionStats(totalCount, totalCount);
-
-    renderDecisionRows(
-      data.rows || [],
-      `Decisions view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
-    );
-  } catch (err) {
-    window.clearTableWrapLoading?.(tbody);
-    throw err;
-  }
-}
-
-function clearDecisionFilters() {
-  clearMultiSelect("decisionFilter");
-  qs("decisionCompanyFilter").value = "";
-  qs("decisionLimitInput").value = "15";
-  decisionsTableState.page = 1;
-  updateDecisionStats([]);
-}
-
-function attachDecisionHandlers() {
-  initMultiSelect("decisionFilter");
-  qs("decisionApplyFiltersBtn").addEventListener("click", async () => {
-    decisionsTableState.page = 1;
-    try {
-      await loadDecisionsTable(1);
-    } catch (err) {
-      showAppError("Failed to load decisions table", err);
-    }
-  });
-
-  qs("decisionClearFiltersBtn").addEventListener("click", async () => {
-    clearDecisionFilters();
-    try {
-      await loadDecisionsTable(1);
-    } catch (err) {
-      showAppError("Failed to reload decisions table", err);
-    }
-  });
-
-  qs("decisionsPaginationActions").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-page-target]");
-    if (!button || button.disabled) return;
-
-    const nextPage = Number(button.dataset.pageTarget || "");
-    if (!Number.isFinite(nextPage) || nextPage < 1 || nextPage === decisionsTableState.page) {
-      return;
-    }
-
-    try {
-      await loadDecisionsTable(nextPage);
-    } catch (err) {
-      showAppError("Failed to change decisions page", err);
-    }
-  });
-
-  qs("decisionsTableBody").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-apply-job='true']");
-    if (!button || button.disabled) return;
-
-    try {
-      await handleApplyClick(button);
-    } catch (err) {
-      showAppError("Failed to open apply workflow", err);
-    }
-  });
-
-  qs("closeApplicationModalBtn").addEventListener("click", () => {
+  qs("closeAppErrorModalBtn")?.addEventListener(
+    "click",
+    () => qs("appErrorModal")?.classList.add("hidden"),
+  );
+  qs("appErrorOkBtn")?.addEventListener(
+    "click",
+    () => qs("appErrorModal")?.classList.add("hidden"),
+  );
+  qs("closeApplicationModalBtn")?.addEventListener("click", () => {
     clearPendingApplication();
     closeApplicationModal();
   });
 
-  getApplicationModal().addEventListener("click", (event) => {
-    if (event.target === getApplicationModal()) {
-      clearPendingApplication();
-      closeApplicationModal();
-    }
-  });
-
-  document.querySelectorAll("[data-status-action]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const status = btn.dataset.statusAction;
-      if (!status) return;
-
-      try {
-        await submitApplicationStatus(status);
-      } catch (err) {
-        showAppError("Failed to update application status", err);
-      }
-    });
-  });
-
-  document.addEventListener("click", (event) => {
-    document.querySelectorAll(".multi-select").forEach((root) => {
-      if (!root.contains(event.target)) {
-        setMultiSelectOpen(root, false);
-      }
-    });
-  });
-
-  const repositionOpenMultiSelects = () => {
-    document.querySelectorAll(".multi-select.is-open").forEach((root) => {
-      positionMultiSelectMenu(root);
-    });
-  };
-  window.addEventListener("resize", repositionOpenMultiSelects);
-  window.addEventListener("scroll", repositionOpenMultiSelects, true);
+  document.querySelectorAll("[data-status-action]").forEach((button) =>
+    button.addEventListener("click", () =>
+      submitApplicationStatus(button.dataset.statusAction).catch((error) =>
+        showAppError("Failed to update application status", error),
+      ),
+    ),
+  );
 
   window.addEventListener("focus", () => {
-    const pending = loadPendingApplicationFromStorage();
-    if (!pending || !getApplicationModal().classList.contains("hidden")) return;
-    openApplicationModal(pending);
+    const job = pendingApplication();
+    const modal = qs("applicationActionModal");
+    if (job && modal?.classList.contains("hidden")) openApplicationModal(job);
   });
+
+  decisionsDashboardInitialized = true;
+  loadDecisionsTable();
 }
-
-window.addEventListener("DOMContentLoaded", async () => {
-  bindAppErrorModal();
-  attachDecisionHandlers();
-
-  bindTableSorting("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort, () => {
-    renderDecisionRows(decisionsTableState.rows, decisionsTableState.metaLabel);
-  });
-
-  try {
-    await loadDecisionsTable();
-  } catch (err) {
-    showAppError("Failed to initialize decisions dashboard", err);
-  }
-});
+window.addEventListener(DECISIONS_READY_EVENT_NAME, initializeDecisionsDashboard);
+if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", initializeDecisionsDashboard, { once: true });
+else initializeDecisionsDashboard();
+if (window.__APPLYLENS_DECISIONS_REACT_READY__) initializeDecisionsDashboard();
+})();

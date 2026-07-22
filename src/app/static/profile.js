@@ -712,30 +712,6 @@ function renderPipelineRuns(runs) {
   }).join("");
 }
 
-function buildPaginationSequence(currentPage, totalPages) {
-  const pages = [];
-  if (totalPages <= 7) {
-    for (let page = 1; page <= totalPages; page += 1) {
-      pages.push(page);
-    }
-    return pages;
-  }
-
-  pages.push(1);
-
-  const start = Math.max(2, currentPage - 1);
-  const end = Math.min(totalPages - 1, currentPage + 1);
-
-  if (start > 2) pages.push("ellipsis-left");
-  for (let page = start; page <= end; page += 1) {
-    pages.push(page);
-  }
-  if (end < totalPages - 1) pages.push("ellipsis-right");
-
-  pages.push(totalPages);
-  return pages;
-}
-
 function renderPipelineRunsPagination() {
   const metaEl = qs("pipelineRunsPaginationMeta");
   const actionsEl = qs("pipelineRunsPaginationActions");
@@ -756,47 +732,27 @@ function renderPipelineRunsPagination() {
   const endRow = Math.min(startRow + (profileState.pipelineRuns.length || 0) - 1, totalCount);
   metaEl.textContent = `Showing ${startRow}-${endRow} of ${totalCount} · Page ${currentPage} of ${totalPages}`;
 
-  const buttons = [];
-  buttons.push(`
+  actionsEl.innerHTML = `
     <button
       type="button"
       class="application-pagination-btn"
       data-pipeline-runs-page="${currentPage - 1}"
+      aria-label="Previous pipeline runs page"
       ${profileState.pipelineRunsHasPrevious ? "" : "disabled"}
     >
-      Prev
+      Previous
     </button>
-  `);
-
-  buildPaginationSequence(currentPage, totalPages).forEach((item) => {
-    if (typeof item === "string" && item.startsWith("ellipsis")) {
-      buttons.push(`<span class="application-pagination-ellipsis">…</span>`);
-      return;
-    }
-
-    buttons.push(`
-      <button
-        type="button"
-        class="application-pagination-btn ${item === currentPage ? "is-active" : ""}"
-        data-pipeline-runs-page="${item}"
-      >
-        ${item}
-      </button>
-    `);
-  });
-
-  buttons.push(`
+    <span aria-current="page">${currentPage} / ${totalPages}</span>
     <button
       type="button"
       class="application-pagination-btn"
       data-pipeline-runs-page="${currentPage + 1}"
+      aria-label="Next pipeline runs page"
       ${profileState.pipelineRunsHasNext ? "" : "disabled"}
     >
       Next
     </button>
-  `);
-
-  actionsEl.innerHTML = buttons.join("");
+  `;
 }
 
 function applyPipelineRunsPaginationPayload(data) {

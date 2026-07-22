@@ -3,6 +3,34 @@ from pathlib import Path
 from src.app import services
 
 
+def test_browse_sort_allowlist_is_deterministic_and_keeps_missing_values_last():
+    rows = [
+        {"queue_rank": "3", "job_doc_id": "c", "job_title": "Gamma", "winner_score": "", "posted_at": ""},
+        {"queue_rank": "2", "job_doc_id": "b", "job_title": "Beta", "winner_score": "0.91", "posted_at": "2026-06-30T23:00:00-04:00"},
+        {"queue_rank": "1", "job_doc_id": "a", "job_title": "Alpha", "winner_score": "0.72", "posted_at": "2026-07-02T12:00:00Z"},
+    ]
+
+    assert [row["job_doc_id"] for row in services._sort_browse_rows(rows, sort_key="winner_score", sort_dir="desc")] == ["b", "a", "c"]
+    assert [row["job_doc_id"] for row in services._sort_browse_rows(rows, sort_key="job_title", sort_dir="asc")] == ["a", "b", "c"]
+    assert [row["job_doc_id"] for row in services._sort_browse_rows(rows, sort_key="posted_at", sort_dir="asc")] == ["b", "a", "c"]
+    assert services._sort_browse_rows(rows, sort_key="not_allowed", sort_dir="desc") is rows
+
+
+def test_shared_sort_bridges_use_browse_query_parameters_before_server_pagination():
+    app_js = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_js = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    api = Path("src/app/api.py").read_text(encoding="utf-8")
+    service = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    for source in (app_js, planning_js):
+        assert 'params.set("sort_key"' in source
+        assert 'params.set("sort_dir"' in source
+    assert 'sort_key: str = ""' in api
+    assert 'sort_dir: str = "asc"' in api
+    assert "selected = _sort_browse_rows(" in service
+    assert service.index("selected = _sort_browse_rows(") < service.index("selected = selected[:requested_limit]")
+
+
 def _css_block(css: str, selector: str) -> str:
     start = css.index(selector)
     end = css.index("}", start) + 1
@@ -33,6 +61,8 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
     shell_source = Path("src/app/ui_shell.py").read_text(encoding="utf-8")
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
     for class_name in (
@@ -47,8 +77,10 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
     assert "New Scan" in shell_source
     assert "Run Live Pipeline" in app_markup
     assert "Refresh Status" in app_markup
-    assert "multi-select-trigger-icon" in app_markup
-    assert "multi-select-trigger-icon" in planning_markup
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert "SharedFilterSelect" in executive_queue
+    assert "export function SharedFilterSelect" in shared_filter
+    assert 'id="planningFiltersRoot"' in planning_markup
 
     primary_selector = (
         "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn)"
@@ -56,6 +88,7 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
         ":not(.sort-header-btn):not(.scheduler-tab-btn)"
         ":not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn)"
         ":not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option)"
+        ":not(.shared-filter-select__trigger):not(.shared-filter-select__option)"
         ":not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button)"
         ":not(.preference-location-chip-remove):not(.preferences-utility-button)"
         ":not(.preferences-back-button):not(.preferences-secondary-action)"
@@ -175,9 +208,11 @@ def test_queue_ui_uses_simplified_job_seeker_columns():
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    planning_react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
-    for source in (app_source, planning_source):
+    for source in (app_source,):
         assert 'label: "Rank"' in source
         assert 'label: "Job title"' in source
         assert 'label: "Posted at"' in source
@@ -197,12 +232,41 @@ def test_queue_ui_uses_simplified_job_seeker_columns():
         assert "Priority reason" in source
         assert "A packet is a review bundle for this job." in source
 
-    for markup in (app_markup, planning_markup):
-        assert "Recommendation" in markup
-        assert "Posted at" in markup
-        assert "Selected Resume" in markup
-        assert "Review" in markup
-        assert ">Apply<" not in markup
+    for label in (
+        "Rank",
+        "Job",
+        "Posted at",
+        "Review readiness",
+        "Match score",
+        "Resume selection",
+        "Packet / workspace",
+        "Next step",
+    ):
+        assert label in planning_react
+    assert "Review job" in planning_source
+    assert "Review later" in planning_source
+    assert "Choose resume" in planning_source
+    assert "Close resume match" in planning_source
+    assert "Runner-up resume" in planning_source
+    assert "Score gap" in planning_source
+    assert "Missing requirements" in planning_source
+    assert "Priority reason" in planning_source
+    assert "A packet is a review bundle for this job." in planning_source
+
+    assert 'id="planningWorklistRoot"' in planning_markup
+    assert "Review readiness" in planning_react
+    assert "Resume selection" in planning_react
+    assert "Next step" in planning_react
+    assert ">Apply<" not in planning_markup
+    assert "Recommendation" in executive_queue
+    assert "Selected Resume" in executive_queue
+    assert "Review" in executive_queue
+    assert ">Apply<" not in executive_queue
+    assert "Posted at" in planning_source
+    assert "Posted at" in executive_queue
+
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert 'id="queueTable"' not in app_markup
 
     assert ".queue-job-summary" in css
     assert ".queue-status-stack" in css
@@ -214,6 +278,8 @@ def test_phase77b_executive_detail_and_packet_help_contract():
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     planning_markup = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    planning_react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
 
     assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
     assert 'key: "runner_up_resume", label: "Runner-up resume"' in app_source
@@ -221,23 +287,21 @@ def test_phase77b_executive_detail_and_packet_help_contract():
     assert 'key: "missing_requirement_count", label: "Missing req count"' in app_source
     assert 'key: "next_step", label: "Next step"' in app_source
     assert 'key: "queue_priority_reason", label: "Priority reason"' in app_source
-    assert 'data-col-key="runner_up_resume"' in app_markup
-    assert 'data-col-key="score_gap"' in app_markup
-    assert 'data-col-key="missing_requirement_count"' in app_markup
-    assert 'data-col-key="next_step"' in app_markup
-    assert 'data-col-key="queue_priority_reason"' in app_markup
+    assert 'id: "runner_up_resume"' in executive_queue
+    assert 'accessorKey: "score_gap"' in executive_queue
+    assert 'accessorKey: "missing_requirement_count"' in executive_queue
+    assert 'id: "next_step"' in executive_queue
+    assert 'id: "queue_priority_reason"' in executive_queue
 
-    for source in (app_source, planning_source, app_markup, planning_markup):
+    for source in (app_source, planning_source, executive_queue, planning_react):
         assert "A packet is a review bundle for this job." in source
         assert "It does not apply to the job." in source
 
-    assert "executive-view-mode-row--table" in app_markup
-    queue_header_index = app_markup.index("<h2>Queue Table</h2>")
-    toggle_index = app_markup.index("executive-view-mode-row--table")
-    controls_start = app_markup.index('<section class="card controls-card">')
-    controls_end = app_markup.index('<div class="subtext pipeline-run-meta"')
-    assert toggle_index > queue_header_index
-    assert "executive-view-mode-row--table" not in app_markup[controls_start:controls_end]
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert 'title="Queue Table"' in executive_queue
+    assert 'className="executive-queue-view-toggle"' in executive_queue
+    assert "headerActions={viewToggle}" in executive_queue
+    assert 'id="planningWorklistRoot"' in planning_markup
 
 
 def test_phase77b_recommendation_has_single_why_control_per_cell():
@@ -257,14 +321,17 @@ def test_phase77c_table_polish_contract():
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    shared_table = Path("frontend/executive-kpi/src/table/TablePrimitives.tsx").read_text(encoding="utf-8")
 
-    assert "binary-toggle--small" in app_markup
-    assert "application-table-title-row" in app_markup
-    assert "executive-view-mode-row--table" in app_markup
-    title_row_index = app_markup.index("application-table-title-row")
-    toggle_index = app_markup.index("executive-view-mode-row--table")
-    header_right_index = app_markup.index("application-table-header-right")
-    assert title_row_index < toggle_index < header_right_index
+    assert 'id="executiveQueueRoot"' in app_markup
+    assert "shared-table-title-line" in shared_table
+    assert "executive-queue-view-toggle" in executive_queue
+    assert "shared-table-header" in shared_table
+    title_row_index = shared_table.index("shared-table-title-line")
+    header_right_index = shared_table.index("shared-table-header")
+    header_actions_index = shared_table.index("shared-table-header-actions")
+    assert header_right_index < title_row_index < header_actions_index
     assert "Posted:" not in app_source
     assert "Posted:" not in planning_source
     assert 'key: "posted_at", label: "Posted at", type: "date"' in app_source
@@ -343,80 +410,15 @@ def test_phase77d_stateful_table_header_and_review_styling_contract():
     assert "reviewActionStateClass = \"review-action-button--available\";" in planning_source
 
 
-def test_phase77e_scheduler_tabs_are_underline_style():
-    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
-    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
-
-    assert "Contract Health" in app_markup
-    assert "JSONL Rows" in app_markup
-    assert "Postgres Rows" in app_markup
-    assert "Latest Runs by Job" in app_markup
-    scheduler_section = app_markup[
-        app_markup.index('<div class="scheduler-table-tabs">'):
-        app_markup.index('<div class="scheduler-table-header">')
-    ]
-    assert "scheduler-tab-btn" in scheduler_section
-    assert "ghost-btn scheduler-tab-btn" not in scheduler_section
-    assert "body .scheduler-page .scheduler-tab-btn::after" in css
-    assert "body .scheduler-page .scheduler-tab-btn.active::after" in css
-    assert "html[data-theme=\"light\"] body .scheduler-page .scheduler-table-tabs" in css
-    assert "background: transparent !important" in css
-    scheduler_css = css[
-        css.index("body .scheduler-page .scheduler-table-tabs,"):
-        css.index("/* ui_redesign_v25: remove remaining tab button chrome on concrete pages. */")
-    ]
-    for boxed_property in (
-        "border-radius: 12px",
-        "background: #e0f2fe",
-        "background: linear-gradient(135deg, var(--app-primary), var(--app-violet))",
-        "box-shadow: var(--app-shadow-sm)",
-    ):
-        assert boxed_property not in scheduler_css
-    assert "border-radius: 0 !important" in scheduler_css
-    assert "background-color: transparent !important" in scheduler_css
-    assert "background-image: none !important" in scheduler_css
-    assert "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab]" in scheduler_css
-    concrete_state_selector = (
-        "body .scheduler-page .scheduler-table-tabs .scheduler-tab-row > "
-        "button.scheduler-tab-btn[data-tab][role=\"tab\"].active"
-    )
-    assert concrete_state_selector in scheduler_css
-    concrete_tab_css = _css_block(
-        css, "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab],"
-    )
-    active_tab_css = _css_block(
-        css, "body .scheduler-page .scheduler-table-tabs button.scheduler-tab-btn[data-tab].active,"
-    )
-    for block in (concrete_tab_css, active_tab_css):
-        assert "border: 0 !important" in block
-        assert "border-width: 0 !important" in block
-        assert "border-style: none !important" in block
-        assert "border-color: transparent !important" in block
-        assert "border-radius: 0 !important" in block
-        assert "background: transparent !important" in block
-        assert "background-color: transparent !important" in block
-        assert "background-image: none !important" in block
-        assert "box-shadow: none !important" in block
-        assert "background: var(--app-panel)" not in block
-        assert "background: #ffffff" not in block
-        assert "border: 1px solid" not in block
-        assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in block
-    assert "button.scheduler-tab-btn[data-tab].active::after" in scheduler_css
-    assert "background: linear-gradient(90deg, #2563eb, #06b6d4) !important" in scheduler_css
-
-
 def test_phase77h_dark_tabs_keep_underline_style_with_readable_text():
-    app_markup = Path("src/app/ui.py").read_text(encoding="utf-8")
+    # Scheduler Health migrated to a React island (Scheduler Health Visual
+    # Correction); the classic scheduler-page tab markup this test previously
+    # read from src/app/ui.py no longer exists there. The underline-tab CSS
+    # itself is untouched (still relied on by Planning's tailoring-selected
+    # tabs, which reuse .scheduler-tab-btn under a different page scope), so
+    # only the now-obsolete markup assertions are removed; see
+    # tests/test_scheduler_admin_health_redesign.py for the current contract.
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
-
-    scheduler_section = app_markup[
-        app_markup.index('<div class="scheduler-table-tabs">'):
-        app_markup.index('<div class="scheduler-table-header">')
-    ]
-    assert 'class="scheduler-tab-btn active"' in scheduler_section
-    assert 'class="scheduler-tab-btn"' in scheduler_section
-    assert 'data-tab="contract"' in scheduler_section
-    assert 'role="tab"' in scheduler_section
 
     dark_tab_css = css[
         css.index('html[data-theme="dark"] body .scheduler-page .scheduler-table-tabs,'):
@@ -787,7 +789,7 @@ def test_agentic_review_dedicated_page_contract():
     assert "pipeline-run-icon-btn pipeline-run-agentic-review-btn" in profile_source
     assert "pipeline-run-action-icon--view" in profile_source
     assert "pipeline-run-action-icon--agentic" in profile_source
-    assert '("Scheduler", "/scheduler", "S")' in shell_source
+    assert '("Scheduler", "/scheduler", "scheduler")' not in shell_source
     assert '("Agentic Review", "/agentic-review", "AR")' not in shell_source
 
     assert '@router.get("/agentic-review"' not in profile_ui_source
@@ -934,22 +936,23 @@ def test_executive_and_planning_preferences_filters_use_backend_ids_and_search()
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     api_source = Path("src/app/api.py").read_text(encoding="utf-8")
     services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    planning_worklist = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
 
-    assert 'id="preferenceFilter"' in executive_markup
-    assert 'id="planningPreferenceFilter"' in planning_markup
-    for markup in (executive_markup, planning_markup):
-        assert 'data-all-value="__all__"' in markup
-        assert 'data-searchable="true"' in markup
-        assert "All Preferences" in markup
-        assert "Search preferences" in markup
-        assert "No preferences found" in markup
+    assert 'id="executiveQueueRoot"' in executive_markup
+    assert 'label="Preferences"' in executive_queue
+    assert 'placeholder="All Preferences"' in executive_queue
+    assert 'placeholder={`Search ${label.toLowerCase()}`}' in shared_filter
+    assert "No options found" in shared_filter
+    assert 'id="planningFiltersRoot"' in planning_markup
+    assert 'id="planningPreferenceFilter"' in planning_worklist
+    assert 'allLabel="All Preferences"' in planning_worklist
+    assert 'searchable' in planning_worklist
 
     for source in (app_source, planning_source):
         assert 'fetchJson("/onboarding/preferences")' in source
         assert 'appendMultiValueParams(params, "preference_id", preferenceIds)' in source
-        assert 'value !== (root.dataset.allValue || "")' in source
-        assert "filterMultiSelectOptions" in source
-        assert "resetMultiSelectToAll" in source
 
     assert "preference_id: list[str] | None = Query(default=None)" in api_source
     assert "preference_id=preference_id or []" in api_source
@@ -965,62 +968,54 @@ def test_shared_multi_select_contract_supports_dynamic_preference_options():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    executive_queue = Path("frontend/executive-kpi/src/ExecutiveQueue.tsx").read_text(encoding="utf-8")
+    planning_worklist = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
+    frontend_css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
 
-    for markup in (executive_markup, planning_markup):
-        preference_markup = markup[markup.index('data-placeholder="All Preferences"'):]
-        assert 'class="multi-select-option is-selected" data-value="__all__" aria-checked="true"' in preference_markup
-        assert preference_markup.count('placeholder="Search preferences"') == 1
-        assert preference_markup.count('aria-label="Search preferences"') == 1
-        assert 'class="multi-select-empty" hidden' in preference_markup
-
-    for source in (app_source, planning_source):
-        engine = source[source.index("function handleMultiSelectOptionSelection"):source.index("function normalize", source.index("function handleMultiSelectOptionSelection"))]
-        assert 'menu.addEventListener("click", (event) =>' in engine
-        assert 'event.target.closest(".multi-select-option")' in engine
-        assert "handleMultiSelectOptionSelection(root, option)" in engine
-        assert 'setMultiSelectOptionSelected(candidate, candidate === option)' in engine
-        assert "setMultiSelectOptionSelected(allOption, false)" in engine
-        assert "resetMultiSelectToAll(root.id)" in engine
-        assert 'getMultiSelectMenu(root)?.querySelector(".multi-select-options")' in engine
-        assert 'option.addEventListener("click"' not in engine
-        assert 'root.classList.toggle("opens-upward", openAbove)' in source
-        assert 'menu.dataset.placement = openAbove ? "top" : "bottom"' in source
-
-    canonical_css = css[css.index("body .multi-select {"):css.index("body .application-tabs {")]
-    assert "background: var(--app-surface-2) !important" in canonical_css
-    assert "position: sticky" in canonical_css
-    assert "overflow-y: auto !important" in canonical_css
-    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in canonical_css
+    assert 'id="executiveQueueRoot"' in executive_markup
+    assert "SharedFilterSelect" in executive_queue
+    assert "options={preferenceOptions}" in executive_queue
+    assert "values={filters.preferenceIds}" in executive_queue
+    assert "All Preferences" in executive_queue
+    assert "SharedFilterSelect" in planning_worklist
+    assert planning_worklist.count("<SharedFilterSelect") == 4
+    assert "state.preferenceOptions.map" in planning_worklist
+    assert 'loadPlanningPreferenceFilterOptions()' in planning_source
+    assert "planningTableState.preferenceOptions = options" in planning_source
+    assert 'createPortal(' in shared_filter
+    assert 'placement = below < 190 && above > below ? "top" : "bottom"' in shared_filter
+    assert 'window.addEventListener("resize", handleViewportChange)' in shared_filter
+    assert 'window.addEventListener("scroll", handleViewportChange, true)' in shared_filter
+    assert ".shared-filter-select__menu" in frontend_css
+    assert "position: fixed" in frontend_css
+    assert "overflow-y: auto" in frontend_css
+    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet))" not in frontend_css[frontend_css.index(".shared-filter-select__trigger"):frontend_css.index(".shared-filter-select__empty")]
     assert ":not(.multi-select-option)" in css
 
 
 def test_shared_preference_search_filters_current_portaled_options_without_mutating_selection():
-    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
-    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
-
-    for source in (app_source, planning_source):
-        search_engine = source[
-            source.index("function normalizeMultiSelectSearchText"):
-            source.index("function handleMultiSelectOptionSelection")
-        ]
-        assert '.addEventListener("input", () => filterMultiSelectOptions' in search_engine
-        assert '.toLowerCase()' in search_engine
-        assert '.replace(/[\\/_-]+/g, " ")' in search_engine
-        assert '.replace(/\\s+/g, " ")' in search_engine
-        assert "normalizeMultiSelectSearchText(label).includes(normalizedQuery)" in search_engine
-        assert "getMultiSelectOptions(root).forEach((option) =>" in search_engine
-        assert 'getMultiSelectMenu(root)?.querySelector(".multi-select-search-input")' in search_engine
-        assert "option.hidden = !isVisible" in search_engine
-        assert "empty.hidden = visibleCount > 0" in search_engine
-        assert "setMultiSelectOptionSelected" not in search_engine
-        assert "aria-checked" not in search_engine
-        assert "fetch(" not in search_engine
-        assert "fetchJson(" not in search_engine
-
-    assert "body .multi-select-option[hidden]" in css
-    assert "body .multi-select-empty[hidden]" in css
-    assert "display: none !important" in css
+    shared_filter = Path("frontend/executive-kpi/src/filter/FilterSelect.tsx").read_text(encoding="utf-8")
+    search_engine = shared_filter[
+        shared_filter.index("function normalizeSearchText"):
+        shared_filter.index("export function SharedFilterSelect")
+    ]
+    assert ".toLowerCase()" in search_engine
+    assert '.replace(/[\\/_-]+/g, " ")' in search_engine
+    assert '.replace(/\\s+/g, " ")' in search_engine
+    assert "normalizeSearchText(option.label).includes(normalizedQuery)" in shared_filter
+    assert "setQuery(event.target.value)" in shared_filter
+    assert "onChange(values.includes(value)" in shared_filter
+    assert 'aria-selected={selected}' in shared_filter
+    assert "fetch(" not in shared_filter
+    assert "fetchJson(" not in shared_filter
+    assert 'action.type === "filters_change"' in planning_source
+    filters_change = planning_source[
+        planning_source.index('action.type === "filters_change"'):
+        planning_source.index('action.type === "apply_filters"')
+    ]
+    assert "loadPlanningTable" not in filters_change
 
 
 def test_preference_filter_rejects_ids_outside_authenticated_owner_preferences(monkeypatch):

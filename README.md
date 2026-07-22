@@ -109,7 +109,6 @@ The web app uses a shared navigation shell with these main pages:
 | Executive | `/` | High-level operator dashboard for live pipeline runs and current opportunities. |
 | Planning | `/planning` | Application planning table, shortlist, resume selection, and tailoring entry points. |
 | Decisions | `/decisions-ui` | Review and manage operator decisions for jobs and resume variants. |
-| Intelligence | `/intelligence` | Job and skill intelligence surfaces backed by local artifacts and RAG tools. |
 | Applications | `/applications` | Application/action tracking workspace. |
 | Scheduler | `/scheduler` | Scheduler health, command previews, launchd configuration, and run history. |
 | Profile | `/profile` | Saved resumes, pipeline runs, saved scans, and account/admin tools. |
@@ -417,6 +416,20 @@ http://127.0.0.1:8000
 ```bash
 python run_api.py --reload
 ```
+
+The Executive Dashboard KPI cards are a scoped React island. Its deterministic
+production bundle is checked in under `src/app/static/build/executive-kpi` so the
+normal Python runtime does not require Node or a frontend development server.
+Rebuild that bundle after changing `frontend/executive-kpi`:
+
+```bash
+cd frontend/executive-kpi
+npm ci
+npm run build
+```
+
+The production Docker build performs the same locked frontend build in a Node
+build stage, then copies only the generated browser assets into the Python image.
 
 ### Health Check
 

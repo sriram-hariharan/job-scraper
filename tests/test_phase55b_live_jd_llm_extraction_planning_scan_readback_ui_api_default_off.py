@@ -198,7 +198,11 @@ def test_saved_scan_readback_materializes_from_stored_metadata_without_provider_
 
 
 def test_ui_readback_surface_is_passive_and_does_not_enable_provider_calls():
-    html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+    # id="scanWorkspaceJdLlmReadback" moved from src/app/planning_ui.py into the
+    # React Advanced Diagnostics Command Center (Item 1 Phase 3).
+    html = (
+        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
+    ).read_text(encoding="utf-8")
     script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
     renderer = script.split("function renderScanWorkspaceJdLlmReadback()", 1)[1].split(
         "\nfunction ",
@@ -213,7 +217,7 @@ def test_ui_readback_surface_is_passive_and_does_not_enable_provider_calls():
         1,
     )[1].split("\nasync function ", 1)[0]
 
-    assert 'id="scanWorkspaceJdLlmReadback"' in html
+    assert '"scanWorkspaceJdLlmReadback"' in html
     assert "jd_llm_extraction_readback" in readback_getter
     assert "fetch(" not in renderer
     assert "enable_jd_llm_extraction" not in start_payload_builder

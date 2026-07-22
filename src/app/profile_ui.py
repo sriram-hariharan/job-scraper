@@ -207,17 +207,19 @@ def profile_page(request: Request) -> str:
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_pipeline_run_buttons_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_pipeline_run_buttons_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
 </head>
 <body>
   {render_top_shell("/profile")}
   {_profile_navigation_icon_preloads_html()}
 
   <div class="page">
-    <header class="page-header">
-      <div>
-        <h1>My Profile</h1>
-        <p class="subtext">Manage resume files and persisted Live Pipeline runs.</p>
+    <header class="page-header app-page-header">
+      <div class="app-page-header__main">
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">My Profile</h1>
+        </div>
+        <p class="subtext app-page-header__description">Manage resume files and persisted Live Pipeline runs.</p>
       </div>
     </header>
 
@@ -491,8 +493,8 @@ def profile_page(request: Request) -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_pipeline_rerun_modal_r1"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/profile.js?v=item2_phase4_profile_corrections_r1"></script>
 </body>
 </html>
     """.strip()
@@ -510,7 +512,7 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
   <title>Agentic Review</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=agentic_review_v1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=agentic_review_v1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <link rel="stylesheet" href="/static/agentic_review.css?v=agentic_review_v1" />
 </head>
 <body>
@@ -597,7 +599,7 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
     </main>
   </div>
 
-  <script src="/static/shell.js?v=agentic_review_v1"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/profile.js?v=agentic_review_v1"></script>
   <script src="/static/agentic_review.js?v=agentic_review_v1"></script>
 </body>
@@ -616,7 +618,7 @@ def profile_preferences_page() -> str:
   <title>Preferences · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=preferences_toolbar_ownership_r11" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
   <link rel="stylesheet" href="/static/preferences.css?v=preferences_footer_compact_r15" />
 </head>
 <body class="preferences-page-shell">
@@ -627,7 +629,7 @@ def profile_preferences_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/preferences_workflow.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/profile.js?v=preferences_guided_parity_r9"></script>
@@ -647,7 +649,7 @@ def saved_scans_page() -> str:
   <title>Saved Scans</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_confirm_specific_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_confirm_specific_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -739,7 +741,7 @@ def saved_scans_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10"></script>
 </body>
 </html>

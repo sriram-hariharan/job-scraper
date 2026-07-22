@@ -678,6 +678,15 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert len(item2_phase4_corrections_profile) == 36
     assert not any("*" in path for path in item2_phase4_corrections_profile)
 
+    phase8_step3d_profile = legacy_guard_allowlist(
+        "phase8_step3d_tailoring_llm_gate"
+    )
+    assert phase8_step3d_profile == {
+        "src/tailoring/rendering.py",
+        "tests/test_tailoring_patch_refinement_explicit_opt_in.py",
+    }
+    assert not any("*" in path for path in phase8_step3d_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -695,6 +704,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item2_phase3_profile
         | item2_phase4_profile
         | item2_phase4_corrections_profile
+        | phase8_step3d_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

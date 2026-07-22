@@ -1029,6 +1029,10 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_scheduler_admin_health_redesign.py",
         },
+        "phase8_step3d_tailoring_llm_gate": {
+            "src/tailoring/rendering.py",
+            "tests/test_tailoring_patch_refinement_explicit_opt_in.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1056,6 +1060,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item2_phase3_shared_page_header_foundation")
         | legacy_guard_allowlist("item2_phase4_secondary_page_headers")
         | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
+        | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
     )
 
 

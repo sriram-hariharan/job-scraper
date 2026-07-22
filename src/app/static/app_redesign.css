@@ -796,7 +796,7 @@ html[data-theme="light"] .profile-dropdown-nav-btn:focus-visible {
   width: 44px !important;
   height: 44px !important;
   border-radius: 14px !important;
-  color: #0f172a !important;
+  color: var(--app-text) !important;
 }
 
 .profile-dropdown-nav-icon--scans {
@@ -8127,44 +8127,159 @@ body.app-shell-mobile-open {
   }
 }
 
-/* Scheduler Health page title — overrides the global h1 rule above (which
-   sizes every <h1> for hero-style pages) down to the same compact scale as
-   Executive/Pipeline/Planning/Decisions/Applications titles. The React
-   component only sets margin for this element; sizing lives here because the
-   React stylesheet is a forced-declaration-free zone by convention. */
-.scheduler-health-page #schedulerHealthDashboardRoot h1 {
-  font-size: 38px !important;
-  font-weight: 800 !important;
-  line-height: 1.15 !important;
+/* === Item 2 Phase 3: Shared page header foundation =======================
+   One class contract for the primary authenticated surfaces (Overview,
+   Planning, Decisions, Applications, Pipeline, Scheduler Health, Advanced
+   Diagnostics). Placed after the legacy .page-header/global h1 rules above
+   so the canonical migrated-page classes own the final cascade. Selectors
+   are deliberately over-qualified (3-4 classes) to beat the highest-
+   specificity legacy title/description rules found in this file
+   (body .page > .page-header h1 / p, specificity 0,0,2,2) purely on class
+   count, without editing those legacy rules — non-migrated pages (Scan
+   Workspace, Tailoring Workspace, Preferences, onboarding) are unaffected.
+   This replaces the former per-page Scheduler Health / Advanced Diagnostics
+   h1 overrides above, which are now redundant once both pages carry the
+   shared title class. */
+
+.app-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+/* Overview and Planning still carry the legacy .page-header class. Mirror
+   the highest-specificity legacy container selectors (adding .app-page-header
+   alongside .page-header) so the two-row stack wins instead of the old
+   row layout + calculated right padding reserved for the global toolbar. */
+body .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .app-page-header.page-header,
+body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.preferences-page) > .app-page-header.page-header,
+body .page > .app-page-header.page-header {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 0 14px !important;
+  padding: 0 !important;
+  text-align: left !important;
+}
+
+.app-page-header__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.app-page-header__main--with-icon { flex-direction: row; align-items: flex-start; gap: 14px; }
+.app-page-header__copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.app-page-header .app-page-header__eyebrow {
+  margin: 0 0 4px;
+  color: var(--app-primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app-page-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.page .app-page-header .app-page-header__title-row .app-page-header__title {
+  margin: 0;
+  color: var(--app-text);
+  font-size: clamp(30px, 2.5vw, 36px) !important;
+  font-weight: 900 !important;
+  line-height: 1.08 !important;
   letter-spacing: -0.02em !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+}
+
+@media (max-width: 1024px) {
+  .page .app-page-header .app-page-header__title-row .app-page-header__title {
+    font-size: 34px !important;
+  }
 }
 
 @media (max-width: 680px) {
-  .scheduler-health-page #schedulerHealthDashboardRoot h1 {
+  .page .app-page-header .app-page-header__title-row .app-page-header__title {
     font-size: 30px !important;
   }
 }
 
-/* Advanced Diagnostics page title — same fix as Scheduler Health above: the
-   global h1 rule sizes every <h1> for hero-style pages, so the compact scale
-   for this page's title has to be forced here too. The React component only
-   sets margin for this element; sizing lives here because the React
-   stylesheet is a forced-declaration-free zone by convention. */
-.scan-workspace-diagnostics-page #advancedDiagnosticsRoot h1 {
-  font-size: clamp(34px, 3vw, 44px) !important;
-  font-weight: 800 !important;
-  line-height: 1.05 !important;
+.page .app-page-header .app-page-header__main .app-page-header__description,
+.page .app-page-header .app-page-header__copy .app-page-header__description {
+  margin: 6px 0 0 !important;
+  max-width: 760px;
+  color: var(--app-muted);
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  white-space: normal !important;
+}
+
+.app-page-header__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 680px) {
+  .app-page-header__actions { justify-content: flex-start; }
+}
+
+.app-page-header__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Item 2 Phase 4: Scan Workspace carries an older, higher-specificity title
+   rule in scan_workspace_review.css
+   (body .scan-workspace-page.page > .scan-workspace-header-shell.scan-
+   workspace-header-shell--minimal .scan-workspace-header-copy h1, specificity
+   0,0,5,2) that the base shared-title selector above (0,0,3,0) cannot beat.
+   This selector reuses the identical shared class names and identical shared
+   values (no page-specific size) with enough additional specificity
+   (0,0,6,1) to win without touching scan_workspace_review.css. Tailoring
+   Workspace has no comparable competing rule, so the base selector already
+   applies there unassisted. */
+body .scan-workspace-page.page > .app-page-header.scan-workspace-header-shell .app-page-header__title-row .app-page-header__title {
+  font-size: clamp(30px, 2.5vw, 36px) !important;
+  font-weight: 900 !important;
+  line-height: 1.08 !important;
   letter-spacing: -0.02em !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
 }
 
 @media (max-width: 1024px) {
-  .scan-workspace-diagnostics-page #advancedDiagnosticsRoot h1 {
-    font-size: 36px !important;
+  body .scan-workspace-page.page > .app-page-header.scan-workspace-header-shell .app-page-header__title-row .app-page-header__title {
+    font-size: 34px !important;
   }
 }
 
 @media (max-width: 680px) {
-  .scan-workspace-diagnostics-page #advancedDiagnosticsRoot h1 {
+  body .scan-workspace-page.page > .app-page-header.scan-workspace-header-shell .app-page-header__title-row .app-page-header__title {
     font-size: 30px !important;
   }
 }

@@ -95,6 +95,25 @@ describe("SchedulerHealthDashboard", () => {
     expect(within(activeJobsMetric as HTMLElement).getByText("2")).toBeInTheDocument();
   });
 
+  it("uses the shared app-page-header contract while keeping the Admin only badge and last-refreshed text", async () => {
+    const { container } = render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+    await screen.findByText("Healthy");
+    const header = container.querySelector("header.scheduler-health-header") as HTMLElement;
+    expect(header).not.toBeNull();
+    expect(header).toHaveClass("scheduler-health-header");
+    expect(header).toHaveClass("app-page-header");
+    expect(within(header).getByRole("heading", { level: 1 })).toHaveClass("app-page-header__title");
+    expect(within(header).getByRole("heading", { level: 1 })).toHaveTextContent("Scheduler Health");
+    expect(within(header).getByText("Admin only")).toHaveClass("app-page-header__badge");
+    expect(
+      within(header).getByText(
+        "Monitor scheduled jobs, run outcomes, persistence consistency, and configuration integrity.",
+      ),
+    ).toHaveClass("app-page-header__description");
+    expect(within(header).getByText(/Last refreshed at/)).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: /Refresh/ })).toBeInTheDocument();
+  });
+
   it("shows a Recorded runs metric backed by postgres_summary.run_history_count, and no Storage sync metric", async () => {
     render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
     await screen.findByText("Healthy");

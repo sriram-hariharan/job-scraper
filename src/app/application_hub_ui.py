@@ -17,17 +17,21 @@ def applications_dashboard() -> str:
   <title>Applications</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="operational-dashboard-page applications-dashboard-page">
   {render_top_shell("/applications")}
 
   <main class="page operational-dashboard-shell">
-    <header class="operational-dashboard-heading">
-      <span>APPLICATION TRACKING</span>
-      <h1>Applications</h1>
-      <p>Track applied jobs and jobs saved for later through the existing manual workflow.</p>
+    <header class="operational-dashboard-heading app-page-header">
+      <div class="app-page-header__main">
+        <span class="app-page-header__eyebrow">APPLICATION TRACKING</span>
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">Applications</h1>
+        </div>
+        <p class="app-page-header__description">Track applied jobs and jobs saved for later through the existing manual workflow.</p>
+      </div>
     </header>
     <div id="applicationsDashboardRoot" aria-live="polite"><div class="operational-dashboard-fallback">Loading applications...</div></div>
   </main>
@@ -65,7 +69,7 @@ def applications_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/application_views.js?v=phase133ef_r5"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
 </html>
     """.strip()

@@ -121,18 +121,20 @@ def planning_dashboard() -> str:
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="planning-dashboard-page">
 {render_top_shell("/planning")}
   <main class="page planning-dashboard-shell">
-    <header class="page-header planning-dashboard-header">
-      <div>
-        <div class="planning-dashboard-eyebrow">Application planning</div>
-        <h1>Planning</h1>
-        <p class="subtext">Review resume selection, planning readiness, and the recommended next step for every shortlisted job.</p>
+    <header class="page-header planning-dashboard-header app-page-header">
+      <div class="app-page-header__main">
+        <div class="planning-dashboard-eyebrow app-page-header__eyebrow">Application planning</div>
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">Planning</h1>
+        </div>
+        <p class="subtext app-page-header__description">Review resume selection, planning readiness, and the recommended next step for every shortlisted job.</p>
       </div>
     </header>
 
@@ -575,7 +577,7 @@ def planning_dashboard() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
   <script src="/static/planning.js?v=phase133g_s1_r1"></script>
 </body>
 </html>
@@ -674,7 +676,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
   <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
 </head>
 <body>
@@ -694,10 +696,12 @@ def tailoring_workspace(
     data-packet-json-key="{packet_json_key_safe}"
     data-planning-output-dir="{output_dir_safe}"
   >
-    <header class="page-header tailoring-workspace-header">
-      <div>
-        <h1>Tailoring Workspace</h1>
-        <p class="subtext">
+    <header class="page-header tailoring-workspace-header app-page-header">
+      <div class="app-page-header__main">
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">Tailoring Workspace</h1>
+        </div>
+        <p class="subtext app-page-header__description">
           Review suggested bullet replacements on the left and resume preview on the right.
         </p>
       </div>
@@ -1200,8 +1204,8 @@ def advanced_diagnostics(
   <title>Advanced Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body>
 {render_top_shell("/advanced-diagnostics")}
@@ -1216,7 +1220,7 @@ def advanced_diagnostics(
   <script>
     window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = {initial_state_script};
   </script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
 </html>
     """.strip()
@@ -1378,7 +1382,7 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
   <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" />
 </head>
 <body>
@@ -1401,13 +1405,13 @@ def scan_workspace(
     data-scan-initial-mode="{scan_initial_mode_safe}"
     data-scan-mode=""
   >
-    <header class="page-header scan-workspace-header-shell scan-workspace-header-shell--minimal">
+    <header class="page-header scan-workspace-header-shell scan-workspace-header-shell--minimal app-page-header">
       <div class="scan-workspace-header-row">
-        <div class="scan-workspace-header-copy">
-          <h1>AI Optimize Scan</h1>
+        <div class="scan-workspace-header-copy app-page-header__title-row">
+          <h1 class="app-page-header__title">AI Optimize Scan</h1>
         </div>
 
-        <div class="scan-workspace-header-actions">
+        <div class="scan-workspace-header-actions app-page-header__actions">
           {tailoring_back_link_html}
 
         </div>

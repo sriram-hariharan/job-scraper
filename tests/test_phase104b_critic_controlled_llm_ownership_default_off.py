@@ -323,6 +323,8 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         "src/app/static/scan_workspace.js",
         "src/app/static/scan_workspace_review.css",
         "src/app/static/styles.css",
+        "src/app/static/profile.js",
+        "src/app/static/intelligence.js",
     }
     scheduler_static_surface = {
         "src/app/static/build/executive-kpi/executive-kpi.css",

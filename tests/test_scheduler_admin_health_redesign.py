@@ -385,25 +385,34 @@ def test_classic_shell_js_ownership_is_unaffected() -> None:
 
 
 def test_page_title_uses_the_scoped_scheduler_class_not_a_global_display_style() -> None:
-    # The <h1> carries no separate "display title" class of its own. Its
-    # compact size comes from a selector scoped to the scheduler page + root,
-    # overriding the shared global h1 rule that otherwise renders every <h1>
-    # oversized (clamp(38px, 5vw, 74px)). The override lives in the classic
-    # app_redesign.css — the only stylesheet already using !important to win
-    # that cascade fight — not in the React stylesheet.
-    assert "<h1>Scheduler Health</h1>" in SCHEDULER_DASHBOARD_TSX
-    assert ".scheduler-health-header-copy h1 {" in REACT_CSS
+    # The <h1> carries no page-specific "display title" class of its own —
+    # only the shared Item 2 Phase 3 title class. Its compact size comes from
+    # a selector scoped to that shared class, overriding the shared global h1
+    # rule that otherwise renders every <h1> oversized (clamp(38px, 5vw,
+    # 74px)). The override lives in the classic app_redesign.css — the only
+    # stylesheet already using !important to win that cascade fight — not in
+    # the React stylesheet. (Formerly a scheduler-specific override; Item 2
+    # Phase 3 consolidated it into the shared .app-page-header__title rule,
+    # which is now the sole owner of this sizing.)
+    assert '<h1 className="app-page-header__title">Scheduler Health</h1>' in SCHEDULER_DASHBOARD_TSX
     assert "!important" not in REACT_CSS
-    assert ".scheduler-health-page #schedulerHealthDashboardRoot h1 {" in APP_REDESIGN_CSS
+    assert (
+        ".page .app-page-header .app-page-header__title-row .app-page-header__title {"
+        in APP_REDESIGN_CSS
+    )
     header_override = APP_REDESIGN_CSS[
-        APP_REDESIGN_CSS.index(".scheduler-health-page #schedulerHealthDashboardRoot h1 {"):
+        APP_REDESIGN_CSS.index(
+            ".page .app-page-header .app-page-header__title-row .app-page-header__title {"
+        ):
     ]
     header_override = header_override[: header_override.index("}") + 1]
-    assert "font-size: 38px !important" in header_override
+    assert "font-size: clamp(30px, 2.5vw, 36px) !important" in header_override
+    # The old scheduler-specific override is gone now that the shared class owns it.
+    assert ".scheduler-health-page #schedulerHealthDashboardRoot h1 {" not in APP_REDESIGN_CSS
 
 
 def test_scheduler_refresh_is_inside_scheduler_content_not_the_shared_shell() -> None:
-    assert 'className="scheduler-health-header"' in SCHEDULER_DASHBOARD_TSX
+    assert 'className="scheduler-health-header app-page-header"' in SCHEDULER_DASHBOARD_TSX
     header_block = SCHEDULER_DASHBOARD_TSX[
         SCHEDULER_DASHBOARD_TSX.index('function DashboardHeader'):
         SCHEDULER_DASHBOARD_TSX.index('function OverviewPanel')

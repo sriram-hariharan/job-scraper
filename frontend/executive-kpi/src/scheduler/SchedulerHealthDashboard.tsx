@@ -79,15 +79,15 @@ function DashboardHeader({
   lastRefreshedAt: number | null;
 }) {
   return (
-    <header className="scheduler-health-header">
-      <div className="scheduler-health-header-copy">
-        <div className="scheduler-health-title-row">
-          <h1>Scheduler Health</h1>
-          <span className="scheduler-badge scheduler-badge--muted scheduler-admin-badge">Admin only</span>
+    <header className="scheduler-health-header app-page-header">
+      <div className="scheduler-health-header-copy app-page-header__main">
+        <div className="scheduler-health-title-row app-page-header__title-row">
+          <h1 className="app-page-header__title">Scheduler Health</h1>
+          <span className="scheduler-badge scheduler-badge--muted scheduler-admin-badge app-page-header__badge">Admin only</span>
         </div>
-        <p>Monitor scheduled jobs, run outcomes, persistence consistency, and configuration integrity.</p>
+        <p className="app-page-header__description">Monitor scheduled jobs, run outcomes, persistence consistency, and configuration integrity.</p>
       </div>
-      <div className="scheduler-health-header-actions">
+      <div className="scheduler-health-header-actions app-page-header__actions">
         <span className="scheduler-last-refreshed">
           {lastRefreshedAt ? `Last refreshed at ${formatClockTime(new Date(lastRefreshedAt))}` : "Not refreshed yet"}
         </span>

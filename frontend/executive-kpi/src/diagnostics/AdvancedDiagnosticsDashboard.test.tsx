@@ -402,4 +402,31 @@ describe("AdvancedDiagnosticsDashboard — header", () => {
       "Advanced Diagnostics",
     );
   });
+
+  it("uses the shared app-page-header contract with the icon-tile layout, badges, and description", () => {
+    render(<AdvancedDiagnosticsDashboard state={HUB_STATE} />);
+    const header = screen.getByRole("banner");
+    expect(header).toHaveClass("advanced-diagnostics-header");
+    expect(header).toHaveClass("app-page-header");
+    expect(within(header).getByRole("heading", { level: 1 })).toHaveClass("app-page-header__title");
+    expect(within(header).getByText("Admin only")).toHaveClass("app-page-header__badge");
+    expect(within(header).getByText("Read-only")).toHaveClass("app-page-header__badge");
+    expect(
+      within(header).getByText(
+        "Admin workflow diagnostics for saved scan contexts and scan-specific readbacks.",
+      ),
+    ).toHaveClass("app-page-header__description");
+    // Icon-tile layout preserved via app-page-header__main--with-icon / __copy.
+    expect(header.querySelector(".app-page-header__main--with-icon")).not.toBeNull();
+    expect(header.querySelector(".app-page-header__copy")).not.toBeNull();
+    expect(header.querySelector(".advanced-diagnostics-header-icon-tile")).not.toBeNull();
+  });
+
+  it("keeps Change scan and Back to scan outside the main header, and Run selected diagnostics disabled", () => {
+    render(<AdvancedDiagnosticsDashboard state={CONTEXT_STATE} />);
+    const header = screen.getByRole("banner");
+    expect(within(header).queryByRole("link", { name: "Back to scan" })).not.toBeInTheDocument();
+    expect(within(header).queryByRole("link", { name: "Change scan" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run selected diagnostics" })).toBeDisabled();
+  });
 });

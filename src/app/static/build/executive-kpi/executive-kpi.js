@@ -25087,16 +25087,28 @@ function NL() {
 }
 function PL({ onRefresh: e, onRun: t, refreshing: n, runActive: r }) {
 	return /* @__PURE__ */ (0, X.jsxs)("header", {
-		className: "pipeline-dashboard-header",
-		children: [/* @__PURE__ */ (0, X.jsxs)("div", { children: [
-			/* @__PURE__ */ (0, X.jsx)("p", {
-				className: "pipeline-dashboard-eyebrow",
-				children: "Operations"
-			}),
-			/* @__PURE__ */ (0, X.jsx)("h1", { children: "Pipeline" }),
-			/* @__PURE__ */ (0, X.jsx)("p", { children: "Monitor job collection, filtering, evaluation, resume matching, and planning." })
-		] }), /* @__PURE__ */ (0, X.jsxs)("div", {
-			className: "pipeline-dashboard-actions",
+		className: "pipeline-dashboard-header app-page-header",
+		children: [/* @__PURE__ */ (0, X.jsxs)("div", {
+			className: "app-page-header__main",
+			children: [
+				/* @__PURE__ */ (0, X.jsx)("p", {
+					className: "pipeline-dashboard-eyebrow app-page-header__eyebrow",
+					children: "Operations"
+				}),
+				/* @__PURE__ */ (0, X.jsx)("div", {
+					className: "app-page-header__title-row",
+					children: /* @__PURE__ */ (0, X.jsx)("h1", {
+						className: "app-page-header__title",
+						children: "Pipeline"
+					})
+				}),
+				/* @__PURE__ */ (0, X.jsx)("p", {
+					className: "app-page-header__description",
+					children: "Monitor job collection, filtering, evaluation, resume matching, and planning."
+				})
+			]
+		}), /* @__PURE__ */ (0, X.jsxs)("div", {
+			className: "pipeline-dashboard-actions app-page-header__actions",
 			children: [/* @__PURE__ */ (0, X.jsxs)("button", {
 				className: "pipeline-dashboard-btn pipeline-dashboard-btn--secondary",
 				type: "button",
@@ -25610,18 +25622,24 @@ function eR(e) {
 }
 function tR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 	return /* @__PURE__ */ (0, X.jsxs)("header", {
-		className: "scheduler-health-header",
+		className: "scheduler-health-header app-page-header",
 		children: [/* @__PURE__ */ (0, X.jsxs)("div", {
-			className: "scheduler-health-header-copy",
+			className: "scheduler-health-header-copy app-page-header__main",
 			children: [/* @__PURE__ */ (0, X.jsxs)("div", {
-				className: "scheduler-health-title-row",
-				children: [/* @__PURE__ */ (0, X.jsx)("h1", { children: "Scheduler Health" }), /* @__PURE__ */ (0, X.jsx)("span", {
-					className: "scheduler-badge scheduler-badge--muted scheduler-admin-badge",
+				className: "scheduler-health-title-row app-page-header__title-row",
+				children: [/* @__PURE__ */ (0, X.jsx)("h1", {
+					className: "app-page-header__title",
+					children: "Scheduler Health"
+				}), /* @__PURE__ */ (0, X.jsx)("span", {
+					className: "scheduler-badge scheduler-badge--muted scheduler-admin-badge app-page-header__badge",
 					children: "Admin only"
 				})]
-			}), /* @__PURE__ */ (0, X.jsx)("p", { children: "Monitor scheduled jobs, run outcomes, persistence consistency, and configuration integrity." })]
+			}), /* @__PURE__ */ (0, X.jsx)("p", {
+				className: "app-page-header__description",
+				children: "Monitor scheduled jobs, run outcomes, persistence consistency, and configuration integrity."
+			})]
 		}), /* @__PURE__ */ (0, X.jsxs)("div", {
-			className: "scheduler-health-header-actions",
+			className: "scheduler-health-header-actions app-page-header__actions",
 			children: [/* @__PURE__ */ (0, X.jsx)("span", {
 				className: "scheduler-last-refreshed",
 				children: n ? `Last refreshed at ${XL(new Date(n))}` : "Not refreshed yet"
@@ -26693,30 +26711,36 @@ function CR({ activeSection: e }) {
 }
 function wR() {
 	return /* @__PURE__ */ (0, X.jsx)("header", {
-		className: "advanced-diagnostics-header",
+		className: "advanced-diagnostics-header app-page-header",
 		children: /* @__PURE__ */ (0, X.jsxs)("div", {
-			className: "advanced-diagnostics-header-primary",
+			className: "advanced-diagnostics-header-primary app-page-header__main app-page-header__main--with-icon",
 			children: [/* @__PURE__ */ (0, X.jsx)("span", {
 				className: "advanced-diagnostics-header-icon-tile",
 				"aria-hidden": "true",
 				children: /* @__PURE__ */ (0, X.jsx)(be, { size: 22 })
-			}), /* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsxs)("div", {
-				className: "advanced-diagnostics-header-title-row",
-				children: [
-					/* @__PURE__ */ (0, X.jsx)("h1", { children: "Advanced Diagnostics" }),
-					/* @__PURE__ */ (0, X.jsx)("span", {
-						className: "advanced-diagnostics-badge advanced-diagnostics-badge--muted",
-						children: "Admin only"
-					}),
-					/* @__PURE__ */ (0, X.jsx)("span", {
-						className: "advanced-diagnostics-badge advanced-diagnostics-badge--muted",
-						children: "Read-only"
-					})
-				]
-			}), /* @__PURE__ */ (0, X.jsx)("p", {
-				className: "advanced-diagnostics-header-description",
-				children: "Admin workflow diagnostics for saved scan contexts and scan-specific readbacks."
-			})] })]
+			}), /* @__PURE__ */ (0, X.jsxs)("div", {
+				className: "app-page-header__copy",
+				children: [/* @__PURE__ */ (0, X.jsxs)("div", {
+					className: "advanced-diagnostics-header-title-row app-page-header__title-row",
+					children: [
+						/* @__PURE__ */ (0, X.jsx)("h1", {
+							className: "app-page-header__title",
+							children: "Advanced Diagnostics"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("span", {
+							className: "advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge",
+							children: "Admin only"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("span", {
+							className: "advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge",
+							children: "Read-only"
+						})
+					]
+				}), /* @__PURE__ */ (0, X.jsx)("p", {
+					className: "app-page-header__description",
+					children: "Admin workflow diagnostics for saved scan contexts and scan-specific readbacks."
+				})]
+			})]
 		})
 	});
 }

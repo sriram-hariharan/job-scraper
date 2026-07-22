@@ -44,6 +44,22 @@ afterEach(() => {
 });
 
 describe("PipelineDashboard", () => {
+  it("uses the shared app-page-header contract and keeps eyebrow/title/description unchanged", async () => {
+    render(<PipelineDashboard readStatus={async () => ({ pipeline: { status: "idle" } })} launchPipeline={vi.fn()} />);
+    await screen.findByText("Pipeline is idle");
+    const header = screen.getByRole("banner");
+    expect(header).toHaveClass("pipeline-dashboard-header");
+    expect(header).toHaveClass("app-page-header");
+    expect(within(header).getByText("Operations")).toHaveClass("app-page-header__eyebrow");
+    expect(within(header).getByRole("heading", { level: 1 })).toHaveClass("app-page-header__title");
+    expect(within(header).getByRole("heading", { level: 1 })).toHaveTextContent("Pipeline");
+    expect(
+      within(header).getByText("Monitor job collection, filtering, evaluation, resume matching, and planning."),
+    ).toHaveClass("app-page-header__description");
+    expect(within(header).getByRole("button", { name: "Refresh Status" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Run Pipeline" })).toBeInTheDocument();
+  });
+
   it("renders a premium loading state without fake counts or stages", () => {
     const neverResolves = () => new Promise<never>(() => undefined);
     render(<PipelineDashboard readStatus={neverResolves} launchPipeline={vi.fn()} />);

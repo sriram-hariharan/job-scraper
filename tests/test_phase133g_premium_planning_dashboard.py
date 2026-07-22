@@ -32,8 +32,10 @@ def test_planning_route_mounts_the_scoped_react_islands_and_canonical_bundle() -
     assert 'id="planningTable"' not in html
     assert 'id="planningTableBody"' not in html
     assert '/static/planning_dashboard.css?v=phase133g_s1_r1' in html
-    assert '/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1' in html
-    assert '/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1' in html
+    # Bundle cache marker bumped to item2_phase3_shared_header_r1 when Planning's
+    # header was migrated onto the shared .app-page-header contract.
+    assert '/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1' in html
+    assert '/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1' in html
     assert '/static/planning.js?v=phase133g_s1_r1' in html
 
 

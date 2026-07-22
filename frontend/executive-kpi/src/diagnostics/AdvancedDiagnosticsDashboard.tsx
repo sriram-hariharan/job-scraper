@@ -531,18 +531,18 @@ function SectionNav({ activeSection }: { activeSection: string }) {
 
 function AdvancedDiagnosticsHeader() {
   return (
-    <header className="advanced-diagnostics-header">
-      <div className="advanced-diagnostics-header-primary">
+    <header className="advanced-diagnostics-header app-page-header">
+      <div className="advanced-diagnostics-header-primary app-page-header__main app-page-header__main--with-icon">
         <span className="advanced-diagnostics-header-icon-tile" aria-hidden="true">
           <ShieldCheck size={22} />
         </span>
-        <div>
-          <div className="advanced-diagnostics-header-title-row">
-            <h1>Advanced Diagnostics</h1>
-            <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted">Admin only</span>
-            <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted">Read-only</span>
+        <div className="app-page-header__copy">
+          <div className="advanced-diagnostics-header-title-row app-page-header__title-row">
+            <h1 className="app-page-header__title">Advanced Diagnostics</h1>
+            <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge">Admin only</span>
+            <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge">Read-only</span>
           </div>
-          <p className="advanced-diagnostics-header-description">
+          <p className="app-page-header__description">
             Admin workflow diagnostics for saved scan contexts and scan-specific readbacks.
           </p>
         </div>

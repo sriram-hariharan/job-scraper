@@ -172,13 +172,15 @@ function DashboardHeader({
   runActive: boolean;
 }) {
   return (
-    <header className="pipeline-dashboard-header">
-      <div>
-        <p className="pipeline-dashboard-eyebrow">Operations</p>
-        <h1>Pipeline</h1>
-        <p>Monitor job collection, filtering, evaluation, resume matching, and planning.</p>
+    <header className="pipeline-dashboard-header app-page-header">
+      <div className="app-page-header__main">
+        <p className="pipeline-dashboard-eyebrow app-page-header__eyebrow">Operations</p>
+        <div className="app-page-header__title-row">
+          <h1 className="app-page-header__title">Pipeline</h1>
+        </div>
+        <p className="app-page-header__description">Monitor job collection, filtering, evaluation, resume matching, and planning.</p>
       </div>
-      <div className="pipeline-dashboard-actions">
+      <div className="pipeline-dashboard-actions app-page-header__actions">
         <button className="pipeline-dashboard-btn pipeline-dashboard-btn--secondary" type="button" onClick={onRefresh} disabled={refreshing}>
           <RefreshCw size={17} aria-hidden="true" />
           {refreshing ? "Refreshing" : "Refresh Status"}

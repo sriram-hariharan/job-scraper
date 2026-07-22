@@ -17,16 +17,20 @@ def decisions_dashboard() -> str:
   <title>Decisions Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="operational-dashboard-page decisions-dashboard-page">
 {render_top_shell("/decisions-ui")}
   <main class="page operational-dashboard-shell">
-    <header class="operational-dashboard-heading">
-      <span>OPERATOR REVIEW</span>
-      <h1>Decisions</h1>
-      <p>Review recorded operator decisions, resume selections, and the resulting manual next steps.</p>
+    <header class="operational-dashboard-heading app-page-header">
+      <div class="app-page-header__main">
+        <span class="app-page-header__eyebrow">OPERATOR REVIEW</span>
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">Decisions</h1>
+        </div>
+        <p class="app-page-header__description">Review recorded operator decisions, resume selections, and the resulting manual next steps.</p>
+      </div>
     </header>
     <div id="decisionsDashboardRoot" aria-live="polite"><div class="operational-dashboard-fallback">Loading operator decisions...</div></div>
   </main>
@@ -94,7 +98,7 @@ def decisions_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/decisions.js?v=phase133ef_r5"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
 </html>
     """.strip()

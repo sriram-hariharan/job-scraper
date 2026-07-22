@@ -1568,28 +1568,11 @@ html[data-theme="dark"] #pipelineDashboardRoot {
   letter-spacing: 0;
 }
 
+/* Layout, title, and description typography are owned by the shared
+   .app-page-header contract (src/app/static/app_redesign.css) added in
+   Item 2 Phase 3; only page-specific spacing stays here. */
 .pipeline-dashboard-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
   padding: 8px 0 4px;
-}
-
-.pipeline-dashboard-header h1 {
-  margin: 2px 0 6px;
-  color: var(--pipeline-ink);
-  font-size: 34px;
-  line-height: 1.1;
-  letter-spacing: 0;
-}
-
-.pipeline-dashboard-header p:not(.pipeline-dashboard-eyebrow) {
-  max-width: 680px;
-  margin: 0;
-  color: var(--pipeline-muted);
-  font-size: 14px;
-  line-height: 1.55;
 }
 
 .pipeline-dashboard-eyebrow,
@@ -2073,7 +2056,6 @@ html[data-theme="dark"] #pipelineDashboardRoot {
 }
 
 @media (max-width: 520px) {
-  .pipeline-dashboard-header h1 { font-size: 30px; }
   .pipeline-dashboard-actions,
   .pipeline-count-groups,
   .pipeline-config-list { grid-template-columns: 1fr; }
@@ -2324,14 +2306,10 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
   flex-direction: column;
   gap: 10px;
 }
-.scheduler-health-header-copy h1 {
-  /* Sizing/weight/line-height/letter-spacing are forced in the classic
-     app_redesign.css, which already owns overriding the global h1 rule there;
-     this stylesheet stays free of forced declarations, so only margin lives
-     here. */
-  margin: 0 0 4px;
-}
-.scheduler-health-header-copy p { margin: 0; max-width: 620px; color: var(--scheduler-muted); font-size: 13px; line-height: 1.5; }
+/* Sizing/weight/line-height/letter-spacing/max-width for the title and
+   description are owned by the shared .app-page-header contract
+   (src/app/static/app_redesign.css, Item 2 Phase 3); this stylesheet stays
+   free of forced declarations for those properties. */
 .scheduler-health-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .scheduler-health-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
 .scheduler-last-refreshed { color: var(--scheduler-muted); font-size: 12px; white-space: nowrap; }
@@ -2594,12 +2572,10 @@ html[data-theme="dark"] #advancedDiagnosticsRoot {
   background: var(--advdx-blue-soft); color: var(--advdx-blue); flex: 0 0 44px;
 }
 .advanced-diagnostics-header-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-/* Sizing/weight/line-height are forced in the classic app_redesign.css,
-   which already owns overriding the global h1 rule there (mirrors the
-   Scheduler Health precedent); this stylesheet stays free of forced
-   declarations, so only margin lives here. */
-.advanced-diagnostics-header-title-row h1 { margin: 0; }
-.advanced-diagnostics-header-description { margin: 6px 0 0; max-width: 760px; color: var(--advdx-muted); font-size: 13px; line-height: 1.5; }
+/* Sizing/weight/line-height/letter-spacing/max-width for the title and
+   description are owned by the shared .app-page-header contract
+   (src/app/static/app_redesign.css, Item 2 Phase 3); this stylesheet stays
+   free of forced declarations for those properties. */
 
 .advanced-diagnostics-badge {
   display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px;

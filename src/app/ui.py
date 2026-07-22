@@ -38,22 +38,22 @@ def executive_dashboard() -> str:
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="executive-dashboard-page">
   {render_top_shell("/")}
   <div class="page">
-        <header class="page-header">
-          <div class="page-header-main">
-            <div class="executive-title-row">
-              <h1>Executive Queue</h1>
+        <header class="page-header app-page-header">
+          <div class="page-header-main app-page-header__main">
+            <div class="executive-title-row app-page-header__title-row">
+              <h1 class="app-page-header__title">Executive Queue</h1>
             </div>
 
-            <p class="subtext">High-signal operator dashboard for direct apply and review decisions.</p>
+            <p class="subtext app-page-header__description">High-signal operator dashboard for direct apply and review decisions.</p>
           </div>
 
-          <div class="header-actions">
+          <div class="header-actions app-page-header__actions">
             <button class="ghost-btn" id="refreshStatusBtn" type="button">Refresh Status</button>
             <button id="runPipelineBtn" type="button">Run Live Pipeline</button>
           </div>
@@ -229,7 +229,7 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
 </html>
@@ -404,8 +404,8 @@ def pipeline_dashboard() -> str:
   <title>Pipeline Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="pipeline-dashboard-page">
   {render_top_shell("/pipeline")}
@@ -424,7 +424,7 @@ def pipeline_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
 </html>
     """.strip()
@@ -441,8 +441,8 @@ def scheduler_dashboard(request: Request) -> str:
   <title>Scheduler Health</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_close_fill_r2" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=scheduler_health_react_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="scheduler-health-page">
   {render_top_shell("/scheduler")}
@@ -459,7 +459,7 @@ def scheduler_dashboard(request: Request) -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=scheduler_health_react_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
 </html>
     """.strip()

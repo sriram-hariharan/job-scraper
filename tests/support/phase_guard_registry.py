@@ -952,6 +952,83 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
+        "item2_phase3_shared_page_header_foundation": {
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.test.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+            "frontend/executive-kpi/src/styles.css",
+            "src/app/ui.py",
+            "src/app/planning_ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/application_hub_ui.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_item2_phase3_shared_page_header_foundation.py",
+            "tests/test_scheduler_admin_health_redesign.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
+        "item2_phase4_secondary_page_headers": {
+            "src/app/profile_ui.py",
+            "src/app/intelligence_ui.py",
+            "src/app/applied_ui.py",
+            "src/app/saved_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/static/app_redesign.css",
+            "src/app/ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/application_hub_ui.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_item2_phase3_shared_page_header_foundation.py",
+            "tests/test_item2_phase4_secondary_page_headers.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
+        "item2_phase4_profile_corrections_legacy_route_retirement": {
+            "README.md",
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.test.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+            "frontend/executive-kpi/src/styles.css",
+            "src/app/api.py",
+            "src/app/application_hub_ui.py",
+            "src/app/applied_ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/intelligence_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/profile_ui.py",
+            "src/app/saved_ui.py",
+            "src/app/static/app_redesign.css",
+            "src/app/static/build/executive-kpi/executive-kpi.css",
+            "src/app/static/build/executive-kpi/executive-kpi.js",
+            "src/app/static/intelligence.js",
+            "src/app/static/profile.js",
+            "src/app/ui.py",
+            "src/app/ui_shell.py",
+            "src/auth/runtime.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_item2_phase3_shared_page_header_foundation.py",
+            "tests/test_item2_phase4_secondary_page_headers.py",
+            "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+            "tests/test_phase133a_executive_kpi_react_island.py",
+            "tests/test_phase133d_pipeline_dashboard_react_island.py",
+            "tests/test_phase133ef_decisions_applications_dashboards.py",
+            "tests/test_phase133g_premium_planning_dashboard.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_scheduler_admin_health_redesign.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -976,6 +1053,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("scheduler_health_visual_correction")
         | legacy_guard_allowlist("scheduler_health_final_visual_polish")
         | legacy_guard_allowlist("phase133i_advanced_diagnostics_react_command_center")
+        | legacy_guard_allowlist("item2_phase3_shared_page_header_foundation")
+        | legacy_guard_allowlist("item2_phase4_secondary_page_headers")
+        | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
     )
 
 
@@ -1017,7 +1097,7 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "cf11fdbb368ee350613dcae9647573201c26de0aaabf76b5436b71178e0b6f20",
+        ): "fc5487b793cf3e36018bb37863b426ec8f1134224f0e3bf20ad0aa2990b7a241",
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
@@ -1025,7 +1105,7 @@ def assert_protected_hashes(
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-        ): "749bfb1c88d953963dfc2061d0b5fc9f54212533bceacb57f2fdc1d6fd357e3a",
+        ): "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",

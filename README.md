@@ -109,7 +109,6 @@ The web app uses a shared navigation shell with these main pages:
 | Executive | `/` | High-level operator dashboard for live pipeline runs and current opportunities. |
 | Planning | `/planning` | Application planning table, shortlist, resume selection, and tailoring entry points. |
 | Decisions | `/decisions-ui` | Review and manage operator decisions for jobs and resume variants. |
-| Intelligence | `/intelligence` | Job and skill intelligence surfaces backed by local artifacts and RAG tools. |
 | Applications | `/applications` | Application/action tracking workspace. |
 | Scheduler | `/scheduler` | Scheduler health, command previews, launchd configuration, and run history. |
 | Profile | `/profile` | Saved resumes, pipeline runs, saved scans, and account/admin tools. |

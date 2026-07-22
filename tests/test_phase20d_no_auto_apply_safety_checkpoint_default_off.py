@@ -1211,6 +1211,72 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         for marker in FORBIDDEN_RUNTIME_MARKERS:
             assert marker not in source
         return
+    item2_phase3_shared_header_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == item2_phase3_shared_header_runtime_files:
+        for relative_source in (
+            "frontend/executive-kpi/src/pipeline/PipelineDashboard.tsx",
+            "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+            "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        ):
+            source = (ROOT / relative_source).read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    item2_phase4_secondary_headers_runtime_files = item2_phase3_shared_header_runtime_files | {
+        ROOT / "src/app/profile_ui.py",
+        ROOT / "src/app/intelligence_ui.py",
+        ROOT / "src/app/applied_ui.py",
+        ROOT / "src/app/saved_ui.py",
+    }
+    if set(changed_runtime_files) == item2_phase4_secondary_headers_runtime_files:
+        for relative_source in (
+            "src/app/profile_ui.py",
+            "src/app/intelligence_ui.py",
+            "src/app/applied_ui.py",
+            "src/app/saved_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/application_hub_ui.py",
+        ):
+            source = (ROOT / relative_source).read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    item2_phase4_profile_corrections_runtime_files = (
+        item2_phase4_secondary_headers_runtime_files
+        | {
+            ROOT / "src/app/api.py",
+            ROOT / "src/app/static/profile.js",
+            ROOT / "src/app/ui_shell.py",
+            ROOT / "src/auth/runtime.py",
+            ROOT / "src/app/static/intelligence.js",
+        }
+    )
+    if set(changed_runtime_files) == item2_phase4_profile_corrections_runtime_files:
+        for relative_source in (
+            "src/app/profile_ui.py",
+            "src/app/planning_ui.py",
+            "src/app/ui.py",
+            "src/app/decisions_ui.py",
+            "src/app/application_hub_ui.py",
+            "src/app/api.py",
+            "src/app/ui_shell.py",
+            "src/auth/runtime.py",
+            "src/app/static/profile.js",
+        ):
+            source = (ROOT / relative_source).read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     assert changed_runtime_files in (
         [],
         [

@@ -418,6 +418,8 @@ def test_no_collector_api_ui_or_static_changes_for_phase105b():
         "src/app/static/scan_workspace.js",
         "src/app/static/scan_workspace_review.css",
         "src/app/static/styles.css",
+        "src/app/static/profile.js",
+        "src/app/static/intelligence.js",
     }
     scheduler_static_surface = {
         "src/app/static/build/executive-kpi/executive-kpi.css",

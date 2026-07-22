@@ -687,6 +687,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }
     assert not any("*" in path for path in phase8_step3d_profile)
 
+    phase8_step4_profile = legacy_guard_allowlist(
+        "phase8_step4_dead_file_cleanup"
+    )
+    assert phase8_step4_profile == {
+        "src/ai/deterministic_skill_extractor.py",
+    }
+    assert not any("*" in path for path in phase8_step4_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -705,6 +713,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item2_phase4_profile
         | item2_phase4_corrections_profile
         | phase8_step3d_profile
+        | phase8_step4_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

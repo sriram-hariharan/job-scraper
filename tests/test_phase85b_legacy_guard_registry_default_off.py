@@ -850,6 +850,27 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }.isdisjoint(phase9_step4_profile)
 
+    phase9_step6_profile = legacy_guard_allowlist(
+        "phase9_step6_inmemory_operator_review_pause_resume"
+    )
+    assert phase9_step6_profile == {
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+        "tests/test_phase9_step6_langgraph_operator_review_pause_resume_default_off.py",
+    }
+    assert not any("*" in path for path in phase9_step6_profile)
+    assert not any(
+        path in {
+            "src", "src/", "src/**", "src/agents", "src/agents/",
+            "src/agents/**", "tests", "tests/", "tests/**",
+        }
+        for path in phase9_step6_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step6_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -878,6 +899,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase9_step2_profile
         | phase9_step3_profile
         | phase9_step4_profile
+        | phase9_step6_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

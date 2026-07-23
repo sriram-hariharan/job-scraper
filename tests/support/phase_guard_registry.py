@@ -1096,6 +1096,11 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
             "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
         },
+        "phase9_step6_inmemory_operator_review_pause_resume": {
+            "src/agents/evidence_chain_langgraph_harness.py",
+            "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+            "tests/test_phase9_step6_langgraph_operator_review_pause_resume_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1141,6 +1146,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase9_step4_attempt_terminal_recovery_storage"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step6_inmemory_operator_review_pause_resume"
         )
     )
 

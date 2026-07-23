@@ -1029,6 +1029,39 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
             "tests/test_scheduler_admin_health_redesign.py",
         },
+        "phase8_step3d_tailoring_llm_gate": {
+            "src/tailoring/rendering.py",
+            "tests/test_tailoring_patch_refinement_explicit_opt_in.py",
+        },
+        "phase8_step4_dead_file_cleanup": {
+            "src/ai/deterministic_skill_extractor.py",
+        },
+        "phase8_step6_canonical_agent_registry": {
+            "src/agents/canonical_registry.py",
+            "src/agents/workflow_registry.py",
+            "tests/test_phase8_step6_canonical_agent_registry.py",
+        },
+        "phase8_step8_legacy_agent_context_retirement": {
+            "src/agents/context.py",
+            "tests/test_agent_context.py",
+            "tests/test_full_agentic_ai_current_state_audit_no_runtime_change.py",
+            "docs/full_agentic_ai_current_state_audit_no_runtime_change.md",
+        },
+        "phase8_step13_langgraph_parity_contract": {
+            "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+        },
+        "phase8_step14_typed_langgraph_state_normalization": {
+            "src/agents/evidence_chain_langgraph_harness.py",
+            "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+        },
+        "phase8_step15_checkpoint_identity_serialization_contract": {
+            "src/agents/evidence_chain_langgraph_harness.py",
+            "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+        },
+        "phase8_step17_readonly_operator_review_interrupt_request": {
+            "src/agents/evidence_chain_langgraph_harness.py",
+            "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1056,6 +1089,16 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item2_phase3_shared_page_header_foundation")
         | legacy_guard_allowlist("item2_phase4_secondary_page_headers")
         | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
+        | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
+        | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
+        | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")
+        | legacy_guard_allowlist("phase8_step8_legacy_agent_context_retirement")
+        | legacy_guard_allowlist("phase8_step13_langgraph_parity_contract")
+        | legacy_guard_allowlist("phase8_step14_typed_langgraph_state_normalization")
+        | legacy_guard_allowlist("phase8_step15_checkpoint_identity_serialization_contract")
+        | legacy_guard_allowlist(
+            "phase8_step17_readonly_operator_review_interrupt_request"
+        )
     )
 
 

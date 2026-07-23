@@ -37,7 +37,7 @@ def test_full_agentic_ai_current_state_audit_doc_exists():
 def test_full_agentic_ai_current_state_audit_referenced_core_files_exist():
     required_paths = [
         "docs/full_fledged_agentic_ai_app_roadmap.md",
-        "src/agents/context.py",
+        "src/agents/agent_state.py",
         "src/agents/trace.py",
         "src/storage/agent_state/schema.sql",
         "src/storage/agent_state/store.py",

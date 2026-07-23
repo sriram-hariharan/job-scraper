@@ -1,6 +1,7 @@
 # phase107b legacy guard marker: changes_only requirements_hash_old 96146be2940c7333dba0f919dc4d9d21bed3db536bf3249684b03705991ede1f d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 src/app/api.py
 import ast
 from copy import deepcopy
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -830,6 +831,10 @@ def test_parity_contract_adds_no_routing_checkpoint_interrupt_or_action_paths():
     forbidden_import_fragments = {
         "langgraph.checkpoint",
         "langgraph.types",
+        "pickle",
+        "sqlite3",
+        "psycopg",
+        "sqlalchemy",
         "src.storage.operator_decisions",
         "src.storage.agentic_approvals",
         "src.storage.application_actions",
@@ -849,6 +854,8 @@ def test_parity_contract_adds_no_routing_checkpoint_interrupt_or_action_paths():
         "insert_application_action_row_to_postgres",
         "write_text",
         "open",
+        "__import__",
+        "getenv",
     }
 
     for path in paths:
@@ -1048,3 +1055,248 @@ def test_typed_state_normalization_adds_no_external_per_job_result_keys():
         "trace_payload",
         "safety_metadata",
     }
+
+
+def _checkpoint_initial_state(
+    *,
+    job_id="job-checkpoint",
+    job_index=0,
+    job=None,
+    resume_rows=None,
+):
+    resolved_job = deepcopy(job) if job is not None else _job(job_id)
+    return harness._build_initial_graph_state(
+        job=resolved_job,
+        job_index=job_index,
+        job_identity={
+            "job_id": job_id,
+            "title": resolved_job["title"],
+            "company": resolved_job["company"],
+        },
+        resume_rows=deepcopy(
+            resume_rows
+            if resume_rows is not None
+            else _resume_context()["resume_variants"]
+        ),
+        selected_resume_id="resume-main",
+        pipeline_run_id="run-checkpoint",
+        owner_user_id="owner-checkpoint",
+        context_id="ctx-checkpoint",
+        include_trace_payload=True,
+    )
+
+
+def test_checkpoint_identity_is_stable_and_independent_of_mapping_or_object_identity():
+    job_a = _job(
+        "job-checkpoint-stable",
+        nested_metadata={"alpha": 1, "beta": {"first": True, "second": False}},
+    )
+    job_b = {
+        "nested_metadata": {
+            "beta": {"second": False, "first": True},
+            "alpha": 1,
+        },
+        **{
+            key: deepcopy(value)
+            for key, value in job_a.items()
+            if key != "nested_metadata"
+        },
+    }
+    state_a = _checkpoint_initial_state(
+        job_id="job-checkpoint-stable",
+        job=job_a,
+    )
+    state_b = _checkpoint_initial_state(
+        job_id="job-checkpoint-stable",
+        job=job_b,
+    )
+
+    identity_a = harness._build_checkpoint_identity(state_a)
+    identity_b = harness._build_checkpoint_identity(state_b)
+    assert identity_a == identity_b
+    assert identity_a is not identity_b
+    assert identity_a.graph_invocation_id == identity_b.graph_invocation_id
+    assert identity_a.checkpoint_id == identity_b.checkpoint_id
+    with pytest.raises(FrozenInstanceError):
+        identity_a.job_id = "mutated"
+
+
+def test_checkpoint_identity_changes_for_different_job_or_selected_index():
+    base = harness._build_checkpoint_identity(
+        _checkpoint_initial_state(job_id="job-checkpoint-a", job_index=0)
+    )
+    different_job = harness._build_checkpoint_identity(
+        _checkpoint_initial_state(job_id="job-checkpoint-b", job_index=0)
+    )
+    different_index = harness._build_checkpoint_identity(
+        _checkpoint_initial_state(job_id="job-checkpoint-a", job_index=1)
+    )
+
+    assert base.graph_invocation_id != different_job.graph_invocation_id
+    assert base.checkpoint_id != different_job.checkpoint_id
+    assert base.graph_invocation_id != different_index.graph_invocation_id
+    assert base.checkpoint_id != different_index.checkpoint_id
+
+
+def test_complete_checkpoint_round_trip_is_deterministic_and_lossless():
+    initial_state = _checkpoint_initial_state(job_id="job-checkpoint-complete")
+    final_state = harness._execute_graph_state(initial_state)
+    final_before = deepcopy(final_state)
+
+    envelope = harness._build_checkpoint_envelope(final_state)
+    first_serialized = harness._serialize_checkpoint_envelope(envelope)
+    second_serialized = harness._serialize_checkpoint_envelope(
+        harness._build_checkpoint_envelope(deepcopy(final_state))
+    )
+    restored = harness._deserialize_checkpoint_envelope(first_serialized)
+
+    assert first_serialized == second_serialized
+    assert restored == envelope
+    assert restored["state"] == final_state
+    assert restored["completed_node_keys"] == EXPECTED_AGENT_KEYS
+    assert restored["next_node_key"] == ""
+    assert restored["checkpoint_status"] == "diagnostic_snapshot"
+    assert restored["diagnostic_only"] is True
+    assert restored["read_only"] is True
+    assert restored["durable"] is False
+    assert restored["resumable"] is False
+    assert restored["persistence_performed"] is False
+    assert final_state == final_before
+
+
+def test_initial_and_partial_checkpoint_states_round_trip_with_derived_next_node():
+    initial_state = _checkpoint_initial_state(job_id="job-checkpoint-partial")
+    partial_state = harness._jd_intelligence_node(initial_state)
+
+    initial_restored = harness._deserialize_checkpoint_envelope(
+        harness._serialize_checkpoint_envelope(
+            harness._build_checkpoint_envelope(initial_state)
+        )
+    )
+    partial_restored = harness._deserialize_checkpoint_envelope(
+        harness._serialize_checkpoint_envelope(
+            harness._build_checkpoint_envelope(partial_state)
+        )
+    )
+
+    assert initial_restored["state"] == initial_state
+    assert initial_restored["completed_node_keys"] == []
+    assert initial_restored["next_node_key"] == "jd_intelligence"
+    assert partial_restored["state"] == partial_state
+    assert partial_restored["completed_node_keys"] == ["jd_intelligence"]
+    assert partial_restored["next_node_key"] == "resume_match"
+
+
+def test_checkpoint_round_trip_returns_fresh_mutable_containers():
+    state = _checkpoint_initial_state(job_id="job-checkpoint-fresh")
+    partial_state = harness._jd_intelligence_node(state)
+    envelope = harness._build_checkpoint_envelope(partial_state)
+    envelope_before = deepcopy(envelope)
+    partial_before = deepcopy(partial_state)
+    restored = harness._deserialize_checkpoint_envelope(
+        harness._serialize_checkpoint_envelope(envelope)
+    )
+
+    restored["state"]["job"]["title"] = "Mutated restored title"
+    restored["state"]["artifacts"]["jd_intelligence"]["required_skills"].append(
+        "mutated"
+    )
+    restored["completed_node_keys"].append("mutated")
+    restored["checkpoint_identity"]["job_id"] = "mutated"
+    assert envelope == envelope_before
+    assert partial_state == partial_before
+
+
+def test_checkpoint_deserialization_fails_closed_for_malformed_or_unsupported_payloads():
+    envelope = harness._build_checkpoint_envelope(
+        _checkpoint_initial_state(job_id="job-checkpoint-invalid")
+    )
+    unsupported_checkpoint = deepcopy(envelope)
+    unsupported_checkpoint["checkpoint_schema_version"] = "unsupported"
+    unsupported_state = deepcopy(envelope)
+    unsupported_state["graph_state_schema_version"] = "unsupported"
+
+    for malformed in ("", "{", "[]", '{"unexpected":true}'):
+        with pytest.raises(ValueError):
+            harness._deserialize_checkpoint_envelope(malformed)
+    with pytest.raises(ValueError, match="checkpoint_schema_version_unsupported"):
+        harness._deserialize_checkpoint_envelope(
+            harness._serialize_checkpoint_envelope(unsupported_checkpoint)
+        )
+    with pytest.raises(
+        ValueError,
+        match="checkpoint_graph_state_schema_version_unsupported",
+    ):
+        harness._deserialize_checkpoint_envelope(
+            harness._serialize_checkpoint_envelope(unsupported_state)
+        )
+
+
+def test_checkpoint_deserialization_rejects_identity_mismatch_and_missing_fields():
+    state = _checkpoint_initial_state(job_id="job-checkpoint-mismatch")
+    envelope = harness._build_checkpoint_envelope(state)
+    mismatch = deepcopy(envelope)
+    mismatch["checkpoint_identity"]["job_id"] = "different-job"
+    missing_identity = deepcopy(envelope)
+    del missing_identity["checkpoint_identity"]["owner_user_id"]
+    missing_state_identity = deepcopy(state)
+    missing_state_identity["owner_user_id"] = ""
+
+    with pytest.raises(ValueError, match="checkpoint_identity_mismatch"):
+        harness._deserialize_checkpoint_envelope(
+            harness._serialize_checkpoint_envelope(mismatch)
+        )
+    with pytest.raises(ValueError, match="checkpoint_identity_fields_invalid"):
+        harness._deserialize_checkpoint_envelope(
+            harness._serialize_checkpoint_envelope(missing_identity)
+        )
+    with pytest.raises(
+        ValueError,
+        match="checkpoint_identity_missing_required_field:owner_user_id",
+    ):
+        harness._build_checkpoint_envelope(missing_state_identity)
+
+
+def test_checkpoint_serialization_does_not_mutate_state_or_caller_inputs():
+    caller_job = _job(
+        "job-checkpoint-immutable",
+        nested_metadata={"skills": ["Python"], "rank": 1},
+    )
+    caller_resume_rows = deepcopy(_resume_context()["resume_variants"])
+    caller_job_before = deepcopy(caller_job)
+    caller_resume_before = deepcopy(caller_resume_rows)
+    state = _checkpoint_initial_state(
+        job_id="job-checkpoint-immutable",
+        job=caller_job,
+        resume_rows=caller_resume_rows,
+    )
+    state_before = deepcopy(state)
+
+    envelope = harness._build_checkpoint_envelope(state)
+    serialized = harness._serialize_checkpoint_envelope(envelope)
+    harness._deserialize_checkpoint_envelope(serialized)
+
+    assert caller_job == caller_job_before
+    assert caller_resume_rows == caller_resume_before
+    assert state == state_before
+    assert "checkpoint_identity" not in state
+    assert "checkpoint_id" not in state
+
+
+def test_normal_execution_exposes_no_checkpoint_contract_fields():
+    payload = harness.execute_langgraph_evidence_chain(
+        [_job("job-no-checkpoint-output")],
+        resume_context=_resume_context(),
+        pipeline_run_id="run-no-checkpoint-output",
+        owner_user_id="owner-no-checkpoint-output",
+        context_id="ctx-no-checkpoint-output",
+        enabled=True,
+        strict=True,
+    )
+
+    assert "checkpoint" not in payload
+    assert "checkpoint_identity" not in payload
+    assert "checkpoint_id" not in payload
+    assert "checkpoint" not in payload["per_job_results"][0]
+    assert "checkpoint_identity" not in payload["per_job_results"][0]
+    assert "checkpoint_id" not in payload["per_job_results"][0]

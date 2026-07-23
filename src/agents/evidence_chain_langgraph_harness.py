@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
+import hashlib
+import json
+import math
 from typing import Any, Dict, List, Mapping, TypedDict
 
 from src.agents.critic_agent import build_critic_resume_match_jd_evidence_artifact
@@ -30,6 +34,10 @@ LANGGRAPH_EVIDENCE_CHAIN_GATE_NAME = (
     "APPLYLENS_AGENTIC_LANGGRAPH_EVIDENCE_CHAIN_ENABLED"
 )
 LANGGRAPH_EVIDENCE_CHAIN_VERSION = "langgraph-evidence-chain-harness-v1"
+CHECKPOINT_SCHEMA_VERSION = "evidence-chain-checkpoint-envelope-v1"
+GRAPH_STATE_SCHEMA_VERSION = "evidence-chain-graph-state-v1"
+CHECKPOINT_GRAPH_ENGINE = "langgraph-evidence-chain"
+CHECKPOINT_STATUS = "diagnostic_snapshot"
 ARTIFACT_KEYS_BY_AGENT = {
     "jd_intelligence": "jd_intelligence",
     "resume_match": "resume_match_jd_evidence",
@@ -73,6 +81,65 @@ class EvidenceChainInitialState(TypedDict):
 class EvidenceChainGraphState(EvidenceChainInitialState, total=False):
     evidence_chain_bundle: Dict[str, Any]
     trace_payload: Dict[str, Any]
+
+
+class EvidenceChainCheckpointIdentityPayload(TypedDict):
+    graph_engine: str
+    checkpoint_schema_version: str
+    graph_state_schema_version: str
+    owner_user_id: str
+    pipeline_run_id: str
+    context_id: str
+    job_id: str
+    job_index: int
+    selected_resume_id: str
+    graph_invocation_id: str
+    checkpoint_id: str
+
+
+class EvidenceChainCheckpointEnvelope(TypedDict):
+    checkpoint_schema_version: str
+    graph_state_schema_version: str
+    checkpoint_identity: EvidenceChainCheckpointIdentityPayload
+    checkpoint_status: str
+    diagnostic_only: bool
+    read_only: bool
+    durable: bool
+    resumable: bool
+    persistence_performed: bool
+    completed_node_keys: List[str]
+    next_node_key: str
+    state: Dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceChainCheckpointIdentity:
+    graph_engine: str
+    checkpoint_schema_version: str
+    graph_state_schema_version: str
+    owner_user_id: str
+    pipeline_run_id: str
+    context_id: str
+    job_id: str
+    job_index: int
+    selected_resume_id: str
+    graph_invocation_id: str
+    checkpoint_id: str
+
+    def to_payload(self) -> EvidenceChainCheckpointIdentityPayload:
+        return {
+            "graph_engine": self.graph_engine,
+            "checkpoint_schema_version": self.checkpoint_schema_version,
+            "graph_state_schema_version": self.graph_state_schema_version,
+            "owner_user_id": self.owner_user_id,
+            "pipeline_run_id": self.pipeline_run_id,
+            "context_id": self.context_id,
+            "job_id": self.job_id,
+            "job_index": self.job_index,
+            "selected_resume_id": self.selected_resume_id,
+            "graph_invocation_id": self.graph_invocation_id,
+            "checkpoint_id": self.checkpoint_id,
+        }
 
 
 def _clean_text(value: Any) -> str:
@@ -234,6 +301,265 @@ def _copy_state_for_transition(
     next_state["node_statuses"] = deepcopy(list(state.get("node_statuses") or []))
     next_state["warnings"] = list(state.get("warnings") or [])
     return next_state
+
+
+def _checkpoint_json_value(value: Any, *, field_path: str) -> Any:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(
+                f"checkpoint_value_not_json_compatible:{field_path}"
+            )
+        return value
+    if isinstance(value, Mapping):
+        normalized: Dict[str, Any] = {}
+        keys = list(value)
+        if not all(isinstance(key, str) for key in keys):
+            raise ValueError(
+                f"checkpoint_mapping_key_not_text:{field_path}"
+            )
+        for key in sorted(keys):
+            child_path = f"{field_path}.{key}" if field_path else key
+            normalized[key] = _checkpoint_json_value(
+                value[key],
+                field_path=child_path,
+            )
+        return normalized
+    if isinstance(value, list):
+        return [
+            _checkpoint_json_value(
+                item,
+                field_path=f"{field_path}[{index}]",
+            )
+            for index, item in enumerate(value)
+        ]
+    raise ValueError(f"checkpoint_value_not_json_compatible:{field_path}")
+
+
+def _canonical_checkpoint_json(value: Any) -> str:
+    normalized = _checkpoint_json_value(value, field_path="checkpoint")
+    return json.dumps(
+        normalized,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def _checkpoint_digest(value: Any) -> str:
+    encoded = _canonical_checkpoint_json(value).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _checkpoint_completed_node_keys(
+    state: Mapping[str, Any],
+) -> List[str]:
+    completed = [
+        _clean_text(node_key)
+        for node_key in list(state.get("ordered_node_keys") or [])
+    ]
+    expected_prefix = list(ORDERED_AGENT_KEYS)[: len(completed)]
+    if completed != expected_prefix:
+        raise ValueError("checkpoint_completed_node_keys_invalid")
+    return completed
+
+
+def _checkpoint_next_node_key(
+    state: Mapping[str, Any],
+    completed_node_keys: List[str],
+) -> str:
+    if isinstance(state.get("evidence_chain_bundle"), Mapping):
+        return ""
+    if len(completed_node_keys) < len(ORDERED_AGENT_KEYS):
+        return ORDERED_AGENT_KEYS[len(completed_node_keys)]
+    return "finalize"
+
+
+def _build_checkpoint_identity(
+    state: Mapping[str, Any],
+) -> EvidenceChainCheckpointIdentity:
+    identity = state.get("job_identity")
+    if not isinstance(identity, Mapping):
+        raise ValueError("checkpoint_identity_missing_required_field:job_identity")
+    required_text = {
+        "owner_user_id": _clean_text(state.get("owner_user_id")),
+        "pipeline_run_id": _clean_text(state.get("pipeline_run_id")),
+        "context_id": _clean_text(state.get("context_id")),
+        "job_id": _clean_text(identity.get("job_id")),
+    }
+    for field_name, field_value in required_text.items():
+        if not field_value:
+            raise ValueError(
+                f"checkpoint_identity_missing_required_field:{field_name}"
+            )
+    job_index = state.get("job_index")
+    if isinstance(job_index, bool) or not isinstance(job_index, int) or job_index < 0:
+        raise ValueError("checkpoint_identity_invalid_job_index")
+
+    completed_node_keys = _checkpoint_completed_node_keys(state)
+    invocation_seed = {
+        "graph_engine": CHECKPOINT_GRAPH_ENGINE,
+        "graph_state_schema_version": GRAPH_STATE_SCHEMA_VERSION,
+        **required_text,
+        "job_index": job_index,
+        "selected_resume_id": _clean_text(state.get("selected_resume_id")),
+        "include_trace_payload": bool(state.get("include_trace_payload")),
+        "job": state.get("job"),
+        "job_identity": identity,
+        "resume_rows": state.get("resume_rows"),
+    }
+    graph_invocation_id = (
+        "langgraph-evidence-chain-invocation:"
+        + _checkpoint_digest(invocation_seed)
+    )
+    state_snapshot = _checkpoint_json_value(state, field_path="state")
+    checkpoint_id = (
+        "langgraph-evidence-chain-checkpoint:"
+        + _checkpoint_digest(
+            {
+                "graph_invocation_id": graph_invocation_id,
+                "completed_node_keys": completed_node_keys,
+                "state": state_snapshot,
+            }
+        )
+    )
+    return EvidenceChainCheckpointIdentity(
+        graph_engine=CHECKPOINT_GRAPH_ENGINE,
+        checkpoint_schema_version=CHECKPOINT_SCHEMA_VERSION,
+        graph_state_schema_version=GRAPH_STATE_SCHEMA_VERSION,
+        owner_user_id=required_text["owner_user_id"],
+        pipeline_run_id=required_text["pipeline_run_id"],
+        context_id=required_text["context_id"],
+        job_id=required_text["job_id"],
+        job_index=job_index,
+        selected_resume_id=_clean_text(state.get("selected_resume_id")),
+        graph_invocation_id=graph_invocation_id,
+        checkpoint_id=checkpoint_id,
+    )
+
+
+def _build_checkpoint_envelope(
+    state: Mapping[str, Any],
+) -> EvidenceChainCheckpointEnvelope:
+    state_snapshot = _checkpoint_json_value(state, field_path="state")
+    completed_node_keys = _checkpoint_completed_node_keys(state_snapshot)
+    identity = _build_checkpoint_identity(state_snapshot)
+    return {
+        "checkpoint_schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "graph_state_schema_version": GRAPH_STATE_SCHEMA_VERSION,
+        "checkpoint_identity": identity.to_payload(),
+        "checkpoint_status": CHECKPOINT_STATUS,
+        "diagnostic_only": True,
+        "read_only": True,
+        "durable": False,
+        "resumable": False,
+        "persistence_performed": False,
+        "completed_node_keys": completed_node_keys,
+        "next_node_key": _checkpoint_next_node_key(
+            state_snapshot,
+            completed_node_keys,
+        ),
+        "state": state_snapshot,
+    }
+
+
+def _serialize_checkpoint_envelope(
+    envelope: Mapping[str, Any],
+) -> str:
+    return _canonical_checkpoint_json(envelope)
+
+
+def _deserialize_checkpoint_envelope(
+    serialized_envelope: str,
+) -> EvidenceChainCheckpointEnvelope:
+    if not isinstance(serialized_envelope, str) or not serialized_envelope.strip():
+        raise ValueError("checkpoint_payload_malformed")
+    try:
+        decoded = json.loads(serialized_envelope)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("checkpoint_payload_malformed") from exc
+    if not isinstance(decoded, Mapping):
+        raise ValueError("checkpoint_payload_malformed")
+
+    expected_fields = {
+        "checkpoint_schema_version",
+        "graph_state_schema_version",
+        "checkpoint_identity",
+        "checkpoint_status",
+        "diagnostic_only",
+        "read_only",
+        "durable",
+        "resumable",
+        "persistence_performed",
+        "completed_node_keys",
+        "next_node_key",
+        "state",
+    }
+    if set(decoded) != expected_fields:
+        raise ValueError("checkpoint_envelope_fields_invalid")
+    if decoded.get("checkpoint_schema_version") != CHECKPOINT_SCHEMA_VERSION:
+        raise ValueError("checkpoint_schema_version_unsupported")
+    if decoded.get("graph_state_schema_version") != GRAPH_STATE_SCHEMA_VERSION:
+        raise ValueError("checkpoint_graph_state_schema_version_unsupported")
+    if (
+        decoded.get("checkpoint_status") != CHECKPOINT_STATUS
+        or decoded.get("diagnostic_only") is not True
+        or decoded.get("read_only") is not True
+        or decoded.get("durable") is not False
+        or decoded.get("resumable") is not False
+        or decoded.get("persistence_performed") is not False
+    ):
+        raise ValueError("checkpoint_safety_metadata_invalid")
+
+    state = decoded.get("state")
+    identity_payload = decoded.get("checkpoint_identity")
+    completed_node_keys = decoded.get("completed_node_keys")
+    if not isinstance(state, Mapping):
+        raise ValueError("checkpoint_state_malformed")
+    if not isinstance(identity_payload, Mapping):
+        raise ValueError("checkpoint_identity_malformed")
+    expected_identity_fields = set(
+        EvidenceChainCheckpointIdentityPayload.__required_keys__
+    )
+    if set(identity_payload) != expected_identity_fields:
+        raise ValueError("checkpoint_identity_fields_invalid")
+    if not isinstance(completed_node_keys, list):
+        raise ValueError("checkpoint_completed_node_keys_invalid")
+
+    normalized_state = _checkpoint_json_value(state, field_path="state")
+    normalized_completed = _checkpoint_completed_node_keys(normalized_state)
+    if completed_node_keys != normalized_completed:
+        raise ValueError("checkpoint_completed_node_keys_mismatch")
+    expected_next_node = _checkpoint_next_node_key(
+        normalized_state,
+        normalized_completed,
+    )
+    if decoded.get("next_node_key") != expected_next_node:
+        raise ValueError("checkpoint_next_node_mismatch")
+    expected_identity = _build_checkpoint_identity(normalized_state).to_payload()
+    normalized_identity = _checkpoint_json_value(
+        identity_payload,
+        field_path="checkpoint_identity",
+    )
+    if normalized_identity != expected_identity:
+        raise ValueError("checkpoint_identity_mismatch")
+
+    return {
+        "checkpoint_schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "graph_state_schema_version": GRAPH_STATE_SCHEMA_VERSION,
+        "checkpoint_identity": expected_identity,
+        "checkpoint_status": CHECKPOINT_STATUS,
+        "diagnostic_only": True,
+        "read_only": True,
+        "durable": False,
+        "resumable": False,
+        "persistence_performed": False,
+        "completed_node_keys": list(normalized_completed),
+        "next_node_key": expected_next_node,
+        "state": deepcopy(normalized_state),
+    }
 
 
 def _state_with_artifact(

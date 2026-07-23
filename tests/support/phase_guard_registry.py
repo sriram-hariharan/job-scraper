@@ -1109,6 +1109,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/storage/admin_tools/durable_orchestration/apply_schema.py",
             "tests/test_phase9_step9_durable_orchestration_schema_executor_contract.py",
         },
+        "phase9_step10_durable_orchestration_postgres_integration": {
+            "tests/test_phase9_step10_durable_orchestration_postgres_integration.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1163,6 +1166,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase9_step9_durable_orchestration_schema_executor"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step10_durable_orchestration_postgres_integration"
         )
     )
 

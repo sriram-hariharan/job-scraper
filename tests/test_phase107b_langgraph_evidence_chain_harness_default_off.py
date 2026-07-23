@@ -1063,6 +1063,10 @@ def _checkpoint_initial_state(
     job_index=0,
     job=None,
     resume_rows=None,
+    selected_resume_id="resume-main",
+    pipeline_run_id="run-checkpoint",
+    owner_user_id="owner-checkpoint",
+    context_id="ctx-checkpoint",
 ):
     resolved_job = deepcopy(job) if job is not None else _job(job_id)
     return harness._build_initial_graph_state(
@@ -1078,12 +1082,44 @@ def _checkpoint_initial_state(
             if resume_rows is not None
             else _resume_context()["resume_variants"]
         ),
-        selected_resume_id="resume-main",
-        pipeline_run_id="run-checkpoint",
-        owner_user_id="owner-checkpoint",
-        context_id="ctx-checkpoint",
+        selected_resume_id=selected_resume_id,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
         include_trace_payload=True,
     )
+
+
+def _operator_review_pause_state(
+    *,
+    job_id="job-interrupt-request",
+    job_index=0,
+    selected_resume_id="resume-main",
+    pipeline_run_id="run-interrupt-request",
+    owner_user_id="owner-interrupt-request",
+    context_id="ctx-interrupt-request",
+):
+    resume_rows = deepcopy(_resume_context()["resume_variants"])
+    resume_rows[0]["resume_id"] = selected_resume_id
+    state = _checkpoint_initial_state(
+        job_id=job_id,
+        job_index=job_index,
+        resume_rows=resume_rows,
+        selected_resume_id=selected_resume_id,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+    )
+    for node in (
+        harness._jd_intelligence_node,
+        harness._resume_match_node,
+        harness._critic_node,
+        harness._job_prioritization_node,
+        harness._tailoring_decision_node,
+        harness._operator_review_node,
+    ):
+        state = node(state)
+    return state
 
 
 def test_checkpoint_identity_is_stable_and_independent_of_mapping_or_object_identity():
@@ -1300,3 +1336,436 @@ def test_normal_execution_exposes_no_checkpoint_contract_fields():
     assert "checkpoint" not in payload["per_job_results"][0]
     assert "checkpoint_identity" not in payload["per_job_results"][0]
     assert "checkpoint_id" not in payload["per_job_results"][0]
+
+
+def test_interrupt_request_is_deterministic_and_artifact_order_independent():
+    state = _operator_review_pause_state()
+    reordered = deepcopy(state)
+    artifact = reordered["artifacts"]["operator_review_tailoring_evidence"]
+    reordered_artifact = {
+        key: deepcopy(artifact[key])
+        for key in reversed(list(artifact))
+    }
+    validation = reordered_artifact["validation_summary"]
+    reordered_artifact["validation_summary"] = {
+        key: deepcopy(validation[key])
+        for key in reversed(list(validation))
+    }
+    reordered["artifacts"][
+        "operator_review_tailoring_evidence"
+    ] = reordered_artifact
+    state_before = deepcopy(state)
+    reordered_before = deepcopy(reordered)
+
+    first = harness._build_operator_review_interrupt_request(state)
+    second = harness._build_operator_review_interrupt_request(reordered)
+
+    assert first == second
+    assert first["interrupt_request_id"] == second["interrupt_request_id"]
+    assert first["operator_review_artifact_digest"] == (
+        second["operator_review_artifact_digest"]
+    )
+    assert state == state_before
+    assert reordered == reordered_before
+
+
+def test_operator_review_artifact_digest_rejects_noncanonical_values_and_tracks_content():
+    artifact = {
+        "artifact_type": "operator_review_tailoring_evidence",
+        "nested": {"alpha": 1, "beta": ["value"]},
+    }
+    reordered = {
+        "nested": {"beta": ["value"], "alpha": 1},
+        "artifact_type": "operator_review_tailoring_evidence",
+    }
+    changed = deepcopy(artifact)
+    changed["nested"]["beta"] = ["different"]
+
+    assert harness._operator_review_artifact_digest(artifact) == (
+        harness._operator_review_artifact_digest(reordered)
+    )
+    assert harness._operator_review_artifact_digest(artifact) != (
+        harness._operator_review_artifact_digest(changed)
+    )
+    for malformed in (
+        {1: "non-string-key"},
+        {"unsupported": ("tuple",)},
+        {"non_finite": float("inf")},
+    ):
+        with pytest.raises(ValueError):
+            harness._operator_review_artifact_digest(malformed)
+
+
+def test_interrupt_request_has_exact_identity_evidence_decisions_and_safety():
+    state = _operator_review_pause_state()
+    request = harness._build_operator_review_interrupt_request(state)
+    artifact = state["artifacts"]["operator_review_tailoring_evidence"]
+    checkpoint_identity = harness._build_checkpoint_identity(state)
+
+    assert set(request) == set(
+        harness.OperatorReviewInterruptRequest.__required_keys__
+    )
+    assert request["interrupt_request_schema_version"] == (
+        "operator-review-interrupt-request-v1"
+    )
+    assert request["graph_engine"] == checkpoint_identity.graph_engine
+    assert request["graph_invocation_id"] == (
+        checkpoint_identity.graph_invocation_id
+    )
+    assert request["checkpoint_id"] == checkpoint_identity.checkpoint_id
+    assert request["checkpoint_schema_version"] == (
+        harness.CHECKPOINT_SCHEMA_VERSION
+    )
+    assert request["graph_state_schema_version"] == (
+        harness.GRAPH_STATE_SCHEMA_VERSION
+    )
+    assert request["owner_user_id"] == "owner-interrupt-request"
+    assert request["pipeline_run_id"] == "run-interrupt-request"
+    assert request["context_id"] == "ctx-interrupt-request"
+    assert request["job_id"] == "job-interrupt-request"
+    assert request["job_index"] == 0
+    assert request["selected_resume_id"] == "resume-main"
+    assert request["node_key"] == "operator_review"
+    assert request["completed_node_keys"] == EXPECTED_AGENT_KEYS
+    assert request["safe_next_node_key"] == "finalize"
+    assert request["operator_review_artifact_type"] == artifact["artifact_type"]
+    assert request["operator_review_artifact_version"] == (
+        artifact["artifact_version"]
+    )
+    assert request["operator_review_lane"] == artifact["operator_review_lane"]
+    assert request["operator_review_readiness"] == (
+        artifact["operator_review_readiness"]
+    )
+    assert request["human_review_required"] is artifact["human_review_required"]
+    assert request["recommended_next_step"] == (
+        artifact["recommended_next_step"]
+    )
+    assert request["reason_codes"] == artifact["reason_codes"]
+    assert request["validation_status"] == (
+        artifact["validation_summary"]["validation_status"]
+    )
+    assert request["allowed_decision_values"] == [
+        "continue_read_only",
+        "needs_revision",
+        "cancel",
+    ]
+    assert request["read_only"] is True
+    assert request["diagnostic_only"] is True
+    assert request["persistent"] is False
+    assert request["resumable"] is False
+    assert request["application_authorization"] is False
+    assert request["resume_authorization"] is False
+
+
+def test_interrupt_request_identity_changes_across_bound_context_and_evidence():
+    base_state = _operator_review_pause_state()
+    base = harness._build_operator_review_interrupt_request(base_state)
+    variants = [
+        _operator_review_pause_state(job_id="job-interrupt-request-other"),
+        _operator_review_pause_state(job_index=2),
+        _operator_review_pause_state(selected_resume_id="resume-other"),
+        _operator_review_pause_state(owner_user_id="owner-other"),
+        _operator_review_pause_state(pipeline_run_id="run-other"),
+        _operator_review_pause_state(context_id="ctx-other"),
+    ]
+    checkpoint_variant = deepcopy(base_state)
+    checkpoint_variant["warnings"].append("diagnostic-state-changed")
+    variants.append(checkpoint_variant)
+    artifact_variant = deepcopy(base_state)
+    artifact_variant["artifacts"]["operator_review_tailoring_evidence"][
+        "recommended_next_step"
+    ] = "collect_more_evidence"
+    variants.append(artifact_variant)
+
+    variant_requests = [
+        harness._build_operator_review_interrupt_request(state)
+        for state in variants
+    ]
+    assert all(
+        request["interrupt_request_id"] != base["interrupt_request_id"]
+        for request in variant_requests
+    )
+    assert len(
+        {request["interrupt_request_id"] for request in variant_requests}
+    ) == len(variant_requests)
+    for state in variants:
+        with pytest.raises(ValueError, match="interrupt_request_mismatch"):
+            harness._validate_operator_review_interrupt_request(base, state)
+
+
+def test_interrupt_request_missing_or_malformed_operator_review_fails_closed():
+    state = _operator_review_pause_state()
+    missing = deepcopy(state)
+    del missing["artifacts"]["operator_review_tailoring_evidence"]
+    malformed = deepcopy(state)
+    malformed["artifacts"]["operator_review_tailoring_evidence"] = []
+    wrong_type = deepcopy(state)
+    wrong_type["artifacts"]["operator_review_tailoring_evidence"][
+        "artifact_type"
+    ] = "wrong"
+    missing_lane = deepcopy(state)
+    del missing_lane["artifacts"]["operator_review_tailoring_evidence"][
+        "operator_review_lane"
+    ]
+    unsupported_value = deepcopy(state)
+    unsupported_value["artifacts"]["operator_review_tailoring_evidence"][
+        "confidence"
+    ] = float("nan")
+    wrong_job = deepcopy(state)
+    wrong_job["artifacts"]["operator_review_tailoring_evidence"][
+        "job_id"
+    ] = "wrong-job"
+    wrong_resume = deepcopy(state)
+    wrong_resume["artifacts"]["operator_review_tailoring_evidence"][
+        "selected_resume_id"
+    ] = "wrong-resume"
+
+    with pytest.raises(ValueError, match="operator_review_artifact_missing"):
+        harness._build_operator_review_interrupt_request(missing)
+    for invalid in (malformed, wrong_type, missing_lane):
+        with pytest.raises(ValueError, match="operator_review_artifact_malformed"):
+            harness._build_operator_review_interrupt_request(invalid)
+    with pytest.raises(ValueError, match="artifact_job_identity_mismatch"):
+        harness._build_operator_review_interrupt_request(wrong_job)
+    with pytest.raises(ValueError, match="artifact_resume_identity_mismatch"):
+        harness._build_operator_review_interrupt_request(wrong_resume)
+    with pytest.raises(
+        ValueError,
+        match="checkpoint_value_not_json_compatible",
+    ):
+        harness._build_operator_review_interrupt_request(unsupported_value)
+
+
+def test_interrupt_request_requires_complete_order_and_exact_pause_boundary():
+    state = _operator_review_pause_state()
+    incomplete = deepcopy(state)
+    incomplete["ordered_node_keys"].pop()
+    incorrect = deepcopy(state)
+    incorrect["ordered_node_keys"][-2:] = [
+        "operator_review",
+        "tailoring_decision",
+    ]
+    finalized = harness._finalize_node(state)
+
+    for invalid in (incomplete, incorrect):
+        with pytest.raises(ValueError, match="completed_node_keys"):
+            harness._build_operator_review_interrupt_request(invalid)
+    with pytest.raises(ValueError, match="node_key_invalid"):
+        harness._build_operator_review_interrupt_request(
+            state,
+            requested_node_key="tailoring_decision",
+        )
+    with pytest.raises(ValueError, match="safe_next_node_key_invalid"):
+        harness._build_operator_review_interrupt_request(
+            state,
+            safe_next_node_key="application_action",
+        )
+    with pytest.raises(ValueError, match="state_already_finalized"):
+        harness._build_operator_review_interrupt_request(finalized)
+
+
+def test_interrupt_request_rejects_unsupported_or_mismatched_checkpoint_identity():
+    state = _operator_review_pause_state()
+    identity = harness._build_checkpoint_identity(state).to_payload()
+    unsupported_checkpoint = deepcopy(identity)
+    unsupported_checkpoint["checkpoint_schema_version"] = "unsupported"
+    unsupported_state = deepcopy(identity)
+    unsupported_state["graph_state_schema_version"] = "unsupported"
+    stale_identity = deepcopy(identity)
+    stale_identity["checkpoint_id"] = "stale-checkpoint"
+
+    with pytest.raises(
+        ValueError,
+        match="checkpoint_schema_version_unsupported",
+    ):
+        harness._build_operator_review_interrupt_request(
+            state,
+            checkpoint_identity=unsupported_checkpoint,
+        )
+    with pytest.raises(
+        ValueError,
+        match="graph_state_schema_version_unsupported",
+    ):
+        harness._build_operator_review_interrupt_request(
+            state,
+            checkpoint_identity=unsupported_state,
+        )
+    with pytest.raises(ValueError, match="checkpoint_identity_mismatch"):
+        harness._build_operator_review_interrupt_request(
+            state,
+            checkpoint_identity=stale_identity,
+        )
+
+
+def test_interrupt_request_validator_rejects_schema_identity_artifact_and_safety_changes():
+    state = _operator_review_pause_state()
+    request = harness._build_operator_review_interrupt_request(state)
+    mutations = {
+        "interrupt_request_schema_version": "unsupported",
+        "graph_engine": "wrong-engine",
+        "checkpoint_schema_version": "unsupported",
+        "graph_state_schema_version": "unsupported",
+        "graph_invocation_id": "wrong-invocation",
+        "checkpoint_id": "stale-checkpoint",
+        "owner_user_id": "wrong-owner",
+        "pipeline_run_id": "wrong-run",
+        "context_id": "wrong-context",
+        "job_id": "wrong-job",
+        "selected_resume_id": "wrong-resume",
+        "node_key": "tailoring_decision",
+        "safe_next_node_key": "application_action",
+        "operator_review_artifact_digest": "altered",
+        "human_review_required": 1,
+        "persistent": True,
+        "resumable": True,
+        "application_authorization": True,
+        "resume_authorization": True,
+    }
+    for field, value in mutations.items():
+        altered = deepcopy(request)
+        altered[field] = value
+        with pytest.raises(ValueError):
+            harness._validate_operator_review_interrupt_request(altered, state)
+
+    malformed_decisions = deepcopy(request)
+    malformed_decisions["allowed_decision_values"] = [
+        "continue_read_only",
+        "apply",
+    ]
+    with pytest.raises(ValueError, match="allowed_decision_values_invalid"):
+        harness._validate_operator_review_interrupt_request(
+            malformed_decisions,
+            state,
+        )
+
+
+def test_interrupt_request_requires_all_bound_execution_identity():
+    state = _operator_review_pause_state()
+    missing_identity_states = []
+    for field in ("owner_user_id", "pipeline_run_id", "context_id"):
+        missing = deepcopy(state)
+        missing[field] = ""
+        missing_identity_states.append(missing)
+    missing_job = deepcopy(state)
+    missing_job["job_identity"]["job_id"] = ""
+    missing_identity_states.append(missing_job)
+    missing_resume = deepcopy(state)
+    missing_resume["selected_resume_id"] = ""
+    missing_identity_states.append(missing_resume)
+
+    for missing in missing_identity_states:
+        with pytest.raises(ValueError, match="missing_required_field"):
+            harness._build_operator_review_interrupt_request(missing)
+
+
+def test_interrupt_request_builder_and_validator_are_pure_and_return_fresh_data():
+    state = _operator_review_pause_state()
+    state_before = deepcopy(state)
+    identity = harness._build_checkpoint_identity(state).to_payload()
+    identity_before = deepcopy(identity)
+
+    request = harness._build_operator_review_interrupt_request(
+        state,
+        checkpoint_identity=identity,
+    )
+    request_before = deepcopy(request)
+    validated = harness._validate_operator_review_interrupt_request(
+        request,
+        state,
+    )
+
+    assert state == state_before
+    assert identity == identity_before
+    assert request == request_before
+    assert validated == request
+    assert validated is not request
+    assert validated["completed_node_keys"] is not state["ordered_node_keys"]
+    assert validated["reason_codes"] is not state["artifacts"][
+        "operator_review_tailoring_evidence"
+    ]["reason_codes"]
+
+    validated["completed_node_keys"].append("mutated")
+    validated["reason_codes"].append("mutated")
+    validated["allowed_decision_values"].append("apply")
+    request["completed_node_keys"].append("request-mutated")
+    request["reason_codes"].append("request-mutated")
+    assert state == state_before
+    assert identity == identity_before
+
+
+def test_initial_partial_and_final_states_are_not_interrupt_request_eligible():
+    initial = _checkpoint_initial_state()
+    partial = harness._jd_intelligence_node(initial)
+    pause_ready = _operator_review_pause_state()
+    finalized = harness._finalize_node(pause_ready)
+
+    for state in (initial, partial, finalized):
+        with pytest.raises(ValueError):
+            harness._build_operator_review_interrupt_request(state)
+
+
+def test_normal_execution_exposes_no_interrupt_request_contract_fields():
+    payload = harness.execute_langgraph_evidence_chain(
+        [_job("job-no-interrupt-output")],
+        resume_context=_resume_context(),
+        pipeline_run_id="run-no-interrupt-output",
+        owner_user_id="owner-no-interrupt-output",
+        context_id="ctx-no-interrupt-output",
+        enabled=True,
+        strict=True,
+    )
+
+    assert "interrupt_request" not in payload
+    assert "interrupt_request_id" not in payload
+    result = payload["per_job_results"][0]
+    assert "interrupt_request" not in result
+    assert "interrupt_request_id" not in result
+    assert "allowed_decision_values" not in result
+
+
+def test_interrupt_request_contract_adds_no_interrupt_persistence_resume_or_action_calls():
+    path = ROOT / "src/agents/evidence_chain_langgraph_harness.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    forbidden_import_fragments = {
+        "langgraph.checkpoint",
+        "langgraph.types",
+        "sqlite3",
+        "psycopg",
+        "sqlalchemy",
+        "src.storage",
+        "src.app",
+    }
+    forbidden_calls = {
+        "interrupt",
+        "Command",
+        "add_conditional_edges",
+        "open",
+        "write_text",
+        "__import__",
+        "run_chat_completion",
+        "execute_application",
+        "submit_application",
+        "mark_applied",
+        "insert_operator_decision_row_to_postgres",
+        "insert_application_action_row_to_postgres",
+    }
+    imports = set()
+    called_names = set()
+    called_attributes = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imports.add(node.module or "")
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                called_names.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                called_attributes.add(node.func.attr)
+    assert not any(
+        fragment in imported
+        for imported in imports
+        for fragment in forbidden_import_fragments
+    )
+    assert forbidden_calls.isdisjoint(called_names | called_attributes)
+    assert not any(isinstance(node, ast.While) for node in ast.walk(tree))

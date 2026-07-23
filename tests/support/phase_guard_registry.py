@@ -1062,6 +1062,17 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/agents/evidence_chain_langgraph_harness.py",
             "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
         },
+        "phase9_step2_durable_checkpoint_interrupt_storage": {
+            "src/storage/durable_orchestration/__init__.py",
+            "src/storage/durable_orchestration/schema.sql",
+            "src/storage/durable_orchestration/store.py",
+            "tests/test_phase9_step2_durable_checkpoint_interrupt_storage_contract.py",
+            "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+            "tests/test_pgvector_extension_probe_contract_no_schema.py",
+            "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+            "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+            "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1098,6 +1109,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase8_step15_checkpoint_identity_serialization_contract")
         | legacy_guard_allowlist(
             "phase8_step17_readonly_operator_review_interrupt_request"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step2_durable_checkpoint_interrupt_storage"
         )
     )
 

@@ -40,7 +40,21 @@ ARTIFACT_KEYS_BY_AGENT = {
 }
 
 
-class EvidenceChainGraphState(TypedDict, total=False):
+EvidenceChainArtifact = Dict[str, Any]
+EvidenceChainArtifacts = Dict[str, EvidenceChainArtifact]
+EvidenceChainGraphWarnings = List[str]
+
+
+class EvidenceChainNodeSummary(TypedDict):
+    agent_key: str
+    node_key: str
+    status: str
+    artifact_key: str
+    artifact_type: str
+    reason_codes: List[str]
+
+
+class EvidenceChainInitialState(TypedDict):
     job: Dict[str, Any]
     job_index: int
     job_identity: Dict[str, str]
@@ -50,10 +64,13 @@ class EvidenceChainGraphState(TypedDict, total=False):
     owner_user_id: str
     context_id: str
     include_trace_payload: bool
-    artifacts: Dict[str, Any]
+    artifacts: EvidenceChainArtifacts
     ordered_node_keys: List[str]
-    node_statuses: List[Dict[str, Any]]
-    warnings: List[str]
+    node_statuses: List[EvidenceChainNodeSummary]
+    warnings: EvidenceChainGraphWarnings
+
+
+class EvidenceChainGraphState(EvidenceChainInitialState, total=False):
     evidence_chain_bundle: Dict[str, Any]
     trace_payload: Dict[str, Any]
 
@@ -158,7 +175,7 @@ def _reason_codes_from_artifacts(artifacts: Mapping[str, Any]) -> List[str]:
     return list(dict.fromkeys(reason_codes))
 
 
-def _node_summary(agent_key: str, artifact: Any) -> Dict[str, Any]:
+def _node_summary(agent_key: str, artifact: Any) -> EvidenceChainNodeSummary:
     artifact_type = artifact.get("artifact_type", "") if isinstance(artifact, Mapping) else ""
     reason_codes = artifact.get("reason_codes", []) if isinstance(artifact, Mapping) else []
     return {
@@ -175,6 +192,50 @@ def _node_summary(agent_key: str, artifact: Any) -> Dict[str, Any]:
     }
 
 
+def _build_initial_graph_state(
+    *,
+    job: Mapping[str, Any],
+    job_index: int,
+    job_identity: Mapping[str, Any],
+    resume_rows: List[Dict[str, Any]],
+    selected_resume_id: str,
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    include_trace_payload: bool,
+) -> EvidenceChainInitialState:
+    return {
+        "job": deepcopy(dict(job)),
+        "job_index": int(job_index),
+        "job_identity": {
+            "job_id": _clean_text(job_identity.get("job_id")),
+            "title": _clean_text(job_identity.get("title")),
+            "company": _clean_text(job_identity.get("company")),
+        },
+        "resume_rows": deepcopy(list(resume_rows)),
+        "selected_resume_id": _clean_text(selected_resume_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "context_id": _clean_text(context_id),
+        "include_trace_payload": bool(include_trace_payload),
+        "artifacts": {},
+        "ordered_node_keys": [],
+        "node_statuses": [],
+        "warnings": [],
+    }
+
+
+def _copy_state_for_transition(
+    state: EvidenceChainGraphState,
+) -> EvidenceChainGraphState:
+    next_state: EvidenceChainGraphState = dict(state)
+    next_state["artifacts"] = deepcopy(dict(state.get("artifacts") or {}))
+    next_state["ordered_node_keys"] = list(state.get("ordered_node_keys") or [])
+    next_state["node_statuses"] = deepcopy(list(state.get("node_statuses") or []))
+    next_state["warnings"] = list(state.get("warnings") or [])
+    return next_state
+
+
 def _state_with_artifact(
     state: EvidenceChainGraphState,
     *,
@@ -182,16 +243,15 @@ def _state_with_artifact(
     artifact_key: str,
     artifact: Dict[str, Any],
 ) -> EvidenceChainGraphState:
-    next_state: EvidenceChainGraphState = dict(state)
-    artifacts = dict(next_state.get("artifacts") or {})
+    next_state = _copy_state_for_transition(state)
+    artifacts = next_state["artifacts"]
     artifacts[artifact_key] = artifact
-    next_state["artifacts"] = artifacts
     next_state["ordered_node_keys"] = [
-        *list(next_state.get("ordered_node_keys") or []),
+        *next_state["ordered_node_keys"],
         agent_key,
     ]
     next_state["node_statuses"] = [
-        *list(next_state.get("node_statuses") or []),
+        *next_state["node_statuses"],
         _node_summary(agent_key, artifact),
     ]
     return next_state
@@ -338,7 +398,8 @@ def _finalize_node(state: EvidenceChainGraphState) -> EvidenceChainGraphState:
         owner_user_id=_clean_text(state.get("owner_user_id")),
         context_id=_clean_text(state.get("context_id")),
     )
-    next_state: EvidenceChainGraphState = dict(state)
+    next_state = _copy_state_for_transition(state)
+    artifacts = next_state["artifacts"]
     artifacts["agent_evidence_chain_bundle"] = bundle
     next_state["evidence_chain_bundle"] = bundle
     if bool(state.get("include_trace_payload")):
@@ -513,21 +574,17 @@ def execute_langgraph_evidence_chain(
     warnings: List[str] = []
     for index, job in enumerate(sampled_jobs):
         identity = _job_identity(job, index)
-        initial_state: EvidenceChainGraphState = {
-            "job": deepcopy(job),
-            "job_index": index,
-            "job_identity": identity,
-            "resume_rows": deepcopy(resume_rows),
-            "selected_resume_id": selected_resume_id,
-            "pipeline_run_id": pipeline_run,
-            "owner_user_id": owner_user,
-            "context_id": context,
-            "include_trace_payload": bool(include_trace_payload),
-            "artifacts": {},
-            "ordered_node_keys": [],
-            "node_statuses": [],
-            "warnings": [],
-        }
+        initial_state = _build_initial_graph_state(
+            job=job,
+            job_index=index,
+            job_identity=identity,
+            resume_rows=resume_rows,
+            selected_resume_id=selected_resume_id,
+            pipeline_run_id=pipeline_run,
+            owner_user_id=owner_user,
+            context_id=context,
+            include_trace_payload=include_trace_payload,
+        )
         try:
             final_state = _execute_graph_state(initial_state)
             per_job_results.append(_per_job_result_from_state(final_state))

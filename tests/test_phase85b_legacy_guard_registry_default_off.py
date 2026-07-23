@@ -728,6 +728,19 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         for path in phase8_step13_profile
     )
 
+    phase8_step14_profile = legacy_guard_allowlist(
+        "phase8_step14_typed_langgraph_state_normalization"
+    )
+    assert phase8_step14_profile == {
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+    }
+    assert not any("*" in path for path in phase8_step14_profile)
+    assert not any(
+        path in {"src", "src/", "src/**", "tests", "tests/", "tests/**"}
+        for path in phase8_step14_profile
+    )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -750,6 +763,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase8_step6_profile
         | phase8_step8_profile
         | phase8_step13_profile
+        | phase8_step14_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

@@ -884,3 +884,167 @@ def test_parity_contract_adds_no_routing_checkpoint_interrupt_or_action_paths():
                 and node.func.attr == "compile"
             ):
                 assert all(keyword.arg != "checkpointer" for keyword in node.keywords)
+
+
+def test_initial_state_builder_has_exact_keys_types_and_deep_copies_inputs():
+    job = _job(
+        "job-initial-state",
+        nested_metadata={"skills": ["Python"], "signals": {"rank": 2}},
+    )
+    resume_rows = deepcopy(_resume_context()["resume_variants"])
+    identity = {
+        "job_id": "job-initial-state",
+        "title": "AI Platform Engineer",
+        "company": "Example AI",
+    }
+    state = harness._build_initial_graph_state(
+        job=job,
+        job_index=3,
+        job_identity=identity,
+        resume_rows=resume_rows,
+        selected_resume_id="resume-main",
+        pipeline_run_id="run-state",
+        owner_user_id="owner-state",
+        context_id="ctx-state",
+        include_trace_payload=True,
+    )
+
+    assert set(state) == {
+        "job",
+        "job_index",
+        "job_identity",
+        "resume_rows",
+        "selected_resume_id",
+        "pipeline_run_id",
+        "owner_user_id",
+        "context_id",
+        "include_trace_payload",
+        "artifacts",
+        "ordered_node_keys",
+        "node_statuses",
+        "warnings",
+    }
+    assert isinstance(state["job"], dict)
+    assert isinstance(state["job_index"], int)
+    assert isinstance(state["job_identity"], dict)
+    assert isinstance(state["resume_rows"], list)
+    assert isinstance(state["selected_resume_id"], str)
+    assert isinstance(state["pipeline_run_id"], str)
+    assert isinstance(state["owner_user_id"], str)
+    assert isinstance(state["context_id"], str)
+    assert isinstance(state["include_trace_payload"], bool)
+    assert isinstance(state["artifacts"], dict)
+    assert isinstance(state["ordered_node_keys"], list)
+    assert isinstance(state["node_statuses"], list)
+    assert isinstance(state["warnings"], list)
+
+    job["nested_metadata"]["skills"].append("SQL")
+    job["nested_metadata"]["signals"]["rank"] = 99
+    resume_rows[0]["skills"].append("Airflow")
+    identity["title"] = "Mutated title"
+    assert state["job"]["nested_metadata"] == {
+        "skills": ["Python"],
+        "signals": {"rank": 2},
+    }
+    assert state["resume_rows"][0]["skills"] == ["Python", "SQL", "RAG"]
+    assert state["job_identity"]["title"] == "AI Platform Engineer"
+
+
+def test_state_transition_isolates_all_owned_containers_and_summary_shape():
+    initial_state = harness._build_initial_graph_state(
+        job=_job("job-transition"),
+        job_index=0,
+        job_identity={
+            "job_id": "job-transition",
+            "title": "AI Platform Engineer",
+            "company": "Example AI",
+        },
+        resume_rows=_resume_context()["resume_variants"],
+        selected_resume_id="resume-main",
+        pipeline_run_id="run-transition",
+        owner_user_id="owner-transition",
+        context_id="ctx-transition",
+        include_trace_payload=True,
+    )
+    jd_artifact = {
+        "status": "completed",
+        "validation_json": {
+            "is_valid_for_existing_output_wrapper": True,
+            "missing_or_invalid_fields": [],
+        },
+        "reason_codes": [],
+    }
+    jd_state = harness._state_with_artifact(
+        initial_state,
+        agent_key="jd_intelligence",
+        artifact_key="jd_intelligence",
+        artifact=jd_artifact,
+    )
+    resume_state = harness._state_with_artifact(
+        jd_state,
+        agent_key="resume_match",
+        artifact_key="resume_match_jd_evidence",
+        artifact={
+            "artifact_type": "resume_match_jd_evidence",
+            "validation_summary": {"validation_status": "passed"},
+            "reason_codes": [],
+        },
+    )
+
+    for key in ("artifacts", "ordered_node_keys", "node_statuses", "warnings"):
+        assert initial_state[key] is not jd_state[key]
+        assert jd_state[key] is not resume_state[key]
+    assert set(jd_state["node_statuses"][0]) == {
+        "agent_key",
+        "node_key",
+        "status",
+        "artifact_key",
+        "artifact_type",
+        "reason_codes",
+    }
+    assert jd_state["node_statuses"][0]["status"] == "completed"
+
+    resume_state["artifacts"]["jd_intelligence"]["validation_json"][
+        "missing_or_invalid_fields"
+    ].append("mutated")
+    resume_state["ordered_node_keys"].append("mutated")
+    resume_state["node_statuses"][0]["status"] = "mutated"
+    resume_state["warnings"].append("mutated")
+    assert jd_state["artifacts"]["jd_intelligence"]["validation_json"][
+        "missing_or_invalid_fields"
+    ] == []
+    assert jd_state["ordered_node_keys"] == ["jd_intelligence"]
+    assert jd_state["node_statuses"][0]["status"] == "completed"
+    assert jd_state["warnings"] == []
+    assert initial_state["artifacts"] == {}
+    assert initial_state["ordered_node_keys"] == []
+    assert initial_state["node_statuses"] == []
+    assert initial_state["warnings"] == []
+
+
+def test_typed_state_normalization_adds_no_external_per_job_result_keys():
+    payload = harness.execute_langgraph_evidence_chain(
+        [_job("job-external-shape")],
+        resume_context=_resume_context(),
+        pipeline_run_id="run-external-shape",
+        owner_user_id="owner-external-shape",
+        context_id="ctx-external-shape",
+        enabled=True,
+        strict=True,
+    )
+
+    assert set(payload["per_job_results"][0]) == {
+        "job_id",
+        "title",
+        "company",
+        "status",
+        "reason_codes",
+        "graph_runtime",
+        "ordered_node_keys",
+        "ordered_agent_keys",
+        "node_statuses",
+        "artifacts",
+        "evidence_chain_bundle",
+        "trace_payload",
+        "safety_metadata",
+    }

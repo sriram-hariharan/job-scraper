@@ -13,6 +13,10 @@ from src.agents import (
     source_health_agent,
     tailoring_decision_agent,
 )
+from src.agents.canonical_registry import (
+    CANONICAL_AGENT_DEFINITIONS_BY_KEY,
+    CANONICAL_AGENT_KEYS,
+)
 
 
 WORKFLOW_NAME = "ApplyLens Agentic Workflow"
@@ -30,10 +34,7 @@ REQUIRED_FEATURE_FLAGS = [
 ORDERED_AGENT_KEYS = [
     "source_health",
     "resume_match",
-    "critic",
-    "job_prioritization",
-    "tailoring_decision",
-    "operator_review",
+    *CANONICAL_AGENT_KEYS,
 ]
 
 GENERATED_ARTIFACT_KINDS = [
@@ -186,8 +187,8 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
         "owner_module": "src.agents.resume_match_agent",
     },
     "critic": {
-        "agent_key": "critic",
-        "agent_name": critic_agent.AGENT_NAME,
+        "agent_key": CANONICAL_AGENT_DEFINITIONS_BY_KEY["critic"].key,
+        "agent_name": CANONICAL_AGENT_DEFINITIONS_BY_KEY["critic"].display_name,
         "agent_version": critic_agent.AGENT_VERSION,
         "model_provider": "deterministic",
         "model_name": "critic_rules",
@@ -207,11 +208,13 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
             "critic_safe_suggestion_approval_rate",
             "critic_downgrade_rate",
         ],
-        "owner_module": "src.agents.critic_agent",
+        "owner_module": CANONICAL_AGENT_DEFINITIONS_BY_KEY["critic"].owner_module,
     },
     "job_prioritization": {
-        "agent_key": "job_prioritization",
-        "agent_name": job_prioritization_agent.AGENT_NAME,
+        "agent_key": CANONICAL_AGENT_DEFINITIONS_BY_KEY["job_prioritization"].key,
+        "agent_name": CANONICAL_AGENT_DEFINITIONS_BY_KEY[
+            "job_prioritization"
+        ].display_name,
         "agent_version": job_prioritization_agent.AGENT_VERSION,
         "model_provider": "deterministic",
         "model_name": "job_prioritization_rules",
@@ -232,11 +235,15 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
             "high_score_apply_rate",
             "packet_block_skip_rate",
         ],
-        "owner_module": "src.agents.job_prioritization_agent",
+        "owner_module": CANONICAL_AGENT_DEFINITIONS_BY_KEY[
+            "job_prioritization"
+        ].owner_module,
     },
     "tailoring_decision": {
-        "agent_key": "tailoring_decision",
-        "agent_name": tailoring_decision_agent.AGENT_NAME,
+        "agent_key": CANONICAL_AGENT_DEFINITIONS_BY_KEY["tailoring_decision"].key,
+        "agent_name": CANONICAL_AGENT_DEFINITIONS_BY_KEY[
+            "tailoring_decision"
+        ].display_name,
         "agent_version": tailoring_decision_agent.AGENT_VERSION,
         "model_provider": "deterministic",
         "model_name": "tailoring_decision_rules",
@@ -260,11 +267,15 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
             "critic_reject_do_not_tailor_rate",
             "high_score_light_tailoring_rate",
         ],
-        "owner_module": "src.agents.tailoring_decision_agent",
+        "owner_module": CANONICAL_AGENT_DEFINITIONS_BY_KEY[
+            "tailoring_decision"
+        ].owner_module,
     },
     "operator_review": {
-        "agent_key": "operator_review",
-        "agent_name": operator_review_agent.AGENT_NAME,
+        "agent_key": CANONICAL_AGENT_DEFINITIONS_BY_KEY["operator_review"].key,
+        "agent_name": CANONICAL_AGENT_DEFINITIONS_BY_KEY[
+            "operator_review"
+        ].display_name,
         "agent_version": operator_review_agent.AGENT_VERSION,
         "model_provider": "deterministic",
         "model_name": "operator_review_rules",
@@ -289,7 +300,9 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
             "hold_or_skip_block_rate",
             "critic_reject_hold_rate",
         ],
-        "owner_module": "src.agents.operator_review_agent",
+        "owner_module": CANONICAL_AGENT_DEFINITIONS_BY_KEY[
+            "operator_review"
+        ].owner_module,
     },
 }
 

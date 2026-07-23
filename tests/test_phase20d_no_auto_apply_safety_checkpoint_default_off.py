@@ -773,6 +773,16 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     if changed_runtime_files == [phase8_step4_deleted_runtime_file]:
         assert not phase8_step4_deleted_runtime_file.exists()
         return
+    phase8_step6_canonical_registry_runtime_files = {
+        ROOT / "src/agents/canonical_registry.py",
+        ROOT / "src/agents/workflow_registry.py",
+    }
+    if set(changed_runtime_files) == phase8_step6_canonical_registry_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase129_auth_artwork_runtime_files = {
         ROOT / "src/app/auth_ui.py",
     }

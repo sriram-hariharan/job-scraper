@@ -1036,6 +1036,11 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase8_step4_dead_file_cleanup": {
             "src/ai/deterministic_skill_extractor.py",
         },
+        "phase8_step6_canonical_agent_registry": {
+            "src/agents/canonical_registry.py",
+            "src/agents/workflow_registry.py",
+            "tests/test_phase8_step6_canonical_agent_registry.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1065,6 +1070,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
         | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
         | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
+        | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")
     )
 
 

@@ -37,7 +37,7 @@ The next phase should not blindly create new modules or rewrite the pipeline. Th
 | Area | Existing files |
 |---|---|
 | Roadmap | `docs/full_fledged_agentic_ai_app_roadmap.md` |
-| Agent context/state | `src/agents/context.py`, `src/agents/agent_state.py` |
+| Agent state | `src/agents/agent_state.py` (current state owner) |
 | Agent trace helpers | `src/agents/trace.py` |
 | Stage-style agents | `src/agents/relevance_prefilter.py`, `src/agents/deduplication.py`, `src/agents/jd_intelligence.py`, `src/agents/resume_match_agent.py`, `src/agents/tailoring_decision_agent.py`, `src/agents/final_application_scoring.py` |
 | Critic/evaluator | `src/agents/critic_agent.py`, `src/agents/critic_evaluator.py` |
@@ -55,7 +55,6 @@ The next phase should not blindly create new modules or rewrite the pipeline. Th
 | Path | Status |
 |---|---|
 | `docs/full_fledged_agentic_ai_app_roadmap.md` | present |
-| `src/agents/context.py` | present |
 | `src/agents/agent_state.py` | present |
 | `src/agents/trace.py` | present |
 | `src/agents/relevance_prefilter.py` | present |

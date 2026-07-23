@@ -678,6 +678,95 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert len(item2_phase4_corrections_profile) == 36
     assert not any("*" in path for path in item2_phase4_corrections_profile)
 
+    phase8_step3d_profile = legacy_guard_allowlist(
+        "phase8_step3d_tailoring_llm_gate"
+    )
+    assert phase8_step3d_profile == {
+        "src/tailoring/rendering.py",
+        "tests/test_tailoring_patch_refinement_explicit_opt_in.py",
+    }
+    assert not any("*" in path for path in phase8_step3d_profile)
+
+    phase8_step4_profile = legacy_guard_allowlist(
+        "phase8_step4_dead_file_cleanup"
+    )
+    assert phase8_step4_profile == {
+        "src/ai/deterministic_skill_extractor.py",
+    }
+    assert not any("*" in path for path in phase8_step4_profile)
+
+    phase8_step6_profile = legacy_guard_allowlist(
+        "phase8_step6_canonical_agent_registry"
+    )
+    assert phase8_step6_profile == {
+        "src/agents/canonical_registry.py",
+        "src/agents/workflow_registry.py",
+        "tests/test_phase8_step6_canonical_agent_registry.py",
+    }
+    assert not any("*" in path for path in phase8_step6_profile)
+
+    phase8_step8_profile = legacy_guard_allowlist(
+        "phase8_step8_legacy_agent_context_retirement"
+    )
+    assert phase8_step8_profile == {
+        "src/agents/context.py",
+        "tests/test_agent_context.py",
+        "tests/test_full_agentic_ai_current_state_audit_no_runtime_change.py",
+        "docs/full_agentic_ai_current_state_audit_no_runtime_change.md",
+    }
+    assert not any("*" in path for path in phase8_step8_profile)
+
+    phase8_step13_profile = legacy_guard_allowlist(
+        "phase8_step13_langgraph_parity_contract"
+    )
+    assert phase8_step13_profile == {
+        "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+    }
+    assert not any("*" in path for path in phase8_step13_profile)
+    assert not any(
+        path in {"tests", "tests/", "tests/**"}
+        for path in phase8_step13_profile
+    )
+
+    phase8_step14_profile = legacy_guard_allowlist(
+        "phase8_step14_typed_langgraph_state_normalization"
+    )
+    assert phase8_step14_profile == {
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+    }
+    assert not any("*" in path for path in phase8_step14_profile)
+    assert not any(
+        path in {"src", "src/", "src/**", "tests", "tests/", "tests/**"}
+        for path in phase8_step14_profile
+    )
+
+    phase8_step15_profile = legacy_guard_allowlist(
+        "phase8_step15_checkpoint_identity_serialization_contract"
+    )
+    assert phase8_step15_profile == {
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+    }
+    assert not any("*" in path for path in phase8_step15_profile)
+    assert not any(
+        path in {"src", "src/", "src/**", "tests", "tests/", "tests/**"}
+        for path in phase8_step15_profile
+    )
+
+    phase8_step17_profile = legacy_guard_allowlist(
+        "phase8_step17_readonly_operator_review_interrupt_request"
+    )
+    assert phase8_step17_profile == {
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+    }
+    assert not any("*" in path for path in phase8_step17_profile)
+    assert not any(
+        path in {"src", "src/", "src/**", "tests", "tests/", "tests/**"}
+        for path in phase8_step17_profile
+    )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -695,6 +784,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item2_phase3_profile
         | item2_phase4_profile
         | item2_phase4_corrections_profile
+        | phase8_step3d_profile
+        | phase8_step4_profile
+        | phase8_step6_profile
+        | phase8_step8_profile
+        | phase8_step13_profile
+        | phase8_step14_profile
+        | phase8_step15_profile
+        | phase8_step17_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

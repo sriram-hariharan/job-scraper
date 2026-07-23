@@ -6516,11 +6516,12 @@ def _build_replacement_candidates(
                         and patch_method_base not in skip_llm_refinement_methods
                         and patch_method_base != "llm_substantive_multisignal_reframe"
                     ):
-                        from src.tailoring.llm import _maybe_refine_patch_ready_rewrite_candidate
-                        candidate = _maybe_refine_patch_ready_rewrite_candidate(
-                            payload,
-                            candidate,
-                        )
+                        if llm_output is not None:
+                            from src.tailoring.llm import _maybe_refine_patch_ready_rewrite_candidate
+                            candidate = _maybe_refine_patch_ready_rewrite_candidate(
+                                payload,
+                                candidate,
+                            )
                         candidate = _materiality_validate_rewrite_candidate(
                             payload,
                             candidate,

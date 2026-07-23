@@ -75,6 +75,26 @@ def _catalog_output(rows):
     )
 
 
+def _postgres18_sized_catalog_output():
+    rows = _compatible_rows()
+    for index, row in enumerate(rows):
+        row["constraint_definitions"].append(
+            "CHECK (postgres18_catalog_shape_"
+            + str(index)
+            + "_"
+            + ("x" * 3_600)
+            + ")"
+        )
+    output = _catalog_output(rows)
+    assert len(output) > apply_schema.MAX_CAPTURED_OUTPUT_CHARS
+    assert len(output) <= apply_schema.MAX_CATALOG_OUTPUT_CHARS
+    assert all(
+        len(line) <= apply_schema.MAX_CATALOG_RECORD_CHARS
+        for line in output.splitlines()
+    )
+    return output
+
+
 def _executor(runner, *, enabled=True):
     return apply_schema.DurableOrchestrationSchemaExecutor(
         enabled=enabled,
@@ -280,6 +300,18 @@ def test_check_all_nine_compatible_objects():
     assert result.object_count == 9
 
 
+def test_postgres18_sized_nine_record_catalog_output_is_compatible():
+    runner = FakeRunner(
+        _process(stdout=_postgres18_sized_catalog_output())
+    )
+
+    result = _executor(runner).check(database_url=TARGET)
+
+    assert result.outcome == "compatible"
+    assert result.compatibility == "compatible"
+    assert result.object_count == 9
+
+
 def test_check_partial_table_set_is_blocking_classification():
     runner = FakeRunner(
         _process(stdout=_catalog_output(_compatible_rows()[:4]))
@@ -312,6 +344,103 @@ def test_check_incompatible_object_structure(mutation):
 
     assert result.outcome == "incompatible"
     assert result.object_count == 9
+
+
+@pytest.mark.parametrize(
+    ("table_index", "remove_prefix"),
+    [
+        (1, "foreign key"),
+        (0, "unique"),
+        (0, "run_status"),
+    ],
+)
+def test_foreign_unique_and_check_constraint_drift_remains_incompatible(
+    table_index,
+    remove_prefix,
+):
+    rows = _compatible_rows()
+    rows[table_index]["constraint_definitions"] = [
+        definition
+        for definition in rows[table_index]["constraint_definitions"]
+        if not definition.lower().startswith(remove_prefix)
+    ]
+    runner = FakeRunner(_process(stdout=_catalog_output(rows)))
+
+    result = _executor(runner).check(database_url=TARGET)
+
+    assert result.outcome == "incompatible"
+    assert result.object_count == 9
+
+
+def test_missing_cas_column_remains_incompatible():
+    rows = _compatible_rows()
+    rows[0]["columns"].remove("lock_version")
+    rows[0]["column_types"].pop("lock_version")
+    runner = FakeRunner(_process(stdout=_catalog_output(rows)))
+
+    result = _executor(runner).check(database_url=TARGET)
+
+    assert result.outcome == "incompatible"
+    assert result.object_count == 9
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda row: row.pop("index_names"),
+        lambda row: row.update(unexpected_field=[]),
+        lambda row: row.update(columns=None),
+        lambda row: row.update(relkind=True),
+        lambda row: row.update(columns="not-an-array"),
+        lambda row: row.update(column_types=False),
+        lambda row: row.update(columns=[True]),
+    ],
+)
+def test_malformed_field_count_null_boolean_or_array_shape_fails_closed(
+    mutate,
+):
+    rows = _compatible_rows()
+    mutate(rows[0])
+    runner = FakeRunner(_process(stdout=_catalog_output(rows)))
+
+    result = _executor(runner).check(database_url=TARGET)
+
+    assert result.outcome == "unavailable"
+    assert result.diagnostic_code == "catalog_result_invalid"
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        _catalog_output(_compatible_rows() + [_compatible_rows()[0]]),
+        _catalog_output(_compatible_rows()[:1])
+        + "\n"
+        + _catalog_output(_compatible_rows()[1:]),
+        '{"object_name":"one","object_name":"two"}\n',
+    ],
+)
+def test_excess_blank_or_duplicate_key_records_fail_closed(stdout):
+    runner = FakeRunner(_process(stdout=stdout))
+
+    result = _executor(runner).check(database_url=TARGET)
+
+    assert result.outcome == "unavailable"
+    assert result.diagnostic_code == "catalog_result_invalid"
+
+
+@pytest.mark.parametrize("stderr", ["WARNING: bounded", "NOTICE: bounded"])
+def test_catalog_warning_or_notice_on_stderr_fails_closed(stderr):
+    runner = FakeRunner(
+        _process(
+            stdout=_catalog_output(_compatible_rows()),
+            stderr=stderr,
+        )
+    )
+
+    result = _executor(runner).check(database_url=TARGET)
+
+    assert result.outcome == "unavailable"
+    assert result.diagnostic_code == "catalog_stderr_present"
 
 
 @pytest.mark.parametrize(

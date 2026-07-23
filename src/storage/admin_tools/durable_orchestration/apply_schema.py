@@ -41,6 +41,7 @@ SCHEMA_PATH = (
 )
 PSQL_TIMEOUT_SECONDS = 60
 MAX_CAPTURED_OUTPUT_CHARS = 16_384
+MAX_CATALOG_RECORD_CHARS = 16_384
 
 OUTCOMES = (
     "planned",
@@ -66,6 +67,20 @@ _EXPECTED_TABLES = (
     "orchestration_terminal_results",
     "orchestration_lifecycle_events",
 )
+MAX_CATALOG_OUTPUT_CHARS = (
+    len(_EXPECTED_TABLES) * (MAX_CATALOG_RECORD_CHARS + 1)
+)
+_CATALOG_ROW_FIELDS = {
+    "object_name",
+    "schema_name",
+    "relkind",
+    "columns",
+    "column_types",
+    "primary_key_columns",
+    "constraint_names",
+    "constraint_definitions",
+    "index_names",
+}
 
 _COMMON_IDENTITY_COLUMNS = (
     "owner_user_id",
@@ -781,17 +796,58 @@ def _bounded_process_diagnostic(completed: Any) -> str:
 
 def _parse_catalog(stdout: Any) -> list[dict[str, Any]]:
     text = str(stdout or "")
-    if len(text) > MAX_CAPTURED_OUTPUT_CHARS:
+    if len(text) > MAX_CATALOG_OUTPUT_CHARS:
         raise ValueError("catalog_output_too_large")
+    lines = text.splitlines()
+    if len(lines) > len(_EXPECTED_TABLES):
+        raise ValueError("catalog_record_count_invalid")
     rows: list[dict[str, Any]] = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        value = json.loads(stripped)
-        if not isinstance(value, dict):
+    for line in lines:
+        if not line.strip():
+            raise ValueError("catalog_blank_record_invalid")
+        if len(line) > MAX_CATALOG_RECORD_CHARS:
+            raise ValueError("catalog_record_too_large")
+
+        def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            value: dict[str, Any] = {}
+            for key, nested in pairs:
+                if key in value:
+                    raise ValueError("catalog_duplicate_json_key")
+                value[key] = nested
+            return value
+
+        row = json.loads(line, object_pairs_hook=strict_object)
+        if not isinstance(row, dict) or set(row) != _CATALOG_ROW_FIELDS:
             raise ValueError("catalog_row_malformed")
-        rows.append(value)
+        if any(value is None for value in row.values()):
+            raise ValueError("catalog_null_value_invalid")
+        if not all(
+            isinstance(row[field], str)
+            for field in ("object_name", "schema_name", "relkind")
+        ):
+            raise ValueError("catalog_scalar_type_invalid")
+        if (
+            not isinstance(row["column_types"], dict)
+            or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in row["column_types"].items()
+            )
+        ):
+            raise ValueError("catalog_column_types_invalid")
+        array_fields = (
+            "columns",
+            "primary_key_columns",
+            "constraint_names",
+            "constraint_definitions",
+            "index_names",
+        )
+        if not all(
+            isinstance(row[field], list)
+            and all(isinstance(value, str) for value in row[field])
+            for field in array_fields
+        ):
+            raise ValueError("catalog_array_type_invalid")
+        rows.append(row)
     return rows
 
 
@@ -1045,6 +1101,12 @@ class DurableOrchestrationSchemaExecutor:
                 operation=operation,
                 outcome="unavailable",
                 diagnostic_code=_bounded_process_diagnostic(completed),
+            )
+        if str(getattr(completed, "stderr", "") or "").strip():
+            return SchemaExecutionResult(
+                operation=operation,
+                outcome="unavailable",
+                diagnostic_code="catalog_stderr_present",
             )
         try:
             rows = _parse_catalog(getattr(completed, "stdout", ""))

@@ -837,6 +837,15 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase9_step12_postgres_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/postgres_connection.py",
+    }
+    if set(changed_runtime_files) == phase9_step12_postgres_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase129_auth_artwork_runtime_files = {
         ROOT / "src/app/auth_ui.py",
     }

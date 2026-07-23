@@ -1112,6 +1112,25 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase9_step10_durable_orchestration_postgres_integration": {
             "tests/test_phase9_step10_durable_orchestration_postgres_integration.py",
         },
+        "phase9_step12_postgres_runtime_repository_integration": {
+            "requirements.txt",
+            "src/storage/durable_orchestration/postgres_connection.py",
+            "tests/test_phase9_step12_durable_orchestration_postgres_runtime_integration.py",
+        },
+        "phase9_step12_dependency_driver_compatibility": {
+            "tests/test_agent_trace_store.py",
+            "tests/test_jd_provider_runtime_api_readback_default_off.py",
+            "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+            "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+            "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+            "tests/test_provider_runtime_activation_plan_default_off.py",
+            "tests/test_provider_runtime_api_readback_default_off.py",
+            "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
+            "tests/test_provider_runtime_service_bridge_default_off.py",
+            "tests/test_three_agent_llmops_observability_api_default_off.py",
+            "tests/test_vector_evidence_api_no_db_no_ui.py",
+            "tests/test_vector_evidence_readback_api_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1170,6 +1189,12 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist(
             "phase9_step10_durable_orchestration_postgres_integration"
         )
+        | legacy_guard_allowlist(
+            "phase9_step12_postgres_runtime_repository_integration"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step12_dependency_driver_compatibility"
+        )
     )
 
 
@@ -1208,6 +1233,10 @@ def assert_protected_hashes(
     compatibility_profiles: Iterable[str] = (),
 ) -> None:
     phase88b_runtime_hash_compatibility = {
+        (
+            "requirements.txt",
+            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
+        ): "d9778ce9b45bee65f133a74d955f8a509e2c37d4e618fa7597feb2953946cfd4",
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
@@ -1260,7 +1289,12 @@ def assert_protected_hashes(
     repo = Path(root)
     profiles = tuple(compatibility_profiles)
     compatible_paths = (
-        merge_allowed(*(legacy_guard_allowlist(profile) for profile in profiles))
+        merge_allowed(
+            *(legacy_guard_allowlist(profile) for profile in profiles),
+            legacy_guard_allowlist(
+                "phase9_step12_postgres_runtime_repository_integration"
+            ),
+        )
         if profiles
         else None
     )

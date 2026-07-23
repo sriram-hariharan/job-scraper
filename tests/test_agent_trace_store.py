@@ -1,3 +1,4 @@
+import builtins
 import inspect
 
 from src.storage.agent_trace import store
@@ -70,6 +71,7 @@ def test_runtime_query_runner_supports_dbapi_and_psql_fallback():
 
 def test_runtime_query_runner_falls_back_to_psql_when_dbapi_missing(monkeypatch):
     captured = {}
+    real_import = builtins.__import__
 
     class Completed:
         stdout = '{"ok":true,"rows":[]}\n'
@@ -79,6 +81,12 @@ def test_runtime_query_runner_falls_back_to_psql_when_dbapi_missing(monkeypatch)
         captured["kwargs"] = dict(kwargs)
         return Completed()
 
+    def import_without_postgres_driver(name, *args, **kwargs):
+        if name in {"psycopg", "psycopg2"}:
+            raise ImportError(f"{name} unavailable for fallback test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_postgres_driver)
     monkeypatch.setattr(store.shutil, "which", lambda value: f"/usr/bin/{value}")
     monkeypatch.setattr(store.subprocess, "run", fake_run)
 

@@ -937,6 +937,69 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }.isdisjoint(phase9_step10_profile)
 
+    phase9_step12_profile = legacy_guard_allowlist(
+        "phase9_step12_postgres_runtime_repository_integration"
+    )
+    assert phase9_step12_profile == {
+        "requirements.txt",
+        "src/storage/durable_orchestration/postgres_connection.py",
+        "tests/test_phase9_step12_durable_orchestration_postgres_runtime_integration.py",
+    }
+    assert not any("*" in path for path in phase9_step12_profile)
+    assert not any(
+        path
+        in {
+            "src",
+            "src/",
+            "src/**",
+            "src/storage",
+            "src/storage/",
+            "src/storage/**",
+            "src/storage/durable_orchestration",
+            "src/storage/durable_orchestration/",
+            "src/storage/durable_orchestration/**",
+            "tests",
+            "tests/",
+            "tests/**",
+        }
+        for path in phase9_step12_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase9_step12_profile)
+
+    phase9_step12_compatibility_profile = legacy_guard_allowlist(
+        "phase9_step12_dependency_driver_compatibility"
+    )
+    assert phase9_step12_compatibility_profile == {
+        "tests/test_agent_trace_store.py",
+        "tests/test_jd_provider_runtime_api_readback_default_off.py",
+        "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+        "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+        "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+        "tests/test_provider_runtime_activation_plan_default_off.py",
+        "tests/test_provider_runtime_api_readback_default_off.py",
+        "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
+        "tests/test_provider_runtime_service_bridge_default_off.py",
+        "tests/test_three_agent_llmops_observability_api_default_off.py",
+        "tests/test_vector_evidence_api_no_db_no_ui.py",
+        "tests/test_vector_evidence_readback_api_default_off.py",
+    }
+    assert not any("*" in path for path in phase9_step12_compatibility_profile)
+    assert all(
+        path.startswith("tests/")
+        for path in phase9_step12_compatibility_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase9_step12_compatibility_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -969,6 +1032,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase9_step8_profile
         | phase9_step9_profile
         | phase9_step10_profile
+        | phase9_step12_profile
+        | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206
@@ -984,10 +1049,10 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         },
         set(),
     )
+    assert_changed_files_allowed({"requirements.txt"}, set())
 
     for forbidden_path in (
         "src/matching/scorer.py",
-        "requirements.txt",
         "src/app/unapproved_runtime.py",
         "src/app/static/media/unapproved.jpg",
         "tests/test_unapproved_phase129_surface.py",

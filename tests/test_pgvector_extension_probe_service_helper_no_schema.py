@@ -315,7 +315,7 @@ def test_no_dependency_schema_migration_or_pipeline_change():
         digest.update(path.read_bytes())
         digest.update(b"\0")
     assert digest.hexdigest() == (
-        "46783457f9e1017eb5d236f721185544491cb912282649c57cd460cb6b192c62"
+        "75053e5ef2e36a083a881e3eccdad98bcd194e59d41ecb508d28e6188ba30504"
     )
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()

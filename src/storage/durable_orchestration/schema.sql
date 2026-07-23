@@ -22,12 +22,16 @@ CREATE TABLE IF NOT EXISTS orchestration_graph_runs (
     CONSTRAINT ck_orchestration_graph_runs_lock_version
         CHECK (lock_version >= 0),
     CONSTRAINT ck_orchestration_graph_runs_status
-        CHECK (run_status IN ('running', 'awaiting_decision')),
+        CHECK (run_status IN (
+            'running', 'awaiting_decision', 'decision_recorded',
+            'resume_authorized', 'resume_consumed', 'decision_rejected',
+            'cancelled'
+        )),
     CONSTRAINT ck_orchestration_graph_runs_current_checkpoint
         CHECK (
             (run_status = 'running' AND current_checkpoint_id IS NULL)
             OR
-            (run_status = 'awaiting_decision' AND current_checkpoint_id IS NOT NULL)
+            (run_status <> 'running' AND current_checkpoint_id IS NOT NULL)
         ),
     CONSTRAINT uq_orchestration_graph_runs_logical_identity
         UNIQUE (
@@ -156,7 +160,10 @@ CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests (
     CONSTRAINT ck_orchestration_interrupt_requests_lock_version
         CHECK (lock_version >= 0),
     CONSTRAINT ck_orchestration_interrupt_requests_status
-        CHECK (interrupt_status = 'pending'),
+        CHECK (interrupt_status IN (
+            'awaiting_decision', 'decision_recorded', 'resume_authorized',
+            'resume_consumed', 'decision_rejected', 'cancelled', 'expired'
+        )),
     CONSTRAINT ck_orchestration_interrupt_requests_unresolved
         CHECK (resolved_at IS NULL),
     CONSTRAINT ck_orchestration_interrupt_requests_boundary
@@ -249,8 +256,94 @@ ON orchestration_interrupt_requests (
     created_at,
     interrupt_request_id
 )
-WHERE interrupt_status = 'pending';
+WHERE interrupt_status = 'awaiting_decision';
 
 CREATE INDEX IF NOT EXISTS idx_orchestration_interrupt_requests_expiry
 ON orchestration_interrupt_requests (expires_at)
-WHERE expires_at IS NOT NULL AND interrupt_status = 'pending';
+WHERE expires_at IS NOT NULL AND interrupt_status = 'awaiting_decision';
+
+CREATE TABLE IF NOT EXISTS orchestration_human_decisions (
+    decision_id TEXT PRIMARY KEY,
+    graph_invocation_id TEXT NOT NULL REFERENCES orchestration_graph_runs (graph_invocation_id),
+    checkpoint_id TEXT NOT NULL REFERENCES orchestration_checkpoints (checkpoint_id),
+    interrupt_request_id TEXT NOT NULL REFERENCES orchestration_interrupt_requests (interrupt_request_id),
+    owner_user_id TEXT NOT NULL,
+    pipeline_run_id TEXT NOT NULL,
+    context_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    job_index INTEGER NOT NULL CHECK (job_index >= 0),
+    selected_resume_id TEXT NOT NULL,
+    operator_review_artifact_digest TEXT NOT NULL CHECK (operator_review_artifact_digest ~ '^[0-9a-f]{64}$'),
+    decision_value TEXT NOT NULL CHECK (decision_value IN ('continue_read_only', 'needs_revision', 'cancel')),
+    actor_id TEXT NOT NULL,
+    client_idempotency_key TEXT NOT NULL,
+    expected_interrupt_status TEXT NOT NULL CHECK (expected_interrupt_status = 'awaiting_decision'),
+    expected_interrupt_version INTEGER NOT NULL CHECK (expected_interrupt_version >= 0),
+    expected_run_lock_version INTEGER NOT NULL CHECK (expected_run_lock_version >= 0),
+    decision_record_status TEXT NOT NULL CHECK (decision_record_status IN ('recorded', 'rejected')),
+    reason TEXT NOT NULL DEFAULT '' CHECK (octet_length(reason) <= 4096),
+    rejection_code TEXT NOT NULL DEFAULT '',
+    application_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (application_authorization = FALSE),
+    created_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT uq_orchestration_human_decisions_idempotency UNIQUE (interrupt_request_id, client_idempotency_key)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_orchestration_human_decisions_current
+ON orchestration_human_decisions (interrupt_request_id)
+WHERE decision_record_status = 'recorded';
+
+CREATE TABLE IF NOT EXISTS orchestration_resume_authorizations (
+    authorization_id TEXT PRIMARY KEY,
+    decision_id TEXT NOT NULL UNIQUE REFERENCES orchestration_human_decisions (decision_id),
+    graph_invocation_id TEXT NOT NULL REFERENCES orchestration_graph_runs (graph_invocation_id),
+    checkpoint_id TEXT NOT NULL REFERENCES orchestration_checkpoints (checkpoint_id),
+    interrupt_request_id TEXT NOT NULL REFERENCES orchestration_interrupt_requests (interrupt_request_id),
+    owner_user_id TEXT NOT NULL,
+    pipeline_run_id TEXT NOT NULL,
+    context_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    job_index INTEGER NOT NULL CHECK (job_index >= 0),
+    selected_resume_id TEXT NOT NULL,
+    operator_review_artifact_digest TEXT NOT NULL CHECK (operator_review_artifact_digest ~ '^[0-9a-f]{64}$'),
+    decision_value TEXT NOT NULL CHECK (decision_value = 'continue_read_only'),
+    safe_next_node_key TEXT NOT NULL CHECK (safe_next_node_key = 'finalize'),
+    authorization_token_hash TEXT NOT NULL CHECK (authorization_token_hash ~ '^[0-9a-f]{64}$'),
+    authorization_status TEXT NOT NULL CHECK (authorization_status IN ('authorized', 'consumed', 'expired', 'revoked')),
+    lock_version INTEGER NOT NULL DEFAULT 0 CHECK (lock_version >= 0),
+    read_only BOOLEAN NOT NULL DEFAULT TRUE CHECK (read_only = TRUE),
+    application_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (application_authorization = FALSE),
+    resume_text_mutation_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (resume_text_mutation_authorization = FALSE),
+    queue_mutation_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (queue_mutation_authorization = FALSE),
+    operator_state_mutation_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (operator_state_mutation_authorization = FALSE),
+    created_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS orchestration_resume_consumptions (
+    consumption_id TEXT PRIMARY KEY,
+    authorization_id TEXT NOT NULL UNIQUE REFERENCES orchestration_resume_authorizations (authorization_id),
+    decision_id TEXT NOT NULL REFERENCES orchestration_human_decisions (decision_id),
+    graph_invocation_id TEXT NOT NULL REFERENCES orchestration_graph_runs (graph_invocation_id),
+    checkpoint_id TEXT NOT NULL REFERENCES orchestration_checkpoints (checkpoint_id),
+    interrupt_request_id TEXT NOT NULL REFERENCES orchestration_interrupt_requests (interrupt_request_id),
+    owner_user_id TEXT NOT NULL,
+    pipeline_run_id TEXT NOT NULL,
+    context_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    job_index INTEGER NOT NULL CHECK (job_index >= 0),
+    selected_resume_id TEXT NOT NULL,
+    resume_invocation_id TEXT NOT NULL UNIQUE,
+    consumer_instance_id TEXT NOT NULL,
+    claimed_at TIMESTAMPTZ NOT NULL,
+    claim_status TEXT NOT NULL CHECK (claim_status IN ('claimed', 'reconciled', 'failed')),
+    expected_authorization_version INTEGER NOT NULL CHECK (expected_authorization_version >= 0),
+    application_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (application_authorization = FALSE)
+);
+
+CREATE INDEX IF NOT EXISTS idx_orchestration_human_decisions_owner_interrupt
+ON orchestration_human_decisions (owner_user_id, interrupt_request_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orchestration_resume_authorizations_owner_status
+ON orchestration_resume_authorizations (owner_user_id, authorization_status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_orchestration_resume_consumptions_owner_authorization
+ON orchestration_resume_consumptions (owner_user_id, authorization_id);

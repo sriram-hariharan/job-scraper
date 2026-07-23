@@ -91,13 +91,19 @@ def _contracts(**overrides):
 def test_schema_has_exact_non_colliding_objects_and_static_only_scope():
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
 
-    assert schema.count("CREATE TABLE IF NOT EXISTS") == 3
+    assert schema.count("CREATE TABLE IF NOT EXISTS") == 6
     assert "CREATE TABLE IF NOT EXISTS orchestration_graph_runs" in schema
     assert "CREATE TABLE IF NOT EXISTS orchestration_checkpoints" in schema
     assert (
         "CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests"
         in schema
     )
+    for approved_step3_table in (
+        "orchestration_human_decisions",
+        "orchestration_resume_authorizations",
+        "orchestration_resume_consumptions",
+    ):
+        assert f"CREATE TABLE IF NOT EXISTS {approved_step3_table}" in schema
     assert "CREATE TABLE IF NOT EXISTS agent_runs" not in schema
     assert "CREATE TABLE IF NOT EXISTS agent_steps" not in schema
     assert "\nINSERT INTO " not in schema
@@ -119,7 +125,7 @@ def test_schema_defines_keys_cas_constraints_and_immutable_checkpoint_shape():
     assert "fk_orchestration_interrupt_requests_checkpoint" in schema
     assert "uq_orchestration_checkpoints_run_sequence" in schema
     assert "uq_orchestration_interrupt_requests_checkpoint_node" in schema
-    assert schema.count("lock_version INTEGER NOT NULL DEFAULT 0") == 2
+    assert schema.count("lock_version INTEGER NOT NULL DEFAULT 0") == 3
     assert "CHECK (lock_version >= 0)" in schema
     assert "ON CONFLICT" not in schema
     assert "updated_at" not in schema.split(
@@ -134,8 +140,8 @@ def test_schema_defines_keys_cas_constraints_and_immutable_checkpoint_shape():
 def test_schema_status_safety_payload_bounds_and_targeted_indexes_are_exact():
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
 
-    assert "run_status IN ('running', 'awaiting_decision')" in schema
-    assert "CHECK (interrupt_status = 'pending')" in schema
+    assert "'running', 'awaiting_decision', 'decision_recorded'" in schema
+    assert "'awaiting_decision', 'decision_recorded', 'resume_authorized'" in schema
     assert "node_key = 'operator_review'" in schema
     assert "safe_next_node_key = 'finalize'" in schema
     assert (
@@ -168,6 +174,11 @@ def test_table_specs_capture_relationships_immutability_and_status_vocabularies(
     assert specs["orchestration_graph_runs"]["status_values"] == [
         "running",
         "awaiting_decision",
+        "decision_recorded",
+        "resume_authorized",
+        "resume_consumed",
+        "decision_rejected",
+        "cancelled",
     ]
     assert specs["orchestration_graph_runs"]["cas_column"] == "lock_version"
     assert specs["orchestration_checkpoints"]["immutable"] is True
@@ -181,7 +192,13 @@ def test_table_specs_capture_relationships_immutability_and_status_vocabularies(
         "checkpoint_id": "orchestration_checkpoints.checkpoint_id",
     }
     assert specs["orchestration_interrupt_requests"]["status_values"] == [
-        "pending"
+        "awaiting_decision",
+        "decision_recorded",
+        "resume_authorized",
+        "resume_consumed",
+        "decision_rejected",
+        "cancelled",
+        "expired",
     ]
 
 
@@ -443,7 +460,7 @@ def test_owner_scoped_reads_bind_owner_and_current_checkpoint():
         )
     assert "graph_run.current_checkpoint_id" in checkpoint_read["sql"]
     assert "graph_run.current_checkpoint_id" in interrupt_read["sql"]
-    assert interrupt_read["params"]["interrupt_status"] == "pending"
+    assert interrupt_read["params"]["interrupt_status"] == "awaiting_decision"
     with pytest.raises(ValueError, match="owner_user_id"):
         store.prepare_current_graph_run_read(
             owner_user_id="",

@@ -9,13 +9,20 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+import re
 from typing import Any, Mapping
 
 from src.agents import evidence_chain_langgraph_harness as harness
 
 
-GRAPH_RUN_STATUS_VALUES = ("running", "awaiting_decision")
-INTERRUPT_STATUS_VALUES = ("pending",)
+GRAPH_RUN_STATUS_VALUES = (
+    "running", "awaiting_decision", "decision_recorded", "resume_authorized",
+    "resume_consumed", "decision_rejected", "cancelled",
+)
+INTERRUPT_STATUS_VALUES = (
+    "awaiting_decision", "decision_recorded", "resume_authorized",
+    "resume_consumed", "decision_rejected", "cancelled", "expired",
+)
 MAX_CHECKPOINT_ENVELOPE_BYTES = 1_048_576
 MAX_INTERRUPT_REQUEST_BYTES = 262_144
 
@@ -427,7 +434,7 @@ def prepare_interrupt_request_row(
             validated["allowed_decision_values"]
         ),
         "interrupt_request_json": deepcopy(validated),
-        "interrupt_status": "pending",
+        "interrupt_status": "awaiting_decision",
         "lock_version": 0,
         "read_only": True,
         "diagnostic_only": True,
@@ -690,7 +697,7 @@ def prepare_pending_interrupt_read(
     params = {
         "owner_user_id": _clean_text(owner_user_id),
         "graph_invocation_id": _clean_text(graph_invocation_id),
-        "interrupt_status": "pending",
+        "interrupt_status": "awaiting_decision",
     }
     for key in ("owner_user_id", "graph_invocation_id"):
         if not params[key]:
@@ -939,3 +946,370 @@ FROM advanced_run
         params=params,
         read_only=False,
     )
+
+
+_DECISION_COLUMNS = (
+    "decision_id", "graph_invocation_id", "checkpoint_id",
+    "interrupt_request_id", *_IDENTITY_COLUMNS,
+    "operator_review_artifact_digest", "decision_value", "actor_id",
+    "client_idempotency_key", "expected_interrupt_status",
+    "expected_interrupt_version", "expected_run_lock_version",
+    "decision_record_status", "reason", "rejection_code",
+    "application_authorization", "created_at",
+)
+_AUTHORIZATION_COLUMNS = (
+    "authorization_id", "decision_id", "graph_invocation_id", "checkpoint_id",
+    "interrupt_request_id", *_IDENTITY_COLUMNS,
+    "operator_review_artifact_digest", "decision_value",
+    "safe_next_node_key", "authorization_token_hash",
+    "authorization_status", "lock_version", "read_only",
+    "application_authorization", "resume_text_mutation_authorization",
+    "queue_mutation_authorization", "operator_state_mutation_authorization",
+    "created_at", "expires_at", "consumed_at",
+)
+_CONSUMPTION_COLUMNS = (
+    "consumption_id", "authorization_id", "decision_id",
+    "graph_invocation_id", "checkpoint_id", "interrupt_request_id",
+    *_IDENTITY_COLUMNS, "resume_invocation_id", "consumer_instance_id",
+    "claimed_at", "claim_status", "expected_authorization_version",
+    "application_authorization",
+)
+
+
+def _deterministic_id(prefix: str, payload: Mapping[str, Any]) -> str:
+    _reject_prohibited_payload(payload, field_path=prefix)
+    return f"{prefix}:{harness._checkpoint_digest(payload)}"
+
+
+def prepare_human_decision_row(
+    interrupt_row: Mapping[str, Any],
+    *,
+    decision_value: str,
+    actor_id: str,
+    client_idempotency_key: str,
+    expected_interrupt_version: int,
+    expected_run_lock_version: int,
+    created_at: str,
+    reason: str = "",
+) -> dict[str, Any]:
+    _require_exact_fields(interrupt_row, _INTERRUPT_COLUMNS, "interrupt_row")
+    decision = _clean_text(decision_value)
+    if decision not in harness.OPERATOR_REVIEW_INTERRUPT_ALLOWED_DECISIONS:
+        raise ValueError("decision_value_unsupported")
+    actor = _clean_text(actor_id)
+    idempotency_key = _clean_text(client_idempotency_key)
+    created = _clean_text(created_at)
+    if not actor or not idempotency_key or not created:
+        raise ValueError("decision_required_field_missing")
+    note = _clean_text(reason)
+    if len(note.encode("utf-8")) > 4096:
+        raise ValueError("decision_reason_too_large")
+    seed = {
+        "interrupt_request_id": interrupt_row["interrupt_request_id"],
+        "client_idempotency_key": idempotency_key,
+        "decision_value": decision,
+        "actor_id": actor,
+        "graph_invocation_id": interrupt_row["graph_invocation_id"],
+        "checkpoint_id": interrupt_row["checkpoint_id"],
+        "operator_review_artifact_digest": interrupt_row[
+            "operator_review_artifact_digest"
+        ],
+    }
+    return {
+        "decision_id": _deterministic_id("human-decision", seed),
+        "graph_invocation_id": interrupt_row["graph_invocation_id"],
+        "checkpoint_id": interrupt_row["checkpoint_id"],
+        "interrupt_request_id": interrupt_row["interrupt_request_id"],
+        **{key: deepcopy(interrupt_row[key]) for key in _IDENTITY_COLUMNS},
+        "operator_review_artifact_digest": interrupt_row[
+            "operator_review_artifact_digest"
+        ],
+        "decision_value": decision,
+        "actor_id": actor,
+        "client_idempotency_key": idempotency_key,
+        "expected_interrupt_status": "awaiting_decision",
+        "expected_interrupt_version": _require_nonnegative_int(
+            expected_interrupt_version, "expected_interrupt_version"
+        ),
+        "expected_run_lock_version": _require_nonnegative_int(
+            expected_run_lock_version, "expected_run_lock_version"
+        ),
+        "decision_record_status": "recorded",
+        "reason": note,
+        "rejection_code": "",
+        "application_authorization": False,
+        "created_at": created,
+    }
+
+
+def prepare_resume_authorization_row(
+    decision_row: Mapping[str, Any],
+    *,
+    authorization_token_hash: str,
+    created_at: str,
+    expires_at: str,
+) -> dict[str, Any]:
+    _require_exact_fields(decision_row, _DECISION_COLUMNS, "decision_row")
+    if decision_row["decision_value"] != "continue_read_only":
+        raise ValueError("decision_not_resume_authorizable")
+    token_hash = _clean_text(authorization_token_hash)
+    if re.fullmatch(r"[0-9a-f]{64}", token_hash) is None:
+        raise ValueError("authorization_token_hash_invalid")
+    created, expires = _clean_text(created_at), _clean_text(expires_at)
+    if not created or not expires:
+        raise ValueError("authorization_timestamp_required")
+    seed = {
+        "decision_id": decision_row["decision_id"],
+        "interrupt_request_id": decision_row["interrupt_request_id"],
+        "authorization_token_hash": token_hash,
+        "safe_next_node_key": "finalize",
+    }
+    return {
+        "authorization_id": _deterministic_id("resume-authorization", seed),
+        "decision_id": decision_row["decision_id"],
+        "graph_invocation_id": decision_row["graph_invocation_id"],
+        "checkpoint_id": decision_row["checkpoint_id"],
+        "interrupt_request_id": decision_row["interrupt_request_id"],
+        **{key: deepcopy(decision_row[key]) for key in _IDENTITY_COLUMNS},
+        "operator_review_artifact_digest": decision_row[
+            "operator_review_artifact_digest"
+        ],
+        "decision_value": "continue_read_only",
+        "safe_next_node_key": "finalize",
+        "authorization_token_hash": token_hash,
+        "authorization_status": "authorized",
+        "lock_version": 0,
+        "read_only": True,
+        "application_authorization": False,
+        "resume_text_mutation_authorization": False,
+        "queue_mutation_authorization": False,
+        "operator_state_mutation_authorization": False,
+        "created_at": created,
+        "expires_at": expires,
+        "consumed_at": None,
+    }
+
+
+def prepare_resume_consumption_row(
+    authorization_row: Mapping[str, Any],
+    *,
+    consumer_instance_id: str,
+    claimed_at: str,
+    expected_authorization_version: int,
+) -> dict[str, Any]:
+    _require_exact_fields(
+        authorization_row, _AUTHORIZATION_COLUMNS, "authorization_row"
+    )
+    if authorization_row["authorization_status"] != "authorized":
+        raise ValueError("authorization_not_consumable")
+    consumer, claimed = (
+        _clean_text(consumer_instance_id), _clean_text(claimed_at)
+    )
+    if not consumer or not claimed:
+        raise ValueError("consumption_required_field_missing")
+    resume_seed = {
+        "authorization_id": authorization_row["authorization_id"],
+        "consumer_instance_id": consumer,
+    }
+    resume_id = _deterministic_id("resume-invocation", resume_seed)
+    return {
+        "consumption_id": _deterministic_id(
+            "resume-consumption",
+            {"authorization_id": authorization_row["authorization_id"]},
+        ),
+        "authorization_id": authorization_row["authorization_id"],
+        "decision_id": authorization_row["decision_id"],
+        "graph_invocation_id": authorization_row["graph_invocation_id"],
+        "checkpoint_id": authorization_row["checkpoint_id"],
+        "interrupt_request_id": authorization_row["interrupt_request_id"],
+        **{key: deepcopy(authorization_row[key]) for key in _IDENTITY_COLUMNS},
+        "resume_invocation_id": resume_id,
+        "consumer_instance_id": consumer,
+        "claimed_at": claimed,
+        "claim_status": "claimed",
+        "expected_authorization_version": _require_nonnegative_int(
+            expected_authorization_version, "expected_authorization_version"
+        ),
+        "application_authorization": False,
+    }
+
+
+def _owner_scoped_read(
+    operation: str, table: str, id_column: str, id_value: str,
+    owner_user_id: str,
+) -> dict[str, Any]:
+    owner, identifier = _clean_text(owner_user_id), _clean_text(id_value)
+    if not owner or not identifier:
+        raise ValueError("owner_and_identity_required")
+    return _command(
+        operation=operation, tables=(table,), read_only=True,
+        sql=f"SELECT * FROM {table} WHERE owner_user_id = %(owner_user_id)s "
+            f"AND {id_column} = %(identity)s LIMIT 1",
+        params={"owner_user_id": owner, "identity": identifier},
+    )
+
+
+def prepare_current_decision_read(*, owner_user_id: str, interrupt_request_id: str):
+    return _owner_scoped_read(
+        "prepare_current_decision_read", "orchestration_human_decisions",
+        "interrupt_request_id", interrupt_request_id, owner_user_id,
+    )
+
+
+def prepare_resume_authorization_read(*, owner_user_id: str, decision_id: str):
+    return _owner_scoped_read(
+        "prepare_resume_authorization_read",
+        "orchestration_resume_authorizations", "decision_id", decision_id,
+        owner_user_id,
+    )
+
+
+def prepare_resume_consumption_read(*, owner_user_id: str, authorization_id: str):
+    return _owner_scoped_read(
+        "prepare_resume_consumption_read", "orchestration_resume_consumptions",
+        "authorization_id", authorization_id, owner_user_id,
+    )
+
+
+def prepare_authorized_resume_work_read(*, owner_user_id: str, graph_invocation_id: str):
+    owner, graph_id = _clean_text(owner_user_id), _clean_text(graph_invocation_id)
+    if not owner or not graph_id:
+        raise ValueError("owner_and_identity_required")
+    return _command(
+        operation="prepare_authorized_resume_work_read",
+        tables=("orchestration_resume_authorizations",),
+        read_only=True,
+        sql="SELECT * FROM orchestration_resume_authorizations "
+            "WHERE owner_user_id = %(owner_user_id)s "
+            "AND graph_invocation_id = %(graph_invocation_id)s "
+            "AND authorization_status = 'authorized' ORDER BY created_at LIMIT 1",
+        params={"owner_user_id": owner, "graph_invocation_id": graph_id},
+    )
+
+
+def _atomic_transition_command(
+    operation: str, row: Mapping[str, Any], columns: tuple[str, ...],
+    insert_table: str, expected_run_status: str,
+    expected_interrupt_status: str, next_run_status: str,
+    next_interrupt_status: str, insert_columns: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    _require_exact_fields(row, columns, operation)
+    params = deepcopy(dict(row))
+    params.update({
+        "expected_run_status": expected_run_status,
+        "expected_interrupt_status": expected_interrupt_status,
+        "next_run_status": next_run_status,
+        "next_interrupt_status": next_interrupt_status,
+    })
+    persisted_columns = insert_columns or columns
+    column_sql = ", ".join(persisted_columns)
+    value_sql = ", ".join(f"%({column})s" for column in persisted_columns)
+    sql = f"""
+WITH locked_run AS (
+ SELECT * FROM orchestration_graph_runs
+ WHERE graph_invocation_id = %(graph_invocation_id)s
+   AND owner_user_id = %(owner_user_id)s
+   AND current_checkpoint_id = %(checkpoint_id)s
+   AND run_status = %(expected_run_status)s
+   AND lock_version = %(expected_run_lock_version)s FOR UPDATE
+), locked_interrupt AS (
+ SELECT * FROM orchestration_interrupt_requests
+ WHERE interrupt_request_id = %(interrupt_request_id)s
+   AND checkpoint_id = %(checkpoint_id)s
+   AND operator_review_artifact_digest = %(operator_review_artifact_digest)s
+   AND interrupt_status = %(expected_interrupt_status)s
+   AND lock_version = %(expected_interrupt_version)s FOR UPDATE
+), inserted AS (
+ INSERT INTO {insert_table} ({column_sql})
+ SELECT {value_sql} FROM locked_run JOIN locked_interrupt ON TRUE
+ ON CONFLICT DO NOTHING RETURNING *
+), updated_interrupt AS (
+ UPDATE orchestration_interrupt_requests
+ SET interrupt_status = %(next_interrupt_status)s, lock_version = lock_version + 1
+ WHERE interrupt_request_id = %(interrupt_request_id)s
+   AND EXISTS (SELECT 1 FROM inserted) RETURNING *
+)
+UPDATE orchestration_graph_runs
+SET run_status = %(next_run_status)s, lock_version = lock_version + 1
+WHERE graph_invocation_id = %(graph_invocation_id)s
+  AND EXISTS (SELECT 1 FROM inserted)
+RETURNING *
+"""
+    return _command(
+        operation=operation,
+        tables=("orchestration_graph_runs",
+                "orchestration_interrupt_requests", insert_table),
+        sql=sql, params=params, read_only=False,
+    )
+
+
+def prepare_human_decision_recording(decision_row: Mapping[str, Any]):
+    decision = decision_row.get("decision_value")
+    next_status = {
+        "continue_read_only": "decision_recorded",
+        "needs_revision": "decision_rejected",
+        "cancel": "cancelled",
+    }.get(decision)
+    if next_status is None:
+        raise ValueError("decision_value_unsupported")
+    return _atomic_transition_command(
+        "prepare_human_decision_recording", decision_row, _DECISION_COLUMNS,
+        "orchestration_human_decisions", "awaiting_decision",
+        "awaiting_decision", next_status, next_status,
+    )
+
+
+def prepare_resume_authorization_commit(
+    authorization_row: Mapping[str, Any], *,
+    expected_run_lock_version: int, expected_interrupt_version: int,
+):
+    row = dict(authorization_row)
+    row["expected_run_lock_version"] = _require_nonnegative_int(
+        expected_run_lock_version, "expected_run_lock_version"
+    )
+    row["expected_interrupt_version"] = _require_nonnegative_int(
+        expected_interrupt_version, "expected_interrupt_version"
+    )
+    columns = (*_AUTHORIZATION_COLUMNS,
+               "expected_run_lock_version", "expected_interrupt_version")
+    return _atomic_transition_command(
+        "prepare_resume_authorization_commit", row, columns,
+        "orchestration_resume_authorizations", "decision_recorded",
+        "decision_recorded", "resume_authorized", "resume_authorized",
+        _AUTHORIZATION_COLUMNS,
+    )
+
+
+def prepare_resume_consumption_commit(
+    consumption_row: Mapping[str, Any], *, expected_run_lock_version: int,
+    expected_interrupt_version: int,
+):
+    row = dict(consumption_row)
+    row["expected_run_lock_version"] = _require_nonnegative_int(
+        expected_run_lock_version, "expected_run_lock_version"
+    )
+    row["expected_interrupt_version"] = _require_nonnegative_int(
+        expected_interrupt_version, "expected_interrupt_version"
+    )
+    columns = (*_CONSUMPTION_COLUMNS,
+               "expected_run_lock_version", "expected_interrupt_version")
+    command = _atomic_transition_command(
+        "prepare_resume_consumption_commit", row, columns,
+        "orchestration_resume_consumptions", "resume_authorized",
+        "resume_authorized", "resume_consumed", "resume_consumed",
+        _CONSUMPTION_COLUMNS,
+    )
+    command["sql"] = command["sql"].replace(
+        "), updated_interrupt AS (",
+        """), updated_authorization AS (
+ UPDATE orchestration_resume_authorizations
+ SET authorization_status = 'consumed', consumed_at = %(claimed_at)s,
+     lock_version = lock_version + 1
+ WHERE authorization_id = %(authorization_id)s
+   AND authorization_status = 'authorized'
+   AND lock_version = %(expected_authorization_version)s
+   AND EXISTS (SELECT 1 FROM inserted)
+ RETURNING *
+), updated_interrupt AS (""",
+    )
+    return command

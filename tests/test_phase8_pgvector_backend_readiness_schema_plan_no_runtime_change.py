@@ -294,7 +294,7 @@ def test_storage_schema_and_migration_files_match_phase8i_checkpoint():
     paths = [path for path in paths if path != later_schema_path]
 
     assert _aggregate_hash(paths) == (
-        "46783457f9e1017eb5d236f721185544491cb912282649c57cd460cb6b192c62"
+        "75053e5ef2e36a083a881e3eccdad98bcd194e59d41ecb508d28e6188ba30504"
     )
 
 

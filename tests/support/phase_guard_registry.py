@@ -1047,6 +1047,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_full_agentic_ai_current_state_audit_no_runtime_change.py",
             "docs/full_agentic_ai_current_state_audit_no_runtime_change.md",
         },
+        "phase8_step13_langgraph_parity_contract": {
+            "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1078,6 +1081,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
         | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")
         | legacy_guard_allowlist("phase8_step8_legacy_agent_context_retirement")
+        | legacy_guard_allowlist("phase8_step13_langgraph_parity_contract")
     )
 
 

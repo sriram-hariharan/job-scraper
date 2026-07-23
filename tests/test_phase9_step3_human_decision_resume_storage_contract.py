@@ -71,7 +71,13 @@ def test_exact_new_schema_tables_constraints_and_statuses():
         "orchestration_resume_consumptions",
     ):
         assert f"CREATE TABLE IF NOT EXISTS {table}" in schema
-    assert schema.count("CREATE TABLE IF NOT EXISTS") == 6
+    assert schema.count("CREATE TABLE IF NOT EXISTS") == 9
+    for table in (
+        "orchestration_node_attempts",
+        "orchestration_terminal_results",
+        "orchestration_lifecycle_events",
+    ):
+        assert f"CREATE TABLE IF NOT EXISTS {table}" in schema
     assert "UNIQUE (interrupt_request_id, client_idempotency_key)" in schema
     assert "WHERE decision_record_status = 'recorded'" in schema
     assert "decision_id TEXT NOT NULL UNIQUE" in schema

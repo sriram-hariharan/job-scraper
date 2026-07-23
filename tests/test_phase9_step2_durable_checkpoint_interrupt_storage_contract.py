@@ -91,7 +91,7 @@ def _contracts(**overrides):
 def test_schema_has_exact_non_colliding_objects_and_static_only_scope():
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
 
-    assert schema.count("CREATE TABLE IF NOT EXISTS") == 6
+    assert schema.count("CREATE TABLE IF NOT EXISTS") == 9
     assert "CREATE TABLE IF NOT EXISTS orchestration_graph_runs" in schema
     assert "CREATE TABLE IF NOT EXISTS orchestration_checkpoints" in schema
     assert (
@@ -104,6 +104,12 @@ def test_schema_has_exact_non_colliding_objects_and_static_only_scope():
         "orchestration_resume_consumptions",
     ):
         assert f"CREATE TABLE IF NOT EXISTS {approved_step3_table}" in schema
+    for approved_step4_table in (
+        "orchestration_node_attempts",
+        "orchestration_terminal_results",
+        "orchestration_lifecycle_events",
+    ):
+        assert f"CREATE TABLE IF NOT EXISTS {approved_step4_table}" in schema
     assert "CREATE TABLE IF NOT EXISTS agent_runs" not in schema
     assert "CREATE TABLE IF NOT EXISTS agent_steps" not in schema
     assert "\nINSERT INTO " not in schema
@@ -125,7 +131,7 @@ def test_schema_defines_keys_cas_constraints_and_immutable_checkpoint_shape():
     assert "fk_orchestration_interrupt_requests_checkpoint" in schema
     assert "uq_orchestration_checkpoints_run_sequence" in schema
     assert "uq_orchestration_interrupt_requests_checkpoint_node" in schema
-    assert schema.count("lock_version INTEGER NOT NULL DEFAULT 0") == 3
+    assert schema.count("lock_version INTEGER NOT NULL DEFAULT 0") == 4
     assert "CHECK (lock_version >= 0)" in schema
     assert "ON CONFLICT" not in schema
     assert "updated_at" not in schema.split(
@@ -178,6 +184,9 @@ def test_table_specs_capture_relationships_immutability_and_status_vocabularies(
         "resume_authorized",
         "resume_consumed",
         "decision_rejected",
+        "resumed",
+        "completed",
+        "failed",
         "cancelled",
     ]
     assert specs["orchestration_graph_runs"]["cas_column"] == "lock_version"

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS orchestration_graph_runs (
         CHECK (run_status IN (
             'running', 'awaiting_decision', 'decision_recorded',
             'resume_authorized', 'resume_consumed', 'decision_rejected',
-            'cancelled'
+            'resumed', 'completed', 'failed', 'cancelled'
         )),
     CONSTRAINT ck_orchestration_graph_runs_current_checkpoint
         CHECK (
@@ -347,3 +347,118 @@ CREATE INDEX IF NOT EXISTS idx_orchestration_resume_authorizations_owner_status
 ON orchestration_resume_authorizations (owner_user_id, authorization_status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_orchestration_resume_consumptions_owner_authorization
 ON orchestration_resume_consumptions (owner_user_id, authorization_id);
+
+CREATE TABLE IF NOT EXISTS orchestration_node_attempts (
+    node_attempt_id TEXT PRIMARY KEY,
+    graph_invocation_id TEXT NOT NULL REFERENCES orchestration_graph_runs (graph_invocation_id),
+    input_checkpoint_id TEXT NOT NULL REFERENCES orchestration_checkpoints (checkpoint_id),
+    output_checkpoint_id TEXT REFERENCES orchestration_checkpoints (checkpoint_id),
+    owner_user_id TEXT NOT NULL,
+    pipeline_run_id TEXT NOT NULL,
+    context_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    job_index INTEGER NOT NULL CHECK (job_index >= 0),
+    selected_resume_id TEXT NOT NULL,
+    node_key TEXT NOT NULL,
+    attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
+    resume_invocation_id TEXT,
+    attempt_status TEXT NOT NULL CHECK (attempt_status IN ('pending', 'claimed', 'succeeded', 'failed', 'abandoned')),
+    lease_owner_id TEXT,
+    lease_acquired_at TIMESTAMPTZ,
+    lease_expires_at TIMESTAMPTZ,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+    input_digest TEXT NOT NULL CHECK (input_digest ~ '^[0-9a-f]{64}$'),
+    output_digest TEXT CHECK (output_digest IS NULL OR output_digest ~ '^[0-9a-f]{64}$'),
+    error_code TEXT NOT NULL DEFAULT '' CHECK (octet_length(error_code) <= 256),
+    error_detail TEXT NOT NULL DEFAULT '' CHECK (octet_length(error_detail) <= 4096),
+    lock_version INTEGER NOT NULL DEFAULT 0 CHECK (lock_version >= 0),
+    application_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (application_authorization = FALSE),
+    mutation_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (mutation_authorization = FALSE),
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT uq_orchestration_node_attempt_identity
+        UNIQUE (graph_invocation_id, input_checkpoint_id, node_key, attempt_number),
+    CONSTRAINT ck_orchestration_node_attempt_output
+        CHECK (
+            (attempt_status = 'succeeded' AND output_checkpoint_id IS NOT NULL AND output_digest IS NOT NULL)
+            OR
+            (attempt_status <> 'succeeded' AND output_checkpoint_id IS NULL AND output_digest IS NULL)
+        )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_orchestration_node_attempt_success
+ON orchestration_node_attempts (graph_invocation_id, input_checkpoint_id, node_key)
+WHERE attempt_status = 'succeeded';
+
+CREATE TABLE IF NOT EXISTS orchestration_terminal_results (
+    terminal_result_id TEXT PRIMARY KEY,
+    graph_invocation_id TEXT NOT NULL UNIQUE REFERENCES orchestration_graph_runs (graph_invocation_id),
+    terminal_checkpoint_id TEXT NOT NULL REFERENCES orchestration_checkpoints (checkpoint_id),
+    owner_user_id TEXT NOT NULL,
+    pipeline_run_id TEXT NOT NULL,
+    context_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    job_index INTEGER NOT NULL CHECK (job_index >= 0),
+    selected_resume_id TEXT NOT NULL,
+    graph_state_schema_version TEXT NOT NULL,
+    checkpoint_schema_version TEXT NOT NULL,
+    terminal_status TEXT NOT NULL CHECK (terminal_status IN ('completed', 'failed', 'cancelled')),
+    result_digest TEXT NOT NULL CHECK (result_digest ~ '^[0-9a-f]{64}$'),
+    result_metadata_json JSONB NOT NULL CHECK (
+        jsonb_typeof(result_metadata_json) = 'object'
+        AND octet_length(result_metadata_json::text) <= 262144
+    ),
+    final_node_order_json JSONB NOT NULL CHECK (jsonb_typeof(final_node_order_json) = 'array'),
+    failure_code TEXT NOT NULL DEFAULT '' CHECK (
+        octet_length(failure_code) <= 256
+        AND (
+            (terminal_status = 'failed' AND failure_code <> '')
+            OR
+            (terminal_status <> 'failed' AND failure_code = '')
+        )
+    ),
+    application_authorization BOOLEAN NOT NULL DEFAULT FALSE CHECK (application_authorization = FALSE),
+    completed_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS orchestration_lifecycle_events (
+    event_id TEXT PRIMARY KEY,
+    graph_invocation_id TEXT NOT NULL REFERENCES orchestration_graph_runs (graph_invocation_id),
+    checkpoint_id TEXT REFERENCES orchestration_checkpoints (checkpoint_id),
+    interrupt_request_id TEXT REFERENCES orchestration_interrupt_requests (interrupt_request_id),
+    decision_id TEXT REFERENCES orchestration_human_decisions (decision_id),
+    authorization_id TEXT REFERENCES orchestration_resume_authorizations (authorization_id),
+    consumption_id TEXT REFERENCES orchestration_resume_consumptions (consumption_id),
+    node_attempt_id TEXT REFERENCES orchestration_node_attempts (node_attempt_id),
+    terminal_result_id TEXT REFERENCES orchestration_terminal_results (terminal_result_id),
+    owner_user_id TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN (
+        'graph_run_created', 'checkpoint_committed', 'interrupt_created',
+        'decision_recorded', 'decision_rejected', 'authorization_created',
+        'authorization_consumed', 'node_attempt_claimed',
+        'node_attempt_succeeded', 'node_attempt_failed',
+        'terminal_result_recorded', 'recovery_claim_recorded'
+    )),
+    aggregate_type TEXT NOT NULL,
+    aggregate_id TEXT NOT NULL,
+    event_sequence INTEGER NOT NULL CHECK (event_sequence >= 0),
+    event_payload_json JSONB NOT NULL CHECK (
+        jsonb_typeof(event_payload_json) = 'object'
+        AND octet_length(event_payload_json::text) <= 262144
+    ),
+    event_timestamp TIMESTAMPTZ NOT NULL,
+    projection_status TEXT NOT NULL DEFAULT 'pending' CHECK (projection_status IN ('pending', 'projected', 'failed')),
+    projected_at TIMESTAMPTZ,
+    projection_retry_count INTEGER NOT NULL DEFAULT 0 CHECK (projection_retry_count >= 0),
+    CONSTRAINT uq_orchestration_lifecycle_event_sequence
+        UNIQUE (graph_invocation_id, aggregate_type, aggregate_id, event_sequence)
+);
+
+CREATE INDEX IF NOT EXISTS idx_orchestration_node_attempts_owner_recovery
+ON orchestration_node_attempts (owner_user_id, graph_invocation_id, attempt_status, lease_expires_at);
+CREATE INDEX IF NOT EXISTS idx_orchestration_terminal_results_owner_graph
+ON orchestration_terminal_results (owner_user_id, graph_invocation_id);
+CREATE INDEX IF NOT EXISTS idx_orchestration_lifecycle_events_owner_projection
+ON orchestration_lifecycle_events (owner_user_id, graph_invocation_id, projection_status, event_sequence);

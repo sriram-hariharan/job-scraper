@@ -17,7 +17,8 @@ from src.agents import evidence_chain_langgraph_harness as harness
 
 GRAPH_RUN_STATUS_VALUES = (
     "running", "awaiting_decision", "decision_recorded", "resume_authorized",
-    "resume_consumed", "decision_rejected", "cancelled",
+    "resume_consumed", "decision_rejected", "resumed", "completed", "failed",
+    "cancelled",
 )
 INTERRUPT_STATUS_VALUES = (
     "awaiting_decision", "decision_recorded", "resume_authorized",
@@ -1313,3 +1314,911 @@ def prepare_resume_consumption_commit(
 ), updated_interrupt AS (""",
     )
     return command
+
+
+NODE_ATTEMPT_STATUS_VALUES = (
+    "pending", "claimed", "succeeded", "failed", "abandoned",
+)
+TERMINAL_STATUS_VALUES = ("completed", "failed", "cancelled")
+LIFECYCLE_EVENT_TYPE_VALUES = (
+    "graph_run_created", "checkpoint_committed", "interrupt_created",
+    "decision_recorded", "decision_rejected", "authorization_created",
+    "authorization_consumed", "node_attempt_claimed",
+    "node_attempt_succeeded", "node_attempt_failed",
+    "terminal_result_recorded", "recovery_claim_recorded",
+)
+_NODE_ATTEMPT_COLUMNS = (
+    "node_attempt_id", "graph_invocation_id", "input_checkpoint_id",
+    "output_checkpoint_id", *_IDENTITY_COLUMNS, "node_key",
+    "attempt_number", "resume_invocation_id", "attempt_status",
+    "lease_owner_id", "lease_acquired_at", "lease_expires_at", "started_at",
+    "completed_at", "duration_ms", "input_digest", "output_digest",
+    "error_code", "error_detail", "lock_version",
+    "application_authorization", "mutation_authorization",
+    "created_at", "updated_at",
+)
+_TERMINAL_RESULT_COLUMNS = (
+    "terminal_result_id", "graph_invocation_id", "terminal_checkpoint_id",
+    *_IDENTITY_COLUMNS, "graph_state_schema_version",
+    "checkpoint_schema_version", "terminal_status", "result_digest",
+    "result_metadata_json", "final_node_order_json", "failure_code",
+    "application_authorization", "completed_at",
+)
+_LIFECYCLE_EVENT_COLUMNS = (
+    "event_id", "graph_invocation_id", "checkpoint_id",
+    "interrupt_request_id", "decision_id", "authorization_id",
+    "consumption_id", "node_attempt_id", "terminal_result_id",
+    "owner_user_id", "event_type", "aggregate_type", "aggregate_id",
+    "event_sequence", "event_payload_json", "event_timestamp",
+    "projection_status", "projected_at", "projection_retry_count",
+)
+
+
+def _require_digest(value: Any, key: str) -> str:
+    digest = _clean_text(value)
+    if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise ValueError(f"{key}_invalid")
+    return digest
+
+
+def prepare_node_attempt_row(
+    graph_run_row: Mapping[str, Any],
+    *,
+    input_checkpoint_id: str,
+    node_key: str,
+    attempt_number: int,
+    input_digest: str,
+    created_at: str,
+    resume_invocation_id: str = "",
+) -> dict[str, Any]:
+    _graph_run_params(graph_run_row)
+    checkpoint_id = _clean_text(input_checkpoint_id)
+    node = _clean_text(node_key)
+    if not checkpoint_id:
+        raise ValueError("input_checkpoint_id_required")
+    if node not in (*harness.ORDERED_AGENT_KEYS, "finalize"):
+        raise ValueError("node_key_unsupported")
+    attempt = _require_nonnegative_int(attempt_number, "attempt_number")
+    if attempt < 1:
+        raise ValueError("attempt_number_must_be_positive")
+    created = _clean_text(created_at)
+    if not created:
+        raise ValueError("created_at is required.")
+    resume_id = _optional_text(resume_invocation_id)
+    seed = {
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        "input_checkpoint_id": checkpoint_id,
+        "node_key": node,
+        "attempt_number": attempt,
+        "resume_invocation_id": resume_id,
+    }
+    return {
+        "node_attempt_id": _deterministic_id("node-attempt", seed),
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        "input_checkpoint_id": checkpoint_id,
+        "output_checkpoint_id": None,
+        **{key: deepcopy(graph_run_row[key]) for key in _IDENTITY_COLUMNS},
+        "node_key": node,
+        "attempt_number": attempt,
+        "resume_invocation_id": resume_id,
+        "attempt_status": "pending",
+        "lease_owner_id": None,
+        "lease_acquired_at": None,
+        "lease_expires_at": None,
+        "started_at": None,
+        "completed_at": None,
+        "duration_ms": None,
+        "input_digest": _require_digest(input_digest, "input_digest"),
+        "output_digest": None,
+        "error_code": "",
+        "error_detail": "",
+        "lock_version": 0,
+        "application_authorization": False,
+        "mutation_authorization": False,
+        "created_at": created,
+        "updated_at": created,
+    }
+
+
+def prepare_terminal_result_row(
+    graph_run_row: Mapping[str, Any],
+    *,
+    terminal_checkpoint_id: str,
+    checkpoint_schema_version: str,
+    terminal_status: str,
+    result_metadata: Mapping[str, Any],
+    completed_at: str,
+    failure_code: str = "",
+) -> dict[str, Any]:
+    _graph_run_params(graph_run_row)
+    status = _clean_text(terminal_status)
+    if status not in TERMINAL_STATUS_VALUES:
+        raise ValueError("terminal_status_unsupported")
+    checkpoint_id = _clean_text(terminal_checkpoint_id)
+    if not checkpoint_id:
+        raise ValueError("terminal_checkpoint_id_required")
+    if checkpoint_schema_version != harness.CHECKPOINT_SCHEMA_VERSION:
+        raise ValueError("checkpoint_schema_version_unsupported")
+    _reject_prohibited_payload(result_metadata, field_path="result_metadata")
+    metadata_json = json.loads(
+        _canonical_json(result_metadata, field_path="result_metadata")
+    )
+    if len(
+        _canonical_json(
+            metadata_json, field_path="result_metadata"
+        ).encode("utf-8")
+    ) > 262144:
+        raise ValueError("result_metadata_too_large")
+    result_digest = harness._checkpoint_digest(metadata_json)
+    failure = _clean_text(failure_code)
+    completed = _clean_text(completed_at)
+    if not completed:
+        raise ValueError("completed_at_required")
+    if len(failure.encode("utf-8")) > 256:
+        raise ValueError("failure_code_too_large")
+    if status == "failed" and not failure:
+        raise ValueError("failed_terminal_result_requires_failure_code")
+    if status != "failed" and failure:
+        raise ValueError("nonfailed_terminal_result_prohibits_failure_code")
+    seed = {
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        "terminal_checkpoint_id": checkpoint_id,
+        "terminal_status": status,
+        "result_digest": result_digest,
+    }
+    return {
+        "terminal_result_id": _deterministic_id("terminal-result", seed),
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        "terminal_checkpoint_id": checkpoint_id,
+        **{key: deepcopy(graph_run_row[key]) for key in _IDENTITY_COLUMNS},
+        "graph_state_schema_version": graph_run_row[
+            "graph_state_schema_version"
+        ],
+        "checkpoint_schema_version": checkpoint_schema_version,
+        "terminal_status": status,
+        "result_digest": result_digest,
+        "result_metadata_json": deepcopy(metadata_json),
+        "final_node_order_json": list(harness.ORDERED_AGENT_KEYS),
+        "failure_code": failure,
+        "application_authorization": False,
+        "completed_at": completed,
+    }
+
+
+def prepare_lifecycle_event_row(
+    graph_run_row: Mapping[str, Any],
+    *,
+    event_type: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    event_sequence: int,
+    event_payload: Mapping[str, Any],
+    event_timestamp: str,
+    references: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    _graph_run_params(graph_run_row)
+    event = _clean_text(event_type)
+    if event not in LIFECYCLE_EVENT_TYPE_VALUES:
+        raise ValueError("event_type_unsupported")
+    aggregate, aggregate_key = (
+        _clean_text(aggregate_type), _clean_text(aggregate_id)
+    )
+    if not aggregate or not aggregate_key:
+        raise ValueError("aggregate_identity_required")
+    sequence = _require_nonnegative_int(event_sequence, "event_sequence")
+    timestamp = _clean_text(event_timestamp)
+    if not timestamp:
+        raise ValueError("event_timestamp_required")
+    _reject_prohibited_payload(event_payload, field_path="event_payload")
+    payload_json = json.loads(
+        _canonical_json(event_payload, field_path="event_payload")
+    )
+    if len(_canonical_json(payload_json, field_path="event_payload").encode()) > 262144:
+        raise ValueError("event_payload_too_large")
+    refs = dict(references or {})
+    allowed_refs = {
+        "checkpoint_id", "interrupt_request_id", "decision_id",
+        "authorization_id", "consumption_id", "node_attempt_id",
+        "terminal_result_id",
+    }
+    if set(refs) - allowed_refs:
+        raise ValueError("lifecycle_event_reference_fields_invalid")
+    normalized_refs = {
+        key: _optional_text(refs.get(key)) for key in allowed_refs
+    }
+    seed = {
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        "event_type": event,
+        "aggregate_type": aggregate,
+        "aggregate_id": aggregate_key,
+        "event_sequence": sequence,
+        "references": normalized_refs,
+        "payload_digest": harness._checkpoint_digest(payload_json),
+    }
+    return {
+        "event_id": _deterministic_id("lifecycle-event", seed),
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        **normalized_refs,
+        "owner_user_id": graph_run_row["owner_user_id"],
+        "event_type": event,
+        "aggregate_type": aggregate,
+        "aggregate_id": aggregate_key,
+        "event_sequence": sequence,
+        "event_payload_json": deepcopy(payload_json),
+        "event_timestamp": timestamp,
+        "projection_status": "pending",
+        "projected_at": None,
+        "projection_retry_count": 0,
+    }
+
+
+def terminal_results_are_identical(
+    existing: Mapping[str, Any], candidate: Mapping[str, Any]
+) -> bool:
+    _require_exact_fields(existing, _TERMINAL_RESULT_COLUMNS, "terminal_result")
+    _require_exact_fields(candidate, _TERMINAL_RESULT_COLUMNS, "terminal_result")
+    return _canonical_json(existing, field_path="existing_terminal") == (
+        _canonical_json(candidate, field_path="candidate_terminal")
+    )
+
+
+def require_idempotent_terminal_result(
+    existing: Mapping[str, Any], candidate: Mapping[str, Any]
+) -> dict[str, Any]:
+    if not terminal_results_are_identical(existing, candidate):
+        raise ValueError("terminal_result_digest_conflict")
+    return deepcopy(dict(candidate))
+
+
+def _prefixed_params(prefix: str, row: Mapping[str, Any]) -> dict[str, Any]:
+    return {f"{prefix}_{key}": deepcopy(value) for key, value in row.items()}
+
+
+def prepare_pending_node_attempt_insert(attempt_row: Mapping[str, Any]):
+    _require_exact_fields(attempt_row, _NODE_ATTEMPT_COLUMNS, "node_attempt")
+    columns = ", ".join(_NODE_ATTEMPT_COLUMNS)
+    values = ", ".join(f"%({column})s" for column in _NODE_ATTEMPT_COLUMNS)
+    return _command(
+        operation="prepare_pending_node_attempt_insert",
+        tables=("orchestration_node_attempts",), read_only=False,
+        sql=f"INSERT INTO orchestration_node_attempts ({columns}) VALUES "
+            f"({values}) ON CONFLICT "
+            "(graph_invocation_id, input_checkpoint_id, node_key, attempt_number) "
+            "DO NOTHING RETURNING *",
+        params=attempt_row,
+    )
+
+
+def _attempt_transition_command(
+    operation: str, attempt_row: Mapping[str, Any],
+    lifecycle_event_row: Mapping[str, Any], *, expected_status: str,
+    next_status: str, expected_lock_version: int,
+    expected_run_status: str, expected_run_lock_version: int,
+    extra_set: str = "",
+):
+    _require_exact_fields(attempt_row, _NODE_ATTEMPT_COLUMNS, "node_attempt")
+    _require_exact_fields(
+        lifecycle_event_row, _LIFECYCLE_EVENT_COLUMNS, "lifecycle_event"
+    )
+    if (
+        lifecycle_event_row["graph_invocation_id"]
+        != attempt_row["graph_invocation_id"]
+        or lifecycle_event_row["owner_user_id"]
+        != attempt_row["owner_user_id"]
+        or lifecycle_event_row["node_attempt_id"]
+        != attempt_row["node_attempt_id"]
+    ):
+        raise ValueError("attempt_lifecycle_identity_mismatch")
+    expected_event_type = {
+        "prepare_node_attempt_claim": "node_attempt_claimed",
+        "prepare_node_attempt_success": "node_attempt_succeeded",
+        "prepare_node_attempt_failure": "node_attempt_failed",
+        "prepare_expired_attempt_abandonment": "node_attempt_failed",
+    }[operation]
+    if lifecycle_event_row["event_type"] != expected_event_type:
+        raise ValueError("attempt_lifecycle_event_type_mismatch")
+    params = {
+        **_prefixed_params("attempt", attempt_row),
+        **_prefixed_params("event", lifecycle_event_row),
+        "expected_status": expected_status,
+        "next_status": next_status,
+        "expected_lock_version": _require_nonnegative_int(
+            expected_lock_version, "expected_lock_version"
+        ),
+        "expected_run_status": _clean_text(expected_run_status),
+        "expected_run_lock_version": _require_nonnegative_int(
+            expected_run_lock_version, "expected_run_lock_version"
+        ),
+    }
+    if params["expected_run_status"] not in (
+        "resume_consumed", "resumed",
+    ):
+        raise ValueError("node_attempt_run_status_unsupported")
+    sql = f"""
+WITH locked_run AS (
+ SELECT * FROM orchestration_graph_runs
+ WHERE graph_invocation_id = %(attempt_graph_invocation_id)s
+   AND owner_user_id = %(attempt_owner_user_id)s
+   AND current_checkpoint_id = %(attempt_input_checkpoint_id)s
+   AND run_status = %(expected_run_status)s
+   AND lock_version = %(expected_run_lock_version)s
+ FOR UPDATE
+), updated_attempt AS (
+ UPDATE orchestration_node_attempts
+ SET attempt_status = %(next_status)s, lock_version = lock_version + 1,
+     updated_at = %(event_event_timestamp)s {extra_set}
+ WHERE node_attempt_id = %(attempt_node_attempt_id)s
+   AND owner_user_id = %(attempt_owner_user_id)s
+   AND attempt_status = %(expected_status)s
+   AND lock_version = %(expected_lock_version)s
+   AND EXISTS (SELECT 1 FROM locked_run)
+ RETURNING *
+), inserted_event AS (
+ INSERT INTO orchestration_lifecycle_events
+ SELECT %(event_event_id)s, %(event_graph_invocation_id)s,
+        %(event_checkpoint_id)s, %(event_interrupt_request_id)s,
+        %(event_decision_id)s, %(event_authorization_id)s,
+        %(event_consumption_id)s, %(event_node_attempt_id)s,
+        %(event_terminal_result_id)s, %(event_owner_user_id)s,
+        %(event_event_type)s, %(event_aggregate_type)s,
+        %(event_aggregate_id)s, %(event_event_sequence)s,
+        %(event_event_payload_json)s::jsonb, %(event_event_timestamp)s,
+        %(event_projection_status)s, %(event_projected_at)s,
+        %(event_projection_retry_count)s
+ FROM updated_attempt ON CONFLICT (event_id) DO NOTHING RETURNING *
+)
+SELECT * FROM updated_attempt
+"""
+    return _command(
+        operation=operation,
+        tables=("orchestration_graph_runs", "orchestration_node_attempts",
+                "orchestration_lifecycle_events"),
+        sql=sql, params=params, read_only=False,
+    )
+
+
+def prepare_node_attempt_claim(
+    attempt_row, lifecycle_event_row, *, lease_owner_id: str,
+    lease_acquired_at: str, lease_expires_at: str, expected_lock_version: int,
+    expected_run_status: str, expected_run_lock_version: int,
+):
+    lease_owner = _clean_text(lease_owner_id)
+    acquired, expires = (
+        _clean_text(lease_acquired_at), _clean_text(lease_expires_at)
+    )
+    if not lease_owner or not acquired or not expires:
+        raise ValueError("attempt_lease_fields_required")
+    command = _attempt_transition_command(
+        "prepare_node_attempt_claim", attempt_row, lifecycle_event_row,
+        expected_status="pending", next_status="claimed",
+        expected_lock_version=expected_lock_version,
+        expected_run_status=expected_run_status,
+        expected_run_lock_version=expected_run_lock_version,
+        extra_set=", lease_owner_id = %(lease_owner_id)s, "
+                  "lease_acquired_at = %(lease_acquired_at)s, "
+                  "lease_expires_at = %(lease_expires_at)s, "
+                  "started_at = %(lease_acquired_at)s",
+    )
+    command["sql"] = command["sql"].replace(
+        "attempt_status = %(expected_status)s",
+        "(attempt_status = %(expected_status)s OR "
+        "(attempt_status = 'claimed' "
+        "AND lease_expires_at < %(lease_acquired_at)s))",
+    )
+    command["params"].update({
+        "lease_owner_id": lease_owner,
+        "lease_acquired_at": acquired,
+        "lease_expires_at": expires,
+    })
+    return command
+
+
+def prepare_node_attempt_success(
+    attempt_row, lifecycle_event_row, *, output_checkpoint_id: str,
+    output_digest: str, completed_at: str, duration_ms: int,
+    lease_owner_id: str, expected_lock_version: int,
+    expected_run_status: str, expected_run_lock_version: int,
+):
+    output_checkpoint = _clean_text(output_checkpoint_id)
+    completed = _clean_text(completed_at)
+    lease_owner = _clean_text(lease_owner_id)
+    if not output_checkpoint or not completed or not lease_owner:
+        raise ValueError("attempt_success_fields_required")
+    command = _attempt_transition_command(
+        "prepare_node_attempt_success", attempt_row, lifecycle_event_row,
+        expected_status="claimed", next_status="succeeded",
+        expected_lock_version=expected_lock_version,
+        expected_run_status=expected_run_status,
+        expected_run_lock_version=expected_run_lock_version,
+        extra_set=", output_checkpoint_id = %(output_checkpoint_id)s, "
+                  "output_digest = %(output_digest)s, "
+                  "completed_at = %(completed_at)s, duration_ms = %(duration_ms)s",
+    )
+    command["params"].update({
+        "output_checkpoint_id": output_checkpoint,
+        "output_digest": _require_digest(output_digest, "output_digest"),
+        "completed_at": completed,
+        "duration_ms": _require_nonnegative_int(duration_ms, "duration_ms"),
+        "lease_owner_id": lease_owner,
+    })
+    command["sql"] = command["sql"].replace(
+        "AND attempt_status = %(expected_status)s",
+        "AND attempt_status = %(expected_status)s "
+        "AND lease_owner_id = %(lease_owner_id)s",
+    )
+    command["sql"] = command["sql"].replace(
+        "), inserted_event AS (",
+        """), advanced_run AS (
+ UPDATE orchestration_graph_runs
+ SET current_checkpoint_id = %(output_checkpoint_id)s,
+     lock_version = lock_version + 1,
+     updated_at = %(completed_at)s
+ WHERE graph_invocation_id = %(attempt_graph_invocation_id)s
+   AND owner_user_id = %(attempt_owner_user_id)s
+   AND run_status = %(expected_run_status)s
+   AND lock_version = %(expected_run_lock_version)s
+   AND EXISTS (SELECT 1 FROM updated_attempt)
+ RETURNING *
+), inserted_event AS (""",
+    )
+    command["sql"] = command["sql"].replace(
+        "FROM updated_attempt ON CONFLICT",
+        "FROM updated_attempt JOIN advanced_run ON TRUE "
+        "ON CONFLICT",
+    )
+    return command
+
+
+def prepare_node_attempt_failure(
+    attempt_row, lifecycle_event_row, *, error_code: str, error_detail: str,
+    completed_at: str, lease_owner_id: str, expected_lock_version: int,
+    expected_run_status: str, expected_run_lock_version: int,
+):
+    code, detail = _clean_text(error_code), _clean_text(error_detail)
+    completed, lease_owner = (
+        _clean_text(completed_at), _clean_text(lease_owner_id)
+    )
+    if not code or not completed or not lease_owner:
+        raise ValueError("attempt_failure_fields_required")
+    if len(code.encode()) > 256 or len(detail.encode()) > 4096:
+        raise ValueError("attempt_error_too_large")
+    command = _attempt_transition_command(
+        "prepare_node_attempt_failure", attempt_row, lifecycle_event_row,
+        expected_status="claimed", next_status="failed",
+        expected_lock_version=expected_lock_version,
+        expected_run_status=expected_run_status,
+        expected_run_lock_version=expected_run_lock_version,
+        extra_set=", error_code = %(error_code)s, error_detail = %(error_detail)s, "
+                  "completed_at = %(completed_at)s",
+    )
+    command["params"].update({
+        "error_code": code, "error_detail": detail,
+        "completed_at": completed,
+        "lease_owner_id": lease_owner,
+    })
+    command["sql"] = command["sql"].replace(
+        "AND attempt_status = %(expected_status)s",
+        "AND attempt_status = %(expected_status)s "
+        "AND lease_owner_id = %(lease_owner_id)s",
+    )
+    return command
+
+
+def prepare_expired_attempt_abandonment(
+    attempt_row, lifecycle_event_row, *, recovery_at: str,
+    expected_lock_version: int, expected_run_status: str,
+    expected_run_lock_version: int,
+):
+    recovered_at = _clean_text(recovery_at)
+    if not recovered_at:
+        raise ValueError("recovery_at_required")
+    command = _attempt_transition_command(
+        "prepare_expired_attempt_abandonment", attempt_row,
+        lifecycle_event_row, expected_status="claimed",
+        next_status="abandoned", expected_lock_version=expected_lock_version,
+        expected_run_status=expected_run_status,
+        expected_run_lock_version=expected_run_lock_version,
+    )
+    command["params"]["recovery_at"] = recovered_at
+    command["sql"] = command["sql"].replace(
+        "AND lock_version = %(expected_lock_version)s",
+        "AND lock_version = %(expected_lock_version)s "
+        "AND lease_expires_at < %(recovery_at)s",
+    )
+    return command
+
+
+def prepare_recovery_claim_inputs(
+    consumption_row: Mapping[str, Any],
+    graph_run_row: Mapping[str, Any],
+    node_attempt_row: Mapping[str, Any],
+) -> dict[str, Any]:
+    _require_exact_fields(
+        consumption_row, _CONSUMPTION_COLUMNS, "consumption_row"
+    )
+    _graph_run_params(graph_run_row)
+    _require_exact_fields(
+        node_attempt_row, _NODE_ATTEMPT_COLUMNS, "node_attempt"
+    )
+    if consumption_row["claim_status"] != "claimed":
+        raise ValueError("resume_consumption_not_claimed")
+    if graph_run_row["run_status"] != "resume_consumed":
+        raise ValueError("graph_run_not_recoverable")
+    shared = (
+        "graph_invocation_id", *_IDENTITY_COLUMNS,
+    )
+    if any(
+        consumption_row[key] != graph_run_row[key]
+        or node_attempt_row[key] != graph_run_row[key]
+        for key in shared
+    ):
+        raise ValueError("recovery_identity_mismatch")
+    if (
+        consumption_row["checkpoint_id"]
+        != graph_run_row["current_checkpoint_id"]
+        or node_attempt_row["input_checkpoint_id"]
+        != consumption_row["checkpoint_id"]
+        or node_attempt_row["resume_invocation_id"]
+        != consumption_row["resume_invocation_id"]
+    ):
+        raise ValueError("recovery_resume_identity_mismatch")
+    if node_attempt_row["attempt_status"] != "pending":
+        raise ValueError("recovery_attempt_not_pending")
+    return {
+        "consumption": deepcopy(dict(consumption_row)),
+        "graph_run": deepcopy(dict(graph_run_row)),
+        "node_attempt": deepcopy(dict(node_attempt_row)),
+    }
+
+
+def prepare_resume_recovery_claim(
+    consumption_row: Mapping[str, Any],
+    graph_run_row: Mapping[str, Any],
+    node_attempt_row: Mapping[str, Any],
+    lifecycle_event_row: Mapping[str, Any],
+    *,
+    expected_run_lock_version: int,
+):
+    rows = prepare_recovery_claim_inputs(
+        consumption_row, graph_run_row, node_attempt_row
+    )
+    _require_exact_fields(
+        lifecycle_event_row, _LIFECYCLE_EVENT_COLUMNS, "lifecycle_event"
+    )
+    if lifecycle_event_row["event_type"] != "recovery_claim_recorded":
+        raise ValueError("recovery_lifecycle_event_required")
+    if (
+        lifecycle_event_row["graph_invocation_id"]
+        != graph_run_row["graph_invocation_id"]
+        or lifecycle_event_row["owner_user_id"]
+        != graph_run_row["owner_user_id"]
+        or lifecycle_event_row["consumption_id"]
+        != consumption_row["consumption_id"]
+        or lifecycle_event_row["node_attempt_id"]
+        != node_attempt_row["node_attempt_id"]
+    ):
+        raise ValueError("recovery_lifecycle_identity_mismatch")
+    params = {
+        **_prefixed_params("consumption", rows["consumption"]),
+        **_prefixed_params("run", rows["graph_run"]),
+        **_prefixed_params("attempt", rows["node_attempt"]),
+        **_prefixed_params("event", lifecycle_event_row),
+        "expected_run_lock_version": _require_nonnegative_int(
+            expected_run_lock_version, "expected_run_lock_version"
+        ),
+    }
+    sql = """
+WITH locked_run AS (
+ SELECT * FROM orchestration_graph_runs
+ WHERE graph_invocation_id = %(run_graph_invocation_id)s
+   AND owner_user_id = %(run_owner_user_id)s
+   AND current_checkpoint_id = %(consumption_checkpoint_id)s
+   AND run_status = 'resume_consumed'
+   AND lock_version = %(expected_run_lock_version)s
+ FOR UPDATE
+), locked_consumption AS (
+ SELECT * FROM orchestration_resume_consumptions
+ WHERE consumption_id = %(consumption_consumption_id)s
+   AND authorization_id = %(consumption_authorization_id)s
+   AND decision_id = %(consumption_decision_id)s
+   AND interrupt_request_id = %(consumption_interrupt_request_id)s
+   AND graph_invocation_id = %(consumption_graph_invocation_id)s
+   AND checkpoint_id = %(consumption_checkpoint_id)s
+   AND owner_user_id = %(consumption_owner_user_id)s
+   AND resume_invocation_id = %(consumption_resume_invocation_id)s
+   AND claim_status = 'claimed'
+), inserted_attempt AS (
+ INSERT INTO orchestration_node_attempts
+ SELECT %(attempt_node_attempt_id)s, %(attempt_graph_invocation_id)s,
+        %(attempt_input_checkpoint_id)s, %(attempt_output_checkpoint_id)s,
+        %(attempt_owner_user_id)s, %(attempt_pipeline_run_id)s,
+        %(attempt_context_id)s, %(attempt_job_id)s, %(attempt_job_index)s,
+        %(attempt_selected_resume_id)s, %(attempt_node_key)s,
+        %(attempt_attempt_number)s, %(attempt_resume_invocation_id)s,
+        %(attempt_attempt_status)s, %(attempt_lease_owner_id)s,
+        %(attempt_lease_acquired_at)s, %(attempt_lease_expires_at)s,
+        %(attempt_started_at)s, %(attempt_completed_at)s,
+        %(attempt_duration_ms)s, %(attempt_input_digest)s,
+        %(attempt_output_digest)s, %(attempt_error_code)s,
+        %(attempt_error_detail)s, %(attempt_lock_version)s,
+        %(attempt_application_authorization)s,
+        %(attempt_mutation_authorization)s, %(attempt_created_at)s,
+        %(attempt_updated_at)s
+ FROM locked_run JOIN locked_consumption ON TRUE
+ ON CONFLICT (graph_invocation_id, input_checkpoint_id, node_key, attempt_number)
+ DO NOTHING RETURNING *
+), accepted_attempt AS (
+ SELECT * FROM inserted_attempt
+ UNION ALL
+ SELECT existing.* FROM orchestration_node_attempts AS existing
+ WHERE existing.node_attempt_id = %(attempt_node_attempt_id)s
+   AND existing.resume_invocation_id = %(consumption_resume_invocation_id)s
+   AND existing.input_digest = %(attempt_input_digest)s
+   AND existing.attempt_status = 'pending'
+   AND NOT EXISTS (SELECT 1 FROM inserted_attempt)
+), advanced_run AS (
+ UPDATE orchestration_graph_runs
+ SET run_status = 'resumed', lock_version = lock_version + 1,
+     updated_at = %(event_event_timestamp)s
+ WHERE graph_invocation_id = %(run_graph_invocation_id)s
+   AND run_status = 'resume_consumed'
+   AND lock_version = %(expected_run_lock_version)s
+   AND EXISTS (SELECT 1 FROM accepted_attempt)
+ RETURNING *
+), inserted_event AS (
+ INSERT INTO orchestration_lifecycle_events
+ SELECT %(event_event_id)s, %(event_graph_invocation_id)s,
+        %(event_checkpoint_id)s, %(event_interrupt_request_id)s,
+        %(event_decision_id)s, %(event_authorization_id)s,
+        %(event_consumption_id)s, %(event_node_attempt_id)s,
+        %(event_terminal_result_id)s, %(event_owner_user_id)s,
+        %(event_event_type)s, %(event_aggregate_type)s,
+        %(event_aggregate_id)s, %(event_event_sequence)s,
+        %(event_event_payload_json)s::jsonb, %(event_event_timestamp)s,
+        %(event_projection_status)s, %(event_projected_at)s,
+        %(event_projection_retry_count)s
+ FROM advanced_run
+ ON CONFLICT (event_id) DO NOTHING RETURNING *
+)
+SELECT * FROM accepted_attempt
+"""
+    return _command(
+        operation="prepare_resume_recovery_claim",
+        tables=(
+            "orchestration_graph_runs",
+            "orchestration_resume_consumptions",
+            "orchestration_node_attempts",
+            "orchestration_lifecycle_events",
+        ),
+        sql=sql,
+        params=params,
+        read_only=False,
+    )
+
+
+def prepare_terminalization(
+    graph_run_row: Mapping[str, Any],
+    terminal_result_row: Mapping[str, Any],
+    lifecycle_event_row: Mapping[str, Any],
+    *,
+    expected_run_status: str,
+    expected_run_lock_version: int,
+):
+    _graph_run_params(graph_run_row)
+    _require_exact_fields(
+        terminal_result_row, _TERMINAL_RESULT_COLUMNS, "terminal_result"
+    )
+    _require_exact_fields(
+        lifecycle_event_row, _LIFECYCLE_EVENT_COLUMNS, "lifecycle_event"
+    )
+    expected = _clean_text(expected_run_status)
+    if expected not in (
+        "awaiting_decision", "decision_recorded", "resume_authorized",
+        "resume_consumed", "decision_rejected", "resumed",
+    ):
+        raise ValueError("terminalization_expected_status_invalid")
+    if (
+        terminal_result_row["terminal_status"] not in TERMINAL_STATUS_VALUES
+        or terminal_result_row["graph_invocation_id"]
+        != graph_run_row["graph_invocation_id"]
+        or terminal_result_row["owner_user_id"]
+        != graph_run_row["owner_user_id"]
+        or terminal_result_row["terminal_checkpoint_id"]
+        != graph_run_row["current_checkpoint_id"]
+    ):
+        raise ValueError("terminal_result_identity_mismatch")
+    if (
+        lifecycle_event_row["event_type"] != "terminal_result_recorded"
+        or lifecycle_event_row["terminal_result_id"]
+        != terminal_result_row["terminal_result_id"]
+        or lifecycle_event_row["owner_user_id"]
+        != graph_run_row["owner_user_id"]
+    ):
+        raise ValueError("terminal_lifecycle_identity_mismatch")
+    params = {
+        **_prefixed_params("run", graph_run_row),
+        **_prefixed_params("terminal", terminal_result_row),
+        **_prefixed_params("event", lifecycle_event_row),
+        "expected_run_status": expected,
+        "expected_run_lock_version": _require_nonnegative_int(
+            expected_run_lock_version, "expected_run_lock_version"
+        ),
+    }
+    sql = """
+WITH locked_run AS (
+ SELECT * FROM orchestration_graph_runs
+ WHERE graph_invocation_id = %(run_graph_invocation_id)s
+   AND owner_user_id = %(run_owner_user_id)s
+   AND current_checkpoint_id = %(terminal_terminal_checkpoint_id)s
+   AND run_status = %(expected_run_status)s
+   AND run_status NOT IN ('completed', 'failed', 'cancelled')
+   AND lock_version = %(expected_run_lock_version)s
+ FOR UPDATE
+), inserted_terminal AS (
+ INSERT INTO orchestration_terminal_results
+ SELECT %(terminal_terminal_result_id)s,
+        %(terminal_graph_invocation_id)s,
+        %(terminal_terminal_checkpoint_id)s,
+        %(terminal_owner_user_id)s, %(terminal_pipeline_run_id)s,
+        %(terminal_context_id)s, %(terminal_job_id)s,
+        %(terminal_job_index)s, %(terminal_selected_resume_id)s,
+        %(terminal_graph_state_schema_version)s,
+        %(terminal_checkpoint_schema_version)s,
+        %(terminal_terminal_status)s, %(terminal_result_digest)s,
+        %(terminal_result_metadata_json)s::jsonb,
+        %(terminal_final_node_order_json)s::jsonb,
+        %(terminal_failure_code)s,
+        %(terminal_application_authorization)s,
+        %(terminal_completed_at)s
+ FROM locked_run
+ ON CONFLICT (graph_invocation_id) DO NOTHING RETURNING *
+), accepted_terminal AS (
+ SELECT * FROM inserted_terminal
+ UNION ALL
+ SELECT existing.* FROM orchestration_terminal_results AS existing
+ WHERE existing.graph_invocation_id = %(terminal_graph_invocation_id)s
+   AND existing.terminal_result_id = %(terminal_terminal_result_id)s
+   AND existing.terminal_checkpoint_id = %(terminal_terminal_checkpoint_id)s
+   AND existing.terminal_status = %(terminal_terminal_status)s
+   AND existing.result_digest = %(terminal_result_digest)s
+   AND existing.result_metadata_json = %(terminal_result_metadata_json)s::jsonb
+   AND NOT EXISTS (SELECT 1 FROM inserted_terminal)
+), terminalized_run AS (
+ UPDATE orchestration_graph_runs
+ SET run_status = %(terminal_terminal_status)s,
+     current_checkpoint_id = %(terminal_terminal_checkpoint_id)s,
+     terminal_at = %(terminal_completed_at)s,
+     updated_at = %(terminal_completed_at)s,
+     lock_version = lock_version + 1
+ WHERE graph_invocation_id = %(run_graph_invocation_id)s
+   AND run_status = %(expected_run_status)s
+   AND lock_version = %(expected_run_lock_version)s
+   AND EXISTS (SELECT 1 FROM accepted_terminal)
+ RETURNING *
+), inserted_event AS (
+ INSERT INTO orchestration_lifecycle_events
+ SELECT %(event_event_id)s, %(event_graph_invocation_id)s,
+        %(event_checkpoint_id)s, %(event_interrupt_request_id)s,
+        %(event_decision_id)s, %(event_authorization_id)s,
+        %(event_consumption_id)s, %(event_node_attempt_id)s,
+        %(event_terminal_result_id)s, %(event_owner_user_id)s,
+        %(event_event_type)s, %(event_aggregate_type)s,
+        %(event_aggregate_id)s, %(event_event_sequence)s,
+        %(event_event_payload_json)s::jsonb, %(event_event_timestamp)s,
+        %(event_projection_status)s, %(event_projected_at)s,
+        %(event_projection_retry_count)s
+ FROM terminalized_run
+ ON CONFLICT (event_id) DO NOTHING RETURNING *
+)
+SELECT * FROM accepted_terminal
+"""
+    return _command(
+        operation="prepare_terminalization",
+        tables=(
+            "orchestration_graph_runs", "orchestration_terminal_results",
+            "orchestration_lifecycle_events",
+        ),
+        sql=sql,
+        params=params,
+        read_only=False,
+    )
+
+
+def _graph_owner_read(
+    operation: str,
+    table: str,
+    graph_invocation_id: str,
+    owner_user_id: str,
+    suffix: str = "",
+    extra_params: Mapping[str, Any] | None = None,
+):
+    graph_id, owner = (
+        _clean_text(graph_invocation_id), _clean_text(owner_user_id)
+    )
+    if not graph_id or not owner:
+        raise ValueError("owner_and_graph_identity_required")
+    return _command(
+        operation=operation,
+        tables=(table,),
+        sql=f"SELECT * FROM {table} "
+            "WHERE owner_user_id = %(owner_user_id)s "
+            "AND graph_invocation_id = %(graph_invocation_id)s "
+            f"{suffix}".strip(),
+        params={
+            "owner_user_id": owner,
+            "graph_invocation_id": graph_id,
+            **deepcopy(dict(extra_params or {})),
+        },
+        read_only=True,
+    )
+
+
+def prepare_active_node_attempt_read(*, owner_user_id: str, graph_invocation_id: str):
+    return _graph_owner_read(
+        "prepare_active_node_attempt_read", "orchestration_node_attempts",
+        graph_invocation_id, owner_user_id,
+        "AND attempt_status = 'claimed' ORDER BY updated_at DESC LIMIT 1",
+    )
+
+
+def prepare_latest_successful_attempt_read(
+    *, owner_user_id: str, graph_invocation_id: str,
+    input_checkpoint_id: str, node_key: str,
+):
+    checkpoint, node = (
+        _clean_text(input_checkpoint_id), _clean_text(node_key)
+    )
+    if not checkpoint or node not in (*harness.ORDERED_AGENT_KEYS, "finalize"):
+        raise ValueError("attempt_read_identity_invalid")
+    return _graph_owner_read(
+        "prepare_latest_successful_attempt_read",
+        "orchestration_node_attempts", graph_invocation_id, owner_user_id,
+        "AND input_checkpoint_id = %(input_checkpoint_id)s "
+        "AND node_key = %(node_key)s AND attempt_status = 'succeeded' "
+        "ORDER BY attempt_number DESC LIMIT 1",
+        {"input_checkpoint_id": checkpoint, "node_key": node},
+    )
+
+
+def prepare_recoverable_expired_attempt_read(
+    *, owner_user_id: str, graph_invocation_id: str, recovery_at: str,
+):
+    recovered_at = _clean_text(recovery_at)
+    if not recovered_at:
+        raise ValueError("recovery_at_required")
+    return _graph_owner_read(
+        "prepare_recoverable_expired_attempt_read",
+        "orchestration_node_attempts", graph_invocation_id, owner_user_id,
+        "AND attempt_status = 'claimed' "
+        "AND lease_expires_at < %(recovery_at)s "
+        "ORDER BY lease_expires_at LIMIT 1",
+        {"recovery_at": recovered_at},
+    )
+
+
+def prepare_terminal_result_read(*, owner_user_id: str, graph_invocation_id: str):
+    return _graph_owner_read(
+        "prepare_terminal_result_read", "orchestration_terminal_results",
+        graph_invocation_id, owner_user_id, "LIMIT 1",
+    )
+
+
+def prepare_unprojected_lifecycle_events_read(
+    *, owner_user_id: str, graph_invocation_id: str,
+):
+    return _graph_owner_read(
+        "prepare_unprojected_lifecycle_events_read",
+        "orchestration_lifecycle_events", graph_invocation_id, owner_user_id,
+        "AND projection_status IN ('pending', 'failed') "
+        "ORDER BY event_sequence",
+    )
+
+
+def prepare_restart_reconciliation_read(
+    *, owner_user_id: str, graph_invocation_id: str,
+):
+    return _graph_owner_read(
+        "prepare_restart_reconciliation_read", "orchestration_graph_runs",
+        graph_invocation_id, owner_user_id,
+        "AND run_status IN ('resume_consumed', 'resumed') LIMIT 1",
+    )

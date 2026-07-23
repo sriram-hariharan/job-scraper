@@ -1041,6 +1041,12 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/agents/workflow_registry.py",
             "tests/test_phase8_step6_canonical_agent_registry.py",
         },
+        "phase8_step8_legacy_agent_context_retirement": {
+            "src/agents/context.py",
+            "tests/test_agent_context.py",
+            "tests/test_full_agentic_ai_current_state_audit_no_runtime_change.py",
+            "docs/full_agentic_ai_current_state_audit_no_runtime_change.md",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1071,6 +1077,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
         | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
         | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")
+        | legacy_guard_allowlist("phase8_step8_legacy_agent_context_retirement")
     )
 
 

@@ -705,6 +705,17 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }
     assert not any("*" in path for path in phase8_step6_profile)
 
+    phase8_step8_profile = legacy_guard_allowlist(
+        "phase8_step8_legacy_agent_context_retirement"
+    )
+    assert phase8_step8_profile == {
+        "src/agents/context.py",
+        "tests/test_agent_context.py",
+        "tests/test_full_agentic_ai_current_state_audit_no_runtime_change.py",
+        "docs/full_agentic_ai_current_state_audit_no_runtime_change.md",
+    }
+    assert not any("*" in path for path in phase8_step8_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -725,6 +736,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase8_step3d_profile
         | phase8_step4_profile
         | phase8_step6_profile
+        | phase8_step8_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

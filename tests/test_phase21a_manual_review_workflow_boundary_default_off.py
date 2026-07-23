@@ -775,6 +775,10 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     if changed_runtime_files == [phase8_step4_deleted_runtime_file]:
         assert not phase8_step4_deleted_runtime_file.exists()
         return
+    phase8_step8_deleted_runtime_file = ROOT / "src/agents/context.py"
+    if changed_runtime_files == [phase8_step8_deleted_runtime_file]:
+        assert not phase8_step8_deleted_runtime_file.exists()
+        return
     phase8_step6_canonical_registry_runtime_files = {
         ROOT / "src/agents/canonical_registry.py",
         ROOT / "src/agents/workflow_registry.py",

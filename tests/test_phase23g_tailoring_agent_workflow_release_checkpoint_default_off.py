@@ -379,6 +379,9 @@ def test_no_new_runtime_provider_execution_or_submission_markers():
         if relative_path == "src/ai/deterministic_skill_extractor.py":
             assert not (ROOT / relative_path).exists()
             continue
+        if relative_path == "src/agents/context.py":
+            assert not (ROOT / relative_path).exists()
+            continue
         source = (ROOT / relative_path).read_text(encoding="utf-8").lower()
         for marker in forbidden:
             assert marker not in source

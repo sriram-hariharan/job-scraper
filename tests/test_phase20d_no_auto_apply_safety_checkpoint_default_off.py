@@ -773,6 +773,10 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     if changed_runtime_files == [phase8_step4_deleted_runtime_file]:
         assert not phase8_step4_deleted_runtime_file.exists()
         return
+    phase8_step8_deleted_runtime_file = ROOT / "src/agents/context.py"
+    if changed_runtime_files == [phase8_step8_deleted_runtime_file]:
+        assert not phase8_step8_deleted_runtime_file.exists()
+        return
     phase8_step6_canonical_registry_runtime_files = {
         ROOT / "src/agents/canonical_registry.py",
         ROOT / "src/agents/workflow_registry.py",

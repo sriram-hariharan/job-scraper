@@ -1101,6 +1101,10 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
             "tests/test_phase9_step6_langgraph_operator_review_pause_resume_default_off.py",
         },
+        "phase9_step8_durable_orchestration_transaction_executor": {
+            "src/storage/durable_orchestration/repository.py",
+            "tests/test_phase9_step8_durable_orchestration_transaction_executor_contract.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1149,6 +1153,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase9_step6_inmemory_operator_review_pause_resume"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step8_durable_orchestration_transaction_executor"
         )
     )
 

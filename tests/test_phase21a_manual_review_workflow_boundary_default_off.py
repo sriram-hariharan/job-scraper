@@ -814,6 +814,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase9_step8_durable_orchestration_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/repository.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase9_step8_durable_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase133h_shared_shell_files = {
         ROOT / "src/app/application_hub_ui.py",
         ROOT / "src/app/applied_ui.py",

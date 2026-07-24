@@ -1195,6 +1195,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase10_step11_postgres_planning_snapshot_files = {
+        ROOT / "src/pipeline/postgres_planning_corpus_snapshot.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase10_step11_postgres_planning_snapshot_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase109b_live_pipeline_popup_ux_files = {
         ROOT / "src/app/ui.py",
         ROOT / "src/app/static/app.js",

@@ -1221,6 +1221,30 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
     }.isdisjoint(phase10_step8_profile)
 
+    phase10_step11_profile = legacy_guard_allowlist(
+        "phase10_step11_postgres_planning_corpus_snapshot"
+    )
+    assert phase10_step11_profile == {
+        "main.py",
+        "src/pipeline/postgres_planning_corpus_snapshot.py",
+        "tests/test_phase10_step11_postgres_planning_corpus_snapshot.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any("*" in path for path in phase10_step11_profile)
+    assert {
+        "src/storage/rag_store.py",
+        "src/rag/export_job_corpus.py",
+        "run_application_planning.py",
+        "batch_select_best_resume_variant.py",
+        "src/pipeline/post_planning_shadow.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/collector.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "requirements.txt",
+    }.isdisjoint(phase10_step11_profile)
+
     phase9_step12_compatibility_profile = legacy_guard_allowlist(
         "phase9_step12_dependency_driver_compatibility"
     )
@@ -1295,6 +1319,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase10_step5b_profile
         | phase10_step5c_profile
         | phase10_step8_profile
+        | phase10_step11_profile
         | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile

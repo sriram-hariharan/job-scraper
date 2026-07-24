@@ -1187,6 +1187,13 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase10_step8_shadow_cleanup_liveness.py",
             "tests/test_phase10_step8_shadow_observation_integration.py",
         },
+        "phase10_step11_postgres_planning_corpus_snapshot": {
+            "main.py",
+            "src/pipeline/postgres_planning_corpus_snapshot.py",
+            "tests/test_phase10_step11_postgres_planning_corpus_snapshot.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1297,6 +1304,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase10_step8_shadow_observation_safety"
+        )
+        | legacy_guard_allowlist(
+            "phase10_step11_postgres_planning_corpus_snapshot"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

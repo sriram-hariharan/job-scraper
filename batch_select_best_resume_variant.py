@@ -1417,6 +1417,25 @@ def _resolved_selection_projection(
         best_available_imperfect_match=False,
     )
 
+
+def _write_requested_shadow_resume_evidence_candidate(
+    output_path: str,
+    resume_evidence_list: List[object],
+) -> bool:
+    requested_path = str(output_path or "").strip()
+    if not requested_path:
+        return False
+
+    from src.pipeline.shadow_resume_evidence_projection import (
+        build_candidate_projection,
+        write_projection_atomic,
+    )
+
+    candidate = build_candidate_projection(resume_evidence_list)
+    write_projection_atomic(requested_path, candidate)
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Batch-select the best resume variant for multiple jobs."
@@ -1476,6 +1495,14 @@ def main() -> None:
         "--generate-llm-adjudication",
         action="store_true",
         help="For effective ties and manual-review close calls, run bounded LLM adjudication across the top two deterministic finalists.",
+    )
+    parser.add_argument(
+        "--shadow-resume-evidence-candidate-output",
+        default="",
+        help=(
+            "Optional internal path for a bounded candidate resume-evidence "
+            "projection. No projection is produced when omitted."
+        ),
     )
     args = parser.parse_args()
 
@@ -1904,6 +1931,11 @@ def main() -> None:
         writer.writeheader()
         for row in output_rows:
             writer.writerow(row)
+
+    _write_requested_shadow_resume_evidence_candidate(
+        args.shadow_resume_evidence_candidate_output,
+        resume_evidence_list,
+    )
 
     try:
         trace_result = record_resume_match_agent_trace(

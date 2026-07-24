@@ -356,7 +356,27 @@ def _resolve_packet_resume_selection(row: dict) -> Dict[str, str]:
         "packet_resume_source": "missing_winner_resume",
     }
 
-def main() -> None:
+def _write_final_shadow_resume_evidence_projection(
+    *,
+    candidate_path: str | Path,
+    manifest_rows: List[dict],
+    output_path: str | Path,
+) -> Path:
+    from src.pipeline.shadow_resume_evidence_projection import (
+        filter_projection_by_packet_manifest,
+        load_projection,
+        write_projection_atomic,
+    )
+
+    candidate = load_projection(candidate_path)
+    final_projection = filter_projection_by_packet_manifest(
+        candidate,
+        manifest_rows,
+    )
+    return write_projection_atomic(output_path, final_projection)
+
+
+def _main(shadow_candidate_projection_path: Path | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Run the application-planning workflow: batch best-variant selection, shortlist generation, and JD diff packets."
     )
@@ -449,7 +469,27 @@ def main() -> None:
         action="store_true",
         help="When batch selecting resume variants, run bounded LLM adjudication for effective ties and manual-review close calls.",
     )
+    parser.add_argument(
+        "--shadow-resume-evidence-output",
+        default="",
+        help=(
+            "Optional final path for a bounded projection filtered strictly by "
+            "the completed packet manifest."
+        ),
+    )
     args = parser.parse_args()
+
+    shadow_projection_output = str(
+        args.shadow_resume_evidence_output or ""
+    ).strip()
+    if shadow_projection_output:
+        if shadow_candidate_projection_path is None:
+            raise RuntimeError("projection_malformed")
+        from src.pipeline.shadow_resume_evidence_projection import (
+            remove_projection_output,
+        )
+
+        remove_projection_output(shadow_projection_output)
 
     job_corpus_path = Path(args.job_corpus)
 
@@ -527,6 +567,13 @@ def main() -> None:
         batch_selector_cmd.append("--generate-llm-fallback")
     if args.generate_llm_adjudication:
         batch_selector_cmd.append("--generate-llm-adjudication")
+    if shadow_projection_output:
+        batch_selector_cmd.extend(
+            [
+                "--shadow-resume-evidence-candidate-output",
+                str(shadow_candidate_projection_path),
+            ]
+        )
 
     _planning_status(
         "Planning: selecting best resume variants",
@@ -1033,6 +1080,13 @@ def main() -> None:
         ),
     )
 
+    if shadow_projection_output:
+        _write_final_shadow_resume_evidence_projection(
+            candidate_path=shadow_candidate_projection_path,
+            manifest_rows=manifest_rows,
+            output_path=shadow_projection_output,
+        )
+
     print()
     print("=" * 100)
     print("APPLICATION PLANNING WORKFLOW COMPLETE")
@@ -1084,6 +1138,47 @@ def main() -> None:
     print("LLM status counts:")
     for status, count in llm_status_counts.items():
         print(f"  {status}: {count}")
+
+
+def _shadow_projection_requested(argv: List[str]) -> bool:
+    option = "--shadow-resume-evidence-output"
+    return any(argument == option or argument.startswith(f"{option}=") for argument in argv)
+
+
+def _shadow_projection_output_argument(argv: List[str]) -> str:
+    option = "--shadow-resume-evidence-output"
+    for index, argument in enumerate(argv):
+        if argument.startswith(f"{option}="):
+            return argument.split("=", 1)[1].strip()
+        if argument == option and index + 1 < len(argv):
+            return str(argv[index + 1] or "").strip()
+    return ""
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    if not _shadow_projection_requested(argv):
+        _main()
+        return
+
+    from src.pipeline.shadow_resume_evidence_projection import (
+        ProjectionError,
+        remove_projection_output,
+        temporary_candidate_projection_path,
+    )
+
+    final_output = _shadow_projection_output_argument(argv)
+    with temporary_candidate_projection_path() as candidate_path:
+        try:
+            _main(candidate_path)
+        except BaseException:
+            if final_output:
+                try:
+                    remove_projection_output(final_output)
+                except ProjectionError:
+                    pass
+            raise
+
 
 if __name__ == "__main__":
     main()

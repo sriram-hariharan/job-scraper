@@ -1153,6 +1153,13 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase10_shadow_parity_contract.py",
             "tests/test_phase10_shadow_adapter_write_suppression.py",
         },
+        "phase10_step3_explicit_readonly_shadow_execution": {
+            "src/agents/evidence_chain_shadow_execution.py",
+            "run_evidence_chain_shadow.py",
+            "tests/test_phase10_shadow_execution_readonly.py",
+            "tests/test_phase10_shadow_command_default_off.py",
+            "tests/test_phase10_shadow_execution_write_suppression.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1248,6 +1255,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase10_step2_shadow_adapter_parity_foundation"
+        )
+        | legacy_guard_allowlist(
+            "phase10_step3_explicit_readonly_shadow_execution"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

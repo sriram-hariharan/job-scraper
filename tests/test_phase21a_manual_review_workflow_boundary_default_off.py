@@ -1134,6 +1134,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase10_step3_shadow_execution_files = {
+        ROOT / "src/agents/evidence_chain_shadow_execution.py",
+    }
+    if set(changed_runtime_files) == phase10_step3_shadow_execution_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase109b_live_pipeline_popup_ux_files = {
         ROOT / "src/app/ui.py",
         ROOT / "src/app/static/app.js",

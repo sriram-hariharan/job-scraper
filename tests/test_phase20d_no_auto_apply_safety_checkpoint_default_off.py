@@ -822,6 +822,15 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase9_step17_runtime_files = {
+        ROOT / "src/agents/durable_evidence_chain_resume_coordinator.py",
+    }
+    if set(changed_runtime_files) == phase9_step17_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase9_step8_durable_orchestration_runtime_files = {
         ROOT / "src/storage/durable_orchestration/repository.py",
     }

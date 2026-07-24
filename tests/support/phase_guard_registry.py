@@ -1142,6 +1142,10 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase9_step17_durable_langgraph_restart_resume_integration.py",
             "tests/test_phase9_step18a_coordinator_owned_resume_boundary.py",
         },
+        "phase9_step18b_durable_langgraph_process_restart": {
+            "tests/support/phase9_step18b_restart_process_worker.py",
+            "tests/test_phase9_step18b_durable_langgraph_process_restart.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1231,6 +1235,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase9_step18a_coordinator_owned_resume_boundary"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step18b_durable_langgraph_process_restart"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

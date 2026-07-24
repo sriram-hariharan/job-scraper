@@ -281,7 +281,7 @@ def test_phase11_has_no_sdk_network_embedding_storage_or_mutation_wiring():
 def test_pipeline_decision_queue_and_dependencies_are_unchanged():
     expected = {
         "requirements.txt": (
-            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"
+            "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/pipeline/collector.py": (
             "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc"

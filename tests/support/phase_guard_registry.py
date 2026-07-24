@@ -1062,6 +1062,104 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/agents/evidence_chain_langgraph_harness.py",
             "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
         },
+        "phase9_step2_durable_checkpoint_interrupt_storage": {
+            "src/storage/durable_orchestration/__init__.py",
+            "src/storage/durable_orchestration/schema.sql",
+            "src/storage/durable_orchestration/store.py",
+            "tests/test_phase9_step2_durable_checkpoint_interrupt_storage_contract.py",
+            "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+            "tests/test_pgvector_extension_probe_contract_no_schema.py",
+            "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+            "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+            "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+        },
+        "phase9_step3_human_decision_resume_storage": {
+            "src/storage/durable_orchestration/schema.sql",
+            "src/storage/durable_orchestration/store.py",
+            "tests/test_phase9_step2_durable_checkpoint_interrupt_storage_contract.py",
+            "tests/test_phase9_step3_human_decision_resume_storage_contract.py",
+            "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+            "tests/test_pgvector_extension_probe_contract_no_schema.py",
+            "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+            "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+            "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+        },
+        "phase9_step4_attempt_terminal_recovery_storage": {
+            "src/storage/durable_orchestration/schema.sql",
+            "src/storage/durable_orchestration/store.py",
+            "tests/test_phase9_step2_durable_checkpoint_interrupt_storage_contract.py",
+            "tests/test_phase9_step3_human_decision_resume_storage_contract.py",
+            "tests/test_phase9_step4_attempt_terminal_recovery_storage_contract.py",
+            "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+            "tests/test_pgvector_extension_probe_contract_no_schema.py",
+            "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+            "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+            "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+        },
+        "phase9_step6_inmemory_operator_review_pause_resume": {
+            "src/agents/evidence_chain_langgraph_harness.py",
+            "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+            "tests/test_phase9_step6_langgraph_operator_review_pause_resume_default_off.py",
+        },
+        "phase9_step8_durable_orchestration_transaction_executor": {
+            "src/storage/durable_orchestration/repository.py",
+            "tests/test_phase9_step8_durable_orchestration_transaction_executor_contract.py",
+        },
+        "phase9_step9_durable_orchestration_schema_executor": {
+            "src/storage/admin_tools/durable_orchestration/apply_schema.py",
+            "tests/test_phase9_step9_durable_orchestration_schema_executor_contract.py",
+        },
+        "phase9_step10_durable_orchestration_postgres_integration": {
+            "tests/test_phase9_step10_durable_orchestration_postgres_integration.py",
+        },
+        "phase9_step12_postgres_runtime_repository_integration": {
+            "requirements.txt",
+            "src/storage/durable_orchestration/postgres_connection.py",
+            "tests/test_phase9_step12_durable_orchestration_postgres_runtime_integration.py",
+        },
+        "phase9_step14_langgraph_postgres_checkpointer_foundation": {
+            "requirements.txt",
+            "src/storage/durable_orchestration/langgraph_postgres.py",
+            "src/storage/admin_tools/durable_orchestration/setup_langgraph_checkpointer.py",
+            "tests/test_phase9_step14_langgraph_postgres_checkpointer_foundation.py",
+        },
+        "phase9_step16a_durable_decision_authorization_runtime": {
+            "src/storage/durable_orchestration/store.py",
+            "src/storage/durable_orchestration/repository.py",
+            "tests/test_phase9_step16a_durable_decision_authorization_runtime_contract.py",
+        },
+        "phase9_step16b_attempt_recovery_terminal_runtime": {
+            "src/storage/durable_orchestration/store.py",
+            "src/storage/durable_orchestration/repository.py",
+            "tests/test_phase9_step16b_attempt_recovery_terminal_runtime_contract.py",
+        },
+        "phase9_step17_durable_langgraph_restart_resume_integration": {
+            "src/agents/durable_evidence_chain_resume_coordinator.py",
+            "tests/test_phase9_step17_durable_langgraph_restart_resume_integration.py",
+        },
+        "phase9_step18a_coordinator_owned_resume_boundary": {
+            "src/agents/durable_evidence_chain_resume_coordinator.py",
+            "tests/test_phase9_step17_durable_langgraph_restart_resume_integration.py",
+            "tests/test_phase9_step18a_coordinator_owned_resume_boundary.py",
+        },
+        "phase9_step18b_durable_langgraph_process_restart": {
+            "tests/support/phase9_step18b_restart_process_worker.py",
+            "tests/test_phase9_step18b_durable_langgraph_process_restart.py",
+        },
+        "phase9_step12_dependency_driver_compatibility": {
+            "tests/test_agent_trace_store.py",
+            "tests/test_jd_provider_runtime_api_readback_default_off.py",
+            "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+            "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+            "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+            "tests/test_provider_runtime_activation_plan_default_off.py",
+            "tests/test_provider_runtime_api_readback_default_off.py",
+            "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
+            "tests/test_provider_runtime_service_bridge_default_off.py",
+            "tests/test_three_agent_llmops_observability_api_default_off.py",
+            "tests/test_vector_evidence_api_no_db_no_ui.py",
+            "tests/test_vector_evidence_readback_api_default_off.py",
+        },
     }
     try:
         return set(profiles[profile])
@@ -1098,6 +1196,51 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase8_step15_checkpoint_identity_serialization_contract")
         | legacy_guard_allowlist(
             "phase8_step17_readonly_operator_review_interrupt_request"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step2_durable_checkpoint_interrupt_storage"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step3_human_decision_resume_storage"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step4_attempt_terminal_recovery_storage"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step6_inmemory_operator_review_pause_resume"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step8_durable_orchestration_transaction_executor"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step9_durable_orchestration_schema_executor"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step10_durable_orchestration_postgres_integration"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step12_postgres_runtime_repository_integration"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step14_langgraph_postgres_checkpointer_foundation"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step16a_durable_decision_authorization_runtime"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step16b_attempt_recovery_terminal_runtime"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step17_durable_langgraph_restart_resume_integration"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step18a_coordinator_owned_resume_boundary"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step18b_durable_langgraph_process_restart"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step12_dependency_driver_compatibility"
         )
     )
 
@@ -1137,6 +1280,10 @@ def assert_protected_hashes(
     compatibility_profiles: Iterable[str] = (),
 ) -> None:
     phase88b_runtime_hash_compatibility = {
+        (
+            "requirements.txt",
+            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
+        ): "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
@@ -1189,7 +1336,12 @@ def assert_protected_hashes(
     repo = Path(root)
     profiles = tuple(compatibility_profiles)
     compatible_paths = (
-        merge_allowed(*(legacy_guard_allowlist(profile) for profile in profiles))
+        merge_allowed(
+            *(legacy_guard_allowlist(profile) for profile in profiles),
+            legacy_guard_allowlist(
+                "phase9_step12_postgres_runtime_repository_integration"
+            ),
+        )
         if profiles
         else None
     )

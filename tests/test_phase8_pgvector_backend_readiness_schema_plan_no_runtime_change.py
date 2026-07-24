@@ -277,7 +277,7 @@ def test_dependency_files_match_phase8i_checkpoint():
         "requirements.txt"
     ]
     assert _aggregate_hash(paths) == (
-        "e44233025871325d1c3b54473ca6a80f710dea9a550f7be2420976be1850d6f9"
+        "3b54d41c0408145340ca8849f47ee70ae9a8c321db4e5f960f63399a37e201fb"
     )
 
 
@@ -294,7 +294,7 @@ def test_storage_schema_and_migration_files_match_phase8i_checkpoint():
     paths = [path for path in paths if path != later_schema_path]
 
     assert _aggregate_hash(paths) == (
-        "2968e8526d4ae2e66b2ef8ee4b32d9063988c92407c618971071beb78abf7c80"
+        "a6d8338050e90a6d25d69dc8d903656dd06f5d7a6435c52cf365f4c417d94a03"
     )
 
 

@@ -356,7 +356,126 @@ def _resolve_packet_resume_selection(row: dict) -> Dict[str, str]:
         "packet_resume_source": "missing_winner_resume",
     }
 
-def main() -> None:
+def _write_final_shadow_resume_evidence_projection(
+    *,
+    candidate_path: str | Path,
+    manifest_rows: List[dict],
+    output_path: str | Path,
+) -> Path:
+    from src.pipeline.shadow_resume_evidence_projection import (
+        filter_projection_by_packet_manifest,
+        load_projection,
+        write_projection_atomic,
+    )
+
+    candidate = load_projection(candidate_path)
+    final_projection = filter_projection_by_packet_manifest(
+        candidate,
+        manifest_rows,
+    )
+    return write_projection_atomic(output_path, final_projection)
+
+
+def _write_non_authoritative_shadow_resume_evidence_handoff(
+    *,
+    candidate_path: str | Path,
+    manifest_rows: List[dict],
+    output_path: str | Path,
+    status_output_path: str | Path,
+) -> dict:
+    from src.pipeline.shadow_resume_evidence_projection import (
+        ProjectionError,
+        build_handoff_status,
+        filter_projection_by_packet_manifest,
+        load_projection,
+        packet_manifest_selected_resume_ids,
+        remove_projection_output,
+        write_handoff_status_atomic,
+        write_projection_atomic,
+    )
+
+    def finish(status: dict) -> dict:
+        if status["status"] != "ready":
+            try:
+                remove_projection_output(output_path)
+            except ProjectionError:
+                pass
+        try:
+            write_handoff_status_atomic(status_output_path, status)
+        except ProjectionError as exc:
+            print(f"WARNING: shadow resume-evidence status unavailable: {exc}")
+        return status
+
+    try:
+        selected_ids = packet_manifest_selected_resume_ids(manifest_rows)
+    except ProjectionError:
+        return finish(
+            build_handoff_status(
+                status="failed",
+                reason_code="final_projection_failed",
+                selected_resume_count=0,
+                projected_resume_count=0,
+            )
+        )
+    selected_count = len(selected_ids)
+    if not selected_ids:
+        return finish(
+            build_handoff_status(
+                status="skipped",
+                reason_code="no_final_selected_resumes",
+                selected_resume_count=0,
+                projected_resume_count=0,
+            )
+        )
+
+    try:
+        candidate = load_projection(candidate_path)
+    except ProjectionError as exc:
+        reason = (
+            "candidate_projection_missing"
+            if str(exc) == "projection_malformed"
+            and not Path(candidate_path).expanduser().absolute().exists()
+            else "candidate_projection_malformed"
+        )
+        return finish(
+            build_handoff_status(
+                status="failed",
+                reason_code=reason,
+                selected_resume_count=selected_count,
+                projected_resume_count=0,
+            )
+        )
+
+    try:
+        final_projection = filter_projection_by_packet_manifest(
+            candidate, manifest_rows
+        )
+        write_projection_atomic(output_path, final_projection)
+    except ProjectionError as exc:
+        reason = (
+            "selected_resume_evidence_missing"
+            if str(exc) == "selected_resume_evidence_missing"
+            else "final_projection_failed"
+        )
+        return finish(
+            build_handoff_status(
+                status="failed",
+                reason_code=reason,
+                selected_resume_count=selected_count,
+                projected_resume_count=0,
+            )
+        )
+    return finish(
+        build_handoff_status(
+            status="ready",
+            reason_code="projection_ready",
+            selected_resume_count=selected_count,
+            projected_resume_count=len(final_projection["resumes"]),
+        )
+    )
+
+
+def _main(shadow_candidate_projection_path: Path | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Run the application-planning workflow: batch best-variant selection, shortlist generation, and JD diff packets."
     )
@@ -449,7 +568,73 @@ def main() -> None:
         action="store_true",
         help="When batch selecting resume variants, run bounded LLM adjudication for effective ties and manual-review close calls.",
     )
+    parser.add_argument(
+        "--shadow-resume-evidence-output",
+        default="",
+        help=(
+            "Optional final path for a bounded projection filtered strictly by "
+            "the completed packet manifest."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-resume-evidence-non-authoritative",
+        action="store_true",
+        help="Isolate bounded projection failures from authoritative planning.",
+    )
+    parser.add_argument(
+        "--shadow-resume-evidence-status-output",
+        default="",
+        help="Status artifact path required by non-authoritative projection mode.",
+    )
     args = parser.parse_args()
+
+    shadow_projection_output = str(
+        args.shadow_resume_evidence_output or ""
+    ).strip()
+    shadow_status_output = str(
+        args.shadow_resume_evidence_status_output or ""
+    ).strip()
+    if args.shadow_resume_evidence_non_authoritative:
+        if not shadow_projection_output or not shadow_status_output:
+            parser.error(
+                "--shadow-resume-evidence-non-authoritative requires both "
+                "--shadow-resume-evidence-output and "
+                "--shadow-resume-evidence-status-output"
+            )
+        if (
+            Path(shadow_projection_output).expanduser().absolute()
+            == Path(shadow_status_output).expanduser().absolute()
+        ):
+            parser.error(
+                "projection and status outputs must use distinct paths"
+            )
+    elif shadow_status_output:
+        parser.error(
+            "--shadow-resume-evidence-status-output requires "
+            "--shadow-resume-evidence-non-authoritative"
+        )
+    if shadow_projection_output:
+        if shadow_candidate_projection_path is None:
+            raise RuntimeError("projection_malformed")
+        from src.pipeline.shadow_resume_evidence_projection import (
+            ProjectionError,
+            remove_projection_output,
+        )
+
+        try:
+            remove_projection_output(shadow_projection_output)
+        except ProjectionError:
+            if not args.shadow_resume_evidence_non_authoritative:
+                raise
+        if shadow_status_output:
+            from src.pipeline.shadow_resume_evidence_projection import (
+                remove_handoff_status_output,
+            )
+
+            try:
+                remove_handoff_status_output(shadow_status_output)
+            except ProjectionError:
+                pass
 
     job_corpus_path = Path(args.job_corpus)
 
@@ -527,6 +712,17 @@ def main() -> None:
         batch_selector_cmd.append("--generate-llm-fallback")
     if args.generate_llm_adjudication:
         batch_selector_cmd.append("--generate-llm-adjudication")
+    if shadow_projection_output:
+        batch_selector_cmd.extend(
+            [
+                "--shadow-resume-evidence-candidate-output",
+                str(shadow_candidate_projection_path),
+            ]
+        )
+        if args.shadow_resume_evidence_non_authoritative:
+            batch_selector_cmd.append(
+                "--shadow-resume-evidence-non-authoritative"
+            )
 
     _planning_status(
         "Planning: selecting best resume variants",
@@ -1033,6 +1229,21 @@ def main() -> None:
         ),
     )
 
+    if shadow_projection_output:
+        if args.shadow_resume_evidence_non_authoritative:
+            _write_non_authoritative_shadow_resume_evidence_handoff(
+                candidate_path=shadow_candidate_projection_path,
+                manifest_rows=manifest_rows,
+                output_path=shadow_projection_output,
+                status_output_path=shadow_status_output,
+            )
+        else:
+            _write_final_shadow_resume_evidence_projection(
+                candidate_path=shadow_candidate_projection_path,
+                manifest_rows=manifest_rows,
+                output_path=shadow_projection_output,
+            )
+
     print()
     print("=" * 100)
     print("APPLICATION PLANNING WORKFLOW COMPLETE")
@@ -1084,6 +1295,75 @@ def main() -> None:
     print("LLM status counts:")
     for status, count in llm_status_counts.items():
         print(f"  {status}: {count}")
+
+
+def _shadow_projection_requested(argv: List[str]) -> bool:
+    option = "--shadow-resume-evidence-output"
+    return any(argument == option or argument.startswith(f"{option}=") for argument in argv)
+
+
+def _shadow_projection_output_argument(argv: List[str]) -> str:
+    option = "--shadow-resume-evidence-output"
+    for index, argument in enumerate(argv):
+        if argument.startswith(f"{option}="):
+            return argument.split("=", 1)[1].strip()
+        if argument == option and index + 1 < len(argv):
+            return str(argv[index + 1] or "").strip()
+    return ""
+
+
+def _shadow_status_output_argument(argv: List[str]) -> str:
+    option = "--shadow-resume-evidence-status-output"
+    for index, argument in enumerate(argv):
+        if argument.startswith(f"{option}="):
+            return argument.split("=", 1)[1].strip()
+        if argument == option and index + 1 < len(argv):
+            return str(argv[index + 1] or "").strip()
+    return ""
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    if not _shadow_projection_requested(argv):
+        status_output = _shadow_status_output_argument(argv)
+        if status_output:
+            from src.pipeline.shadow_resume_evidence_projection import (
+                ProjectionError,
+                remove_handoff_status_output,
+            )
+
+            try:
+                remove_handoff_status_output(status_output)
+            except ProjectionError:
+                pass
+        _main()
+        return
+
+    from src.pipeline.shadow_resume_evidence_projection import (
+        ProjectionError,
+        remove_handoff_status_output,
+        remove_projection_output,
+        temporary_candidate_projection_path,
+    )
+
+    final_output = _shadow_projection_output_argument(argv)
+    status_output = _shadow_status_output_argument(argv)
+    with temporary_candidate_projection_path() as candidate_path:
+        try:
+            _main(candidate_path)
+        except BaseException:
+            if final_output:
+                try:
+                    remove_projection_output(final_output)
+                except ProjectionError:
+                    pass
+            if status_output:
+                try:
+                    remove_handoff_status_output(status_output)
+                except ProjectionError:
+                    pass
+            raise
+
 
 if __name__ == "__main__":
     main()

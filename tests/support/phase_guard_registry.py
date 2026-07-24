@@ -1146,6 +1146,13 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/support/phase9_step18b_restart_process_worker.py",
             "tests/test_phase9_step18b_durable_langgraph_process_restart.py",
         },
+        "phase10_step2_shadow_adapter_parity_foundation": {
+            "src/agents/evidence_chain_shadow_adapter.py",
+            "src/agents/evidence_chain_shadow_parity.py",
+            "tests/test_phase10_shadow_input_adapter.py",
+            "tests/test_phase10_shadow_parity_contract.py",
+            "tests/test_phase10_shadow_adapter_write_suppression.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1238,6 +1245,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase9_step18b_durable_langgraph_process_restart"
+        )
+        | legacy_guard_allowlist(
+            "phase10_step2_shadow_adapter_parity_foundation"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

@@ -1139,6 +1139,16 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase107b_langgraph_evidence_chain_harness_files:
         return
+    phase10_step2_shadow_foundation_files = {
+        ROOT / "src/agents/evidence_chain_shadow_adapter.py",
+        ROOT / "src/agents/evidence_chain_shadow_parity.py",
+    }
+    if set(changed_runtime_files) == phase10_step2_shadow_foundation_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase109b_live_pipeline_popup_ux_files = {
         ROOT / "src/app/ui.py",
         ROOT / "src/app/static/app.js",

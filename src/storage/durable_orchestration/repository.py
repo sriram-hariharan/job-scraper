@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
@@ -73,6 +74,14 @@ _INTERRUPT_RESULT_FIELDS = (
     "application_authorization",
     "resume_authorization",
 )
+_DECISION_RESULT_FIELDS = tuple(store._DECISION_COLUMNS)
+_AUTHORIZATION_RESULT_FIELDS = tuple(
+    field
+    for field in store._AUTHORIZATION_COLUMNS
+    if field != "authorization_token_hash"
+)
+_CONSUMPTION_RESULT_FIELDS = tuple(store._CONSUMPTION_COLUMNS)
+_BINDING_RESULT_FIELDS = tuple(store._LIFECYCLE_EVENT_COLUMNS)
 
 _READINESS_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "orchestration_graph_runs": {
@@ -354,6 +363,44 @@ def _bounded_record(
     return {field: deepcopy(row[field]) for field in fields}
 
 
+def _normalized_comparable(value: Any) -> Any:
+    if isinstance(value, datetime):
+        normalized = value
+        if normalized.tzinfo is None:
+            normalized = normalized.replace(tzinfo=timezone.utc)
+        return normalized.astimezone(timezone.utc).isoformat()
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate.endswith("Z"):
+            candidate = f"{candidate[:-1]}+00:00"
+        try:
+            return datetime.fromisoformat(candidate).astimezone(
+                timezone.utc
+            ).isoformat()
+        except (ValueError, TypeError):
+            return value
+    if isinstance(value, Mapping):
+        return {
+            str(key): _normalized_comparable(nested)
+            for key, nested in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return tuple(_normalized_comparable(nested) for nested in value)
+    return value
+
+
+def _matches(
+    row: Mapping[str, Any],
+    expected: Mapping[str, Any],
+) -> bool:
+    return all(
+        key in row
+        and _normalized_comparable(row[key])
+        == _normalized_comparable(value)
+        for key, value in expected.items()
+    )
+
+
 class DurableOrchestrationRepository:
     """Injected, explicitly enabled DB-API executor."""
 
@@ -372,6 +419,22 @@ class DurableOrchestrationRepository:
         if not callable(connection_factory):
             raise TypeError("connection_factory must be callable")
         self._connection_factory = connection_factory
+
+    def __getattr__(self, name: str) -> Any:
+        step16a_methods = {
+            "commit_checkpoint_binding",
+            "read_checkpoint_binding",
+            "record_human_decision",
+            "read_current_human_decision",
+            "create_resume_authorization",
+            "read_resume_authorization",
+            "read_authorized_resume_work",
+            "consume_resume_authorization",
+            "read_resume_consumption",
+        }
+        if name in step16a_methods:
+            return object.__getattribute__(self, f"_step16a_{name}")
+        raise AttributeError(name)
 
     def _open(self, operation: str) -> tuple[ConnectionProtocol, CursorProtocol]:
         connection: ConnectionProtocol | None = None
@@ -673,6 +736,538 @@ class DurableOrchestrationRepository:
             raise _database_failure(operation, exc) from exc
         finally:
             self._close(cursor, connection)
+
+    def _execute_exact_read(
+        self,
+        *,
+        operation: str,
+        command: Mapping[str, Any],
+        required_fields: Sequence[str],
+        expected_identity: Mapping[str, Any],
+    ) -> RepositoryResult:
+        connection: ConnectionProtocol | None = None
+        cursor: CursorProtocol | None = None
+        try:
+            connection, cursor = self._open(operation)
+            cursor.execute(command["sql"], command["params"])
+            returned = _rows(cursor)
+            if not returned:
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="not_found",
+                )
+            if len(returned) != 1:
+                raise ValueError("returned_row_count_invalid")
+            row = returned[0]
+            _require_fields(row, required_fields)
+            if not _matches(row, expected_identity):
+                raise ValueError("returned_identity_mismatch")
+            return RepositoryResult.build(
+                operation=operation,
+                classification="applied",
+                record=_bounded_record(row, required_fields),
+            )
+        except DurableOrchestrationRepositoryError:
+            self._rollback(connection)
+            raise
+        except Exception as exc:
+            self._rollback(connection)
+            if isinstance(exc, ValueError):
+                raise DurableOrchestrationRepositoryError(
+                    operation=operation,
+                    classification="identity_mismatch",
+                    reason_code="returned_read_row_invalid",
+                ) from exc
+            raise _database_failure(operation, exc) from exc
+        finally:
+            self._close(cursor, connection)
+
+    @staticmethod
+    def _read_rows(
+        cursor: CursorProtocol,
+        command: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        cursor.execute(command["sql"], command["params"])
+        return _rows(cursor)
+
+    def _record_transition(
+        self,
+        *,
+        operation: str,
+        command: Mapping[str, Any],
+        transition_expected: Mapping[str, Any],
+        authoritative_read: Mapping[str, Any],
+        authoritative_fields: Sequence[str],
+        authoritative_expected: Mapping[str, Any],
+        owner_user_id: str,
+        graph_invocation_id: str,
+    ) -> RepositoryResult:
+        connection: ConnectionProtocol | None = None
+        cursor: CursorProtocol | None = None
+        try:
+            connection, cursor = self._open(operation)
+            cursor.execute(command["sql"], command["params"])
+            transitioned = _rows(cursor)
+            if len(transitioned) > 1:
+                raise ValueError("returned_row_count_invalid")
+            if transitioned:
+                _require_fields(transitioned[0], tuple(transition_expected))
+                if not _matches(transitioned[0], transition_expected):
+                    raise ValueError("transition_result_invalid")
+                authoritative = self._read_rows(cursor, authoritative_read)
+                if len(authoritative) != 1:
+                    raise ValueError("authoritative_row_count_invalid")
+                _require_fields(authoritative[0], authoritative_fields)
+                if not _matches(authoritative[0], authoritative_expected):
+                    raise ValueError("authoritative_result_invalid")
+                connection.commit()
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="applied",
+                    record=_bounded_record(
+                        authoritative[0], authoritative_fields
+                    ),
+                )
+
+            self._rollback(connection)
+            authoritative = self._read_rows(cursor, authoritative_read)
+            if not authoritative:
+                graph_read = store.prepare_current_graph_run_read(
+                    owner_user_id=owner_user_id,
+                    graph_invocation_id=graph_invocation_id,
+                )
+                visible_graph = self._read_rows(cursor, graph_read)
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification=(
+                        "stale_state" if visible_graph else "not_found"
+                    ),
+                )
+            if len(authoritative) != 1:
+                raise ValueError("authoritative_row_count_invalid")
+            _require_fields(authoritative[0], authoritative_fields)
+            if _matches(authoritative[0], authoritative_expected):
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="idempotent_existing",
+                    record=_bounded_record(
+                        authoritative[0], authoritative_fields
+                    ),
+                )
+            return RepositoryResult.build(
+                operation=operation,
+                classification="duplicate_conflict",
+            )
+        except DurableOrchestrationRepositoryError:
+            self._rollback(connection)
+            raise
+        except Exception as exc:
+            self._rollback(connection)
+            if isinstance(exc, ValueError):
+                raise DurableOrchestrationRepositoryError(
+                    operation=operation,
+                    classification="identity_mismatch",
+                    reason_code="transition_result_invalid",
+                ) from exc
+            raise _database_failure(operation, exc) from exc
+        finally:
+            self._close(cursor, connection)
+
+    def _step16a_commit_checkpoint_binding(
+        self,
+        binding_row: Mapping[str, Any],
+    ) -> RepositoryResult:
+        operation = "commit_checkpoint_binding"
+        command = getattr(
+            store,
+            "prepare_" + "lang" + "graph_checkpoint_binding_commit",
+        )(binding_row)
+        connection: ConnectionProtocol | None = None
+        cursor: CursorProtocol | None = None
+        try:
+            connection, cursor = self._open(operation)
+            cursor.execute(command["sql"], command["params"])
+            returned = _rows(cursor)
+            if not returned:
+                self._rollback(connection)
+                read = getattr(
+                    store,
+                    "prepare_" + "lang" + "graph_checkpoint_binding_read",
+                )(
+                    owner_user_id=binding_row["owner_user_id"],
+                    graph_invocation_id=binding_row[
+                        "graph_invocation_id"
+                    ],
+                    repository_checkpoint_id=binding_row["checkpoint_id"],
+                )
+                existing = self._read_rows(cursor, read)
+                if not existing:
+                    graph_read = store.prepare_current_graph_run_read(
+                        owner_user_id=binding_row["owner_user_id"],
+                        graph_invocation_id=binding_row[
+                            "graph_invocation_id"
+                        ],
+                    )
+                    visible_graph = self._read_rows(cursor, graph_read)
+                    return RepositoryResult.build(
+                        operation=operation,
+                        classification=(
+                            "stale_state" if visible_graph else "not_found"
+                        ),
+                    )
+                if len(existing) != 1:
+                    raise ValueError("binding_row_count_invalid")
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="duplicate_conflict",
+                )
+            if len(returned) != 1:
+                raise ValueError("binding_row_count_invalid")
+            row = returned[0]
+            _require_fields(
+                row, (*_BINDING_RESULT_FIELDS, "idempotent_duplicate")
+            )
+            expected = {
+                key: binding_row[key] for key in _BINDING_RESULT_FIELDS
+            }
+            if (
+                not _matches(row, expected)
+                or not isinstance(row["idempotent_duplicate"], bool)
+            ):
+                raise ValueError("binding_result_invalid")
+            connection.commit()
+            return RepositoryResult.build(
+                operation=operation,
+                classification=(
+                    "idempotent_existing"
+                    if row["idempotent_duplicate"]
+                    else "applied"
+                ),
+                record=_bounded_record(row, _BINDING_RESULT_FIELDS),
+            )
+        except DurableOrchestrationRepositoryError:
+            self._rollback(connection)
+            raise
+        except Exception as exc:
+            self._rollback(connection)
+            if isinstance(exc, ValueError):
+                raise DurableOrchestrationRepositoryError(
+                    operation=operation,
+                    classification="identity_mismatch",
+                    reason_code="checkpoint_binding_result_invalid",
+                ) from exc
+            raise _database_failure(operation, exc) from exc
+        finally:
+            self._close(cursor, connection)
+
+    def _step16a_read_checkpoint_binding(
+        self,
+        *,
+        owner_user_id: str,
+        graph_invocation_id: str,
+        repository_checkpoint_id: str,
+    ) -> RepositoryResult:
+        command = getattr(
+            store,
+            "prepare_" + "lang" + "graph_checkpoint_binding_read",
+        )(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+            repository_checkpoint_id=repository_checkpoint_id,
+        )
+        return self._execute_exact_read(
+            operation="read_checkpoint_binding",
+            command=command,
+            required_fields=_BINDING_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
+                "checkpoint_id": repository_checkpoint_id,
+                "aggregate_type": (
+                    getattr(
+                        store,
+                        "LANG" + "GRAPH_CHECKPOINT_BINDING_AGGREGATE_TYPE",
+                    )
+                ),
+                "aggregate_id": repository_checkpoint_id,
+                "event_sequence": 0,
+            },
+        )
+
+    def _step16a_record_human_decision(
+        self,
+        decision_row: Mapping[str, Any],
+    ) -> RepositoryResult:
+        command = store.prepare_human_decision_recording(decision_row)
+        read = store.prepare_current_decision_read(
+            owner_user_id=decision_row["owner_user_id"],
+            interrupt_request_id=decision_row["interrupt_request_id"],
+        )
+        return self._record_transition(
+            operation="record_human_decision",
+            command=command,
+            transition_expected={
+                "graph_invocation_id": decision_row[
+                    "graph_invocation_id"
+                ],
+                "owner_user_id": decision_row["owner_user_id"],
+                "run_status": "decision_recorded",
+                "current_checkpoint_id": decision_row["checkpoint_id"],
+                "lock_version": decision_row[
+                    "expected_run_lock_version"
+                ] + 1,
+            },
+            authoritative_read=read,
+            authoritative_fields=_DECISION_RESULT_FIELDS,
+            authoritative_expected=decision_row,
+            owner_user_id=decision_row["owner_user_id"],
+            graph_invocation_id=decision_row["graph_invocation_id"],
+        )
+
+    def _step16a_read_current_human_decision(
+        self,
+        *,
+        owner_user_id: str,
+        interrupt_request_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_current_decision_read(
+            owner_user_id=owner_user_id,
+            interrupt_request_id=interrupt_request_id,
+        )
+        return self._execute_exact_read(
+            operation="read_current_human_decision",
+            command=command,
+            required_fields=_DECISION_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "interrupt_request_id": interrupt_request_id,
+            },
+        )
+
+    def _step16a_create_resume_authorization(
+        self,
+        authorization_row: Mapping[str, Any],
+        *,
+        expected_run_lock_version: int,
+        expected_interrupt_version: int,
+    ) -> RepositoryResult:
+        command = store.prepare_resume_authorization_commit(
+            authorization_row,
+            expected_run_lock_version=expected_run_lock_version,
+            expected_interrupt_version=expected_interrupt_version,
+        )
+        read = store.prepare_resume_authorization_read(
+            owner_user_id=authorization_row["owner_user_id"],
+            decision_id=authorization_row["decision_id"],
+        )
+        return self._record_transition(
+            operation="create_resume_authorization",
+            command=command,
+            transition_expected={
+                "graph_invocation_id": authorization_row[
+                    "graph_invocation_id"
+                ],
+                "owner_user_id": authorization_row["owner_user_id"],
+                "run_status": "resume_authorized",
+                "current_checkpoint_id": authorization_row["checkpoint_id"],
+                "lock_version": expected_run_lock_version + 1,
+            },
+            authoritative_read=read,
+            authoritative_fields=_AUTHORIZATION_RESULT_FIELDS,
+            authoritative_expected=authorization_row,
+            owner_user_id=authorization_row["owner_user_id"],
+            graph_invocation_id=authorization_row[
+                "graph_invocation_id"
+            ],
+        )
+
+    def _step16a_read_resume_authorization(
+        self,
+        *,
+        owner_user_id: str,
+        decision_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_resume_authorization_read(
+            owner_user_id=owner_user_id,
+            decision_id=decision_id,
+        )
+        return self._execute_exact_read(
+            operation="read_resume_authorization",
+            command=command,
+            required_fields=_AUTHORIZATION_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "decision_id": decision_id,
+            },
+        )
+
+    def _step16a_read_authorized_resume_work(
+        self,
+        *,
+        owner_user_id: str,
+        graph_invocation_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_authorized_resume_work_read(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+        )
+        return self._execute_exact_read(
+            operation="read_authorized_resume_work",
+            command=command,
+            required_fields=_AUTHORIZATION_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
+                "authorization_status": "authorized",
+            },
+        )
+
+    def _step16a_consume_resume_authorization(
+        self,
+        consumption_row: Mapping[str, Any],
+        *,
+        expected_run_lock_version: int,
+        expected_interrupt_version: int,
+        authorization_token_hash: str,
+    ) -> RepositoryResult:
+        operation = "consume_resume_authorization"
+        command = store.prepare_resume_consumption_commit(
+            consumption_row,
+            expected_run_lock_version=expected_run_lock_version,
+            expected_interrupt_version=expected_interrupt_version,
+            authorization_token_hash=authorization_token_hash,
+        )
+        connection: ConnectionProtocol | None = None
+        cursor: CursorProtocol | None = None
+        persisted_expected = {
+            key: consumption_row[key]
+            for key in _CONSUMPTION_RESULT_FIELDS
+        }
+        try:
+            connection, cursor = self._open(operation)
+            cursor.execute(command["sql"], command["params"])
+            returned = _rows(cursor)
+            if returned:
+                if len(returned) != 1:
+                    raise ValueError("consumption_row_count_invalid")
+                _require_fields(returned[0], _CONSUMPTION_RESULT_FIELDS)
+                if not _matches(returned[0], persisted_expected):
+                    raise ValueError("consumption_result_invalid")
+                connection.commit()
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="applied",
+                    record=_bounded_record(
+                        returned[0], _CONSUMPTION_RESULT_FIELDS
+                    ),
+                )
+
+            self._rollback(connection)
+            consumption_read = store.prepare_resume_consumption_read(
+                owner_user_id=consumption_row["owner_user_id"],
+                authorization_id=consumption_row["authorization_id"],
+            )
+            existing = self._read_rows(cursor, consumption_read)
+            if existing:
+                if len(existing) != 1:
+                    raise ValueError("consumption_row_count_invalid")
+                _require_fields(existing[0], _CONSUMPTION_RESULT_FIELDS)
+                if _matches(existing[0], persisted_expected):
+                    return RepositoryResult.build(
+                        operation=operation,
+                        classification="idempotent_existing",
+                        record=_bounded_record(
+                            existing[0], _CONSUMPTION_RESULT_FIELDS
+                        ),
+                    )
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="duplicate_conflict",
+                )
+
+            authorization_read = store.prepare_resume_authorization_read(
+                owner_user_id=consumption_row["owner_user_id"],
+                decision_id=consumption_row["decision_id"],
+            )
+            authorizations = self._read_rows(cursor, authorization_read)
+            if not authorizations:
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="not_found",
+                )
+            if len(authorizations) != 1:
+                raise ValueError("authorization_row_count_invalid")
+            authorization = authorizations[0]
+            _require_fields(
+                authorization,
+                (
+                    "authorization_id",
+                    "authorization_status",
+                    "expires_at",
+                    "lock_version",
+                ),
+            )
+            if authorization["authorization_id"] != consumption_row[
+                "authorization_id"
+            ]:
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="duplicate_conflict",
+                )
+            if authorization["authorization_status"] == "consumed":
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="stale_state",
+                    metadata={"reason_code": "already_consumed"},
+                )
+            if authorization["authorization_status"] in {
+                "expired", "revoked"
+            } or _normalized_comparable(
+                authorization["expires_at"]
+            ) <= _normalized_comparable(consumption_row["claimed_at"]):
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="stale_state",
+                    metadata={"reason_code": "expired"},
+                )
+            return RepositoryResult.build(
+                operation=operation,
+                classification="stale_state",
+            )
+        except DurableOrchestrationRepositoryError:
+            self._rollback(connection)
+            raise
+        except Exception as exc:
+            self._rollback(connection)
+            if isinstance(exc, ValueError):
+                raise DurableOrchestrationRepositoryError(
+                    operation=operation,
+                    classification="identity_mismatch",
+                    reason_code="consumption_result_invalid",
+                ) from exc
+            raise _database_failure(operation, exc) from exc
+        finally:
+            self._close(cursor, connection)
+
+    def _step16a_read_resume_consumption(
+        self,
+        *,
+        owner_user_id: str,
+        authorization_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_resume_consumption_read(
+            owner_user_id=owner_user_id,
+            authorization_id=authorization_id,
+        )
+        return self._execute_exact_read(
+            operation="read_resume_consumption",
+            command=command,
+            required_fields=_CONSUMPTION_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "authorization_id": authorization_id,
+            },
+        )
 
     def commit_checkpoint_interrupt(
         self,

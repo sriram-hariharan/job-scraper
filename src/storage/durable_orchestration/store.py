@@ -1131,6 +1131,9 @@ def prepare_resume_consumption_row(
         "expected_authorization_version": _require_nonnegative_int(
             expected_authorization_version, "expected_authorization_version"
         ),
+        "authorization_token_hash_proof": authorization_row[
+            "authorization_token_hash"
+        ],
         "application_authorization": False,
     }
 
@@ -1284,36 +1287,112 @@ def prepare_resume_authorization_commit(
 def prepare_resume_consumption_commit(
     consumption_row: Mapping[str, Any], *, expected_run_lock_version: int,
     expected_interrupt_version: int,
+    authorization_token_hash: str | None = None,
 ):
-    row = dict(consumption_row)
-    row["expected_run_lock_version"] = _require_nonnegative_int(
-        expected_run_lock_version, "expected_run_lock_version"
+    _require_exact_fields(
+        consumption_row,
+        (*_CONSUMPTION_COLUMNS, "authorization_token_hash_proof"),
+        "consumption_row",
     )
-    row["expected_interrupt_version"] = _require_nonnegative_int(
-        expected_interrupt_version, "expected_interrupt_version"
+    token_hash = _clean_text(
+        authorization_token_hash
+        if authorization_token_hash is not None
+        else consumption_row["authorization_token_hash_proof"]
     )
-    columns = (*_CONSUMPTION_COLUMNS,
-               "expected_run_lock_version", "expected_interrupt_version")
-    command = _atomic_transition_command(
-        "prepare_resume_consumption_commit", row, columns,
-        "orchestration_resume_consumptions", "resume_authorized",
-        "resume_authorized", "resume_consumed", "resume_consumed",
-        _CONSUMPTION_COLUMNS,
+    if re.fullmatch(r"[0-9a-f]{64}", token_hash) is None:
+        raise ValueError("authorization_token_hash_invalid")
+    params = {
+        **{
+            key: deepcopy(consumption_row[key])
+            for key in _CONSUMPTION_COLUMNS
+        },
+        "authorization_token_hash": token_hash,
+        "expected_run_lock_version": _require_nonnegative_int(
+            expected_run_lock_version, "expected_run_lock_version"
+        ),
+        "expected_interrupt_version": _require_nonnegative_int(
+            expected_interrupt_version, "expected_interrupt_version"
+        ),
+    }
+    columns = ", ".join(_CONSUMPTION_COLUMNS)
+    values = ", ".join(f"%({column})s" for column in _CONSUMPTION_COLUMNS)
+    identity_predicates = "\n".join(
+        f"   AND {column} = %({column})s"
+        for column in (
+            "decision_id", "graph_invocation_id", "checkpoint_id",
+            "interrupt_request_id", *_IDENTITY_COLUMNS,
+        )
     )
-    command["sql"] = command["sql"].replace(
-        "), updated_interrupt AS (",
-        """), updated_authorization AS (
+    sql = f"""
+WITH locked_authorization AS (
+ SELECT * FROM orchestration_resume_authorizations
+ WHERE authorization_id = %(authorization_id)s
+{identity_predicates}
+   AND authorization_status = 'authorized'
+   AND lock_version = %(expected_authorization_version)s
+   AND authorization_token_hash = %(authorization_token_hash)s
+   AND expires_at > %(claimed_at)s
+ FOR UPDATE
+), locked_run AS (
+ SELECT * FROM orchestration_graph_runs
+ WHERE graph_invocation_id = %(graph_invocation_id)s
+   AND owner_user_id = %(owner_user_id)s
+   AND current_checkpoint_id = %(checkpoint_id)s
+   AND run_status = 'resume_authorized'
+   AND lock_version = %(expected_run_lock_version)s
+ FOR UPDATE
+), locked_interrupt AS (
+ SELECT * FROM orchestration_interrupt_requests
+ WHERE interrupt_request_id = %(interrupt_request_id)s
+   AND graph_invocation_id = %(graph_invocation_id)s
+   AND checkpoint_id = %(checkpoint_id)s
+   AND owner_user_id = %(owner_user_id)s
+   AND interrupt_status = 'resume_authorized'
+   AND lock_version = %(expected_interrupt_version)s
+ FOR UPDATE
+), updated_authorization AS (
  UPDATE orchestration_resume_authorizations
  SET authorization_status = 'consumed', consumed_at = %(claimed_at)s,
      lock_version = lock_version + 1
  WHERE authorization_id = %(authorization_id)s
-   AND authorization_status = 'authorized'
-   AND lock_version = %(expected_authorization_version)s
-   AND EXISTS (SELECT 1 FROM inserted)
+   AND EXISTS (SELECT 1 FROM locked_authorization)
+   AND EXISTS (SELECT 1 FROM locked_run)
+   AND EXISTS (SELECT 1 FROM locked_interrupt)
  RETURNING *
-), updated_interrupt AS (""",
+), inserted_consumption AS (
+ INSERT INTO orchestration_resume_consumptions ({columns})
+ SELECT {values} FROM updated_authorization
+ ON CONFLICT DO NOTHING RETURNING *
+), updated_interrupt AS (
+ UPDATE orchestration_interrupt_requests
+ SET interrupt_status = 'resume_consumed', lock_version = lock_version + 1
+ WHERE interrupt_request_id = %(interrupt_request_id)s
+   AND EXISTS (SELECT 1 FROM inserted_consumption)
+ RETURNING *
+), updated_run AS (
+ UPDATE orchestration_graph_runs
+ SET run_status = 'resume_consumed', lock_version = lock_version + 1,
+     updated_at = %(claimed_at)s
+ WHERE graph_invocation_id = %(graph_invocation_id)s
+   AND EXISTS (SELECT 1 FROM inserted_consumption)
+   AND EXISTS (SELECT 1 FROM updated_interrupt)
+ RETURNING *
+)
+SELECT inserted_consumption.*
+FROM inserted_consumption JOIN updated_run ON TRUE
+"""
+    return _command(
+        operation="prepare_resume_consumption_commit",
+        tables=(
+            "orchestration_graph_runs",
+            "orchestration_interrupt_requests",
+            "orchestration_resume_authorizations",
+            "orchestration_resume_consumptions",
+        ),
+        sql=sql,
+        params=params,
+        read_only=False,
     )
-    return command
 
 
 NODE_ATTEMPT_STATUS_VALUES = (
@@ -1351,6 +1430,13 @@ _LIFECYCLE_EVENT_COLUMNS = (
     "owner_user_id", "event_type", "aggregate_type", "aggregate_id",
     "event_sequence", "event_payload_json", "event_timestamp",
     "projection_status", "projected_at", "projection_retry_count",
+)
+
+LANGGRAPH_CHECKPOINT_BINDING_SCHEMA_VERSION = (
+    "langgraph-checkpoint-binding-v1"
+)
+LANGGRAPH_CHECKPOINT_BINDING_AGGREGATE_TYPE = (
+    "langgraph_checkpoint_binding"
 )
 
 
@@ -1550,6 +1636,176 @@ def prepare_lifecycle_event_row(
         "projected_at": None,
         "projection_retry_count": 0,
     }
+
+
+def prepare_langgraph_checkpoint_binding_row(
+    graph_run_row: Mapping[str, Any],
+    *,
+    repository_checkpoint_id: str,
+    langgraph_thread_id: str,
+    langgraph_checkpoint_namespace: str,
+    langgraph_checkpoint_id: str,
+    event_timestamp: str,
+) -> dict[str, Any]:
+    repository_id = _clean_text(repository_checkpoint_id)
+    thread_id = _clean_text(langgraph_thread_id)
+    checkpoint_id = _clean_text(langgraph_checkpoint_id)
+    if not repository_id or not thread_id or not checkpoint_id:
+        raise ValueError("checkpoint_binding_identity_required")
+    if repository_id == checkpoint_id:
+        raise ValueError("checkpoint_binding_ids_must_be_distinct")
+    payload = {
+        "binding_schema_version": LANGGRAPH_CHECKPOINT_BINDING_SCHEMA_VERSION,
+        "graph_invocation_id": graph_run_row.get("graph_invocation_id"),
+        "repository_checkpoint_id": repository_id,
+        "langgraph_thread_id": thread_id,
+        "langgraph_checkpoint_namespace": _clean_text(
+            langgraph_checkpoint_namespace
+        ),
+        "langgraph_checkpoint_id": checkpoint_id,
+    }
+    return prepare_lifecycle_event_row(
+        graph_run_row,
+        event_type="checkpoint_committed",
+        aggregate_type=LANGGRAPH_CHECKPOINT_BINDING_AGGREGATE_TYPE,
+        aggregate_id=repository_id,
+        event_sequence=0,
+        event_payload=payload,
+        event_timestamp=event_timestamp,
+        references={"checkpoint_id": repository_id},
+    )
+
+
+def prepare_langgraph_checkpoint_binding_commit(
+    binding_row: Mapping[str, Any],
+) -> dict[str, Any]:
+    _require_exact_fields(
+        binding_row, _LIFECYCLE_EVENT_COLUMNS, "checkpoint_binding"
+    )
+    payload = binding_row["event_payload_json"]
+    normalized_refs = {
+        key: binding_row[key]
+        for key in (
+            "checkpoint_id", "interrupt_request_id", "decision_id",
+            "authorization_id", "consumption_id", "node_attempt_id",
+            "terminal_result_id",
+        )
+    }
+    expected_event_id = _deterministic_id(
+        "lifecycle-event",
+        {
+            "graph_invocation_id": binding_row["graph_invocation_id"],
+            "event_type": binding_row["event_type"],
+            "aggregate_type": binding_row["aggregate_type"],
+            "aggregate_id": binding_row["aggregate_id"],
+            "event_sequence": binding_row["event_sequence"],
+            "references": normalized_refs,
+            "payload_digest": harness._checkpoint_digest(payload),
+        },
+    )
+    if (
+        binding_row["event_type"] != "checkpoint_committed"
+        or binding_row["aggregate_type"]
+        != LANGGRAPH_CHECKPOINT_BINDING_AGGREGATE_TYPE
+        or binding_row["event_sequence"] != 0
+        or binding_row["aggregate_id"] != binding_row["checkpoint_id"]
+        or not isinstance(payload, Mapping)
+        or payload.get("binding_schema_version")
+        != LANGGRAPH_CHECKPOINT_BINDING_SCHEMA_VERSION
+        or payload.get("graph_invocation_id")
+        != binding_row["graph_invocation_id"]
+        or payload.get("repository_checkpoint_id")
+        != binding_row["checkpoint_id"]
+        or binding_row["event_id"] != expected_event_id
+    ):
+        raise ValueError("checkpoint_binding_contract_invalid")
+    params = _prefixed_params("binding", binding_row)
+    params["binding_event_payload_json"] = _canonical_json(
+        payload, field_path="checkpoint_binding.event_payload"
+    )
+    sql = """
+WITH locked_checkpoint AS (
+ SELECT checkpoint_id FROM orchestration_checkpoints
+ WHERE checkpoint_id = %(binding_checkpoint_id)s
+   AND graph_invocation_id = %(binding_graph_invocation_id)s
+   AND owner_user_id = %(binding_owner_user_id)s
+), inserted_binding AS (
+ INSERT INTO orchestration_lifecycle_events
+ SELECT %(binding_event_id)s, %(binding_graph_invocation_id)s,
+        %(binding_checkpoint_id)s, %(binding_interrupt_request_id)s,
+        %(binding_decision_id)s, %(binding_authorization_id)s,
+        %(binding_consumption_id)s, %(binding_node_attempt_id)s,
+        %(binding_terminal_result_id)s, %(binding_owner_user_id)s,
+        %(binding_event_type)s, %(binding_aggregate_type)s,
+        %(binding_aggregate_id)s, %(binding_event_sequence)s,
+        %(binding_event_payload_json)s::jsonb,
+        %(binding_event_timestamp)s, %(binding_projection_status)s,
+        %(binding_projected_at)s, %(binding_projection_retry_count)s
+ FROM locked_checkpoint
+ ON CONFLICT DO NOTHING RETURNING *
+), accepted_binding AS (
+ SELECT inserted_binding.*, FALSE AS idempotent_duplicate
+ FROM inserted_binding
+ UNION ALL
+ SELECT existing.*, TRUE AS idempotent_duplicate
+ FROM orchestration_lifecycle_events AS existing
+ WHERE existing.event_id = %(binding_event_id)s
+   AND existing.graph_invocation_id = %(binding_graph_invocation_id)s
+   AND existing.checkpoint_id = %(binding_checkpoint_id)s
+   AND existing.owner_user_id = %(binding_owner_user_id)s
+   AND existing.event_type = %(binding_event_type)s
+   AND existing.aggregate_type = %(binding_aggregate_type)s
+   AND existing.aggregate_id = %(binding_aggregate_id)s
+   AND existing.event_sequence = %(binding_event_sequence)s
+   AND existing.event_payload_json = %(binding_event_payload_json)s::jsonb
+   AND NOT EXISTS (SELECT 1 FROM inserted_binding)
+)
+SELECT * FROM accepted_binding
+"""
+    return _command(
+        operation="prepare_langgraph_checkpoint_binding_commit",
+        tables=(
+            "orchestration_checkpoints",
+            "orchestration_lifecycle_events",
+        ),
+        sql=sql,
+        params=params,
+        read_only=False,
+    )
+
+
+def prepare_langgraph_checkpoint_binding_read(
+    *,
+    owner_user_id: str,
+    graph_invocation_id: str,
+    repository_checkpoint_id: str,
+) -> dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    graph_id = _clean_text(graph_invocation_id)
+    checkpoint_id = _clean_text(repository_checkpoint_id)
+    if not owner or not graph_id or not checkpoint_id:
+        raise ValueError("checkpoint_binding_read_identity_required")
+    return _command(
+        operation="prepare_langgraph_checkpoint_binding_read",
+        tables=("orchestration_lifecycle_events",),
+        read_only=True,
+        sql="""
+SELECT * FROM orchestration_lifecycle_events
+WHERE owner_user_id = %(owner_user_id)s
+  AND graph_invocation_id = %(graph_invocation_id)s
+  AND checkpoint_id = %(repository_checkpoint_id)s
+  AND event_type = 'checkpoint_committed'
+  AND aggregate_type = %(aggregate_type)s
+  AND aggregate_id = %(repository_checkpoint_id)s
+  AND event_sequence = 0
+""",
+        params={
+            "owner_user_id": owner,
+            "graph_invocation_id": graph_id,
+            "repository_checkpoint_id": checkpoint_id,
+            "aggregate_type": LANGGRAPH_CHECKPOINT_BINDING_AGGREGATE_TYPE,
+        },
+    )
 
 
 def terminal_results_are_identical(

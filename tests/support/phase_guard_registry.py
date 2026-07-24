@@ -1128,6 +1128,11 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/storage/durable_orchestration/repository.py",
             "tests/test_phase9_step16a_durable_decision_authorization_runtime_contract.py",
         },
+        "phase9_step16b_attempt_recovery_terminal_runtime": {
+            "src/storage/durable_orchestration/store.py",
+            "src/storage/durable_orchestration/repository.py",
+            "tests/test_phase9_step16b_attempt_recovery_terminal_runtime_contract.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1208,6 +1213,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase9_step16a_durable_decision_authorization_runtime"
+        )
+        | legacy_guard_allowlist(
+            "phase9_step16b_attempt_recovery_terminal_runtime"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

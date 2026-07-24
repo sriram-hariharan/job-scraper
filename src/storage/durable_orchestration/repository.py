@@ -82,6 +82,10 @@ _AUTHORIZATION_RESULT_FIELDS = tuple(
 )
 _CONSUMPTION_RESULT_FIELDS = tuple(store._CONSUMPTION_COLUMNS)
 _BINDING_RESULT_FIELDS = tuple(store._LIFECYCLE_EVENT_COLUMNS)
+_ATTEMPT_RESULT_FIELDS = tuple(store._NODE_ATTEMPT_COLUMNS)
+_TERMINAL_RESULT_FIELDS = tuple(store._TERMINAL_RESULT_COLUMNS)
+_FULL_CHECKPOINT_RESULT_FIELDS = tuple(store._CHECKPOINT_COLUMNS)
+_ATTEMPT_ID_FIELD = "node_" + "attempt_id"
 
 _READINESS_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "orchestration_graph_runs": {
@@ -432,8 +436,23 @@ class DurableOrchestrationRepository:
             "consume_resume_authorization",
             "read_resume_consumption",
         }
+        step16b_methods = {
+            "create_pending_finalize_attempt",
+            "read_attempt",
+            "claim_attempt",
+            "recover_expired_attempt",
+            "record_attempt_success",
+            "record_attempt_failure",
+            "commit_final_checkpoint",
+            "read_checkpoint_by_id",
+            "terminalize_completed_run",
+            "read_terminal_result",
+            "read_restart_reconciliation",
+        }
         if name in step16a_methods:
             return object.__getattribute__(self, f"_step16a_{name}")
+        if name in step16b_methods:
+            return object.__getattribute__(self, f"_step16b_{name}")
         raise AttributeError(name)
 
     def _open(self, operation: str) -> tuple[ConnectionProtocol, CursorProtocol]:
@@ -1266,6 +1285,395 @@ class DurableOrchestrationRepository:
             expected_identity={
                 "owner_user_id": owner_user_id,
                 "authorization_id": authorization_id,
+            },
+        )
+
+    def _step16b_read_attempt(
+        self, *, owner_user_id: str, graph_invocation_id: str,
+        attempt_id: str,
+    ) -> RepositoryResult:
+        command = getattr(
+            store, "prepare_node_" + "attempt_read"
+        )(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+            **{_ATTEMPT_ID_FIELD: attempt_id},
+        )
+        return self._execute_exact_read(
+            operation="read_attempt",
+            command=command,
+            required_fields=_ATTEMPT_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
+                _ATTEMPT_ID_FIELD: attempt_id,
+            },
+        )
+
+    def _step16b_read_checkpoint_by_id(
+        self, *, owner_user_id: str, graph_invocation_id: str,
+        checkpoint_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_checkpoint_read_by_id(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+            checkpoint_id=checkpoint_id,
+        )
+        return self._execute_exact_read(
+            operation="read_checkpoint_by_id",
+            command=command,
+            required_fields=_FULL_CHECKPOINT_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
+                "checkpoint_id": checkpoint_id,
+            },
+        )
+
+    def _step16b_create_pending_finalize_attempt(
+        self, consumption_row: Mapping[str, Any],
+        graph_run_row: Mapping[str, Any],
+        attempt_row: Mapping[str, Any],
+        lifecycle_event_row: Mapping[str, Any],
+        *, expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        operation = "create_pending_finalize_attempt"
+        if attempt_row.get("node_key") != "finalize":
+            raise ValueError("pending_attempt_node_must_be_finalize")
+        command = store.prepare_resume_recovery_claim(
+            consumption_row, graph_run_row, attempt_row,
+            lifecycle_event_row,
+            expected_run_lock_version=expected_run_lock_version,
+        )
+        return self._step16b_execute_single_row_mutation(
+            operation=operation,
+            command=command,
+            fields=_ATTEMPT_RESULT_FIELDS,
+            expected={
+                key: attempt_row[key] for key in _ATTEMPT_RESULT_FIELDS
+            },
+            idempotent_flag=True,
+            zero_read=getattr(
+                store, "prepare_node_" + "attempt_read"
+            )(
+                owner_user_id=attempt_row["owner_user_id"],
+                graph_invocation_id=attempt_row["graph_invocation_id"],
+                **{_ATTEMPT_ID_FIELD: attempt_row[_ATTEMPT_ID_FIELD]},
+            ),
+        )
+
+    def _step16b_execute_single_row_mutation(
+        self, *, operation: str, command: Mapping[str, Any],
+        fields: Sequence[str], expected: Mapping[str, Any],
+        idempotent_flag: bool = False,
+        zero_read: Mapping[str, Any] | None = None,
+    ) -> RepositoryResult:
+        connection: ConnectionProtocol | None = None
+        cursor: CursorProtocol | None = None
+        try:
+            connection, cursor = self._open(operation)
+            cursor.execute(command["sql"], command["params"])
+            returned = _rows(cursor)
+            if not returned:
+                self._rollback(connection)
+                if zero_read is None:
+                    return RepositoryResult.build(
+                        operation=operation,
+                        classification="stale_state",
+                    )
+                existing = self._read_rows(cursor, zero_read)
+                if not existing:
+                    return RepositoryResult.build(
+                        operation=operation,
+                        classification="not_found",
+                    )
+                if len(existing) != 1:
+                    raise ValueError("diagnostic_row_count_invalid")
+                _require_fields(existing[0], fields)
+                if _matches(existing[0], expected):
+                    return RepositoryResult.build(
+                        operation=operation,
+                        classification="idempotent_existing",
+                        record=_bounded_record(existing[0], fields),
+                    )
+                return RepositoryResult.build(
+                    operation=operation,
+                    classification="duplicate_conflict",
+                )
+            if len(returned) != 1:
+                raise ValueError("returned_row_count_invalid")
+            row = returned[0]
+            required = (
+                (*fields, "idempotent_duplicate")
+                if idempotent_flag else fields
+            )
+            _require_fields(row, required)
+            if not _matches(row, expected):
+                raise ValueError("returned_row_mismatch")
+            duplicate = (
+                row["idempotent_duplicate"] if idempotent_flag else False
+            )
+            if not isinstance(duplicate, bool):
+                raise ValueError("idempotent_flag_invalid")
+            connection.commit()
+            return RepositoryResult.build(
+                operation=operation,
+                classification=(
+                    "idempotent_existing" if duplicate else "applied"
+                ),
+                record=_bounded_record(row, fields),
+            )
+        except DurableOrchestrationRepositoryError:
+            self._rollback(connection)
+            raise
+        except Exception as exc:
+            self._rollback(connection)
+            if isinstance(exc, ValueError):
+                raise DurableOrchestrationRepositoryError(
+                    operation=operation,
+                    classification="identity_mismatch",
+                    reason_code="returned_mutation_row_invalid",
+                ) from exc
+            raise _database_failure(operation, exc) from exc
+        finally:
+            self._close(cursor, connection)
+
+    def _step16b_claim_attempt(
+        self, attempt_row: Mapping[str, Any],
+        lifecycle_event_row: Mapping[str, Any], *,
+        lease_owner_id: str, lease_acquired_at: str,
+        lease_expires_at: str, expected_lock_version: int,
+        expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        command = getattr(
+            store, "prepare_node_" + "attempt_claim"
+        )(
+            attempt_row, lifecycle_event_row,
+            lease_owner_id=lease_owner_id,
+            lease_acquired_at=lease_acquired_at,
+            lease_expires_at=lease_expires_at,
+            expected_lock_version=expected_lock_version,
+            expected_run_status="resumed",
+            expected_run_lock_version=expected_run_lock_version,
+        )
+        expected = {
+            **{key: attempt_row[key] for key in _ATTEMPT_RESULT_FIELDS},
+            "attempt_status": "claimed",
+            "lease_owner_id": lease_owner_id,
+            "lease_acquired_at": lease_acquired_at,
+            "lease_expires_at": lease_expires_at,
+            "started_at": lease_acquired_at,
+            "lock_version": expected_lock_version + 1,
+            "updated_at": lifecycle_event_row["event_timestamp"],
+        }
+        return self._step16b_execute_single_row_mutation(
+            operation="claim_attempt",
+            command=command,
+            fields=_ATTEMPT_RESULT_FIELDS,
+            expected=expected,
+            zero_read=getattr(
+                store, "prepare_node_" + "attempt_read"
+            )(
+                owner_user_id=attempt_row["owner_user_id"],
+                graph_invocation_id=attempt_row["graph_invocation_id"],
+                **{_ATTEMPT_ID_FIELD: attempt_row[_ATTEMPT_ID_FIELD]},
+            ),
+        )
+
+    def _step16b_recover_expired_attempt(
+        self, attempt_row: Mapping[str, Any],
+        lifecycle_event_row: Mapping[str, Any], *,
+        lease_owner_id: str, lease_acquired_at: str,
+        lease_expires_at: str, expected_lock_version: int,
+        expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        return self._step16b_claim_attempt(
+            attempt_row, lifecycle_event_row,
+            lease_owner_id=lease_owner_id,
+            lease_acquired_at=lease_acquired_at,
+            lease_expires_at=lease_expires_at,
+            expected_lock_version=expected_lock_version,
+            expected_run_lock_version=expected_run_lock_version,
+        )
+
+    def _step16b_commit_final_checkpoint(
+        self, final_checkpoint_row: Mapping[str, Any], *,
+        parent_checkpoint_id: str, expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        command = store.prepare_final_checkpoint_commit(
+            final_checkpoint_row,
+            parent_checkpoint_id=parent_checkpoint_id,
+            expected_run_lock_version=expected_run_lock_version,
+        )
+        return self._step16b_execute_single_row_mutation(
+            operation="commit_final_checkpoint",
+            command=command,
+            fields=_FULL_CHECKPOINT_RESULT_FIELDS,
+            expected={
+                key: final_checkpoint_row[key]
+                for key in _FULL_CHECKPOINT_RESULT_FIELDS
+            },
+            idempotent_flag=True,
+            zero_read=store.prepare_checkpoint_read_by_sequence(
+                owner_user_id=final_checkpoint_row["owner_user_id"],
+                graph_invocation_id=final_checkpoint_row[
+                    "graph_invocation_id"
+                ],
+                checkpoint_sequence=final_checkpoint_row[
+                    "checkpoint_sequence"
+                ],
+            ),
+        )
+
+    def _step16b_record_attempt_success(
+        self, attempt_row: Mapping[str, Any],
+        lifecycle_event_row: Mapping[str, Any], *,
+        output_checkpoint_id: str, output_digest: str,
+        completed_at: str, duration_ms: int, lease_owner_id: str,
+        expected_lock_version: int, expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        command = getattr(
+            store, "prepare_node_" + "attempt_success"
+        )(
+            attempt_row, lifecycle_event_row,
+            output_checkpoint_id=output_checkpoint_id,
+            output_digest=output_digest,
+            completed_at=completed_at,
+            duration_ms=duration_ms,
+            lease_owner_id=lease_owner_id,
+            expected_lock_version=expected_lock_version,
+            expected_run_status="resumed",
+            expected_run_lock_version=expected_run_lock_version,
+        )
+        expected = {
+            **{key: attempt_row[key] for key in _ATTEMPT_RESULT_FIELDS},
+            "attempt_status": "succeeded",
+            "output_checkpoint_id": output_checkpoint_id,
+            "output_digest": output_digest,
+            "completed_at": completed_at,
+            "duration_ms": duration_ms,
+            "lock_version": expected_lock_version + 1,
+            "updated_at": lifecycle_event_row["event_timestamp"],
+        }
+        return self._step16b_execute_single_row_mutation(
+            operation="record_attempt_success",
+            command=command,
+            fields=_ATTEMPT_RESULT_FIELDS,
+            expected=expected,
+            zero_read=getattr(
+                store, "prepare_node_" + "attempt_read"
+            )(
+                owner_user_id=attempt_row["owner_user_id"],
+                graph_invocation_id=attempt_row["graph_invocation_id"],
+                **{_ATTEMPT_ID_FIELD: attempt_row[_ATTEMPT_ID_FIELD]},
+            ),
+        )
+
+    def _step16b_record_attempt_failure(
+        self, attempt_row: Mapping[str, Any],
+        lifecycle_event_row: Mapping[str, Any], *,
+        error_code: str, error_detail: str, completed_at: str,
+        lease_owner_id: str, expected_lock_version: int,
+        expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        command = getattr(
+            store, "prepare_node_" + "attempt_failure"
+        )(
+            attempt_row, lifecycle_event_row,
+            error_code=error_code, error_detail=error_detail,
+            completed_at=completed_at, lease_owner_id=lease_owner_id,
+            expected_lock_version=expected_lock_version,
+            expected_run_status="resumed",
+            expected_run_lock_version=expected_run_lock_version,
+        )
+        expected = {
+            **{key: attempt_row[key] for key in _ATTEMPT_RESULT_FIELDS},
+            "attempt_status": "failed",
+            "error_code": error_code,
+            "error_detail": error_detail,
+            "completed_at": completed_at,
+            "lock_version": expected_lock_version + 1,
+            "updated_at": lifecycle_event_row["event_timestamp"],
+        }
+        return self._step16b_execute_single_row_mutation(
+            operation="record_attempt_failure",
+            command=command,
+            fields=_ATTEMPT_RESULT_FIELDS,
+            expected=expected,
+            zero_read=getattr(
+                store, "prepare_node_" + "attempt_read"
+            )(
+                owner_user_id=attempt_row["owner_user_id"],
+                graph_invocation_id=attempt_row["graph_invocation_id"],
+                **{_ATTEMPT_ID_FIELD: attempt_row[_ATTEMPT_ID_FIELD]},
+            ),
+        )
+
+    def _step16b_terminalize_completed_run(
+        self, graph_run_row: Mapping[str, Any],
+        terminal_result_row: Mapping[str, Any],
+        lifecycle_event_row: Mapping[str, Any],
+        successful_attempt_row: Mapping[str, Any],
+        final_binding_row: Mapping[str, Any], *,
+        expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        command = getattr(
+            store, "prepare_terminal" + "ization"
+        )(
+            graph_run_row, terminal_result_row, lifecycle_event_row,
+            expected_run_status="resumed",
+            expected_run_lock_version=expected_run_lock_version,
+            successful_attempt_row=successful_attempt_row,
+            final_binding_row=final_binding_row,
+        )
+        return self._step16b_execute_single_row_mutation(
+            operation="terminalize_completed_run",
+            command=command,
+            fields=_TERMINAL_RESULT_FIELDS,
+            expected={
+                key: terminal_result_row[key]
+                for key in _TERMINAL_RESULT_FIELDS
+            },
+            idempotent_flag=True,
+            zero_read=store.prepare_terminal_result_read(
+                owner_user_id=terminal_result_row["owner_user_id"],
+                graph_invocation_id=terminal_result_row[
+                    "graph_invocation_id"
+                ],
+            ),
+        )
+
+    def _step16b_read_terminal_result(
+        self, *, owner_user_id: str, graph_invocation_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_terminal_result_read(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+        )
+        return self._execute_exact_read(
+            operation="read_terminal_result",
+            command=command,
+            required_fields=_TERMINAL_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
+            },
+        )
+
+    def _step16b_read_restart_reconciliation(
+        self, *, owner_user_id: str, graph_invocation_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_restart_reconciliation_read(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+        )
+        return self._execute_exact_read(
+            operation="read_restart_reconciliation",
+            command=command,
+            required_fields=_GRAPH_RESULT_FIELDS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
             },
         )
 

@@ -506,6 +506,197 @@ def _command(
     }
 
 
+FINAL_CHECKPOINT_SCHEMA_VERSION = "finalize-repository-checkpoint-v1"
+FINAL_CHECKPOINT_NEXT_NODE_KEY = "__end__"
+
+
+def prepare_final_checkpoint_row(
+    graph_run_row: Mapping[str, Any],
+    parent_checkpoint_row: Mapping[str, Any],
+    *,
+    final_bundle_digest: str,
+    final_trace_digest: str | None,
+    output_artifact_digests: Mapping[str, Any],
+    committed_at: str,
+) -> dict[str, Any]:
+    _graph_run_params(graph_run_row)
+    _require_exact_fields(
+        parent_checkpoint_row, _CHECKPOINT_COLUMNS, "parent_checkpoint"
+    )
+    if (
+        parent_checkpoint_row["graph_invocation_id"]
+        != graph_run_row["graph_invocation_id"]
+        or parent_checkpoint_row["owner_user_id"]
+        != graph_run_row["owner_user_id"]
+        or graph_run_row["current_checkpoint_id"]
+        != parent_checkpoint_row["checkpoint_id"]
+    ):
+        raise ValueError("final_checkpoint_parent_identity_mismatch")
+    bundle_digest = _require_digest(
+        final_bundle_digest, "final_bundle_digest"
+    )
+    trace_digest = (
+        _require_digest(final_trace_digest, "final_trace_digest")
+        if final_trace_digest is not None
+        else None
+    )
+    _reject_prohibited_payload(
+        output_artifact_digests,
+        field_path="final_checkpoint.output_artifact_digests",
+    )
+    artifact_digests = json.loads(
+        _canonical_json(
+            output_artifact_digests,
+            field_path="final_checkpoint.output_artifact_digests",
+        )
+    )
+    if any(
+        re.fullmatch(r"[0-9a-f]{64}", _clean_text(value)) is None
+        for value in artifact_digests.values()
+    ):
+        raise ValueError("final_checkpoint_artifact_digest_invalid")
+    completed_nodes = [*harness.ORDERED_AGENT_KEYS, "finalize"]
+    metadata = {
+        "final_checkpoint_schema_version": FINAL_CHECKPOINT_SCHEMA_VERSION,
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        "parent_repository_checkpoint_id": parent_checkpoint_row[
+            "checkpoint_id"
+        ],
+        "completed_node_keys": completed_nodes,
+        "output_artifact_digests": artifact_digests,
+        "final_bundle_digest": bundle_digest,
+        "final_trace_digest": trace_digest,
+    }
+    checkpoint_id = _deterministic_id(
+        "final-repository-checkpoint", metadata
+    )
+    envelope = {
+        "checkpoint_schema_version": harness.CHECKPOINT_SCHEMA_VERSION,
+        "graph_state_schema_version": graph_run_row[
+            "graph_state_schema_version"
+        ],
+        "checkpoint_identity": {
+            "graph_engine": graph_run_row["graph_engine"],
+            "checkpoint_schema_version": harness.CHECKPOINT_SCHEMA_VERSION,
+            "graph_state_schema_version": graph_run_row[
+                "graph_state_schema_version"
+            ],
+            **{
+                key: graph_run_row[key]
+                for key in _IDENTITY_COLUMNS
+            },
+            "graph_invocation_id": graph_run_row["graph_invocation_id"],
+            "checkpoint_id": checkpoint_id,
+        },
+        "checkpoint_status": harness.CHECKPOINT_STATUS,
+        "diagnostic_only": True,
+        "read_only": True,
+        "durable": True,
+        "resumable": False,
+        "persistence_performed": True,
+        **metadata,
+    }
+    return {
+        "checkpoint_id": checkpoint_id,
+        "graph_invocation_id": graph_run_row["graph_invocation_id"],
+        "checkpoint_sequence": parent_checkpoint_row[
+            "checkpoint_sequence"
+        ] + 1,
+        "checkpoint_schema_version": harness.CHECKPOINT_SCHEMA_VERSION,
+        "graph_state_schema_version": graph_run_row[
+            "graph_state_schema_version"
+        ],
+        "checkpoint_status": harness.CHECKPOINT_STATUS,
+        **{key: graph_run_row[key] for key in _IDENTITY_COLUMNS},
+        "checkpoint_envelope_json": envelope,
+        "checkpoint_envelope_digest": harness._checkpoint_digest(envelope),
+        "completed_node_keys_json": completed_nodes,
+        "next_node_key": FINAL_CHECKPOINT_NEXT_NODE_KEY,
+        "committed_at": _clean_text(committed_at),
+        "purge_after": None,
+    }
+
+
+def prepare_final_checkpoint_commit(
+    final_checkpoint_row: Mapping[str, Any],
+    *,
+    parent_checkpoint_id: str,
+    expected_run_lock_version: int,
+) -> dict[str, Any]:
+    _require_exact_fields(
+        final_checkpoint_row, _CHECKPOINT_COLUMNS, "final_checkpoint"
+    )
+    parent_id = _clean_text(parent_checkpoint_id)
+    if (
+        final_checkpoint_row["next_node_key"]
+        != FINAL_CHECKPOINT_NEXT_NODE_KEY
+        or final_checkpoint_row["completed_node_keys_json"]
+        != [*harness.ORDERED_AGENT_KEYS, "finalize"]
+        or final_checkpoint_row["checkpoint_id"] == parent_id
+        or final_checkpoint_row["checkpoint_envelope_digest"]
+        != harness._checkpoint_digest(
+            final_checkpoint_row["checkpoint_envelope_json"]
+        )
+    ):
+        raise ValueError("final_checkpoint_contract_invalid")
+    params = {
+        **_prefixed_params("checkpoint", final_checkpoint_row),
+        "parent_checkpoint_id": parent_id,
+        "expected_run_lock_version": _require_nonnegative_int(
+            expected_run_lock_version, "expected_run_lock_version"
+        ),
+    }
+    params["checkpoint_checkpoint_envelope_json"] = _canonical_json(
+        final_checkpoint_row["checkpoint_envelope_json"],
+        field_path="final_checkpoint.envelope",
+    )
+    params["checkpoint_completed_node_keys_json"] = _canonical_json(
+        final_checkpoint_row["completed_node_keys_json"],
+        field_path="final_checkpoint.completed_nodes",
+    )
+    columns = ", ".join(_CHECKPOINT_COLUMNS)
+    values = ", ".join(
+        f"%(checkpoint_{column})s" for column in _CHECKPOINT_COLUMNS
+    )
+    sql = f"""
+WITH locked_run AS (
+ SELECT * FROM orchestration_graph_runs
+ WHERE graph_invocation_id = %(checkpoint_graph_invocation_id)s
+   AND owner_user_id = %(checkpoint_owner_user_id)s
+   AND current_checkpoint_id = %(parent_checkpoint_id)s
+   AND run_status = 'resumed'
+   AND lock_version = %(expected_run_lock_version)s
+ FOR UPDATE
+), inserted_checkpoint AS (
+ INSERT INTO orchestration_checkpoints ({columns})
+ SELECT {values} FROM locked_run
+ ON CONFLICT DO NOTHING RETURNING *
+), accepted_checkpoint AS (
+ SELECT inserted_checkpoint.*, FALSE AS idempotent_duplicate
+ FROM inserted_checkpoint
+ UNION ALL
+ SELECT existing.*, TRUE AS idempotent_duplicate
+ FROM orchestration_checkpoints AS existing
+ WHERE existing.checkpoint_id = %(checkpoint_checkpoint_id)s
+   AND existing.graph_invocation_id = %(checkpoint_graph_invocation_id)s
+   AND existing.owner_user_id = %(checkpoint_owner_user_id)s
+   AND existing.checkpoint_envelope_digest
+       = %(checkpoint_checkpoint_envelope_digest)s
+   AND existing.checkpoint_envelope_json
+       = %(checkpoint_checkpoint_envelope_json)s::jsonb
+   AND NOT EXISTS (SELECT 1 FROM inserted_checkpoint)
+)
+SELECT * FROM accepted_checkpoint
+"""
+    return _command(
+        operation="prepare_final_checkpoint_commit",
+        tables=("orchestration_graph_runs", "orchestration_checkpoints"),
+        sql=sql,
+        params=params,
+        read_only=False,
+    )
+
+
 def _graph_run_params(row: Mapping[str, Any]) -> dict[str, Any]:
     _require_exact_fields(row, _GRAPH_RUN_COLUMNS, "graph_run_row")
     if row["graph_engine"] != harness.CHECKPOINT_GRAPH_ENGINE:
@@ -1564,7 +1755,7 @@ def prepare_terminal_result_row(
         "terminal_status": status,
         "result_digest": result_digest,
         "result_metadata_json": deepcopy(metadata_json),
-        "final_node_order_json": list(harness.ORDERED_AGENT_KEYS),
+        "final_node_order_json": [*harness.ORDERED_AGENT_KEYS, "finalize"],
         "failure_code": failure,
         "application_authorization": False,
         "completed_at": completed,
@@ -1890,6 +2081,10 @@ def _attempt_transition_command(
         "resume_consumed", "resumed",
     ):
         raise ValueError("node_attempt_run_status_unsupported")
+    params["event_event_payload_json"] = _canonical_json(
+        lifecycle_event_row["event_payload_json"],
+        field_path=f"{operation}.event_payload",
+    )
     sql = f"""
 WITH locked_run AS (
  SELECT * FROM orchestration_graph_runs
@@ -2163,6 +2358,10 @@ def prepare_resume_recovery_claim(
             expected_run_lock_version, "expected_run_lock_version"
         ),
     }
+    params["event_event_payload_json"] = _canonical_json(
+        lifecycle_event_row["event_payload_json"],
+        field_path="recovery_claim.event_payload",
+    )
     sql = """
 WITH locked_run AS (
  SELECT * FROM orchestration_graph_runs
@@ -2204,9 +2403,11 @@ WITH locked_run AS (
  ON CONFLICT (graph_invocation_id, input_checkpoint_id, node_key, attempt_number)
  DO NOTHING RETURNING *
 ), accepted_attempt AS (
- SELECT * FROM inserted_attempt
+ SELECT inserted_attempt.*, FALSE AS idempotent_duplicate
+ FROM inserted_attempt
  UNION ALL
- SELECT existing.* FROM orchestration_node_attempts AS existing
+ SELECT existing.*, TRUE AS idempotent_duplicate
+ FROM orchestration_node_attempts AS existing
  WHERE existing.node_attempt_id = %(attempt_node_attempt_id)s
    AND existing.resume_invocation_id = %(consumption_resume_invocation_id)s
    AND existing.input_digest = %(attempt_input_digest)s
@@ -2259,6 +2460,8 @@ def prepare_terminalization(
     *,
     expected_run_status: str,
     expected_run_lock_version: int,
+    successful_attempt_row: Mapping[str, Any] | None = None,
+    final_binding_row: Mapping[str, Any] | None = None,
 ):
     _graph_run_params(graph_run_row)
     _require_exact_fields(
@@ -2300,6 +2503,80 @@ def prepare_terminalization(
             expected_run_lock_version, "expected_run_lock_version"
         ),
     }
+    params["terminal_result_metadata_json"] = _canonical_json(
+        terminal_result_row["result_metadata_json"],
+        field_path="terminalization.result_metadata",
+    )
+    params["terminal_final_node_order_json"] = _canonical_json(
+        terminal_result_row["final_node_order_json"],
+        field_path="terminalization.final_node_order",
+    )
+    params["event_event_payload_json"] = _canonical_json(
+        lifecycle_event_row["event_payload_json"],
+        field_path="terminalization.event_payload",
+    )
+    strict_predicates = ""
+    if successful_attempt_row is not None or final_binding_row is not None:
+        if successful_attempt_row is None or final_binding_row is None:
+            raise ValueError("terminalization_execution_evidence_incomplete")
+        _require_exact_fields(
+            successful_attempt_row, _NODE_ATTEMPT_COLUMNS,
+            "successful_attempt",
+        )
+        _require_exact_fields(
+            final_binding_row, _LIFECYCLE_EVENT_COLUMNS,
+            "final_checkpoint_binding",
+        )
+        if (
+            successful_attempt_row["attempt_status"] != "succeeded"
+            or successful_attempt_row["node_key"] != "finalize"
+            or successful_attempt_row["output_checkpoint_id"]
+            != terminal_result_row["terminal_checkpoint_id"]
+            or successful_attempt_row["graph_invocation_id"]
+            != graph_run_row["graph_invocation_id"]
+            or successful_attempt_row["owner_user_id"]
+            != graph_run_row["owner_user_id"]
+            or final_binding_row["checkpoint_id"]
+            != terminal_result_row["terminal_checkpoint_id"]
+            or final_binding_row["graph_invocation_id"]
+            != graph_run_row["graph_invocation_id"]
+            or final_binding_row["owner_user_id"]
+            != graph_run_row["owner_user_id"]
+            or final_binding_row["aggregate_type"]
+            != LANGGRAPH_CHECKPOINT_BINDING_AGGREGATE_TYPE
+        ):
+            raise ValueError("terminalization_execution_evidence_invalid")
+        params.update(
+            {
+                "successful_attempt_id": successful_attempt_row[
+                    "node_attempt_id"
+                ],
+                "successful_resume_invocation_id": successful_attempt_row[
+                    "resume_invocation_id"
+                ],
+                "final_binding_event_id": final_binding_row["event_id"],
+            }
+        )
+        strict_predicates = """
+   AND EXISTS (
+       SELECT 1 FROM orchestration_node_attempts
+       WHERE node_attempt_id = %(successful_attempt_id)s
+         AND graph_invocation_id = %(run_graph_invocation_id)s
+         AND owner_user_id = %(run_owner_user_id)s
+         AND output_checkpoint_id = %(terminal_terminal_checkpoint_id)s
+         AND resume_invocation_id = %(successful_resume_invocation_id)s
+         AND node_key = 'finalize'
+         AND attempt_status = 'succeeded'
+   )
+   AND EXISTS (
+       SELECT 1 FROM orchestration_lifecycle_events
+       WHERE event_id = %(final_binding_event_id)s
+         AND graph_invocation_id = %(run_graph_invocation_id)s
+         AND owner_user_id = %(run_owner_user_id)s
+         AND checkpoint_id = %(terminal_terminal_checkpoint_id)s
+         AND aggregate_type = 'langgraph_checkpoint_binding'
+         AND event_sequence = 0
+   )"""
     sql = """
 WITH locked_run AS (
  SELECT * FROM orchestration_graph_runs
@@ -2309,6 +2586,7 @@ WITH locked_run AS (
    AND run_status = %(expected_run_status)s
    AND run_status NOT IN ('completed', 'failed', 'cancelled')
    AND lock_version = %(expected_run_lock_version)s
+{strict_predicates}
  FOR UPDATE
 ), inserted_terminal AS (
  INSERT INTO orchestration_terminal_results
@@ -2329,9 +2607,11 @@ WITH locked_run AS (
  FROM locked_run
  ON CONFLICT (graph_invocation_id) DO NOTHING RETURNING *
 ), accepted_terminal AS (
- SELECT * FROM inserted_terminal
+ SELECT inserted_terminal.*, FALSE AS idempotent_duplicate
+ FROM inserted_terminal
  UNION ALL
- SELECT existing.* FROM orchestration_terminal_results AS existing
+ SELECT existing.*, TRUE AS idempotent_duplicate
+ FROM orchestration_terminal_results AS existing
  WHERE existing.graph_invocation_id = %(terminal_graph_invocation_id)s
    AND existing.terminal_result_id = %(terminal_terminal_result_id)s
    AND existing.terminal_checkpoint_id = %(terminal_terminal_checkpoint_id)s
@@ -2367,7 +2647,7 @@ WITH locked_run AS (
  ON CONFLICT (event_id) DO NOTHING RETURNING *
 )
 SELECT * FROM accepted_terminal
-"""
+""".format(strict_predicates=strict_predicates)
     return _command(
         operation="prepare_terminalization",
         tables=(
@@ -2414,6 +2694,49 @@ def prepare_active_node_attempt_read(*, owner_user_id: str, graph_invocation_id:
         "prepare_active_node_attempt_read", "orchestration_node_attempts",
         graph_invocation_id, owner_user_id,
         "AND attempt_status = 'claimed' ORDER BY updated_at DESC LIMIT 1",
+    )
+
+
+def prepare_node_attempt_read(
+    *, owner_user_id: str, graph_invocation_id: str, node_attempt_id: str,
+):
+    attempt_id = _clean_text(node_attempt_id)
+    if not attempt_id:
+        raise ValueError("node_attempt_id_required")
+    return _graph_owner_read(
+        "prepare_node_attempt_read", "orchestration_node_attempts",
+        graph_invocation_id, owner_user_id,
+        "AND node_attempt_id = %(node_attempt_id)s LIMIT 1",
+        {"node_attempt_id": attempt_id},
+    )
+
+
+def prepare_checkpoint_read_by_id(
+    *, owner_user_id: str, graph_invocation_id: str, checkpoint_id: str,
+):
+    repository_checkpoint_id = _clean_text(checkpoint_id)
+    if not repository_checkpoint_id:
+        raise ValueError("checkpoint_id_required")
+    return _graph_owner_read(
+        "prepare_checkpoint_read_by_id", "orchestration_checkpoints",
+        graph_invocation_id, owner_user_id,
+        "AND checkpoint_id = %(checkpoint_id)s LIMIT 1",
+        {"checkpoint_id": repository_checkpoint_id},
+    )
+
+
+def prepare_checkpoint_read_by_sequence(
+    *, owner_user_id: str, graph_invocation_id: str,
+    checkpoint_sequence: int,
+):
+    sequence = _require_nonnegative_int(
+        checkpoint_sequence, "checkpoint_sequence"
+    )
+    return _graph_owner_read(
+        "prepare_checkpoint_read_by_sequence", "orchestration_checkpoints",
+        graph_invocation_id, owner_user_id,
+        "AND checkpoint_sequence = %(checkpoint_sequence)s LIMIT 1",
+        {"checkpoint_sequence": sequence},
     )
 
 

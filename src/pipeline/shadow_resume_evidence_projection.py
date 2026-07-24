@@ -12,6 +12,7 @@ from typing import Any, Mapping, Sequence
 
 
 PROJECTION_CONTRACT_VERSION = "applylens-shadow-resume-evidence-v1"
+HANDOFF_CONTRACT_VERSION = "applylens-shadow-resume-evidence-handoff-v1"
 MAX_SELECTED_RESUMES = 50
 MAX_EVIDENCE_ROWS_PER_RESUME = 20
 MAX_SERIALIZED_BYTES = 1_000_000
@@ -19,6 +20,7 @@ MAX_IDENTITY_LENGTH = 200
 MAX_STRING_LENGTH = 500
 MAX_LIST_ITEMS = 50
 MAX_NESTED_DEPTH = 5
+MAX_HANDOFF_SERIALIZED_BYTES = 4096
 
 _IDENTITY_PATTERN = re.compile(r"[A-Za-z0-9_.:@/-]{1,200}")
 _TOP_LEVEL_FIELDS = {"contract_version", "resumes"}
@@ -62,6 +64,22 @@ _SENSITIVE_FIELDS = {
     "database_url",
     "credential",
     "credentials",
+}
+_HANDOFF_FIELDS = {
+    "contract_version",
+    "status",
+    "reason_code",
+    "projection_available",
+    "selected_resume_count",
+    "projected_resume_count",
+}
+_HANDOFF_REASONS = {
+    "projection_ready": "ready",
+    "candidate_projection_missing": "failed",
+    "candidate_projection_malformed": "failed",
+    "selected_resume_evidence_missing": "failed",
+    "final_projection_failed": "failed",
+    "no_final_selected_resumes": "skipped",
 }
 
 
@@ -309,6 +327,30 @@ def filter_projection_by_packet_manifest(
     manifest_rows: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     candidate = validate_projection(candidate_projection)
+    selected_ids = set(packet_manifest_selected_resume_ids(manifest_rows))
+    if not selected_ids:
+        _fail("selected_resume_evidence_missing")
+
+    candidates_by_id = {
+        entry["resume_id"]: entry for entry in candidate["resumes"]
+    }
+    missing = selected_ids.difference(candidates_by_id)
+    if missing:
+        _fail("selected_resume_evidence_missing")
+    return validate_projection(
+        {
+            "contract_version": PROJECTION_CONTRACT_VERSION,
+            "resumes": [
+                deepcopy(candidates_by_id[resume_id])
+                for resume_id in sorted(selected_ids)
+            ],
+        }
+    )
+
+
+def packet_manifest_selected_resume_ids(
+    manifest_rows: Sequence[Mapping[str, Any]],
+) -> tuple[str, ...]:
     if not isinstance(manifest_rows, (list, tuple)):
         _fail("projection_malformed")
 
@@ -328,26 +370,57 @@ def filter_projection_by_packet_manifest(
         seen_jobs.add(job_id)
         selected_ids.add(_identity(raw_resume_id))
 
-    if not selected_ids:
-        _fail("selected_resume_evidence_missing")
     if len(selected_ids) > MAX_SELECTED_RESUMES:
         _fail("projection_limit_exceeded")
+    return tuple(sorted(selected_ids))
 
-    candidates_by_id = {
-        entry["resume_id"]: entry for entry in candidate["resumes"]
+
+def build_handoff_status(
+    *,
+    status: str,
+    reason_code: str,
+    selected_resume_count: int,
+    projected_resume_count: int,
+) -> dict[str, Any]:
+    payload = {
+        "contract_version": HANDOFF_CONTRACT_VERSION,
+        "status": status,
+        "reason_code": reason_code,
+        "projection_available": status == "ready",
+        "selected_resume_count": selected_resume_count,
+        "projected_resume_count": projected_resume_count,
     }
-    missing = selected_ids.difference(candidates_by_id)
-    if missing:
-        _fail("selected_resume_evidence_missing")
-    return validate_projection(
-        {
-            "contract_version": PROJECTION_CONTRACT_VERSION,
-            "resumes": [
-                deepcopy(candidates_by_id[resume_id])
-                for resume_id in sorted(selected_ids)
-            ],
-        }
-    )
+    return validate_handoff_status(payload)
+
+
+def validate_handoff_status(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, Mapping) or set(payload) != _HANDOFF_FIELDS:
+        _fail("handoff_status_malformed")
+    status = payload.get("status")
+    reason = payload.get("reason_code")
+    if _HANDOFF_REASONS.get(reason) != status:
+        _fail("handoff_status_malformed")
+    selected = payload.get("selected_resume_count")
+    projected = payload.get("projected_resume_count")
+    if (
+        payload.get("contract_version") != HANDOFF_CONTRACT_VERSION
+        or not isinstance(payload.get("projection_available"), bool)
+        or isinstance(selected, bool)
+        or not isinstance(selected, int)
+        or isinstance(projected, bool)
+        or not isinstance(projected, int)
+        or not 0 <= selected <= MAX_SELECTED_RESUMES
+        or not 0 <= projected <= MAX_SELECTED_RESUMES
+    ):
+        _fail("handoff_status_malformed")
+    if status == "ready":
+        if not payload["projection_available"] or selected < 1 or projected != selected:
+            _fail("handoff_status_malformed")
+    elif payload["projection_available"] or projected != 0:
+        _fail("handoff_status_malformed")
+    if status == "skipped" and selected != 0:
+        _fail("handoff_status_malformed")
+    return dict(payload)
 
 
 def _reject_unsafe_path(path: Path, *, require_file: bool = False) -> None:
@@ -368,6 +441,10 @@ def write_projection_atomic(path: str | Path, payload: Mapping[str, Any]) -> Pat
     output_path = Path(path).expanduser().absolute()
     _reject_unsafe_path(output_path)
     encoded = _serialized_bytes(normalized)
+    return _write_atomic_bytes(output_path, encoded)
+
+
+def _write_atomic_bytes(output_path: Path, encoded: bytes) -> Path:
     descriptor = -1
     temporary_name = ""
     try:
@@ -401,6 +478,56 @@ def write_projection_atomic(path: str | Path, payload: Mapping[str, Any]) -> Pat
                 pass
 
 
+def write_handoff_status_atomic(
+    path: str | Path, payload: Mapping[str, Any]
+) -> Path:
+    normalized = validate_handoff_status(payload)
+    output_path = Path(path).expanduser().absolute()
+    _reject_unsafe_path(output_path)
+    try:
+        encoded = (
+            json.dumps(
+                normalized,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError):
+        _fail("handoff_status_malformed")
+    if len(encoded) > MAX_HANDOFF_SERIALIZED_BYTES:
+        _fail("handoff_status_malformed")
+    return _write_atomic_bytes(output_path, encoded)
+
+
+def _reject_duplicate_json_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            _fail("handoff_status_malformed")
+        result[key] = value
+    return result
+
+
+def load_handoff_status(path: str | Path) -> dict[str, Any]:
+    input_path = Path(path).expanduser().absolute()
+    _reject_unsafe_path(input_path, require_file=True)
+    try:
+        if input_path.stat().st_size > MAX_HANDOFF_SERIALIZED_BYTES:
+            _fail("handoff_status_malformed")
+        payload = json.loads(
+            input_path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_json_fields,
+        )
+    except ProjectionError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        _fail("handoff_status_malformed")
+    return validate_handoff_status(payload)
+
+
 def load_projection(path: str | Path) -> dict[str, Any]:
     input_path = Path(path).expanduser().absolute()
     _reject_unsafe_path(input_path, require_file=True)
@@ -424,6 +551,10 @@ def remove_projection_output(path: str | Path) -> None:
         output_path.unlink()
     except OSError:
         _fail("projection_malformed")
+
+
+def remove_handoff_status_output(path: str | Path) -> None:
+    remove_projection_output(path)
 
 
 def temporary_candidate_projection_path() -> Any:

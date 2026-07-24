@@ -1192,6 +1192,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase11_step2_job_prioritization_graph_contract_files = {
+        ROOT / "src/agents/job_prioritization_graph_verification.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step2_job_prioritization_graph_contract_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase109b_live_pipeline_popup_ux_files = {
         ROOT / "src/app/ui.py",
         ROOT / "src/app/static/app.js",

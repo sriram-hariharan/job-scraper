@@ -1194,6 +1194,14 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
+        "phase11_step2_job_prioritization_graph_contract": {
+            "src/agents/job_prioritization_graph_verification.py",
+            "tests/test_phase11_step2_job_prioritization_graph_contract.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1307,6 +1315,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase10_step11_postgres_planning_corpus_snapshot"
+        )
+        | legacy_guard_allowlist(
+            "phase11_step2_job_prioritization_graph_contract"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

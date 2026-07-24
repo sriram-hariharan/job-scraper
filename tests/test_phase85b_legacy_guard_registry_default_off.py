@@ -1097,6 +1097,154 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "src/app/api.py",
     }.isdisjoint(phase9_step18b_profile)
 
+    phase10_step2_profile = legacy_guard_allowlist(
+        "phase10_step2_shadow_adapter_parity_foundation"
+    )
+    assert phase10_step2_profile == {
+        "src/agents/evidence_chain_shadow_adapter.py",
+        "src/agents/evidence_chain_shadow_parity.py",
+        "tests/test_phase10_shadow_input_adapter.py",
+        "tests/test_phase10_shadow_parity_contract.py",
+        "tests/test_phase10_shadow_adapter_write_suppression.py",
+    }
+    assert not any("*" in path for path in phase10_step2_profile)
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase10_step2_profile)
+
+    phase10_step3_profile = legacy_guard_allowlist(
+        "phase10_step3_explicit_readonly_shadow_execution"
+    )
+    assert phase10_step3_profile == {
+        "src/agents/evidence_chain_shadow_execution.py",
+        "run_evidence_chain_shadow.py",
+        "tests/test_phase10_shadow_execution_readonly.py",
+        "tests/test_phase10_shadow_command_default_off.py",
+        "tests/test_phase10_shadow_execution_write_suppression.py",
+    }
+    assert not any("*" in path for path in phase10_step3_profile)
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase10_step3_profile)
+
+    phase10_step5a_profile = legacy_guard_allowlist(
+        "phase10_step5a_shadow_resume_evidence_projection"
+    )
+    assert phase10_step5a_profile == {
+        "batch_select_best_resume_variant.py",
+        "run_application_planning.py",
+        "src/pipeline/shadow_resume_evidence_projection.py",
+        "tests/test_phase10_step5a_shadow_resume_evidence_projection.py",
+    }
+    assert not any("*" in path for path in phase10_step5a_profile)
+    assert {
+        "main.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/runtime_status.py",
+        "src/pipeline/collector.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase10_step5a_profile)
+
+    phase10_step5b_profile = legacy_guard_allowlist(
+        "phase10_step5b_shadow_projection_failure_isolation"
+    )
+    assert phase10_step5b_profile == {
+        "batch_select_best_resume_variant.py",
+        "run_application_planning.py",
+        "src/pipeline/shadow_resume_evidence_projection.py",
+        "tests/test_phase10_step5b_shadow_projection_failure_isolation.py",
+    }
+    assert not any("*" in path for path in phase10_step5b_profile)
+    assert {
+        "main.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/runtime_status.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase10_step5b_profile)
+
+    phase10_step5c_profile = legacy_guard_allowlist(
+        "phase10_step5c_default_off_post_planning_shadow_hook"
+    )
+    assert phase10_step5c_profile == {
+        "main.py",
+        "src/pipeline/post_planning_shadow.py",
+        "tests/test_phase10_step5c_default_off_post_planning_shadow_hook.py",
+    }
+    assert not any("*" in path for path in phase10_step5c_profile)
+    assert {
+        "run_application_planning.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/runtime_status.py",
+        "src/storage/durable_orchestration/repository.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase10_step5c_profile)
+
+    phase10_step8_profile = legacy_guard_allowlist(
+        "phase10_step8_shadow_observation_safety"
+    )
+    assert phase10_step8_profile == {
+        "src/pipeline/post_planning_shadow.py",
+        "src/pipeline/shadow_observation_contract.py",
+        "src/pipeline/shadow_observation_store.py",
+        "docs/controlled_shadow_observation_runbook.md",
+        "tests/test_phase10_step8_shadow_observation_contract.py",
+        "tests/test_phase10_step8_shadow_observation_store.py",
+        "tests/test_phase10_step8_shadow_cleanup_liveness.py",
+        "tests/test_phase10_step8_shadow_observation_integration.py",
+    }
+    assert not any("*" in path for path in phase10_step8_profile)
+    assert {
+        "main.py",
+        "run_application_planning.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/runtime_status.py",
+        "src/pipeline/collector.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "requirements.txt",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase10_step8_profile)
+
+    phase10_step11_profile = legacy_guard_allowlist(
+        "phase10_step11_postgres_planning_corpus_snapshot"
+    )
+    assert phase10_step11_profile == {
+        "main.py",
+        "src/pipeline/postgres_planning_corpus_snapshot.py",
+        "tests/test_phase10_step11_postgres_planning_corpus_snapshot.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any("*" in path for path in phase10_step11_profile)
+    assert {
+        "src/storage/rag_store.py",
+        "src/rag/export_job_corpus.py",
+        "run_application_planning.py",
+        "batch_select_best_resume_variant.py",
+        "src/pipeline/post_planning_shadow.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/collector.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "requirements.txt",
+    }.isdisjoint(phase10_step11_profile)
+
     phase9_step12_compatibility_profile = legacy_guard_allowlist(
         "phase9_step12_dependency_driver_compatibility"
     )
@@ -1165,6 +1313,13 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase9_step17_profile
         | phase9_step18a_profile
         | phase9_step18b_profile
+        | phase10_step2_profile
+        | phase10_step3_profile
+        | phase10_step5a_profile
+        | phase10_step5b_profile
+        | phase10_step5c_profile
+        | phase10_step8_profile
+        | phase10_step11_profile
         | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile

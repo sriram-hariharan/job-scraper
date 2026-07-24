@@ -759,6 +759,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "semantic_alignment_weighted_score_component",
             "llm_adjudicator_readback_default_off",
             "phase133g_premium_planning_dashboard",
+            "phase10_step8_shadow_observation_safety",
         ),
     )
 
@@ -1123,6 +1124,73 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/agents/evidence_chain_langgraph_harness.py",
     }
     if set(changed_runtime_files) == phase107b_langgraph_evidence_chain_harness_files:
+        return
+    phase10_step2_shadow_foundation_files = {
+        ROOT / "src/agents/evidence_chain_shadow_adapter.py",
+        ROOT / "src/agents/evidence_chain_shadow_parity.py",
+    }
+    if set(changed_runtime_files) == phase10_step2_shadow_foundation_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase10_step3_shadow_execution_files = {
+        ROOT / "src/agents/evidence_chain_shadow_execution.py",
+    }
+    if set(changed_runtime_files) == phase10_step3_shadow_execution_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase10_step5a_shadow_resume_evidence_projection_files = {
+        ROOT / "src/pipeline/shadow_resume_evidence_projection.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase10_step5a_shadow_resume_evidence_projection_files
+    ):
+        for path in (
+            ROOT / "batch_select_best_resume_variant.py",
+            ROOT / "run_application_planning.py",
+            *changed_runtime_files,
+        ):
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase10_step5c_post_planning_shadow_files = {
+        ROOT / "src/pipeline/post_planning_shadow.py",
+    }
+    if set(changed_runtime_files) == phase10_step5c_post_planning_shadow_files:
+        for path in (ROOT / "main.py", *changed_runtime_files):
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase10_step8_shadow_observation_files = {
+        ROOT / "src/pipeline/post_planning_shadow.py",
+        ROOT / "src/pipeline/shadow_observation_contract.py",
+        ROOT / "src/pipeline/shadow_observation_store.py",
+    }
+    if set(changed_runtime_files) == phase10_step8_shadow_observation_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase10_step11_postgres_planning_snapshot_files = {
+        ROOT / "src/pipeline/postgres_planning_corpus_snapshot.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase10_step11_postgres_planning_snapshot_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
         return
     phase109b_live_pipeline_popup_ux_files = {
         ROOT / "src/app/ui.py",

@@ -13,6 +13,8 @@ from src.pipeline.runtime_status import (
     finish_run,
     initialize_run,
     start_stage,
+    update_config,
+    update_counts,
 )
 from src.rag.export_job_corpus import export_job_corpus
 from src.utils.logging import get_logger
@@ -123,6 +125,15 @@ def _parse_args():
         help="Skip scraping and run downstream application planning only, using the existing exported job corpus.",
     )
     parser.add_argument(
+        "--application-planning-corpus-source",
+        choices=["filesystem", "postgres"],
+        default="filesystem",
+        help=(
+            "Select the explicit application-planning corpus owner. "
+            "Postgres is supported only for planning-only execution."
+        ),
+    )
+    parser.add_argument(
         "--application-planning-generate-llm-fallback",
         action="store_true",
         help="Pass --generate-llm-fallback to run_application_planning.py so filtered-out jobs get cached LLM fallback resume ranking.",
@@ -141,11 +152,42 @@ def _parse_args():
     return parser.parse_args()
 
 
-def _run_cmd(cmd):
+def _run_cmd(cmd, *, redact_values=None):
+    redactions = [
+        str(value)
+        for value in list(redact_values or [])
+        if str(value or "")
+    ]
+
+    def redact(rendered):
+        result = str(rendered)
+        for value in redactions:
+            result = result.replace(value, "[private-planning-corpus]")
+        return result
+
     logger.info("")
-    logger.info("RUNNING: %s", " ".join(cmd))
+    logger.info("RUNNING: %s", redact(" ".join(cmd)))
     logger.info("")
-    subprocess.run(cmd, check=True)
+    if not redactions:
+        subprocess.run(cmd, check=True)
+        return
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        shell=False,
+    )
+    if process.stdout is None:
+        process.kill()
+        process.wait()
+        raise RuntimeError("application_planning_failed")
+    for line in process.stdout:
+        sys.stdout.write(redact(line))
+    return_code = process.wait()
+    if return_code != 0:
+        raise RuntimeError("application_planning_failed")
 
 
 def _write_current_run_planning_corpus(jobs, output_dir):
@@ -159,7 +201,11 @@ def _write_current_run_planning_corpus(jobs, output_dir):
     return str(path)
 
 
-def _run_application_planning(args, job_corpus_path=None):
+def _run_application_planning(
+    args,
+    job_corpus_path=None,
+    additional_arguments=None,
+):
     resolved_job_corpus_path = str(job_corpus_path or _job_corpus_path_from_env()).strip()
 
     cmd = [
@@ -194,7 +240,26 @@ def _run_application_planning(args, job_corpus_path=None):
     if args.application_planning_refresh_llm_tailoring:
         cmd.append("--refresh-llm-tailoring")
 
-    _run_cmd(cmd)
+    if additional_arguments:
+        cmd.extend(list(additional_arguments))
+
+    redact_values = (
+        [resolved_job_corpus_path]
+        if str(
+            getattr(
+                args,
+                "application_planning_corpus_source",
+                "filesystem",
+            )
+            or "filesystem"
+        ).strip()
+        == "postgres"
+        else None
+    )
+    if redact_values:
+        _run_cmd(cmd, redact_values=redact_values)
+    else:
+        _run_cmd(cmd)
 
 
 def _corpus_has_job_records(path: str) -> bool:
@@ -214,6 +279,17 @@ def _validate_application_planning_only_args(args) -> None:
     if args.application_planning_only and not args.run_application_planning:
         raise SystemExit(
             "--application-planning-only requires --run-application-planning."
+        )
+    corpus_source = str(
+        getattr(args, "application_planning_corpus_source", "filesystem")
+        or "filesystem"
+    ).strip()
+    if corpus_source == "postgres" and not (
+        args.run_application_planning and args.application_planning_only
+    ):
+        raise SystemExit(
+            "--application-planning-corpus-source postgres requires both "
+            "--run-application-planning and --application-planning-only."
         )
 
 
@@ -453,6 +529,16 @@ def _is_user_pipeline_mode() -> bool:
     }
 
 
+def _post_planning_shadow_enabled() -> bool:
+    return str(
+        os.environ.get(
+            "APPLYLENS_DURABLE_EVIDENCE_CHAIN_SHADOW_ENABLED",
+            "",
+        )
+        or ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _clear_seen_jobs_for_current_backend() -> None:
     backend = _seen_jobs_backend_from_env()
     owner_user_id = _owner_user_id_from_env()
@@ -483,10 +569,18 @@ def _clear_seen_jobs_for_current_backend() -> None:
         logger.info(f"Seen file not found: {seen_file}")
 
 
-async def main_async(args):
+async def _main_async(
+    args,
+    *,
+    postgres_snapshot=None,
+):
     logger.info("Starting main pipeline entrypoint...")
 
     delete_seen_data = _resolve_delete_seen_data(args)
+    corpus_source = str(
+        getattr(args, "application_planning_corpus_source", "filesystem")
+        or "filesystem"
+    ).strip()
 
     initialize_run(
         output_dir=args.application_planning_output_dir,
@@ -507,6 +601,10 @@ async def main_async(args):
         generate_llm_adjudication=bool(args.application_planning_generate_llm_adjudication),
         delete_seen_data=delete_seen_data,
     )
+    update_config(corpus_source=corpus_source)
+    if postgres_snapshot is not None:
+        update_counts(**postgres_snapshot.counts.runtime_counts())
+    logger.info("Application-planning corpus_source=%s", corpus_source)
 
     if delete_seen_data == "yes":
         _clear_seen_jobs_for_current_backend()
@@ -534,6 +632,12 @@ async def main_async(args):
 
     jobs = []
     application_planning_ran = False
+    post_planning_shadow = None
+    planning_corpus_path = (
+        str(postgres_snapshot.corpus_path)
+        if postgres_snapshot is not None
+        else _job_corpus_path_from_env()
+    )
 
     if args.application_planning_only:
         logger.info("=============================")
@@ -554,7 +658,7 @@ async def main_async(args):
         logger.info("APPLICATION PLANNING")
         logger.info("=============================")
 
-        corpus_path = _job_corpus_path_from_env()
+        corpus_path = planning_corpus_path
         planning_corpus_path = corpus_path
         if jobs and not args.application_planning_only:
             planning_corpus_path = _write_current_run_planning_corpus(
@@ -564,56 +668,130 @@ async def main_async(args):
 
         if _corpus_has_job_records(planning_corpus_path):
             start_stage("planning", "Running application planning")
-            _run_application_planning(args, job_corpus_path=planning_corpus_path)
-            complete_stage("planning", "Application planning completed")
-            application_planning_ran = True
+            if _post_planning_shadow_enabled():
+                from src.pipeline.post_planning_shadow import (
+                    prepare_post_planning_shadow,
+                )
+
+                post_planning_shadow = prepare_post_planning_shadow()
+            try:
+                _run_application_planning(
+                    args,
+                    job_corpus_path=planning_corpus_path,
+                    additional_arguments=(
+                        post_planning_shadow.planning_arguments
+                        if post_planning_shadow is not None
+                        else None
+                    ),
+                )
+                complete_stage("planning", "Application planning completed")
+                application_planning_ran = True
+            except BaseException:
+                if post_planning_shadow is not None:
+                    post_planning_shadow.cleanup()
+                raise
         else:
             logger.warning(
                 "Skipping application planning because the job corpus is missing or empty: %s",
                 planning_corpus_path,
             )
 
-    if not jobs and application_planning_ran and args.application_planning_only:
-        planning_corpus_path = _job_corpus_path_from_env()
-        jobs = _load_jobs_from_corpus(planning_corpus_path)
-        logger.info(
-            "Loaded %s jobs from %s for planning-only sheet refresh",
-            len(jobs),
-            planning_corpus_path,
+    try:
+        if not jobs and application_planning_ran and args.application_planning_only:
+            jobs = _load_jobs_from_corpus(planning_corpus_path)
+            if postgres_snapshot is not None:
+                logger.info(
+                    "Loaded %s jobs from private Postgres planning snapshot "
+                    "for planning-only sheet refresh",
+                    len(jobs),
+                )
+            else:
+                logger.info(
+                    "Loaded %s jobs from %s for planning-only sheet refresh",
+                    len(jobs),
+                    planning_corpus_path,
+                )
+
+        if jobs and application_planning_ran:
+            best_variant_lookup = _load_best_variant_lookup(args.application_planning_output_dir)
+            execution_queue_lookup = _load_execution_queue_lookup(args.application_planning_output_dir)
+            packet_manifest_lookup = _load_packet_manifest_lookup(args.application_planning_output_dir)
+
+            merged_count = _merge_application_planning_into_jobs(
+                jobs,
+                best_variant_lookup=best_variant_lookup,
+                execution_queue_lookup=execution_queue_lookup,
+                packet_manifest_lookup=packet_manifest_lookup,
+            )
+
+            logger.info(
+                "Merged application-planning metadata into %s jobs from %s, %s, and %s",
+                merged_count,
+                Path(args.application_planning_output_dir) / "best_resume_variant_by_job.csv",
+                Path(args.application_planning_output_dir) / "application_execution_queue.csv",
+                Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
+            )
+
+        start_stage("finalization", f"Display jobs: {len(jobs)}")
+        logger.info("Display jobs: %s", len(jobs))
+
+        finish_run(
+            return_code=0,
+            summary_message=(
+                "Completed: no new jobs after cache/filtering"
+                if len(jobs) == 0
+                else _application_planning_summary_message(len(jobs))
+            ),
+            final_job_count=len(jobs),
         )
+    except BaseException:
+        if post_planning_shadow is not None:
+            post_planning_shadow.cleanup()
+        raise
 
-    if jobs and application_planning_ran:
-        best_variant_lookup = _load_best_variant_lookup(args.application_planning_output_dir)
-        execution_queue_lookup = _load_execution_queue_lookup(args.application_planning_output_dir)
-        packet_manifest_lookup = _load_packet_manifest_lookup(args.application_planning_output_dir)
+    if post_planning_shadow is not None:
+        try:
+            post_planning_shadow.complete_after_authoritative_success(
+                job_corpus_path=planning_corpus_path,
+                output_dir=args.application_planning_output_dir,
+            )
+        except Exception:
+            logger.warning(
+                "Post-planning shadow lifecycle failed after authoritative success"
+            )
+            post_planning_shadow.cleanup()
 
-        merged_count = _merge_application_planning_into_jobs(
-            jobs,
-            best_variant_lookup=best_variant_lookup,
-            execution_queue_lookup=execution_queue_lookup,
-            packet_manifest_lookup=packet_manifest_lookup,
+
+async def main_async(args):
+    _validate_application_planning_only_args(args)
+    postgres_snapshot = None
+    corpus_source = str(
+        getattr(args, "application_planning_corpus_source", "filesystem")
+        or "filesystem"
+    ).strip()
+    try:
+        if corpus_source == "postgres":
+            from src.pipeline.postgres_planning_corpus_snapshot import (
+                create_postgres_planning_corpus_snapshot,
+            )
+
+            postgres_snapshot = create_postgres_planning_corpus_snapshot(
+                args.application_planning_job_limit
+            )
+        return await _main_async(
+            args,
+            postgres_snapshot=postgres_snapshot,
         )
-
-        logger.info(
-            "Merged application-planning metadata into %s jobs from %s, %s, and %s",
-            merged_count,
-            Path(args.application_planning_output_dir) / "best_resume_variant_by_job.csv",
-            Path(args.application_planning_output_dir) / "application_execution_queue.csv",
-            Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
-        )
-
-    start_stage("finalization", f"Display jobs: {len(jobs)}")
-    logger.info("Display jobs: %s", len(jobs))
-
-    finish_run(
-        return_code=0,
-        summary_message=(
-            "Completed: no new jobs after cache/filtering"
-            if len(jobs) == 0
-            else _application_planning_summary_message(len(jobs))
-        ),
-        final_job_count=len(jobs),
-    )
+    finally:
+        if postgres_snapshot is not None:
+            cleanup_complete = postgres_snapshot.cleanup()
+            update_counts(
+                postgres_snapshot_cleanup_complete=bool(cleanup_complete)
+            )
+            logger.info(
+                "Postgres planning corpus snapshot cleanup_complete=%s",
+                bool(cleanup_complete),
+            )
 
 
 if __name__ == "__main__":

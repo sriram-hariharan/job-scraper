@@ -1417,6 +1417,40 @@ def _resolved_selection_projection(
         best_available_imperfect_match=False,
     )
 
+
+def _write_requested_shadow_resume_evidence_candidate(
+    output_path: str,
+    resume_evidence_list: List[object],
+    *,
+    non_authoritative: bool = False,
+) -> bool:
+    requested_path = str(output_path or "").strip()
+    if not requested_path:
+        return False
+
+    from src.pipeline.shadow_resume_evidence_projection import (
+        ProjectionError,
+        build_candidate_projection,
+        remove_projection_output,
+        write_projection_atomic,
+    )
+
+    try:
+        remove_projection_output(requested_path)
+        candidate = build_candidate_projection(resume_evidence_list)
+        write_projection_atomic(requested_path, candidate)
+    except ProjectionError as exc:
+        try:
+            remove_projection_output(requested_path)
+        except ProjectionError:
+            pass
+        if not non_authoritative:
+            raise
+        print(f"WARNING: shadow resume-evidence candidate unavailable: {exc}")
+        return False
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Batch-select the best resume variant for multiple jobs."
@@ -1477,7 +1511,28 @@ def main() -> None:
         action="store_true",
         help="For effective ties and manual-review close calls, run bounded LLM adjudication across the top two deterministic finalists.",
     )
+    parser.add_argument(
+        "--shadow-resume-evidence-candidate-output",
+        default="",
+        help=(
+            "Optional internal path for a bounded candidate resume-evidence "
+            "projection. No projection is produced when omitted."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-resume-evidence-non-authoritative",
+        action="store_true",
+        help="Isolate bounded projection failures from authoritative selection.",
+    )
     args = parser.parse_args()
+    if (
+        args.shadow_resume_evidence_non_authoritative
+        and not str(args.shadow_resume_evidence_candidate_output or "").strip()
+    ):
+        parser.error(
+            "--shadow-resume-evidence-non-authoritative requires "
+            "--shadow-resume-evidence-candidate-output"
+        )
 
     raw_records = _load_job_records(
         Path(args.job_corpus),
@@ -1904,6 +1959,12 @@ def main() -> None:
         writer.writeheader()
         for row in output_rows:
             writer.writerow(row)
+
+    _write_requested_shadow_resume_evidence_candidate(
+        args.shadow_resume_evidence_candidate_output,
+        resume_evidence_list,
+        non_authoritative=args.shadow_resume_evidence_non_authoritative,
+    )
 
     try:
         trace_result = record_resume_match_agent_trace(

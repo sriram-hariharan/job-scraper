@@ -159,7 +159,11 @@ def _write_current_run_planning_corpus(jobs, output_dir):
     return str(path)
 
 
-def _run_application_planning(args, job_corpus_path=None):
+def _run_application_planning(
+    args,
+    job_corpus_path=None,
+    additional_arguments=None,
+):
     resolved_job_corpus_path = str(job_corpus_path or _job_corpus_path_from_env()).strip()
 
     cmd = [
@@ -193,6 +197,9 @@ def _run_application_planning(args, job_corpus_path=None):
 
     if args.application_planning_refresh_llm_tailoring:
         cmd.append("--refresh-llm-tailoring")
+
+    if additional_arguments:
+        cmd.extend(list(additional_arguments))
 
     _run_cmd(cmd)
 
@@ -453,6 +460,16 @@ def _is_user_pipeline_mode() -> bool:
     }
 
 
+def _post_planning_shadow_enabled() -> bool:
+    return str(
+        os.environ.get(
+            "APPLYLENS_DURABLE_EVIDENCE_CHAIN_SHADOW_ENABLED",
+            "",
+        )
+        or ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _clear_seen_jobs_for_current_backend() -> None:
     backend = _seen_jobs_backend_from_env()
     owner_user_id = _owner_user_id_from_env()
@@ -534,6 +551,8 @@ async def main_async(args):
 
     jobs = []
     application_planning_ran = False
+    post_planning_shadow = None
+    planning_corpus_path = _job_corpus_path_from_env()
 
     if args.application_planning_only:
         logger.info("=============================")
@@ -564,56 +583,92 @@ async def main_async(args):
 
         if _corpus_has_job_records(planning_corpus_path):
             start_stage("planning", "Running application planning")
-            _run_application_planning(args, job_corpus_path=planning_corpus_path)
-            complete_stage("planning", "Application planning completed")
-            application_planning_ran = True
+            if _post_planning_shadow_enabled():
+                from src.pipeline.post_planning_shadow import (
+                    prepare_post_planning_shadow,
+                )
+
+                post_planning_shadow = prepare_post_planning_shadow()
+            try:
+                _run_application_planning(
+                    args,
+                    job_corpus_path=planning_corpus_path,
+                    additional_arguments=(
+                        post_planning_shadow.planning_arguments
+                        if post_planning_shadow is not None
+                        else None
+                    ),
+                )
+                complete_stage("planning", "Application planning completed")
+                application_planning_ran = True
+            except BaseException:
+                if post_planning_shadow is not None:
+                    post_planning_shadow.cleanup()
+                raise
         else:
             logger.warning(
                 "Skipping application planning because the job corpus is missing or empty: %s",
                 planning_corpus_path,
             )
 
-    if not jobs and application_planning_ran and args.application_planning_only:
-        planning_corpus_path = _job_corpus_path_from_env()
-        jobs = _load_jobs_from_corpus(planning_corpus_path)
-        logger.info(
-            "Loaded %s jobs from %s for planning-only sheet refresh",
-            len(jobs),
-            planning_corpus_path,
+    try:
+        if not jobs and application_planning_ran and args.application_planning_only:
+            planning_corpus_path = _job_corpus_path_from_env()
+            jobs = _load_jobs_from_corpus(planning_corpus_path)
+            logger.info(
+                "Loaded %s jobs from %s for planning-only sheet refresh",
+                len(jobs),
+                planning_corpus_path,
+            )
+
+        if jobs and application_planning_ran:
+            best_variant_lookup = _load_best_variant_lookup(args.application_planning_output_dir)
+            execution_queue_lookup = _load_execution_queue_lookup(args.application_planning_output_dir)
+            packet_manifest_lookup = _load_packet_manifest_lookup(args.application_planning_output_dir)
+
+            merged_count = _merge_application_planning_into_jobs(
+                jobs,
+                best_variant_lookup=best_variant_lookup,
+                execution_queue_lookup=execution_queue_lookup,
+                packet_manifest_lookup=packet_manifest_lookup,
+            )
+
+            logger.info(
+                "Merged application-planning metadata into %s jobs from %s, %s, and %s",
+                merged_count,
+                Path(args.application_planning_output_dir) / "best_resume_variant_by_job.csv",
+                Path(args.application_planning_output_dir) / "application_execution_queue.csv",
+                Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
+            )
+
+        start_stage("finalization", f"Display jobs: {len(jobs)}")
+        logger.info("Display jobs: %s", len(jobs))
+
+        finish_run(
+            return_code=0,
+            summary_message=(
+                "Completed: no new jobs after cache/filtering"
+                if len(jobs) == 0
+                else _application_planning_summary_message(len(jobs))
+            ),
+            final_job_count=len(jobs),
         )
+    except BaseException:
+        if post_planning_shadow is not None:
+            post_planning_shadow.cleanup()
+        raise
 
-    if jobs and application_planning_ran:
-        best_variant_lookup = _load_best_variant_lookup(args.application_planning_output_dir)
-        execution_queue_lookup = _load_execution_queue_lookup(args.application_planning_output_dir)
-        packet_manifest_lookup = _load_packet_manifest_lookup(args.application_planning_output_dir)
-
-        merged_count = _merge_application_planning_into_jobs(
-            jobs,
-            best_variant_lookup=best_variant_lookup,
-            execution_queue_lookup=execution_queue_lookup,
-            packet_manifest_lookup=packet_manifest_lookup,
-        )
-
-        logger.info(
-            "Merged application-planning metadata into %s jobs from %s, %s, and %s",
-            merged_count,
-            Path(args.application_planning_output_dir) / "best_resume_variant_by_job.csv",
-            Path(args.application_planning_output_dir) / "application_execution_queue.csv",
-            Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
-        )
-
-    start_stage("finalization", f"Display jobs: {len(jobs)}")
-    logger.info("Display jobs: %s", len(jobs))
-
-    finish_run(
-        return_code=0,
-        summary_message=(
-            "Completed: no new jobs after cache/filtering"
-            if len(jobs) == 0
-            else _application_planning_summary_message(len(jobs))
-        ),
-        final_job_count=len(jobs),
-    )
+    if post_planning_shadow is not None:
+        try:
+            post_planning_shadow.complete_after_authoritative_success(
+                job_corpus_path=planning_corpus_path,
+                output_dir=args.application_planning_output_dir,
+            )
+        except Exception:
+            logger.warning(
+                "Post-planning shadow lifecycle failed after authoritative success"
+            )
+            post_planning_shadow.cleanup()
 
 
 if __name__ == "__main__":

@@ -1174,6 +1174,24 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }.isdisjoint(phase10_step5b_profile)
 
+    phase10_step5c_profile = legacy_guard_allowlist(
+        "phase10_step5c_default_off_post_planning_shadow_hook"
+    )
+    assert phase10_step5c_profile == {
+        "main.py",
+        "src/pipeline/post_planning_shadow.py",
+        "tests/test_phase10_step5c_default_off_post_planning_shadow_hook.py",
+    }
+    assert not any("*" in path for path in phase10_step5c_profile)
+    assert {
+        "run_application_planning.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/runtime_status.py",
+        "src/storage/durable_orchestration/repository.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase10_step5c_profile)
+
     phase9_step12_compatibility_profile = legacy_guard_allowlist(
         "phase9_step12_dependency_driver_compatibility"
     )
@@ -1246,6 +1264,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase10_step3_profile
         | phase10_step5a_profile
         | phase10_step5b_profile
+        | phase10_step5c_profile
         | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile

@@ -374,7 +374,7 @@ def test_no_schema_dependency_ui_or_pipeline_change():
         ROOT / "tests/test_vector_evidence_ui_no_db_readonly.py"
     ).exists()
     protected_hashes = {
-        "requirements.txt": ("d9778ce9b45bee65f133a74d955f8a509e2c37d4e618fa7597feb2953946cfd4"),
+        "requirements.txt": ("75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"),
         "src/storage/agent_trace/schema.sql": ("69305cd1bec0be9caa8c8c1b93e8fc10a3e80a92c08acd5683e7800763d2a77a"),
         "src/storage/agentic_approvals/schema.sql": ("57e84094cdbd3a4e8542fd205d89bfde18179c5d07c15084354f31f77bf5d98f"),
         "src/storage/profile_resumes/schema.sql": ("a71d55d9306258661b99f9bc88aa122fbf24443e7bd43a9ba597133289df1e57"),

@@ -971,6 +971,44 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
     }.isdisjoint(phase9_step12_profile)
 
+    phase9_step14_profile = legacy_guard_allowlist(
+        "phase9_step14_langgraph_postgres_checkpointer_foundation"
+    )
+    assert phase9_step14_profile == {
+        "requirements.txt",
+        "src/storage/durable_orchestration/langgraph_postgres.py",
+        "src/storage/admin_tools/durable_orchestration/setup_langgraph_checkpointer.py",
+        "tests/test_phase9_step14_langgraph_postgres_checkpointer_foundation.py",
+    }
+    assert not any("*" in path for path in phase9_step14_profile)
+    assert not any(
+        path
+        in {
+            "src",
+            "src/",
+            "src/**",
+            "src/storage",
+            "src/storage/",
+            "src/storage/**",
+            "src/storage/durable_orchestration",
+            "src/storage/durable_orchestration/",
+            "src/storage/durable_orchestration/**",
+            "src/storage/admin_tools",
+            "src/storage/admin_tools/",
+            "src/storage/admin_tools/**",
+            "tests",
+            "tests/",
+            "tests/**",
+        }
+        for path in phase9_step14_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase9_step14_profile)
+
     phase9_step12_compatibility_profile = legacy_guard_allowlist(
         "phase9_step12_dependency_driver_compatibility"
     )
@@ -1033,6 +1071,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase9_step9_profile
         | phase9_step10_profile
         | phase9_step12_profile
+        | phase9_step14_profile
         | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile

@@ -319,7 +319,7 @@ def test_route_slice_has_no_activation_client_network_storage_or_mutation():
 
 def test_ui_pipeline_and_dependencies_are_unchanged():
     expected = {
-        "requirements.txt": ("d9778ce9b45bee65f133a74d955f8a509e2c37d4e618fa7597feb2953946cfd4"),
+        "requirements.txt": ("75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"),
         "src/app/static/agentic_review.js": ("fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0"),
         "src/pipeline/collector.py": ("75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),

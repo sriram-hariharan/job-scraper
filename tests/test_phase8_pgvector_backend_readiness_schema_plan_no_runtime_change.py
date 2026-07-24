@@ -277,7 +277,7 @@ def test_dependency_files_match_phase8i_checkpoint():
         "requirements.txt"
     ]
     assert _aggregate_hash(paths) == (
-        "5b2ba0aebcb5a2092bdd5123fac645bc64dd482f0c328420c79a63c88408964a"
+        "3b54d41c0408145340ca8849f47ee70ae9a8c321db4e5f960f63399a37e201fb"
     )
 
 

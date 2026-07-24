@@ -1117,6 +1117,12 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/storage/durable_orchestration/postgres_connection.py",
             "tests/test_phase9_step12_durable_orchestration_postgres_runtime_integration.py",
         },
+        "phase9_step14_langgraph_postgres_checkpointer_foundation": {
+            "requirements.txt",
+            "src/storage/durable_orchestration/langgraph_postgres.py",
+            "src/storage/admin_tools/durable_orchestration/setup_langgraph_checkpointer.py",
+            "tests/test_phase9_step14_langgraph_postgres_checkpointer_foundation.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1193,6 +1199,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase9_step12_postgres_runtime_repository_integration"
         )
         | legacy_guard_allowlist(
+            "phase9_step14_langgraph_postgres_checkpointer_foundation"
+        )
+        | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
     )
@@ -1236,7 +1245,7 @@ def assert_protected_hashes(
         (
             "requirements.txt",
             "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
-        ): "d9778ce9b45bee65f133a74d955f8a509e2c37d4e618fa7597feb2953946cfd4",
+        ): "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",

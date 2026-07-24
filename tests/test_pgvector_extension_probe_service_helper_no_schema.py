@@ -270,7 +270,7 @@ def test_service_helper_slice_has_no_api_ui_storage_pipeline_or_mutation_calls()
 def test_no_dependency_schema_migration_or_pipeline_change():
     protected_hashes = {
         "requirements.txt": (
-            "d9778ce9b45bee65f133a74d955f8a509e2c37d4e618fa7597feb2953946cfd4"
+            "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/pipeline/collector.py": (
             "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc"

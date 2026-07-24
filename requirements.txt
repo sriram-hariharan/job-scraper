@@ -26,3 +26,5 @@ python-docx
 pdf2docx
 bcrypt
 redis==5.0.8
+psycopg[binary]==3.3.4
+langgraph-checkpoint-postgres==3.1.0

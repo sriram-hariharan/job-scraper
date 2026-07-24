@@ -36,6 +36,15 @@ LANGGRAPH_EVIDENCE_CHAIN_GATE_NAME = (
     "APPLYLENS_AGENTIC_LANGGRAPH_EVIDENCE_CHAIN_ENABLED"
 )
 LANGGRAPH_EVIDENCE_CHAIN_VERSION = "langgraph-evidence-chain-harness-v1"
+LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_GATE_NAME = (
+    "APPLYLENS_AGENTIC_LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_ENABLED"
+)
+LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_SESSION_VERSION = (
+    "langgraph-operator-review-pause-resume-session-v1"
+)
+LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_CHECKPOINT_NAMESPACE = (
+    "applylens/operator-review-pause-resume/v1"
+)
 CHECKPOINT_SCHEMA_VERSION = "evidence-chain-checkpoint-envelope-v1"
 GRAPH_STATE_SCHEMA_VERSION = "evidence-chain-graph-state-v1"
 CHECKPOINT_GRAPH_ENGINE = "langgraph-evidence-chain"
@@ -187,6 +196,32 @@ class EvidenceChainCheckpointIdentity:
             "graph_invocation_id": self.graph_invocation_id,
             "checkpoint_id": self.checkpoint_id,
         }
+
+
+@dataclass(slots=True)
+class _OperatorReviewPauseResumeSession:
+    session_schema_version: str
+    session_status: str
+    graph_invocation_id: str
+    langgraph_thread_id: str
+    checkpoint_namespace: str
+    repository_checkpoint_id: str
+    langgraph_checkpoint_id: str
+    paused_config: Dict[str, Any]
+    interrupt_request: OperatorReviewInterruptRequest
+    owner_user_id: str
+    pipeline_run_id: str
+    context_id: str
+    job_id: str
+    job_index: int
+    selected_resume_id: str
+    operator_review_artifact_digest: str
+    paused_state_digest: str
+    _checkpointer: Any
+    _compiled_graph: Any
+    _paused_state: EvidenceChainGraphState
+    decision_consumed: bool = False
+    finalization_completed: bool = False
 
 
 def _clean_text(value: Any) -> str:
@@ -1034,7 +1069,7 @@ def _finalize_node(state: EvidenceChainGraphState) -> EvidenceChainGraphState:
     return next_state
 
 
-def _compile_graph() -> Any:
+def _build_graph() -> Any:
     from langgraph.graph import END, StateGraph
 
     graph = StateGraph(EvidenceChainGraphState)
@@ -1053,7 +1088,20 @@ def _compile_graph() -> Any:
     graph.add_edge("tailoring_decision", "operator_review")
     graph.add_edge("operator_review", "finalize")
     graph.add_edge("finalize", END)
-    return graph.compile()
+    return graph
+
+
+def _compile_graph() -> Any:
+    return _build_graph().compile()
+
+
+def _compile_operator_review_pause_resume_graph(checkpointer: Any) -> Any:
+    if checkpointer is None:
+        raise ValueError("experimental_checkpointer_required")
+    return _build_graph().compile(
+        checkpointer=checkpointer,
+        interrupt_after=["operator_review"],
+    )
 
 
 def _execute_graph_state(state: EvidenceChainGraphState) -> EvidenceChainGraphState:
@@ -1081,6 +1129,505 @@ def _per_job_result_from_state(state: EvidenceChainGraphState) -> Dict[str, Any]
         "safety_metadata": _safety_metadata(
             automatic_internal_decisioning_performed=True
         ),
+    }
+
+
+def _pause_resume_safety_metadata() -> Dict[str, bool]:
+    return {
+        "read_only": True,
+        "diagnostic_only": True,
+        "durable": False,
+        "persistent": False,
+        "process_restart_supported": False,
+        "application_authorization": False,
+        "resume_text_mutation_authorization": False,
+        "queue_mutation_authorization": False,
+        "operator_state_mutation_authorization": False,
+        "patch_application_authorization": False,
+    }
+
+
+def _pause_resume_base_result(
+    *,
+    status: str,
+    enabled: bool,
+    decision: str = "",
+    resume_consumed: bool = False,
+    resumed: bool = False,
+    completed: bool = False,
+) -> Dict[str, Any]:
+    return {
+        "artifact_type": "langgraph_operator_review_pause_resume_diagnostic",
+        "artifact_version": (
+            LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_SESSION_VERSION
+        ),
+        "gate_name": LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_GATE_NAME,
+        "enabled": bool(enabled),
+        "default_off": True,
+        "explicit_call_only": True,
+        "process_local_only": True,
+        "status": status,
+        "decision": decision,
+        "resume_consumed": bool(resume_consumed),
+        "resumed": bool(resumed),
+        "completed": bool(completed),
+        **_pause_resume_safety_metadata(),
+    }
+
+
+def _experimental_state_lookup_config(
+    config: Mapping[str, Any],
+    checkpointer: Any,
+) -> Dict[str, Any]:
+    lookup = deepcopy(dict(config))
+    configurable = deepcopy(dict(lookup.get("configurable") or {}))
+    configurable["__pregel_checkpointer"] = checkpointer
+    lookup["configurable"] = configurable
+    return lookup
+
+
+def _paused_snapshot_state(session: _OperatorReviewPauseResumeSession) -> (
+    EvidenceChainGraphState
+):
+    snapshot = session._compiled_graph.get_state(
+        _experimental_state_lookup_config(
+            session.paused_config,
+            session._checkpointer,
+        )
+    )
+    if tuple(snapshot.next) != ("finalize",):
+        raise ValueError("experimental_pause_boundary_mismatch")
+    configurable = dict(snapshot.config.get("configurable") or {})
+    if (
+        _clean_text(configurable.get("thread_id"))
+        != session.langgraph_thread_id
+        or _clean_text(configurable.get("checkpoint_ns"))
+        != ""
+        or _clean_text(configurable.get("checkpoint_id"))
+        != session.langgraph_checkpoint_id
+        or _clean_text(
+            dict(session.paused_config.get("configurable") or {}).get(
+                "applylens_checkpoint_namespace"
+            )
+        )
+        != session.checkpoint_namespace
+    ):
+        raise ValueError("experimental_langgraph_checkpoint_mismatch")
+    state = _checkpoint_json_value(snapshot.values, field_path="paused_state")
+    if not isinstance(state, Mapping):
+        raise ValueError("experimental_paused_state_malformed")
+    normalized_state: EvidenceChainGraphState = deepcopy(dict(state))
+    if _checkpoint_digest(normalized_state) != session.paused_state_digest:
+        raise ValueError("experimental_paused_state_changed")
+    return normalized_state
+
+
+def _validate_paused_operator_review_state(
+    state: Mapping[str, Any],
+) -> None:
+    if _checkpoint_completed_node_keys(state) != list(ORDERED_AGENT_KEYS):
+        raise ValueError("experimental_pause_completed_nodes_invalid")
+    if _checkpoint_next_node_key(state, list(ORDERED_AGENT_KEYS)) != "finalize":
+        raise ValueError("experimental_pause_next_node_invalid")
+    artifacts = state.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        raise ValueError("experimental_pause_artifacts_missing")
+    for artifact_key in ARTIFACT_KEYS_BY_AGENT.values():
+        if not isinstance(artifacts.get(artifact_key), Mapping):
+            raise ValueError(
+                f"experimental_pause_artifact_missing:{artifact_key}"
+            )
+    if (
+        "evidence_chain_bundle" in state
+        or "trace_payload" in state
+        or "agent_evidence_chain_bundle" in artifacts
+        or "agent_evidence_chain_trace_payload" in artifacts
+    ):
+        raise ValueError("experimental_pause_state_already_finalized")
+
+
+def _start_operator_review_pause_resume_session(
+    job: Mapping[str, Any],
+    *,
+    job_index: int = 0,
+    resume_context: Any = None,
+    pipeline_run_id: str | None = None,
+    owner_user_id: str | None = None,
+    context_id: str | None = None,
+    include_trace_payload: bool = True,
+    enabled: bool = False,
+    existing_session: _OperatorReviewPauseResumeSession | None = None,
+) -> tuple[_OperatorReviewPauseResumeSession | None, Dict[str, Any]]:
+    if not enabled:
+        return None, _pause_resume_base_result(
+            status="disabled",
+            enabled=False,
+        )
+    if existing_session is not None:
+        raise ValueError("experimental_session_already_exists")
+    if not isinstance(job, Mapping):
+        raise ValueError("experimental_job_required")
+    if isinstance(job_index, bool) or not isinstance(job_index, int) or job_index < 0:
+        raise ValueError("experimental_job_index_invalid")
+
+    job_copy = deepcopy(dict(job))
+    resume_rows, selected_resume_id = _resume_rows_and_selection(
+        resume_context
+    )
+    identity = _job_identity(job_copy, job_index)
+    initial_state = _build_initial_graph_state(
+        job=job_copy,
+        job_index=job_index,
+        job_identity=identity,
+        resume_rows=resume_rows,
+        selected_resume_id=selected_resume_id,
+        pipeline_run_id=_clean_text(pipeline_run_id),
+        owner_user_id=_clean_text(owner_user_id),
+        context_id=_clean_text(context_id),
+        include_trace_payload=include_trace_payload,
+    )
+    graph_identity = _build_checkpoint_identity(initial_state)
+    graph_invocation_id = graph_identity.graph_invocation_id
+    config = {
+        "configurable": {
+            "thread_id": graph_invocation_id,
+            "checkpoint_ns": "",
+            "applylens_checkpoint_namespace": (
+                LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_CHECKPOINT_NAMESPACE
+            ),
+        }
+    }
+
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    checkpointer = InMemorySaver()
+    compiled_graph = _compile_operator_review_pause_resume_graph(checkpointer)
+    compiled_graph.invoke(deepcopy(initial_state), deepcopy(config))
+    snapshot = compiled_graph.get_state(
+        _experimental_state_lookup_config(config, checkpointer)
+    )
+    if tuple(snapshot.next) != ("finalize",):
+        raise ValueError("experimental_graph_did_not_pause_after_operator_review")
+    paused_state = _checkpoint_json_value(
+        snapshot.values,
+        field_path="paused_state",
+    )
+    if not isinstance(paused_state, Mapping):
+        raise ValueError("experimental_paused_state_malformed")
+    normalized_paused_state: EvidenceChainGraphState = deepcopy(
+        dict(paused_state)
+    )
+    _validate_paused_operator_review_state(normalized_paused_state)
+
+    envelope = _build_checkpoint_envelope(normalized_paused_state)
+    interrupt_request = _build_operator_review_interrupt_request(
+        normalized_paused_state,
+        checkpoint_identity=envelope["checkpoint_identity"],
+    )
+    validated_request = _validate_operator_review_interrupt_request(
+        interrupt_request,
+        normalized_paused_state,
+    )
+    configurable = dict(snapshot.config.get("configurable") or {})
+    thread_id = _clean_text(configurable.get("thread_id"))
+    checkpoint_namespace = _clean_text(
+        configurable.get("checkpoint_ns")
+    )
+    langgraph_checkpoint_id = _clean_text(
+        configurable.get("checkpoint_id")
+    )
+    if (
+        thread_id != graph_invocation_id
+        or checkpoint_namespace != ""
+        or not langgraph_checkpoint_id
+    ):
+        raise ValueError("experimental_langgraph_checkpoint_identity_invalid")
+
+    paused_config = deepcopy(dict(snapshot.config))
+    paused_config.setdefault("configurable", {})[
+        "applylens_checkpoint_namespace"
+    ] = LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_CHECKPOINT_NAMESPACE
+    repository_checkpoint_id = _clean_text(
+        envelope["checkpoint_identity"]["checkpoint_id"]
+    )
+    session = _OperatorReviewPauseResumeSession(
+        session_schema_version=(
+            LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_SESSION_VERSION
+        ),
+        session_status="awaiting_decision",
+        graph_invocation_id=graph_invocation_id,
+        langgraph_thread_id=thread_id,
+        checkpoint_namespace=(
+            LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_CHECKPOINT_NAMESPACE
+        ),
+        repository_checkpoint_id=repository_checkpoint_id,
+        langgraph_checkpoint_id=langgraph_checkpoint_id,
+        paused_config=paused_config,
+        interrupt_request=deepcopy(validated_request),
+        owner_user_id=_clean_text(normalized_paused_state.get("owner_user_id")),
+        pipeline_run_id=_clean_text(
+            normalized_paused_state.get("pipeline_run_id")
+        ),
+        context_id=_clean_text(normalized_paused_state.get("context_id")),
+        job_id=_clean_text(identity.get("job_id")),
+        job_index=job_index,
+        selected_resume_id=_clean_text(
+            normalized_paused_state.get("selected_resume_id")
+        ),
+        operator_review_artifact_digest=_clean_text(
+            validated_request.get("operator_review_artifact_digest")
+        ),
+        paused_state_digest=_checkpoint_digest(normalized_paused_state),
+        _checkpointer=checkpointer,
+        _compiled_graph=compiled_graph,
+        _paused_state=deepcopy(normalized_paused_state),
+    )
+    result = {
+        **_pause_resume_base_result(
+            status="awaiting_decision",
+            enabled=True,
+        ),
+        "session_schema_version": session.session_schema_version,
+        "graph_invocation_id": session.graph_invocation_id,
+        "langgraph_thread_id": session.langgraph_thread_id,
+        "checkpoint_namespace": session.checkpoint_namespace,
+        "repository_checkpoint_id": session.repository_checkpoint_id,
+        "langgraph_checkpoint_id": session.langgraph_checkpoint_id,
+        "checkpoint_envelope": deepcopy(envelope),
+        "interrupt_request": deepcopy(validated_request),
+        "completed_node_keys": list(ORDERED_AGENT_KEYS),
+        "artifact_keys": list(ARTIFACT_KEYS_BY_AGENT.values()),
+        "safe_next_node": "finalize",
+    }
+    return session, result
+
+
+def _validate_operator_review_pause_resume_decision(
+    session: _OperatorReviewPauseResumeSession,
+    *,
+    decision_value: str,
+    interrupt_request: Mapping[str, Any],
+    expected_owner_user_id: str,
+    expected_pipeline_run_id: str,
+    expected_context_id: str,
+    expected_job_id: str,
+    expected_job_index: int,
+    expected_selected_resume_id: str,
+    expected_graph_invocation_id: str,
+    expected_repository_checkpoint_id: str,
+    expected_langgraph_checkpoint_id: str,
+) -> tuple[str, EvidenceChainGraphState]:
+    if not isinstance(session, _OperatorReviewPauseResumeSession):
+        raise ValueError("experimental_session_invalid")
+    if (
+        session.session_schema_version
+        != LANGGRAPH_OPERATOR_REVIEW_PAUSE_RESUME_SESSION_VERSION
+    ):
+        raise ValueError("experimental_session_schema_unsupported")
+    if session.session_status != "awaiting_decision":
+        raise ValueError("experimental_session_not_awaiting_decision")
+    if session.decision_consumed or session.finalization_completed:
+        raise ValueError("experimental_decision_already_consumed")
+
+    expected_identity = {
+        "owner_user_id": _clean_text(expected_owner_user_id),
+        "pipeline_run_id": _clean_text(expected_pipeline_run_id),
+        "context_id": _clean_text(expected_context_id),
+        "job_id": _clean_text(expected_job_id),
+        "selected_resume_id": _clean_text(expected_selected_resume_id),
+        "graph_invocation_id": _clean_text(expected_graph_invocation_id),
+        "repository_checkpoint_id": _clean_text(
+            expected_repository_checkpoint_id
+        ),
+        "langgraph_checkpoint_id": _clean_text(
+            expected_langgraph_checkpoint_id
+        ),
+    }
+    for field_name, expected_value in expected_identity.items():
+        if not expected_value or getattr(session, field_name) != expected_value:
+            raise ValueError(f"experimental_identity_mismatch:{field_name}")
+    if (
+        isinstance(expected_job_index, bool)
+        or expected_job_index != session.job_index
+    ):
+        raise ValueError("experimental_identity_mismatch:job_index")
+    if session.graph_invocation_id != session.langgraph_thread_id:
+        raise ValueError("experimental_thread_identity_mismatch")
+
+    decision = _clean_text(decision_value)
+    if decision not in OPERATOR_REVIEW_INTERRUPT_ALLOWED_DECISIONS:
+        raise ValueError("experimental_decision_unsupported")
+    paused_state = _paused_snapshot_state(session)
+    _validate_paused_operator_review_state(paused_state)
+    envelope = _build_checkpoint_envelope(paused_state)
+    if (
+        envelope["checkpoint_identity"]["graph_invocation_id"]
+        != session.graph_invocation_id
+        or envelope["checkpoint_identity"]["checkpoint_id"]
+        != session.repository_checkpoint_id
+    ):
+        raise ValueError("experimental_repository_checkpoint_mismatch")
+    supplied_request = _validate_operator_review_interrupt_request(
+        interrupt_request,
+        paused_state,
+    )
+    if supplied_request != session.interrupt_request:
+        raise ValueError("experimental_interrupt_request_mismatch")
+    if (
+        supplied_request["owner_user_id"] != session.owner_user_id
+        or supplied_request["pipeline_run_id"] != session.pipeline_run_id
+        or supplied_request["context_id"] != session.context_id
+        or supplied_request["job_id"] != session.job_id
+        or supplied_request["job_index"] != session.job_index
+        or supplied_request["selected_resume_id"]
+        != session.selected_resume_id
+        or supplied_request["operator_review_artifact_digest"]
+        != session.operator_review_artifact_digest
+        or supplied_request["allowed_decision_values"]
+        != list(OPERATOR_REVIEW_INTERRUPT_ALLOWED_DECISIONS)
+    ):
+        raise ValueError("experimental_interrupt_identity_mismatch")
+    artifacts = dict(paused_state.get("artifacts") or {})
+    operator_review = artifacts.get(
+        "operator_review_tailoring_evidence"
+    )
+    if (
+        not isinstance(operator_review, Mapping)
+        or _operator_review_artifact_digest(operator_review)
+        != session.operator_review_artifact_digest
+    ):
+        raise ValueError("experimental_operator_review_artifact_mismatch")
+    return decision, paused_state
+
+
+def _apply_operator_review_pause_resume_decision(
+    session: _OperatorReviewPauseResumeSession,
+    *,
+    decision_value: str,
+    interrupt_request: Mapping[str, Any],
+    expected_owner_user_id: str,
+    expected_pipeline_run_id: str,
+    expected_context_id: str,
+    expected_job_id: str,
+    expected_job_index: int,
+    expected_selected_resume_id: str,
+    expected_graph_invocation_id: str,
+    expected_repository_checkpoint_id: str,
+    expected_langgraph_checkpoint_id: str,
+) -> Dict[str, Any]:
+    decision, paused_state = _validate_operator_review_pause_resume_decision(
+        session,
+        decision_value=decision_value,
+        interrupt_request=interrupt_request,
+        expected_owner_user_id=expected_owner_user_id,
+        expected_pipeline_run_id=expected_pipeline_run_id,
+        expected_context_id=expected_context_id,
+        expected_job_id=expected_job_id,
+        expected_job_index=expected_job_index,
+        expected_selected_resume_id=expected_selected_resume_id,
+        expected_graph_invocation_id=expected_graph_invocation_id,
+        expected_repository_checkpoint_id=expected_repository_checkpoint_id,
+        expected_langgraph_checkpoint_id=expected_langgraph_checkpoint_id,
+    )
+    session.decision_consumed = True
+
+    if decision == "needs_revision":
+        session.session_status = "needs_revision"
+        return {
+            **_pause_resume_base_result(
+                status="needs_revision",
+                enabled=True,
+                decision=decision,
+                resume_consumed=True,
+            ),
+            "graph_invocation_id": session.graph_invocation_id,
+            "repository_checkpoint_id": session.repository_checkpoint_id,
+            "langgraph_checkpoint_id": session.langgraph_checkpoint_id,
+            "final_evidence_bundle": {},
+            "durable_terminal_result_policy": "product_decision_pending",
+        }
+    if decision == "cancel":
+        session.session_status = "cancelled"
+        return {
+            **_pause_resume_base_result(
+                status="cancelled",
+                enabled=True,
+                decision=decision,
+                resume_consumed=True,
+            ),
+            "graph_invocation_id": session.graph_invocation_id,
+            "repository_checkpoint_id": session.repository_checkpoint_id,
+            "langgraph_checkpoint_id": session.langgraph_checkpoint_id,
+            "final_evidence_bundle": {},
+        }
+
+    try:
+        final_state = session._compiled_graph.invoke(
+            None,
+            deepcopy(session.paused_config),
+        )
+        latest_config = {
+            "configurable": {
+                "thread_id": session.langgraph_thread_id,
+                "checkpoint_ns": "",
+                "applylens_checkpoint_namespace": (
+                    session.checkpoint_namespace
+                ),
+            }
+        }
+        final_snapshot = session._compiled_graph.get_state(
+            _experimental_state_lookup_config(
+                latest_config,
+                session._checkpointer,
+            )
+        )
+        if tuple(final_snapshot.next):
+            raise ValueError("experimental_resume_did_not_complete")
+        normalized_final = _checkpoint_json_value(
+            final_state,
+            field_path="final_state",
+        )
+        if not isinstance(normalized_final, Mapping):
+            raise ValueError("experimental_final_state_malformed")
+        final_graph_state: EvidenceChainGraphState = deepcopy(
+            dict(normalized_final)
+        )
+        if (
+            list(final_graph_state.get("ordered_node_keys") or [])
+            != list(ORDERED_AGENT_KEYS)
+        ):
+            raise ValueError("experimental_evidence_node_replay_detected")
+        artifacts = dict(final_graph_state.get("artifacts") or {})
+        if not isinstance(
+            artifacts.get("agent_evidence_chain_bundle"),
+            Mapping,
+        ):
+            raise ValueError("experimental_final_bundle_missing")
+        if bool(paused_state.get("include_trace_payload")) and not isinstance(
+            artifacts.get("agent_evidence_chain_trace_payload"),
+            Mapping,
+        ):
+            raise ValueError("experimental_final_trace_missing")
+        normal_result = _per_job_result_from_state(final_graph_state)
+    except Exception:
+        session.session_status = "failed"
+        raise
+
+    session.session_status = "completed"
+    session.finalization_completed = True
+    return {
+        **_pause_resume_base_result(
+            status="completed",
+            enabled=True,
+            decision=decision,
+            resume_consumed=True,
+            resumed=True,
+            completed=True,
+        ),
+        "graph_invocation_id": session.graph_invocation_id,
+        "repository_checkpoint_id": session.repository_checkpoint_id,
+        "langgraph_checkpoint_id": session.langgraph_checkpoint_id,
+        "normal_result": deepcopy(normal_result),
     }
 
 

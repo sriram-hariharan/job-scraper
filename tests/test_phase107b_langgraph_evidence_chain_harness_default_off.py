@@ -869,10 +869,18 @@ def test_parity_contract_adds_no_routing_checkpoint_interrupt_or_action_paths():
                 imports.add(node.module or "")
             elif isinstance(node, ast.Call):
                 calls.append(node)
+        effective_forbidden_imports = set(forbidden_import_fragments)
+        if path.name == "evidence_chain_langgraph_harness.py":
+            assert {
+                imported
+                for imported in imports
+                if imported.startswith("langgraph.checkpoint")
+            } == {"langgraph.checkpoint.memory"}
+            effective_forbidden_imports.remove("langgraph.checkpoint")
         assert not any(
             fragment in imported
             for imported in imports
-            for fragment in forbidden_import_fragments
+            for fragment in effective_forbidden_imports
         )
         called_names = {
             node.func.id
@@ -885,12 +893,39 @@ def test_parity_contract_adds_no_routing_checkpoint_interrupt_or_action_paths():
             if isinstance(node.func, ast.Attribute)
         }
         assert forbidden_calls.isdisjoint(called_names | called_attributes)
-        for node in calls:
-            if (
-                isinstance(node.func, ast.Attribute)
-                and node.func.attr == "compile"
-            ):
-                assert all(keyword.arg != "checkpointer" for keyword in node.keywords)
+    harness_tree = ast.parse(paths[1].read_text(encoding="utf-8"))
+    functions = {
+        node.name: node
+        for node in ast.walk(harness_tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    normal_compile_calls = [
+        node
+        for node in ast.walk(functions["_compile_graph"])
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "compile"
+    ]
+    assert len(normal_compile_calls) == 1
+    assert normal_compile_calls[0].keywords == []
+    experimental_compile_calls = [
+        node
+        for node in ast.walk(
+            functions["_compile_operator_review_pause_resume_graph"]
+        )
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "compile"
+    ]
+    assert len(experimental_compile_calls) == 1
+    experimental_keywords = {
+        keyword.arg: keyword.value
+        for keyword in experimental_compile_calls[0].keywords
+    }
+    assert set(experimental_keywords) == {"checkpointer", "interrupt_after"}
+    interrupt_after = experimental_keywords["interrupt_after"]
+    assert isinstance(interrupt_after, ast.List)
+    assert [item.value for item in interrupt_after.elts] == ["operator_review"]
 
 
 def test_initial_state_builder_has_exact_keys_types_and_deep_copies_inputs():
@@ -1762,10 +1797,19 @@ def test_interrupt_request_contract_adds_no_interrupt_persistence_resume_or_acti
                 called_names.add(node.func.id)
             elif isinstance(node.func, ast.Attribute):
                 called_attributes.add(node.func.attr)
+    assert {
+        imported
+        for imported in imports
+        if imported.startswith("langgraph.checkpoint")
+    } == {"langgraph.checkpoint.memory"}
+    effective_forbidden_imports = (
+        forbidden_import_fragments - {"langgraph.checkpoint"}
+    )
     assert not any(
         fragment in imported
         for imported in imports
-        for fragment in forbidden_import_fragments
+        for fragment in effective_forbidden_imports
     )
     assert forbidden_calls.isdisjoint(called_names | called_attributes)
+    assert "InMemorySaver" in called_names
     assert not any(isinstance(node, ast.While) for node in ast.walk(tree))

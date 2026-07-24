@@ -767,6 +767,365 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         for path in phase8_step17_profile
     )
 
+    phase9_step2_profile = legacy_guard_allowlist(
+        "phase9_step2_durable_checkpoint_interrupt_storage"
+    )
+    assert phase9_step2_profile == {
+        "src/storage/durable_orchestration/__init__.py",
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/store.py",
+        "tests/test_phase9_step2_durable_checkpoint_interrupt_storage_contract.py",
+        "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+        "tests/test_pgvector_extension_probe_contract_no_schema.py",
+        "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+        "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+        "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    }
+    assert not any("*" in path for path in phase9_step2_profile)
+    assert not any(
+        path
+        in {
+            "src",
+            "src/",
+            "src/**",
+            "src/storage",
+            "src/storage/",
+            "src/storage/**",
+            "tests",
+            "tests/",
+            "tests/**",
+        }
+        for path in phase9_step2_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step2_profile)
+
+    phase9_step3_profile = legacy_guard_allowlist(
+        "phase9_step3_human_decision_resume_storage"
+    )
+    assert phase9_step3_profile == {
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/store.py",
+        "tests/test_phase9_step2_durable_checkpoint_interrupt_storage_contract.py",
+        "tests/test_phase9_step3_human_decision_resume_storage_contract.py",
+        "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+        "tests/test_pgvector_extension_probe_contract_no_schema.py",
+        "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+        "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+        "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    }
+    assert not any("*" in path for path in phase9_step3_profile)
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step3_profile)
+
+    phase9_step4_profile = legacy_guard_allowlist(
+        "phase9_step4_attempt_terminal_recovery_storage"
+    )
+    assert phase9_step4_profile == {
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/store.py",
+        "tests/test_phase9_step2_durable_checkpoint_interrupt_storage_contract.py",
+        "tests/test_phase9_step3_human_decision_resume_storage_contract.py",
+        "tests/test_phase9_step4_attempt_terminal_recovery_storage_contract.py",
+        "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+        "tests/test_pgvector_extension_probe_contract_no_schema.py",
+        "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+        "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+        "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    }
+    assert not any("*" in path for path in phase9_step4_profile)
+    assert not any(
+        path in {
+            "src", "src/", "src/**", "src/storage", "src/storage/",
+            "src/storage/**", "tests", "tests/", "tests/**",
+        }
+        for path in phase9_step4_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step4_profile)
+
+    phase9_step6_profile = legacy_guard_allowlist(
+        "phase9_step6_inmemory_operator_review_pause_resume"
+    )
+    assert phase9_step6_profile == {
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "tests/test_phase107b_langgraph_evidence_chain_harness_default_off.py",
+        "tests/test_phase9_step6_langgraph_operator_review_pause_resume_default_off.py",
+    }
+    assert not any("*" in path for path in phase9_step6_profile)
+    assert not any(
+        path in {
+            "src", "src/", "src/**", "src/agents", "src/agents/",
+            "src/agents/**", "tests", "tests/", "tests/**",
+        }
+        for path in phase9_step6_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step6_profile)
+
+    phase9_step8_profile = legacy_guard_allowlist(
+        "phase9_step8_durable_orchestration_transaction_executor"
+    )
+    assert phase9_step8_profile == {
+        "src/storage/durable_orchestration/repository.py",
+        "tests/test_phase9_step8_durable_orchestration_transaction_executor_contract.py",
+    }
+    assert not any("*" in path for path in phase9_step8_profile)
+    assert not any(
+        path in {
+            "src", "src/", "src/**", "src/storage", "src/storage/",
+            "src/storage/**", "src/storage/durable_orchestration",
+            "src/storage/durable_orchestration/",
+            "src/storage/durable_orchestration/**",
+            "tests", "tests/", "tests/**",
+        }
+        for path in phase9_step8_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step8_profile)
+
+    phase9_step9_profile = legacy_guard_allowlist(
+        "phase9_step9_durable_orchestration_schema_executor"
+    )
+    assert phase9_step9_profile == {
+        "src/storage/admin_tools/durable_orchestration/apply_schema.py",
+        "tests/test_phase9_step9_durable_orchestration_schema_executor_contract.py",
+    }
+    assert not any("*" in path for path in phase9_step9_profile)
+    assert not any(
+        path in {
+            "src", "src/", "src/**", "src/storage", "src/storage/",
+            "src/storage/**", "src/storage/admin_tools",
+            "src/storage/admin_tools/", "src/storage/admin_tools/**",
+            "src/storage/admin_tools/durable_orchestration",
+            "src/storage/admin_tools/durable_orchestration/",
+            "src/storage/admin_tools/durable_orchestration/**",
+            "tests", "tests/", "tests/**",
+        }
+        for path in phase9_step9_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step9_profile)
+
+    phase9_step10_profile = legacy_guard_allowlist(
+        "phase9_step10_durable_orchestration_postgres_integration"
+    )
+    assert phase9_step10_profile == {
+        "tests/test_phase9_step10_durable_orchestration_postgres_integration.py",
+    }
+    assert not any("*" in path for path in phase9_step10_profile)
+    assert not any(
+        path in {
+            "src", "src/", "src/**", "tests", "tests/", "tests/**",
+        }
+        for path in phase9_step10_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }.isdisjoint(phase9_step10_profile)
+
+    phase9_step12_profile = legacy_guard_allowlist(
+        "phase9_step12_postgres_runtime_repository_integration"
+    )
+    assert phase9_step12_profile == {
+        "requirements.txt",
+        "src/storage/durable_orchestration/postgres_connection.py",
+        "tests/test_phase9_step12_durable_orchestration_postgres_runtime_integration.py",
+    }
+    assert not any("*" in path for path in phase9_step12_profile)
+    assert not any(
+        path
+        in {
+            "src",
+            "src/",
+            "src/**",
+            "src/storage",
+            "src/storage/",
+            "src/storage/**",
+            "src/storage/durable_orchestration",
+            "src/storage/durable_orchestration/",
+            "src/storage/durable_orchestration/**",
+            "tests",
+            "tests/",
+            "tests/**",
+        }
+        for path in phase9_step12_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase9_step12_profile)
+
+    phase9_step14_profile = legacy_guard_allowlist(
+        "phase9_step14_langgraph_postgres_checkpointer_foundation"
+    )
+    assert phase9_step14_profile == {
+        "requirements.txt",
+        "src/storage/durable_orchestration/langgraph_postgres.py",
+        "src/storage/admin_tools/durable_orchestration/setup_langgraph_checkpointer.py",
+        "tests/test_phase9_step14_langgraph_postgres_checkpointer_foundation.py",
+    }
+    assert not any("*" in path for path in phase9_step14_profile)
+    assert not any(
+        path
+        in {
+            "src",
+            "src/",
+            "src/**",
+            "src/storage",
+            "src/storage/",
+            "src/storage/**",
+            "src/storage/durable_orchestration",
+            "src/storage/durable_orchestration/",
+            "src/storage/durable_orchestration/**",
+            "src/storage/admin_tools",
+            "src/storage/admin_tools/",
+            "src/storage/admin_tools/**",
+            "tests",
+            "tests/",
+            "tests/**",
+        }
+        for path in phase9_step14_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase9_step14_profile)
+
+    phase9_step16a_profile = legacy_guard_allowlist(
+        "phase9_step16a_durable_decision_authorization_runtime"
+    )
+    assert phase9_step16a_profile == {
+        "src/storage/durable_orchestration/store.py",
+        "src/storage/durable_orchestration/repository.py",
+        "tests/test_phase9_step16a_durable_decision_authorization_runtime_contract.py",
+    }
+    assert not any("*" in path for path in phase9_step16a_profile)
+    assert {
+        "requirements.txt",
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/langgraph_postgres.py",
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "src/app/api.py",
+    }.isdisjoint(phase9_step16a_profile)
+
+    phase9_step16b_profile = legacy_guard_allowlist(
+        "phase9_step16b_attempt_recovery_terminal_runtime"
+    )
+    assert phase9_step16b_profile == {
+        "src/storage/durable_orchestration/store.py",
+        "src/storage/durable_orchestration/repository.py",
+        "tests/test_phase9_step16b_attempt_recovery_terminal_runtime_contract.py",
+    }
+    assert not any("*" in path for path in phase9_step16b_profile)
+    assert {
+        "requirements.txt",
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/langgraph_postgres.py",
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "src/app/api.py",
+    }.isdisjoint(phase9_step16b_profile)
+
+    phase9_step17_profile = legacy_guard_allowlist(
+        "phase9_step17_durable_langgraph_restart_resume_integration"
+    )
+    assert phase9_step17_profile == {
+        "src/agents/durable_evidence_chain_resume_coordinator.py",
+        "tests/test_phase9_step17_durable_langgraph_restart_resume_integration.py",
+    }
+    assert not any("*" in path for path in phase9_step17_profile)
+    assert {
+        "requirements.txt",
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/store.py",
+        "src/storage/durable_orchestration/repository.py",
+        "src/storage/durable_orchestration/langgraph_postgres.py",
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "src/app/api.py",
+    }.isdisjoint(phase9_step17_profile)
+
+    phase9_step18a_profile = legacy_guard_allowlist(
+        "phase9_step18a_coordinator_owned_resume_boundary"
+    )
+    assert phase9_step18a_profile == {
+        "src/agents/durable_evidence_chain_resume_coordinator.py",
+        "tests/test_phase9_step17_durable_langgraph_restart_resume_integration.py",
+        "tests/test_phase9_step18a_coordinator_owned_resume_boundary.py",
+    }
+    assert not any("*" in path for path in phase9_step18a_profile)
+    assert {
+        "requirements.txt",
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/store.py",
+        "src/storage/durable_orchestration/repository.py",
+        "src/storage/durable_orchestration/langgraph_postgres.py",
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "src/app/api.py",
+    }.isdisjoint(phase9_step18a_profile)
+
+    phase9_step18b_profile = legacy_guard_allowlist(
+        "phase9_step18b_durable_langgraph_process_restart"
+    )
+    assert phase9_step18b_profile == {
+        "tests/support/phase9_step18b_restart_process_worker.py",
+        "tests/test_phase9_step18b_durable_langgraph_process_restart.py",
+    }
+    assert not any("*" in path for path in phase9_step18b_profile)
+    assert {
+        "requirements.txt",
+        "src/agents/durable_evidence_chain_resume_coordinator.py",
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/store.py",
+        "src/storage/durable_orchestration/repository.py",
+        "src/app/api.py",
+    }.isdisjoint(phase9_step18b_profile)
+
+    phase9_step12_compatibility_profile = legacy_guard_allowlist(
+        "phase9_step12_dependency_driver_compatibility"
+    )
+    assert phase9_step12_compatibility_profile == {
+        "tests/test_agent_trace_store.py",
+        "tests/test_jd_provider_runtime_api_readback_default_off.py",
+        "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+        "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+        "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+        "tests/test_provider_runtime_activation_plan_default_off.py",
+        "tests/test_provider_runtime_api_readback_default_off.py",
+        "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
+        "tests/test_provider_runtime_service_bridge_default_off.py",
+        "tests/test_three_agent_llmops_observability_api_default_off.py",
+        "tests/test_vector_evidence_api_no_db_no_ui.py",
+        "tests/test_vector_evidence_readback_api_default_off.py",
+    }
+    assert not any("*" in path for path in phase9_step12_compatibility_profile)
+    assert all(
+        path.startswith("tests/")
+        for path in phase9_step12_compatibility_profile
+    )
+    assert {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase9_step12_compatibility_profile)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
@@ -792,6 +1151,21 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase8_step14_profile
         | phase8_step15_profile
         | phase8_step17_profile
+        | phase9_step2_profile
+        | phase9_step3_profile
+        | phase9_step4_profile
+        | phase9_step6_profile
+        | phase9_step8_profile
+        | phase9_step9_profile
+        | phase9_step10_profile
+        | phase9_step12_profile
+        | phase9_step14_profile
+        | phase9_step16a_profile
+        | phase9_step16b_profile
+        | phase9_step17_profile
+        | phase9_step18a_profile
+        | phase9_step18b_profile
+        | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206
@@ -807,10 +1181,10 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         },
         set(),
     )
+    assert_changed_files_allowed({"requirements.txt"}, set())
 
     for forbidden_path in (
         "src/matching/scorer.py",
-        "requirements.txt",
         "src/app/unapproved_runtime.py",
         "src/app/static/media/unapproved.jpg",
         "tests/test_unapproved_phase129_surface.py",

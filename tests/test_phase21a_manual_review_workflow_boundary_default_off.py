@@ -789,6 +789,99 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase9_step2_durable_orchestration_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/__init__.py",
+        ROOT / "src/storage/durable_orchestration/store.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase9_step2_durable_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase9_step3_human_decision_storage_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/store.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase9_step3_human_decision_storage_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase9_step16a_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/store.py",
+        ROOT / "src/storage/durable_orchestration/repository.py",
+    }
+    if set(changed_runtime_files) == phase9_step16a_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase9_step17_runtime_files = {
+        ROOT / "src/agents/durable_evidence_chain_resume_coordinator.py",
+    }
+    if set(changed_runtime_files) == phase9_step17_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase9_step8_durable_orchestration_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/repository.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase9_step8_durable_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase9_step9_durable_orchestration_admin_files = {
+        ROOT
+        / "src/storage/admin_tools/durable_orchestration/apply_schema.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase9_step9_durable_orchestration_admin_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase9_step12_postgres_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/postgres_connection.py",
+    }
+    if set(changed_runtime_files) == phase9_step12_postgres_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase9_step14_langgraph_postgres_checkpointer_files = {
+        ROOT / "src/storage/durable_orchestration/langgraph_postgres.py",
+        ROOT
+        / "src/storage/admin_tools/durable_orchestration"
+        / "setup_langgraph_checkpointer.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase9_step14_langgraph_postgres_checkpointer_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase133h_shared_shell_files = {
         ROOT / "src/app/application_hub_ui.py",
         ROOT / "src/app/applied_ui.py",

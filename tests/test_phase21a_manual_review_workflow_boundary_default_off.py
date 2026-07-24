@@ -759,6 +759,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "semantic_alignment_weighted_score_component",
             "llm_adjudicator_readback_default_off",
             "phase133g_premium_planning_dashboard",
+            "phase10_step8_shadow_observation_safety",
         ),
     )
 
@@ -1164,6 +1165,17 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == phase10_step5c_post_planning_shadow_files:
         for path in (ROOT / "main.py", *changed_runtime_files):
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase10_step8_shadow_observation_files = {
+        ROOT / "src/pipeline/post_planning_shadow.py",
+        ROOT / "src/pipeline/shadow_observation_contract.py",
+        ROOT / "src/pipeline/shadow_observation_store.py",
+    }
+    if set(changed_runtime_files) == phase10_step8_shadow_observation_files:
+        for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source

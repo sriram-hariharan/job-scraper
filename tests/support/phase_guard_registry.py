@@ -1177,6 +1177,16 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/pipeline/post_planning_shadow.py",
             "tests/test_phase10_step5c_default_off_post_planning_shadow_hook.py",
         },
+        "phase10_step8_shadow_observation_safety": {
+            "src/pipeline/post_planning_shadow.py",
+            "src/pipeline/shadow_observation_contract.py",
+            "src/pipeline/shadow_observation_store.py",
+            "docs/controlled_shadow_observation_runbook.md",
+            "tests/test_phase10_step8_shadow_observation_contract.py",
+            "tests/test_phase10_step8_shadow_observation_store.py",
+            "tests/test_phase10_step8_shadow_cleanup_liveness.py",
+            "tests/test_phase10_step8_shadow_observation_integration.py",
+        },
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1284,6 +1294,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase10_step5c_default_off_post_planning_shadow_hook"
+        )
+        | legacy_guard_allowlist(
+            "phase10_step8_shadow_observation_safety"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

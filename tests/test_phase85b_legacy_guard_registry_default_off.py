@@ -1192,6 +1192,35 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }.isdisjoint(phase10_step5c_profile)
 
+    phase10_step8_profile = legacy_guard_allowlist(
+        "phase10_step8_shadow_observation_safety"
+    )
+    assert phase10_step8_profile == {
+        "src/pipeline/post_planning_shadow.py",
+        "src/pipeline/shadow_observation_contract.py",
+        "src/pipeline/shadow_observation_store.py",
+        "docs/controlled_shadow_observation_runbook.md",
+        "tests/test_phase10_step8_shadow_observation_contract.py",
+        "tests/test_phase10_step8_shadow_observation_store.py",
+        "tests/test_phase10_step8_shadow_cleanup_liveness.py",
+        "tests/test_phase10_step8_shadow_observation_integration.py",
+    }
+    assert not any("*" in path for path in phase10_step8_profile)
+    assert {
+        "main.py",
+        "run_application_planning.py",
+        "run_evidence_chain_shadow.py",
+        "src/pipeline/runtime_status.py",
+        "src/pipeline/collector.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "requirements.txt",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }.isdisjoint(phase10_step8_profile)
+
     phase9_step12_compatibility_profile = legacy_guard_allowlist(
         "phase9_step12_dependency_driver_compatibility"
     )
@@ -1265,6 +1294,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase10_step5a_profile
         | phase10_step5b_profile
         | phase10_step5c_profile
+        | phase10_step8_profile
         | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile

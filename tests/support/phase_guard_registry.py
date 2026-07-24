@@ -16,6 +16,61 @@ KNOWN_LEGACY_DUPLICATE_TEST_PATHS = {
     "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off 2.py",
 }
 
+PHASE11_STEP3_DIRECT_HASH_GUARD_FILES = {
+    "tests/test_jd_provider_runtime_api_readback_default_off.py",
+    "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+    "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+    "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
+    "tests/test_phase42b_exact_resume_change_set_proposal_builder_dry_run_command_default_off.py",
+    "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
+    "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
+    "tests/test_phase44b_controlled_exact_resume_change_set_provider_call_boundary_dry_run_command_default_off.py",
+    "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+    "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+    "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
+    "tests/test_phase46b_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off.py",
+    "tests/test_phase47a_controlled_exact_resume_change_set_manual_review_packet_builder_default_off.py",
+    "tests/test_phase47b_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off.py",
+    "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
+    "tests/test_phase48b_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run_command_default_off.py",
+    "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+    "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
+    "tests/test_phase50a_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
+    "tests/test_phase50b_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.py",
+    "tests/test_phase51a_controlled_exact_resume_change_set_manual_decision_packet_default_off.py",
+    "tests/test_phase51b_controlled_exact_resume_change_set_manual_decision_packet_dry_run_command_default_off.py",
+    "tests/test_phase52a_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
+    "tests/test_phase52b_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run_command_default_off.py",
+    "tests/test_phase53a_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
+    "tests/test_phase53b_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.py",
+    "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+    "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
+    "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+    "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+    "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",
+    "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+    "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
+    "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
+    "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
+    "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
+    "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
+    "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
+    "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
+    "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
+    "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
+    "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
+    "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
+    "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
+    "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
+    "tests/test_provider_runtime_activation_plan_default_off.py",
+    "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
+    "tests/test_vector_evidence_readback_api_default_off.py",
+}
+
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
     value = str(path).strip().replace("\\", "/")
@@ -1202,6 +1257,17 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
             "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         },
+        "phase11_step3_job_prioritization_graph_integration": {
+            "application_execution_queue.py",
+            "src/agents/job_prioritization_graph_verification.py",
+            "src/agents/job_prioritization_graph_integration.py",
+            "tests/test_phase11_step3_job_prioritization_graph_integration.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        }
+        | PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1320,6 +1386,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase11_step2_job_prioritization_graph_contract"
         )
         | legacy_guard_allowlist(
+            "phase11_step3_job_prioritization_graph_integration"
+        )
+        | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
     )
@@ -1360,6 +1429,10 @@ def assert_protected_hashes(
     compatibility_profiles: Iterable[str] = (),
 ) -> None:
     phase88b_runtime_hash_compatibility = {
+        (
+            "application_execution_queue.py",
+            "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+        ): "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097",
         (
             "requirements.txt",
             "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
@@ -1420,6 +1493,9 @@ def assert_protected_hashes(
             *(legacy_guard_allowlist(profile) for profile in profiles),
             legacy_guard_allowlist(
                 "phase9_step12_postgres_runtime_repository_integration"
+            ),
+            legacy_guard_allowlist(
+                "phase11_step3_job_prioritization_graph_integration"
             ),
         )
         if profiles

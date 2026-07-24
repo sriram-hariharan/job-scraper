@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List
@@ -9,6 +10,7 @@ from src.agents.job_prioritization_agent import (
     render_job_prioritization_recommendation_rows,
     write_job_prioritization_artifacts,
 )
+from src.agents.resume_match_agent import _truthy
 from src.agents.operator_review_agent import (
     record_operator_review_agent_trace,
     write_operator_review_artifacts,
@@ -35,6 +37,9 @@ LIVE_SCHEDULER_EXECUTION_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_WIRING_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_OBSERVABILITY_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_OBSERVABILITY_REPORTING_GATE_ENABLED = True
+JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG = (
+    "APPLYLENS_DETERMINISTIC_JOB_PRIORITIZATION_GRAPH_VERIFY_ENABLED"
+)
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -1255,10 +1260,71 @@ def _job_key(row: dict) -> str:
     )
 
 
-def _with_priority_overlay(rows: List[dict]) -> List[dict]:
+def _job_prioritization_graph_verification_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(env_map.get(JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG))
+
+
+def _bounded_graph_verification_exception_summary(
+    input_row_count: int,
+) -> Dict[str, Any]:
+    return {
+        "enabled": True,
+        "attempted": False,
+        "completed": False,
+        "classification": "exception",
+        "input_row_count": max(0, min(input_row_count, 1_000_000)),
+        "output_row_count": 0,
+        "parity_matched": False,
+        "timeout_count": 0,
+        "exception_count": 1,
+        "duplicate_suppressed_count": 0,
+        "elapsed_ms": 0,
+        "direct_output_authoritative": True,
+        "graph_output_applied": False,
+        "safety_violation_count": 0,
+        "rollback_required": False,
+    }
+
+
+def _with_priority_overlay(
+    rows: List[dict],
+    *,
+    env: Dict[str, str] | None = None,
+    source_artifact_reference: str = "",
+) -> List[dict]:
+    direct_priority_rows = render_job_prioritization_recommendation_rows(rows)
+    if _job_prioritization_graph_verification_enabled(env):
+        try:
+            from src.agents.job_prioritization_graph_integration import (
+                verify_direct_job_prioritization_rows,
+            )
+
+            verification_summary = verify_direct_job_prioritization_rows(
+                rows=rows,
+                direct_rendered_rows=direct_priority_rows,
+                source_artifact_reference=source_artifact_reference,
+                env=os.environ if env is None else env,
+            )
+        except Exception:
+            verification_summary = _bounded_graph_verification_exception_summary(
+                len(rows)
+            )
+        print(
+            "Job prioritization graph verification: "
+            + json.dumps(
+                verification_summary,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
+
     priority_by_key = {
         _job_key(row): row
-        for row in render_job_prioritization_recommendation_rows(rows)
+        for row in direct_priority_rows
         if _job_key(row)
     }
     merged_rows: List[dict] = []
@@ -1502,7 +1568,10 @@ def main() -> None:
             print(f"Job prioritization advisory artifact skipped: {exc}")
 
     tailoring_decision_artifact = None
-    tailoring_decision_rows = _with_priority_overlay(queue_rows)
+    tailoring_decision_rows = _with_priority_overlay(
+        queue_rows,
+        source_artifact_reference=str(output_csv_path),
+    )
     if str(args.tailoring_decision_output_csv or "").strip():
         try:
             tailoring_decision_artifact = write_tailoring_decision_artifacts(

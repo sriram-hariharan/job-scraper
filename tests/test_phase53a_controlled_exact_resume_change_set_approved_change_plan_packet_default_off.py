@@ -18,7 +18,7 @@ PROTECTED_HASHES = {
     "generate_tailoring_" + "suggestions" + ".py": "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28",
     "src/matching/scorer.py": "f56624b5b3c7e2bb01a824386b86fbc2a194e727f0437ca0773764eae64ec941",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
-    "application_execution_" + "queue" + ".py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+    "application_execution_" + "queue" + ".py": "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097",
     "src/agents/controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py": (
         "68ef42fd16c6299681641ad92bc93c648331c36e8fdd17971e387247e9c3e66a"
     ),

@@ -118,6 +118,70 @@ def _validate_and_copy_rows(rows: Any) -> List[Dict[str, Any]]:
     return copied_rows
 
 
+def _prepare_verification_identity(
+    *,
+    rows: Any,
+    pipeline_run_id: Any,
+    owner_user_id: Any,
+    context_id: Any,
+) -> tuple[List[Dict[str, Any]], str, str, str, str, str]:
+    clean_owner_user_id = _clean_required_identity(owner_user_id, "owner_user_id")
+    clean_pipeline_run_id = _clean_required_identity(
+        pipeline_run_id,
+        "pipeline_run_id",
+    )
+    clean_context_id = _clean_required_identity(context_id, "context_id")
+    copied_rows = _validate_and_copy_rows(rows)
+    input_digest = _digest(copied_rows)
+    invocation_identity = _digest(
+        {
+            "contract_version": CONTRACT_VERSION,
+            "owner_user_id": clean_owner_user_id,
+            "pipeline_run_id": clean_pipeline_run_id,
+            "context_id": clean_context_id,
+            "rows": copied_rows,
+        }
+    )
+    return (
+        copied_rows,
+        clean_pipeline_run_id,
+        clean_owner_user_id,
+        clean_context_id,
+        input_digest,
+        invocation_identity,
+    )
+
+
+def build_job_prioritization_graph_verification_identity(
+    *,
+    rows: List[Mapping[str, Any]],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+) -> Dict[str, Any]:
+    """Return the contract-owned bounded identity without executing the graph."""
+
+    (
+        copied_rows,
+        _,
+        _,
+        _,
+        input_digest,
+        invocation_identity,
+    ) = _prepare_verification_identity(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+    )
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "input_row_count": len(copied_rows),
+        "input_digest": input_digest,
+        "invocation_identity": invocation_identity,
+    }
+
+
 def _job_prioritization_node(
     state: JobPrioritizationVerificationState,
 ) -> JobPrioritizationVerificationState:
@@ -162,26 +226,22 @@ def execute_job_prioritization_graph_verification(
 ) -> Dict[str, Any]:
     """Run the explicit, read-only production-row renderer verification graph."""
 
-    clean_owner_user_id = _clean_required_identity(owner_user_id, "owner_user_id")
-    clean_pipeline_run_id = _clean_required_identity(
-        pipeline_run_id,
-        "pipeline_run_id",
+    (
+        copied_rows,
+        clean_pipeline_run_id,
+        clean_owner_user_id,
+        clean_context_id,
+        input_digest,
+        invocation_identity,
+    ) = _prepare_verification_identity(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
     )
-    clean_context_id = _clean_required_identity(context_id, "context_id")
     clean_source_reference = str(source_artifact_reference or "").strip()
 
     caller_rows_snapshot = deepcopy(rows)
-    copied_rows = _validate_and_copy_rows(rows)
-    input_digest = _digest(copied_rows)
-    invocation_identity = _digest(
-        {
-            "contract_version": CONTRACT_VERSION,
-            "owner_user_id": clean_owner_user_id,
-            "pipeline_run_id": clean_pipeline_run_id,
-            "context_id": clean_context_id,
-            "rows": copied_rows,
-        }
-    )
 
     initial_state: JobPrioritizationVerificationState = {
         "rows": copied_rows,

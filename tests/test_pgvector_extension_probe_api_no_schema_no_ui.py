@@ -210,7 +210,7 @@ def test_no_dependency_schema_migration_or_pipeline_change():
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"
         ),
         "application_execution_queue.py": (
-            "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
+            "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097"
         ),
     }
     for relative_path, expected_hash in protected_hashes.items():

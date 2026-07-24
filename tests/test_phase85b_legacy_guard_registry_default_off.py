@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tests.support.phase_guard_registry import (
+    PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1268,6 +1269,33 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "src/storage/durable_orchestration/repository.py",
     }.isdisjoint(phase11_step2_profile)
 
+    phase11_step3_profile = legacy_guard_allowlist(
+        "phase11_step3_job_prioritization_graph_integration"
+    )
+    assert phase11_step3_profile == {
+        "application_execution_queue.py",
+        "src/agents/job_prioritization_graph_verification.py",
+        "src/agents/job_prioritization_graph_integration.py",
+        "tests/test_phase11_step3_job_prioritization_graph_integration.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    } | PHASE11_STEP3_DIRECT_HASH_GUARD_FILES
+    assert not any("*" in path for path in phase11_step3_profile)
+    assert {
+        "main.py",
+        "run_application_planning.py",
+        "src/agents/job_prioritization_agent.py",
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "src/agents/evidence_chain_composition.py",
+        "src/pipeline/collector.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/config/settings.py",
+        "src/storage/durable_orchestration/repository.py",
+    }.isdisjoint(phase11_step3_profile)
+
     phase9_step12_compatibility_profile = legacy_guard_allowlist(
         "phase9_step12_dependency_driver_compatibility"
     )
@@ -1344,6 +1372,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase10_step8_profile
         | phase10_step11_profile
         | phase11_step2_profile
+        | phase11_step3_profile
         | phase9_step12_compatibility_profile
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile

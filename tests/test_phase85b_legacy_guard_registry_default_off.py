@@ -12,6 +12,7 @@ from tests.support.phase_guard_registry import (
     PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES,
     PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES,
     PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES,
+    PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES,
     PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES,
     PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
     assert_changed_files_allowed,
@@ -1393,6 +1394,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES
         | PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES
         | PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES
+        | PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
     assert PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES == {
@@ -1475,6 +1477,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert not any(
         "*" in path
         for path in PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES
+    )
+    assert PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES == {
+        "src/evaluation/controlled_groq_canary_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_evidence_runtime.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES
     )
     assert PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES == {
         "tests/test_rag_endpoint_behavior.py",

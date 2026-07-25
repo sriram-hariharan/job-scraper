@@ -431,6 +431,196 @@
       "comparison_type": "exact_golden",
       "human_review_required": true,
       "deterministic_authority_required": true
+    },
+    {
+      "case_id": "job_fit_synthetic_transmission_safe_v1",
+      "workload_id": "job_fit_evaluation",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/fixtures/agentic_benchmark/cases.json",
+        "source_identifier": "cases.bench_job_backend_1"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "job_fit_evaluation_result_v1",
+      "normalized_input_packet": {
+        "role_category": "synthetic_workflow_role",
+        "required_skills": [
+          "synthetic_skill_alpha",
+          "synthetic_skill_beta"
+        ],
+        "preferred_skills": [
+          "synthetic_skill_delta"
+        ],
+        "matched_skills": [
+          "synthetic_skill_alpha"
+        ],
+        "missing_skills": [
+          "synthetic_skill_beta"
+        ],
+        "evidence_tokens": [
+          "synthetic_skill_alpha",
+          "synthetic_skill_beta",
+          "synthetic_workflow_signal"
+        ]
+      },
+      "expected_output": {
+        "fit_score": 0.7,
+        "required_match_score": 0.5,
+        "classification": "partial_fit",
+        "missing_requirements": [
+          "synthetic_skill_beta"
+        ],
+        "reason_tokens": [
+          "synthetic_skill_alpha",
+          "synthetic_workflow_signal"
+        ]
+      },
+      "expected_invariant": {
+        "score_min": 0.0,
+        "score_max": 1.0,
+        "evidence_grounded_reason_required": true,
+        "unsupported_claim_count": 0
+      },
+      "required_fields": [
+        "classification",
+        "fit_score",
+        "required_match_score",
+        "reason_tokens",
+        "missing_requirements"
+      ],
+      "supported_evidence_tokens": [
+        "synthetic_skill_alpha",
+        "synthetic_skill_beta",
+        "synthetic_workflow_signal"
+      ],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": [
+        "synthetic_unsupported_claim"
+      ],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "grounded_rag_synthetic_transmission_safe_v1",
+      "workload_id": "grounded_rag_answer",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/test_agentic_benchmark.py",
+        "source_identifier": "test_agentic_benchmark_rag_evaluation_schema_metric_is_offline"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "grounded_rag_answer_result_v1",
+      "normalized_input_packet": {
+        "question": "Which synthetic capability is supported?",
+        "sources": [
+          {
+            "source_alias": "source_alpha",
+            "evidence_tokens": [
+              "synthetic_capability_alpha",
+              "synthetic_workflow_signal"
+            ]
+          }
+        ]
+      },
+      "expected_output": {
+        "answer_status": "supported",
+        "claims": [
+          "synthetic_capability_alpha"
+        ],
+        "source_ids": [
+          "source_alpha"
+        ]
+      },
+      "expected_invariant": {
+        "insufficient_evidence_status": "insufficient_evidence",
+        "unsupported_claim_count": 0,
+        "unsupported_source_count": 0
+      },
+      "required_fields": [
+        "answer_status",
+        "claims",
+        "source_ids"
+      ],
+      "supported_evidence_tokens": [
+        "synthetic_capability_alpha",
+        "synthetic_workflow_signal"
+      ],
+      "supported_evidence_ids": [
+        "source_alpha"
+      ],
+      "prohibited_claims_or_terms": [
+        "synthetic_unsupported_claim"
+      ],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "critic_synthetic_transmission_safe_v1",
+      "workload_id": "critic_evaluation",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/test_critic_agent.py",
+        "source_identifier": "test_critic_supported_suggestion_is_approved"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "critic_evaluation_result_v1",
+      "normalized_input_packet": {
+        "proposed_text": "Synthetic capability alpha is supported.",
+        "proposal_tokens": [
+          "synthetic_capability_alpha"
+        ],
+        "evidence_tokens": [
+          "synthetic_capability_alpha"
+        ]
+      },
+      "expected_output": {
+        "decision": "approve",
+        "reason_codes": [
+          "evidence_supported"
+        ],
+        "claims": [
+          "synthetic_capability_alpha"
+        ],
+        "safe_suggestion": true
+      },
+      "expected_invariant": {
+        "advisory_only": true,
+        "human_review_required": true,
+        "unsupported_claim_count": 0,
+        "mutation_authorized": false,
+        "application_authorized": false,
+        "ats_authorized": false
+      },
+      "required_fields": [
+        "decision",
+        "reason_codes",
+        "claims",
+        "safe_suggestion"
+      ],
+      "supported_evidence_tokens": [
+        "synthetic_capability_alpha"
+      ],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": [
+        "synthetic_unsupported_claim"
+      ],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
     }
   ]
 }

@@ -225,8 +225,8 @@ def test_machine_readable_corpus_has_exact_workload_coverage():
     coverage = engine.fixture_case_coverage_summary()
 
     assert coverage["workload_count"] == 12
-    assert coverage["total_case_count"] == 12
-    assert coverage["exact_golden_count"] == 12
+    assert coverage["total_case_count"] == 15
+    assert coverage["exact_golden_count"] == 15
     assert coverage["invariant_only_count"] == 0
     assert coverage["schema_only_count"] == 0
     assert coverage["coverage_gap_count"] == 0
@@ -235,10 +235,29 @@ def test_machine_readable_corpus_has_exact_workload_coverage():
     assert [row["workload_id"] for row in coverage["workloads"]] == list(
         WORKLOAD_ORDER
     )
+    expected_case_counts = {
+        workload_id: (
+            2
+            if workload_id
+            in {
+                "job_fit_evaluation",
+                "grounded_rag_answer",
+                "critic_evaluation",
+            }
+            else 1
+        )
+        for workload_id in WORKLOAD_ORDER
+    }
+    assert {
+        row["workload_id"]: row["machine_readable_case_count"]
+        for row in coverage["workloads"]
+    } == expected_case_counts
+    assert {
+        row["workload_id"]: row["exact_golden_count"]
+        for row in coverage["workloads"]
+    } == expected_case_counts
     assert all(
-        row["machine_readable_case_count"] == 1
-        and row["exact_golden_count"] == 1
-        and row["live_transmission_eligible_count"] == 0
+        row["live_transmission_eligible_count"] == 0
         for row in coverage["workloads"]
     )
 

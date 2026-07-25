@@ -120,6 +120,11 @@ PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES = {
     "tests/test_controlled_groq_provider_canary.py",
 }
 
+PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES = {
+    "src/evaluation/controlled_groq_canary_transport.py",
+    "tests/test_controlled_groq_canary_transport.py",
+}
+
 PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
     "tests/test_rag_endpoint_behavior.py",
 }
@@ -1452,6 +1457,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES
         | PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES
         | PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES
+        | PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
 

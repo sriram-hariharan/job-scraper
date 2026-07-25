@@ -13,7 +13,7 @@ PROTECTED_BACKEND_HASHES = {
     "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
     "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
     "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
-    "src/ai/llm_client.py": "b97f54b85d18386479f284a99d65bfdd663f25b5e076e1c3bd18fb839af22eca",
+    "src/ai/llm_client.py": "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2",
     "src/ai/job_fit_evaluator.py": "3776e5ce3c098c5329d2e7631195915f6bcf098ec0303ec619e9b0e9ecf393fb",
     "src/storage/agent_trace/schema.sql": "69305cd1bec0be9caa8c8c1b93e8fc10a3e80a92c08acd5683e7800763d2a77a",
 }

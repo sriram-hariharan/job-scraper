@@ -5,6 +5,7 @@ import pytest
 from tests.support.phase_guard_registry import (
     PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
     PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES,
+    PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES,
     PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES,
     PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
     assert_changed_files_allowed,
@@ -1379,6 +1380,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase9_step12_compatibility_profile
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
         | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
+        | PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
     assert PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES == {
@@ -1397,6 +1399,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert not any(
         "*" in path
         for path in PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
+    )
+    assert PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES == {
+        "src/ai/llm_client.py",
+        "tests/test_llm_client_safety.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES
     )
     assert PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES == {
         "tests/test_rag_endpoint_behavior.py",

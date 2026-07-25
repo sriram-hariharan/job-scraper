@@ -82,6 +82,11 @@ PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES = {
     "tests/test_provider_client_compatibility.py",
 }
 
+PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES = {
+    "src/ai/llm_client.py",
+    "tests/test_llm_client_safety.py",
+}
+
 PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
     "tests/test_rag_endpoint_behavior.py",
 }
@@ -1408,6 +1413,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
         | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
+        | PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
 

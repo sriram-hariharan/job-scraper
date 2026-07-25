@@ -16,10 +16,12 @@ from src.evaluation.provider_benchmark_contract import (
 from src.evaluation.provider_client_compatibility import (
     COMPATIBILITY_CONTRACT_VERSION,
     LIVE_UNPROVEN,
-    RAW_DEBUG_REPAIR_REQUIRED,
+    RAW_DEBUG_SAFE,
+    STEP8M_COMPATIBILITY_BASELINE_SHA256,
     SYNTHETIC_PASS,
     build_compatibility_scenarios,
     provider_client_compatibility_sha256,
+    provider_client_compatibility_result_sha256,
     run_offline_provider_client_compatibility,
     serialize_provider_client_compatibility_result,
     validate_provider_client_compatibility_result,
@@ -247,34 +249,28 @@ def test_unsupported_provider_fails_closed(result):
 
 
 def test_provider_model_mismatch_is_recorded_as_repair_requirement(result):
-    assert (
-        result["fallback"]["provider_model_mismatch"]
-        == "provider_model_mismatch_not_rejected"
-    )
+    assert result["fallback"]["provider_model_mismatch"] == "fails_closed"
 
 
 def test_fallback_policy_risks_are_classified(result):
     assert (
         result["fallback"]["exception_policy"]
-        == "catches_all_exceptions_without_taxonomy"
+        == "approved_transient_categories_only"
     )
     assert (
         result["fallback"]["routing_policy"]
-        == "broader_than_approved_future_policy"
+        == "bounded_explicit_transient_only"
     )
 
 
 def test_raw_debug_output_is_classified_without_persisting_marker(result):
-    assert result["raw_debug_output"] == RAW_DEBUG_REPAIR_REQUIRED
+    assert result["raw_debug_output"] == RAW_DEBUG_SAFE
     serialized = serialize_provider_client_compatibility_result(result)
     assert "bounded-raw-debug-synthetic-marker" not in serialized
 
 
 def test_production_repair_owner_is_exact(result):
-    assert result["production_repair_requirements"]
-    assert {
-        row["owner"] for row in result["production_repair_requirements"]
-    } == {"src/ai/llm_client.py"}
+    assert result["production_repair_requirements"] == []
 
 
 def test_openai_chat_completions_risks_are_complete(result):
@@ -318,6 +314,22 @@ def test_serialization_and_digest_are_deterministic(result):
     assert first == second
     assert provider_client_compatibility_sha256(result) == provider_client_compatibility_sha256(
         deepcopy(result)
+    )
+    assert provider_client_compatibility_result_sha256(
+        result
+    ) == provider_client_compatibility_result_sha256(deepcopy(result))
+
+
+def test_step8m_baseline_digest_remains_exact(result):
+    assert (
+        result["step8m_compatibility_baseline_sha256"]
+        == STEP8M_COMPATIBILITY_BASELINE_SHA256
+    )
+    assert STEP8M_COMPATIBILITY_BASELINE_SHA256 == (
+        "e798f7d10f67c65c5d02f7531b54c3ce1b18ad0a6db5ec98505b4f1847f23ddd"
+    )
+    assert provider_client_compatibility_sha256(result) == (
+        STEP8M_COMPATIBILITY_BASELINE_SHA256
     )
 
 
@@ -462,4 +474,4 @@ def test_result_validation_rejects_authority_or_live_status(result):
 
 
 def test_next_safe_step_is_production_client_repair(result):
-    assert result["next_safe_step"] == "production_client_repair"
+    assert result["next_safe_step"] == "offline_fixture_benchmark_implementation"

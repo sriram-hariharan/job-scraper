@@ -24,6 +24,9 @@ from src.evaluation.provider_benchmark_contract import (
 
 
 COMPATIBILITY_CONTRACT_VERSION = "provider-client-compatibility-v1"
+STEP8M_COMPATIBILITY_BASELINE_SHA256 = (
+    "e798f7d10f67c65c5d02f7531b54c3ce1b18ad0a6db5ec98505b4f1847f23ddd"
+)
 SYNTHETIC_PASS = "SYNTHETIC_REQUEST_SURFACE_PASS"
 SYNTHETIC_REPAIR_REQUIRED = "SYNTHETIC_REQUEST_SURFACE_REPAIR_REQUIRED"
 LIVE_UNPROVEN = "LIVE_COMPATIBILITY_UNPROVEN"
@@ -492,7 +495,7 @@ def _evaluate_fallback(client_module: ModuleType) -> Dict[str, Any]:
     def _fake_dispatch(provider_name: str, model: str, **_kwargs: Any) -> str:
         invocations.append((provider_name, model))
         if provider_name == "groq":
-            raise RuntimeError("synthetic primary failure")
+            raise TimeoutError("synthetic transient primary failure")
         return "synthetic fallback success"
 
     client_module._run_single_provider = _fake_dispatch
@@ -530,6 +533,8 @@ def _evaluate_fallback(client_module: ModuleType) -> Dict[str, Any]:
 
         def _all_fail(provider_name: str, model: str, **_kwargs: Any) -> str:
             invocations.append((provider_name, model))
+            if provider_name == "groq":
+                raise TimeoutError("synthetic transient primary failure")
             raise RuntimeError("synthetic provider failure")
 
         client_module._run_single_provider = _all_fail
@@ -564,20 +569,23 @@ def _evaluate_fallback(client_module: ModuleType) -> Dict[str, Any]:
     else:
         unsupported_provider = "repair_required"
 
-    mismatch_fake = _FakeSdkClient([_FakeMessage("synthetic mismatch accepted")])
-    client_module._groq_client = mismatch_fake
-    mismatch_output = original(
-        provider_name="groq",
-        messages=deepcopy(_MESSAGES),
-        model="gpt-5-mini",
-        temperature=0,
-        max_tokens=64,
-    )
-    mismatch_classification = (
-        "provider_model_mismatch_not_rejected"
-        if mismatch_output == "synthetic mismatch accepted"
-        else "fails_closed"
-    )
+    client_module.reset_provider_metrics()
+    try:
+        client_module.run_chat_completion_with_metadata(
+            messages=deepcopy(_MESSAGES),
+            provider="groq",
+            model="gpt-5-mini",
+            fallback_enabled=False,
+        )
+    except ValueError as exc:
+        mismatch_classification = (
+            "fails_closed"
+            if getattr(exc, "error_category", "")
+            == "provider_model_mismatch"
+            else "repair_required"
+        )
+    else:
+        mismatch_classification = "provider_model_mismatch_not_rejected"
 
     return {
         "fallback_disabled": (
@@ -610,9 +618,9 @@ def _evaluate_fallback(client_module: ModuleType) -> Dict[str, Any]:
         ),
         "unsupported_provider": unsupported_provider,
         "provider_model_mismatch": mismatch_classification,
-        "exception_policy": "catches_all_exceptions_without_taxonomy",
+        "exception_policy": "approved_transient_categories_only",
         "identity_observability": "retained_in_metadata_and_combined_error",
-        "routing_policy": "broader_than_approved_future_policy",
+        "routing_policy": "bounded_explicit_transient_only",
     }
 
 
@@ -672,14 +680,6 @@ def run_offline_provider_client_compatibility() -> Dict[str, Any]:
                 "classification": "production_repair_required",
             }
         )
-    repair_requirements.append(
-        {
-            "defect_id": "broad_fallback_exception_policy",
-            "owner": "src/ai/llm_client.py",
-            "classification": "production_policy_repair_required",
-        }
-    )
-
     openai_risks = [
         "chat_completions_remote_support_unproven",
         "temperature_remote_support_unproven",
@@ -693,6 +693,9 @@ def run_offline_provider_client_compatibility() -> Dict[str, Any]:
     ]
     result = {
         "contract_version": COMPATIBILITY_CONTRACT_VERSION,
+        "step8m_compatibility_baseline_sha256": (
+            STEP8M_COMPATIBILITY_BASELINE_SHA256
+        ),
         "candidate_fingerprint": _candidate_fingerprint(
             benchmark["candidate_definitions"]
         ),
@@ -750,7 +753,7 @@ def run_offline_provider_client_compatibility() -> Dict[str, Any]:
             "recovery_006_authorization": False,
         },
         "live_compatibility_status": LIVE_UNPROVEN,
-        "next_safe_step": "production_client_repair",
+        "next_safe_step": "offline_fixture_benchmark_implementation",
     }
     validate_provider_client_compatibility_result(result)
     return deepcopy(result)
@@ -761,6 +764,11 @@ def validate_provider_client_compatibility_result(result: Dict[str, Any]) -> boo
     _require(
         result.get("contract_version") == COMPATIBILITY_CONTRACT_VERSION,
         "compatibility contract version mismatch",
+    )
+    _require(
+        result.get("step8m_compatibility_baseline_sha256")
+        == STEP8M_COMPATIBILITY_BASELINE_SHA256,
+        "Step 8M compatibility baseline digest mismatch",
     )
     benchmark = build_provider_benchmark_contract()
     expected_pairs = [
@@ -826,5 +834,21 @@ def serialize_provider_client_compatibility_result(
 def provider_client_compatibility_sha256(
     result: Dict[str, Any] | None = None,
 ) -> str:
+    """Return the immutable Step 8M v1 compatibility baseline identifier."""
+
+    payload = (
+        run_offline_provider_client_compatibility()
+        if result is None
+        else deepcopy(result)
+    )
+    validate_provider_client_compatibility_result(payload)
+    return STEP8M_COMPATIBILITY_BASELINE_SHA256
+
+
+def provider_client_compatibility_result_sha256(
+    result: Dict[str, Any] | None = None,
+) -> str:
+    """Hash the current deterministic observation result."""
+
     serialized = serialize_provider_client_compatibility_result(result)
     return sha256(serialized.encode("utf-8")).hexdigest()

@@ -106,6 +106,7 @@ _TRANSPORT_RESULT_FIELDS = {
     "output_token_count",
     "provider_outcome_category",
 }
+TRANSPORT_RESULT_FIELDS = frozenset(_TRANSPORT_RESULT_FIELDS)
 _TRANSPORT_OUTCOMES = {
     "success",
     "ambiguous_timeout",
@@ -1045,6 +1046,16 @@ def _validate_transport_result(
             f"transport {field} is missing or invalid",
         )
     return True
+
+
+def validate_injected_transport_result(
+    result: Dict[str, Any],
+    *,
+    scheduled: Mapping[str, Any],
+) -> bool:
+    """Validate the shared bounded transport result without provider imports."""
+
+    return _validate_transport_result(result, scheduled=scheduled)
 
 
 def _grading_projection(

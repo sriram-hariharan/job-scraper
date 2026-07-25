@@ -850,6 +850,19 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase11_step8r_groq_live_canary_preparation_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_provider_canary.py",
+        ROOT / "src/evaluation/controlled_provider_benchmark_harness.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8r_groq_live_canary_preparation_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase8_step4_deleted_runtime_file = ROOT / "src/ai/deterministic_skill_extractor.py"
     if changed_runtime_files == [phase8_step4_deleted_runtime_file]:
         assert not phase8_step4_deleted_runtime_file.exists()

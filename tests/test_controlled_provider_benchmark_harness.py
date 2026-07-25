@@ -31,6 +31,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OWNER_PATH = (
     ROOT / "src/evaluation/controlled_provider_benchmark_harness.py"
 )
+CANARY_OWNER_PATH = (
+    ROOT / "src/evaluation/controlled_groq_provider_canary.py"
+)
 RECOVERY_006_STATUS = (
     ROOT
     / "outputs/application_planning"
@@ -1582,7 +1585,7 @@ def test_no_production_source_imports_or_calls_the_harness_owner():
             else list(source_root.rglob("*.py"))
         )
         for path in paths:
-            if path == OWNER_PATH:
+            if path in {OWNER_PATH, CANARY_OWNER_PATH}:
                 continue
             text = path.read_text(encoding="utf-8")
             if "controlled_provider_benchmark_harness" in text:

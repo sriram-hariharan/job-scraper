@@ -166,6 +166,9 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "src/evaluation/provider_benchmark_contract.py",
         "tests/fixtures/provider_benchmark/manifest.json",
         "tests/test_provider_benchmark_contract.py",
+        "src/evaluation/provider_client_compatibility.py",
+        "tests/test_provider_client_compatibility.py",
+        "tests/test_rag_endpoint_behavior.py",
         "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
                     "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
@@ -779,6 +782,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     if (
         set(changed_runtime_files)
         == phase11_step8l_provider_benchmark_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8m_provider_compatibility_runtime_files = {
+        ROOT / "src/evaluation/provider_client_compatibility.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8m_provider_compatibility_runtime_files
     ):
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")

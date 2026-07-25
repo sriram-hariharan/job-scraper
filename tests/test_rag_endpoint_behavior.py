@@ -1,3 +1,62 @@
+import socket
+
+import pytest
+
+
+@pytest.fixture
+def offline_rag_query_isolation(monkeypatch):
+    from src.rag import query_engine
+    from src.storage import rag_store
+
+    counters = {
+        "database_connection_factory_calls": 0,
+        "database_client_constructions": 0,
+        "database_cursor_calls": 0,
+        "database_execute_calls": 0,
+        "credential_reads": 0,
+        "network_socket_calls": 0,
+    }
+
+    monkeypatch.setattr(
+        query_engine,
+        "_infer_metadata_filters",
+        lambda _query: {},
+    )
+
+    def reject_database_adapter(*_args, **_kwargs):
+        counters["database_connection_factory_calls"] += 1
+        raise AssertionError("offline RAG test reached the database adapter")
+
+    def reject_database_process(*_args, **_kwargs):
+        counters["database_client_constructions"] += 1
+        raise AssertionError("offline RAG test attempted database client construction")
+
+    def reject_database_configuration(*_args, **_kwargs):
+        counters["credential_reads"] += 1
+        raise AssertionError("offline RAG test attempted database configuration access")
+
+    def reject_socket(*_args, **_kwargs):
+        counters["network_socket_calls"] += 1
+        raise AssertionError("offline RAG test attempted network access")
+
+    monkeypatch.setattr(rag_store, "_run_psql_statement", reject_database_adapter)
+    monkeypatch.setattr(rag_store, "_run_psql_json_query", reject_database_adapter)
+    monkeypatch.setattr(rag_store, "_database_url", reject_database_configuration)
+    monkeypatch.setattr(rag_store.subprocess, "run", reject_database_process)
+    monkeypatch.setattr(socket, "socket", reject_socket)
+
+    yield counters
+
+    assert counters == {
+        "database_connection_factory_calls": 0,
+        "database_client_constructions": 0,
+        "database_cursor_calls": 0,
+        "database_execute_calls": 0,
+        "credential_reads": 0,
+        "network_socket_calls": 0,
+    }
+
+
 def _raw_result(
     *,
     doc_id="job-1",
@@ -23,7 +82,10 @@ def _raw_result(
     }
 
 
-def test_search_jobs_semantic_timeout_falls_back_to_lexical(monkeypatch):
+def test_search_jobs_semantic_timeout_falls_back_to_lexical(
+    monkeypatch,
+    offline_rag_query_isolation,
+):
     from src.rag import query_engine
 
     def timeout_retrieval(*args, **kwargs):
@@ -47,7 +109,10 @@ def test_search_jobs_semantic_timeout_falls_back_to_lexical(monkeypatch):
     assert results[0]["retrieval_lanes"] == ["lexical"]
 
 
-def test_search_jobs_semantic_unavailable_falls_back_to_lexical(monkeypatch):
+def test_search_jobs_semantic_unavailable_falls_back_to_lexical(
+    monkeypatch,
+    offline_rag_query_isolation,
+):
     from src.rag import query_engine
 
     def unavailable_retrieval(*args, **kwargs):
@@ -74,7 +139,10 @@ def test_search_jobs_semantic_unavailable_falls_back_to_lexical(monkeypatch):
     assert results[0]["retrieval_lanes"] == ["lexical"]
 
 
-def test_answer_job_query_uses_lexical_fallback_after_semantic_timeout(monkeypatch):
+def test_answer_job_query_uses_lexical_fallback_after_semantic_timeout(
+    monkeypatch,
+    offline_rag_query_isolation,
+):
     from src.rag import query_engine, rag_answerer
 
     def timeout_retrieval(*args, **kwargs):
@@ -115,7 +183,10 @@ def test_answer_job_query_uses_lexical_fallback_after_semantic_timeout(monkeypat
     assert payload["sources"][0]["title"] == "Machine Learning Engineer"
 
 
-def test_answer_job_query_uses_lexical_fallback_after_semantic_unavailable(monkeypatch):
+def test_answer_job_query_uses_lexical_fallback_after_semantic_unavailable(
+    monkeypatch,
+    offline_rag_query_isolation,
+):
     from src.rag import query_engine, rag_answerer
 
     def unavailable_retrieval(*args, **kwargs):
@@ -164,7 +235,10 @@ def test_answer_job_query_uses_lexical_fallback_after_semantic_unavailable(monke
     assert payload["sources"][0]["title"] == "Backend Software Engineer"
 
 
-def test_answer_job_query_no_matches_after_semantic_unavailable_is_clean(monkeypatch):
+def test_answer_job_query_no_matches_after_semantic_unavailable_is_clean(
+    monkeypatch,
+    offline_rag_query_isolation,
+):
     from src.rag import query_engine, rag_answerer
 
     def unavailable_retrieval(*args, **kwargs):

@@ -77,6 +77,15 @@ PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES = {
     "tests/test_provider_benchmark_contract.py",
 }
 
+PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES = {
+    "src/evaluation/provider_client_compatibility.py",
+    "tests/test_provider_client_compatibility.py",
+}
+
+PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
+    "tests/test_rag_endpoint_behavior.py",
+}
+
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
     value = str(path).strip().replace("\\", "/")
@@ -1398,6 +1407,8 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase9_step12_dependency_driver_compatibility"
         )
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
+        | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
+        | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
 
 

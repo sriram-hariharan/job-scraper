@@ -105,6 +105,13 @@ PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES = {
     "tests/test_transmission_safe_provider_fixtures.py",
 }
 
+PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES = {
+    "src/evaluation/controlled_provider_benchmark_harness.py",
+    "tests/fixtures/provider_benchmark/synthetic_authorization.json",
+    "tests/fixtures/provider_benchmark/synthetic_pricing.json",
+    "tests/test_controlled_provider_benchmark_harness.py",
+}
+
 PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
     "tests/test_rag_endpoint_behavior.py",
 }
@@ -1435,6 +1442,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE11_STEP8O_PROVIDER_FIXTURE_BENCHMARK_FILES
         | PHASE11_STEP8P_CONTROLLED_PROVIDER_BENCHMARK_PLAN_FILES
         | PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES
+        | PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
 

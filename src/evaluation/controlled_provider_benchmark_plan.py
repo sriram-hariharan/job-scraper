@@ -1318,8 +1318,23 @@ def validate_redacted_result_packet(packet: Dict[str, Any]) -> bool:
         set(packet) == _RESULT_PACKET_FIELDS,
         "result packet fields must match the allowlist",
     )
+    packet_for_sensitive_scan = deepcopy(packet)
+    normalized_for_scan = packet_for_sensitive_scan.get("normalized_output")
+    if isinstance(normalized_for_scan, dict):
+        for authority_field in (
+            "mutation_authorized",
+            "application_authorized",
+            "ats_authorized",
+        ):
+            if authority_field not in normalized_for_scan:
+                continue
+            _require(
+                normalized_for_scan[authority_field] is False,
+                "result packet attempts authoritative action",
+            )
+            normalized_for_scan.pop(authority_field)
     _require(
-        not _has_prohibited_packet_key(packet),
+        not _has_prohibited_packet_key(packet_for_sensitive_scan),
         "result packet contains a prohibited field",
     )
     _require(

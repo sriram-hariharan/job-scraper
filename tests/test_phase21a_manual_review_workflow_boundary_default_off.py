@@ -170,6 +170,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
         "src/agents/jd_intelligence.py",
         "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+        "src/evaluation/provider_benchmark_contract.py",
+        "tests/fixtures/provider_benchmark/manifest.json",
+        "tests/test_provider_benchmark_contract.py",
         "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
                     "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
@@ -772,6 +775,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    phase11_step8l_provider_benchmark_runtime_files = {
+        ROOT / "src/evaluation/provider_benchmark_contract.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8l_provider_benchmark_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase8_step4_deleted_runtime_file = ROOT / "src/ai/deterministic_skill_extractor.py"
     if changed_runtime_files == [phase8_step4_deleted_runtime_file]:
         assert not phase8_step4_deleted_runtime_file.exists()

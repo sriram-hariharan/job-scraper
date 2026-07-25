@@ -71,6 +71,12 @@ PHASE11_STEP3_DIRECT_HASH_GUARD_FILES = {
     "tests/test_vector_evidence_readback_api_default_off.py",
 }
 
+PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES = {
+    "src/evaluation/provider_benchmark_contract.py",
+    "tests/fixtures/provider_benchmark/manifest.json",
+    "tests/test_provider_benchmark_contract.py",
+}
+
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
     value = str(path).strip().replace("\\", "/")
@@ -1391,6 +1397,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
+        | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
     )
 
 

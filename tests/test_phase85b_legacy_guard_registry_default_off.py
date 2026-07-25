@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tests.support.phase_guard_registry import (
+    PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
     PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
@@ -1374,6 +1375,16 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase11_step2_profile
         | phase11_step3_profile
         | phase9_step12_compatibility_profile
+        | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
+    )
+    assert PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES == {
+        "src/evaluation/provider_benchmark_contract.py",
+        "tests/fixtures/provider_benchmark/manifest.json",
+        "tests/test_provider_benchmark_contract.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

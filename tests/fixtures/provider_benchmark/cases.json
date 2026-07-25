@@ -1,0 +1,436 @@
+{
+  "corpus_version": "provider-fixture-case-corpus-v1",
+  "cases": [
+    {
+      "case_id": "skill_extraction_required_preferred_v1",
+      "workload_id": "skill_extraction",
+      "tier": "A",
+      "provenance": {
+        "source_path": "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+        "source_identifier": "test_future_agent_contract_map_prevents_duplicate_default_provider_calls"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "skill_extraction_result_v1",
+      "normalized_input_packet": {
+        "required_terms": ["python", "sql"],
+        "preferred_terms": ["airflow"],
+        "evidence_tokens": ["python", "sql", "airflow"]
+      },
+      "expected_output": {
+        "required_skills": ["python", "sql"],
+        "preferred_skills": ["airflow"]
+      },
+      "expected_invariant": {},
+      "required_fields": ["required_skills", "preferred_skills"],
+      "supported_evidence_tokens": ["python", "sql", "airflow"],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": ["kubernetes"],
+      "comparison_type": "exact_golden",
+      "human_review_required": false,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "job_fit_bounded_scores_v1",
+      "workload_id": "job_fit_evaluation",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/fixtures/agentic_benchmark/cases.json",
+        "source_identifier": "cases.bench_job_backend_1"
+      },
+      "sanitized_classification": "repository_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "job_fit_evaluation_result_v1",
+      "normalized_input_packet": {
+        "required_terms": ["python", "sql"],
+        "matched_terms": ["python", "sql"],
+        "missing_terms": [],
+        "evidence_tokens": ["python", "sql", "api"]
+      },
+      "expected_output": {
+        "classification": "strong_fit",
+        "fit_score": 0.9,
+        "required_match_score": 1.0,
+        "reason_tokens": ["python", "sql"],
+        "missing_requirements": []
+      },
+      "expected_invariant": {
+        "score_min": 0.0,
+        "score_max": 1.0
+      },
+      "required_fields": ["classification", "fit_score", "required_match_score", "reason_tokens", "missing_requirements"],
+      "supported_evidence_tokens": ["python", "sql", "api"],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": ["kubernetes"],
+      "comparison_type": "exact_golden",
+      "human_review_required": false,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "jd_intelligence_signals_v1",
+      "workload_id": "jd_intelligence",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/test_manual_jd_intelligence_dry_run_surface_no_pipeline_change.py",
+        "source_identifier": "test_service_enabled_fake_adapter_returns_validated_jd_intelligence"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "jd_intelligence_result_v1",
+      "normalized_input_packet": {
+        "required_signals": ["python", "sql"],
+        "preferred_signals": ["dbt"],
+        "workflow_context": ["analytics"],
+        "available_evidence": ["python", "sql", "dbt", "analytics"]
+      },
+      "expected_output": {
+        "required_signals": ["python", "sql"],
+        "preferred_signals": ["dbt"],
+        "workflow_context": ["analytics"],
+        "missing_requirements": []
+      },
+      "expected_invariant": {},
+      "required_fields": ["required_signals", "preferred_signals", "workflow_context", "missing_requirements"],
+      "supported_evidence_tokens": ["python", "sql", "dbt", "analytics"],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": ["spark"],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "grounded_rag_supported_sources_v1",
+      "workload_id": "grounded_rag_answer",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/test_agentic_benchmark.py",
+        "source_identifier": "test_agentic_benchmark_rag_evaluation_schema_metric_is_offline"
+      },
+      "sanitized_classification": "repository_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "grounded_rag_answer_result_v1",
+      "normalized_input_packet": {
+        "question_id": "question_alpha",
+        "sources": [
+          {
+            "source_id": "source_alpha",
+            "evidence_tokens": ["python", "sql"]
+          }
+        ]
+      },
+      "expected_output": {
+        "answer_status": "supported",
+        "claims": ["python", "sql"],
+        "source_ids": ["source_alpha"]
+      },
+      "expected_invariant": {
+        "insufficient_evidence_status": "insufficient_evidence"
+      },
+      "required_fields": ["answer_status", "claims", "source_ids"],
+      "supported_evidence_tokens": ["python", "sql"],
+      "supported_evidence_ids": ["source_alpha"],
+      "prohibited_claims_or_terms": ["kubernetes"],
+      "comparison_type": "exact_golden",
+      "human_review_required": false,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "resume_fallback_ranking_identity_v1",
+      "workload_id": "resume_fallback_ranking",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/test_resume_selector_llm_normalization.py",
+        "source_identifier": "test_normalize_llm_fallback_parsed_handles_non_string_allowed_names"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "resume_fallback_ranking_result_v1",
+      "normalized_input_packet": {
+        "candidate_ids": ["candidate_alpha", "candidate_beta"],
+        "deterministic_candidate_id": "candidate_alpha",
+        "deterministic_order": ["candidate_alpha", "candidate_beta"]
+      },
+      "expected_output": {
+        "advisory_candidate_id": "candidate_alpha",
+        "ranking": ["candidate_alpha", "candidate_beta"],
+        "authoritative_candidate_id": "candidate_alpha",
+        "authority_mutated": false
+      },
+      "expected_invariant": {},
+      "required_fields": ["advisory_candidate_id", "ranking", "authoritative_candidate_id", "authority_mutated"],
+      "supported_evidence_tokens": [],
+      "supported_evidence_ids": ["candidate_alpha", "candidate_beta"],
+      "prohibited_claims_or_terms": [],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "ambiguous_adjudication_preserves_authority_v1",
+      "workload_id": "ambiguous_resume_adjudication",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/test_phase128b_policy_driven_llm_adjudicator_readback.py",
+        "source_identifier": "test_auto_calls_fake_provider_for_close_gap"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "ambiguous_resume_adjudication_result_v1",
+      "normalized_input_packet": {
+        "candidate_ids": ["candidate_alpha", "candidate_beta"],
+        "deterministic_candidate_id": "candidate_alpha",
+        "policy_reason": "close_score_gap"
+      },
+      "expected_output": {
+        "advisory_candidate_id": "candidate_alpha",
+        "decision": "preserve_deterministic",
+        "reason_codes": ["close_score_gap"],
+        "authoritative_candidate_id": "candidate_alpha",
+        "authority_mutated": false
+      },
+      "expected_invariant": {},
+      "required_fields": ["advisory_candidate_id", "decision", "reason_codes", "authoritative_candidate_id", "authority_mutated"],
+      "supported_evidence_tokens": ["close_score_gap"],
+      "supported_evidence_ids": ["candidate_alpha", "candidate_beta"],
+      "prohibited_claims_or_terms": [],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "critic_supported_claim_v1",
+      "workload_id": "critic_evaluation",
+      "tier": "B",
+      "provenance": {
+        "source_path": "tests/test_critic_agent.py",
+        "source_identifier": "test_critic_supported_suggestion_is_approved"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "critic_evaluation_result_v1",
+      "normalized_input_packet": {
+        "evidence_tokens": ["python", "api", "sql"],
+        "proposal_tokens": ["python", "api", "sql"],
+        "expected_decision": "approve"
+      },
+      "expected_output": {
+        "decision": "approve",
+        "reason_codes": [],
+        "claims": ["python", "api", "sql"],
+        "safe_suggestion": true
+      },
+      "expected_invariant": {},
+      "required_fields": ["decision", "reason_codes", "claims", "safe_suggestion"],
+      "supported_evidence_tokens": ["python", "api", "sql"],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": ["kubernetes", "40%"],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "tailoring_generation_evidence_bound_v1",
+      "workload_id": "tailoring_generation",
+      "tier": "C",
+      "provenance": {
+        "source_path": "tests/test_manual_tailoring_suggestion_dry_run_surface_no_pipeline_change.py",
+        "source_identifier": "test_service_enabled_fake_tailoring_provider_returns_validated_suggestions"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "tailoring_generation_result_v1",
+      "normalized_input_packet": {
+        "source_bullet_ids": ["bullet_alpha"],
+        "evidence_tokens": ["python", "sql", "airflow"]
+      },
+      "expected_output": {
+        "suggestions": [
+          {
+            "suggestion_id": "suggestion_alpha",
+            "source_bullet_id": "bullet_alpha",
+            "claims": ["python", "sql", "airflow"],
+            "evidence_tokens": ["python", "sql", "airflow"]
+          }
+        ],
+        "human_review_required": true,
+        "authority_mutated": false
+      },
+      "expected_invariant": {},
+      "required_fields": ["suggestions", "human_review_required", "authority_mutated"],
+      "supported_evidence_tokens": ["python", "sql", "airflow"],
+      "supported_evidence_ids": ["bullet_alpha"],
+      "prohibited_claims_or_terms": ["kubernetes", "40%"],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "tailoring_refinement_identity_v1",
+      "workload_id": "tailoring_refinement",
+      "tier": "C",
+      "provenance": {
+        "source_path": "tests/test_tailoring_patch_refinement_explicit_opt_in.py",
+        "source_identifier": "test_non_none_live_context_runs_existing_writer_judge_helper"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "tailoring_refinement_result_v1",
+      "normalized_input_packet": {
+        "patch_id": "patch_alpha",
+        "source_bullet_id": "bullet_alpha",
+        "original_claims": ["sql", "reporting"],
+        "evidence_tokens": ["sql", "reporting"]
+      },
+      "expected_output": {
+        "patch_id": "patch_alpha",
+        "source_bullet_id": "bullet_alpha",
+        "claims": ["sql", "reporting"],
+        "structure_valid": true,
+        "meaning_preserved": true,
+        "authority_mutated": false
+      },
+      "expected_invariant": {},
+      "required_fields": ["patch_id", "source_bullet_id", "claims", "structure_valid", "meaning_preserved", "authority_mutated"],
+      "supported_evidence_tokens": ["sql", "reporting"],
+      "supported_evidence_ids": ["patch_alpha", "bullet_alpha"],
+      "prohibited_claims_or_terms": ["kubernetes", "40%"],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "tailoring_judge_supported_candidate_v1",
+      "workload_id": "tailoring_judge",
+      "tier": "C",
+      "provenance": {
+        "source_path": "tests/test_tailoring_patch_refinement_explicit_opt_in.py",
+        "source_identifier": "test_non_none_live_context_runs_existing_writer_judge_helper"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "tailoring_judge_result_v1",
+      "normalized_input_packet": {
+        "candidate_ids": ["patch_alpha", "patch_beta"],
+        "supported_candidate_ids": ["patch_alpha"],
+        "unsupported_candidate_ids": ["patch_beta"]
+      },
+      "expected_output": {
+        "advisory_candidate_id": "patch_alpha",
+        "rejected_candidate_ids": ["patch_beta"],
+        "decision": "supported_candidate",
+        "authority_mutated": false
+      },
+      "expected_invariant": {},
+      "required_fields": ["advisory_candidate_id", "rejected_candidate_ids", "decision", "authority_mutated"],
+      "supported_evidence_tokens": ["sql", "reporting"],
+      "supported_evidence_ids": ["patch_alpha", "patch_beta"],
+      "prohibited_claims_or_terms": [],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "manual_scan_phrase_supported_terms_v1",
+      "workload_id": "manual_scan_phrase",
+      "tier": "A",
+      "provenance": {
+        "source_path": "tests/test_score_first_scan.py",
+        "source_identifier": "test_scan_phrase_validate_llm_options_marks_manual_only"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "manual_scan_phrase_result_v1",
+      "normalized_input_packet": {
+        "supported_terms": ["sql", "reporting"],
+        "prohibited_terms": ["kubernetes"]
+      },
+      "expected_output": {
+        "options": [
+          {
+            "option_id": "option_alpha",
+            "terms": ["sql", "reporting"],
+            "risk_flags": []
+          }
+        ],
+        "manual_only": true,
+        "can_accept_directly": false
+      },
+      "expected_invariant": {},
+      "required_fields": ["options", "manual_only", "can_accept_directly"],
+      "supported_evidence_tokens": ["sql", "reporting"],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": ["kubernetes"],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    },
+    {
+      "case_id": "manual_provider_preview_read_only_v1",
+      "workload_id": "manual_provider_preview",
+      "tier": "C",
+      "provenance": {
+        "source_path": "tests/test_provider_runtime_adapter_default_off.py",
+        "source_identifier": "test_enabled_fake_callable_returns_normalized_output"
+      },
+      "sanitized_classification": "synthetic_sanitized",
+      "contains_personal_resume_content": false,
+      "live_transmission_eligible": false,
+      "offline_only": true,
+      "additional_redaction_required": false,
+      "schema_id": "manual_provider_preview_result_v1",
+      "normalized_input_packet": {
+        "evidence_tokens": ["python"],
+        "request_mode": "manual_preview"
+      },
+      "expected_output": {
+        "preview_status": "advisory",
+        "manual_only": true,
+        "claims": ["python"],
+        "mutation_authorized": false,
+        "application_authorized": false,
+        "ats_authorized": false
+      },
+      "expected_invariant": {},
+      "required_fields": ["preview_status", "manual_only", "claims", "mutation_authorized", "application_authorized", "ats_authorized"],
+      "supported_evidence_tokens": ["python"],
+      "supported_evidence_ids": [],
+      "prohibited_claims_or_terms": ["kubernetes"],
+      "comparison_type": "exact_golden",
+      "human_review_required": true,
+      "deterministic_authority_required": true
+    }
+  ]
+}

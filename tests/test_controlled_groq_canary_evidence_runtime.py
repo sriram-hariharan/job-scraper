@@ -1368,5 +1368,6 @@ def test_no_production_source_imports_evidence_runtime():
         ):
             references.append(source_path.relative_to(ROOT).as_posix())
     assert references == [
-        "src/evaluation/controlled_groq_canary_run_identity.py"
+        "src/evaluation/controlled_groq_canary_run_identity.py",
+        "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
     ]

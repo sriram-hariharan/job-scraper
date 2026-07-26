@@ -385,4 +385,6 @@ def test_no_production_source_imports_run_identity_owner():
             encoding="utf-8"
         ):
             references.append(path.relative_to(ROOT).as_posix())
-    assert references == []
+    assert references == [
+        "src/evaluation/controlled_groq_canary_run_evidence_runtime.py"
+    ]

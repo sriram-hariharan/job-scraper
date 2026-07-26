@@ -425,7 +425,7 @@ def test_prior_artifacts_are_byte_identical_and_run003_artifacts_absent():
         ).exists()
 
 
-def test_no_production_source_imports_run003_plan_owner():
+def test_only_run003_identity_imports_run003_plan_owner():
     references = []
     for path in (ROOT / "src").rglob("*.py"):
         if path == OWNER_PATH:
@@ -434,7 +434,9 @@ def test_no_production_source_imports_run003_plan_owner():
             encoding="utf-8"
         ):
             references.append(path.relative_to(ROOT).as_posix())
-    assert references == []
+    assert references == [
+        "src/evaluation/controlled_groq_canary_run_003_identity.py"
+    ]
 
 
 def test_process_environment_is_not_used_by_runtime(monkeypatch):

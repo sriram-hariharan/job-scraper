@@ -134,6 +134,14 @@ def _result(index=0, **overrides):
     return payload
 
 
+def _safe_non_golden_skill_extraction_result():
+    result = _result(0)
+    normalized = deepcopy(result["normalized_output"])
+    normalized["required_skills"] = normalized["required_skills"][:-1]
+    result["normalized_output"] = normalized
+    return result
+
+
 def _complete(checkpoint, index=0, *, result=None, authorization=None):
     approved_authorization = (
         _authorization() if authorization is None else authorization
@@ -663,6 +671,108 @@ def test_quality_gate_failure_becomes_hard_failure():
     checkpoint = _complete(_empty(), result=result)
     assert checkpoint["completed_schedule_keys"] == []
     assert len(checkpoint["hard_failure_schedule_keys"]) == 1
+
+
+def test_safe_non_golden_quality_failure_is_bounded_and_durable(tmp_path):
+    original = _empty()
+    before = deepcopy(original)
+    result = _safe_non_golden_skill_extraction_result()
+    row = _canary()["schedule"][0]
+    cases_by_alias, case_ids = runtime._case_maps()
+    case = cases_by_alias[row["case_alias"]]
+    grade = runtime.grade_normalized_candidate_result(
+        {
+            "case_id": case_ids[row["case_alias"]],
+            "workload_id": row["workload_id"],
+            "provider": row["provider"],
+            "model": row["model"],
+            "normalized_output": deepcopy(result["normalized_output"]),
+            "schema_valid": all(
+                field in result["normalized_output"]
+                and result["normalized_output"][field] is not None
+                for field in case["required_fields"]
+            ),
+            "normalization_succeeded": True,
+            "fallback_used": False,
+            "provider_call_count": 0,
+            "mutation_count": 0,
+            "application_action_count": 0,
+            "ats_action_count": 0,
+            "raw_response_persisted": False,
+            "live_execution": False,
+            "latency_ms": result["latency_ms"],
+            "input_token_count": result["input_token_count"],
+            "output_token_count": result["output_token_count"],
+            "estimated_cost": 0.0,
+        },
+        corpus=runtime.load_fixture_case_corpus(),
+    )
+    assert grade["quality_gate_passed"] is False
+    assert all(value == 0 for value in grade["hard_failures"].values())
+    assert runtime._bounded_grade_failures(grade) == {}
+
+    updated = _complete(original, result=result)
+    key = row["schedule_key"]
+    summary = updated["grading_summaries"][0]
+    expected_cost = runtime.calculate_observed_cost(
+        pricing=_pricing(),
+        provider=row["provider"],
+        model=row["model"],
+        input_token_count=result["input_token_count"],
+        output_token_count=result["output_token_count"],
+    )
+    assert original == before
+    assert updated["completed_schedule_keys"] == []
+    assert updated["blocked_schedule_keys"] == []
+    assert updated["ambiguous_schedule_keys"] == []
+    assert updated["hard_failure_schedule_keys"] == [key]
+    assert summary["quality_gate_passed"] is False
+    assert summary["hard_failures"] == {"workload_quality_gate_failed": 1}
+    assert updated["stop_reason"] == "hard_safety_failure"
+    assert updated["quality_gate_status"] == "failed"
+    assert updated["cost_comparison_eligibility"] is False
+    assert updated["aggregate_usage"]["provider_call_count"] == 1
+    assert updated["aggregate_usage"]["input_token_count"] == 11
+    assert updated["aggregate_usage"]["output_token_count"] == 7
+    assert updated["aggregate_usage"]["latency_ms"] == 12.5
+    assert Decimal(updated["aggregate_usage"]["observed_cost"]) == expected_cost
+    assert runtime.validate_checkpoint(
+        updated,
+        authorization=_authorization(),
+        pricing=_pricing(),
+        execution_at_utc=EXECUTION_TIME,
+        canary=_canary(),
+    )
+    serialized = runtime.serialize_checkpoint(
+        updated,
+        authorization=_authorization(),
+        pricing=_pricing(),
+        execution_at_utc=EXECUTION_TIME,
+        canary=_canary(),
+    )
+    serialized_keys = set(runtime._iter_keys(json.loads(serialized)))
+    assert "normalized_output" not in serialized_keys
+    assert "raw_response" not in serialized_keys
+
+    root, output = _temporary_repository(tmp_path)
+    path = output / "checkpoint.json"
+    kwargs = _persistence_kwargs(root)
+    runtime.write_initial_checkpoint(path, original, **kwargs)
+    prior = runtime.checkpoint_sha256(
+        original,
+        authorization=_authorization(),
+        pricing=_pricing(),
+        execution_at_utc=EXECUTION_TIME,
+        canary=_canary(),
+    )
+    runtime.replace_checkpoint_atomic(
+        path,
+        updated,
+        expected_prior_sha256=prior,
+        **kwargs,
+    )
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert runtime.load_checkpoint(path, **kwargs) == updated
 
 
 @pytest.mark.parametrize(
@@ -1217,10 +1327,23 @@ def test_operator_inputs_are_byte_identical_and_valid():
     )
 
 
-def test_real_reserved_artifacts_and_recovery_remain_absent():
+def test_real_reserved_artifacts_are_absent_or_exact_empty_incident():
     assert not REAL_RESULT_PATH.exists()
-    assert not REAL_CHECKPOINT_PATH.exists()
     assert not (ROOT / canary_owner.RECOVERY_006_STATUS_PATH).exists()
+    if not REAL_CHECKPOINT_PATH.exists():
+        return
+    assert REAL_CHECKPOINT_PATH.is_file()
+    assert not REAL_CHECKPOINT_PATH.is_symlink()
+    assert stat.S_IMODE(REAL_CHECKPOINT_PATH.stat().st_mode) == 0o600
+    incident = runtime.load_checkpoint(
+        REAL_CHECKPOINT_PATH,
+        repository_root=ROOT,
+        authorization=_authorization(),
+        pricing=_pricing(),
+        execution_at_utc=EXECUTION_TIME,
+        canary=_canary(),
+    )
+    assert incident == _empty()
 
 
 def test_runtime_authority_remains_zero():

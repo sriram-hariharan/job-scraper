@@ -172,6 +172,7 @@ _HARD_FAILURE_CATEGORIES = set(HARD_FAILURE_ORDER) | {
     "schema_invalid",
     "token_budget_exceeded",
     "unknown_provider_outcome",
+    "workload_quality_gate_failed",
 }
 _STOP_REASONS = {
     None,
@@ -1254,6 +1255,8 @@ def record_completed_call(
     )
     if cost_exceeded:
         failures["cost_ceiling_exceeded"] = 1
+    if not grade["quality_gate_passed"] and not failures:
+        failures["workload_quality_gate_failed"] = 1
     passed = bool(grade["quality_gate_passed"]) and not failures
     summary = _summary(
         scheduled=row,

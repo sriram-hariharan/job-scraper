@@ -7,11 +7,13 @@ import json
 import math
 from pathlib import Path
 import socket
+import stat
 from types import SimpleNamespace
 
 import pytest
 
 from src.evaluation import controlled_groq_canary_transport as transport
+from src.evaluation import controlled_groq_canary_evidence_runtime as evidence
 from src.evaluation import controlled_groq_provider_canary as canary
 from src.evaluation import controlled_provider_benchmark_harness as harness
 from src.evaluation.controlled_provider_benchmark_plan import (
@@ -926,16 +928,41 @@ def test_owner_has_no_database_subprocess_thread_or_artifact_write_reach():
 
 
 def test_no_result_or_checkpoint_artifact_is_written():
-    before = (
-        RESULT_PATH.exists(),
-        CHECKPOINT_PATH.exists(),
+    assert not RESULT_PATH.exists()
+    incident_bytes = (
+        CHECKPOINT_PATH.read_bytes() if CHECKPOINT_PATH.exists() else None
     )
+    if incident_bytes is not None:
+        assert CHECKPOINT_PATH.is_file()
+        assert not CHECKPOINT_PATH.is_symlink()
+        assert stat.S_IMODE(CHECKPOINT_PATH.stat().st_mode) == 0o600
+        pricing = json.loads(PRICING_PATH.read_text(encoding="utf-8"))
+        authorization = json.loads(
+            AUTHORIZATION_PATH.read_text(encoding="utf-8")
+        )
+        checkpoint = evidence.load_checkpoint(
+            CHECKPOINT_PATH,
+            repository_root=ROOT,
+            authorization=authorization,
+            pricing=pricing,
+            execution_at_utc=EXECUTION_TIME,
+            canary=_canary(),
+        )
+        assert checkpoint == evidence.build_empty_checkpoint(
+            authorization=authorization,
+            pricing=pricing,
+            execution_at_utc=EXECUTION_TIME,
+            canary=_canary(),
+        )
 
     _execute()
 
-    assert before == (False, False)
     assert not RESULT_PATH.exists()
-    assert not CHECKPOINT_PATH.exists()
+    if incident_bytes is None:
+        assert not CHECKPOINT_PATH.exists()
+    else:
+        assert CHECKPOINT_PATH.read_bytes() == incident_bytes
+        assert stat.S_IMODE(CHECKPOINT_PATH.stat().st_mode) == 0o600
 
 
 def test_operator_inputs_are_unchanged_and_still_validate():

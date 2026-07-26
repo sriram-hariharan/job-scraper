@@ -55,6 +55,20 @@ IDENTITY_SHA = (
 INCIDENT_SHA = (
     "63be65e2db0f6a2877f79d8a8927692175abec949ea596fc5b86f3ae0b7f75ad"
 )
+RUN_002_ARTIFACT_SHA256 = {
+    "pricing": (
+        "1ff5154cc369e3b29cca238db78b35d88cf83538f46f04a04a08bc6a4b5823f4"
+    ),
+    "authorization": (
+        "a9f8b67bbe48965b669f9f56209ef6ca4127e07fad29377db624adb9cf018133"
+    ),
+    "checkpoint": (
+        "2b0f54607b6a818bdadb2e0acada644ee9ded78bfeb7f1808cad7b99b3befe72"
+    ),
+    "result": (
+        "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
+    ),
+}
 _PRICING = json.loads(PRICING_001.read_text(encoding="utf-8"))
 _BASE_CASES = {
     case["workload_id"]: case
@@ -657,8 +671,11 @@ def test_incident_and_real_run002_artifacts_remain_protected():
     )
     assert CHECKPOINT_001.read_bytes() == before
     assert not RESULT_001.exists()
-    assert all(
-        not (ROOT / artifact).exists()
-        for artifact in identity.RUN_002_ARTIFACT_PATHS.values()
-    )
+    for kind, relative_path in identity.RUN_002_ARTIFACT_PATHS.items():
+        path = ROOT / relative_path
+        assert path.is_file() and not path.is_symlink()
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert sha256(path.read_bytes()).hexdigest() == (
+            RUN_002_ARTIFACT_SHA256[kind]
+        )
     assert not (ROOT / canary.RECOVERY_006_STATUS_PATH).exists()

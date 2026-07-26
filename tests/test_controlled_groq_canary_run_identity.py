@@ -53,6 +53,20 @@ TRANSPORT_SHA256 = (
 INCIDENT_SHA256 = (
     "63be65e2db0f6a2877f79d8a8927692175abec949ea596fc5b86f3ae0b7f75ad"
 )
+RUN_002_ARTIFACT_SHA256 = {
+    "pricing": (
+        "1ff5154cc369e3b29cca238db78b35d88cf83538f46f04a04a08bc6a4b5823f4"
+    ),
+    "authorization": (
+        "a9f8b67bbe48965b669f9f56209ef6ca4127e07fad29377db624adb9cf018133"
+    ),
+    "checkpoint": (
+        "2b0f54607b6a818bdadb2e0acada644ee9ded78bfeb7f1808cad7b99b3befe72"
+    ),
+    "result": (
+        "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
+    ),
+}
 
 
 def _contract():
@@ -148,7 +162,7 @@ def test_schedule_bounds_and_model_assignments_remain_exact():
     assert contract["request_bounds"]["maximum_requests_per_case"] == 1
 
 
-def test_reserved_artifact_paths_are_exact_and_absent():
+def test_reserved_artifact_paths_are_exact_and_terminal_evidence_is_immutable():
     assert _contract()["future_artifact_identities"] == {
         "pricing": (
             "outputs/provider_benchmark/phase11_groq_canary_pricing_002.json"
@@ -165,10 +179,13 @@ def test_reserved_artifact_paths_are_exact_and_absent():
             "outputs/provider_benchmark/phase11_groq_canary_result_002.json"
         ),
     }
-    assert all(
-        not (ROOT / path).exists()
-        for path in identity.RUN_002_ARTIFACT_PATHS.values()
-    )
+    for kind, relative_path in identity.RUN_002_ARTIFACT_PATHS.items():
+        path = ROOT / relative_path
+        assert path.is_file() and not path.is_symlink()
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert sha256(path.read_bytes()).hexdigest() == (
+            RUN_002_ARTIFACT_SHA256[kind]
+        )
 
 
 def test_incident_checkpoint_is_valid_empty_secure_and_unchanged():

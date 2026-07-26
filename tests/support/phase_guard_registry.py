@@ -140,6 +140,11 @@ PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES = {
     "tests/test_controlled_groq_canary_run_evidence_runtime.py",
 }
 
+PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES = {
+    "src/evaluation/controlled_groq_canary_run_003_plan.py",
+    "tests/test_controlled_groq_canary_run_003_plan.py",
+}
+
 PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
     "tests/test_rag_endpoint_behavior.py",
 }
@@ -1476,6 +1481,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES
         | PHASE11_STEP8Y_GROQ_CANARY_RUN_IDENTITY_FILES
         | PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES
+        | PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
 

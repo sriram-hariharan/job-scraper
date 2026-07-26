@@ -121,6 +121,8 @@ def test_protected_runtime_files_are_unchanged():
 
 def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
+        "src/evaluation/controlled_groq_canary_run_identity.py",
+        "tests/test_controlled_groq_canary_run_identity.py",
         "src/app/auth_ui.py",
         "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
         "tests/test_phase110b_generate_suggestions_loader_static_only.py",
@@ -883,6 +885,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     if (
         set(changed_runtime_files)
         == phase11_step8v_groq_canary_evidence_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8y_groq_canary_run_identity_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_identity.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8y_groq_canary_run_identity_runtime_files
     ):
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")

@@ -1008,6 +1008,7 @@ def test_no_production_source_imports_the_transport_owner():
             references.append(path.relative_to(ROOT).as_posix())
 
     assert references == [
+        "src/evaluation/controlled_groq_canary_run_identity.py",
         "src/evaluation/controlled_groq_canary_evidence_runtime.py"
     ]
 

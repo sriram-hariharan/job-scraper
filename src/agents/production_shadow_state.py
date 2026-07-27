@@ -8,7 +8,7 @@ import re
 from typing import Any, Dict, Mapping, TypedDict
 
 
-PRODUCTION_SHADOW_STATE_VERSION = "production-shadow-artifact-state-v2"
+PRODUCTION_SHADOW_STATE_VERSION = "production-shadow-artifact-state-v3"
 _IDENTITY = re.compile(r"[A-Za-z0-9_.:@/-]{1,200}")
 _PROHIBITED_KEYS = {
     "resume_text",
@@ -44,6 +44,15 @@ _ALLOWED_TOP_LEVEL = {
     "tailoring_decision_facts",
     "operator_review_facts",
     "parity",
+    "deterministic_owner_enabled",
+    "deterministic_owner_invocation_attempted",
+    "deterministic_owner_invocation_completed",
+    "deterministic_owner_invocation_count",
+    "deterministic_owner_invocation_latency_ms",
+    "deterministic_owner_status",
+    "deterministic_owner_failure_code",
+    "rendered_priority_facts",
+    "direct_owner_parity",
     "provider_metadata",
     "node_statuses",
     "node_latencies_ms",
@@ -85,6 +94,15 @@ class ProductionShadowState(TypedDict):
     tailoring_decision_facts: Dict[str, Any]
     operator_review_facts: Dict[str, Any]
     parity: Dict[str, Any]
+    deterministic_owner_enabled: bool
+    deterministic_owner_invocation_attempted: bool
+    deterministic_owner_invocation_completed: bool
+    deterministic_owner_invocation_count: int
+    deterministic_owner_invocation_latency_ms: int
+    deterministic_owner_status: str
+    deterministic_owner_failure_code: str
+    rendered_priority_facts: Dict[str, Any]
+    direct_owner_parity: Dict[str, Any]
     provider_metadata: Dict[str, Any]
     node_statuses: Dict[str, str]
     node_latencies_ms: Dict[str, int]
@@ -218,6 +236,8 @@ def validate_production_shadow_state(
         "tailoring_decision_facts",
         "operator_review_facts",
         "parity",
+        "rendered_priority_facts",
+        "direct_owner_parity",
         "provider_metadata",
         "node_statuses",
         "node_latencies_ms",
@@ -235,6 +255,32 @@ def validate_production_shadow_state(
         raise ValueError(
             "production_shadow_state_invalid:operator_review_required"
         )
+    for field in (
+        "deterministic_owner_enabled",
+        "deterministic_owner_invocation_attempted",
+        "deterministic_owner_invocation_completed",
+    ):
+        if not isinstance(detached.get(field), bool):
+            raise ValueError(f"production_shadow_state_invalid:{field}")
+    invocation_count = detached.get("deterministic_owner_invocation_count")
+    latency_ms = detached.get("deterministic_owner_invocation_latency_ms")
+    if (
+        isinstance(invocation_count, bool)
+        or not isinstance(invocation_count, int)
+        or invocation_count not in {0, 1}
+        or isinstance(latency_ms, bool)
+        or not isinstance(latency_ms, int)
+        or latency_ms < 0
+        or latency_ms > 3_600_000
+    ):
+        raise ValueError("production_shadow_state_owner_metrics_invalid")
+    for field in (
+        "deterministic_owner_status",
+        "deterministic_owner_failure_code",
+    ):
+        value = str(detached.get(field) or "")
+        if not re.fullmatch(r"[a-z0-9_.-]{0,120}", value):
+            raise ValueError(f"production_shadow_state_invalid:{field}")
     return detached  # type: ignore[return-value]
 
 
@@ -262,6 +308,17 @@ def build_initial_production_shadow_state(
         "tailoring_decision_facts": {},
         "operator_review_facts": {},
         "parity": {},
+        "deterministic_owner_enabled": bool(
+            projection.get("deterministic_owner_enabled")
+        ),
+        "deterministic_owner_invocation_attempted": False,
+        "deterministic_owner_invocation_completed": False,
+        "deterministic_owner_invocation_count": 0,
+        "deterministic_owner_invocation_latency_ms": 0,
+        "deterministic_owner_status": "owner_not_enabled",
+        "deterministic_owner_failure_code": "",
+        "rendered_priority_facts": {},
+        "direct_owner_parity": {},
         "provider_metadata": {},
         "node_statuses": {},
         "node_latencies_ms": {},

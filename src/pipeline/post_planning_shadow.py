@@ -23,11 +23,14 @@ from src.utils.logging import get_logger
 
 SHADOW_FLAG = "APPLYLENS_DURABLE_EVIDENCE_CHAIN_SHADOW_ENABLED"
 PRODUCTION_SHADOW_FLAG = "APPLYLENS_ARTIFACT_ONLY_PRODUCTION_SHADOW_ENABLED"
+DETERMINISTIC_OWNER_FLAG = (
+    "APPLYLENS_PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_ENABLED"
+)
 SHADOW_HOOK_VERSION = "applylens-post-planning-shadow-v1"
 AUTHORITATIVE_FACTS_VERSION = "applylens-shadow-authoritative-facts-v1"
 SHADOW_EXECUTION_VERSION = "evidence-chain-shadow-execution-v1"
 SHADOW_PARITY_VERSION = "evidence-chain-shadow-parity-v1"
-PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v2"
+PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v3"
 MAX_SHADOW_JOBS = 25
 MAX_FACTS_BYTES = 256_000
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -51,6 +54,7 @@ _PRODUCTION_SHADOW_NODES = [
     "compare_authoritative_parity",
     "finalize_shadow_observation",
 ]
+_PRODUCTION_OWNER_NODE = "invoke_job_prioritization_owner"
 _logger = get_logger(__name__)
 _CLEANUP_CATEGORIES = {
     "process_terminate_failed",
@@ -108,6 +112,18 @@ def production_shadow_enabled(
 ) -> bool:
     source = os.environ if env is None else env
     return str(source.get(PRODUCTION_SHADOW_FLAG, "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def deterministic_owner_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    source = os.environ if env is None else env
+    return str(source.get(DETERMINISTIC_OWNER_FLAG, "") or "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -404,7 +420,7 @@ def _shadow_subprocess_environment() -> dict[str, str]:
     for key, value in os.environ.items():
         normalized = key.upper()
         if (
-            normalized == SHADOW_FLAG
+            normalized in {SHADOW_FLAG, DETERMINISTIC_OWNER_FLAG}
             or normalized == "DATABASE_URL"
             or "DURABLE" in normalized
             or "LLM" in normalized
@@ -720,6 +736,12 @@ def _classify_production_shadow_payload(
     categorical_total = 0
     categorical_matched = 0
     incomparable_total = 0
+    owner_gate_enabled = bool(payload.get("deterministic_owner_enabled"))
+    owner_attempted = 0
+    owner_completed = 0
+    owner_invocations = 0
+    owner_max_latency_ms = 0
+    owner_status_counts: dict[str, int] = {}
     for ordinal, row in enumerate(results):
         if not isinstance(row, Mapping):
             return {**aggregates, "classification": "shadow_execution_failure"}
@@ -737,12 +759,69 @@ def _classify_production_shadow_payload(
             "parity_mismatch",
         }:
             return {**aggregates, "classification": "shadow_execution_failure"}
+        row_owner_enabled = bool(row.get("deterministic_owner_enabled"))
+        expected_nodes = list(_PRODUCTION_SHADOW_NODES)
+        if row_owner_enabled:
+            expected_nodes.insert(
+                expected_nodes.index("project_tailoring_decision"),
+                _PRODUCTION_OWNER_NODE,
+            )
         if (
-            row.get("completed_node_order") != _PRODUCTION_SHADOW_NODES
+            row_owner_enabled is not owner_gate_enabled
+            or row.get("completed_node_order") != expected_nodes
             or row.get("pending_node") != "operator_review"
             or row.get("operator_review_required") is not True
         ):
             return {**aggregates, "classification": "shadow_execution_failure"}
+        owner_status = str(row.get("deterministic_owner_status") or "")
+        owner_count = _bounded_int(
+            row.get("deterministic_owner_invocation_count")
+        )
+        if owner_count > 1:
+            return {
+                **aggregates,
+                "classification": "shadow_safety_violation",
+                "safety_violation_count": 1,
+            }
+        if not row_owner_enabled:
+            if (
+                owner_status != "owner_not_enabled"
+                or owner_count != 0
+                or row.get("deterministic_owner_invocation_attempted")
+                is not False
+                or row.get("deterministic_owner_invocation_completed")
+                is not False
+            ):
+                return {
+                    **aggregates,
+                    "classification": "shadow_safety_violation",
+                    "safety_violation_count": 1,
+                }
+        elif owner_status not in {
+            "owner_input_incomplete",
+            "owner_invocation_completed",
+            "owner_parity_passed",
+            "owner_parity_mismatch",
+            "owner_output_invalid",
+            "owner_invocation_failed",
+        }:
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        owner_status_counts[owner_status] = (
+            owner_status_counts.get(owner_status, 0) + 1
+        )
+        owner_attempted += int(
+            row.get("deterministic_owner_invocation_attempted") is True
+        )
+        owner_completed += int(
+            row.get("deterministic_owner_invocation_completed") is True
+        )
+        owner_invocations += owner_count
+        owner_max_latency_ms = max(
+            owner_max_latency_ms,
+            _bounded_int(
+                row.get("deterministic_owner_invocation_latency_ms")
+            ),
+        )
         for field in (
             "provider_call_count",
             "production_write_count",
@@ -881,6 +960,33 @@ def _classify_production_shadow_payload(
             "truncated_job_count": max(0, len(results) - len(parity_jobs)),
             "jobs": parity_jobs,
         },
+        "deterministic_owner": {
+            "version": "production-shadow-owner-observation-v1",
+            "gate_enabled": owner_gate_enabled,
+            "job_count": len(results),
+            "invocation_attempted_count": owner_attempted,
+            "invocation_completed_count": owner_completed,
+            "invocation_count": owner_invocations,
+            "owner_not_enabled_count": owner_status_counts.get(
+                "owner_not_enabled", 0
+            ),
+            "owner_input_incomplete_count": owner_status_counts.get(
+                "owner_input_incomplete", 0
+            ),
+            "owner_parity_passed_count": owner_status_counts.get(
+                "owner_parity_passed", 0
+            ),
+            "owner_parity_mismatch_count": owner_status_counts.get(
+                "owner_parity_mismatch", 0
+            ),
+            "owner_output_invalid_count": owner_status_counts.get(
+                "owner_output_invalid", 0
+            ),
+            "owner_invocation_failed_count": owner_status_counts.get(
+                "owner_invocation_failed", 0
+            ),
+            "max_invocation_latency_ms": owner_max_latency_ms,
+        },
         "max_job_graph_latency_ms": max_latency,
     }
 
@@ -890,6 +996,7 @@ class PostPlanningShadowLifecycle:
     enabled: bool
     armed: bool
     production_graph: bool = False
+    deterministic_owner: bool = False
     owner_id: str = ""
     pipeline_run_id: str = ""
     context_id: str = ""
@@ -958,6 +1065,8 @@ class PostPlanningShadowLifecycle:
                     str(output / "operator_review_recommendations.csv"),
                 ]
             )
+            if self.deterministic_owner:
+                command.append("--invoke-job-prioritization-owner")
         else:
             command.extend(
                 ["--resume-evidence", str(self.projection_path)]
@@ -1351,6 +1460,14 @@ class PostPlanningShadowLifecycle:
                     and isinstance(outcome.get("production_parity"), Mapping)
                     else None
                 ),
+                deterministic_owner=(
+                    dict(outcome["deterministic_owner"])
+                    if self.production_graph
+                    and isinstance(
+                        outcome.get("deterministic_owner"), Mapping
+                    )
+                    else None
+                ),
             )
             return store.append(record).status
         except Exception as exc:
@@ -1415,6 +1532,9 @@ def prepare_post_planning_shadow(
             initial_classification="shadow_disabled",
         )
     production_graph = production_shadow_enabled(source)
+    deterministic_owner = bool(
+        production_graph and deterministic_owner_enabled(source)
+    )
     owner_id = _identity(source.get("JOB_STACK_OWNER_USER_ID"))
     pipeline_run_id = _identity(source.get("JOB_APP_PIPELINE_RUN_ID"))
     explicit_context = str(
@@ -1442,6 +1562,7 @@ def prepare_post_planning_shadow(
         enabled=True,
         armed=True,
         production_graph=production_graph,
+        deterministic_owner=deterministic_owner,
         owner_id=owner_id,
         pipeline_run_id=pipeline_run_id,
         context_id=context_id,

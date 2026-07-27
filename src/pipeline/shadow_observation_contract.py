@@ -108,6 +108,7 @@ class ShadowObservationRecord:
     cleanup_complete: bool | None
     process_liveness_confirmed: bool | None
     production_parity: dict[str, Any] | None = None
+    deterministic_owner: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         _validate_mapping(asdict(self))
@@ -248,6 +249,50 @@ def _validate_production_parity(value: Any) -> None:
                     )
 
 
+def _validate_deterministic_owner(value: Any) -> None:
+    if value is None:
+        return
+    count_fields = {
+        "job_count",
+        "invocation_attempted_count",
+        "invocation_completed_count",
+        "invocation_count",
+        "owner_not_enabled_count",
+        "owner_input_incomplete_count",
+        "owner_parity_passed_count",
+        "owner_parity_mismatch_count",
+        "owner_output_invalid_count",
+        "owner_invocation_failed_count",
+    }
+    if not isinstance(value, Mapping) or set(value) != {
+        "version",
+        "gate_enabled",
+        *count_fields,
+        "max_invocation_latency_ms",
+    }:
+        raise ObservationContractError("observation_owner_invalid")
+    if (
+        value["version"] != "production-shadow-owner-observation-v1"
+        or not isinstance(value["gate_enabled"], bool)
+    ):
+        raise ObservationContractError("observation_owner_invalid")
+    for field in count_fields:
+        _strict_int(field, value[field], maximum=25, nullable=False)
+    _strict_int(
+        "max_invocation_latency_ms",
+        value["max_invocation_latency_ms"],
+        maximum=MAX_LATENCY_MS,
+        nullable=False,
+    )
+    if (
+        value["invocation_count"] > value["job_count"]
+        or value["invocation_completed_count"]
+        > value["invocation_attempted_count"]
+        or value["invocation_attempted_count"] > value["job_count"]
+    ):
+        raise ObservationContractError("observation_owner_invalid")
+
+
 def _validate_mapping(payload: Mapping[str, Any]) -> None:
     if set(payload) != _OBSERVATION_FIELD_SET or len(payload) != len(
         OBSERVATION_FIELDS
@@ -315,6 +360,7 @@ def _validate_mapping(payload: Mapping[str, Any]) -> None:
         if isinstance(value, float) and not math.isfinite(value):
             raise ObservationContractError("observation_numeric_invalid")
     _validate_production_parity(payload["production_parity"])
+    _validate_deterministic_owner(payload["deterministic_owner"])
 
 
 def serialize_observation(record: ShadowObservationRecord) -> bytes:
@@ -368,6 +414,8 @@ def parse_observation_json(rendered: str | bytes) -> ShadowObservationRecord:
         raise ObservationContractError("observation_json_invalid")
     if "production_parity" not in payload:
         payload = {**payload, "production_parity": None}
+    if "deterministic_owner" not in payload:
+        payload = {**payload, "deterministic_owner": None}
     try:
         return ShadowObservationRecord(**payload)
     except TypeError as exc:

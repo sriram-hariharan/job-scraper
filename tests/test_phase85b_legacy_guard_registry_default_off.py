@@ -23,6 +23,7 @@ from tests.support.phase_guard_registry import (
     PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES,
     PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES,
     PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
+    PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1412,6 +1413,19 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES
         | PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
+        | PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
+    )
+    assert PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES == {
+        "src/agents/production_shadow_artifact_adapter.py",
+        "src/agents/production_shadow_graph.py",
+        "src/agents/production_shadow_job_priority_owner.py",
+        "src/agents/production_shadow_state.py",
+        "tests/test_phase12b_artifact_only_production_shadow_foundation.py",
+        "tests/test_phase12d_first_deterministic_production_owner.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
     )
     assert PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES == {
         "src/evaluation/provider_benchmark_contract.py",

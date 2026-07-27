@@ -188,6 +188,16 @@ PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
     "tests/test_rag_endpoint_behavior.py",
 }
 
+PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES = {
+    "src/agents/production_shadow_artifact_adapter.py",
+    "src/agents/production_shadow_graph.py",
+    "src/agents/production_shadow_job_priority_owner.py",
+    "src/agents/production_shadow_state.py",
+    "tests/test_phase12b_artifact_only_production_shadow_foundation.py",
+    "tests/test_phase12d_first_deterministic_production_owner.py",
+}
+
+
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
     value = str(path).strip().replace("\\", "/")
@@ -1527,6 +1537,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES
         | PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
+        | PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
     )
 
 

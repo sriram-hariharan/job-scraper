@@ -327,11 +327,61 @@ def _project_one_job(
     )
     if operator_reasons:
         operator_facts["operator_review_reason_codes"] = operator_reasons
+    owner_input_facts = {
+        "job_id": job_id,
+        "company": _text(queue.get("job_company") or queue.get("company")),
+        "title": _text(queue.get("job_title") or queue.get("title")),
+        "action": queue_action,
+        "deterministic_winner_score": _text(
+            queue.get("deterministic_winner_score")
+            or queue.get("selector_winner_score")
+            or queue.get("winner_score")
+            or queue.get("resolved_score")
+        ),
+        "deterministic_winner_available": _text(
+            queue.get("deterministic_winner_available")
+        ),
+        "fallback_only_no_deterministic_match": _text(
+            queue.get("fallback_only_no_deterministic_match")
+        ),
+        "packet_generation_allowed": _text(
+            queue.get("packet_generation_allowed")
+        ),
+        "packet_generation_block_reason": _text(
+            queue.get("packet_generation_block_reason")
+        ),
+    }
+    for field in ("source_recommendation", "critic_decision"):
+        value = _text(queue.get(field))
+        if value:
+            owner_input_facts[field] = value
+    owner_authoritative_facts: Dict[str, Any] = {
+        "job_id": job_id,
+    }
+    for field in ("advisory_priority", "existing_action"):
+        value = _text(priority.get(field))
+        if value:
+            owner_authoritative_facts[field] = value
+    if advisory_reasons:
+        owner_authoritative_facts[
+            "advisory_reason_codes"
+        ] = advisory_reasons
+    priority_packet_allowed = _optional_bool(
+        priority, "packet_generation_allowed"
+    )
+    if priority_packet_allowed is not None:
+        owner_authoritative_facts[
+            "packet_generation_allowed"
+        ] = priority_packet_allowed
     return {
         **seed,
         "graph_invocation_id": f"production-shadow:{invocation}",
         "authoritative_artifacts": deepcopy(dict(artifact_identities)),
         "authoritative_parity_facts": deepcopy(authoritative_facts),
+        "deterministic_owner_input_facts": owner_input_facts,
+        "deterministic_owner_authoritative_facts": (
+            owner_authoritative_facts
+        ),
         "identity_facts": {"job_id": job_id},
         "resume_selection_facts": {
             "selected_resume_id": packet_resume,

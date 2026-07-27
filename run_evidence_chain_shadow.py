@@ -99,6 +99,9 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run explicit read-only evidence shadow.")
     parser.add_argument("--execute-shadow", action="store_true")
     parser.add_argument("--production-shadow", action="store_true")
+    parser.add_argument(
+        "--invoke-job-prioritization-owner", action="store_true"
+    )
     parser.add_argument("--job-corpus")
     parser.add_argument("--best-resume")
     parser.add_argument("--execution-queue")
@@ -119,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if not args.execute_shadow:
         raise CommandInputError("execute_shadow_acknowledgement_required")
+    if args.invoke_job_prioritization_owner and not args.production_shadow:
+        raise CommandInputError("production_shadow_required_for_owner")
     required = (
         ("job_corpus", args.job_corpus),
         ("best_resume", args.best_resume),
@@ -161,6 +166,9 @@ def main(argv: list[str] | None = None) -> int:
             owner_user_id=owner_id,
             pipeline_run_id=pipeline_run_id,
             context_id=context_id,
+            deterministic_owner_enabled=bool(
+                args.invoke_job_prioritization_owner
+            ),
             artifact_paths={
                 "job_corpus": args.job_corpus,
                 "best_resume": args.best_resume,

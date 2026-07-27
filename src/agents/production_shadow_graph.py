@@ -21,7 +21,8 @@ from src.agents.production_shadow_parity import (
 )
 
 
-PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v2"
+PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v3"
+PRODUCTION_PRIORITY_OWNER_NODE = "invoke_job_prioritization_owner"
 PRODUCTION_SHADOW_NODE_ORDER = (
     "load_authoritative_identity",
     "project_resume_selection",
@@ -32,6 +33,19 @@ PRODUCTION_SHADOW_NODE_ORDER = (
     "finalize_shadow_observation",
 )
 MAX_PRODUCTION_SHADOW_JOBS = 25
+
+
+def production_shadow_node_order(
+    deterministic_owner_enabled: bool,
+) -> tuple[str, ...]:
+    if not deterministic_owner_enabled:
+        return PRODUCTION_SHADOW_NODE_ORDER
+    nodes = list(PRODUCTION_SHADOW_NODE_ORDER)
+    nodes.insert(
+        nodes.index("project_tailoring_decision"),
+        PRODUCTION_PRIORITY_OWNER_NODE,
+    )
+    return tuple(nodes)
 
 
 def _projection(state: Mapping[str, Any]) -> Dict[str, Any]:
@@ -46,8 +60,11 @@ def _complete_delta(
     **values: Any,
 ) -> Dict[str, Any]:
     completed = list(state.get("completed_nodes") or [])
-    expected = list(PRODUCTION_SHADOW_NODE_ORDER)[: len(completed)]
-    if completed != expected or node != PRODUCTION_SHADOW_NODE_ORDER[len(completed)]:
+    node_order = production_shadow_node_order(
+        bool(state.get("deterministic_owner_enabled"))
+    )
+    expected = list(node_order)[: len(completed)]
+    if completed != expected or node != node_order[len(completed)]:
         raise ValueError("production_shadow_node_order_invalid")
     statuses = deepcopy(dict(state.get("node_statuses") or {}))
     statuses[node] = "completed"
@@ -135,6 +152,55 @@ def _project_tailoring_decision(
     )
 
 
+def _invoke_job_prioritization_owner(
+    state: ProductionShadowState,
+) -> Dict[str, Any]:
+    started = time.perf_counter_ns()
+    projection = _projection(state)
+    from src.agents.production_shadow_job_priority_owner import (
+        invoke_job_prioritization_owner,
+    )
+
+    outcome = invoke_job_prioritization_owner(
+        input_facts=dict(
+            projection.get("deterministic_owner_input_facts") or {}
+        ),
+        authoritative_priority_facts=dict(
+            projection.get(
+                "deterministic_owner_authoritative_facts"
+            )
+            or {}
+        ),
+    )
+    return _complete_delta(
+        state,
+        PRODUCTION_PRIORITY_OWNER_NODE,
+        started,
+        deterministic_owner_invocation_attempted=bool(
+            outcome.get("invocation_attempted")
+        ),
+        deterministic_owner_invocation_completed=bool(
+            outcome.get("invocation_completed")
+        ),
+        deterministic_owner_invocation_count=int(
+            outcome.get("invocation_count") or 0
+        ),
+        deterministic_owner_invocation_latency_ms=max(
+            0, int(outcome.get("invocation_latency_ms") or 0)
+        ),
+        deterministic_owner_status=str(outcome.get("status") or "")[:120],
+        deterministic_owner_failure_code=str(
+            outcome.get("failure_code") or ""
+        )[:120],
+        rendered_priority_facts=deepcopy(
+            dict(outcome.get("rendered_priority_facts") or {})
+        ),
+        direct_owner_parity=deepcopy(
+            dict(outcome.get("direct_owner_parity") or {})
+        ),
+    )
+
+
 def _project_operator_review(
     state: ProductionShadowState,
 ) -> Dict[str, Any]:
@@ -213,7 +279,9 @@ def _finalize_shadow_observation(
     )
 
 
-def build_production_shadow_graph() -> Any:
+def build_production_shadow_graph(
+    *, deterministic_owner_enabled: bool = False
+) -> Any:
     """Build the real six-node LangGraph without a checkpointer or writer."""
 
     from langgraph.graph import END, StateGraph
@@ -222,6 +290,11 @@ def build_production_shadow_graph() -> Any:
     graph.add_node("load_authoritative_identity", _load_authoritative_identity)
     graph.add_node("project_resume_selection", _project_resume_selection)
     graph.add_node("project_queue_priority", _project_queue_priority)
+    if deterministic_owner_enabled:
+        graph.add_node(
+            PRODUCTION_PRIORITY_OWNER_NODE,
+            _invoke_job_prioritization_owner,
+        )
     graph.add_node("project_tailoring_decision", _project_tailoring_decision)
     graph.add_node("project_operator_review", _project_operator_review)
     graph.add_node(
@@ -229,9 +302,10 @@ def build_production_shadow_graph() -> Any:
     )
     graph.add_node("finalize_shadow_observation", _finalize_shadow_observation)
     graph.set_entry_point("load_authoritative_identity")
-    for left, right in zip(
-        PRODUCTION_SHADOW_NODE_ORDER, PRODUCTION_SHADOW_NODE_ORDER[1:]
-    ):
+    node_order = production_shadow_node_order(
+        deterministic_owner_enabled
+    )
+    for left, right in zip(node_order, node_order[1:]):
         graph.add_edge(left, right)
     graph.add_edge("finalize_shadow_observation", END)
     return graph
@@ -239,7 +313,10 @@ def build_production_shadow_graph() -> Any:
 
 def _bounded_result(state: Mapping[str, Any], graph_latency_ms: int) -> Dict[str, Any]:
     validated = validate_production_shadow_state(state)
-    if tuple(validated["completed_nodes"]) != PRODUCTION_SHADOW_NODE_ORDER:
+    expected_order = production_shadow_node_order(
+        validated["deterministic_owner_enabled"]
+    )
+    if tuple(validated["completed_nodes"]) != expected_order:
         raise ValueError("production_shadow_completed_nodes_invalid")
     return {
         "status": "completed_at_operator_review",
@@ -257,6 +334,31 @@ def _bounded_result(state: Mapping[str, Any], graph_latency_ms: int) -> Dict[str
         ),
         "operator_review_facts": deepcopy(validated["operator_review_facts"]),
         "parity": deepcopy(validated["parity"]),
+        "deterministic_owner_enabled": validated[
+            "deterministic_owner_enabled"
+        ],
+        "deterministic_owner_invocation_attempted": validated[
+            "deterministic_owner_invocation_attempted"
+        ],
+        "deterministic_owner_invocation_completed": validated[
+            "deterministic_owner_invocation_completed"
+        ],
+        "deterministic_owner_invocation_count": validated[
+            "deterministic_owner_invocation_count"
+        ],
+        "deterministic_owner_invocation_latency_ms": validated[
+            "deterministic_owner_invocation_latency_ms"
+        ],
+        "deterministic_owner_status": validated[
+            "deterministic_owner_status"
+        ],
+        "deterministic_owner_failure_code": validated[
+            "deterministic_owner_failure_code"
+        ],
+        "rendered_priority_facts": deepcopy(
+            validated["rendered_priority_facts"]
+        ),
+        "direct_owner_parity": deepcopy(validated["direct_owner_parity"]),
         "provider_metadata": deepcopy(validated["provider_metadata"]),
         "completed_node_order": list(validated["completed_nodes"]),
         "node_statuses": deepcopy(validated["node_statuses"]),
@@ -287,6 +389,7 @@ def execute_production_shadow_graph(
     pipeline_run_id: str,
     context_id: str,
     artifact_paths: Mapping[str, Any],
+    deterministic_owner_enabled: bool = False,
     _compiled_graph: Any = None,
 ) -> Dict[str, Any]:
     """Execute bounded artifact projection and verify source bytes are unchanged."""
@@ -319,6 +422,10 @@ def execute_production_shadow_graph(
             "mutation_count": 0,
             "application_count": 0,
             "ats_count": 0,
+            "deterministic_owner_enabled": bool(
+                deterministic_owner_enabled
+            ),
+            "deterministic_owner_invocation_count": 0,
             "results": [
                 {
                     "job_id": str(job_id or "").strip(),
@@ -329,7 +436,13 @@ def execute_production_shadow_graph(
             ],
         }
 
-    graph = _compiled_graph or build_production_shadow_graph().compile()
+    for projection in adapted["projections"]:
+        projection["deterministic_owner_enabled"] = bool(
+            deterministic_owner_enabled
+        )
+    graph = _compiled_graph or build_production_shadow_graph(
+        deterministic_owner_enabled=bool(deterministic_owner_enabled)
+    ).compile()
     indexed_results: list[tuple[int, Dict[str, Any]]] = [
         (int(row["request_index"]), dict(row))
         for row in adapted.get("rejections", [])
@@ -392,5 +505,12 @@ def execute_production_shadow_graph(
         "mutation_count": 0,
         "application_count": 0,
         "ats_count": 0,
+        "deterministic_owner_enabled": bool(
+            deterministic_owner_enabled
+        ),
+        "deterministic_owner_invocation_count": sum(
+            int(row.get("deterministic_owner_invocation_count") or 0)
+            for row in results
+        ),
         "results": results,
     }

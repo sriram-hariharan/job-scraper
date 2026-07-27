@@ -70,11 +70,18 @@ def _artifacts(tmp_path: Path, *, jobs: int = 1) -> dict[str, Path]:
         [
             {
                 "job_doc_id": job,
+                "job_company": "Synthetic Co",
+                "job_title": "Synthetic Engineer",
                 "queue_rank": index + 1,
                 "action": "REVIEW",
                 "winner_resume": f"resume-{index}",
                 "resolved_resume": f"resume-{index}",
                 "requires_manual_review": "true",
+                "deterministic_winner_score": "0.650000",
+                "deterministic_winner_available": "true",
+                "fallback_only_no_deterministic_match": "false",
+                "packet_generation_allowed": "true",
+                "packet_generation_block_reason": "",
             }
             for index, job in enumerate(identities)
         ],
@@ -97,7 +104,9 @@ def _artifacts(tmp_path: Path, *, jobs: int = 1) -> dict[str, Path]:
             {
                 "job_id": job,
                 "advisory_priority": "manual_review",
-                "advisory_reason_codes": "review_requested",
+                "advisory_reason_codes": "borderline_deterministic_score",
+                "existing_action": "REVIEW",
+                "packet_generation_allowed": "true",
             }
             for job in identities
         ],

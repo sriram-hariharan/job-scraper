@@ -16,15 +16,19 @@ from src.agents.production_shadow_state import (
     build_initial_production_shadow_state,
     validate_production_shadow_state,
 )
+from src.agents.production_shadow_parity import (
+    compare_production_shadow_parity,
+)
 
 
-PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v1"
+PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v2"
 PRODUCTION_SHADOW_NODE_ORDER = (
     "load_authoritative_identity",
     "project_resume_selection",
     "project_queue_priority",
     "project_tailoring_decision",
     "project_operator_review",
+    "compare_authoritative_parity",
     "finalize_shadow_observation",
 )
 MAX_PRODUCTION_SHADOW_JOBS = 25
@@ -93,22 +97,28 @@ def _project_queue_priority(
     rank = facts.get("queue_rank")
     action = str(facts.get("queue_action") or "").strip()
     priority = str(facts.get("advisory_priority") or "").strip()
-    if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+    if rank is not None and (
+        isinstance(rank, bool) or not isinstance(rank, int) or rank < 0
+    ):
         raise ValueError("production_shadow_queue_rank_invalid")
-    if not action or not priority:
-        raise ValueError("production_shadow_queue_priority_missing")
+    advisory_facts: Dict[str, Any] = {}
+    if priority:
+        advisory_facts["advisory_priority"] = priority
+    if facts.get("advisory_reason_codes"):
+        advisory_facts["advisory_reason_codes"] = deepcopy(
+            facts["advisory_reason_codes"]
+        )
+    if "requires_manual_review" in facts:
+        advisory_facts["requires_manual_review"] = facts[
+            "requires_manual_review"
+        ]
     return _complete_delta(
         state,
         "project_queue_priority",
         started,
         queue_rank=rank,
         queue_action=action,
-        advisory_priority_facts={
-            "advisory_priority": priority,
-            "advisory_reason_codes": deepcopy(
-                facts.get("advisory_reason_codes") or []
-            ),
-        },
+        advisory_priority_facts=advisory_facts,
     )
 
 
@@ -117,8 +127,6 @@ def _project_tailoring_decision(
 ) -> Dict[str, Any]:
     started = time.perf_counter_ns()
     facts = dict(_projection(state).get("tailoring_decision_facts") or {})
-    if not str(facts.get("tailoring_decision") or "").strip():
-        raise ValueError("production_shadow_tailoring_decision_missing")
     return _complete_delta(
         state,
         "project_tailoring_decision",
@@ -133,8 +141,7 @@ def _project_operator_review(
     started = time.perf_counter_ns()
     facts = dict(_projection(state).get("operator_review_facts") or {})
     if (
-        not str(facts.get("operator_review_lane") or "").strip()
-        or facts.get("operator_decision_consumed") is not False
+        facts.get("operator_decision_consumed") is not False
     ):
         raise ValueError("production_shadow_operator_review_invalid")
     return _complete_delta(
@@ -143,6 +150,50 @@ def _project_operator_review(
         started,
         operator_review_facts=deepcopy(facts),
         operator_review_required=True,
+    )
+
+
+def _compare_authoritative_parity(
+    state: ProductionShadowState,
+) -> Dict[str, Any]:
+    started = time.perf_counter_ns()
+    projection = _projection(state)
+    resume_facts = dict(projection.get("resume_selection_facts") or {})
+    advisory = dict(state.get("advisory_priority_facts") or {})
+    tailoring = dict(state.get("tailoring_decision_facts") or {})
+    operator = dict(state.get("operator_review_facts") or {})
+    shadow_facts: Dict[str, Any] = {
+        "job_id": state.get("job_id"),
+        "selected_resume_id": state.get("selected_resume_id"),
+    }
+    for field, value in (
+        ("packet_resume", resume_facts.get("packet_resume")),
+        ("queue_rank", state.get("queue_rank")),
+        ("action", state.get("queue_action")),
+        ("advisory_priority", advisory.get("advisory_priority")),
+        ("advisory_reason_codes", advisory.get("advisory_reason_codes")),
+        ("requires_manual_review", advisory.get("requires_manual_review")),
+        ("tailoring_decision", tailoring.get("tailoring_decision")),
+        ("tailoring_reason_codes", tailoring.get("tailoring_reason_codes")),
+        ("operator_review_lane", operator.get("operator_review_lane")),
+        (
+            "packet_generation_allowed",
+            operator.get("packet_generation_allowed"),
+        ),
+    ):
+        if value is not None and value != "" and value != []:
+            shadow_facts[field] = deepcopy(value)
+    parity = compare_production_shadow_parity(
+        authoritative_facts=dict(
+            projection.get("authoritative_parity_facts") or {}
+        ),
+        shadow_facts=shadow_facts,
+    )
+    return _complete_delta(
+        state,
+        "compare_authoritative_parity",
+        started,
+        parity=parity,
     )
 
 
@@ -173,6 +224,9 @@ def build_production_shadow_graph() -> Any:
     graph.add_node("project_queue_priority", _project_queue_priority)
     graph.add_node("project_tailoring_decision", _project_tailoring_decision)
     graph.add_node("project_operator_review", _project_operator_review)
+    graph.add_node(
+        "compare_authoritative_parity", _compare_authoritative_parity
+    )
     graph.add_node("finalize_shadow_observation", _finalize_shadow_observation)
     graph.set_entry_point("load_authoritative_identity")
     for left, right in zip(
@@ -202,6 +256,7 @@ def _bounded_result(state: Mapping[str, Any], graph_latency_ms: int) -> Dict[str
             validated["tailoring_decision_facts"]
         ),
         "operator_review_facts": deepcopy(validated["operator_review_facts"]),
+        "parity": deepcopy(validated["parity"]),
         "provider_metadata": deepcopy(validated["provider_metadata"]),
         "completed_node_order": list(validated["completed_nodes"]),
         "node_statuses": deepcopy(validated["node_statuses"]),
@@ -264,11 +319,21 @@ def execute_production_shadow_graph(
             "mutation_count": 0,
             "application_count": 0,
             "ats_count": 0,
-            "results": [],
+            "results": [
+                {
+                    "job_id": str(job_id or "").strip(),
+                    "status": "input_rejected",
+                    "failure_classification": str(exc)[:120],
+                }
+                for job_id in detached_job_ids
+            ],
         }
 
     graph = _compiled_graph or build_production_shadow_graph().compile()
-    results: list[Dict[str, Any]] = []
+    indexed_results: list[tuple[int, Dict[str, Any]]] = [
+        (int(row["request_index"]), dict(row))
+        for row in adapted.get("rejections", [])
+    ]
     for projection in adapted["projections"]:
         initial = build_initial_production_shadow_state(projection)
         started = time.perf_counter_ns()
@@ -277,15 +342,32 @@ def execute_production_shadow_graph(
             latency_ms = int(
                 (time.perf_counter_ns() - started) / 1_000_000
             )
-            results.append(_bounded_result(final, latency_ms))
+            bounded = _bounded_result(final, latency_ms)
+            parity_status = dict(bounded.get("parity") or {}).get(
+                "parity_status"
+            )
+            bounded["status"] = {
+                "passed": "parity_completed",
+                "mismatch": "parity_mismatch",
+                "incomplete": "parity_incomplete",
+                "incomparable": "parity_completed",
+                "failed": "parity_failed",
+            }.get(parity_status, "parity_failed")
+            indexed_results.append(
+                (int(projection["request_index"]), bounded)
+            )
         except (TypeError, ValueError, RuntimeError):
-            results.append(
-                {
+            indexed_results.append(
+                (
+                    int(projection["request_index"]),
+                    {
                     "status": "graph_execution_failed",
                     "job_id": projection["job_id"],
                     "failure_classification": "bounded_graph_failure",
-                }
+                    },
+                )
             )
+    results = [row for _index, row in sorted(indexed_results)]
     try:
         after = artifact_digests(detached_paths)
     except ProductionShadowAdapterError:

@@ -74,6 +74,7 @@ def _artifacts(tmp_path: Path, *, jobs: int = 1) -> dict[str, Path]:
                 "action": "REVIEW",
                 "winner_resume": f"resume-{index}",
                 "resolved_resume": f"resume-{index}",
+                "requires_manual_review": "true",
             }
             for index, job in enumerate(identities)
         ],
@@ -121,6 +122,7 @@ def _artifacts(tmp_path: Path, *, jobs: int = 1) -> dict[str, Path]:
                 "operator_review_lane": "review_before_action",
                 "operator_review_reason_codes": "operator_required",
                 "winner_resume": f"resume-{index}",
+                "packet_generation_allowed": "true",
             }
             for index, job in enumerate(identities)
         ],
@@ -416,7 +418,7 @@ def test_enabled_lifecycle_executes_real_production_shadow_worker(
     )
     assert outcome["classification"] == "shadow_completed"
     assert outcome["shadow_completed"] == 1
-    assert outcome["shadow_parity_matches"] == 0
+    assert outcome["shadow_parity_matches"] == 1
     assert outcome["shadow_write_suppression_violations"] == 0
     assert _digests(paths) == before
     assert lifecycle.directory is not None

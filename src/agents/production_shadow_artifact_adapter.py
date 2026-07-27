@@ -196,6 +196,156 @@ def _provider_metadata(*rows: Mapping[str, Any]) -> Dict[str, Any]:
     return metadata
 
 
+def _optional_bool(row: Mapping[str, Any], field: str) -> bool | None:
+    raw = _text(row.get(field)).lower()
+    if not raw:
+        return None
+    if raw in {"1", "true", "yes", "y"}:
+        return True
+    if raw in {"0", "false", "no", "n"}:
+        return False
+    _fail("authoritative_boolean_invalid")
+
+
+def _project_one_job(
+    *,
+    job_id: str,
+    indexed: Mapping[str, Mapping[str, Mapping[str, Any]]],
+    corpus_order: Sequence[str],
+    owner: str,
+    run: str,
+    context: str,
+    digests: Mapping[str, str],
+    artifact_identities: Mapping[str, Mapping[str, str]],
+) -> Dict[str, Any]:
+    if any(job_id not in rows for rows in indexed.values()):
+        _fail("partial_artifact_set")
+    best = indexed["best_resume"][job_id]
+    queue = indexed["execution_queue"][job_id]
+    packet = indexed["packet_manifest"][job_id]
+    priority = indexed["advisory_priority"][job_id]
+    tailoring = indexed["tailoring_decision"][job_id]
+    operator = indexed["operator_review"][job_id]
+
+    best_resume = _identity(
+        _required(best, "winner_resume"), "selected_resume_identity_invalid"
+    )
+    packet_resume = _identity(
+        _required(packet, "packet_resume"), "selected_resume_identity_invalid"
+    )
+    queue_winner = _identity(
+        _text(queue.get("resolved_resume") or queue.get("winner_resume")),
+        "selected_resume_identity_invalid",
+    )
+    if best_resume != _text(queue.get("winner_resume") or best_resume):
+        _fail("selected_resume_conflict")
+    if packet_resume != queue_winner:
+        _fail("selected_resume_conflict")
+    for row in (tailoring, operator):
+        row_resume = _text(row.get("resolved_resume") or row.get("winner_resume"))
+        if row_resume and row_resume != packet_resume:
+            _fail("selected_resume_conflict")
+
+    queue_rank: int | None = None
+    if _text(queue.get("queue_rank")):
+        try:
+            queue_rank = int(_text(queue.get("queue_rank")))
+        except ValueError:
+            _fail("queue_rank_invalid")
+        if queue_rank < 0:
+            _fail("queue_rank_invalid")
+    queue_action = _text(queue.get("action"))
+    advisory_priority = _text(priority.get("advisory_priority"))
+    advisory_reasons = _reason_codes(priority.get("advisory_reason_codes"))
+    tailoring_decision = _text(tailoring.get("tailoring_decision"))
+    tailoring_reasons = _reason_codes(
+        tailoring.get("tailoring_reason_codes")
+    )
+    operator_lane = _text(operator.get("operator_review_lane"))
+    packet_allowed = _optional_bool(operator, "packet_generation_allowed")
+    manual_review = _optional_bool(queue, "requires_manual_review")
+
+    authoritative_facts: Dict[str, Any] = {
+        "job_id": job_id,
+        "selected_resume_id": queue_winner,
+        "packet_resume": packet_resume,
+    }
+    for field, value in (
+        ("queue_rank", queue_rank),
+        ("action", queue_action),
+        ("advisory_priority", advisory_priority),
+        ("tailoring_decision", tailoring_decision),
+        ("operator_review_lane", operator_lane),
+        ("packet_generation_allowed", packet_allowed),
+        ("requires_manual_review", manual_review),
+    ):
+        if value is not None and value != "":
+            authoritative_facts[field] = value
+    if advisory_reasons:
+        authoritative_facts["advisory_reason_codes"] = advisory_reasons
+    if tailoring_reasons:
+        authoritative_facts["tailoring_reason_codes"] = tailoring_reasons
+
+    seed = {
+        "version": PRODUCTION_SHADOW_ADAPTER_VERSION,
+        "owner_user_id": owner,
+        "pipeline_run_id": run,
+        "context_id": context,
+        "job_id": job_id,
+        "job_index": corpus_order.index(job_id),
+        "selected_resume_id": packet_resume,
+        "artifact_digests": dict(digests),
+    }
+    invocation = hashlib.sha256(
+        json.dumps(seed, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    queue_facts: Dict[str, Any] = {}
+    if queue_rank is not None:
+        queue_facts["queue_rank"] = queue_rank
+    if queue_action:
+        queue_facts["queue_action"] = queue_action[:80]
+    if advisory_priority:
+        queue_facts["advisory_priority"] = advisory_priority[:80]
+    if advisory_reasons:
+        queue_facts["advisory_reason_codes"] = advisory_reasons
+    if manual_review is not None:
+        queue_facts["requires_manual_review"] = manual_review
+    tailoring_facts: Dict[str, Any] = {}
+    if tailoring_decision:
+        tailoring_facts["tailoring_decision"] = tailoring_decision[:80]
+    if tailoring_reasons:
+        tailoring_facts["tailoring_reason_codes"] = tailoring_reasons
+    operator_facts: Dict[str, Any] = {
+        "operator_decision_consumed": False
+    }
+    if operator_lane:
+        operator_facts["operator_review_lane"] = operator_lane[:80]
+    if packet_allowed is not None:
+        operator_facts["packet_generation_allowed"] = packet_allowed
+    operator_reasons = _reason_codes(
+        operator.get("operator_review_reason_codes")
+    )
+    if operator_reasons:
+        operator_facts["operator_review_reason_codes"] = operator_reasons
+    return {
+        **seed,
+        "graph_invocation_id": f"production-shadow:{invocation}",
+        "authoritative_artifacts": deepcopy(dict(artifact_identities)),
+        "authoritative_parity_facts": deepcopy(authoritative_facts),
+        "identity_facts": {"job_id": job_id},
+        "resume_selection_facts": {
+            "selected_resume_id": packet_resume,
+            "packet_resume": packet_resume,
+        },
+        "queue_priority_facts": queue_facts,
+        "tailoring_decision_facts": tailoring_facts,
+        "operator_review_facts": operator_facts,
+        "provider_metadata": _provider_metadata(
+            queue, packet, priority, tailoring, operator
+        ),
+    }
+
+
 def project_completed_authoritative_artifacts(
     *,
     job_ids: Sequence[str],
@@ -236,95 +386,36 @@ def project_completed_authoritative_artifacts(
         for name, digest in digests.items()
     }
     projections: list[Dict[str, Any]] = []
-    for job_id in requested:
-        if any(job_id not in rows for rows in indexed.values()):
-            _fail("partial_artifact_set")
-        best = indexed["best_resume"][job_id]
-        queue = indexed["execution_queue"][job_id]
-        packet = indexed["packet_manifest"][job_id]
-        priority = indexed["advisory_priority"][job_id]
-        tailoring = indexed["tailoring_decision"][job_id]
-        operator = indexed["operator_review"][job_id]
-
-        best_resume = _identity(
-            _required(best, "winner_resume"), "selected_resume_identity_invalid"
-        )
-        packet_resume = _identity(
-            _required(packet, "packet_resume"), "selected_resume_identity_invalid"
-        )
-        queue_winner = _text(queue.get("resolved_resume") or queue.get("winner_resume"))
-        queue_winner = _identity(
-            queue_winner, "selected_resume_identity_invalid"
-        )
-        if best_resume != _text(queue.get("winner_resume") or best_resume):
-            _fail("selected_resume_conflict")
-        if packet_resume != queue_winner:
-            _fail("selected_resume_conflict")
-        for row in (tailoring, operator):
-            row_resume = _text(row.get("resolved_resume") or row.get("winner_resume"))
-            if row_resume and row_resume != packet_resume:
-                _fail("selected_resume_conflict")
-
+    rejections: list[Dict[str, Any]] = []
+    for request_index, job_id in enumerate(requested):
         try:
-            queue_rank = int(_required(queue, "queue_rank"))
-        except ValueError:
-            _fail("queue_rank_invalid")
-        if queue_rank < 0:
-            _fail("queue_rank_invalid")
-        queue_action = _required(queue, "action")
-        advisory_priority = _required(priority, "advisory_priority")
-        tailoring_decision = _required(tailoring, "tailoring_decision")
-        operator_lane = _required(operator, "operator_review_lane")
-        seed = {
-            "version": PRODUCTION_SHADOW_ADAPTER_VERSION,
-            "owner_user_id": owner,
-            "pipeline_run_id": run,
-            "context_id": context,
-            "job_id": job_id,
-            "job_index": corpus_order.index(job_id),
-            "selected_resume_id": packet_resume,
-            "artifact_digests": digests,
-        }
-        invocation = hashlib.sha256(
-            json.dumps(seed, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        projections.append(
-            {
-                **seed,
-                "graph_invocation_id": f"production-shadow:{invocation}",
-                "authoritative_artifacts": deepcopy(artifact_identities),
-                "identity_facts": {"job_id": job_id},
-                "resume_selection_facts": {
-                    "selected_resume_id": packet_resume,
-                },
-                "queue_priority_facts": {
-                    "queue_rank": queue_rank,
-                    "queue_action": queue_action[:80],
-                    "advisory_priority": advisory_priority[:80],
-                    "advisory_reason_codes": _reason_codes(
-                        priority.get("advisory_reason_codes")
-                    ),
-                },
-                "tailoring_decision_facts": {
-                    "tailoring_decision": tailoring_decision[:80],
-                    "tailoring_reason_codes": _reason_codes(
-                        tailoring.get("tailoring_reason_codes")
-                    ),
-                },
-                "operator_review_facts": {
-                    "operator_review_lane": operator_lane[:80],
-                    "operator_review_reason_codes": _reason_codes(
-                        operator.get("operator_review_reason_codes")
-                    ),
-                    "operator_decision_consumed": False,
-                },
-                "provider_metadata": _provider_metadata(
-                    queue, packet, priority, tailoring, operator
-                ),
-            }
-        )
+            projection = _project_one_job(
+                job_id=job_id,
+                indexed=indexed,
+                corpus_order=corpus_order,
+                owner=owner,
+                run=run,
+                context=context,
+                digests=digests,
+                artifact_identities=artifact_identities,
+            )
+        except ProductionShadowAdapterError as exc:
+            rejections.append(
+                {
+                    "request_index": request_index,
+                    "job_id": job_id,
+                    "status": "input_rejected",
+                    "failure_classification": str(exc)[:120],
+                }
+            )
+            continue
+        projection["request_index"] = request_index
+        projections.append(projection)
+    if not projections and rejections:
+        _fail(rejections[0]["failure_classification"])
     return {
         "adapter_version": PRODUCTION_SHADOW_ADAPTER_VERSION,
         "artifact_digests": digests,
         "projections": deepcopy(projections),
+        "rejections": deepcopy(rejections),
     }

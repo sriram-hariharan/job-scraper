@@ -8,7 +8,7 @@ import re
 from typing import Any, Dict, Mapping, TypedDict
 
 
-PRODUCTION_SHADOW_STATE_VERSION = "production-shadow-artifact-state-v1"
+PRODUCTION_SHADOW_STATE_VERSION = "production-shadow-artifact-state-v2"
 _IDENTITY = re.compile(r"[A-Za-z0-9_.:@/-]{1,200}")
 _PROHIBITED_KEYS = {
     "resume_text",
@@ -43,6 +43,7 @@ _ALLOWED_TOP_LEVEL = {
     "advisory_priority_facts",
     "tailoring_decision_facts",
     "operator_review_facts",
+    "parity",
     "provider_metadata",
     "node_statuses",
     "node_latencies_ms",
@@ -83,6 +84,7 @@ class ProductionShadowState(TypedDict):
     advisory_priority_facts: Dict[str, Any]
     tailoring_decision_facts: Dict[str, Any]
     operator_review_facts: Dict[str, Any]
+    parity: Dict[str, Any]
     provider_metadata: Dict[str, Any]
     node_statuses: Dict[str, str]
     node_latencies_ms: Dict[str, int]
@@ -215,6 +217,7 @@ def validate_production_shadow_state(
         "advisory_priority_facts",
         "tailoring_decision_facts",
         "operator_review_facts",
+        "parity",
         "provider_metadata",
         "node_statuses",
         "node_latencies_ms",
@@ -258,6 +261,7 @@ def build_initial_production_shadow_state(
         "advisory_priority_facts": {},
         "tailoring_decision_facts": {},
         "operator_review_facts": {},
+        "parity": {},
         "provider_metadata": {},
         "node_statuses": {},
         "node_latencies_ms": {},

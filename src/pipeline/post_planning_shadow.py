@@ -27,7 +27,7 @@ SHADOW_HOOK_VERSION = "applylens-post-planning-shadow-v1"
 AUTHORITATIVE_FACTS_VERSION = "applylens-shadow-authoritative-facts-v1"
 SHADOW_EXECUTION_VERSION = "evidence-chain-shadow-execution-v1"
 SHADOW_PARITY_VERSION = "evidence-chain-shadow-parity-v1"
-PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v1"
+PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v2"
 MAX_SHADOW_JOBS = 25
 MAX_FACTS_BYTES = 256_000
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -48,6 +48,7 @@ _PRODUCTION_SHADOW_NODES = [
     "project_queue_priority",
     "project_tailoring_decision",
     "project_operator_review",
+    "compare_authoritative_parity",
     "finalize_shadow_observation",
 ]
 _logger = get_logger(__name__)
@@ -710,11 +711,31 @@ def _classify_production_shadow_payload(
             "safety_violation_count": 1,
         }
     max_latency = 0
-    for row in results:
+    parity_jobs: list[dict[str, Any]] = []
+    status_counts: dict[str, int] = {}
+    exact_identity_total = 0
+    exact_identity_matched = 0
+    selected_resume_total = 0
+    selected_resume_matched = 0
+    categorical_total = 0
+    categorical_matched = 0
+    incomparable_total = 0
+    for ordinal, row in enumerate(results):
         if not isinstance(row, Mapping):
             return {**aggregates, "classification": "shadow_execution_failure"}
-        if row.get("status") != "completed_at_operator_review":
+        job_status = str(row.get("status") or "")
+        status_counts[job_status] = status_counts.get(job_status, 0) + 1
+        if job_status == "input_rejected":
+            aggregates["adapter_rejection_count"] += 1
+            continue
+        if job_status in {"graph_execution_failed", "parity_failed"}:
             aggregates["graph_failure_count"] += 1
+            continue
+        if job_status not in {
+            "parity_completed",
+            "parity_incomplete",
+            "parity_mismatch",
+        }:
             return {**aggregates, "classification": "shadow_execution_failure"}
         if (
             row.get("completed_node_order") != _PRODUCTION_SHADOW_NODES
@@ -738,13 +759,128 @@ def _classify_production_shadow_payload(
                     ),
                     "safety_violation_count": 1,
                 }
+        parity = row.get("parity")
+        if (
+            not isinstance(parity, Mapping)
+            or parity.get("parity_version")
+            != "production-shadow-parity-v1"
+            or parity.get("parity_status")
+            not in {"passed", "mismatch", "incomplete", "incomparable"}
+            or not isinstance(parity.get("comparison_records"), list)
+        ):
+            aggregates["parity_processing_failure_count"] += 1
+            continue
+        comparisons = parity["comparison_records"]
+        for comparison in comparisons:
+            if not isinstance(comparison, Mapping):
+                aggregates["parity_processing_failure_count"] += 1
+                continue
+            field = comparison.get("field")
+            classification = comparison.get("classification")
+            if field == "job_id":
+                exact_identity_total += 1
+                exact_identity_matched += int(
+                    classification == "exact_match"
+                )
+            if field == "selected_resume_id":
+                selected_resume_total += 1
+                selected_resume_matched += int(
+                    classification == "exact_match"
+                )
+        categorical_total += _bounded_int(
+            parity.get("substantive_field_count")
+        )
+        categorical_matched += _bounded_int(
+            parity.get("substantive_exact_match_count")
+        )
+        incomparable_total += _bounded_int(
+            parity.get("incomparable_count")
+        )
+        if ordinal < 1:
+            parity_jobs.append(
+                {
+                    "job_ordinal": ordinal,
+                    "parity_status": parity["parity_status"],
+                    "compared_field_count": _bounded_int(
+                        parity.get("compared_field_count")
+                    ),
+                    "exact_match_count": _bounded_int(
+                        parity.get("exact_match_count")
+                    ),
+                    "mismatch_count": _bounded_int(
+                        parity.get("mismatch_count")
+                    ),
+                    "authoritative_missing_count": _bounded_int(
+                        parity.get("authoritative_missing_count")
+                    ),
+                    "shadow_missing_count": _bounded_int(
+                        parity.get("shadow_missing_count")
+                    ),
+                    "incomparable_count": _bounded_int(
+                        parity.get("incomparable_count")
+                    ),
+                    "substantive_field_count": _bounded_int(
+                        parity.get("substantive_field_count")
+                    ),
+                    "substantive_exact_match_count": _bounded_int(
+                        parity.get("substantive_exact_match_count")
+                    ),
+                    "substantive_mismatch_count": _bounded_int(
+                        parity.get("substantive_mismatch_count")
+                    ),
+                    "comparison_records": [
+                        dict(comparison) for comparison in comparisons[:12]
+                    ],
+                }
+            )
         max_latency = max(
             max_latency, _bounded_int(row.get("graph_latency_ms"))
         )
-    aggregates["shadow_completed"] = len(results)
+    completed = sum(
+        status_counts.get(status, 0)
+        for status in (
+            "parity_completed",
+            "parity_incomplete",
+            "parity_mismatch",
+        )
+    )
+    mismatches = status_counts.get("parity_mismatch", 0)
+    incomplete = (
+        status_counts.get("parity_incomplete", 0)
+        + status_counts.get("input_rejected", 0)
+        + status_counts.get("parity_failed", 0)
+        + status_counts.get("graph_execution_failed", 0)
+        + aggregates["parity_processing_failure_count"]
+    )
+    aggregates["shadow_completed"] = completed
+    aggregates["shadow_parity_matches"] = status_counts.get(
+        "parity_completed", 0
+    )
+    aggregates["shadow_parity_mismatches"] = mismatches
     return {
         **aggregates,
-        "classification": "shadow_completed",
+        "classification": (
+            "parity_mismatch"
+            if mismatches
+            else "shadow_execution_failure"
+            if incomplete
+            else "shadow_completed"
+        ),
+        "parity_mismatch_count": mismatches,
+        "exact_identity_total": exact_identity_total,
+        "exact_identity_matched": exact_identity_matched,
+        "selected_resume_total": selected_resume_total,
+        "selected_resume_matched": selected_resume_matched,
+        "categorical_parity_total": categorical_total,
+        "categorical_parity_matched": categorical_matched,
+        "intentionally_incomparable_count": incomparable_total,
+        "production_parity": {
+            "version": "production-shadow-observation-parity-v1",
+            "job_count": len(results),
+            "persisted_job_count": len(parity_jobs),
+            "truncated_job_count": max(0, len(results) - len(parity_jobs)),
+            "jobs": parity_jobs,
+        },
         "max_job_graph_latency_ms": max_latency,
     }
 
@@ -1208,6 +1344,12 @@ class PostPlanningShadowLifecycle:
                 cleanup_complete=cleanup.complete,
                 process_liveness_confirmed=(
                     cleanup.process_liveness_confirmed
+                ),
+                production_parity=(
+                    dict(outcome["production_parity"])
+                    if self.production_graph
+                    and isinstance(outcome.get("production_parity"), Mapping)
+                    else None
                 ),
             )
             return store.append(record).status

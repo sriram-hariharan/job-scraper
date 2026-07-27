@@ -107,6 +107,7 @@ class ShadowObservationRecord:
     flag_enabled_for_run: bool
     cleanup_complete: bool | None
     process_liveness_confirmed: bool | None
+    production_parity: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         _validate_mapping(asdict(self))
@@ -136,6 +137,115 @@ def _strict_int(
 def _strict_optional_bool(value: Any) -> None:
     if value is not None and not isinstance(value, bool):
         raise ObservationContractError("observation_boolean_invalid")
+
+
+def _validate_production_parity(value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, Mapping) or set(value) != {
+        "version",
+        "job_count",
+        "persisted_job_count",
+        "truncated_job_count",
+        "jobs",
+    }:
+        raise ObservationContractError("observation_parity_invalid")
+    if value["version"] != "production-shadow-observation-parity-v1":
+        raise ObservationContractError("observation_parity_invalid")
+    for field in ("job_count", "persisted_job_count", "truncated_job_count"):
+        _strict_int(field, value[field], maximum=25, nullable=False)
+    if (
+        value["persisted_job_count"] + value["truncated_job_count"]
+        != value["job_count"]
+        or not isinstance(value["jobs"], list)
+        or len(value["jobs"]) != value["persisted_job_count"]
+        or len(value["jobs"]) > 3
+    ):
+        raise ObservationContractError("observation_parity_invalid")
+    allowed_statuses = {
+        "passed",
+        "mismatch",
+        "incomplete",
+        "incomparable",
+        "failed",
+    }
+    count_fields = {
+        "compared_field_count",
+        "exact_match_count",
+        "mismatch_count",
+        "authoritative_missing_count",
+        "shadow_missing_count",
+        "incomparable_count",
+        "substantive_field_count",
+        "substantive_exact_match_count",
+        "substantive_mismatch_count",
+    }
+    comparison_fields = {
+        "field",
+        "classification",
+        "reason_code",
+        "authoritative_present",
+        "shadow_present",
+        "authoritative_digest",
+        "shadow_digest",
+    }
+    allowed_classifications = {
+        "exact_match",
+        "mismatch",
+        "authoritative_missing",
+        "shadow_missing",
+        "both_missing",
+        "incomparable",
+    }
+    for job in value["jobs"]:
+        if not isinstance(job, Mapping) or set(job) != {
+            "job_ordinal",
+            "parity_status",
+            *count_fields,
+            "comparison_records",
+        }:
+            raise ObservationContractError("observation_parity_invalid")
+        _strict_int(
+            "job_ordinal", job["job_ordinal"], maximum=24, nullable=False
+        )
+        if job["parity_status"] not in allowed_statuses:
+            raise ObservationContractError("observation_parity_invalid")
+        for field in count_fields:
+            _strict_int(field, job[field], maximum=25, nullable=False)
+        comparisons = job["comparison_records"]
+        if not isinstance(comparisons, list) or len(comparisons) > 12:
+            raise ObservationContractError("observation_parity_invalid")
+        for comparison in comparisons:
+            if (
+                not isinstance(comparison, Mapping)
+                or set(comparison) != comparison_fields
+                or not re.fullmatch(
+                    r"[a-z0-9_.-]{1,80}",
+                    str(comparison["field"] or ""),
+                )
+                or comparison["classification"]
+                not in allowed_classifications
+                or not re.fullmatch(
+                    r"[a-z0-9_.-]{1,120}",
+                    str(comparison["reason_code"] or ""),
+                )
+                or not isinstance(
+                    comparison["authoritative_present"], bool
+                )
+                or not isinstance(comparison["shadow_present"], bool)
+            ):
+                raise ObservationContractError("observation_parity_invalid")
+            for digest_field in (
+                "authoritative_digest",
+                "shadow_digest",
+            ):
+                digest = comparison[digest_field]
+                if digest is not None and not re.fullmatch(
+                    r"[0-9a-f]{64}", str(digest)
+                ):
+                    raise ObservationContractError(
+                        "observation_parity_invalid"
+                    )
 
 
 def _validate_mapping(payload: Mapping[str, Any]) -> None:
@@ -204,6 +314,7 @@ def _validate_mapping(payload: Mapping[str, Any]) -> None:
     for value in payload.values():
         if isinstance(value, float) and not math.isfinite(value):
             raise ObservationContractError("observation_numeric_invalid")
+    _validate_production_parity(payload["production_parity"])
 
 
 def serialize_observation(record: ShadowObservationRecord) -> bytes:
@@ -255,6 +366,8 @@ def parse_observation_json(rendered: str | bytes) -> ShadowObservationRecord:
         raise ObservationContractError("observation_json_invalid") from exc
     if not isinstance(payload, Mapping):
         raise ObservationContractError("observation_json_invalid")
+    if "production_parity" not in payload:
+        payload = {**payload, "production_parity": None}
     try:
         return ShadowObservationRecord(**payload)
     except TypeError as exc:

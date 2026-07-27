@@ -13,11 +13,13 @@ from src.evaluation.controlled_groq_canary_run_005_identity import (
 from src.evaluation.controlled_groq_provider_canary import (
     build_groq_pricing_template,
     pricing_table_sha256,
+    validate_operator_approved_pricing,
 )
 from src.evaluation.provider_fixture_benchmark import load_fixture_case_corpus
 
 
 NOW = "2026-07-27T12:00:00Z"
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _pricing():
@@ -387,6 +389,115 @@ def _temp_root(tmp_path):
     return root
 
 
+def _assert_safe_real_run_005_artifact_state(repository_root):
+    root = Path(repository_root).resolve()
+    paths = {
+        kind: root / relative
+        for kind, relative in RUN_005_ARTIFACT_PATHS.items()
+    }
+    expected_paths = set(paths.values())
+    namespace = paths["pricing"].parent
+    namespace_entries = set(
+        namespace.glob("phase11_groq_canary_*_005.json")
+    )
+    assert namespace_entries <= expected_paths
+
+    present = {
+        kind
+        for kind, path in paths.items()
+        if path.exists() or path.is_symlink()
+    }
+    if not present:
+        return "absent"
+    assert present == set(paths), (
+        "Run-005 artifacts must all be absent or all be present"
+    )
+    for path in paths.values():
+        assert not path.is_symlink()
+        assert path.is_file()
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+    pricing = json.loads(paths["pricing"].read_text(encoding="utf-8"))
+    authorization = json.loads(
+        paths["authorization"].read_text(encoding="utf-8")
+    )
+    execution_at_utc = authorization["valid_from_utc"]
+    assert validate_operator_approved_pricing(
+        pricing,
+        execution_at_utc=execution_at_utc,
+    )
+    assert owner.validate_run_005_active_authorization(
+        authorization,
+        pricing=pricing,
+        execution_at_utc=execution_at_utc,
+    )
+    checkpoint = owner.load_run_005_checkpoint(
+        paths["checkpoint"],
+        repository_root=root,
+        authorization=authorization,
+        pricing=pricing,
+        execution_at_utc=execution_at_utc,
+    )
+    result = owner.load_run_005_result_artifact(
+        paths["result"],
+        repository_root=root,
+        authorization=authorization,
+        pricing=pricing,
+        execution_at_utc=execution_at_utc,
+    )
+
+    assert result["checkpoint"] == checkpoint
+    assert result["final_status"] == "stopped_hard_failure"
+    assert checkpoint["aggregate_usage"]["provider_call_count"] == 1
+    authority = checkpoint["authority_invariants"]
+    assert authority["provider_call_count"] == 1
+    assert authority["retry_count"] == 0
+    assert authority["fallback_count"] == 0
+    assert authority["raw_response_persisted_count"] == 0
+    assert authority["production_activation"] is False
+    assert authority["winner_selected"] is False
+    assert authority["mutation_count"] == 0
+    assert authority["application_action_count"] == 0
+    assert authority["ats_action_count"] == 0
+    assert result["production_activation"] is False
+    assert result["winner_selected"] is False
+    assert result["mutation_count"] == 0
+    assert result["application_action_count"] == 0
+    assert result["ats_action_count"] == 0
+    assert result["retention_policy"]["overwrite_allowed"] is False
+    assert all(
+        value is False
+        for key, value in authorization.items()
+        if key.endswith("_resume_allowed")
+        or key.endswith("_key_replay_allowed")
+    )
+    assert owner.get_next_run_005_row(
+        checkpoint,
+        authorization=authorization,
+        pricing=pricing,
+        execution_at_utc=execution_at_utc,
+    ) is None
+
+    def keys(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                yield str(key).lower()
+                yield from keys(item)
+        elif isinstance(value, list):
+            for item in value:
+                yield from keys(item)
+
+    persisted_keys = set(keys({"checkpoint": checkpoint, "result": result}))
+    assert {
+        "raw_response",
+        "normalized_output",
+        "generated_content",
+        "credential",
+        "credentials",
+    }.isdisjoint(persisted_keys)
+    return "terminal_present"
+
+
 def test_checkpoint_and_result_persistence_are_exclusive_atomic_and_0600(tmp_path):
     kwargs = _kwargs()
     root = _temp_root(tmp_path)
@@ -451,6 +562,22 @@ def test_persistence_rejects_traversal_symlink_and_real_artifacts_stay_absent(
             repository_root=root,
             **kwargs,
         )
-    assert all(
-        not Path(path).exists() for path in RUN_005_ARTIFACT_PATHS.values()
-    )
+    with pytest.raises(AssertionError):
+        _assert_safe_real_run_005_artifact_state(root)
+
+    clean_root = _temp_root(tmp_path / "clean")
+    assert _assert_safe_real_run_005_artifact_state(clean_root) == "absent"
+
+    partial_root = _temp_root(tmp_path / "partial")
+    partial_pricing = partial_root / RUN_005_ARTIFACT_PATHS["pricing"]
+    partial_pricing.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(
+        AssertionError,
+        match="must all be absent or all be present",
+    ):
+        _assert_safe_real_run_005_artifact_state(partial_root)
+
+    assert _assert_safe_real_run_005_artifact_state(ROOT) in {
+        "absent",
+        "terminal_present",
+    }

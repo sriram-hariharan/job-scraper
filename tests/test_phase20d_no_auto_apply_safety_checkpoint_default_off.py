@@ -116,6 +116,11 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
         "src/evaluation/provider_fixture_benchmark.py",
         "tests/test_provider_fixture_benchmark.py",
+        "src/evaluation/controlled_tailoring_benchmark_request_adapter.py",
+        "src/evaluation/controlled_groq_tailoring_canary_transport.py",
+        "tests/test_controlled_tailoring_benchmark_request_adapter.py",
+        "tests/test_controlled_groq_tailoring_canary_transport.py",
+        "tests/test_controlled_groq_canary_transport.py",
         "src/evaluation/controlled_groq_canary_run_005_plan.py",
         "src/evaluation/controlled_groq_canary_run_005_identity.py",
         "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",
@@ -1001,6 +1006,21 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     if (
         set(changed_runtime_files)
         == phase11_step8zn_groq_canary_run_005_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8zq_tailoring_adapter_transport_runtime_files = {
+        ROOT
+        / "src/evaluation/controlled_tailoring_benchmark_request_adapter.py",
+        ROOT
+        / "src/evaluation/controlled_groq_tailoring_canary_transport.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8zq_tailoring_adapter_transport_runtime_files
     ):
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")

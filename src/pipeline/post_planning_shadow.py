@@ -22,10 +22,12 @@ from src.utils.logging import get_logger
 
 
 SHADOW_FLAG = "APPLYLENS_DURABLE_EVIDENCE_CHAIN_SHADOW_ENABLED"
+PRODUCTION_SHADOW_FLAG = "APPLYLENS_ARTIFACT_ONLY_PRODUCTION_SHADOW_ENABLED"
 SHADOW_HOOK_VERSION = "applylens-post-planning-shadow-v1"
 AUTHORITATIVE_FACTS_VERSION = "applylens-shadow-authoritative-facts-v1"
 SHADOW_EXECUTION_VERSION = "evidence-chain-shadow-execution-v1"
 SHADOW_PARITY_VERSION = "evidence-chain-shadow-parity-v1"
+PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v1"
 MAX_SHADOW_JOBS = 25
 MAX_FACTS_BYTES = 256_000
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -39,6 +41,14 @@ _EXPECTED_NODES = [
     "job_prioritization",
     "tailoring_decision",
     "operator_review",
+]
+_PRODUCTION_SHADOW_NODES = [
+    "load_authoritative_identity",
+    "project_resume_selection",
+    "project_queue_priority",
+    "project_tailoring_decision",
+    "project_operator_review",
+    "finalize_shadow_observation",
 ]
 _logger = get_logger(__name__)
 _CLEANUP_CATEGORIES = {
@@ -85,6 +95,18 @@ class CleanupResult:
 def shadow_enabled(env: Mapping[str, str] | None = None) -> bool:
     source = os.environ if env is None else env
     return str(source.get(SHADOW_FLAG, "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def production_shadow_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    source = os.environ if env is None else env
+    return str(source.get(PRODUCTION_SHADOW_FLAG, "") or "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -491,6 +513,8 @@ def _run_shadow_command(command: Sequence[str]) -> dict[str, Any]:
 def _classify_command_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, Mapping):
         return {"classification": "shadow_execution_failure"}
+    if payload.get("execution_version") == PRODUCTION_SHADOW_EXECUTION_VERSION:
+        return _classify_production_shadow_payload(payload)
     results = payload.get("results")
     if (
         payload.get("execution_version") != SHADOW_EXECUTION_VERSION
@@ -653,10 +677,83 @@ def _classify_command_payload(payload: Any) -> dict[str, Any]:
     }
 
 
+def _classify_production_shadow_payload(
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    results = payload.get("results")
+    if (
+        payload.get("status")
+        not in {"completed", "write_suppression_violation"}
+        or not isinstance(results, list)
+        or not results
+        or len(results) > MAX_SHADOW_JOBS
+        or payload.get("job_count") != len(results)
+    ):
+        return {"classification": "shadow_execution_failure"}
+    aggregates = {
+        "jobs_attempted": len(results),
+        "shadow_completed": 0,
+        "adapter_rejection_count": 0,
+        "graph_failure_count": 0,
+        "parity_processing_failure_count": 0,
+        "shadow_parity_matches": 0,
+        "shadow_parity_mismatches": 0,
+    }
+    if (
+        payload.get("status") == "write_suppression_violation"
+        or payload.get("artifacts_unchanged") is not True
+    ):
+        return {
+            **aggregates,
+            "classification": "shadow_safety_violation",
+            "shadow_write_suppression_violations": 1,
+            "safety_violation_count": 1,
+        }
+    max_latency = 0
+    for row in results:
+        if not isinstance(row, Mapping):
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        if row.get("status") != "completed_at_operator_review":
+            aggregates["graph_failure_count"] += 1
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        if (
+            row.get("completed_node_order") != _PRODUCTION_SHADOW_NODES
+            or row.get("pending_node") != "operator_review"
+            or row.get("operator_review_required") is not True
+        ):
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        for field in (
+            "provider_call_count",
+            "production_write_count",
+            "mutation_count",
+            "application_count",
+            "ats_count",
+        ):
+            if row.get(field) != 0:
+                return {
+                    **aggregates,
+                    "classification": "shadow_safety_violation",
+                    "shadow_write_suppression_violations": int(
+                        field == "production_write_count"
+                    ),
+                    "safety_violation_count": 1,
+                }
+        max_latency = max(
+            max_latency, _bounded_int(row.get("graph_latency_ms"))
+        )
+    aggregates["shadow_completed"] = len(results)
+    return {
+        **aggregates,
+        "classification": "shadow_completed",
+        "max_job_graph_latency_ms": max_latency,
+    }
+
+
 @dataclass
 class PostPlanningShadowLifecycle:
     enabled: bool
     armed: bool
+    production_graph: bool = False
     owner_id: str = ""
     pipeline_run_id: str = ""
     context_id: str = ""
@@ -675,7 +772,7 @@ class PostPlanningShadowLifecycle:
 
     @property
     def planning_arguments(self) -> list[str]:
-        if not self.armed:
+        if not self.armed or self.production_graph:
             return []
         return [
             "--shadow-resume-evidence-output",
@@ -692,7 +789,7 @@ class PostPlanningShadowLifecycle:
         output_dir: str | Path,
     ) -> list[str]:
         output = Path(output_dir)
-        return [
+        command = [
             sys.executable,
             "run_evidence_chain_shadow.py",
             "--execute-shadow",
@@ -704,8 +801,6 @@ class PostPlanningShadowLifecycle:
             str(output / "application_execution_queue.csv"),
             "--packet-manifest",
             str(output / "job_packet_manifest.csv"),
-            "--resume-evidence",
-            str(self.projection_path),
             "--authoritative-facts",
             str(self.facts_path),
             "--owner-id",
@@ -715,6 +810,45 @@ class PostPlanningShadowLifecycle:
             "--context-id",
             self.context_id,
         ]
+        if self.production_graph:
+            command.extend(
+                [
+                    "--production-shadow",
+                    "--job-prioritization",
+                    str(output / "job_prioritization_recommendations.csv"),
+                    "--tailoring-decision",
+                    str(output / "tailoring_decision_recommendations.csv"),
+                    "--operator-review",
+                    str(output / "operator_review_recommendations.csv"),
+                ]
+            )
+        else:
+            command.extend(
+                ["--resume-evidence", str(self.projection_path)]
+            )
+        return command
+
+    def _execute_production_graph(
+        self,
+        *,
+        job_corpus_path: str | Path,
+        output_dir: str | Path,
+    ) -> dict[str, Any]:
+        output = Path(output_dir)
+        facts, skipped_by_limit = build_authoritative_facts(
+            execution_queue_path=output / "application_execution_queue.csv",
+            packet_manifest_path=output / "job_packet_manifest.csv",
+            pipeline_run_id=self.pipeline_run_id,
+        )
+        _atomic_json(self.facts_path, facts)
+        outcome = _run_shadow_command(
+            self._command(
+                job_corpus_path=job_corpus_path,
+                output_dir=output_dir,
+            )
+        )
+        outcome["shadow_skipped_by_limit"] = skipped_by_limit
+        return outcome
 
     def complete_after_authoritative_success(
         self,
@@ -728,7 +862,12 @@ class PostPlanningShadowLifecycle:
             or "shadow_execution_failure"
         }
         try:
-            if self.armed:
+            if self.armed and self.production_graph:
+                outcome = self._execute_production_graph(
+                    job_corpus_path=job_corpus_path,
+                    output_dir=output_dir,
+                )
+            elif self.armed:
                 from src.pipeline.shadow_resume_evidence_projection import (
                     ProjectionError,
                     load_handoff_status,
@@ -1133,6 +1272,7 @@ def prepare_post_planning_shadow(
             armed=False,
             initial_classification="shadow_disabled",
         )
+    production_graph = production_shadow_enabled(source)
     owner_id = _identity(source.get("JOB_STACK_OWNER_USER_ID"))
     pipeline_run_id = _identity(source.get("JOB_APP_PIPELINE_RUN_ID"))
     explicit_context = str(
@@ -1159,12 +1299,25 @@ def prepare_post_planning_shadow(
     return PostPlanningShadowLifecycle(
         enabled=True,
         armed=True,
+        production_graph=production_graph,
         owner_id=owner_id,
         pipeline_run_id=pipeline_run_id,
         context_id=context_id,
         directory=directory,
-        projection_path=directory / "resume_evidence.json",
-        status_path=directory / "projection_status.json",
+        projection_path=(
+            None
+            if production_graph
+            else directory / "resume_evidence.json"
+        ),
+        status_path=(
+            None
+            if production_graph
+            else directory / "projection_status.json"
+        ),
         facts_path=directory / "authoritative_facts.json",
-        initial_classification="shadow_projection_ready",
+        initial_classification=(
+            "production_shadow_ready"
+            if production_graph
+            else "shadow_projection_ready"
+        ),
     )

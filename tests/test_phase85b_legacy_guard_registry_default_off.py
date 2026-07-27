@@ -18,6 +18,7 @@ from tests.support.phase_guard_registry import (
     PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES,
     PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES,
     PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES,
+    PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES,
     PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES,
     PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
     assert_changed_files_allowed,
@@ -1405,6 +1406,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES
         | PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES
         | PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES
+        | PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
     assert PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES == {
@@ -1537,6 +1539,18 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert not any(
         "*" in path
         for path in PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES
+    )
+    assert PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES == {
+        "src/evaluation/controlled_groq_canary_run_004_plan.py",
+        "src/evaluation/controlled_groq_canary_run_004_identity.py",
+        "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_004_plan.py",
+        "tests/test_controlled_groq_canary_run_004_identity.py",
+        "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES
     )
     assert PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES == {
         "tests/test_rag_endpoint_behavior.py",

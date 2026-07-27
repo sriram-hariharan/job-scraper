@@ -71,6 +71,22 @@ PRIOR_ARTIFACT_SHA256 = {
         "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
     ),
 }
+RUN_003_ARTIFACT_SHA256 = {
+    "pricing": "4802ca143f9db7a5891033c045ba9a24898f4bf6c924586ea9619b98720046a8",
+    "authorization": "a3d55c8f8c44c92709c6d354b5f01b4f747b72ebd125542b076cecfbc063cba2",
+    "checkpoint": "6fced7c4ef08f2bbe19138347db9c31eaa5b483aadf03163331d32b8cb0b2b1f",
+    "result": "d9f01c7f699a3389af3fe46cd73f764405a7446102eedf095824bb6865557d07",
+}
+
+
+def _assert_run_003_artifacts_are_immutable():
+    for kind, relative_path in identity.RUN_003_ARTIFACT_PATHS.items():
+        path = ROOT / relative_path
+        assert path.is_file() and not path.is_symlink()
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert sha256(path.read_bytes()).hexdigest() == (
+            RUN_003_ARTIFACT_SHA256[kind]
+        )
 
 
 def _pricing():
@@ -800,10 +816,7 @@ def test_pinned_owners_and_prior_artifacts_are_immutable():
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         assert sha256(path.read_bytes()).hexdigest() == digest
     assert not (output / "phase11_groq_canary_result_001.json").exists()
-    assert all(
-        not (ROOT / path).exists()
-        for path in identity.RUN_003_ARTIFACT_PATHS.values()
-    )
+    _assert_run_003_artifacts_are_immutable()
 
 
 def test_base_runtime_public_cost_behavior_is_unchanged():
@@ -890,10 +903,7 @@ def test_runtime_persists_no_normalized_raw_or_credential_material():
     }.isdisjoint(keys)
 
 
-def test_no_real_run003_artifacts_are_created():
+def test_offline_builds_leave_real_run003_artifacts_immutable():
     _empty()
     _complete()
-    assert all(
-        not (ROOT / path).exists()
-        for path in identity.RUN_003_ARTIFACT_PATHS.values()
-    )
+    _assert_run_003_artifacts_are_immutable()

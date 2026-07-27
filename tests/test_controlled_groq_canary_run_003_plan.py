@@ -62,6 +62,12 @@ RUN_002_ARTIFACT_SHAS = {
         "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
     ),
 }
+RUN_003_ARTIFACT_SHAS = {
+    "pricing": "4802ca143f9db7a5891033c045ba9a24898f4bf6c924586ea9619b98720046a8",
+    "authorization": "a3d55c8f8c44c92709c6d354b5f01b4f747b72ebd125542b076cecfbc063cba2",
+    "checkpoint": "6fced7c4ef08f2bbe19138347db9c31eaa5b483aadf03163331d32b8cb0b2b1f",
+    "result": "d9f01c7f699a3389af3fe46cd73f764405a7446102eedf095824bb6865557d07",
+}
 
 
 def _contract():
@@ -409,7 +415,7 @@ def test_completed_contracts_remain_unchanged():
     assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
 
 
-def test_prior_artifacts_are_byte_identical_and_run003_artifacts_absent():
+def test_prior_and_completed_run003_artifacts_are_byte_identical():
     output = ROOT / "outputs/provider_benchmark"
     checkpoint_001 = output / "phase11_groq_canary_checkpoint_001.json"
     assert sha256(checkpoint_001.read_bytes()).hexdigest() == INCIDENT_SHA
@@ -419,10 +425,11 @@ def test_prior_artifacts_are_byte_identical_and_run003_artifacts_absent():
         path = output / name
         assert sha256(path.read_bytes()).hexdigest() == expected
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    for kind in ("pricing", "authorization", "checkpoint", "result"):
-        assert not (
-            output / f"phase11_groq_canary_{kind}_003.json"
-        ).exists()
+    for kind, expected in RUN_003_ARTIFACT_SHAS.items():
+        path = output / f"phase11_groq_canary_{kind}_003.json"
+        assert path.is_file() and not path.is_symlink()
+        assert sha256(path.read_bytes()).hexdigest() == expected
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_only_exact_run003_owners_import_run003_plan_owner():

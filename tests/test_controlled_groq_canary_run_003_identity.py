@@ -63,6 +63,22 @@ PRIOR_ARTIFACT_SHA256 = {
         "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
     ),
 }
+RUN_003_ARTIFACT_SHA256 = {
+    "pricing": "4802ca143f9db7a5891033c045ba9a24898f4bf6c924586ea9619b98720046a8",
+    "authorization": "a3d55c8f8c44c92709c6d354b5f01b4f747b72ebd125542b076cecfbc063cba2",
+    "checkpoint": "6fced7c4ef08f2bbe19138347db9c31eaa5b483aadf03163331d32b8cb0b2b1f",
+    "result": "d9f01c7f699a3389af3fe46cd73f764405a7446102eedf095824bb6865557d07",
+}
+
+
+def _assert_run_003_artifacts_are_immutable():
+    for kind, relative_path in owner.RUN_003_ARTIFACT_PATHS.items():
+        path = ROOT / relative_path
+        assert path.is_file() and not path.is_symlink()
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert sha256(path.read_bytes()).hexdigest() == (
+            RUN_003_ARTIFACT_SHA256[kind]
+        )
 
 
 def _identity():
@@ -220,13 +236,12 @@ def test_request_token_and_stop_policy_are_exact_plan_bindings():
     assert identity["stop_policy"]["harness_retry_limit"] == 0
 
 
-def test_future_artifacts_are_exact_and_currently_absent():
+def test_run003_artifacts_are_exact_and_immutable():
     contract = _identity()
     assert contract["future_artifact_identities"] == (
         owner.RUN_003_ARTIFACT_PATHS
     )
-    for relative_path in owner.RUN_003_ARTIFACT_PATHS.values():
-        assert not (ROOT / relative_path).exists()
+    _assert_run_003_artifacts_are_immutable()
 
 
 def test_prior_run_artifact_paths_are_exact():
@@ -542,7 +557,7 @@ def test_pinned_plan_controlled_plan_canary_and_run002_identity_are_immutable():
     assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
 
 
-def test_prior_artifacts_are_byte_exact_secure_and_run003_is_absent():
+def test_prior_and_run003_artifacts_are_byte_exact_and_secure():
     output_root = ROOT / "outputs/provider_benchmark"
     for name, digest in PRIOR_ARTIFACT_SHA256.items():
         path = output_root / name
@@ -550,10 +565,7 @@ def test_prior_artifacts_are_byte_exact_secure_and_run003_is_absent():
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         assert sha256(path.read_bytes()).hexdigest() == digest
     assert not (output_root / "phase11_groq_canary_result_001.json").exists()
-    assert all(
-        not (ROOT / path).exists()
-        for path in owner.RUN_003_ARTIFACT_PATHS.values()
-    )
+    _assert_run_003_artifacts_are_immutable()
 
 
 def test_owner_imports_no_environment_sdk_network_database_or_write_reach():
@@ -649,10 +661,7 @@ def test_import_and_build_create_no_real_artifacts():
     )
     after = {path: path.read_bytes() for path in before}
     assert after == before
-    assert all(
-        not (ROOT / path).exists()
-        for path in owner.RUN_003_ARTIFACT_PATHS.values()
-    )
+    _assert_run_003_artifacts_are_immutable()
 
 
 def test_only_exact_run003_runtime_owners_import_run003_identity_owner():

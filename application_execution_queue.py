@@ -3,11 +3,13 @@ import csv
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 from src.agents.job_prioritization_agent import (
+    build_job_prioritization_shared_result,
     record_job_prioritization_agent_trace,
     render_job_prioritization_recommendation_rows,
+    validate_job_prioritization_shared_result,
     write_job_prioritization_artifacts,
 )
 from src.agents.resume_match_agent import _truthy
@@ -1294,8 +1296,16 @@ def _with_priority_overlay(
     *,
     env: Dict[str, str] | None = None,
     source_artifact_reference: str = "",
+    shared_result: Mapping[str, Any] | None = None,
 ) -> List[dict]:
-    direct_priority_rows = render_job_prioritization_recommendation_rows(rows)
+    direct_priority_rows = (
+        render_job_prioritization_recommendation_rows(rows)
+        if shared_result is None
+        else validate_job_prioritization_shared_result(
+            shared_result,
+            expected_rows=rows,
+        )["rendered_rows"]
+    )
     if _job_prioritization_graph_verification_enabled(env):
         try:
             from src.agents.job_prioritization_graph_integration import (
@@ -1550,6 +1560,21 @@ def main() -> None:
             output_row = {name: row.get(name, "") for name in fieldnames}
             writer.writerow(output_row)
 
+    priority_pipeline_run_id = (
+        os.getenv("JOB_APP_PIPELINE_RUN_ID", "").strip()
+        or os.getenv("JOB_STACK_USER_PIPELINE_RUN_ID", "").strip()
+    )
+    priority_owner_user_id = os.getenv(
+        "JOB_STACK_OWNER_USER_ID", ""
+    ).strip()
+    priority_source_artifact_path = str(output_csv_path)
+    priority_shared_result = build_job_prioritization_shared_result(
+        rows=queue_rows,
+        pipeline_run_id=priority_pipeline_run_id,
+        owner_user_id=priority_owner_user_id,
+        source_artifact_path=priority_source_artifact_path,
+    )
+
     priority_artifact = None
     if str(args.priority_output_csv or "").strip():
         try:
@@ -1557,12 +1582,10 @@ def main() -> None:
                 rows=queue_rows,
                 output_csv_path=args.priority_output_csv,
                 summary_json_path=args.priority_summary_json or None,
-                pipeline_run_id=(
-                    os.getenv("JOB_APP_PIPELINE_RUN_ID", "").strip()
-                    or os.getenv("JOB_STACK_USER_PIPELINE_RUN_ID", "").strip()
-                ),
-                owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
-                source_artifact_path=str(output_csv_path),
+                pipeline_run_id=priority_pipeline_run_id,
+                owner_user_id=priority_owner_user_id,
+                source_artifact_path=priority_source_artifact_path,
+                shared_result=priority_shared_result,
             )
         except Exception as exc:
             print(f"Job prioritization advisory artifact skipped: {exc}")
@@ -1571,6 +1594,7 @@ def main() -> None:
     tailoring_decision_rows = _with_priority_overlay(
         queue_rows,
         source_artifact_reference=str(output_csv_path),
+        shared_result=priority_shared_result,
     )
     if str(args.tailoring_decision_output_csv or "").strip():
         try:
@@ -1609,6 +1633,7 @@ def main() -> None:
     trace_result = record_job_prioritization_agent_trace(
         rows=queue_rows,
         source_artifact_path=str(output_csv_path),
+        shared_result=priority_shared_result,
     )
     if trace_result.get("attempted") and not trace_result.get("recorded"):
         print(f"Job prioritization trace warning: {trace_result.get('warning') or trace_result.get('reason')}")

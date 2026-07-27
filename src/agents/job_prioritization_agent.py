@@ -6,7 +6,7 @@ import json
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 from src.agents import llmops, trace as trace_store
 from src.agents.resume_match_agent import (
@@ -19,6 +19,9 @@ from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
 AGENT_NAME = "Job Prioritization Agent"
 AGENT_VERSION = "phase_7a_v1"
+JOB_PRIORITIZATION_SHARED_RESULT_VERSION = (
+    "job-prioritization-shared-result-v1"
+)
 
 PRIORITY_LABELS = {
     "apply_now",
@@ -412,10 +415,23 @@ def render_job_prioritization_recommendations(
     }
 
 
-def render_job_prioritization_recommendation_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    payload = render_job_prioritization_recommendations(rows=rows)
+def _render_job_prioritization_rows_from_payload(
+    payload: Mapping[str, Any],
+) -> List[Dict[str, str]]:
     rendered_rows: List[Dict[str, str]] = []
-    for item in payload["output"].get("recommendations", []) or []:
+    output = payload.get("output")
+    if not isinstance(output, Mapping):
+        raise ValueError("job_prioritization_shared_result_output_invalid")
+    recommendations = output.get("recommendations")
+    if not isinstance(recommendations, list):
+        raise ValueError(
+            "job_prioritization_shared_result_recommendations_invalid"
+        )
+    for item in recommendations:
+        if not isinstance(item, Mapping):
+            raise ValueError(
+                "job_prioritization_shared_result_recommendation_invalid"
+            )
         rendered_rows.append(
             {
                 "job_id": _clean_text(item.get("job_id")),
@@ -440,6 +456,158 @@ def render_job_prioritization_recommendation_rows(rows: List[Dict[str, Any]]) ->
     return rendered_rows
 
 
+def validate_job_prioritization_shared_result(
+    shared_result: Mapping[str, Any],
+    *,
+    expected_rows: List[Dict[str, Any]] | None = None,
+    pipeline_run_id: str | None = None,
+    owner_user_id: str | None = None,
+    source_artifact_path: str | None = None,
+) -> Dict[str, Any]:
+    if not isinstance(shared_result, Mapping):
+        raise TypeError("job_prioritization_shared_result_must_be_mapping")
+    detached = deepcopy(dict(shared_result))
+    if set(detached) != {"contract_version", "payload", "rendered_rows"}:
+        raise ValueError("job_prioritization_shared_result_fields_invalid")
+    if (
+        detached.get("contract_version")
+        != JOB_PRIORITIZATION_SHARED_RESULT_VERSION
+    ):
+        raise ValueError("job_prioritization_shared_result_version_invalid")
+
+    payload = detached.get("payload")
+    rendered_rows = detached.get("rendered_rows")
+    if not isinstance(payload, Mapping) or not isinstance(rendered_rows, list):
+        raise ValueError("job_prioritization_shared_result_contract_invalid")
+    payload = deepcopy(dict(payload))
+    if set(payload) != {"input", "output", "validation", "summary"}:
+        raise ValueError("job_prioritization_shared_result_payload_invalid")
+    input_payload = payload.get("input")
+    output_payload = payload.get("output")
+    validation_payload = payload.get("validation")
+    summary_payload = payload.get("summary")
+    if not all(
+        isinstance(value, Mapping)
+        for value in (
+            input_payload,
+            output_payload,
+            validation_payload,
+            summary_payload,
+        )
+    ):
+        raise ValueError("job_prioritization_shared_result_payload_invalid")
+    input_payload = deepcopy(dict(input_payload))
+    output_payload = deepcopy(dict(output_payload))
+    validation_payload = deepcopy(dict(validation_payload))
+    summary_payload = deepcopy(dict(summary_payload))
+    input_rows = input_payload.get("rows")
+    recommendations = output_payload.get("recommendations")
+    if not isinstance(input_rows, list) or not isinstance(
+        recommendations, list
+    ):
+        raise ValueError("job_prioritization_shared_result_rows_invalid")
+    row_count = len(input_rows)
+    if (
+        input_payload.get("row_count") != row_count
+        or output_payload.get("total_rows") != row_count
+        or len(recommendations) != row_count
+        or len(rendered_rows) != row_count
+    ):
+        raise ValueError("job_prioritization_shared_result_count_mismatch")
+
+    expected_rendered_rows = _render_job_prioritization_rows_from_payload(
+        payload
+    )
+    if rendered_rows != expected_rendered_rows:
+        raise ValueError("job_prioritization_shared_result_rows_mismatch")
+    expected_validation = build_job_prioritization_agent_validation_payload(
+        input_payload=input_payload,
+        output_payload=output_payload,
+    )
+    if validation_payload != expected_validation:
+        raise ValueError(
+            "job_prioritization_shared_result_validation_mismatch"
+        )
+    expected_summary = build_job_prioritization_agent_summary_payload(
+        input_payload=input_payload,
+        output_payload=output_payload,
+        validation_payload=validation_payload,
+    )
+    if summary_payload != expected_summary:
+        raise ValueError("job_prioritization_shared_result_summary_mismatch")
+
+    if expected_rows is not None:
+        normalized_expected = [
+            _normalize_input_row(deepcopy(dict(row)))
+            for row in expected_rows
+        ]
+        if input_rows != normalized_expected:
+            raise ValueError("job_prioritization_shared_result_input_mismatch")
+    expected_metadata = (
+        ("pipeline_run_id", pipeline_run_id),
+        ("owner_user_id", owner_user_id),
+        ("source_artifact_path", source_artifact_path),
+    )
+    for field, expected in expected_metadata:
+        if (
+            expected is not None
+            and _clean_text(input_payload.get(field))
+            != _clean_text(expected)
+        ):
+            raise ValueError(
+                "job_prioritization_shared_result_metadata_mismatch"
+            )
+
+    return {
+        "contract_version": JOB_PRIORITIZATION_SHARED_RESULT_VERSION,
+        "payload": {
+            "input": input_payload,
+            "output": output_payload,
+            "validation": validation_payload,
+            "summary": summary_payload,
+        },
+        "rendered_rows": deepcopy(expected_rendered_rows),
+    }
+
+
+def build_job_prioritization_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    source_artifact_path: str = "",
+) -> Dict[str, Any]:
+    copied_rows = deepcopy(rows)
+    payload = render_job_prioritization_recommendations(
+        rows=copied_rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    result = {
+        "contract_version": JOB_PRIORITIZATION_SHARED_RESULT_VERSION,
+        "payload": deepcopy(payload),
+        "rendered_rows": _render_job_prioritization_rows_from_payload(
+            payload
+        ),
+    }
+    return validate_job_prioritization_shared_result(
+        result,
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+
+
+def render_job_prioritization_recommendation_rows(
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    return deepcopy(
+        build_job_prioritization_shared_result(rows=rows)["rendered_rows"]
+    )
+
+
 def write_job_prioritization_artifacts(
     *,
     rows: List[Dict[str, Any]],
@@ -448,19 +616,32 @@ def write_job_prioritization_artifacts(
     pipeline_run_id: str = "",
     owner_user_id: str = "",
     source_artifact_path: str = "",
+    shared_result: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    payload = render_job_prioritization_recommendations(
-        rows=rows,
-        pipeline_run_id=pipeline_run_id,
-        owner_user_id=owner_user_id,
-        source_artifact_path=source_artifact_path,
+    shared = (
+        build_job_prioritization_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        if shared_result is None
+        else validate_job_prioritization_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
     )
+    payload = deepcopy(shared["payload"])
+    rendered_rows = deepcopy(shared["rendered_rows"])
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=RECOMMENDATION_FIELDNAMES)
         writer.writeheader()
-        for row in render_job_prioritization_recommendation_rows(rows):
+        for row in rendered_rows:
             writer.writerow({field: row.get(field, "") for field in RECOMMENDATION_FIELDNAMES})
 
     summary_path = None
@@ -514,6 +695,7 @@ def record_job_prioritization_agent_trace(
     source_artifact_path: str = "",
     env: Dict[str, str] | None = None,
     trace_module: Any = trace_store,
+    shared_result: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     env_map = env if env is not None else os.environ
     if not agent_trace_enabled(env_map):
@@ -525,11 +707,21 @@ def record_job_prioritization_agent_trace(
 
     try:
         started_at = _utc_now_iso()
-        payload = render_job_prioritization_recommendations(
-            rows=rows,
-            pipeline_run_id=context["pipeline_run_id"],
-            owner_user_id=context["owner_user_id"],
-            source_artifact_path=source_artifact_path,
+        payload = (
+            render_job_prioritization_recommendations(
+                rows=rows,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                source_artifact_path=source_artifact_path,
+            )
+            if shared_result is None
+            else validate_job_prioritization_shared_result(
+                shared_result,
+                expected_rows=rows,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                source_artifact_path=source_artifact_path,
+            )["payload"]
         )
         run_payload = trace_module.create_agent_run(
             record={

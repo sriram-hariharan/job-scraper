@@ -655,7 +655,7 @@ def test_import_and_build_create_no_real_artifacts():
     )
 
 
-def test_no_production_source_imports_run003_identity_owner():
+def test_only_exact_run003_runtime_owners_import_run003_identity_owner():
     references = []
     for path in (ROOT / "src").rglob("*.py"):
         if path == OWNER_PATH:
@@ -664,4 +664,7 @@ def test_no_production_source_imports_run003_identity_owner():
             encoding="utf-8"
         ):
             references.append(path.relative_to(ROOT).as_posix())
-    assert references == []
+    assert references == [
+        "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
+    ]

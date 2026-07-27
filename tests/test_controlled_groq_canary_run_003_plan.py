@@ -425,7 +425,7 @@ def test_prior_artifacts_are_byte_identical_and_run003_artifacts_absent():
         ).exists()
 
 
-def test_only_run003_identity_imports_run003_plan_owner():
+def test_only_exact_run003_owners_import_run003_plan_owner():
     references = []
     for path in (ROOT / "src").rglob("*.py"):
         if path == OWNER_PATH:
@@ -435,7 +435,9 @@ def test_only_run003_identity_imports_run003_plan_owner():
         ):
             references.append(path.relative_to(ROOT).as_posix())
     assert references == [
-        "src/evaluation/controlled_groq_canary_run_003_identity.py"
+        "src/evaluation/controlled_groq_canary_run_003_identity.py",
+        "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
     ]
 
 

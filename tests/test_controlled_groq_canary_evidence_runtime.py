@@ -1370,4 +1370,5 @@ def test_no_production_source_imports_evidence_runtime():
     assert references == [
         "src/evaluation/controlled_groq_canary_run_identity.py",
         "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
+        "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
     ]

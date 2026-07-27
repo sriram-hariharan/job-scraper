@@ -121,6 +121,10 @@ def test_protected_runtime_files_are_unchanged():
 
 def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
+        "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_003_transport.py",
+        "tests/test_controlled_groq_canary_run_003_evidence_runtime.py",
         "src/evaluation/controlled_groq_canary_run_003_identity.py",
         "tests/test_controlled_groq_canary_run_003_identity.py",
         "src/evaluation/controlled_groq_canary_run_003_plan.py",
@@ -939,6 +943,20 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     if (
         set(changed_runtime_files)
         == phase11_step8zf_groq_canary_run_003_identity_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8zg_groq_canary_run_003_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        ROOT
+        / "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8zg_groq_canary_run_003_runtime_files
     ):
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")

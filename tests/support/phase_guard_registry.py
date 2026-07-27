@@ -165,6 +165,18 @@ PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES = {
     "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
 }
 
+PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES = {
+    "src/evaluation/provider_fixture_benchmark.py",
+    "tests/test_provider_fixture_benchmark.py",
+    "src/evaluation/controlled_groq_canary_run_005_plan.py",
+    "src/evaluation/controlled_groq_canary_run_005_identity.py",
+    "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_005_plan.py",
+    "tests/test_controlled_groq_canary_run_005_identity.py",
+    "tests/test_controlled_groq_canary_run_005_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+}
+
 PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
     "tests/test_rag_endpoint_behavior.py",
 }
@@ -1505,6 +1517,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES
         | PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES
         | PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES
+        | PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
 

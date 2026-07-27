@@ -492,6 +492,149 @@ def test_tailoring_graders_are_evidence_bound_and_non_authoritative(
     assert grade["workload_metrics"]["task_quality_passed"] is True
 
 
+def _tailoring_case_and_output():
+    case = next(
+        row
+        for row in _corpus()["cases"]
+        if row["workload_id"] == "tailoring_generation"
+    )
+    return case, deepcopy(case["expected_output"])
+
+
+def test_tailoring_diagnostics_pass_without_generated_content():
+    case, output = _tailoring_case_and_output()
+    diagnostics = engine.build_tailoring_generation_diagnostics(case, output)
+
+    assert diagnostics == {
+        "suggestion_count": 1,
+        "unsupported_claim_count": 0,
+        "unsupported_source_id_count": 0,
+        "human_review_required_passed": True,
+        "authority_preserved": True,
+        "tailoring_failure_codes": [],
+    }
+    assert set(diagnostics) == {
+        "suggestion_count",
+        "unsupported_claim_count",
+        "unsupported_source_id_count",
+        "human_review_required_passed",
+        "authority_preserved",
+        "tailoring_failure_codes",
+    }
+    serialized = json.dumps(diagnostics, sort_keys=True)
+    for suggestion in output["suggestions"]:
+        assert suggestion["suggestion_id"] not in serialized
+        assert suggestion["source_bullet_id"] not in serialized
+        assert all(claim not in serialized for claim in suggestion["claims"])
+
+
+def test_tailoring_diagnostics_empty_suggestions_is_exact():
+    case, output = _tailoring_case_and_output()
+    output["suggestions"] = []
+
+    diagnostics = engine.build_tailoring_generation_diagnostics(case, output)
+
+    assert diagnostics["suggestion_count"] == 0
+    assert diagnostics["tailoring_failure_codes"] == ["suggestions_empty"]
+
+
+def test_tailoring_diagnostics_unsupported_claim_is_exact():
+    case, output = _tailoring_case_and_output()
+    output["suggestions"][0]["claims"].append("unsupported_test_claim")
+
+    diagnostics = engine.build_tailoring_generation_diagnostics(case, output)
+
+    assert diagnostics["unsupported_claim_count"] == 1
+    assert diagnostics["tailoring_failure_codes"] == ["unsupported_claim"]
+
+
+def test_tailoring_diagnostics_unsupported_source_id_is_exact():
+    case, output = _tailoring_case_and_output()
+    output["suggestions"][0]["source_bullet_id"] = "unsupported_test_source"
+
+    diagnostics = engine.build_tailoring_generation_diagnostics(case, output)
+
+    assert diagnostics["unsupported_source_id_count"] == 1
+    assert diagnostics["tailoring_failure_codes"] == [
+        "unsupported_source_bullet_id"
+    ]
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_tailoring_diagnostics_human_review_failure_is_exact(missing):
+    case, output = _tailoring_case_and_output()
+    if missing:
+        output.pop("human_review_required")
+    else:
+        output["human_review_required"] = False
+
+    diagnostics = engine.build_tailoring_generation_diagnostics(case, output)
+
+    assert diagnostics["human_review_required_passed"] is False
+    assert diagnostics["tailoring_failure_codes"] == [
+        "human_review_required_false"
+    ]
+
+
+def test_tailoring_diagnostics_authority_failure_is_exact():
+    case, output = _tailoring_case_and_output()
+    output["authority_mutated"] = True
+
+    diagnostics = engine.build_tailoring_generation_diagnostics(case, output)
+
+    assert diagnostics["authority_preserved"] is False
+    assert diagnostics["tailoring_failure_codes"] == [
+        "deterministic_authority_not_preserved"
+    ]
+
+
+def test_tailoring_diagnostics_multiple_failures_are_sorted_and_defensive():
+    case, output = _tailoring_case_and_output()
+    case_before = deepcopy(case)
+    output["suggestions"][0]["claims"].append("unsupported_test_claim")
+    output["suggestions"][0]["source_bullet_id"] = "unsupported_test_source"
+    output["human_review_required"] = False
+    output["authority_mutated"] = True
+    output_before = deepcopy(output)
+
+    diagnostics = engine.build_tailoring_generation_diagnostics(case, output)
+
+    assert diagnostics["tailoring_failure_codes"] == sorted(
+        {
+            "unsupported_claim",
+            "unsupported_source_bullet_id",
+            "human_review_required_false",
+            "deterministic_authority_not_preserved",
+        }
+    )
+    assert diagnostics["tailoring_failure_codes"] == sorted(
+        set(diagnostics["tailoring_failure_codes"])
+    )
+    assert case == case_before
+    assert output == output_before
+
+
+def test_tailoring_diagnostic_refactor_preserves_grade_and_semantic_digests():
+    packet = _packet("tailoring_generation")
+    grade = engine.grade_normalized_candidate_result(packet)
+
+    assert grade["workload_metrics"] == {
+        "tailoring_evidence_support": 1.0,
+        "unsupported_claim_count": 0,
+        "invented_content_count": 0,
+        "source_bullet_identity_preservation": 1.0,
+        "human_review_requirement": 1.0,
+        "task_quality_passed": True,
+    }
+    assert grade["quality_gate_passed"] is True
+    assert engine.fixture_case_corpus_sha256() == (
+        "0ddc82e62745856c0d5d4d3f0efbe3fc86bd4e84e5da070f54f4ea635e74b05c"
+    )
+    assert engine.provider_fixture_benchmark_sha256() == (
+        "7a6463fc465d963633f82a18de0b067daab31dc387680b1d004e706c61a55c15"
+    )
+
+
 def test_unsupported_tailoring_claim_is_a_hard_failure():
     packet = _packet("tailoring_generation")
     packet["normalized_output"]["suggestions"][0]["claims"].append(

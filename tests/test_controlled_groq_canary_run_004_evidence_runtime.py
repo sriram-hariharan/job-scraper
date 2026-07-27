@@ -298,7 +298,13 @@ def test_checkpoint_and_result_persistence_are_exclusive_atomic_and_0600(tmp_pat
         )
 
 
-def test_persistence_rejects_traversal_symlink_and_real_artifacts_remain_absent(tmp_path):
+def test_persistence_rejects_traversal_symlink_and_real_artifacts_remain_unchanged(
+    tmp_path,
+):
+    real_artifacts_before = {
+        name: Path(path).read_bytes() if Path(path).exists() else None
+        for name, path in RUN_004_ARTIFACT_PATHS.items()
+    }
     kwargs = _kwargs()
     root = _temp_root(tmp_path)
     checkpoint = owner.build_empty_run_004_checkpoint(**kwargs)
@@ -313,9 +319,10 @@ def test_persistence_rejects_traversal_symlink_and_real_artifacts_remain_absent(
         owner.write_initial_run_004_checkpoint(
             symlink, checkpoint, repository_root=root, **kwargs,
         )
-    assert all(
-        not Path(path).exists() for path in RUN_004_ARTIFACT_PATHS.values()
-    )
+    assert {
+        name: Path(path).read_bytes() if Path(path).exists() else None
+        for name, path in RUN_004_ARTIFACT_PATHS.items()
+    } == real_artifacts_before
 
 
 def test_import_and_build_persist_no_generated_or_credential_material():

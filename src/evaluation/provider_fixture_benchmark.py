@@ -108,6 +108,15 @@ _SENSITIVE_MARKERS = {
     "private_runtime",
 }
 _NOT_OBSERVED_OFFLINE = "not_observed_offline"
+TAILORING_DIAGNOSTIC_FAILURE_CODES = frozenset(
+    {
+        "suggestions_empty",
+        "unsupported_claim",
+        "unsupported_source_bullet_id",
+        "human_review_required_false",
+        "deterministic_authority_not_preserved",
+    }
+)
 _NOT_APPLICABLE_FALLBACK = "not_applicable_fallback_disabled"
 
 _WORKLOAD_GRADER_RESPONSIBILITIES = {
@@ -1155,14 +1164,62 @@ def _grade_critic(
     }
 
 
+def build_tailoring_generation_diagnostics(
+    case: Mapping[str, Any],
+    normalized_output: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Return bounded diagnostics without retaining generated content."""
+
+    suggestions_value = normalized_output.get("suggestions")
+    suggestions = (
+        suggestions_value if isinstance(suggestions_value, list) else []
+    )
+    supported_tokens = _normalized_set(case.get("supported_evidence_tokens"))
+    supported_ids = set(case.get("supported_evidence_ids", []))
+    claims: set[str] = set()
+    source_ids: set[str] = set()
+    for suggestion in suggestions:
+        if not isinstance(suggestion, Mapping):
+            continue
+        claims |= _normalized_set(suggestion.get("claims"))
+        source_ids.add(_clean_text(suggestion.get("source_bullet_id")))
+    unsupported_claim_count = len(claims - supported_tokens)
+    unsupported_source_id_count = len(source_ids - supported_ids)
+    human_review_required_passed = (
+        normalized_output.get("human_review_required") is True
+    )
+    authority_preserved = _authority_preserved(case, normalized_output)
+    failure_codes = []
+    if not suggestions:
+        failure_codes.append("suggestions_empty")
+    if unsupported_claim_count:
+        failure_codes.append("unsupported_claim")
+    if unsupported_source_id_count:
+        failure_codes.append("unsupported_source_bullet_id")
+    if not human_review_required_passed:
+        failure_codes.append("human_review_required_false")
+    if not authority_preserved:
+        failure_codes.append("deterministic_authority_not_preserved")
+    failure_codes = sorted(set(failure_codes))
+    if not set(failure_codes) <= TAILORING_DIAGNOSTIC_FAILURE_CODES:
+        raise ValueError("tailoring diagnostic failure code is invalid")
+    return {
+        "suggestion_count": len(suggestions),
+        "unsupported_claim_count": unsupported_claim_count,
+        "unsupported_source_id_count": unsupported_source_id_count,
+        "human_review_required_passed": human_review_required_passed,
+        "authority_preserved": authority_preserved,
+        "tailoring_failure_codes": failure_codes,
+    }
+
+
 def _grade_tailoring_generation(
     case: Mapping[str, Any],
     output: Mapping[str, Any],
 ) -> Dict[str, Any]:
+    diagnostics = build_tailoring_generation_diagnostics(case, output)
     suggestions = output.get("suggestions")
     suggestions = suggestions if isinstance(suggestions, list) else []
-    supported_tokens = _normalized_set(case.get("supported_evidence_tokens"))
-    supported_ids = set(case.get("supported_evidence_ids", []))
     claims: set[str] = set()
     source_ids: set[str] = set()
     for suggestion in suggestions:
@@ -1170,26 +1227,22 @@ def _grade_tailoring_generation(
             continue
         claims |= _normalized_set(suggestion.get("claims"))
         source_ids.add(_clean_text(suggestion.get("source_bullet_id")))
-    unsupported = claims - supported_tokens
-    unsupported_ids = source_ids - supported_ids
-    evidence_support = _rate(len(claims - unsupported), len(claims))
-    human_review = output.get("human_review_required") is True
-    authority = _authority_preserved(case, output)
+    unsupported_count = diagnostics["unsupported_claim_count"]
+    evidence_support = _rate(
+        len(claims) - unsupported_count,
+        len(claims),
+    )
     return {
         "tailoring_evidence_support": evidence_support,
-        "unsupported_claim_count": len(unsupported),
-        "invented_content_count": len(unsupported),
+        "unsupported_claim_count": unsupported_count,
+        "invented_content_count": unsupported_count,
         "source_bullet_identity_preservation": 1.0
-        if not unsupported_ids and bool(source_ids)
+        if diagnostics["unsupported_source_id_count"] == 0 and bool(source_ids)
         else 0.0,
-        "human_review_requirement": 1.0 if human_review else 0.0,
-        "task_quality_passed": (
-            bool(suggestions)
-            and not unsupported
-            and not unsupported_ids
-            and human_review
-            and authority
-        ),
+        "human_review_requirement": 1.0
+        if diagnostics["human_review_required_passed"]
+        else 0.0,
+        "task_quality_passed": not diagnostics["tailoring_failure_codes"],
     }
 
 

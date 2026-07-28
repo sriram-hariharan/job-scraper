@@ -226,6 +226,14 @@ PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES = {
+    "application_execution_queue.py",
+    "src/agents/operator_review_agent.py",
+    "tests/test_phase15b_conditional_operator_review_caller_reconciliation.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1433,6 +1441,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase14c_authoritative_tailoring_node": (
             PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
         ),
+        "phase15b_conditional_operator_review_caller": (
+            PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
+        ),
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1561,6 +1572,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         )
         | legacy_guard_allowlist(
             "phase14c_authoritative_tailoring_node"
+        )
+        | legacy_guard_allowlist(
+            "phase15b_conditional_operator_review_caller"
         )
         | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"

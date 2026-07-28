@@ -15,7 +15,10 @@ from src.agents.job_prioritization_agent import (
 )
 from src.agents.resume_match_agent import _truthy
 from src.agents.operator_review_agent import (
+    agent_trace_enabled as operator_review_trace_enabled,
+    build_operator_review_shared_result,
     record_operator_review_agent_trace,
+    trace_context_from_env as operator_review_trace_context_from_env,
     write_operator_review_artifacts,
 )
 from src.agents.tailoring_decision_agent import (
@@ -1902,7 +1905,35 @@ def main() -> None:
         tailoring_decision_rows,
         shared_result=tailoring_shared_result,
     )
-    if str(args.operator_review_output_csv or "").strip():
+    operator_review_artifact_requested = bool(
+        str(args.operator_review_output_csv or "").strip()
+    )
+    operator_review_trace_is_enabled = operator_review_trace_enabled()
+    operator_review_context = (
+        operator_review_trace_context_from_env()
+        if operator_review_artifact_requested
+        or operator_review_trace_is_enabled
+        else {}
+    )
+    operator_review_trace_eligible = (
+        operator_review_trace_is_enabled
+        and bool(operator_review_context.get("owner_user_id"))
+        and bool(operator_review_context.get("pipeline_run_id"))
+    )
+    operator_review_shared_result = None
+    if operator_review_artifact_requested or operator_review_trace_eligible:
+        operator_review_shared_result = build_operator_review_shared_result(
+            rows=operator_review_rows,
+            pipeline_run_id=str(
+                operator_review_context.get("pipeline_run_id") or ""
+            ),
+            owner_user_id=str(
+                operator_review_context.get("owner_user_id") or ""
+            ),
+            source_artifact_path=str(output_csv_path),
+        )
+
+    if operator_review_artifact_requested:
         try:
             operator_review_artifact = write_operator_review_artifacts(
                 rows=operator_review_rows,
@@ -1914,6 +1945,7 @@ def main() -> None:
                 ),
                 owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
                 source_artifact_path=str(output_csv_path),
+                shared_result=operator_review_shared_result,
             )
         except Exception as exc:
             print(f"Operator review advisory artifact skipped: {exc}")
@@ -1940,6 +1972,7 @@ def main() -> None:
     operator_review_trace_result = record_operator_review_agent_trace(
         rows=operator_review_rows,
         source_artifact_path=str(output_csv_path),
+        shared_result=operator_review_shared_result,
     )
     if operator_review_trace_result.get("attempted") and not operator_review_trace_result.get("recorded"):
         print(

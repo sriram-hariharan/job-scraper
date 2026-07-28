@@ -19,8 +19,10 @@ from src.agents.operator_review_agent import (
     write_operator_review_artifacts,
 )
 from src.agents.tailoring_decision_agent import (
+    build_tailoring_decision_shared_result,
     record_tailoring_decision_agent_trace,
     render_tailoring_decision_rows,
+    validate_tailoring_decision_shared_result,
     write_tailoring_decision_artifacts,
 )
 from src.config.settings import APPLICATION_EXECUTION_QUEUE_POLICY
@@ -1489,10 +1491,22 @@ def _with_priority_overlay(
     return merged_rows
 
 
-def _with_tailoring_decision_overlay(rows: List[dict]) -> List[dict]:
+def _with_tailoring_decision_overlay(
+    rows: List[dict],
+    *,
+    shared_result: Mapping[str, Any] | None = None,
+) -> List[dict]:
+    rendered_rows = (
+        render_tailoring_decision_rows(rows)
+        if shared_result is None
+        else validate_tailoring_decision_shared_result(
+            shared_result,
+            expected_rows=rows,
+        )["rendered_rows"]
+    )
     tailoring_by_key = {
         _job_key(row): row
-        for row in render_tailoring_decision_rows(rows)
+        for row in rendered_rows
         if _job_key(row)
     }
     merged_rows: List[dict] = []
@@ -1744,6 +1758,12 @@ def main() -> None:
         source_artifact_reference=str(output_csv_path),
         shared_result=priority_shared_result,
     )
+    tailoring_shared_result = build_tailoring_decision_shared_result(
+        rows=tailoring_decision_rows,
+        pipeline_run_id=priority_pipeline_run_id,
+        owner_user_id=priority_owner_user_id,
+        source_artifact_path=priority_source_artifact_path,
+    )
     if str(args.tailoring_decision_output_csv or "").strip():
         try:
             tailoring_decision_artifact = write_tailoring_decision_artifacts(
@@ -1756,12 +1776,16 @@ def main() -> None:
                 ),
                 owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
                 source_artifact_path=str(output_csv_path),
+                shared_result=tailoring_shared_result,
             )
         except Exception as exc:
             print(f"Tailoring decision advisory artifact skipped: {exc}")
 
     operator_review_artifact = None
-    operator_review_rows = _with_tailoring_decision_overlay(tailoring_decision_rows)
+    operator_review_rows = _with_tailoring_decision_overlay(
+        tailoring_decision_rows,
+        shared_result=tailoring_shared_result,
+    )
     if str(args.operator_review_output_csv or "").strip():
         try:
             operator_review_artifact = write_operator_review_artifacts(
@@ -1789,6 +1813,7 @@ def main() -> None:
     tailoring_trace_result = record_tailoring_decision_agent_trace(
         rows=tailoring_decision_rows,
         source_artifact_path=str(output_csv_path),
+        shared_result=tailoring_shared_result,
     )
     if tailoring_trace_result.get("attempted") and not tailoring_trace_result.get("recorded"):
         print(

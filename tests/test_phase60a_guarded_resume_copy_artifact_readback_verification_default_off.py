@@ -36,7 +36,7 @@ PROTECTED_HASHES = {
         "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28"
     ),
     "application_execution_" + "queue" + ".py": (
-        "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5"
+        "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e"
     ),
 }
 

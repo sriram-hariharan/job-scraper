@@ -48,13 +48,20 @@ JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG = (
 AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_ENABLED"
 )
+AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_ENABLED"
+)
 PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_FLAG = (
     "APPLYLENS_PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_ENABLED"
 )
 AUTHORITATIVE_JOB_PRIORITIZATION_NODE = (
     "build_job_prioritization_shared_result"
 )
+AUTHORITATIVE_TAILORING_DECISION_NODE = (
+    "build_tailoring_decision_shared_result"
+)
 MAX_AUTHORITATIVE_PRIORITY_LATENCY_MS = 300_000
+MAX_AUTHORITATIVE_TAILORING_LATENCY_MS = 300_000
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -1397,6 +1404,101 @@ def _build_authoritative_priority_shared_result(
     return shared_result, metadata
 
 
+def _authoritative_tailoring_decision_langgraph_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(
+        env_map.get(AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_FLAG)
+    )
+
+
+def _bounded_authoritative_tailoring_latency_ms(
+    started_ns: int,
+) -> int:
+    elapsed_ms = int((time.perf_counter_ns() - started_ns) / 1_000_000)
+    return max(
+        0,
+        min(elapsed_ms, MAX_AUTHORITATIVE_TAILORING_LATENCY_MS),
+    )
+
+
+def _build_authoritative_tailoring_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    source_artifact_path: str,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    env_map = os.environ if env is None else env
+    if not _authoritative_tailoring_decision_langgraph_enabled(env_map):
+        started_ns = time.perf_counter_ns()
+        shared_result = build_tailoring_decision_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        validated = validate_tailoring_decision_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        return validated, {
+            "graph_version": "",
+            "state_version": "",
+            "execution_mode": "direct",
+            "node_name": AUTHORITATIVE_TAILORING_DECISION_NODE,
+            "production_node_count": 0,
+            "invocation_count": 1,
+            "node_latency_ms": (
+                _bounded_authoritative_tailoring_latency_ms(started_ns)
+            ),
+            "status": "completed",
+            "failure_classification": "",
+            "deterministic": True,
+            "read_only": True,
+            "provider_calls_allowed": False,
+            "mutation_authority": False,
+            "application_authority": False,
+            "ats_authority": False,
+        }
+
+    from src.agents.tailoring_decision_authoritative_graph import (
+        execute_authoritative_tailoring_decision_graph,
+    )
+
+    result = execute_authoritative_tailoring_decision_graph(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+        source_artifact_path=source_artifact_path,
+    )
+    shared_result = validate_tailoring_decision_shared_result(
+        result.get("shared_result", {}),
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("invocation_count") != 1
+        or metadata.get("production_node_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_tailoring_decision_execution_metadata_invalid"
+        )
+    return shared_result, metadata
+
+
 def _bounded_graph_verification_exception_summary(
     input_row_count: int,
 ) -> Dict[str, Any]:
@@ -1758,12 +1860,26 @@ def main() -> None:
         source_artifact_reference=str(output_csv_path),
         shared_result=priority_shared_result,
     )
-    tailoring_shared_result = build_tailoring_decision_shared_result(
+    (
+        tailoring_shared_result,
+        tailoring_execution_metadata,
+    ) = _build_authoritative_tailoring_shared_result(
         rows=tailoring_decision_rows,
         pipeline_run_id=priority_pipeline_run_id,
         owner_user_id=priority_owner_user_id,
+        context_id=priority_context_id,
         source_artifact_path=priority_source_artifact_path,
     )
+    if tailoring_execution_metadata["execution_mode"] == "langgraph":
+        print(
+            "Authoritative tailoring decision execution: "
+            + json.dumps(
+                tailoring_execution_metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
     if str(args.tailoring_decision_output_csv or "").strip():
         try:
             tailoring_decision_artifact = write_tailoring_decision_artifacts(

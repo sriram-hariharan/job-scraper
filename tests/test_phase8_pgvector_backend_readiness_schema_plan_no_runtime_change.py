@@ -303,5 +303,5 @@ def test_root_queue_execution_surface_matches_phase8i_checkpoint():
 
     assert all(path.exists() for path in paths)
     assert _aggregate_hash(paths) == (
-        "8c8644b80195e0e9c2fedcc90f1ee51e61bfbba32d4427ab6352a93a1aa43738"
+        "173a54b215fa7a3a8ad5c83e3720b8d8d1cd6833e0d6c403889673dbe6aa524a"
     )

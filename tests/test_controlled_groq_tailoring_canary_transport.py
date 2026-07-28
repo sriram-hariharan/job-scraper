@@ -40,7 +40,7 @@ PROTECTED_FILE_SHAS = {
         "8fdd9eb765fef33d6855a2992c4a5e12aa48c97d055fd41b26076034833a98c6"
     ),
     "src/agents/tailoring_decision_agent.py": (
-        "76c69881c1c3f76c0d34dad3768f3fedd6012207d3663a4c2503644a1a200c73"
+        "8937816651d96e6f5b475a4fc99285ff0a80443269dd1a0359b94fc6f599921e"
     ),
     "src/ai/llm_client.py": (
         "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2"

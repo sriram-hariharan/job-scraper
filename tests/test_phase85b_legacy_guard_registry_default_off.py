@@ -26,6 +26,7 @@ from tests.support.phase_guard_registry import (
     PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES,
     PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES,
     PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES,
+    PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1397,6 +1398,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase11_step3_profile
         | PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES
         | PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES
+        | PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
         | phase9_step12_compatibility_profile
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
         | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
@@ -1425,6 +1427,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase13c_first_authoritative_job_prioritization_node.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
         "tests/support/phase_guard_registry.py",
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }
@@ -1442,6 +1445,19 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert not any(
         "*" in path
         for path in PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES
+    )
+    assert PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES == {
+        "application_execution_queue.py",
+        "src/agents/tailoring_decision_authoritative_graph.py",
+        "tests/test_phase14c_second_authoritative_tailoring_node.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
     )
     assert PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES == {
         "src/agents/production_shadow_artifact_adapter.py",

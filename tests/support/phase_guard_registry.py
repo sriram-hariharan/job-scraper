@@ -203,6 +203,7 @@ PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES = {
     "tests/test_phase13c_first_authoritative_job_prioritization_node.py",
     "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
     "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
     "tests/support/phase_guard_registry.py",
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
@@ -211,6 +212,16 @@ PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES = {
     "application_execution_queue.py",
     "src/agents/tailoring_decision_agent.py",
     "tests/test_phase14b_authoritative_tailoring_caller_reconciliation.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES = {
+    "application_execution_queue.py",
+    "src/agents/tailoring_decision_authoritative_graph.py",
+    "tests/test_phase14c_second_authoritative_tailoring_node.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
     "tests/support/phase_guard_registry.py",
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
@@ -1419,6 +1430,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase14b_authoritative_tailoring_caller": (
             PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES
         ),
+        "phase14c_authoritative_tailoring_node": (
+            PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
+        ),
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1546,6 +1560,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase14b_authoritative_tailoring_caller"
         )
         | legacy_guard_allowlist(
+            "phase14c_authoritative_tailoring_node"
+        )
+        | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
@@ -1609,11 +1626,19 @@ def assert_protected_hashes(
         (
             "application_execution_queue.py",
             "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
-        ): "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5",
+        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
         (
             "application_execution_queue.py",
             "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097",
-        ): "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5",
+        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        (
+            "application_execution_queue.py",
+            "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5",
+        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        (
+            "application_execution_queue.py",
+            "417ee7a37bf05c4cbfa7fe01c1b1d09376a2c7680d2a97867d3ebb529c48cf9f",
+        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
         (
             "requirements.txt",
             "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",

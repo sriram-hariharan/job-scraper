@@ -215,7 +215,7 @@ def test_pipeline_dependencies_and_application_authority_are_unchanged():
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"
         ),
         "application_execution_queue.py": (
-            "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097"
+            "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5"
         ),
     }
     for relative_path, expected_hash in expected.items():

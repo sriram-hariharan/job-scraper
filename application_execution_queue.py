@@ -3,6 +3,7 @@ import csv
 import json
 import os
 from pathlib import Path
+import time
 from typing import Any, Dict, List, Mapping
 
 from src.agents.job_prioritization_agent import (
@@ -42,6 +43,16 @@ PRODUCTION_SCHEDULER_OBSERVABILITY_REPORTING_GATE_ENABLED = True
 JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG = (
     "APPLYLENS_DETERMINISTIC_JOB_PRIORITIZATION_GRAPH_VERIFY_ENABLED"
 )
+AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_ENABLED"
+)
+PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_FLAG = (
+    "APPLYLENS_PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_ENABLED"
+)
+AUTHORITATIVE_JOB_PRIORITIZATION_NODE = (
+    "build_job_prioritization_shared_result"
+)
+MAX_AUTHORITATIVE_PRIORITY_LATENCY_MS = 300_000
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -1269,6 +1280,121 @@ def _job_prioritization_graph_verification_enabled(
     return _truthy(env_map.get(JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG))
 
 
+class AuthoritativeJobPrioritizationGateConflictError(RuntimeError):
+    def __init__(self, failure_code: str) -> None:
+        self.failure_code = failure_code
+        super().__init__(failure_code)
+
+
+def _authoritative_job_prioritization_langgraph_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(
+        env_map.get(AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_FLAG)
+    )
+
+
+def _assert_authoritative_job_prioritization_gates_compatible(
+    env: Mapping[str, str],
+) -> None:
+    if not _authoritative_job_prioritization_langgraph_enabled(env):
+        return
+    if _truthy(env.get(JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG)):
+        raise AuthoritativeJobPrioritizationGateConflictError(
+            "authoritative_priority_conflict_diagnostic_verification"
+        )
+    if _truthy(env.get(PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_FLAG)):
+        raise AuthoritativeJobPrioritizationGateConflictError(
+            "authoritative_priority_conflict_production_shadow_owner"
+        )
+
+
+def _bounded_authoritative_priority_latency_ms(started_ns: int) -> int:
+    elapsed_ms = int((time.perf_counter_ns() - started_ns) / 1_000_000)
+    return max(
+        0,
+        min(elapsed_ms, MAX_AUTHORITATIVE_PRIORITY_LATENCY_MS),
+    )
+
+
+def _build_authoritative_priority_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    source_artifact_path: str,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    env_map = os.environ if env is None else env
+    _assert_authoritative_job_prioritization_gates_compatible(env_map)
+    if not _authoritative_job_prioritization_langgraph_enabled(env_map):
+        started_ns = time.perf_counter_ns()
+        shared_result = build_job_prioritization_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        validated = validate_job_prioritization_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        return validated, {
+            "graph_version": "",
+            "state_version": "",
+            "execution_mode": "direct",
+            "node_name": AUTHORITATIVE_JOB_PRIORITIZATION_NODE,
+            "production_node_count": 0,
+            "invocation_count": 1,
+            "node_latency_ms": (
+                _bounded_authoritative_priority_latency_ms(started_ns)
+            ),
+            "status": "completed",
+            "failure_classification": "",
+            "deterministic": True,
+            "read_only": True,
+            "provider_calls_allowed": False,
+            "mutation_authority": False,
+            "application_authority": False,
+            "ats_authority": False,
+        }
+
+    from src.agents.job_prioritization_authoritative_graph import (
+        execute_authoritative_job_prioritization_graph,
+    )
+
+    result = execute_authoritative_job_prioritization_graph(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+        source_artifact_path=source_artifact_path,
+    )
+    shared_result = validate_job_prioritization_shared_result(
+        result.get("shared_result", {}),
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("invocation_count") != 1
+        or metadata.get("production_node_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_job_prioritization_execution_metadata_invalid"
+        )
+    return shared_result, metadata
+
+
 def _bounded_graph_verification_exception_summary(
     input_row_count: int,
 ) -> Dict[str, Any]:
@@ -1568,12 +1694,34 @@ def main() -> None:
         "JOB_STACK_OWNER_USER_ID", ""
     ).strip()
     priority_source_artifact_path = str(output_csv_path)
-    priority_shared_result = build_job_prioritization_shared_result(
+    priority_context_id = (
+        os.getenv("APPLYLENS_AGENT_CONTEXT_ID", "").strip()
+        or (
+            f"job_priority:{priority_pipeline_run_id}"
+            if priority_pipeline_run_id
+            else ""
+        )
+    )
+    (
+        priority_shared_result,
+        priority_execution_metadata,
+    ) = _build_authoritative_priority_shared_result(
         rows=queue_rows,
         pipeline_run_id=priority_pipeline_run_id,
         owner_user_id=priority_owner_user_id,
+        context_id=priority_context_id,
         source_artifact_path=priority_source_artifact_path,
     )
+    if priority_execution_metadata["execution_mode"] == "langgraph":
+        print(
+            "Authoritative job prioritization execution: "
+            + json.dumps(
+                priority_execution_metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
 
     priority_artifact = None
     if str(args.priority_output_csv or "").strip():

@@ -197,6 +197,16 @@ PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES = {
     "tests/test_phase12d_first_deterministic_production_owner.py",
 }
 
+PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES = {
+    "application_execution_queue.py",
+    "src/agents/job_prioritization_authoritative_graph.py",
+    "tests/test_phase13c_first_authoritative_job_prioritization_node.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1395,6 +1405,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         }
         | PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
+        "phase13c_authoritative_job_prioritization_node": (
+            PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES
+        ),
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1516,6 +1529,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase11_step3_job_prioritization_graph_integration"
         )
         | legacy_guard_allowlist(
+            "phase13c_authoritative_job_prioritization_node"
+        )
+        | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
@@ -1579,7 +1595,11 @@ def assert_protected_hashes(
         (
             "application_execution_queue.py",
             "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
-        ): "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097",
+        ): "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5",
+        (
+            "application_execution_queue.py",
+            "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097",
+        ): "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5",
         (
             "requirements.txt",
             "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",

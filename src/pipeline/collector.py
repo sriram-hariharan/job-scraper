@@ -32,6 +32,9 @@ AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_FLAG = (
 AUTHORITATIVE_FINAL_SCORING_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_FINAL_SCORING_LANGGRAPH_ENABLED"
 )
+AUTHORITATIVE_JD_INTELLIGENCE_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_JD_INTELLIGENCE_LANGGRAPH_ENABLED"
+)
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
 )
@@ -525,6 +528,57 @@ def _maybe_execute_authoritative_final_scoring_graph(
     ):
         raise RuntimeError(
             "authoritative_final_scoring_execution_metadata_invalid"
+        )
+    return result
+
+
+def _authoritative_jd_intelligence_langgraph_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(AUTHORITATIVE_JD_INTELLIGENCE_LANGGRAPH_FLAG)
+    )
+
+
+def _maybe_execute_authoritative_jd_intelligence_graph(
+    *,
+    jobs: List[Dict[str, Any]],
+    build_job_intelligence_func: Callable[
+        [Dict[str, Any]],
+        Dict[str, Any],
+    ],
+    env: Dict[str, str] | None = None,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    if not _authoritative_jd_intelligence_langgraph_enabled(env_map):
+        return None
+
+    from src.agents.jd_intelligence_authoritative_graph import (
+        execute_authoritative_jd_intelligence_graph,
+    )
+
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="jd_intelligence",
+    )
+    result = execute_authoritative_jd_intelligence_graph(
+        jobs=jobs,
+        build_job_intelligence_func=build_job_intelligence_func,
+        pipeline_run_id=context["pipeline_run_id"],
+        owner_user_id=context["owner_user_id"],
+        context_id=context["context_id"],
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("production_node_count") != 1
+        or metadata.get("node_invocation_count") != 1
+        or metadata.get("jd_owner_invocation_count") != len(jobs)
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_jd_intelligence_execution_metadata_invalid"
         )
     return result
 
@@ -2509,6 +2563,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     reset_provider_metrics()
     reset_skill_cache_metrics()
 
+    jd_intelligence_graph_result = None
     if _truthy_env_value(os.environ.get(JD_INTELLIGENCE_CONTROLLED_LLM_FLAG)):
         controlled_jd_result = _build_intelligent_jobs_with_controlled_jd_agent_ownership(
             detailed_jobs,
@@ -2531,9 +2586,30 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
                 controlled_jd_summary.get("extraction_helper_called_count", 0),
             )
     else:
-        intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
+        jd_intelligence_graph_result = (
+            _maybe_execute_authoritative_jd_intelligence_graph(
+                jobs=detailed_jobs,
+                build_job_intelligence_func=build_job_intelligence,
+            )
+        )
+        if jd_intelligence_graph_result is None:
+            intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
+        else:
+            intelligent_jobs = deepcopy(
+                jd_intelligence_graph_result["intelligent_jobs"]
+            )
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
     complete_stage("intelligence", counts={"intelligent_jobs": len(intelligent_jobs)})
+    if jd_intelligence_graph_result is not None:
+        logger.info(
+            "Authoritative JD intelligence execution: %s",
+            json.dumps(
+                jd_intelligence_graph_result["execution_metadata"],
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+        )
     _maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence(
         intelligent_jobs
     )

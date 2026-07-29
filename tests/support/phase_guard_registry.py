@@ -245,6 +245,15 @@ PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES = {
+    "generate_tailoring_suggestions.py",
+    "src/pipeline/collector.py",
+    "src/agents/tailoring_generation_authoritative_graph.py",
+    "tests/test_phase17c_lean_tailoring_intelligence_llm_closure.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/support/phase_guard_registry.py",
+} | PHASE11_STEP3_DIRECT_HASH_GUARD_FILES
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1458,6 +1467,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase15c_conditional_operator_review_node": (
             PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
         ),
+        "phase17c_tailoring_generation_llm_closure": (
+            PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES
+        ),
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1594,6 +1606,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase15c_conditional_operator_review_node"
         )
         | legacy_guard_allowlist(
+            "phase17c_tailoring_generation_llm_closure"
+        )
+        | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
@@ -1721,7 +1736,15 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
-        ): "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",
+        ): "6bc823a688fdd7d270739ea9c1dbc83ef561988cc7f5625b8495bf50c7386689",
+        (
+            "src/pipeline/collector.py",
+            "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",
+        ): "6bc823a688fdd7d270739ea9c1dbc83ef561988cc7f5625b8495bf50c7386689",
+        (
+            "generate_tailoring_suggestions.py",
+            "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28",
+        ): "58ec07a92d2df1ab1ab72a9029d6fd685576c7c0124532bdeefd1e1fd52ed10c",
         (
             "src/app/static/agentic_review.js",
             "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
@@ -1737,6 +1760,9 @@ def assert_protected_hashes(
             ),
             legacy_guard_allowlist(
                 "phase11_step3_job_prioritization_graph_integration"
+            ),
+            legacy_guard_allowlist(
+                "phase17c_tailoring_generation_llm_closure"
             ),
         )
         if profiles

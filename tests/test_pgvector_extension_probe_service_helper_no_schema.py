@@ -273,7 +273,7 @@ def test_no_dependency_schema_migration_or_pipeline_change():
             "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/pipeline/collector.py": (
-            "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc"
+            "6bc823a688fdd7d270739ea9c1dbc83ef561988cc7f5625b8495bf50c7386689"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

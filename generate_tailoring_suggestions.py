@@ -12,6 +12,86 @@ from src.tailoring.rendering import (
     _build_training_log_row,
 )
 
+AUTHORITATIVE_TAILORING_GENERATION_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_TAILORING_GENERATION_LANGGRAPH_ENABLED"
+)
+
+
+def _truthy_env_value(value: object) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _authoritative_tailoring_generation_langgraph_enabled(
+    env: dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(AUTHORITATIVE_TAILORING_GENERATION_LANGGRAPH_FLAG)
+    )
+
+
+def _maybe_execute_authoritative_tailoring_generation_graph(
+    *,
+    packet: dict,
+    payload: dict,
+    run_tailoring_func,
+    output_llm_json: str = "",
+    refresh_llm_cache: bool = False,
+    enable_safe_app_ready_rewrite_promotion: bool = False,
+    env: dict[str, str] | None = None,
+) -> dict | None:
+    env_map = env if env is not None else os.environ
+    if not _authoritative_tailoring_generation_langgraph_enabled(env_map):
+        return None
+
+    from src.agents.tailoring_generation_authoritative_graph import (
+        execute_authoritative_tailoring_generation_graph,
+    )
+
+    pipeline_run_id = str(
+        env_map.get("JOB_APP_PIPELINE_RUN_ID")
+        or env_map.get("JOB_STACK_USER_PIPELINE_RUN_ID")
+        or ""
+    ).strip()
+    owner_user_id = str(
+        env_map.get("JOB_STACK_OWNER_USER_ID") or ""
+    ).strip()
+    context_id = str(
+        env_map.get("APPLYLENS_AGENT_CONTEXT_ID")
+        or (
+            f"tailoring_generation:{pipeline_run_id}"
+            if pipeline_run_id
+            else ""
+        )
+    ).strip()
+    result = execute_authoritative_tailoring_generation_graph(
+        packet=packet,
+        payload=payload,
+        run_tailoring_func=run_tailoring_func,
+        output_llm_json=output_llm_json,
+        refresh_llm_cache=refresh_llm_cache,
+        enable_safe_app_ready_rewrite_promotion=(
+            enable_safe_app_ready_rewrite_promotion
+        ),
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("production_node_count") != 1
+        or metadata.get("node_invocation_count") != 1
+        or metadata.get("tailoring_owner_invocation_count") != 1
+        or metadata.get("critic_invocation_count") != 0
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_tailoring_generation_execution_metadata_invalid"
+        )
+    return result
+
+
 def _print_rewrite_ideas_console(final_payload: dict) -> None:
     print("-" * 100)
     print("EVIDENCE-BACKED EDIT RECOMMENDATIONS")
@@ -220,13 +300,35 @@ def main() -> None:
     llm_output = None
     if args.use_llm:
         from src.tailoring.llm import _run_live_llm_tailoring
-        llm_output = _run_live_llm_tailoring(
+        graph_result = _maybe_execute_authoritative_tailoring_generation_graph(
             packet=packet,
             payload=payload,
+            run_tailoring_func=_run_live_llm_tailoring,
             output_llm_json=args.output_llm_json or "",
             refresh_llm_cache=args.refresh_llm_cache,
-            enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+            enable_safe_app_ready_rewrite_promotion=(
+                enable_safe_app_ready_rewrite_promotion
+            ),
         )
+        if graph_result is None:
+            llm_output = _run_live_llm_tailoring(
+                packet=packet,
+                payload=payload,
+                output_llm_json=args.output_llm_json or "",
+                refresh_llm_cache=args.refresh_llm_cache,
+                enable_safe_app_ready_rewrite_promotion=(
+                    enable_safe_app_ready_rewrite_promotion
+                ),
+            )
+        else:
+            llm_output = graph_result["tailoring_result"]
+            print(
+                "Authoritative tailoring graph: "
+                + json.dumps(
+                    graph_result["execution_metadata"],
+                    sort_keys=True,
+                )
+            )
 
         print("-" * 100)
         print("LIVE LLM TAILORING OUTPUT")

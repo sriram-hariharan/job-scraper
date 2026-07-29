@@ -29,6 +29,7 @@ from tests.support.phase_guard_registry import (
     PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES,
     PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES,
     PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES,
+    PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1403,6 +1404,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
         | PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
         | PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
+        | PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES
         | phase9_step12_compatibility_profile
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
         | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES

@@ -35,6 +35,9 @@ AUTHORITATIVE_FINAL_SCORING_LANGGRAPH_FLAG = (
 AUTHORITATIVE_JD_INTELLIGENCE_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_JD_INTELLIGENCE_LANGGRAPH_ENABLED"
 )
+AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_ENABLED"
+)
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
 )
@@ -579,6 +582,56 @@ def _maybe_execute_authoritative_jd_intelligence_graph(
     ):
         raise RuntimeError(
             "authoritative_jd_intelligence_execution_metadata_invalid"
+        )
+    return result
+
+
+def _authoritative_semantic_evaluation_langgraph_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_FLAG)
+    )
+
+
+def _maybe_execute_authoritative_semantic_evaluation_graph(
+    *,
+    jobs: List[Dict[str, Any]],
+    evaluate_jobs_func: Callable[
+        [List[Dict[str, Any]]],
+        List[Dict[str, Any]],
+    ],
+    env: Dict[str, str] | None = None,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    if not _authoritative_semantic_evaluation_langgraph_enabled(env_map):
+        return None
+
+    from src.agents.semantic_evaluation_authoritative_graph import (
+        execute_authoritative_semantic_evaluation_graph,
+    )
+
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="semantic_evaluation",
+    )
+    result = execute_authoritative_semantic_evaluation_graph(
+        jobs=jobs,
+        evaluate_jobs_func=evaluate_jobs_func,
+        pipeline_run_id=context["pipeline_run_id"],
+        owner_user_id=context["owner_user_id"],
+        context_id=context["context_id"],
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("production_node_count") != 1
+        or metadata.get("invocation_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_semantic_evaluation_execution_metadata_invalid"
         )
     return result
 
@@ -2741,9 +2794,28 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("AI JOB EVALUATION", logger)
     start_stage("ai_evaluation", f"Evaluating {len(evaluable_jobs)} jobs with AI")
 
-    ai_jobs = evaluate_jobs(evaluable_jobs)
+    semantic_evaluation_graph_result = (
+        _maybe_execute_authoritative_semantic_evaluation_graph(
+            jobs=evaluable_jobs,
+            evaluate_jobs_func=evaluate_jobs,
+        )
+    )
+    if semantic_evaluation_graph_result is None:
+        ai_jobs = evaluate_jobs(evaluable_jobs)
+    else:
+        ai_jobs = semantic_evaluation_graph_result["evaluated_jobs"]
     logger.info(f"AI evaluated {len(ai_jobs)} jobs")
     complete_stage("ai_evaluation", counts={"ai_jobs": len(ai_jobs)})
+    if semantic_evaluation_graph_result is not None:
+        logger.info(
+            "Authoritative semantic evaluation execution: %s",
+            json.dumps(
+                semantic_evaluation_graph_result["execution_metadata"],
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+        )
 
     provider_summary = get_provider_metrics()
     logger.info(

@@ -29,6 +29,9 @@ logger = get_logger("collector")
 AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_ENABLED"
 )
+AUTHORITATIVE_FINAL_SCORING_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_FINAL_SCORING_LANGGRAPH_ENABLED"
+)
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
 )
@@ -477,6 +480,51 @@ def _maybe_execute_authoritative_prefilter_dedupe_graph(
     ):
         raise RuntimeError(
             "authoritative_prefilter_dedupe_execution_metadata_invalid"
+        )
+    return result
+
+
+def _authoritative_final_scoring_langgraph_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(AUTHORITATIVE_FINAL_SCORING_LANGGRAPH_FLAG)
+    )
+
+
+def _maybe_execute_authoritative_final_scoring_graph(
+    *,
+    jobs: List[Dict[str, Any]],
+    env: Dict[str, str] | None = None,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    if not _authoritative_final_scoring_langgraph_enabled(env_map):
+        return None
+
+    from src.agents.final_scoring_authoritative_graph import (
+        execute_authoritative_final_scoring_graph,
+    )
+
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="final_scoring",
+    )
+    result = execute_authoritative_final_scoring_graph(
+        jobs=jobs,
+        pipeline_run_id=context["pipeline_run_id"],
+        owner_user_id=context["owner_user_id"],
+        context_id=context["context_id"],
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("production_node_count") != 1
+        or metadata.get("invocation_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_final_scoring_execution_metadata_invalid"
         )
     return result
 
@@ -2677,9 +2725,25 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("APPLICATION PRIORITY", logger)
     start_stage("application_priority", f"Scoring {len(ai_jobs)} jobs for application priority")
 
-    scored_jobs = score_jobs(ai_jobs)
+    final_scoring_graph_result = (
+        _maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)
+    )
+    if final_scoring_graph_result is None:
+        scored_jobs = score_jobs(ai_jobs)
+    else:
+        scored_jobs = deepcopy(final_scoring_graph_result["scored_jobs"])
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
+    if final_scoring_graph_result is not None:
+        logger.info(
+            "Authoritative final scoring execution: %s",
+            json.dumps(
+                final_scoring_graph_result["execution_metadata"],
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+        )
     vector_evidence_hook_payload = (
         _maybe_collect_vector_evidence_after_application_priority(scored_jobs)
     )

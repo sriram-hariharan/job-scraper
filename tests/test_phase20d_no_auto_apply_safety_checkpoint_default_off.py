@@ -1091,6 +1091,19 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase16b_final_scoring_orchestration_runtime_files = {
+        ROOT / "src/pipeline/collector.py",
+        ROOT / "src/agents/final_scoring_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase16b_final_scoring_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase8_step4_deleted_runtime_file = ROOT / "src/ai/deterministic_skill_extractor.py"
     if changed_runtime_files == [phase8_step4_deleted_runtime_file]:
         assert not phase8_step4_deleted_runtime_file.exists()

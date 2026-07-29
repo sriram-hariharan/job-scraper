@@ -1,7 +1,7 @@
 from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 import asyncio
 import hashlib
 import json
@@ -26,6 +26,9 @@ from src.utils.logging import get_logger
 
 logger = get_logger("collector")
 
+AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_ENABLED"
+)
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
 )
@@ -409,6 +412,73 @@ def resolve_pipeline_preference_runtime(
 
 def _truthy_env_value(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _authoritative_prefilter_dedupe_langgraph_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_FLAG)
+    )
+
+
+def _maybe_execute_authoritative_prefilter_dedupe_graph(
+    *,
+    jobs: List[Dict[str, Any]],
+    selected_role_families: List[str] | None,
+    filter_mode: str,
+    role_title_audit_rows: List[Dict[str, Any]] | None,
+    excluded_keywords: List[str],
+    on_prefilter_completed: Callable[
+        [
+            List[Dict[str, Any]],
+            Dict[str, int],
+            List[Dict[str, Any]],
+        ],
+        None,
+    ]
+    | None = None,
+    on_dedupe_completed: Callable[[List[Dict[str, Any]]], None]
+    | None = None,
+    env: Dict[str, str] | None = None,
+) -> Dict[str, Any] | None:
+    env_map = env if env is not None else os.environ
+    if not _authoritative_prefilter_dedupe_langgraph_enabled(env_map):
+        return None
+
+    from src.agents.deterministic_prefilter_dedupe_authoritative_graph import (
+        execute_authoritative_prefilter_dedupe_graph,
+    )
+
+    context = _agent_trace_context_from_env(
+        env=env_map,
+        context_prefix="prefilter_dedupe",
+    )
+    result = execute_authoritative_prefilter_dedupe_graph(
+        jobs=jobs,
+        selected_role_families=selected_role_families,
+        filter_mode=filter_mode,
+        role_title_audit_rows=role_title_audit_rows,
+        excluded_keywords=excluded_keywords,
+        pipeline_run_id=context["pipeline_run_id"],
+        owner_user_id=context["owner_user_id"],
+        context_id=context["context_id"],
+        on_prefilter_completed=on_prefilter_completed,
+        on_dedupe_completed=on_dedupe_completed,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("production_node_count") != 2
+        or metadata.get("prefilter_invocation_count") != 1
+        or metadata.get("dedupe_invocation_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_prefilter_dedupe_execution_metadata_invalid"
+        )
+    return result
 
 
 def _utc_now_iso() -> str:
@@ -2153,65 +2223,201 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
 
     role_title_audit_rows = [] if _is_user_pipeline_mode() and selected_role_families else None
-    filter_result = filter_jobs(
-        all_jobs,
-        selected_role_families=selected_role_families or None,
-        filter_mode="user_pipeline" if _is_user_pipeline_mode() else "strict_live",
-        return_diagnostics=True,
-        role_title_audit_rows=role_title_audit_rows,
-        excluded_keywords=pipeline_preferences["excluded_keywords"],
-    )
-    filtered_jobs, filter_diagnostics = filter_result
-    role_title_audit_summary = role_title_filter_audit_counts(role_title_audit_rows or [])
-    if role_title_audit_rows is not None:
-        audit_path = Path(corpus_path).expanduser().with_name("role_title_filter_audit.csv")
-        write_role_title_filter_audit_csv(role_title_audit_rows, audit_path)
-        logger.info(
-            "Role title filter audit written: %s | total=%s pass=%s reject=%s suspected_false_negative=%s",
-            audit_path,
-            role_title_audit_summary["role_title_audit_total"],
-            role_title_audit_summary["role_title_audit_pass"],
-            role_title_audit_summary["role_title_audit_reject"],
-            role_title_audit_summary["role_title_audit_suspected_false_negative"],
+    deterministic_stage_results: Dict[str, Any] = {}
+
+    def complete_prefilter_stage(
+        completed_filtered_jobs: List[Dict[str, Any]],
+        completed_filter_diagnostics: Dict[str, int],
+        completed_audit_rows: List[Dict[str, Any]],
+    ) -> None:
+        if role_title_audit_rows is not None:
+            role_title_audit_rows[:] = deepcopy(completed_audit_rows)
+        role_title_audit_summary = role_title_filter_audit_counts(
+            role_title_audit_rows or []
         )
-    logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
+        if role_title_audit_rows is not None:
+            audit_path = (
+                Path(corpus_path)
+                .expanduser()
+                .with_name("role_title_filter_audit.csv")
+            )
+            write_role_title_filter_audit_csv(
+                role_title_audit_rows,
+                audit_path,
+            )
+            logger.info(
+                "Role title filter audit written: %s | total=%s "
+                "pass=%s reject=%s suspected_false_negative=%s",
+                audit_path,
+                role_title_audit_summary["role_title_audit_total"],
+                role_title_audit_summary["role_title_audit_pass"],
+                role_title_audit_summary["role_title_audit_reject"],
+                role_title_audit_summary[
+                    "role_title_audit_suspected_false_negative"
+                ],
+            )
+        logger.info(
+            "Total filtered jobs: %s",
+            len(completed_filtered_jobs),
+        )
 
-    filtered_counts = log_stage_metrics("FILTERED", filtered_jobs)
+        deterministic_stage_results["filtered_counts"] = log_stage_metrics(
+            "FILTERED",
+            completed_filtered_jobs,
+        )
 
-    drop_pct = 0
-    if all_jobs:
-        drop_pct = round((1 - len(filtered_jobs) / len(all_jobs)) * 100, 2)
+        drop_pct = 0
+        if all_jobs:
+            drop_pct = round(
+                (1 - len(completed_filtered_jobs) / len(all_jobs)) * 100,
+                2,
+            )
 
-    logger.info(f"Filter drop rate: {drop_pct}%")
-    complete_stage(
-        "filtering",
-        counts={
-            "filtered_jobs": len(filtered_jobs),
-            "filter_title_mismatch": filter_diagnostics.get("title_mismatch", 0),
-            "filter_location_not_us": filter_diagnostics.get("location_not_us", 0),
-            "filter_not_recent": filter_diagnostics.get("not_recent", 0),
-            "filter_missing_timestamp": filter_diagnostics.get("missing_timestamp", 0),
-            "filter_missing_timestamp_allowed": filter_diagnostics.get("missing_timestamp_allowed", 0),
-            "filter_title_pass": filter_diagnostics.get("title_pass", 0),
-            "filter_location_pass": filter_diagnostics.get("location_pass", 0),
-            "filter_excluded_keyword": filter_diagnostics.get("excluded_keyword", 0),
-            "ashby_timestamp_cache_hit": filter_diagnostics.get("ashby_timestamp_cache_hit", 0),
-            "ashby_timestamp_cache_miss": filter_diagnostics.get("ashby_timestamp_cache_miss", 0),
-            "ashby_timestamp_fetch_success": filter_diagnostics.get("ashby_timestamp_fetch_success", 0),
-            "ashby_timestamp_fetch_429": filter_diagnostics.get("ashby_timestamp_fetch_429", 0),
-            "ashby_timestamp_fetch_failed": filter_diagnostics.get("ashby_timestamp_fetch_failed", 0),
-            **role_title_audit_summary,
-        },
+        logger.info("Filter drop rate: %s%%", drop_pct)
+        complete_stage(
+            "filtering",
+            counts={
+                "filtered_jobs": len(completed_filtered_jobs),
+                "filter_title_mismatch": (
+                    completed_filter_diagnostics.get("title_mismatch", 0)
+                ),
+                "filter_location_not_us": (
+                    completed_filter_diagnostics.get("location_not_us", 0)
+                ),
+                "filter_not_recent": (
+                    completed_filter_diagnostics.get("not_recent", 0)
+                ),
+                "filter_missing_timestamp": (
+                    completed_filter_diagnostics.get(
+                        "missing_timestamp",
+                        0,
+                    )
+                ),
+                "filter_missing_timestamp_allowed": (
+                    completed_filter_diagnostics.get(
+                        "missing_timestamp_allowed",
+                        0,
+                    )
+                ),
+                "filter_title_pass": completed_filter_diagnostics.get(
+                    "title_pass",
+                    0,
+                ),
+                "filter_location_pass": (
+                    completed_filter_diagnostics.get("location_pass", 0)
+                ),
+                "filter_excluded_keyword": (
+                    completed_filter_diagnostics.get("excluded_keyword", 0)
+                ),
+                "ashby_timestamp_cache_hit": (
+                    completed_filter_diagnostics.get(
+                        "ashby_timestamp_cache_hit",
+                        0,
+                    )
+                ),
+                "ashby_timestamp_cache_miss": (
+                    completed_filter_diagnostics.get(
+                        "ashby_timestamp_cache_miss",
+                        0,
+                    )
+                ),
+                "ashby_timestamp_fetch_success": (
+                    completed_filter_diagnostics.get(
+                        "ashby_timestamp_fetch_success",
+                        0,
+                    )
+                ),
+                "ashby_timestamp_fetch_429": (
+                    completed_filter_diagnostics.get(
+                        "ashby_timestamp_fetch_429",
+                        0,
+                    )
+                ),
+                "ashby_timestamp_fetch_failed": (
+                    completed_filter_diagnostics.get(
+                        "ashby_timestamp_fetch_failed",
+                        0,
+                    )
+                ),
+                **role_title_audit_summary,
+            },
+        )
+
+        section("DEDUPLICATION", logger)
+        start_stage(
+            "dedupe",
+            f"Deduplicating {len(completed_filtered_jobs)} filtered jobs",
+        )
+
+    def complete_dedupe_stage(
+        completed_deduplicated_jobs: List[Dict[str, Any]],
+    ) -> None:
+        log_company_hiring(completed_deduplicated_jobs, logger)
+        deterministic_stage_results["deduped_counts"] = log_stage_metrics(
+            "DEDUPED",
+            completed_deduplicated_jobs,
+        )
+        complete_stage(
+            "dedupe",
+            counts={
+                "deduped_jobs": len(completed_deduplicated_jobs),
+            },
+        )
+
+    prefilter_dedupe_graph_result = (
+        _maybe_execute_authoritative_prefilter_dedupe_graph(
+            jobs=all_jobs,
+            selected_role_families=selected_role_families or None,
+            filter_mode=(
+                "user_pipeline" if _is_user_pipeline_mode() else "strict_live"
+            ),
+            role_title_audit_rows=role_title_audit_rows,
+            excluded_keywords=pipeline_preferences["excluded_keywords"],
+            on_prefilter_completed=complete_prefilter_stage,
+            on_dedupe_completed=complete_dedupe_stage,
+        )
     )
-
-    section("DEDUPLICATION", logger)
-    start_stage("dedupe", f"Deduplicating {len(filtered_jobs)} filtered jobs")
-
-    deduped_jobs = dedupe_jobs(filtered_jobs)
-    log_company_hiring(deduped_jobs, logger)
-
-    deduped_counts = log_stage_metrics("DEDUPED", deduped_jobs)
-    complete_stage("dedupe", counts={"deduped_jobs": len(deduped_jobs)})
+    if prefilter_dedupe_graph_result is None:
+        filter_result = filter_jobs(
+            all_jobs,
+            selected_role_families=selected_role_families or None,
+            filter_mode=(
+                "user_pipeline" if _is_user_pipeline_mode() else "strict_live"
+            ),
+            return_diagnostics=True,
+            role_title_audit_rows=role_title_audit_rows,
+            excluded_keywords=pipeline_preferences["excluded_keywords"],
+        )
+        filtered_jobs, filter_diagnostics = filter_result
+        complete_prefilter_stage(
+            filtered_jobs,
+            filter_diagnostics,
+            role_title_audit_rows or [],
+        )
+        deduped_jobs = dedupe_jobs(filtered_jobs)
+        complete_dedupe_stage(deduped_jobs)
+    else:
+        filtered_jobs = deepcopy(
+            prefilter_dedupe_graph_result["filtered_jobs"]
+        )
+        filter_diagnostics = dict(
+            prefilter_dedupe_graph_result["filter_diagnostics"]
+        )
+        deduped_jobs = deepcopy(
+            prefilter_dedupe_graph_result["deduplicated_jobs"]
+        )
+    filtered_counts = deterministic_stage_results["filtered_counts"]
+    deduped_counts = deterministic_stage_results["deduped_counts"]
+    if prefilter_dedupe_graph_result is not None:
+        logger.info(
+            "Authoritative prefilter/dedupe execution: %s",
+            json.dumps(
+                prefilter_dedupe_graph_result["execution_metadata"],
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+        )
 
     section("RANKING", logger)
     start_stage("ranking", f"Ranking {len(deduped_jobs)} deduped jobs")

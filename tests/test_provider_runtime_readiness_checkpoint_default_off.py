@@ -293,7 +293,7 @@ def test_pipeline_decision_queue_and_dependencies_are_unchanged():
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"
         ),
         "application_execution_queue.py": (
-            "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e"
+            "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"
         ),
     }
     for relative_path, expected_hash in expected.items():

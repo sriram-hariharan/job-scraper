@@ -324,7 +324,7 @@ def test_ui_pipeline_and_dependencies_are_unchanged():
         "src/pipeline/collector.py": ("75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),
         "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
-        "application_execution_queue.py": ("c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e"),
+        "application_execution_queue.py": ("9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"),
     }
     for relative_path, expected_hash in expected.items():
         assert hashlib.sha256(

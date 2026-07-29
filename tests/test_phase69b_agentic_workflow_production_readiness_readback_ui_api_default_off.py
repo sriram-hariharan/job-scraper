@@ -30,7 +30,7 @@ PROTECTED_HASHES = {
     "src/matching/dimensions.py": "3ccd5e87b9a8aee7901b3efb5ef7582b0fd652aa498f862d0486fbbd97740b9b",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "application_execution_" + "queue" + ".py": (
-        "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e"
+        "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"
     ),
     "generate_tailoring_" + "suggestions" + ".py": (
         "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28"

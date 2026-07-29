@@ -706,7 +706,8 @@ def test_operator_review_path_has_no_decision_store_or_provider_authority():
     assert "src.storage.agentic_approvals" not in operator_text
     assert "requests." not in operator_text
     assert "TavilyClient" not in operator_text
-    assert "AUTHORITATIVE_OPERATOR_REVIEW" not in queue_text
+    import_boundary = queue_text[: queue_text.index("ACTION_RANK_POLICY")]
+    assert "operator_review_authoritative_graph" not in import_boundary
     assert not any(
         path.name.lower().replace("_", "-").startswith("run-006")
         for path in root.rglob("*")

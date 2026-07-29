@@ -234,6 +234,17 @@ PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES = {
+    "application_execution_queue.py",
+    "src/agents/operator_review_authoritative_graph.py",
+    "tests/test_phase15b_conditional_operator_review_caller_reconciliation.py",
+    "tests/test_phase15c_conditional_authoritative_operator_review_node.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1444,6 +1455,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase15b_conditional_operator_review_caller": (
             PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
         ),
+        "phase15c_conditional_operator_review_node": (
+            PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
+        ),
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1577,6 +1591,9 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase15b_conditional_operator_review_caller"
         )
         | legacy_guard_allowlist(
+            "phase15c_conditional_operator_review_node"
+        )
+        | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
@@ -1640,19 +1657,23 @@ def assert_protected_hashes(
         (
             "application_execution_queue.py",
             "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
-        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
         (
             "application_execution_queue.py",
             "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097",
-        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
         (
             "application_execution_queue.py",
             "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5",
-        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
         (
             "application_execution_queue.py",
             "417ee7a37bf05c4cbfa7fe01c1b1d09376a2c7680d2a97867d3ebb529c48cf9f",
-        ): "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
+        (
+            "application_execution_queue.py",
+            "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
         (
             "requirements.txt",
             "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",

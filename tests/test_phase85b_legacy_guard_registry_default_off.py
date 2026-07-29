@@ -28,6 +28,7 @@ from tests.support.phase_guard_registry import (
     PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES,
     PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES,
     PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES,
+    PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1401,6 +1402,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES
         | PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
         | PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
+        | PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
         | phase9_step12_compatibility_profile
         | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
         | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
@@ -1471,6 +1473,20 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert not any(
         "*" in path
         for path in PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
+    )
+    assert PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES == {
+        "application_execution_queue.py",
+        "src/agents/operator_review_authoritative_graph.py",
+        "tests/test_phase15b_conditional_operator_review_caller_reconciliation.py",
+        "tests/test_phase15c_conditional_authoritative_operator_review_node.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
     )
     assert PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES == {
         "src/agents/production_shadow_artifact_adapter.py",

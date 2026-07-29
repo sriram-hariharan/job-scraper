@@ -54,6 +54,9 @@ AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_FLAG = (
 AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_ENABLED"
 )
+AUTHORITATIVE_OPERATOR_REVIEW_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_OPERATOR_REVIEW_LANGGRAPH_ENABLED"
+)
 PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_FLAG = (
     "APPLYLENS_PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_ENABLED"
 )
@@ -63,8 +66,10 @@ AUTHORITATIVE_JOB_PRIORITIZATION_NODE = (
 AUTHORITATIVE_TAILORING_DECISION_NODE = (
     "build_tailoring_decision_shared_result"
 )
+AUTHORITATIVE_OPERATOR_REVIEW_NODE = "build_operator_review_shared_result"
 MAX_AUTHORITATIVE_PRIORITY_LATENCY_MS = 300_000
 MAX_AUTHORITATIVE_TAILORING_LATENCY_MS = 300_000
+MAX_AUTHORITATIVE_OPERATOR_REVIEW_LATENCY_MS = 300_000
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -1502,6 +1507,110 @@ def _build_authoritative_tailoring_shared_result(
     return shared_result, metadata
 
 
+def _authoritative_operator_review_langgraph_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(
+        env_map.get(AUTHORITATIVE_OPERATOR_REVIEW_LANGGRAPH_FLAG)
+    )
+
+
+def _bounded_authoritative_operator_review_latency_ms(
+    started_ns: int,
+) -> int:
+    elapsed_ms = int((time.perf_counter_ns() - started_ns) / 1_000_000)
+    return max(
+        0,
+        min(elapsed_ms, MAX_AUTHORITATIVE_OPERATOR_REVIEW_LATENCY_MS),
+    )
+
+
+def _build_authoritative_operator_review_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    source_artifact_path: str,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    env_map = os.environ if env is None else env
+    if not _authoritative_operator_review_langgraph_enabled(env_map):
+        started_ns = time.perf_counter_ns()
+        shared_result = build_operator_review_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        from src.agents.operator_review_agent import (
+            validate_operator_review_shared_result,
+        )
+
+        validated = validate_operator_review_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        return validated, {
+            "graph_version": "",
+            "state_version": "",
+            "execution_mode": "direct",
+            "node_name": AUTHORITATIVE_OPERATOR_REVIEW_NODE,
+            "production_node_count": 0,
+            "invocation_count": 1,
+            "node_latency_ms": (
+                _bounded_authoritative_operator_review_latency_ms(
+                    started_ns
+                )
+            ),
+            "status": "completed",
+            "failure_classification": "",
+            "deterministic": True,
+            "read_only": True,
+            "provider_calls_allowed": False,
+            "mutation_authority": False,
+            "application_authority": False,
+            "ats_authority": False,
+        }
+
+    from src.agents.operator_review_authoritative_graph import (
+        execute_authoritative_operator_review_graph,
+    )
+    from src.agents.operator_review_agent import (
+        validate_operator_review_shared_result,
+    )
+
+    result = execute_authoritative_operator_review_graph(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+        source_artifact_path=source_artifact_path,
+    )
+    shared_result = validate_operator_review_shared_result(
+        result.get("shared_result", {}),
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("invocation_count") != 1
+        or metadata.get("production_node_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_operator_review_execution_metadata_invalid"
+        )
+    return shared_result, metadata
+
+
 def _bounded_graph_verification_exception_summary(
     input_row_count: int,
 ) -> Dict[str, Any]:
@@ -1921,8 +2030,12 @@ def main() -> None:
         and bool(operator_review_context.get("pipeline_run_id"))
     )
     operator_review_shared_result = None
+    operator_review_execution_metadata = None
     if operator_review_artifact_requested or operator_review_trace_eligible:
-        operator_review_shared_result = build_operator_review_shared_result(
+        (
+            operator_review_shared_result,
+            operator_review_execution_metadata,
+        ) = _build_authoritative_operator_review_shared_result(
             rows=operator_review_rows,
             pipeline_run_id=str(
                 operator_review_context.get("pipeline_run_id") or ""
@@ -1930,8 +2043,24 @@ def main() -> None:
             owner_user_id=str(
                 operator_review_context.get("owner_user_id") or ""
             ),
+            context_id=str(
+                operator_review_context.get("context_id") or ""
+            ),
             source_artifact_path=str(output_csv_path),
         )
+        if (
+            operator_review_execution_metadata["execution_mode"]
+            == "langgraph"
+        ):
+            print(
+                "Authoritative operator review execution: "
+                + json.dumps(
+                    operator_review_execution_metadata,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            )
 
     if operator_review_artifact_requested:
         try:

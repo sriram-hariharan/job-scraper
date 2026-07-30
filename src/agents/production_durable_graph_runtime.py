@@ -412,12 +412,18 @@ class ProductionDurableGraphRuntime:
             return {
                 "tailoring_result": replay,
                 "execution_metadata": {
+                    "graph_version": identity.graph_version,
+                    "state_version": identity.state_version,
                     "execution_mode": "langgraph",
+                    "node_name": identity.node_key,
+                    "node_order": [identity.node_key],
                     "production_node_count": 1,
                     "node_invocation_count": 0,
                     "tailoring_owner_invocation_count": 0,
                     "critic_invocation_count": 0,
                     "status": "completed",
+                    "failure_classification": "",
+                    "node_latency_ms": 0,
                     "durable_runtime_version": (
                         PRODUCTION_DURABLE_RUNTIME_VERSION
                     ),
@@ -448,12 +454,18 @@ class ProductionDurableGraphRuntime:
                 return {
                     "tailoring_result": replay,
                     "execution_metadata": {
+                        "graph_version": identity.graph_version,
+                        "state_version": identity.state_version,
                         "execution_mode": "langgraph",
+                        "node_name": identity.node_key,
+                        "node_order": [identity.node_key],
                         "production_node_count": 1,
                         "node_invocation_count": 0,
                         "tailoring_owner_invocation_count": 0,
                         "critic_invocation_count": 0,
                         "status": "completed",
+                        "failure_classification": "",
+                        "node_latency_ms": 0,
                         "durable_runtime_version": (
                             PRODUCTION_DURABLE_RUNTIME_VERSION
                         ),

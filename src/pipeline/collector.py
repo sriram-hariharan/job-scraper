@@ -38,6 +38,9 @@ AUTHORITATIVE_JD_INTELLIGENCE_LANGGRAPH_FLAG = (
 AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_ENABLED"
 )
+PRODUCTION_AGENT_TELEMETRY_FLAG = (
+    "APPLYLENS_PRODUCTION_AGENT_TELEMETRY_ENABLED"
+)
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
 )
@@ -499,10 +502,20 @@ def _authoritative_final_scoring_langgraph_enabled(
     )
 
 
+def _production_agent_telemetry_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(PRODUCTION_AGENT_TELEMETRY_FLAG)
+    )
+
+
 def _maybe_execute_authoritative_final_scoring_graph(
     *,
     jobs: List[Dict[str, Any]],
     env: Dict[str, str] | None = None,
+    telemetry_sink: Callable[[Dict[str, Any]], Any] | None = None,
 ) -> Dict[str, Any] | None:
     env_map = env if env is not None else os.environ
     if not _authoritative_final_scoring_langgraph_enabled(env_map):
@@ -531,6 +544,22 @@ def _maybe_execute_authoritative_final_scoring_graph(
     ):
         raise RuntimeError(
             "authoritative_final_scoring_execution_metadata_invalid"
+        )
+    if _production_agent_telemetry_enabled(env_map):
+        from src.agents.production_telemetry import (
+            emit_production_telemetry,
+        )
+
+        emit_production_telemetry(
+            pipeline_run_id=context["pipeline_run_id"],
+            owner_user_id=context["owner_user_id"],
+            context_id=context["context_id"],
+            node_key=str(metadata.get("node_name") or "score_jobs"),
+            workload_classification="deterministic",
+            execution_metadata=metadata,
+            input_count=len(jobs),
+            output_count=len(result.get("scored_jobs") or []),
+            sink=telemetry_sink,
         )
     return result
 

@@ -19,6 +19,9 @@ AUTHORITATIVE_TAILORING_GENERATION_LANGGRAPH_FLAG = (
 PRODUCTION_DURABLE_GRAPH_RUNTIME_FLAG = (
     "APPLYLENS_PRODUCTION_DURABLE_GRAPH_RUNTIME_ENABLED"
 )
+PRODUCTION_AGENT_TELEMETRY_FLAG = (
+    "APPLYLENS_PRODUCTION_AGENT_TELEMETRY_ENABLED"
+)
 PRODUCTION_DURABLE_REPOSITORY_TARGET = (
     "APPLYLENS_DURABLE_ORCHESTRATION_DATABASE_URL"
 )
@@ -46,6 +49,15 @@ def _production_durable_graph_runtime_enabled(
     env_map = env if env is not None else os.environ
     return _truthy_env_value(
         env_map.get(PRODUCTION_DURABLE_GRAPH_RUNTIME_FLAG)
+    )
+
+
+def _production_agent_telemetry_enabled(
+    env: dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(PRODUCTION_AGENT_TELEMETRY_FLAG)
     )
 
 
@@ -211,6 +223,7 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
     durable_repository=None,
     durable_saver=None,
     durable_consumer_instance_id: str = "",
+    telemetry_sink=None,
 ) -> dict | None:
     env_map = env if env is not None else os.environ
     if not _authoritative_tailoring_generation_langgraph_enabled(env_map):
@@ -282,6 +295,47 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
     ):
         raise RuntimeError(
             "authoritative_tailoring_generation_execution_metadata_invalid"
+        )
+    if _production_agent_telemetry_enabled(env_map):
+        from src.agents.production_telemetry import (
+            emit_production_telemetry,
+        )
+
+        tailoring_result = dict(result.get("tailoring_result") or {})
+        telemetry_source_fields = (
+            "cache_hit",
+            "requested_provider",
+            "requested_model",
+            "resolved_provider",
+            "resolved_model",
+            "retry_used",
+            "fallback_used",
+            "prompt_version",
+            "input_token_count",
+            "output_token_count",
+            "total_token_count",
+            "exact_cost",
+            "cost_currency",
+        )
+        safe_source_metadata = {
+            field: tailoring_result[field]
+            for field in telemetry_source_fields
+            if field in tailoring_result
+        }
+        emit_production_telemetry(
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            context_id=context_id,
+            node_key=str(
+                metadata.get("node_name")
+                or "tailoring_generation"
+            ),
+            workload_classification="llm",
+            execution_metadata=metadata,
+            source_metadata=safe_source_metadata,
+            input_count=1,
+            output_count=1,
+            sink=telemetry_sink,
         )
     return result
 

@@ -40,7 +40,7 @@ PROTECTED_HASHES = {
     "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
-    "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+    "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
 }
 
 FORBIDDEN_RUNTIME_MARKERS = (
@@ -775,6 +775,9 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "src/storage/durable_orchestration/repository.py",
         "src/storage/durable_orchestration/schema.sql",
         "tests/test_phase18r_generic_production_durable_contract.py",
+        "src/agents/production_telemetry.py",
+        "src/pipeline/collector.py",
+        "tests/test_phase19_unified_production_telemetry.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -1157,6 +1160,20 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/storage/durable_orchestration/repository.py",
     }
     if set(changed_runtime_files) == phase18r_production_durable_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase19_unified_production_telemetry_runtime_files = {
+        ROOT / "src/agents/production_durable_graph_runtime.py",
+        ROOT / "src/agents/production_telemetry.py",
+        ROOT / "src/pipeline/collector.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase19_unified_production_telemetry_runtime_files
+    ):
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

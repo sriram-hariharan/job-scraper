@@ -429,6 +429,7 @@ class DurableOrchestrationRepository:
         step16a_methods = {
             "commit_checkpoint_binding",
             "read_checkpoint_binding",
+            "read_pending_interrupt_full",
             "record_human_decision",
             "read_current_human_decision",
             "create_resume_authorization",
@@ -1050,6 +1051,27 @@ class DurableOrchestrationRepository:
             authoritative_expected=decision_row,
             owner_user_id=decision_row["owner_user_id"],
             graph_invocation_id=decision_row["graph_invocation_id"],
+        )
+
+    def _step16a_read_pending_interrupt_full(
+        self,
+        *,
+        owner_user_id: str,
+        graph_invocation_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_pending_interrupt_read(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+        )
+        return self._execute_exact_read(
+            operation="read_pending_interrupt_full",
+            command=command,
+            required_fields=store._INTERRUPT_COLUMNS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
+                "interrupt_status": "awaiting_decision",
+            },
         )
 
     def _step16a_read_current_human_decision(

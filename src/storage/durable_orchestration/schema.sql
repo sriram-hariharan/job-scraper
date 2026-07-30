@@ -201,7 +201,6 @@ CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests (
     CONSTRAINT ck_orchestration_interrupt_requests_safety
         CHECK (
             read_only = TRUE
-            AND diagnostic_only = TRUE
             AND application_authorization = FALSE
             AND resume_authorization = FALSE
         ),
@@ -238,6 +237,19 @@ CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests (
         )
         ON DELETE CASCADE
 );
+
+-- Backward-compatible Phase 20 extension: production review interrupts are
+-- truthful production rows (`diagnostic_only = FALSE`) while retaining every
+-- read-only and external-action prohibition.
+ALTER TABLE orchestration_interrupt_requests
+    DROP CONSTRAINT IF EXISTS ck_orchestration_interrupt_requests_safety;
+ALTER TABLE orchestration_interrupt_requests
+    ADD CONSTRAINT ck_orchestration_interrupt_requests_safety
+    CHECK (
+        read_only = TRUE
+        AND application_authorization = FALSE
+        AND resume_authorization = FALSE
+    );
 
 CREATE INDEX IF NOT EXISTS idx_orchestration_graph_runs_owner_updated
 ON orchestration_graph_runs (owner_user_id, updated_at DESC, graph_invocation_id);

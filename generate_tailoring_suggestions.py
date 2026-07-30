@@ -22,6 +22,9 @@ PRODUCTION_DURABLE_GRAPH_RUNTIME_FLAG = (
 PRODUCTION_AGENT_TELEMETRY_FLAG = (
     "APPLYLENS_PRODUCTION_AGENT_TELEMETRY_ENABLED"
 )
+PRODUCTION_HUMAN_CHECKPOINT_FLAG = (
+    "APPLYLENS_PRODUCTION_HUMAN_CHECKPOINT_ENABLED"
+)
 PRODUCTION_DURABLE_REPOSITORY_TARGET = (
     "APPLYLENS_DURABLE_ORCHESTRATION_DATABASE_URL"
 )
@@ -61,6 +64,73 @@ def _production_agent_telemetry_enabled(
     )
 
 
+def _production_human_checkpoint_enabled(
+    env: dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(PRODUCTION_HUMAN_CHECKPOINT_FLAG)
+    )
+
+
+def _attach_production_human_checkpoint(
+    *,
+    result: dict,
+    identity,
+    repository,
+    saver,
+    consumer_instance_id: str,
+    coordinator=None,
+) -> dict:
+    from src.agents.production_human_checkpoint_coordinator import (
+        ProductionHumanCheckpointCoordinator,
+    )
+
+    checkpoint_coordinator = coordinator or (
+        ProductionHumanCheckpointCoordinator(
+            repository=repository,
+            saver=saver,
+            consumer_instance_id=consumer_instance_id,
+            enabled=True,
+        )
+    )
+    created_at = datetime.now(timezone.utc)
+    pause = checkpoint_coordinator.create_or_reopen_pause(
+        bounded_tailoring_result=dict(result.get("tailoring_result") or {}),
+        owner_user_id=identity.graph_run_row["owner_user_id"],
+        pipeline_run_id=identity.graph_run_row["pipeline_run_id"],
+        context_id=identity.graph_run_row["context_id"],
+        job_id=identity.graph_run_row["job_id"],
+        job_index=identity.graph_run_row["job_index"],
+        selected_resume_id=identity.graph_run_row["selected_resume_id"],
+        created_at=created_at.isoformat().replace("+00:00", "Z"),
+        expires_at=None,
+    )
+    if pause.classification not in {"applied", "already_terminal"}:
+        raise RuntimeError(
+            "production_human_checkpoint_pause_failed:"
+            + pause.classification
+        )
+    attached = dict(result)
+    attached["human_checkpoint"] = {
+        "coordinator_version": (
+            "production-human-checkpoint-coordinator-v1"
+        ),
+        "status": pause.status,
+        "classification": pause.classification,
+        "graph_invocation_id": pause.graph_invocation_id,
+        "repository_checkpoint_id": pause.repository_checkpoint_id,
+        "interrupt_request_id": pause.interrupt_request_id,
+        "review_artifact_digest": pause.review_artifact_digest,
+        "human_review_status": pause.human_review_status,
+        "read_only": True,
+        "mutation_authority": False,
+        "application_authority": False,
+        "ats_authority": False,
+    }
+    return attached
+
+
 def _execute_durable_tailoring_graph(
     *,
     packet: dict,
@@ -77,6 +147,8 @@ def _execute_durable_tailoring_graph(
     durable_repository=None,
     durable_saver=None,
     durable_consumer_instance_id: str = "",
+    human_checkpoint_enabled: bool = False,
+    human_checkpoint_coordinator=None,
 ) -> dict:
     if isinstance(job_index, bool) or not isinstance(job_index, int):
         raise RuntimeError("production_durable_tailoring_job_index_required")
@@ -153,7 +225,19 @@ def _execute_durable_tailoring_graph(
             consumer_instance_id=consumer_id,
             enabled=True,
         )
-        return runtime.execute(identity=identity, invoke_graph=invoke_graph)
+        result = runtime.execute(
+            identity=identity, invoke_graph=invoke_graph
+        )
+        if human_checkpoint_enabled:
+            return _attach_production_human_checkpoint(
+                result=result,
+                identity=identity,
+                repository=durable_repository,
+                saver=durable_saver,
+                consumer_instance_id=consumer_id,
+                coordinator=human_checkpoint_coordinator,
+            )
+        return result
 
     repository_target = str(
         env_map.get(PRODUCTION_DURABLE_REPOSITORY_TARGET) or ""
@@ -207,7 +291,19 @@ def _execute_durable_tailoring_graph(
             consumer_instance_id=consumer_id,
             enabled=True,
         )
-        return runtime.execute(identity=identity, invoke_graph=invoke_graph)
+        result = runtime.execute(
+            identity=identity, invoke_graph=invoke_graph
+        )
+        if human_checkpoint_enabled:
+            return _attach_production_human_checkpoint(
+                result=result,
+                identity=identity,
+                repository=repository,
+                saver=saver,
+                consumer_instance_id=consumer_id,
+                coordinator=human_checkpoint_coordinator,
+            )
+        return result
 
 
 def _maybe_execute_authoritative_tailoring_generation_graph(
@@ -224,10 +320,21 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
     durable_saver=None,
     durable_consumer_instance_id: str = "",
     telemetry_sink=None,
+    human_checkpoint_coordinator=None,
 ) -> dict | None:
     env_map = env if env is not None else os.environ
     if not _authoritative_tailoring_generation_langgraph_enabled(env_map):
         return None
+    human_checkpoint_enabled = _production_human_checkpoint_enabled(
+        env_map
+    )
+    if (
+        human_checkpoint_enabled
+        and not _production_durable_graph_runtime_enabled(env_map)
+    ):
+        raise RuntimeError(
+            "production_human_checkpoint_requires_durable_runtime"
+        )
 
     from src.agents.tailoring_generation_authoritative_graph import (
         execute_authoritative_tailoring_generation_graph,
@@ -269,6 +376,8 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
             durable_consumer_instance_id=(
                 durable_consumer_instance_id
             ),
+            human_checkpoint_enabled=human_checkpoint_enabled,
+            human_checkpoint_coordinator=human_checkpoint_coordinator,
         )
     else:
         result = execute_authoritative_tailoring_generation_graph(

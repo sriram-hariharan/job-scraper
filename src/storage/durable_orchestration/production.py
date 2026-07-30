@@ -25,6 +25,28 @@ PRODUCTION_GRAPH_ENGINE_PREFIX = "langgraph-production:"
 PRODUCTION_END_NODE = "__end__"
 MAX_PRODUCTION_STATE_BYTES = 262_144
 MAX_PRODUCTION_RESULT_BYTES = 262_144
+PRODUCTION_HUMAN_REVIEW_CONTRACT_VERSION = (
+    "production-human-review-contract-v1"
+)
+PRODUCTION_HUMAN_REVIEW_CHECKPOINT_VERSION = (
+    "production-human-review-checkpoint-v1"
+)
+PRODUCTION_HUMAN_REVIEW_INTERRUPT_VERSION = (
+    "production-human-review-interrupt-v1"
+)
+PRODUCTION_HUMAN_REVIEW_NODE = "operator_review"
+PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE = "finalize"
+PRODUCTION_HUMAN_REVIEW_DECISIONS = (
+    "continue_read_only",
+    "needs_revision",
+    "cancel",
+)
+PRODUCTION_TAILORING_REVIEW_ARTIFACT_TYPE = (
+    "bounded_tailoring_result_digest"
+)
+PRODUCTION_TAILORING_REVIEW_ARTIFACT_VERSION = (
+    "bounded-tailoring-result-digest-v1"
+)
 
 
 def _clean(value: Any) -> str:
@@ -598,6 +620,449 @@ def prepare_terminal_result_row(
     }
 
 
+def prepare_human_review_checkpoint_row(
+    graph_run_row: Mapping[str, Any],
+    *,
+    artifact_digest: str,
+    saved_state_digest: str,
+    committed_at: str,
+    checkpoint_sequence: int = 1,
+    human_review_status: str = "awaiting_review",
+) -> dict[str, Any]:
+    """Build a production checkpoint that retains only review-safe digests."""
+    graph = _validate_graph_run(graph_run_row)
+    if graph["run_status"] != "running":
+        raise ValueError("production_human_review_run_not_running")
+    artifact = _digest(artifact_digest, "artifact_digest")
+    saved_state = _digest(saved_state_digest, "saved_state_digest")
+    sequence = _nonnegative(checkpoint_sequence, "checkpoint_sequence")
+    if sequence != 1:
+        raise ValueError("production_human_review_sequence_invalid")
+    if _clean(human_review_status) != "awaiting_review":
+        raise ValueError("production_human_review_status_invalid")
+    envelope_base = {
+        "contract_type": PRODUCTION_DURABLE_CONTRACT_TYPE,
+        "contract_version": PRODUCTION_DURABLE_CONTRACT_VERSION,
+        "human_review_contract_version": (
+            PRODUCTION_HUMAN_REVIEW_CONTRACT_VERSION
+        ),
+        "checkpoint_schema_version": (
+            PRODUCTION_HUMAN_REVIEW_CHECKPOINT_VERSION
+        ),
+        "checkpoint_status": PRODUCTION_CHECKPOINT_STATUS,
+        "graph_invocation_id": graph["graph_invocation_id"],
+        "graph_engine": graph["graph_engine"],
+        "production_state_version": graph["graph_state_schema_version"],
+        **{
+            field: deepcopy(graph[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "checkpoint_sequence": sequence,
+        "completed_node_keys": [PRODUCTION_HUMAN_REVIEW_NODE],
+        "next_node_key": PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+        "review_artifact_type": PRODUCTION_TAILORING_REVIEW_ARTIFACT_TYPE,
+        "review_artifact_version": (
+            PRODUCTION_TAILORING_REVIEW_ARTIFACT_VERSION
+        ),
+        "review_artifact_digest": artifact,
+        "saved_state_digest": saved_state,
+        "human_review_status": "awaiting_review",
+        "production_execution": True,
+        "diagnostic_only": False,
+        "read_only": True,
+        "application_authorization": False,
+        "mutation_authorization": False,
+        "ats_authorization": False,
+    }
+    checkpoint_id = (
+        "production-review-checkpoint:"
+        + canonical_digest(
+            envelope_base, field="production_human_review_checkpoint"
+        )
+    )
+    envelope = {**envelope_base, "checkpoint_id": checkpoint_id}
+    return {
+        "checkpoint_id": checkpoint_id,
+        "graph_invocation_id": graph["graph_invocation_id"],
+        "checkpoint_sequence": sequence,
+        "checkpoint_schema_version": (
+            PRODUCTION_HUMAN_REVIEW_CHECKPOINT_VERSION
+        ),
+        "graph_state_schema_version": graph["graph_state_schema_version"],
+        "checkpoint_status": PRODUCTION_CHECKPOINT_STATUS,
+        **{
+            field: deepcopy(graph[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "checkpoint_envelope_json": envelope,
+        "checkpoint_envelope_digest": canonical_digest(
+            envelope, field="production_human_review_checkpoint_envelope"
+        ),
+        "completed_node_keys_json": [PRODUCTION_HUMAN_REVIEW_NODE],
+        "next_node_key": PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+        "committed_at": _required(committed_at, "committed_at"),
+        "purge_after": None,
+    }
+
+
+def prepare_human_review_interrupt_row(
+    checkpoint_row: Mapping[str, Any],
+    *,
+    created_at: str,
+    expires_at: str | None = None,
+) -> dict[str, Any]:
+    """Build the bounded production review request for an exact checkpoint."""
+    store._require_exact_fields(
+        checkpoint_row, store._CHECKPOINT_COLUMNS, "checkpoint_row"
+    )
+    envelope = checkpoint_row.get("checkpoint_envelope_json")
+    if (
+        not isinstance(envelope, Mapping)
+        or envelope.get("human_review_contract_version")
+        != PRODUCTION_HUMAN_REVIEW_CONTRACT_VERSION
+        or checkpoint_row.get("checkpoint_envelope_digest")
+        != canonical_digest(
+            envelope, field="production_human_review_checkpoint_envelope"
+        )
+    ):
+        raise ValueError("production_human_review_checkpoint_invalid")
+    payload_base = {
+        "interrupt_request_schema_version": (
+            PRODUCTION_HUMAN_REVIEW_INTERRUPT_VERSION
+        ),
+        "human_review_contract_version": (
+            PRODUCTION_HUMAN_REVIEW_CONTRACT_VERSION
+        ),
+        "checkpoint_schema_version": checkpoint_row[
+            "checkpoint_schema_version"
+        ],
+        "graph_state_schema_version": checkpoint_row[
+            "graph_state_schema_version"
+        ],
+        "graph_invocation_id": checkpoint_row["graph_invocation_id"],
+        "checkpoint_id": checkpoint_row["checkpoint_id"],
+        **{
+            field: deepcopy(checkpoint_row[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "node_key": PRODUCTION_HUMAN_REVIEW_NODE,
+        "safe_next_node_key": PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+        "operator_review_artifact_type": envelope["review_artifact_type"],
+        "operator_review_artifact_version": envelope[
+            "review_artifact_version"
+        ],
+        "operator_review_artifact_digest": envelope[
+            "review_artifact_digest"
+        ],
+        "allowed_decision_values": list(
+            PRODUCTION_HUMAN_REVIEW_DECISIONS
+        ),
+        "read_only": True,
+        "diagnostic_only": False,
+        "application_authorization": False,
+        "resume_authorization": False,
+    }
+    request_id = (
+        "production-review-interrupt:"
+        + canonical_digest(
+            payload_base, field="production_human_review_interrupt"
+        )
+    )
+    payload = {**payload_base, "interrupt_request_id": request_id}
+    _bounded_mapping(
+        payload,
+        field="production_human_review_interrupt",
+        maximum=store.MAX_INTERRUPT_REQUEST_BYTES,
+    )
+    return {
+        "interrupt_request_id": request_id,
+        "graph_invocation_id": checkpoint_row["graph_invocation_id"],
+        "checkpoint_id": checkpoint_row["checkpoint_id"],
+        "interrupt_request_schema_version": (
+            PRODUCTION_HUMAN_REVIEW_INTERRUPT_VERSION
+        ),
+        "checkpoint_schema_version": checkpoint_row[
+            "checkpoint_schema_version"
+        ],
+        "graph_state_schema_version": checkpoint_row[
+            "graph_state_schema_version"
+        ],
+        **{
+            field: deepcopy(checkpoint_row[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "node_key": PRODUCTION_HUMAN_REVIEW_NODE,
+        "safe_next_node_key": PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+        "operator_review_artifact_type": envelope["review_artifact_type"],
+        "operator_review_artifact_version": envelope[
+            "review_artifact_version"
+        ],
+        "operator_review_artifact_digest": envelope[
+            "review_artifact_digest"
+        ],
+        "allowed_decision_values_json": list(
+            PRODUCTION_HUMAN_REVIEW_DECISIONS
+        ),
+        "interrupt_request_json": payload,
+        "interrupt_status": "awaiting_decision",
+        "lock_version": 0,
+        "read_only": True,
+        "diagnostic_only": False,
+        "application_authorization": False,
+        "resume_authorization": False,
+        "created_at": _required(created_at, "created_at"),
+        "expires_at": _clean(expires_at) or None,
+        "resolved_at": None,
+    }
+
+
+def prepare_human_review_decision_row(
+    interrupt_row: Mapping[str, Any],
+    *,
+    decision_value: str,
+    actor_id: str,
+    client_idempotency_key: str,
+    expected_interrupt_version: int,
+    expected_run_lock_version: int,
+    created_at: str,
+    reason: str = "",
+) -> dict[str, Any]:
+    store._require_exact_fields(
+        interrupt_row, store._INTERRUPT_COLUMNS, "interrupt_row"
+    )
+    if (
+        interrupt_row.get("interrupt_request_schema_version")
+        != PRODUCTION_HUMAN_REVIEW_INTERRUPT_VERSION
+        or interrupt_row.get("diagnostic_only") is not False
+    ):
+        raise ValueError("production_human_review_interrupt_invalid")
+    decision = _clean(decision_value)
+    if decision not in PRODUCTION_HUMAN_REVIEW_DECISIONS:
+        raise ValueError("decision_value_unsupported")
+    actor = _required(actor_id, "actor_id")
+    idempotency = _required(
+        client_idempotency_key, "client_idempotency_key"
+    )
+    note = _clean(reason)
+    if len(note.encode("utf-8")) > 4096:
+        raise ValueError("decision_reason_too_large")
+    seed = {
+        "interrupt_request_id": interrupt_row["interrupt_request_id"],
+        "client_idempotency_key": idempotency,
+        "decision_value": decision,
+        "actor_id": actor,
+        "graph_invocation_id": interrupt_row["graph_invocation_id"],
+        "checkpoint_id": interrupt_row["checkpoint_id"],
+        "operator_review_artifact_digest": interrupt_row[
+            "operator_review_artifact_digest"
+        ],
+    }
+    return {
+        "decision_id": (
+            "production-human-decision:"
+            + canonical_digest(seed, field="production_human_decision")
+        ),
+        "graph_invocation_id": interrupt_row["graph_invocation_id"],
+        "checkpoint_id": interrupt_row["checkpoint_id"],
+        "interrupt_request_id": interrupt_row["interrupt_request_id"],
+        **{
+            field: deepcopy(interrupt_row[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "operator_review_artifact_digest": interrupt_row[
+            "operator_review_artifact_digest"
+        ],
+        "decision_value": decision,
+        "actor_id": actor,
+        "client_idempotency_key": idempotency,
+        "expected_interrupt_status": "awaiting_decision",
+        "expected_interrupt_version": _nonnegative(
+            expected_interrupt_version, "expected_interrupt_version"
+        ),
+        "expected_run_lock_version": _nonnegative(
+            expected_run_lock_version, "expected_run_lock_version"
+        ),
+        "decision_record_status": "recorded",
+        "reason": note,
+        "rejection_code": "",
+        "application_authorization": False,
+        "created_at": _required(created_at, "created_at"),
+    }
+
+
+def prepare_human_review_authorization_row(
+    decision_row: Mapping[str, Any],
+    *,
+    authorization_token_hash: str,
+    created_at: str,
+    expires_at: str,
+) -> dict[str, Any]:
+    store._require_exact_fields(
+        decision_row, store._DECISION_COLUMNS, "decision_row"
+    )
+    if decision_row.get("decision_value") != "continue_read_only":
+        raise ValueError("decision_not_resume_authorizable")
+    token_hash = _digest(
+        authorization_token_hash, "authorization_token_hash"
+    )
+    seed = {
+        "decision_id": decision_row["decision_id"],
+        "interrupt_request_id": decision_row["interrupt_request_id"],
+        "authorization_token_hash": token_hash,
+        "safe_next_node_key": PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+    }
+    return {
+        "authorization_id": (
+            "production-resume-authorization:"
+            + canonical_digest(
+                seed, field="production_resume_authorization"
+            )
+        ),
+        "decision_id": decision_row["decision_id"],
+        "graph_invocation_id": decision_row["graph_invocation_id"],
+        "checkpoint_id": decision_row["checkpoint_id"],
+        "interrupt_request_id": decision_row["interrupt_request_id"],
+        **{
+            field: deepcopy(decision_row[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "operator_review_artifact_digest": decision_row[
+            "operator_review_artifact_digest"
+        ],
+        "decision_value": "continue_read_only",
+        "safe_next_node_key": PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+        "authorization_token_hash": token_hash,
+        "authorization_status": "authorized",
+        "lock_version": 0,
+        "read_only": True,
+        "application_authorization": False,
+        "resume_text_mutation_authorization": False,
+        "queue_mutation_authorization": False,
+        "operator_state_mutation_authorization": False,
+        "created_at": _required(created_at, "created_at"),
+        "expires_at": _required(expires_at, "expires_at"),
+        "consumed_at": None,
+    }
+
+
+def prepare_human_review_consumption_row(
+    authorization_row: Mapping[str, Any],
+    *,
+    consumer_instance_id: str,
+    claimed_at: str,
+    expected_authorization_version: int = 0,
+) -> dict[str, Any]:
+    store._require_exact_fields(
+        authorization_row, store._AUTHORIZATION_COLUMNS, "authorization_row"
+    )
+    if authorization_row.get("authorization_status") != "authorized":
+        raise ValueError("authorization_not_consumable")
+    consumer = _required(consumer_instance_id, "consumer_instance_id")
+    seed = {
+        "authorization_id": authorization_row["authorization_id"],
+        "consumer_instance_id": consumer,
+    }
+    resume_invocation_id = (
+        "production-resume-invocation:"
+        + canonical_digest(seed, field="production_resume_invocation")
+    )
+    return {
+        "consumption_id": (
+            "production-resume-consumption:"
+            + canonical_digest(
+                {"authorization_id": authorization_row["authorization_id"]},
+                field="production_resume_consumption",
+            )
+        ),
+        "authorization_id": authorization_row["authorization_id"],
+        "decision_id": authorization_row["decision_id"],
+        "graph_invocation_id": authorization_row["graph_invocation_id"],
+        "checkpoint_id": authorization_row["checkpoint_id"],
+        "interrupt_request_id": authorization_row["interrupt_request_id"],
+        **{
+            field: deepcopy(authorization_row[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "resume_invocation_id": resume_invocation_id,
+        "consumer_instance_id": consumer,
+        "claimed_at": _required(claimed_at, "claimed_at"),
+        "claim_status": "claimed",
+        "expected_authorization_version": _nonnegative(
+            expected_authorization_version,
+            "expected_authorization_version",
+        ),
+        "authorization_token_hash_proof": authorization_row[
+            "authorization_token_hash"
+        ],
+        "application_authorization": False,
+    }
+
+
+def prepare_human_review_terminal_checkpoint_row(
+    graph_run_row: Mapping[str, Any],
+    *,
+    parent_checkpoint_row: Mapping[str, Any],
+    saved_state_digest: str,
+    committed_at: str,
+) -> dict[str, Any]:
+    graph = _validate_graph_run(graph_run_row)
+    store._require_exact_fields(
+        parent_checkpoint_row, store._CHECKPOINT_COLUMNS, "checkpoint_row"
+    )
+    parent_envelope = parent_checkpoint_row["checkpoint_envelope_json"]
+    if not isinstance(parent_envelope, Mapping):
+        raise ValueError("production_human_review_parent_invalid")
+    envelope_base = {
+        **{
+            key: deepcopy(value)
+            for key, value in parent_envelope.items()
+            if key != "checkpoint_id"
+        },
+        "checkpoint_sequence": 2,
+        "completed_node_keys": [
+            PRODUCTION_HUMAN_REVIEW_NODE,
+            PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+        ],
+        "next_node_key": PRODUCTION_END_NODE,
+        "saved_state_digest": _digest(
+            saved_state_digest, "saved_state_digest"
+        ),
+        "human_review_status": "human_reviewed",
+    }
+    checkpoint_id = (
+        "production-review-checkpoint:"
+        + canonical_digest(
+            envelope_base, field="production_human_review_checkpoint"
+        )
+    )
+    envelope = {**envelope_base, "checkpoint_id": checkpoint_id}
+    return {
+        "checkpoint_id": checkpoint_id,
+        "graph_invocation_id": graph["graph_invocation_id"],
+        "checkpoint_sequence": 2,
+        "checkpoint_schema_version": (
+            PRODUCTION_HUMAN_REVIEW_CHECKPOINT_VERSION
+        ),
+        "graph_state_schema_version": graph["graph_state_schema_version"],
+        "checkpoint_status": PRODUCTION_CHECKPOINT_STATUS,
+        **{
+            field: deepcopy(graph[field])
+            for field in store._IDENTITY_COLUMNS
+        },
+        "checkpoint_envelope_json": envelope,
+        "checkpoint_envelope_digest": canonical_digest(
+            envelope, field="production_human_review_checkpoint_envelope"
+        ),
+        "completed_node_keys_json": [
+            PRODUCTION_HUMAN_REVIEW_NODE,
+            PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE,
+        ],
+        "next_node_key": PRODUCTION_END_NODE,
+        "committed_at": _required(committed_at, "committed_at"),
+        "purge_after": None,
+    }
+
+
 def _graph_run_insert_sql(params: Mapping[str, Any]) -> dict[str, Any]:
     sql = """
 WITH inserted AS (
@@ -1039,6 +1504,14 @@ __all__ = [
     "PRODUCTION_DURABLE_CONTRACT_VERSION",
     "PRODUCTION_END_NODE",
     "PRODUCTION_GRAPH_ENGINE_PREFIX",
+    "PRODUCTION_HUMAN_REVIEW_CHECKPOINT_VERSION",
+    "PRODUCTION_HUMAN_REVIEW_CONTRACT_VERSION",
+    "PRODUCTION_HUMAN_REVIEW_DECISIONS",
+    "PRODUCTION_HUMAN_REVIEW_INTERRUPT_VERSION",
+    "PRODUCTION_HUMAN_REVIEW_NODE",
+    "PRODUCTION_HUMAN_REVIEW_SAFE_NEXT_NODE",
+    "PRODUCTION_TAILORING_REVIEW_ARTIFACT_TYPE",
+    "PRODUCTION_TAILORING_REVIEW_ARTIFACT_VERSION",
     "canonical_digest",
     "prepare_checkpoint_attempt_start",
     "prepare_checkpoint_binding_row",
@@ -1046,6 +1519,12 @@ __all__ = [
     "prepare_checkpoint_row",
     "prepare_graph_run_insert",
     "prepare_graph_run_row",
+    "prepare_human_review_authorization_row",
+    "prepare_human_review_checkpoint_row",
+    "prepare_human_review_consumption_row",
+    "prepare_human_review_decision_row",
+    "prepare_human_review_interrupt_row",
+    "prepare_human_review_terminal_checkpoint_row",
     "prepare_lifecycle_event_row",
     "prepare_node_attempt_row",
     "prepare_terminal_result_row",

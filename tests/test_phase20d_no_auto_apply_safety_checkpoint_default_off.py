@@ -778,6 +778,14 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "src/agents/production_telemetry.py",
         "src/pipeline/collector.py",
         "tests/test_phase19_unified_production_telemetry.py",
+        "generate_tailoring_suggestions.py",
+        "src/agents/production_human_checkpoint_coordinator.py",
+        "src/storage/durable_orchestration/production.py",
+        "src/storage/durable_orchestration/repository.py",
+        "src/storage/durable_orchestration/schema.sql",
+        "src/storage/durable_orchestration/store.py",
+        "tests/test_phase20_production_human_review_checkpoint.py",
+        "tests/test_phase9_step16a_durable_decision_authorization_runtime_contract.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -819,6 +827,33 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    phase20_human_checkpoint_runtime_files = {
+        ROOT / "src/agents/production_human_checkpoint_coordinator.py",
+        ROOT / "src/storage/durable_orchestration/production.py",
+        ROOT / "src/storage/durable_orchestration/repository.py",
+        ROOT / "src/storage/durable_orchestration/store.py",
+    }
+    phase20_required_runtime_files = {
+        ROOT / "src/storage/durable_orchestration/production.py",
+        ROOT / "src/storage/durable_orchestration/repository.py",
+        ROOT / "src/storage/durable_orchestration/store.py",
+    }
+    if (
+        phase20_required_runtime_files
+        <= set(changed_runtime_files)
+        <= phase20_human_checkpoint_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        combined = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in changed_runtime_files
+        )
+        assert '"application_authority": False' in combined
+        assert '"ats_authority": False' in combined
+        return
     phase11_step8l_provider_benchmark_runtime_files = {
         ROOT / "src/evaluation/provider_benchmark_contract.py",
     }

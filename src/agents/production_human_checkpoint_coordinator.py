@@ -637,6 +637,59 @@ class ProductionHumanCheckpointCoordinator:
             graph_invocation_id=graph_invocation_id,
         )
         run_status = str(_record(run_result).get("run_status") or "")
+        if run_status == "completed":
+            existing_result = (
+                self._repository.read_current_human_decision(
+                    owner_user_id=owner_user_id,
+                    interrupt_request_id=interrupt_request_id,
+                )
+            )
+            existing = _record(existing_result)
+            if (
+                _classification(existing_result) != "applied"
+                or existing.get("graph_invocation_id")
+                != graph_invocation_id
+                or existing.get("checkpoint_id")
+                != repository_checkpoint_id
+                or existing.get("decision_value") != decision_value
+                or existing.get("actor_id") != actor_id
+                or existing.get("client_idempotency_key")
+                != client_idempotency_key
+            ):
+                return _safe_result(
+                    "decision_not_recorded",
+                    "duplicate_conflict",
+                    graph_invocation_id=graph_invocation_id,
+                )
+            if decision_value != "continue_read_only":
+                return _safe_result(
+                    "decision_not_recorded",
+                    "duplicate_conflict",
+                    graph_invocation_id=graph_invocation_id,
+                )
+            replay = self.reopen_pause(
+                owner_user_id=owner_user_id,
+                graph_invocation_id=graph_invocation_id,
+            )
+            if replay.status != "completed_replay":
+                return _safe_result(
+                    "decision_not_recorded",
+                    "reconciliation_required",
+                    graph_invocation_id=graph_invocation_id,
+                )
+            return ProductionHumanCheckpointResult(
+                status="completed_replay",
+                classification="idempotent_existing",
+                graph_invocation_id=graph_invocation_id,
+                repository_checkpoint_id=(
+                    replay.repository_checkpoint_id
+                ),
+                interrupt_request_id=interrupt_request_id,
+                decision_id=str(existing.get("decision_id") or ""),
+                terminal_result_id=replay.terminal_result_id,
+                review_artifact_digest=replay.review_artifact_digest,
+                human_review_status="human_reviewed",
+            )
         if run_status in {
             "decision_recorded",
             "resume_authorized",

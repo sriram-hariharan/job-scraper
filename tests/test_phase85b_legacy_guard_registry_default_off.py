@@ -30,6 +30,8 @@ from tests.support.phase_guard_registry import (
     PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES,
     PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES,
     PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES,
+    PHASE21_RELEASE_CANDIDATE_FILES,
+    PHASE21R_HISTORICAL_GUARD_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1426,6 +1428,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
         | PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
+        | PHASE21_RELEASE_CANDIDATE_FILES
+        | PHASE21R_HISTORICAL_GUARD_FILES
     )
     assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
         "application_execution_queue.py",

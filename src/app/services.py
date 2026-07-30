@@ -1,4 +1,5 @@
 from collections import Counter
+from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35526,3 +35527,364 @@ def rag_answer_payload(
         payload["response"] = response
 
     return payload
+
+
+PRODUCTION_HUMAN_REVIEW_ACTION_VERSION = (
+    "production-human-review-authenticated-action-v1"
+)
+PRODUCTION_HUMAN_REVIEW_DECISIONS = (
+    "continue_read_only",
+    "needs_revision",
+    "cancel",
+)
+PRODUCTION_HUMAN_REVIEW_ACTION_TTL_SECONDS = 300
+_PRODUCTION_HUMAN_REVIEW_ACTION_FLAGS = (
+    "APPLYLENS_PRODUCTION_DURABLE_GRAPH_RUNTIME_ENABLED",
+    "APPLYLENS_PRODUCTION_HUMAN_CHECKPOINT_ENABLED",
+)
+_PRODUCTION_HUMAN_REVIEW_REPOSITORY_TARGET = (
+    "APPLYLENS_DURABLE_ORCHESTRATION_DATABASE_URL"
+)
+_PRODUCTION_HUMAN_REVIEW_SAVER_TARGET = (
+    "APPLYLENS_LANGGRAPH_POSTGRES_CHECKPOINTER_DATABASE_URL"
+)
+
+
+def _production_human_review_action_enabled(
+    env: Dict[str, str],
+) -> bool:
+    return all(
+        str(env.get(flag) or "").strip().lower()
+        in {"1", "true", "yes", "on"}
+        for flag in _PRODUCTION_HUMAN_REVIEW_ACTION_FLAGS
+    )
+
+
+def _production_human_review_action_timestamp(
+    time_source: Any = None,
+) -> datetime:
+    value = (
+        time_source()
+        if callable(time_source)
+        else datetime.now(timezone.utc)
+    )
+    if not isinstance(value, datetime) or value.tzinfo is None:
+        raise ValueError("authenticated_action_time_source_invalid")
+    return value.astimezone(timezone.utc)
+
+
+def _production_human_review_action_payload(
+    *,
+    result: Any,
+    decision_value: str,
+    ok: bool,
+    continuation_status: str,
+    terminal_status: str,
+) -> Dict[str, Any]:
+    status = str(getattr(result, "status", "") or "")
+    classification = str(
+        getattr(result, "classification", "") or ""
+    )
+    return {
+        "action_version": PRODUCTION_HUMAN_REVIEW_ACTION_VERSION,
+        "ok": bool(ok),
+        "review_request_id": str(
+            getattr(result, "interrupt_request_id", "") or ""
+        ),
+        "checkpoint_id": str(
+            getattr(result, "repository_checkpoint_id", "") or ""
+        ),
+        "decision_value": decision_value,
+        "decision_status": status,
+        "continuation_status": continuation_status,
+        "terminal_status": terminal_status,
+        "human_review_status": str(
+            getattr(result, "human_review_status", "") or ""
+        ),
+        "read_only_artifact": {
+            "digest": str(
+                getattr(result, "review_artifact_digest", "") or ""
+            ),
+            "terminal_result_id": str(
+                getattr(result, "terminal_result_id", "") or ""
+            ),
+        },
+        "failure_classification": "" if ok else classification,
+        "idempotency_status": (
+            "replayed"
+            if classification == "idempotent_existing"
+            else "first_execution"
+        ),
+        "read_only": True,
+        "human_review_is_application_approval": False,
+        "mutation_authority": False,
+        "application_authority": False,
+        "ats_authority": False,
+        "automatic_application_count": 0,
+        "mark_applied_count": 0,
+        "resume_replacement_count": 0,
+        "recruiter_communication_count": 0,
+        "ats_submission_count": 0,
+    }
+
+
+def _execute_production_human_review_action(
+    *,
+    coordinator: Any,
+    owner_user_id: str,
+    actor_id: str,
+    graph_invocation_id: str,
+    repository_checkpoint_id: str,
+    interrupt_request_id: str,
+    decision_value: str,
+    client_idempotency_key: str,
+    decision_reason: str,
+    continuation_token: str,
+    time_source: Any,
+    consumer_instance_id: str,
+) -> Dict[str, Any]:
+    created = _production_human_review_action_timestamp(time_source)
+    expires = created + timedelta(
+        seconds=PRODUCTION_HUMAN_REVIEW_ACTION_TTL_SECONDS
+    )
+    decision = coordinator.record_decision(
+        owner_user_id=owner_user_id,
+        graph_invocation_id=graph_invocation_id,
+        repository_checkpoint_id=repository_checkpoint_id,
+        interrupt_request_id=interrupt_request_id,
+        decision_value=decision_value,
+        actor_id=actor_id,
+        client_idempotency_key=client_idempotency_key,
+        decision_reason=decision_reason,
+        created_at=created.isoformat().replace("+00:00", "Z"),
+        authorization_token=continuation_token,
+        authorization_expires_at=(
+            expires.isoformat().replace("+00:00", "Z")
+            if decision_value == "continue_read_only"
+            else ""
+        ),
+    )
+    if decision.status == "completed_replay":
+        return _production_human_review_action_payload(
+            result=decision,
+            decision_value=decision_value,
+            ok=True,
+            continuation_status="replayed",
+            terminal_status="replay",
+        )
+    if decision_value != "continue_read_only":
+        expected = {
+            "needs_revision": "revision_required",
+            "cancel": "cancelled",
+        }[decision_value]
+        ok = (
+            decision.status == expected
+            and decision.classification
+            in {"applied", "idempotent_existing"}
+        )
+        return _production_human_review_action_payload(
+            result=decision,
+            decision_value=decision_value,
+            ok=ok,
+            continuation_status="not_requested",
+            terminal_status="not_terminal",
+        )
+    if (
+        decision.status != "resume_authorized"
+        or decision.classification
+        not in {"applied", "idempotent_existing"}
+    ):
+        return _production_human_review_action_payload(
+            result=decision,
+            decision_value=decision_value,
+            ok=False,
+            continuation_status="not_started",
+            terminal_status="not_terminal",
+        )
+    claimed = _production_human_review_action_timestamp(time_source)
+    lease_expires = claimed + timedelta(
+        seconds=PRODUCTION_HUMAN_REVIEW_ACTION_TTL_SECONDS
+    )
+    resumed = coordinator.resume(
+        owner_user_id=owner_user_id,
+        graph_invocation_id=graph_invocation_id,
+        repository_checkpoint_id=repository_checkpoint_id,
+        interrupt_request_id=interrupt_request_id,
+        decision_id=decision.decision_id,
+        authorization_token=continuation_token,
+        claimed_at=claimed.isoformat().replace("+00:00", "Z"),
+        lease_expires_at=lease_expires.isoformat().replace(
+            "+00:00", "Z"
+        ),
+        completed_at=claimed.isoformat().replace("+00:00", "Z"),
+        duration_ms=0,
+    )
+    ok = (
+        resumed.status == "completed"
+        and resumed.classification
+        in {"applied", "idempotent_existing"}
+    )
+    return _production_human_review_action_payload(
+        result=resumed,
+        decision_value=decision_value,
+        ok=ok,
+        continuation_status="completed" if ok else "failed",
+        terminal_status="terminal" if ok else "not_terminal",
+    )
+
+
+def production_human_review_decision_action_payload(
+    *,
+    owner_user_id: str,
+    actor_id: str,
+    graph_invocation_id: str,
+    repository_checkpoint_id: str,
+    interrupt_request_id: str,
+    decision_value: str,
+    client_idempotency_key: str,
+    decision_reason: str = "",
+    continuation_token: str = "",
+    env: Dict[str, str] | None = None,
+    coordinator: Any = None,
+    time_source: Any = None,
+    consumer_instance_id: str = "",
+) -> Dict[str, Any]:
+    """Record one authenticated review decision and safely continue if allowed."""
+
+    owner = _clean_text(owner_user_id)
+    actor = _clean_text(actor_id)
+    graph_id = _clean_text(graph_invocation_id)
+    checkpoint_id = _clean_text(repository_checkpoint_id)
+    review_id = _clean_text(interrupt_request_id)
+    decision = _clean_text(decision_value).lower()
+    idempotency_key = _clean_text(client_idempotency_key)
+    token = str(continuation_token or "")
+    if not owner:
+        raise ValueError("authenticated_owner_required")
+    if not actor or actor != owner:
+        raise ValueError("authenticated_actor_owner_mismatch")
+    for field, value in (
+        ("graph_invocation_id", graph_id),
+        ("repository_checkpoint_id", checkpoint_id),
+        ("interrupt_request_id", review_id),
+        ("client_idempotency_key", idempotency_key),
+    ):
+        if not value:
+            raise ValueError(f"{field}_required")
+        if len(value) > 512:
+            raise ValueError(f"{field}_too_large")
+    if decision not in PRODUCTION_HUMAN_REVIEW_DECISIONS:
+        raise ValueError("unsupported_production_human_review_decision")
+    if decision == "continue_read_only":
+        if len(token) < 16 or len(token) > 512:
+            raise ValueError("continuation_token_invalid")
+    elif token:
+        raise ValueError("continuation_token_not_allowed")
+
+    env_map = env if env is not None else os.environ
+    if not _production_human_review_action_enabled(env_map):
+        disabled = SimpleNamespace(
+            status="action_disabled",
+            classification="unavailable",
+            interrupt_request_id=review_id,
+            repository_checkpoint_id=checkpoint_id,
+        )
+        return _production_human_review_action_payload(
+            result=disabled,
+            decision_value=decision,
+            ok=False,
+            continuation_status="not_started",
+            terminal_status="not_terminal",
+        )
+    consumer_id = (
+        _clean_text(consumer_instance_id)
+        or f"authenticated-human-review:{owner}"
+    )
+    arguments = {
+        "owner_user_id": owner,
+        "actor_id": actor,
+        "graph_invocation_id": graph_id,
+        "repository_checkpoint_id": checkpoint_id,
+        "interrupt_request_id": review_id,
+        "decision_value": decision,
+        "client_idempotency_key": idempotency_key,
+        "decision_reason": _clean_text(decision_reason),
+        "continuation_token": token,
+        "time_source": time_source,
+        "consumer_instance_id": consumer_id,
+    }
+    if coordinator is not None:
+        return _execute_production_human_review_action(
+            coordinator=coordinator,
+            **arguments,
+        )
+
+    repository_target = _clean_text(
+        env_map.get(_PRODUCTION_HUMAN_REVIEW_REPOSITORY_TARGET)
+    )
+    saver_target = _clean_text(
+        env_map.get(_PRODUCTION_HUMAN_REVIEW_SAVER_TARGET)
+    )
+    ordinary_target = _clean_text(env_map.get("DATABASE_URL"))
+    if (
+        not repository_target
+        or not saver_target
+        or (ordinary_target and repository_target == ordinary_target)
+        or (ordinary_target and saver_target == ordinary_target)
+    ):
+        unavailable = SimpleNamespace(
+            status="action_unavailable",
+            classification="unavailable",
+            interrupt_request_id=review_id,
+            repository_checkpoint_id=checkpoint_id,
+        )
+        return _production_human_review_action_payload(
+            result=unavailable,
+            decision_value=decision,
+            ok=False,
+            continuation_status="not_started",
+            terminal_status="not_terminal",
+        )
+
+    from src.agents.production_human_checkpoint_coordinator import (
+        ProductionHumanCheckpointCoordinator,
+    )
+    from src.storage.durable_orchestration.langgraph_postgres import (
+        open_langgraph_postgres_saver,
+    )
+    from src.storage.durable_orchestration.postgres_connection import (
+        build_postgres_connection_factory,
+    )
+    from src.storage.durable_orchestration.repository import (
+        DurableOrchestrationRepository,
+    )
+
+    connection_factory = build_postgres_connection_factory(
+        enabled=True,
+        database_url=repository_target,
+        application_name="applylens-authenticated-human-review",
+    )
+    repository = DurableOrchestrationRepository(
+        connection_factory,
+        enabled=True,
+    )
+    with ExitStack() as stack:
+        saver = stack.enter_context(
+            open_langgraph_postgres_saver(
+                enabled=True,
+                database_url=saver_target,
+                application_name=(
+                    "applylens-authenticated-human-review-saver"
+                ),
+            )
+        )
+        action_coordinator = ProductionHumanCheckpointCoordinator(
+            repository=repository,
+            saver=saver,
+            consumer_instance_id=consumer_id,
+            enabled=True,
+        )
+        return _execute_production_human_review_action(
+            coordinator=action_coordinator,
+            **arguments,
+        )

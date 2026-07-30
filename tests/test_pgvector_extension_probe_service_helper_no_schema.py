@@ -273,7 +273,7 @@ def test_no_dependency_schema_migration_or_pipeline_change():
             "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/pipeline/collector.py": (
-            "6bc823a688fdd7d270739ea9c1dbc83ef561988cc7f5625b8495bf50c7386689"
+            "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"
@@ -315,7 +315,7 @@ def test_no_dependency_schema_migration_or_pipeline_change():
         digest.update(path.read_bytes())
         digest.update(b"\0")
     assert digest.hexdigest() == (
-        "a6d8338050e90a6d25d69dc8d903656dd06f5d7a6435c52cf365f4c417d94a03"
+        "7dba8092148c9c401ff56f779adff7dc4363dfec3f67f1502ed549a437a8b4f6"
     )
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()

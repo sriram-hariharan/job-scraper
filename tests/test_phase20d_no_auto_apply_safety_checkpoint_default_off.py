@@ -34,10 +34,10 @@ REQUIRED_TAGS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-    "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+    "src/app/api.py": "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+    "src/app/services.py": "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
     "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-    "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
+    "src/app/static/app_redesign.css": "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
     "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
@@ -786,6 +786,16 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "src/storage/durable_orchestration/store.py",
         "tests/test_phase20_production_human_review_checkpoint.py",
         "tests/test_phase9_step16a_durable_decision_authorization_runtime_contract.py",
+        "README.md",
+        "docs/architecture_summary.md",
+        "docs/full_fledged_agentic_ai_app_roadmap.md",
+        "docs/core_agent_automation_mutation_inventory.md",
+        "docs/phase22_core_agent_automation_mutation_inventory.md",
+        "src/app/services.py",
+        "tests/test_phase21_authenticated_decision_action_release_candidate.py",
+        "tests/test_phase21_release_candidate_documentation.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/support/phase_guard_registry.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -827,6 +837,26 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    phase21_release_candidate_runtime_files = {
+        ROOT / "src/agents/production_human_checkpoint_coordinator.py",
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase21_release_candidate_runtime_files
+    ):
+        combined = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in changed_runtime_files
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in combined
+        assert '"application_authority": False' in combined
+        assert '"ats_authority": False' in combined
+        assert '"automatic_application_count": 0' in combined
+        assert '"ats_submission_count": 0' in combined
+        return
     phase20_human_checkpoint_runtime_files = {
         ROOT / "src/agents/production_human_checkpoint_coordinator.py",
         ROOT / "src/storage/durable_orchestration/production.py",

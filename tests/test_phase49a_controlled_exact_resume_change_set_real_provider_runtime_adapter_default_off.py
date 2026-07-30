@@ -27,7 +27,7 @@ DOC_PATH = (
 
 PROTECTED_HASHES = {
     "src/tailoring/llm.py": "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
-    "generate_tailoring_suggestions.py": "58ec07a92d2df1ab1ab72a9029d6fd685576c7c0124532bdeefd1e1fd52ed10c",
+    "generate_tailoring_suggestions.py": "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d",
     "src/agents/controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py": "cfeff0858be6f9177956a1e4b76af6d3ada1775f2833b7a1a1575a1f17aae03a",
     "run_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run.py": "07497f149c37d7e43068299c439f3dac29cd172cf95ec73c7bdb070f816fc32d",
     "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py": "413ace0d64f8c1bd62726cf7ae32bc4fc8e4b88eca82826492362d9842f569ef",

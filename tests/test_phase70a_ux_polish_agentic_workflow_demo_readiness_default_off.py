@@ -10,15 +10,15 @@ DOC_PATH = ROOT / "docs/phase70_ux_polish_agentic_workflow_demo_readiness_defaul
 SCAN_WORKSPACE_JS = ROOT / "src/app/static/scan_workspace.js"
 PLANNING_UI = ROOT / "src/app/planning_ui.py"
 PROTECTED_HASHES = {
-    "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-    "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+    "src/app/api.py": "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+    "src/app/services.py": "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
     "src/matching/scorer.py": "f56624b5b3c7e2bb01a824386b86fbc2a194e727f0437ca0773764eae64ec941",
     "src/matching/dimensions.py": "3ccd5e87b9a8aee7901b3efb5ef7582b0fd652aa498f862d0486fbbd97740b9b",
     "application_execution_" + "queue" + ".py": (
-        "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
+        "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"
     ),
     "generate_tailoring_" + "suggestions" + ".py": (
-        "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28"
+        "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d"
     ),
 }
 

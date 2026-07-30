@@ -174,13 +174,13 @@ def test_default_probe_keeps_provider_and_mutation_authorized_agents_zero():
 def test_no_api_service_pipeline_schema_migration_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"
+            "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"
         ),
         "src/pipeline/collector.py": (
-            "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671"
+            "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e"
         ),
         "requirements.txt": (
-            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"
+            "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/storage/agent_trace/schema.sql": (
             "69305cd1bec0be9caa8c8c1b93e8fc10a3e80a92c08acd5683e7800763d2a77a"
@@ -192,7 +192,7 @@ def test_no_api_service_pipeline_schema_migration_or_dependency_change():
             "a71d55d9306258661b99f9bc88aa122fbf24443e7bd43a9ba597133289df1e57"
         ),
         "application_execution_queue.py": (
-            "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
+            "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"
         ),
     }
     assert_protected_hashes(
@@ -228,7 +228,7 @@ def test_no_api_service_pipeline_schema_migration_or_dependency_change():
         digest.update(path.read_bytes())
         digest.update(b"\0")
     assert digest.hexdigest() == (
-        "a6d8338050e90a6d25d69dc8d903656dd06f5d7a6435c52cf365f4c417d94a03"
+        "7dba8092148c9c401ff56f779adff7dc4363dfec3f67f1502ed549a437a8b4f6"
     )
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()

@@ -25,7 +25,7 @@ PROTECTED_HASHES = {
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "src/tailoring/llm.py": "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
     "generate_tailoring_" + "suggestions" + ".py": (
-        "58ec07a92d2df1ab1ab72a9029d6fd685576c7c0124532bdeefd1e1fd52ed10c"
+        "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d"
     ),
     "application_execution_" + "queue" + ".py": (
         "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"

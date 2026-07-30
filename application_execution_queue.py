@@ -1,21 +1,31 @@
 import argparse
 import csv
+import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+import time
+from typing import Any, Dict, List, Mapping
 
 from src.agents.job_prioritization_agent import (
+    build_job_prioritization_shared_result,
     record_job_prioritization_agent_trace,
     render_job_prioritization_recommendation_rows,
+    validate_job_prioritization_shared_result,
     write_job_prioritization_artifacts,
 )
+from src.agents.resume_match_agent import _truthy
 from src.agents.operator_review_agent import (
+    agent_trace_enabled as operator_review_trace_enabled,
+    build_operator_review_shared_result,
     record_operator_review_agent_trace,
+    trace_context_from_env as operator_review_trace_context_from_env,
     write_operator_review_artifacts,
 )
 from src.agents.tailoring_decision_agent import (
+    build_tailoring_decision_shared_result,
     record_tailoring_decision_agent_trace,
     render_tailoring_decision_rows,
+    validate_tailoring_decision_shared_result,
     write_tailoring_decision_artifacts,
 )
 from src.config.settings import APPLICATION_EXECUTION_QUEUE_POLICY
@@ -35,6 +45,31 @@ LIVE_SCHEDULER_EXECUTION_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_WIRING_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_OBSERVABILITY_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_OBSERVABILITY_REPORTING_GATE_ENABLED = True
+JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG = (
+    "APPLYLENS_DETERMINISTIC_JOB_PRIORITIZATION_GRAPH_VERIFY_ENABLED"
+)
+AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_ENABLED"
+)
+AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_ENABLED"
+)
+AUTHORITATIVE_OPERATOR_REVIEW_LANGGRAPH_FLAG = (
+    "APPLYLENS_AUTHORITATIVE_OPERATOR_REVIEW_LANGGRAPH_ENABLED"
+)
+PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_FLAG = (
+    "APPLYLENS_PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_ENABLED"
+)
+AUTHORITATIVE_JOB_PRIORITIZATION_NODE = (
+    "build_job_prioritization_shared_result"
+)
+AUTHORITATIVE_TAILORING_DECISION_NODE = (
+    "build_tailoring_decision_shared_result"
+)
+AUTHORITATIVE_OPERATOR_REVIEW_NODE = "build_operator_review_shared_result"
+MAX_AUTHORITATIVE_PRIORITY_LATENCY_MS = 300_000
+MAX_AUTHORITATIVE_TAILORING_LATENCY_MS = 300_000
+MAX_AUTHORITATIVE_OPERATOR_REVIEW_LATENCY_MS = 300_000
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -1255,10 +1290,393 @@ def _job_key(row: dict) -> str:
     )
 
 
-def _with_priority_overlay(rows: List[dict]) -> List[dict]:
+def _job_prioritization_graph_verification_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(env_map.get(JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG))
+
+
+class AuthoritativeJobPrioritizationGateConflictError(RuntimeError):
+    def __init__(self, failure_code: str) -> None:
+        self.failure_code = failure_code
+        super().__init__(failure_code)
+
+
+def _authoritative_job_prioritization_langgraph_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(
+        env_map.get(AUTHORITATIVE_JOB_PRIORITIZATION_LANGGRAPH_FLAG)
+    )
+
+
+def _assert_authoritative_job_prioritization_gates_compatible(
+    env: Mapping[str, str],
+) -> None:
+    if not _authoritative_job_prioritization_langgraph_enabled(env):
+        return
+    if _truthy(env.get(JOB_PRIORITIZATION_GRAPH_VERIFY_FLAG)):
+        raise AuthoritativeJobPrioritizationGateConflictError(
+            "authoritative_priority_conflict_diagnostic_verification"
+        )
+    if _truthy(env.get(PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_FLAG)):
+        raise AuthoritativeJobPrioritizationGateConflictError(
+            "authoritative_priority_conflict_production_shadow_owner"
+        )
+
+
+def _bounded_authoritative_priority_latency_ms(started_ns: int) -> int:
+    elapsed_ms = int((time.perf_counter_ns() - started_ns) / 1_000_000)
+    return max(
+        0,
+        min(elapsed_ms, MAX_AUTHORITATIVE_PRIORITY_LATENCY_MS),
+    )
+
+
+def _build_authoritative_priority_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    source_artifact_path: str,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    env_map = os.environ if env is None else env
+    _assert_authoritative_job_prioritization_gates_compatible(env_map)
+    if not _authoritative_job_prioritization_langgraph_enabled(env_map):
+        started_ns = time.perf_counter_ns()
+        shared_result = build_job_prioritization_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        validated = validate_job_prioritization_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        return validated, {
+            "graph_version": "",
+            "state_version": "",
+            "execution_mode": "direct",
+            "node_name": AUTHORITATIVE_JOB_PRIORITIZATION_NODE,
+            "production_node_count": 0,
+            "invocation_count": 1,
+            "node_latency_ms": (
+                _bounded_authoritative_priority_latency_ms(started_ns)
+            ),
+            "status": "completed",
+            "failure_classification": "",
+            "deterministic": True,
+            "read_only": True,
+            "provider_calls_allowed": False,
+            "mutation_authority": False,
+            "application_authority": False,
+            "ats_authority": False,
+        }
+
+    from src.agents.job_prioritization_authoritative_graph import (
+        execute_authoritative_job_prioritization_graph,
+    )
+
+    result = execute_authoritative_job_prioritization_graph(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+        source_artifact_path=source_artifact_path,
+    )
+    shared_result = validate_job_prioritization_shared_result(
+        result.get("shared_result", {}),
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("invocation_count") != 1
+        or metadata.get("production_node_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_job_prioritization_execution_metadata_invalid"
+        )
+    return shared_result, metadata
+
+
+def _authoritative_tailoring_decision_langgraph_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(
+        env_map.get(AUTHORITATIVE_TAILORING_DECISION_LANGGRAPH_FLAG)
+    )
+
+
+def _bounded_authoritative_tailoring_latency_ms(
+    started_ns: int,
+) -> int:
+    elapsed_ms = int((time.perf_counter_ns() - started_ns) / 1_000_000)
+    return max(
+        0,
+        min(elapsed_ms, MAX_AUTHORITATIVE_TAILORING_LATENCY_MS),
+    )
+
+
+def _build_authoritative_tailoring_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    source_artifact_path: str,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    env_map = os.environ if env is None else env
+    if not _authoritative_tailoring_decision_langgraph_enabled(env_map):
+        started_ns = time.perf_counter_ns()
+        shared_result = build_tailoring_decision_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        validated = validate_tailoring_decision_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        return validated, {
+            "graph_version": "",
+            "state_version": "",
+            "execution_mode": "direct",
+            "node_name": AUTHORITATIVE_TAILORING_DECISION_NODE,
+            "production_node_count": 0,
+            "invocation_count": 1,
+            "node_latency_ms": (
+                _bounded_authoritative_tailoring_latency_ms(started_ns)
+            ),
+            "status": "completed",
+            "failure_classification": "",
+            "deterministic": True,
+            "read_only": True,
+            "provider_calls_allowed": False,
+            "mutation_authority": False,
+            "application_authority": False,
+            "ats_authority": False,
+        }
+
+    from src.agents.tailoring_decision_authoritative_graph import (
+        execute_authoritative_tailoring_decision_graph,
+    )
+
+    result = execute_authoritative_tailoring_decision_graph(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+        source_artifact_path=source_artifact_path,
+    )
+    shared_result = validate_tailoring_decision_shared_result(
+        result.get("shared_result", {}),
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("invocation_count") != 1
+        or metadata.get("production_node_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_tailoring_decision_execution_metadata_invalid"
+        )
+    return shared_result, metadata
+
+
+def _authoritative_operator_review_langgraph_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    env_map = os.environ if env is None else env
+    return _truthy(
+        env_map.get(AUTHORITATIVE_OPERATOR_REVIEW_LANGGRAPH_FLAG)
+    )
+
+
+def _bounded_authoritative_operator_review_latency_ms(
+    started_ns: int,
+) -> int:
+    elapsed_ms = int((time.perf_counter_ns() - started_ns) / 1_000_000)
+    return max(
+        0,
+        min(elapsed_ms, MAX_AUTHORITATIVE_OPERATOR_REVIEW_LATENCY_MS),
+    )
+
+
+def _build_authoritative_operator_review_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    source_artifact_path: str,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    env_map = os.environ if env is None else env
+    if not _authoritative_operator_review_langgraph_enabled(env_map):
+        started_ns = time.perf_counter_ns()
+        shared_result = build_operator_review_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        from src.agents.operator_review_agent import (
+            validate_operator_review_shared_result,
+        )
+
+        validated = validate_operator_review_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        return validated, {
+            "graph_version": "",
+            "state_version": "",
+            "execution_mode": "direct",
+            "node_name": AUTHORITATIVE_OPERATOR_REVIEW_NODE,
+            "production_node_count": 0,
+            "invocation_count": 1,
+            "node_latency_ms": (
+                _bounded_authoritative_operator_review_latency_ms(
+                    started_ns
+                )
+            ),
+            "status": "completed",
+            "failure_classification": "",
+            "deterministic": True,
+            "read_only": True,
+            "provider_calls_allowed": False,
+            "mutation_authority": False,
+            "application_authority": False,
+            "ats_authority": False,
+        }
+
+    from src.agents.operator_review_authoritative_graph import (
+        execute_authoritative_operator_review_graph,
+    )
+    from src.agents.operator_review_agent import (
+        validate_operator_review_shared_result,
+    )
+
+    result = execute_authoritative_operator_review_graph(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        context_id=context_id,
+        source_artifact_path=source_artifact_path,
+    )
+    shared_result = validate_operator_review_shared_result(
+        result.get("shared_result", {}),
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    metadata = dict(result.get("execution_metadata") or {})
+    if (
+        metadata.get("execution_mode") != "langgraph"
+        or metadata.get("invocation_count") != 1
+        or metadata.get("production_node_count") != 1
+        or metadata.get("status") != "completed"
+    ):
+        raise RuntimeError(
+            "authoritative_operator_review_execution_metadata_invalid"
+        )
+    return shared_result, metadata
+
+
+def _bounded_graph_verification_exception_summary(
+    input_row_count: int,
+) -> Dict[str, Any]:
+    return {
+        "enabled": True,
+        "attempted": False,
+        "completed": False,
+        "classification": "exception",
+        "input_row_count": max(0, min(input_row_count, 1_000_000)),
+        "output_row_count": 0,
+        "parity_matched": False,
+        "timeout_count": 0,
+        "exception_count": 1,
+        "duplicate_suppressed_count": 0,
+        "elapsed_ms": 0,
+        "direct_output_authoritative": True,
+        "graph_output_applied": False,
+        "safety_violation_count": 0,
+        "rollback_required": False,
+    }
+
+
+def _with_priority_overlay(
+    rows: List[dict],
+    *,
+    env: Dict[str, str] | None = None,
+    source_artifact_reference: str = "",
+    shared_result: Mapping[str, Any] | None = None,
+) -> List[dict]:
+    direct_priority_rows = (
+        render_job_prioritization_recommendation_rows(rows)
+        if shared_result is None
+        else validate_job_prioritization_shared_result(
+            shared_result,
+            expected_rows=rows,
+        )["rendered_rows"]
+    )
+    if _job_prioritization_graph_verification_enabled(env):
+        try:
+            from src.agents.job_prioritization_graph_integration import (
+                verify_direct_job_prioritization_rows,
+            )
+
+            verification_summary = verify_direct_job_prioritization_rows(
+                rows=rows,
+                direct_rendered_rows=direct_priority_rows,
+                source_artifact_reference=source_artifact_reference,
+                env=os.environ if env is None else env,
+            )
+        except Exception:
+            verification_summary = _bounded_graph_verification_exception_summary(
+                len(rows)
+            )
+        print(
+            "Job prioritization graph verification: "
+            + json.dumps(
+                verification_summary,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
+
     priority_by_key = {
         _job_key(row): row
-        for row in render_job_prioritization_recommendation_rows(rows)
+        for row in direct_priority_rows
         if _job_key(row)
     }
     merged_rows: List[dict] = []
@@ -1287,10 +1705,22 @@ def _with_priority_overlay(rows: List[dict]) -> List[dict]:
     return merged_rows
 
 
-def _with_tailoring_decision_overlay(rows: List[dict]) -> List[dict]:
+def _with_tailoring_decision_overlay(
+    rows: List[dict],
+    *,
+    shared_result: Mapping[str, Any] | None = None,
+) -> List[dict]:
+    rendered_rows = (
+        render_tailoring_decision_rows(rows)
+        if shared_result is None
+        else validate_tailoring_decision_shared_result(
+            shared_result,
+            expected_rows=rows,
+        )["rendered_rows"]
+    )
     tailoring_by_key = {
         _job_key(row): row
-        for row in render_tailoring_decision_rows(rows)
+        for row in rendered_rows
         if _job_key(row)
     }
     merged_rows: List[dict] = []
@@ -1484,6 +1914,43 @@ def main() -> None:
             output_row = {name: row.get(name, "") for name in fieldnames}
             writer.writerow(output_row)
 
+    priority_pipeline_run_id = (
+        os.getenv("JOB_APP_PIPELINE_RUN_ID", "").strip()
+        or os.getenv("JOB_STACK_USER_PIPELINE_RUN_ID", "").strip()
+    )
+    priority_owner_user_id = os.getenv(
+        "JOB_STACK_OWNER_USER_ID", ""
+    ).strip()
+    priority_source_artifact_path = str(output_csv_path)
+    priority_context_id = (
+        os.getenv("APPLYLENS_AGENT_CONTEXT_ID", "").strip()
+        or (
+            f"job_priority:{priority_pipeline_run_id}"
+            if priority_pipeline_run_id
+            else ""
+        )
+    )
+    (
+        priority_shared_result,
+        priority_execution_metadata,
+    ) = _build_authoritative_priority_shared_result(
+        rows=queue_rows,
+        pipeline_run_id=priority_pipeline_run_id,
+        owner_user_id=priority_owner_user_id,
+        context_id=priority_context_id,
+        source_artifact_path=priority_source_artifact_path,
+    )
+    if priority_execution_metadata["execution_mode"] == "langgraph":
+        print(
+            "Authoritative job prioritization execution: "
+            + json.dumps(
+                priority_execution_metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
+
     priority_artifact = None
     if str(args.priority_output_csv or "").strip():
         try:
@@ -1491,18 +1958,40 @@ def main() -> None:
                 rows=queue_rows,
                 output_csv_path=args.priority_output_csv,
                 summary_json_path=args.priority_summary_json or None,
-                pipeline_run_id=(
-                    os.getenv("JOB_APP_PIPELINE_RUN_ID", "").strip()
-                    or os.getenv("JOB_STACK_USER_PIPELINE_RUN_ID", "").strip()
-                ),
-                owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
-                source_artifact_path=str(output_csv_path),
+                pipeline_run_id=priority_pipeline_run_id,
+                owner_user_id=priority_owner_user_id,
+                source_artifact_path=priority_source_artifact_path,
+                shared_result=priority_shared_result,
             )
         except Exception as exc:
             print(f"Job prioritization advisory artifact skipped: {exc}")
 
     tailoring_decision_artifact = None
-    tailoring_decision_rows = _with_priority_overlay(queue_rows)
+    tailoring_decision_rows = _with_priority_overlay(
+        queue_rows,
+        source_artifact_reference=str(output_csv_path),
+        shared_result=priority_shared_result,
+    )
+    (
+        tailoring_shared_result,
+        tailoring_execution_metadata,
+    ) = _build_authoritative_tailoring_shared_result(
+        rows=tailoring_decision_rows,
+        pipeline_run_id=priority_pipeline_run_id,
+        owner_user_id=priority_owner_user_id,
+        context_id=priority_context_id,
+        source_artifact_path=priority_source_artifact_path,
+    )
+    if tailoring_execution_metadata["execution_mode"] == "langgraph":
+        print(
+            "Authoritative tailoring decision execution: "
+            + json.dumps(
+                tailoring_execution_metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
     if str(args.tailoring_decision_output_csv or "").strip():
         try:
             tailoring_decision_artifact = write_tailoring_decision_artifacts(
@@ -1515,13 +2004,65 @@ def main() -> None:
                 ),
                 owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
                 source_artifact_path=str(output_csv_path),
+                shared_result=tailoring_shared_result,
             )
         except Exception as exc:
             print(f"Tailoring decision advisory artifact skipped: {exc}")
 
     operator_review_artifact = None
-    operator_review_rows = _with_tailoring_decision_overlay(tailoring_decision_rows)
-    if str(args.operator_review_output_csv or "").strip():
+    operator_review_rows = _with_tailoring_decision_overlay(
+        tailoring_decision_rows,
+        shared_result=tailoring_shared_result,
+    )
+    operator_review_artifact_requested = bool(
+        str(args.operator_review_output_csv or "").strip()
+    )
+    operator_review_trace_is_enabled = operator_review_trace_enabled()
+    operator_review_context = (
+        operator_review_trace_context_from_env()
+        if operator_review_artifact_requested
+        or operator_review_trace_is_enabled
+        else {}
+    )
+    operator_review_trace_eligible = (
+        operator_review_trace_is_enabled
+        and bool(operator_review_context.get("owner_user_id"))
+        and bool(operator_review_context.get("pipeline_run_id"))
+    )
+    operator_review_shared_result = None
+    operator_review_execution_metadata = None
+    if operator_review_artifact_requested or operator_review_trace_eligible:
+        (
+            operator_review_shared_result,
+            operator_review_execution_metadata,
+        ) = _build_authoritative_operator_review_shared_result(
+            rows=operator_review_rows,
+            pipeline_run_id=str(
+                operator_review_context.get("pipeline_run_id") or ""
+            ),
+            owner_user_id=str(
+                operator_review_context.get("owner_user_id") or ""
+            ),
+            context_id=str(
+                operator_review_context.get("context_id") or ""
+            ),
+            source_artifact_path=str(output_csv_path),
+        )
+        if (
+            operator_review_execution_metadata["execution_mode"]
+            == "langgraph"
+        ):
+            print(
+                "Authoritative operator review execution: "
+                + json.dumps(
+                    operator_review_execution_metadata,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            )
+
+    if operator_review_artifact_requested:
         try:
             operator_review_artifact = write_operator_review_artifacts(
                 rows=operator_review_rows,
@@ -1533,6 +2074,7 @@ def main() -> None:
                 ),
                 owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
                 source_artifact_path=str(output_csv_path),
+                shared_result=operator_review_shared_result,
             )
         except Exception as exc:
             print(f"Operator review advisory artifact skipped: {exc}")
@@ -1540,6 +2082,7 @@ def main() -> None:
     trace_result = record_job_prioritization_agent_trace(
         rows=queue_rows,
         source_artifact_path=str(output_csv_path),
+        shared_result=priority_shared_result,
     )
     if trace_result.get("attempted") and not trace_result.get("recorded"):
         print(f"Job prioritization trace warning: {trace_result.get('warning') or trace_result.get('reason')}")
@@ -1547,6 +2090,7 @@ def main() -> None:
     tailoring_trace_result = record_tailoring_decision_agent_trace(
         rows=tailoring_decision_rows,
         source_artifact_path=str(output_csv_path),
+        shared_result=tailoring_shared_result,
     )
     if tailoring_trace_result.get("attempted") and not tailoring_trace_result.get("recorded"):
         print(
@@ -1557,6 +2101,7 @@ def main() -> None:
     operator_review_trace_result = record_operator_review_agent_trace(
         rows=operator_review_rows,
         source_artifact_path=str(output_csv_path),
+        shared_result=operator_review_shared_result,
     )
     if operator_review_trace_result.get("attempted") and not operator_review_trace_result.get("recorded"):
         print(

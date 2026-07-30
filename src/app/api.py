@@ -7,7 +7,7 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from src.app import services
 from src.auth.runtime import auth_guard_response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from fastapi.staticfiles import StaticFiles
 from src.agents.critic_evaluator import evaluate_agent_trace
 from src.agents.core_agent_evidence_materialization_preview import (
@@ -222,6 +222,17 @@ class AgenticApprovalDecisionRequest(BaseModel):
     review_decision: str
     review_reason: str = ""
     decided_at: str | None = None
+
+
+class ProductionHumanReviewDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    graph_invocation_id: str
+    repository_checkpoint_id: str
+    decision_value: str
+    client_idempotency_key: str
+    decision_reason: str = ""
+    continuation_token: SecretStr | None = None
 
 
 class CriticEvaluatorReadonlyRequest(BaseModel):
@@ -3373,6 +3384,59 @@ def planning_select_resume(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/production-human-reviews/{interrupt_request_id}/decision"
+)
+def production_human_review_decision_action(
+    interrupt_request_id: str,
+    request: ProductionHumanReviewDecisionRequest,
+    http_request: Request,
+):
+    owner_user_id = _require_auth_owner_user_id(http_request)
+    token = (
+        request.continuation_token.get_secret_value()
+        if request.continuation_token is not None
+        else ""
+    )
+    try:
+        result = services.production_human_review_decision_action_payload(
+            owner_user_id=owner_user_id,
+            actor_id=owner_user_id,
+            graph_invocation_id=request.graph_invocation_id,
+            repository_checkpoint_id=(
+                request.repository_checkpoint_id
+            ),
+            interrupt_request_id=interrupt_request_id,
+            decision_value=request.decision_value,
+            client_idempotency_key=request.client_idempotency_key,
+            decision_reason=request.decision_reason,
+            continuation_token=token,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "action_version": (
+                    services.PRODUCTION_HUMAN_REVIEW_ACTION_VERSION
+                ),
+                "ok": False,
+                "failure_classification": str(exc),
+            },
+        ) from exc
+    if result.get("ok"):
+        return result
+    classification = str(
+        result.get("failure_classification") or ""
+    )
+    status_code = {
+        "not_found": 404,
+        "identity_mismatch": 404,
+        "unavailable": 503,
+    }.get(classification, 409)
+    raise HTTPException(status_code=status_code, detail=result)
+
 
 @app.post("/planning/regenerate-selected-resume")
 def planning_regenerate_selected_resume(

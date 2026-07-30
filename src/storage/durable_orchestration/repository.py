@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from src.storage.durable_orchestration import store
+from src.storage.durable_orchestration import production as production_contract
 
 
 CAPABILITY_NAME = (
@@ -428,6 +429,7 @@ class DurableOrchestrationRepository:
         step16a_methods = {
             "commit_checkpoint_binding",
             "read_checkpoint_binding",
+            "read_pending_interrupt_full",
             "record_human_decision",
             "read_current_human_decision",
             "create_resume_authorization",
@@ -449,10 +451,18 @@ class DurableOrchestrationRepository:
             "read_terminal_result",
             "read_restart_reconciliation",
         }
+        production_methods = {
+            "create_production_graph_run",
+            "start_production_attempt",
+            "commit_production_checkpoint",
+            "terminalize_production_run",
+        }
         if name in step16a_methods:
             return object.__getattribute__(self, f"_step16a_{name}")
         if name in step16b_methods:
             return object.__getattribute__(self, f"_step16b_{name}")
+        if name in production_methods:
+            return object.__getattribute__(self, f"_production_{name}")
         raise AttributeError(name)
 
     def _open(self, operation: str) -> tuple[ConnectionProtocol, CursorProtocol]:
@@ -1041,6 +1051,27 @@ class DurableOrchestrationRepository:
             authoritative_expected=decision_row,
             owner_user_id=decision_row["owner_user_id"],
             graph_invocation_id=decision_row["graph_invocation_id"],
+        )
+
+    def _step16a_read_pending_interrupt_full(
+        self,
+        *,
+        owner_user_id: str,
+        graph_invocation_id: str,
+    ) -> RepositoryResult:
+        command = store.prepare_pending_interrupt_read(
+            owner_user_id=owner_user_id,
+            graph_invocation_id=graph_invocation_id,
+        )
+        return self._execute_exact_read(
+            operation="read_pending_interrupt_full",
+            command=command,
+            required_fields=store._INTERRUPT_COLUMNS,
+            expected_identity={
+                "owner_user_id": owner_user_id,
+                "graph_invocation_id": graph_invocation_id,
+                "interrupt_status": "awaiting_decision",
+            },
         )
 
     def _step16a_read_current_human_decision(
@@ -1675,6 +1706,115 @@ class DurableOrchestrationRepository:
                 "owner_user_id": owner_user_id,
                 "graph_invocation_id": graph_invocation_id,
             },
+        )
+
+    def _production_create_production_graph_run(
+        self,
+        graph_run_row: Mapping[str, Any],
+    ) -> RepositoryResult:
+        command = production_contract.prepare_graph_run_insert(graph_run_row)
+        expected = {
+            key: graph_run_row[key] for key in _GRAPH_RESULT_FIELDS
+        }
+        return self._step16b_execute_single_row_mutation(
+            operation="create_production_graph_run",
+            command=command,
+            fields=_GRAPH_RESULT_FIELDS,
+            expected=expected,
+            idempotent_flag=True,
+            zero_read=store.prepare_current_graph_run_read(
+                owner_user_id=graph_run_row["owner_user_id"],
+                graph_invocation_id=graph_run_row["graph_invocation_id"],
+            ),
+        )
+
+    def _production_start_production_attempt(
+        self,
+        graph_run_row: Mapping[str, Any],
+        checkpoint_row: Mapping[str, Any],
+        attempt_row: Mapping[str, Any],
+    ) -> RepositoryResult:
+        command = production_contract.prepare_checkpoint_attempt_start(
+            graph_run_row,
+            checkpoint_row,
+            attempt_row,
+        )
+        return self._step16b_execute_single_row_mutation(
+            operation="start_production_attempt",
+            command=command,
+            fields=_ATTEMPT_RESULT_FIELDS,
+            expected={
+                key: attempt_row[key] for key in _ATTEMPT_RESULT_FIELDS
+            },
+            idempotent_flag=True,
+            zero_read=store.prepare_node_attempt_read(
+                owner_user_id=attempt_row["owner_user_id"],
+                graph_invocation_id=attempt_row["graph_invocation_id"],
+                node_attempt_id=attempt_row["node_attempt_id"],
+            ),
+        )
+
+    def _production_commit_production_checkpoint(
+        self,
+        checkpoint_row: Mapping[str, Any],
+        *,
+        parent_checkpoint_id: str,
+        expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        command = production_contract.prepare_checkpoint_commit(
+            checkpoint_row,
+            parent_checkpoint_id=parent_checkpoint_id,
+            expected_run_lock_version=expected_run_lock_version,
+        )
+        return self._step16b_execute_single_row_mutation(
+            operation="commit_production_checkpoint",
+            command=command,
+            fields=_FULL_CHECKPOINT_RESULT_FIELDS,
+            expected={
+                key: checkpoint_row[key]
+                for key in _FULL_CHECKPOINT_RESULT_FIELDS
+            },
+            idempotent_flag=True,
+            zero_read=store.prepare_checkpoint_read_by_id(
+                owner_user_id=checkpoint_row["owner_user_id"],
+                graph_invocation_id=checkpoint_row["graph_invocation_id"],
+                checkpoint_id=checkpoint_row["checkpoint_id"],
+            ),
+        )
+
+    def _production_terminalize_production_run(
+        self,
+        graph_run_row: Mapping[str, Any],
+        terminal_result_row: Mapping[str, Any],
+        lifecycle_event_row: Mapping[str, Any],
+        *,
+        successful_attempt_row: Mapping[str, Any] | None,
+        final_binding_row: Mapping[str, Any] | None,
+        expected_run_lock_version: int,
+    ) -> RepositoryResult:
+        command = production_contract.prepare_terminalization(
+            graph_run_row,
+            terminal_result_row,
+            lifecycle_event_row,
+            successful_attempt_row=successful_attempt_row,
+            final_binding_row=final_binding_row,
+            expected_run_lock_version=expected_run_lock_version,
+        )
+        return self._step16b_execute_single_row_mutation(
+            operation="terminalize_production_run",
+            command=command,
+            fields=_TERMINAL_RESULT_FIELDS,
+            expected={
+                key: terminal_result_row[key]
+                for key in _TERMINAL_RESULT_FIELDS
+            },
+            idempotent_flag=True,
+            zero_read=store.prepare_terminal_result_read(
+                owner_user_id=terminal_result_row["owner_user_id"],
+                graph_invocation_id=terminal_result_row[
+                    "graph_invocation_id"
+                ],
+            ),
         )
 
     def commit_checkpoint_interrupt(

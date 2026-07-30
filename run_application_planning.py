@@ -914,6 +914,8 @@ def _main(shadow_candidate_projection_path: Path | None = None) -> None:
                     "generate_tailoring_suggestions.py",
                     "--packet-json",
                     str(packet_json_path),
+                    "--job-index",
+                    str(job_index),
                     "--output-json",
                     str(tailoring_json_path),
                     "--output-md",

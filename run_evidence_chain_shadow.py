@@ -98,10 +98,17 @@ def _authoritative_facts(value: Any) -> tuple[list[str], Dict[str, list[Dict[str
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run explicit read-only evidence shadow.")
     parser.add_argument("--execute-shadow", action="store_true")
+    parser.add_argument("--production-shadow", action="store_true")
+    parser.add_argument(
+        "--invoke-job-prioritization-owner", action="store_true"
+    )
     parser.add_argument("--job-corpus")
     parser.add_argument("--best-resume")
     parser.add_argument("--execution-queue")
     parser.add_argument("--packet-manifest")
+    parser.add_argument("--job-prioritization")
+    parser.add_argument("--tailoring-decision")
+    parser.add_argument("--operator-review")
     parser.add_argument("--resume-evidence")
     parser.add_argument("--authoritative-facts")
     parser.add_argument("--owner-id")
@@ -115,12 +122,13 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if not args.execute_shadow:
         raise CommandInputError("execute_shadow_acknowledgement_required")
+    if args.invoke_job_prioritization_owner and not args.production_shadow:
+        raise CommandInputError("production_shadow_required_for_owner")
     required = (
         ("job_corpus", args.job_corpus),
         ("best_resume", args.best_resume),
         ("execution_queue", args.execution_queue),
         ("packet_manifest", args.packet_manifest),
-        ("resume_evidence", args.resume_evidence),
         ("authoritative_facts", args.authoritative_facts),
         ("owner_identity", args.owner_id),
         ("pipeline_identity", args.pipeline_run_id),
@@ -129,29 +137,69 @@ def main(argv: list[str] | None = None) -> int:
     for label, value in required:
         if not str(value or "").strip():
             raise CommandInputError(f"{label}_missing")
+    mode_required = (
+        (
+            ("job_prioritization", args.job_prioritization),
+            ("tailoring_decision", args.tailoring_decision),
+            ("operator_review", args.operator_review),
+        )
+        if args.production_shadow
+        else (("resume_evidence", args.resume_evidence),)
+    )
+    for label, value in mode_required:
+        if not str(value or "").strip():
+            raise CommandInputError(f"{label}_missing")
     owner_id = _identity(args.owner_id, "owner_identity")
     pipeline_run_id = _identity(args.pipeline_run_id, "pipeline_identity")
     context_id = _identity(args.context_id, "context_identity")
-    evidence = _resume_evidence(_load_json(args.resume_evidence, "resume_evidence"))
     job_ids, comparisons = _authoritative_facts(
         _load_json(args.authoritative_facts, "authoritative_facts")
     )
 
-    from src.agents.evidence_chain_shadow_execution import execute_readonly_shadow
+    if args.production_shadow:
+        from src.agents.production_shadow_graph import (
+            execute_production_shadow_graph,
+        )
 
-    result = execute_readonly_shadow(
-        job_ids=job_ids,
-        owner_id=owner_id,
-        pipeline_run_id=pipeline_run_id,
-        context_id=context_id,
-        resume_evidence_by_id=evidence,
-        authoritative_comparisons_by_job=comparisons,
-        include_trace_payload=bool(args.include_trace_payload),
-        job_corpus_path=args.job_corpus,
-        best_resume_path=args.best_resume,
-        execution_queue_path=args.execution_queue,
-        packet_manifest_path=args.packet_manifest,
-    )
+        result = execute_production_shadow_graph(
+            job_ids=job_ids,
+            owner_user_id=owner_id,
+            pipeline_run_id=pipeline_run_id,
+            context_id=context_id,
+            deterministic_owner_enabled=bool(
+                args.invoke_job_prioritization_owner
+            ),
+            artifact_paths={
+                "job_corpus": args.job_corpus,
+                "best_resume": args.best_resume,
+                "execution_queue": args.execution_queue,
+                "packet_manifest": args.packet_manifest,
+                "advisory_priority": args.job_prioritization,
+                "tailoring_decision": args.tailoring_decision,
+                "operator_review": args.operator_review,
+            },
+        )
+    else:
+        evidence = _resume_evidence(
+            _load_json(args.resume_evidence, "resume_evidence")
+        )
+        from src.agents.evidence_chain_shadow_execution import (
+            execute_readonly_shadow,
+        )
+
+        result = execute_readonly_shadow(
+            job_ids=job_ids,
+            owner_id=owner_id,
+            pipeline_run_id=pipeline_run_id,
+            context_id=context_id,
+            resume_evidence_by_id=evidence,
+            authoritative_comparisons_by_job=comparisons,
+            include_trace_payload=bool(args.include_trace_payload),
+            job_corpus_path=args.job_corpus,
+            best_resume_path=args.best_resume,
+            execution_queue_path=args.execution_queue,
+            packet_manifest_path=args.packet_manifest,
+        )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     return 0
 

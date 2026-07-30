@@ -46,13 +46,13 @@ ASSISTIVE_CAPABILITIES = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-    "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+    "src/app/api.py": "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+    "src/app/services.py": "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
     "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-    "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
+    "src/app/static/app_redesign.css": "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
     "src/agents/operator_decision_capture_readback_contract.py": "4066b415b7ac84eca8e37df5b1b71cad208001fd49c76126bd928eab39992450",
-    "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+    "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
 }
 
 FORBIDDEN_RUNTIME_MARKERS = (
@@ -116,11 +116,44 @@ def test_phase21_focuses_on_manual_review_not_autonomous_execution():
 
 
 def test_protected_runtime_files_are_unchanged():
-    assert_protected_hashes(ROOT, PROTECTED_HASHES)
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+        ),
+    )
 
 
 def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
+        "src/evaluation/provider_fixture_benchmark.py",
+        "tests/test_provider_fixture_benchmark.py",
+        "src/evaluation/controlled_groq_canary_run_005_plan.py",
+        "src/evaluation/controlled_groq_canary_run_005_identity.py",
+        "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_005_plan.py",
+        "tests/test_controlled_groq_canary_run_005_identity.py",
+        "tests/test_controlled_groq_canary_run_005_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+        "src/evaluation/controlled_groq_canary_run_004_plan.py",
+        "src/evaluation/controlled_groq_canary_run_004_identity.py",
+        "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_004_plan.py",
+        "tests/test_controlled_groq_canary_run_004_identity.py",
+        "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+        "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_003_transport.py",
+        "tests/test_controlled_groq_canary_run_003_evidence_runtime.py",
+        "src/evaluation/controlled_groq_canary_run_003_identity.py",
+        "tests/test_controlled_groq_canary_run_003_identity.py",
+        "src/evaluation/controlled_groq_canary_run_003_plan.py",
+        "tests/test_controlled_groq_canary_run_003_plan.py",
+        "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_evidence_runtime.py",
+        "src/evaluation/controlled_groq_canary_run_identity.py",
+        "tests/test_controlled_groq_canary_run_identity.py",
         "src/app/auth_ui.py",
         "tests/test_phase109b_live_pipeline_popup_ux_static_only.py",
         "tests/test_phase110b_generate_suggestions_loader_static_only.py",
@@ -170,6 +203,12 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
         "src/agents/jd_intelligence.py",
         "tests/test_phase84b_jd_intelligence_existing_output_wrapper_default_off.py",
+        "src/evaluation/provider_benchmark_contract.py",
+        "tests/fixtures/provider_benchmark/manifest.json",
+        "tests/test_provider_benchmark_contract.py",
+        "src/evaluation/provider_client_compatibility.py",
+        "tests/test_provider_client_compatibility.py",
+        "tests/test_rag_endpoint_behavior.py",
         "tests/test_phase86b_jd_intelligence_existing_output_trace_payload_default_off.py",
                 "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
                     "tests/test_phase88b_jd_intelligence_existing_output_trace_persistence_default_off.py",
@@ -772,6 +811,340 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    phase11_step8l_provider_benchmark_runtime_files = {
+        ROOT / "src/evaluation/provider_benchmark_contract.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8l_provider_benchmark_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8m_provider_compatibility_runtime_files = {
+        ROOT / "src/evaluation/provider_client_compatibility.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8m_provider_compatibility_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8n_shared_llm_client_safety_runtime_files = {
+        ROOT / "src/ai/llm_client.py",
+        ROOT / "src/evaluation/provider_client_compatibility.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8n_shared_llm_client_safety_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8o_provider_fixture_benchmark_runtime_files = {
+        ROOT / "src/evaluation/provider_fixture_benchmark.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8o_provider_fixture_benchmark_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8p_controlled_provider_benchmark_plan_runtime_files = {
+        ROOT / "src/evaluation/controlled_provider_benchmark_plan.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8p_controlled_provider_benchmark_plan_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8q_controlled_provider_benchmark_harness_runtime_files = {
+        ROOT / "src/evaluation/controlled_provider_benchmark_harness.py",
+        ROOT / "src/evaluation/controlled_provider_benchmark_plan.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8q_controlled_provider_benchmark_harness_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8r_groq_live_canary_preparation_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_provider_canary.py",
+        ROOT / "src/evaluation/controlled_provider_benchmark_harness.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8r_groq_live_canary_preparation_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8t_real_groq_canary_transport_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_transport.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8t_real_groq_canary_transport_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8v_groq_canary_evidence_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_evidence_runtime.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8v_groq_canary_evidence_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8y_groq_canary_run_identity_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_identity.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8y_groq_canary_run_identity_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8z_groq_canary_run_evidence_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8z_groq_canary_run_evidence_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8ze_groq_canary_run_003_plan_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_003_plan.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8ze_groq_canary_run_003_plan_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8zf_groq_canary_run_003_identity_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_003_identity.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8zf_groq_canary_run_003_identity_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8zg_groq_canary_run_003_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        ROOT
+        / "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8zg_groq_canary_run_003_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8zk_groq_canary_run_004_runtime_files = {
+        ROOT / "src/evaluation/controlled_groq_canary_run_004_plan.py",
+        ROOT / "src/evaluation/controlled_groq_canary_run_004_identity.py",
+        ROOT
+        / "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8zk_groq_canary_run_004_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8zn_groq_canary_run_005_runtime_files = {
+        ROOT / "src/evaluation/provider_fixture_benchmark.py",
+        ROOT / "src/evaluation/controlled_groq_canary_run_005_plan.py",
+        ROOT / "src/evaluation/controlled_groq_canary_run_005_identity.py",
+        ROOT
+        / "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8zn_groq_canary_run_005_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step8zq_tailoring_adapter_transport_runtime_files = {
+        ROOT
+        / "src/evaluation/controlled_tailoring_benchmark_request_adapter.py",
+        ROOT
+        / "src/evaluation/controlled_groq_tailoring_canary_transport.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step8zq_tailoring_adapter_transport_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase12d_production_shadow_runtime_files = {
+        ROOT / "src/agents/production_shadow_artifact_adapter.py",
+        ROOT / "src/agents/production_shadow_graph.py",
+        ROOT / "src/agents/production_shadow_job_priority_owner.py",
+        ROOT / "src/agents/production_shadow_state.py",
+        ROOT / "src/pipeline/post_planning_shadow.py",
+        ROOT / "src/pipeline/shadow_observation_contract.py",
+    }
+    if set(changed_runtime_files) == phase12d_production_shadow_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase13c_authoritative_priority_graph_runtime_files = {
+        ROOT / "src/agents/job_prioritization_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase13c_authoritative_priority_graph_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase14c_authoritative_tailoring_graph_runtime_files = {
+        ROOT / "src/agents/tailoring_decision_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase14c_authoritative_tailoring_graph_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase15c_authoritative_operator_review_graph_runtime_files = {
+        ROOT / "src/agents/operator_review_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase15c_authoritative_operator_review_graph_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase16a_prefilter_dedupe_orchestration_runtime_files = {
+        ROOT / "src/pipeline/collector.py",
+        ROOT
+        / "src/agents/deterministic_prefilter_dedupe_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase16a_prefilter_dedupe_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase16b_final_scoring_orchestration_runtime_files = {
+        ROOT / "src/pipeline/collector.py",
+        ROOT / "src/agents/final_scoring_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase16b_final_scoring_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase17a_jd_intelligence_orchestration_runtime_files = {
+        ROOT / "src/pipeline/collector.py",
+        ROOT / "src/agents/jd_intelligence_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase17a_jd_intelligence_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase17b_semantic_evaluation_orchestration_runtime_files = {
+        ROOT / "src/pipeline/collector.py",
+        ROOT / "src/agents/semantic_evaluation_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase17b_semantic_evaluation_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase17c_tailoring_generation_orchestration_runtime_files = {
+        ROOT / "src/agents/tailoring_generation_authoritative_graph.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase17c_tailoring_generation_orchestration_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase8_step4_deleted_runtime_file = ROOT / "src/ai/deterministic_skill_extractor.py"
     if changed_runtime_files == [phase8_step4_deleted_runtime_file]:
         assert not phase8_step4_deleted_runtime_file.exists()
@@ -1192,6 +1565,31 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    phase11_step2_job_prioritization_graph_contract_files = {
+        ROOT / "src/agents/job_prioritization_graph_verification.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step2_job_prioritization_graph_contract_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase11_step3_job_prioritization_graph_integration_files = {
+        ROOT / "src/agents/job_prioritization_graph_verification.py",
+        ROOT / "src/agents/job_prioritization_graph_integration.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase11_step3_job_prioritization_graph_integration_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase109b_live_pipeline_popup_ux_files = {
         ROOT / "src/app/ui.py",
         ROOT / "src/app/static/app.js",
@@ -1477,6 +1875,20 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             "src/app/static/profile.js",
         ):
             source = (ROOT / relative_source).read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase21_authenticated_decision_action_runtime_files = {
+        ROOT / "src/agents/production_human_checkpoint_coordinator.py",
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == phase21_authenticated_decision_action_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return

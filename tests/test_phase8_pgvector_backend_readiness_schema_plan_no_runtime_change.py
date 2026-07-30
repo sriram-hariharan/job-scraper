@@ -294,7 +294,7 @@ def test_storage_schema_and_migration_files_match_phase8i_checkpoint():
     paths = [path for path in paths if path != later_schema_path]
 
     assert _aggregate_hash(paths) == (
-        "a6d8338050e90a6d25d69dc8d903656dd06f5d7a6435c52cf365f4c417d94a03"
+        "7dba8092148c9c401ff56f779adff7dc4363dfec3f67f1502ed549a437a8b4f6"
     )
 
 
@@ -303,5 +303,5 @@ def test_root_queue_execution_surface_matches_phase8i_checkpoint():
 
     assert all(path.exists() for path in paths)
     assert _aggregate_hash(paths) == (
-        "c6ec977f78103f5951bcbf493f868c7b82aa561f898cf46831361d1e359302cb"
+        "937b659cac56537c98310f639f0327b562b51f9dffffd74fe7019c1e5d1439f7"
     )

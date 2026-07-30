@@ -193,13 +193,13 @@ def test_ui_calls_api_only_from_explicit_operator_action_without_auto_refresh():
 def test_no_api_service_pipeline_schema_or_dependency_change():
     protected_hashes = {
         "src/app/api.py": (
-            "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"
+            "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"
         ),
         "src/pipeline/collector.py": (
-            "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671"
+            "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e"
         ),
         "requirements.txt": (
-            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"
+            "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/storage/agent_trace/schema.sql": (
             "69305cd1bec0be9caa8c8c1b93e8fc10a3e80a92c08acd5683e7800763d2a77a"

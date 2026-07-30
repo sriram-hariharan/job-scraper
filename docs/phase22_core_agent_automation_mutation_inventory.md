@@ -4,6 +4,12 @@ Phase 22B documents existing deterministic automation and maps its safe future
 relationship to core agents. This is a docs/tests-only checkpoint and changes
 no runtime behavior.
 
+This file is retained as a historical compatibility contract. The current
+eight-agent production reachability, durability, representative telemetry, and
+authenticated human-review action inventory is
+`docs/core_agent_automation_mutation_inventory.md`. Future-tense Phase 22
+recommendations below are not current release claims.
+
 ## Deterministic capability inventory
 
 The application already has the following foundations:

@@ -38,7 +38,7 @@ PHASE_TAGS = [
 
 RUNTIME_HASHES = {
     "src/agents/relevance_prefilter.py": ("5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b"),
-    "src/agents/jd_intelligence.py": ("c0150f2717581647c22bd084e3223691c1ce25d9b573acff10369def28f37f02"),
+    "src/agents/jd_intelligence.py": ("c72224bbc8e64b13c725f9180d227c413fb2fd9a65a97e2e72954f61a8f32b45"),
     "src/agents/final_application_scoring.py": ("eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd"),
     "src/agents/three_core_agent_shadow_pipeline_hook.py": ("bdabd60eda23c115dfba27a3221a97d5b6782e61e13a62fd3c431b230c7428d8"),
     "src/agents/shadow_sidecar_hook.py": ("0bbc15e9a2bae8e5154ff62b5fda7b6e4989ecc70f1104719197a2cf337ac3df"),
@@ -46,9 +46,9 @@ RUNTIME_HASHES = {
     "src/agents/three_core_agent_shadow_callable_adapters.py": ("e7bfcf282a40d254ffbef99d2a8c92abdd2d43ac931741e7a39da1724dd8e37f"),
     "src/agents/three_core_agent_shadow_runtime_readback.py": ("7a11a895ebb409b035cdd2851947f310df4b4fc7a58529794a3046fbbb6ac6b4"),
     "src/agents/three_core_agent_shadow_operator_canary.py": ("b130620a2257603bd2ed5259f65434e4f13d9636d1d25a417c594f38251bb943"),
-    "src/pipeline/collector.py": ("e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671"),
-    "src/app/api.py": ("d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"),
-    "src/app/services.py": ("bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2"),
+    "src/pipeline/collector.py": ("261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e"),
+    "src/app/api.py": ("2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"),
+    "src/app/services.py": ("f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74"),
     "src/app/static/agentic_review.js": ("fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0"),
 }
 

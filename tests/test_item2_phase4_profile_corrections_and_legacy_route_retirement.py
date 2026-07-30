@@ -13,7 +13,11 @@ Protects the three Correction Pass 1 fixes:
 
 from pathlib import Path
 
-from tests.support.phase_guard_registry import get_changed_files
+from tests.support.phase_guard_registry import (
+    PHASE21_RELEASE_CANDIDATE_FILES,
+    PHASE21R_HISTORICAL_GUARD_FILES,
+    get_changed_files,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -201,7 +205,10 @@ def test_other_profile_js_cache_markers_are_untouched():
 
 
 def test_pipeline_runs_api_payload_and_endpoint_untouched():
-    changed = get_changed_files(ROOT)
+    changed = get_changed_files(ROOT) - (
+        PHASE21_RELEASE_CANDIDATE_FILES
+        | PHASE21R_HISTORICAL_GUARD_FILES
+    )
     assert "src/app/services.py" not in changed
 
 

@@ -184,6 +184,8 @@ def execute_authoritative_tailoring_generation_graph(
     pipeline_run_id: str = "",
     owner_user_id: str = "",
     context_id: str = "",
+    checkpointer: Any = None,
+    configurable: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     caller_packet_before = deepcopy(packet)
     caller_payload_before = deepcopy(payload)
@@ -226,26 +228,32 @@ def execute_authoritative_tailoring_generation_graph(
         "caller_input_immutable": True,
         "owner_managed_cache_first": True,
         "provider_calls_conditionally_allowed": True,
-        "graph_persistence_authority": False,
+        "graph_persistence_authority": checkpointer is not None,
         "mutation_authority": False,
         "application_authority": False,
         "ats_authority": False,
         "generated_content_retained_in_state": False,
         "raw_provider_response_retained_in_state": False,
     }
-    final_state = (
-        build_authoritative_tailoring_generation_graph(
-            run_tailoring_func=run_tailoring_func,
-            output_llm_json=output_llm_json,
-            refresh_llm_cache=refresh_llm_cache,
-            enable_safe_app_ready_rewrite_promotion=(
-                enable_safe_app_ready_rewrite_promotion
-            ),
-            result_holder=result_holder,
-        )
-        .compile()
-        .invoke(initial_state)
+    compiled_graph = build_authoritative_tailoring_generation_graph(
+        run_tailoring_func=run_tailoring_func,
+        output_llm_json=output_llm_json,
+        refresh_llm_cache=refresh_llm_cache,
+        enable_safe_app_ready_rewrite_promotion=(
+            enable_safe_app_ready_rewrite_promotion
+        ),
+        result_holder=result_holder,
     )
+    if checkpointer is not None:
+        if not isinstance(configurable, Mapping):
+            raise ValueError(
+                "authoritative_tailoring_generation_configurable_required"
+            )
+        final_state = compiled_graph.compile(
+            checkpointer=checkpointer
+        ).invoke(initial_state, deepcopy(dict(configurable)))
+    else:
+        final_state = compiled_graph.compile().invoke(initial_state)
     if (
         packet != caller_packet_before
         or payload != caller_payload_before
@@ -310,7 +318,7 @@ def execute_authoritative_tailoring_generation_graph(
         "caller_input_immutable": True,
         "owner_managed_cache_first": True,
         "provider_calls_conditionally_allowed": True,
-        "graph_persistence_authority": False,
+        "graph_persistence_authority": checkpointer is not None,
         "mutation_authority": False,
         "application_authority": False,
         "ats_authority": False,

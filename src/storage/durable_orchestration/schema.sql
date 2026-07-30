@@ -80,7 +80,12 @@ CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
     CONSTRAINT ck_orchestration_checkpoints_job_index
         CHECK (job_index >= 0),
     CONSTRAINT ck_orchestration_checkpoints_status
-        CHECK (checkpoint_status = 'diagnostic_snapshot'),
+        CHECK (
+            checkpoint_status IN (
+                'diagnostic_snapshot',
+                'production_execution'
+            )
+        ),
     CONSTRAINT ck_orchestration_checkpoints_envelope_object
         CHECK (jsonb_typeof(checkpoint_envelope_json) = 'object'),
     CONSTRAINT ck_orchestration_checkpoints_envelope_size
@@ -125,6 +130,20 @@ CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
         )
         ON DELETE CASCADE
 );
+
+-- Backward-compatible upgrade for databases created before production graph
+-- checkpoints were supported.  The schema executor applies this artifact in
+-- one transaction, so the named constraint is never absent at commit.
+ALTER TABLE orchestration_checkpoints
+    DROP CONSTRAINT IF EXISTS ck_orchestration_checkpoints_status;
+ALTER TABLE orchestration_checkpoints
+    ADD CONSTRAINT ck_orchestration_checkpoints_status
+    CHECK (
+        checkpoint_status IN (
+            'diagnostic_snapshot',
+            'production_execution'
+        )
+    );
 
 CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests (
     interrupt_request_id TEXT PRIMARY KEY,

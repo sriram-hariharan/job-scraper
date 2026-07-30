@@ -1,4 +1,5 @@
 import argparse
+from contextlib import ExitStack
 import json
 import os
 from datetime import datetime, timezone
@@ -15,6 +16,15 @@ from src.tailoring.rendering import (
 AUTHORITATIVE_TAILORING_GENERATION_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_TAILORING_GENERATION_LANGGRAPH_ENABLED"
 )
+PRODUCTION_DURABLE_GRAPH_RUNTIME_FLAG = (
+    "APPLYLENS_PRODUCTION_DURABLE_GRAPH_RUNTIME_ENABLED"
+)
+PRODUCTION_DURABLE_REPOSITORY_TARGET = (
+    "APPLYLENS_DURABLE_ORCHESTRATION_DATABASE_URL"
+)
+PRODUCTION_DURABLE_SAVER_TARGET = (
+    "APPLYLENS_LANGGRAPH_POSTGRES_CHECKPOINTER_DATABASE_URL"
+)
 
 
 def _truthy_env_value(value: object) -> bool:
@@ -30,6 +40,164 @@ def _authoritative_tailoring_generation_langgraph_enabled(
     )
 
 
+def _production_durable_graph_runtime_enabled(
+    env: dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(
+        env_map.get(PRODUCTION_DURABLE_GRAPH_RUNTIME_FLAG)
+    )
+
+
+def _execute_durable_tailoring_graph(
+    *,
+    packet: dict,
+    payload: dict,
+    run_tailoring_func,
+    output_llm_json: str,
+    refresh_llm_cache: bool,
+    enable_safe_app_ready_rewrite_promotion: bool,
+    pipeline_run_id: str,
+    owner_user_id: str,
+    context_id: str,
+    job_index: int | None,
+    env_map: dict[str, str],
+    durable_repository=None,
+    durable_saver=None,
+    durable_consumer_instance_id: str = "",
+) -> dict:
+    if isinstance(job_index, bool) or not isinstance(job_index, int):
+        raise RuntimeError("production_durable_tailoring_job_index_required")
+    if not pipeline_run_id or not owner_user_id or not context_id:
+        raise RuntimeError(
+            "production_durable_tailoring_run_identity_required"
+        )
+
+    from src.agents.production_durable_graph_runtime import (
+        ProductionDurableGraphRuntime,
+        build_tailoring_execution_identity,
+    )
+    from src.agents.tailoring_generation_authoritative_graph import (
+        AUTHORITATIVE_TAILORING_GENERATION_GRAPH_VERSION,
+        AUTHORITATIVE_TAILORING_GENERATION_NODE,
+        AUTHORITATIVE_TAILORING_GENERATION_STATE_VERSION,
+        execute_authoritative_tailoring_generation_graph,
+    )
+
+    identity = build_tailoring_execution_identity(
+        packet=packet,
+        payload=payload,
+        graph_version=AUTHORITATIVE_TAILORING_GENERATION_GRAPH_VERSION,
+        state_version=AUTHORITATIVE_TAILORING_GENERATION_STATE_VERSION,
+        node_key=AUTHORITATIVE_TAILORING_GENERATION_NODE,
+        owner_user_id=owner_user_id,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+        job_index=job_index,
+        refresh_llm_cache=refresh_llm_cache,
+        enable_safe_app_ready_rewrite_promotion=(
+            enable_safe_app_ready_rewrite_promotion
+        ),
+        created_at=datetime.now(timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+    )
+
+    def invoke_graph(saver, configurable):
+        return execute_authoritative_tailoring_generation_graph(
+            packet=packet,
+            payload=payload,
+            run_tailoring_func=run_tailoring_func,
+            output_llm_json=output_llm_json,
+            refresh_llm_cache=refresh_llm_cache,
+            enable_safe_app_ready_rewrite_promotion=(
+                enable_safe_app_ready_rewrite_promotion
+            ),
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            context_id=context_id,
+            checkpointer=saver,
+            configurable=configurable,
+        )
+
+    consumer_id = (
+        str(durable_consumer_instance_id or "").strip()
+        or str(
+            env_map.get(
+                "APPLYLENS_PRODUCTION_DURABLE_CONSUMER_INSTANCE_ID"
+            )
+            or ""
+        ).strip()
+        or f"tailoring_generation:{pipeline_run_id}:{job_index}"
+    )
+    if durable_repository is not None or durable_saver is not None:
+        if durable_repository is None or durable_saver is None:
+            raise RuntimeError(
+                "production_durable_dependencies_incomplete"
+            )
+        runtime = ProductionDurableGraphRuntime(
+            repository=durable_repository,
+            saver=durable_saver,
+            consumer_instance_id=consumer_id,
+            enabled=True,
+        )
+        return runtime.execute(identity=identity, invoke_graph=invoke_graph)
+
+    repository_target = str(
+        env_map.get(PRODUCTION_DURABLE_REPOSITORY_TARGET) or ""
+    ).strip()
+    saver_target = str(
+        env_map.get(PRODUCTION_DURABLE_SAVER_TARGET) or ""
+    ).strip()
+    ordinary_target = str(env_map.get("DATABASE_URL") or "").strip()
+    if (
+        not repository_target
+        or not saver_target
+        or (ordinary_target and repository_target == ordinary_target)
+        or (ordinary_target and saver_target == ordinary_target)
+    ):
+        raise RuntimeError(
+            "production_durable_dedicated_targets_required"
+        )
+
+    from src.storage.durable_orchestration.langgraph_postgres import (
+        open_langgraph_postgres_saver,
+    )
+    from src.storage.durable_orchestration.postgres_connection import (
+        build_postgres_connection_factory,
+    )
+    from src.storage.durable_orchestration.repository import (
+        DurableOrchestrationRepository,
+    )
+
+    connection_factory = build_postgres_connection_factory(
+        enabled=True,
+        database_url=repository_target,
+        application_name="applylens-production-durable-tailoring",
+    )
+    repository = DurableOrchestrationRepository(
+        connection_factory,
+        enabled=True,
+    )
+    with ExitStack() as stack:
+        saver = stack.enter_context(
+            open_langgraph_postgres_saver(
+                enabled=True,
+                database_url=saver_target,
+                application_name=(
+                    "applylens-production-durable-tailoring-saver"
+                ),
+            )
+        )
+        runtime = ProductionDurableGraphRuntime(
+            repository=repository,
+            saver=saver,
+            consumer_instance_id=consumer_id,
+            enabled=True,
+        )
+        return runtime.execute(identity=identity, invoke_graph=invoke_graph)
+
+
 def _maybe_execute_authoritative_tailoring_generation_graph(
     *,
     packet: dict,
@@ -39,6 +207,10 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
     refresh_llm_cache: bool = False,
     enable_safe_app_ready_rewrite_promotion: bool = False,
     env: dict[str, str] | None = None,
+    job_index: int | None = None,
+    durable_repository=None,
+    durable_saver=None,
+    durable_consumer_instance_id: str = "",
 ) -> dict | None:
     env_map = env if env is not None else os.environ
     if not _authoritative_tailoring_generation_langgraph_enabled(env_map):
@@ -64,25 +236,47 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
             else ""
         )
     ).strip()
-    result = execute_authoritative_tailoring_generation_graph(
-        packet=packet,
-        payload=payload,
-        run_tailoring_func=run_tailoring_func,
-        output_llm_json=output_llm_json,
-        refresh_llm_cache=refresh_llm_cache,
-        enable_safe_app_ready_rewrite_promotion=(
-            enable_safe_app_ready_rewrite_promotion
-        ),
-        pipeline_run_id=pipeline_run_id,
-        owner_user_id=owner_user_id,
-        context_id=context_id,
-    )
+    if _production_durable_graph_runtime_enabled(env_map):
+        result = _execute_durable_tailoring_graph(
+            packet=packet,
+            payload=payload,
+            run_tailoring_func=run_tailoring_func,
+            output_llm_json=output_llm_json,
+            refresh_llm_cache=refresh_llm_cache,
+            enable_safe_app_ready_rewrite_promotion=(
+                enable_safe_app_ready_rewrite_promotion
+            ),
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            context_id=context_id,
+            job_index=job_index,
+            env_map=env_map,
+            durable_repository=durable_repository,
+            durable_saver=durable_saver,
+            durable_consumer_instance_id=(
+                durable_consumer_instance_id
+            ),
+        )
+    else:
+        result = execute_authoritative_tailoring_generation_graph(
+            packet=packet,
+            payload=payload,
+            run_tailoring_func=run_tailoring_func,
+            output_llm_json=output_llm_json,
+            refresh_llm_cache=refresh_llm_cache,
+            enable_safe_app_ready_rewrite_promotion=(
+                enable_safe_app_ready_rewrite_promotion
+            ),
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            context_id=context_id,
+        )
     metadata = dict(result.get("execution_metadata") or {})
     if (
         metadata.get("execution_mode") != "langgraph"
         or metadata.get("production_node_count") != 1
-        or metadata.get("node_invocation_count") != 1
-        or metadata.get("tailoring_owner_invocation_count") != 1
+        or metadata.get("node_invocation_count") not in {0, 1}
+        or metadata.get("tailoring_owner_invocation_count") not in {0, 1}
         or metadata.get("critic_invocation_count") != 0
         or metadata.get("status") != "completed"
     ):
@@ -185,6 +379,15 @@ def main() -> None:
         "--packet-json",
         required=True,
         help="Path to one JD diff packet JSON.",
+    )
+    parser.add_argument(
+        "--job-index",
+        type=int,
+        default=None,
+        help=(
+            "Real source-corpus job index; mandatory only when the "
+            "production durable graph runtime is enabled."
+        ),
     )
     parser.add_argument(
         "--output-json",
@@ -309,6 +512,7 @@ def main() -> None:
             enable_safe_app_ready_rewrite_promotion=(
                 enable_safe_app_ready_rewrite_promotion
             ),
+            job_index=args.job_index,
         )
         if graph_result is None:
             llm_output = _run_live_llm_tailoring(

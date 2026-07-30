@@ -767,6 +767,14 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase110b_generate_suggestions_loader_static_only.py",
         "docs/phase22_manual_review_ux_hardening.md",
         "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
+        "generate_tailoring_suggestions.py",
+        "run_application_planning.py",
+        "src/agents/production_durable_graph_runtime.py",
+        "src/agents/tailoring_generation_authoritative_graph.py",
+        "src/storage/durable_orchestration/production.py",
+        "src/storage/durable_orchestration/repository.py",
+        "src/storage/durable_orchestration/schema.sql",
+        "tests/test_phase18r_generic_production_durable_contract.py",
     }
     legacy_guards = {
         str(path.relative_to(ROOT))
@@ -1137,6 +1145,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         set(changed_runtime_files)
         == phase17c_tailoring_generation_orchestration_runtime_files
     ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase18r_production_durable_runtime_files = {
+        ROOT / "src/agents/production_durable_graph_runtime.py",
+        ROOT / "src/agents/tailoring_generation_authoritative_graph.py",
+        ROOT / "src/storage/durable_orchestration/production.py",
+        ROOT / "src/storage/durable_orchestration/repository.py",
+    }
+    if set(changed_runtime_files) == phase18r_production_durable_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

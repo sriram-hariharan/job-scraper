@@ -80,7 +80,12 @@ CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
     CONSTRAINT ck_orchestration_checkpoints_job_index
         CHECK (job_index >= 0),
     CONSTRAINT ck_orchestration_checkpoints_status
-        CHECK (checkpoint_status = 'diagnostic_snapshot'),
+        CHECK (
+            checkpoint_status IN (
+                'diagnostic_snapshot',
+                'production_execution'
+            )
+        ),
     CONSTRAINT ck_orchestration_checkpoints_envelope_object
         CHECK (jsonb_typeof(checkpoint_envelope_json) = 'object'),
     CONSTRAINT ck_orchestration_checkpoints_envelope_size
@@ -125,6 +130,20 @@ CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
         )
         ON DELETE CASCADE
 );
+
+-- Backward-compatible upgrade for databases created before production graph
+-- checkpoints were supported.  The schema executor applies this artifact in
+-- one transaction, so the named constraint is never absent at commit.
+ALTER TABLE orchestration_checkpoints
+    DROP CONSTRAINT IF EXISTS ck_orchestration_checkpoints_status;
+ALTER TABLE orchestration_checkpoints
+    ADD CONSTRAINT ck_orchestration_checkpoints_status
+    CHECK (
+        checkpoint_status IN (
+            'diagnostic_snapshot',
+            'production_execution'
+        )
+    );
 
 CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests (
     interrupt_request_id TEXT PRIMARY KEY,
@@ -182,7 +201,6 @@ CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests (
     CONSTRAINT ck_orchestration_interrupt_requests_safety
         CHECK (
             read_only = TRUE
-            AND diagnostic_only = TRUE
             AND application_authorization = FALSE
             AND resume_authorization = FALSE
         ),
@@ -219,6 +237,19 @@ CREATE TABLE IF NOT EXISTS orchestration_interrupt_requests (
         )
         ON DELETE CASCADE
 );
+
+-- Backward-compatible Phase 20 extension: production review interrupts are
+-- truthful production rows (`diagnostic_only = FALSE`) while retaining every
+-- read-only and external-action prohibition.
+ALTER TABLE orchestration_interrupt_requests
+    DROP CONSTRAINT IF EXISTS ck_orchestration_interrupt_requests_safety;
+ALTER TABLE orchestration_interrupt_requests
+    ADD CONSTRAINT ck_orchestration_interrupt_requests_safety
+    CHECK (
+        read_only = TRUE
+        AND application_authorization = FALSE
+        AND resume_authorization = FALSE
+    );
 
 CREATE INDEX IF NOT EXISTS idx_orchestration_graph_runs_owner_updated
 ON orchestration_graph_runs (owner_user_id, updated_at DESC, graph_invocation_id);

@@ -16,6 +16,478 @@ KNOWN_LEGACY_DUPLICATE_TEST_PATHS = {
     "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off 2.py",
 }
 
+PHASE11_STEP3_DIRECT_HASH_GUARD_FILES = {
+    "tests/test_jd_provider_runtime_api_readback_default_off.py",
+    "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+    "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+    "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
+    "tests/test_phase42b_exact_resume_change_set_proposal_builder_dry_run_command_default_off.py",
+    "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
+    "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
+    "tests/test_phase44b_controlled_exact_resume_change_set_provider_call_boundary_dry_run_command_default_off.py",
+    "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+    "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+    "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
+    "tests/test_phase46b_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off.py",
+    "tests/test_phase47a_controlled_exact_resume_change_set_manual_review_packet_builder_default_off.py",
+    "tests/test_phase47b_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off.py",
+    "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
+    "tests/test_phase48b_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run_command_default_off.py",
+    "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+    "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
+    "tests/test_phase50a_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
+    "tests/test_phase50b_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.py",
+    "tests/test_phase51a_controlled_exact_resume_change_set_manual_decision_packet_default_off.py",
+    "tests/test_phase51b_controlled_exact_resume_change_set_manual_decision_packet_dry_run_command_default_off.py",
+    "tests/test_phase52a_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
+    "tests/test_phase52b_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run_command_default_off.py",
+    "tests/test_phase53a_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
+    "tests/test_phase53b_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.py",
+    "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+    "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
+    "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+    "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+    "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",
+    "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+    "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
+    "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
+    "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
+    "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
+    "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
+    "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
+    "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
+    "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
+    "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
+    "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
+    "tests/test_phase68b_end_to_end_agentic_workflow_integration_readback_ui_api_default_off.py",
+    "tests/test_phase69a_agentic_workflow_production_readiness_checkpoint_default_off.py",
+    "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
+    "tests/test_provider_runtime_activation_plan_default_off.py",
+    "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
+    "tests/test_vector_evidence_readback_api_default_off.py",
+}
+
+PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES = {
+    "src/evaluation/provider_benchmark_contract.py",
+    "tests/fixtures/provider_benchmark/manifest.json",
+    "tests/test_provider_benchmark_contract.py",
+}
+
+PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES = {
+    "src/evaluation/provider_client_compatibility.py",
+    "tests/test_provider_client_compatibility.py",
+}
+
+PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES = {
+    "src/ai/llm_client.py",
+    "tests/test_llm_client_safety.py",
+}
+
+PHASE11_STEP8O_PROVIDER_FIXTURE_BENCHMARK_FILES = {
+    "src/evaluation/provider_fixture_benchmark.py",
+    "tests/fixtures/provider_benchmark/cases.json",
+    "tests/test_provider_fixture_benchmark.py",
+}
+
+PHASE11_STEP8P_CONTROLLED_PROVIDER_BENCHMARK_PLAN_FILES = {
+    "src/evaluation/controlled_provider_benchmark_plan.py",
+    "tests/fixtures/provider_benchmark/run_plan.json",
+    "tests/test_controlled_provider_benchmark_plan.py",
+}
+
+PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES = {
+    "tests/fixtures/provider_benchmark/cases.json",
+    "tests/test_provider_fixture_benchmark.py",
+    "tests/test_transmission_safe_provider_fixtures.py",
+}
+
+PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES = {
+    "src/evaluation/controlled_provider_benchmark_harness.py",
+    "tests/fixtures/provider_benchmark/synthetic_authorization.json",
+    "tests/fixtures/provider_benchmark/synthetic_pricing.json",
+    "tests/test_controlled_provider_benchmark_harness.py",
+}
+
+PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES = {
+    "docs/controlled_groq_provider_canary_runbook.md",
+    "src/evaluation/controlled_groq_provider_canary.py",
+    "tests/fixtures/provider_benchmark/groq_canary_authorization_template.json",
+    "tests/fixtures/provider_benchmark/groq_canary_pricing_template.json",
+    "tests/test_controlled_groq_provider_canary.py",
+}
+
+PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES = {
+    "src/evaluation/controlled_groq_canary_transport.py",
+    "tests/test_controlled_groq_canary_transport.py",
+}
+
+PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES = {
+    "src/evaluation/controlled_groq_canary_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_evidence_runtime.py",
+}
+
+PHASE11_STEP8Y_GROQ_CANARY_RUN_IDENTITY_FILES = {
+    "src/evaluation/controlled_groq_canary_run_identity.py",
+    "tests/test_controlled_groq_canary_run_identity.py",
+}
+
+PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES = {
+    "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_evidence_runtime.py",
+}
+
+PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES = {
+    "src/evaluation/controlled_groq_canary_run_003_plan.py",
+    "tests/test_controlled_groq_canary_run_003_plan.py",
+}
+
+PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES = {
+    "src/evaluation/controlled_groq_canary_run_003_identity.py",
+    "tests/test_controlled_groq_canary_run_003_identity.py",
+}
+
+PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES = {
+    "src/evaluation/controlled_groq_canary_run_003_transport.py",
+    "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_003_transport.py",
+    "tests/test_controlled_groq_canary_run_003_evidence_runtime.py",
+}
+PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES = {
+    "src/evaluation/controlled_groq_canary_run_004_plan.py",
+    "src/evaluation/controlled_groq_canary_run_004_identity.py",
+    "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_004_plan.py",
+    "tests/test_controlled_groq_canary_run_004_identity.py",
+    "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+}
+
+PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES = {
+    "src/evaluation/provider_fixture_benchmark.py",
+    "tests/test_provider_fixture_benchmark.py",
+    "src/evaluation/controlled_groq_canary_run_005_plan.py",
+    "src/evaluation/controlled_groq_canary_run_005_identity.py",
+    "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_005_plan.py",
+    "tests/test_controlled_groq_canary_run_005_identity.py",
+    "tests/test_controlled_groq_canary_run_005_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+}
+
+PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES = {
+    "src/evaluation/controlled_tailoring_benchmark_request_adapter.py",
+    "src/evaluation/controlled_groq_tailoring_canary_transport.py",
+    "tests/test_controlled_tailoring_benchmark_request_adapter.py",
+    "tests/test_controlled_groq_tailoring_canary_transport.py",
+}
+
+PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES = {
+    "tests/test_rag_endpoint_behavior.py",
+}
+
+PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES = {
+    "src/agents/production_shadow_artifact_adapter.py",
+    "src/agents/production_shadow_graph.py",
+    "src/agents/production_shadow_job_priority_owner.py",
+    "src/agents/production_shadow_state.py",
+    "tests/test_phase12b_artifact_only_production_shadow_foundation.py",
+    "tests/test_phase12d_first_deterministic_production_owner.py",
+}
+
+PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES = {
+    "application_execution_queue.py",
+    "src/agents/job_prioritization_authoritative_graph.py",
+    "tests/test_phase13c_first_authoritative_job_prioritization_node.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES = {
+    "application_execution_queue.py",
+    "src/agents/tailoring_decision_agent.py",
+    "tests/test_phase14b_authoritative_tailoring_caller_reconciliation.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES = {
+    "application_execution_queue.py",
+    "src/agents/tailoring_decision_authoritative_graph.py",
+    "tests/test_phase14c_second_authoritative_tailoring_node.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES = {
+    "application_execution_queue.py",
+    "src/agents/operator_review_agent.py",
+    "tests/test_phase15b_conditional_operator_review_caller_reconciliation.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES = {
+    "application_execution_queue.py",
+    "src/agents/operator_review_authoritative_graph.py",
+    "tests/test_phase15b_conditional_operator_review_caller_reconciliation.py",
+    "tests/test_phase15c_conditional_authoritative_operator_review_node.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES = {
+    "generate_tailoring_suggestions.py",
+    "src/pipeline/collector.py",
+    "src/agents/tailoring_generation_authoritative_graph.py",
+    "tests/test_phase17c_lean_tailoring_intelligence_llm_closure.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/support/phase_guard_registry.py",
+} | PHASE11_STEP3_DIRECT_HASH_GUARD_FILES
+
+PHASE21_RELEASE_CANDIDATE_FILES = {
+    "README.md",
+    "docs/architecture_summary.md",
+    "docs/core_agent_automation_mutation_inventory.md",
+    "docs/full_fledged_agentic_ai_app_roadmap.md",
+    "docs/phase22_core_agent_automation_mutation_inventory.md",
+    "src/agents/production_human_checkpoint_coordinator.py",
+    "src/app/api.py",
+    "src/app/services.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_phase21_authenticated_decision_action_release_candidate.py",
+    "tests/test_phase21_release_candidate_documentation.py",
+}
+
+PHASE21R_HISTORICAL_GUARD_FILES = {
+    "tests/test_controlled_groq_tailoring_canary_transport.py",
+    "tests/test_critic_provider_shadow_default_off.py",
+    "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+    "tests/test_jd_intelligence_provider_shadow_default_off.py",
+    "tests/test_jd_live_provider_canary_api_readback_default_off.py",
+    "tests/test_jd_live_provider_canary_command_default_off.py",
+    "tests/test_jd_live_provider_canary_default_off.py",
+    "tests/test_jd_live_provider_canary_readback_default_off.py",
+    "tests/test_jd_live_provider_canary_readiness_checkpoint_default_off.py",
+    "tests/test_jd_live_provider_canary_runbook_default_off.py",
+    "tests/test_jd_live_provider_canary_service_readback_default_off.py",
+    "tests/test_jd_live_provider_canary_shadow_bridge_default_off.py",
+    "tests/test_jd_live_provider_canary_ui_readback_default_off.py",
+    "tests/test_jd_live_provider_external_adapter_default_off.py",
+    "tests/test_jd_manual_live_canary_readiness_checkpoint_default_off.py",
+    "tests/test_jd_provider_runtime_activation_default_off.py",
+    "tests/test_jd_provider_runtime_api_readback_default_off.py",
+    "tests/test_jd_provider_runtime_readiness_checkpoint_default_off.py",
+    "tests/test_jd_provider_runtime_review_packet_default_off.py",
+    "tests/test_jd_provider_runtime_service_readback_default_off.py",
+    "tests/test_jd_provider_runtime_shadow_bridge_default_off.py",
+    "tests/test_jd_provider_runtime_trace_readback_default_off.py",
+    "tests/test_jd_provider_runtime_ui_readback_default_off.py",
+    "tests/test_pgvector_connection_provider_default_off.py",
+    "tests/test_pgvector_extension_probe_api_no_schema_no_ui.py",
+    "tests/test_pgvector_extension_probe_contract_no_schema.py",
+    "tests/test_pgvector_extension_probe_service_helper_no_schema.py",
+    "tests/test_pgvector_extension_probe_ui_no_schema_readonly.py",
+    "tests/test_pgvector_local_smoke_default_off.py",
+    "tests/test_pgvector_real_local_smoke_command_default_off.py",
+    "tests/test_pgvector_schema_store_adapter_default_off.py",
+    "tests/test_pgvector_smoke_readback_verification_default_off.py",
+    "tests/test_pgvector_store_db_executor_default_off.py",
+    "tests/test_phase106b_agentic_review_evidence_chain_ui_readback_default_off.py",
+    "tests/test_phase18_approval_preview_readonly_default_off.py",
+    "tests/test_phase18_human_approval_gate_contract_default_off.py",
+    "tests/test_phase18_live_provider_activation_plan_default_off.py",
+    "tests/test_phase18_live_provider_dry_run_packet_contract_default_off.py",
+    "tests/test_phase18_live_readiness_approval_boundary_default_off.py",
+    "tests/test_phase18_mutation_boundary_readiness_contract_default_off.py",
+    "tests/test_phase18_operator_decision_capture_contract_default_off.py",
+    "tests/test_phase18_provider_call_boundary_readiness_contract_default_off.py",
+    "tests/test_phase18_provider_readback_audit_contract_default_off.py",
+    "tests/test_phase18_provider_response_validation_contract_default_off.py",
+    "tests/test_phase18_provider_runtime_adapter_contract_default_off.py",
+    "tests/test_phase18_safety_wrap_release_checkpoint_default_off.py",
+    "tests/test_phase19a_three_core_approval_preview_runtime_readonly_default_off.py",
+    "tests/test_phase19b_three_core_approval_preview_service_readback_default_off.py",
+    "tests/test_phase19c_three_core_approval_preview_api_readback_default_off.py",
+    "tests/test_phase19d_three_core_approval_preview_ui_readback_default_off.py",
+    "tests/test_phase19e_three_core_approval_preview_ui_api_fetch_default_off.py",
+    "tests/test_phase19f_approval_preview_operator_decision_preview_default_off.py",
+    "tests/test_phase19g_operator_decision_capture_readback_contract_default_off.py",
+    "tests/test_phase19h_operator_decision_capture_api_readback_default_off.py",
+    "tests/test_phase19i_operator_decision_capture_ui_readback_default_off.py",
+    "tests/test_phase19j_readonly_approval_workflow_release_checkpoint_default_off.py",
+    "tests/test_phase20a_provider_call_readiness_experiment_default_off.py",
+    "tests/test_phase20b_provider_call_readiness_api_readback_default_off.py",
+    "tests/test_phase20c_provider_call_readiness_ui_readback_default_off.py",
+    "tests/test_phase20e_provider_readiness_release_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase21b_manual_review_readiness_contract_default_off.py",
+    "tests/test_phase21c_manual_review_readiness_api_readback_default_off.py",
+    "tests/test_phase21d_manual_review_readiness_ui_readback_default_off.py",
+    "tests/test_phase21e_manual_review_workflow_release_checkpoint_default_off.py",
+    "tests/test_phase22a_manual_review_ux_hardening_default_off.py",
+    "tests/test_phase22b_core_agent_automation_mutation_inventory_default_off.py",
+    "tests/test_phase22c_core_agent_evidence_materialization_preview_default_off.py",
+    "tests/test_phase22d_core_agent_evidence_materialization_api_readback_default_off.py",
+    "tests/test_phase22e_core_agent_evidence_materialization_ui_readback_default_off.py",
+    "tests/test_phase22f_core_agent_evidence_materialization_release_checkpoint_default_off.py",
+    "tests/test_phase23a_tailoring_agent_opportunity_contract_default_off.py",
+    "tests/test_phase23b_tailoring_agent_opportunity_api_readback_default_off.py",
+    "tests/test_phase23c_tailoring_agent_opportunity_ui_readback_default_off.py",
+    "tests/test_phase23d_generate_ai_tailoring_action_boundary_contract_default_off.py",
+    "tests/test_phase23e_generate_ai_tailoring_action_boundary_api_readback_default_off.py",
+    "tests/test_phase23f_generate_ai_tailoring_action_boundary_ui_readback_default_off.py",
+    "tests/test_phase23g_tailoring_agent_workflow_release_checkpoint_default_off.py",
+    "tests/test_phase24a_manual_generate_ai_tailoring_preview_contract_default_off.py",
+    "tests/test_phase24b_manual_generate_ai_tailoring_preview_api_readback_default_off.py",
+    "tests/test_phase24c_manual_generate_ai_tailoring_preview_ui_readback_default_off.py",
+    "tests/test_phase24d_manual_generate_ai_tailoring_preview_release_checkpoint_default_off.py",
+    "tests/test_phase25a_manual_generate_ai_tailoring_preview_request_packet_contract_default_off.py",
+    "tests/test_phase25b_manual_generate_ai_tailoring_preview_request_packet_api_readback_default_off.py",
+    "tests/test_phase25c_manual_generate_ai_tailoring_preview_request_packet_ui_readback_default_off.py",
+    "tests/test_phase25d_manual_generate_ai_tailoring_preview_request_packet_release_checkpoint_default_off.py",
+    "tests/test_phase26a_manual_generate_ai_tailoring_preview_dispatch_boundary_contract_default_off.py",
+    "tests/test_phase26b_manual_generate_ai_tailoring_preview_dispatch_boundary_api_readback_default_off.py",
+    "tests/test_phase26c_manual_generate_ai_tailoring_preview_dispatch_boundary_ui_readback_default_off.py",
+    "tests/test_phase26d_manual_generate_ai_tailoring_preview_dispatch_boundary_release_checkpoint_default_off.py",
+    "tests/test_phase27a_manual_generate_ai_tailoring_preview_provider_request_envelope_contract_default_off.py",
+    "tests/test_phase27b_manual_generate_ai_tailoring_preview_provider_request_envelope_api_readback_default_off.py",
+    "tests/test_phase27c_manual_generate_ai_tailoring_preview_provider_request_envelope_ui_readback_default_off.py",
+    "tests/test_phase27d_manual_generate_ai_tailoring_preview_provider_request_envelope_release_checkpoint_default_off.py",
+    "tests/test_phase28a_manual_generate_ai_tailoring_preview_provider_call_boundary_contract_default_off.py",
+    "tests/test_phase28b_manual_generate_ai_tailoring_preview_provider_call_boundary_api_readback_default_off.py",
+    "tests/test_phase28c_manual_generate_ai_tailoring_preview_provider_call_boundary_ui_readback_default_off.py",
+    "tests/test_phase28d_manual_generate_ai_tailoring_preview_provider_call_boundary_release_checkpoint_default_off.py",
+    "tests/test_phase29a_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_contract_default_off.py",
+    "tests/test_phase29b_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_api_readback_default_off.py",
+    "tests/test_phase29c_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_ui_readback_default_off.py",
+    "tests/test_phase29d_manual_generate_ai_tailoring_preview_provider_call_dry_run_packet_release_checkpoint_default_off.py",
+    "tests/test_phase30a_manual_generate_ai_tailoring_preview_provider_response_validation_contract_default_off.py",
+    "tests/test_phase30b_manual_generate_ai_tailoring_preview_provider_response_validation_api_readback_default_off.py",
+    "tests/test_phase30c_manual_generate_ai_tailoring_preview_provider_response_validation_ui_readback_default_off.py",
+    "tests/test_phase30d_manual_generate_ai_tailoring_preview_provider_response_validation_release_checkpoint_default_off.py",
+    "tests/test_phase31a_manual_generate_ai_tailoring_preview_provider_response_normalization_contract_default_off.py",
+    "tests/test_phase31b_manual_generate_ai_tailoring_preview_provider_response_normalization_api_readback_default_off.py",
+    "tests/test_phase31c_manual_generate_ai_tailoring_preview_provider_response_normalization_ui_readback_default_off.py",
+    "tests/test_phase31d_manual_generate_ai_tailoring_preview_provider_response_normalization_release_checkpoint_default_off.py",
+    "tests/test_phase32a_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract_default_off.py",
+    "tests/test_phase32b_manual_generate_ai_tailoring_preview_normalized_response_preview_packet_api_readback_default_off.py",
+    "tests/test_phase33a_controlled_agent_router_readonly.py",
+    "tests/test_phase33b_controlled_agent_router_workflow_state_adapter_readonly.py",
+    "tests/test_phase33c_controlled_agent_router_batch_handoff_plan_readonly.py",
+    "tests/test_phase33d_controlled_agent_router_planning_artifact_mapper_readonly.py",
+    "tests/test_phase33e_controlled_agent_router_planning_artifact_dry_run_command_readonly.py",
+    "tests/test_phase34a_jd_intelligence_llm_signal_extractor_default_off.py",
+    "tests/test_phase34b_jd_intelligence_planning_artifact_enricher_default_off.py",
+    "tests/test_phase34c_jd_intelligence_planning_artifact_enrichment_dry_run_command_default_off.py",
+    "tests/test_phase35a_jd_signal_resume_evidence_matrix_default_off.py",
+    "tests/test_phase35b_jd_signal_planning_artifact_evidence_enricher_default_off.py",
+    "tests/test_phase35c_jd_signal_planning_artifact_evidence_enrichment_dry_run_command_default_off.py",
+    "tests/test_phase36a_jd_evidence_final_scoring_feature_adapter_default_off.py",
+    "tests/test_phase36b_jd_evidence_final_scoring_feature_adapter_dry_run_command_default_off.py",
+    "tests/test_phase37a_jd_evidence_scoring_contribution_preview_default_off.py",
+    "tests/test_phase37b_jd_evidence_scoring_contribution_preview_dry_run_command_default_off.py",
+    "tests/test_phase38a_jd_evidence_score_impact_preview_default_off.py",
+    "tests/test_phase38b_jd_evidence_score_impact_preview_dry_run_command_default_off.py",
+    "tests/test_phase39a_jd_evidence_score_impact_planning_artifact_annotator_default_off.py",
+    "tests/test_phase39b_jd_evidence_score_impact_planning_artifact_annotator_dry_run_command_default_off.py",
+    "tests/test_phase40a_jd_evidence_score_impact_review_packet_builder_default_off.py",
+    "tests/test_phase40b_jd_evidence_score_impact_review_packet_builder_dry_run_command_default_off.py",
+    "tests/test_phase41a_jd_evidence_score_impact_review_queue_builder_default_off.py",
+    "tests/test_phase41b_jd_evidence_score_impact_review_queue_builder_dry_run_command_default_off.py",
+    "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
+    "tests/test_phase42b_exact_resume_change_set_proposal_builder_dry_run_command_default_off.py",
+    "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
+    "tests/test_phase44a_controlled_exact_resume_change_set_provider_call_boundary_default_off.py",
+    "tests/test_phase44b_controlled_exact_resume_change_set_provider_call_boundary_dry_run_command_default_off.py",
+    "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+    "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+    "tests/test_phase46a_controlled_exact_resume_change_set_provider_response_normalization_default_off.py",
+    "tests/test_phase46b_controlled_exact_resume_change_set_provider_response_normalization_dry_run_command_default_off.py",
+    "tests/test_phase47a_controlled_exact_resume_change_set_manual_review_packet_builder_default_off.py",
+    "tests/test_phase47b_controlled_exact_resume_change_set_manual_review_packet_builder_dry_run_command_default_off.py",
+    "tests/test_phase48a_controlled_exact_resume_change_set_manual_review_readback_adapter_default_off.py",
+    "tests/test_phase48b_controlled_exact_resume_change_set_manual_review_readback_adapter_dry_run_command_default_off.py",
+    "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+    "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
+    "tests/test_phase50a_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_default_off.py",
+    "tests/test_phase50b_controlled_exact_resume_change_set_real_provider_response_handoff_pipeline_dry_run_command_default_off.py",
+    "tests/test_phase51a_controlled_exact_resume_change_set_manual_decision_packet_default_off.py",
+    "tests/test_phase51b_controlled_exact_resume_change_set_manual_decision_packet_dry_run_command_default_off.py",
+    "tests/test_phase52a_controlled_exact_resume_change_set_manual_decision_readback_adapter_default_off.py",
+    "tests/test_phase52b_controlled_exact_resume_change_set_manual_decision_readback_adapter_dry_run_command_default_off.py",
+    "tests/test_phase53a_controlled_exact_resume_change_set_approved_change_plan_packet_default_off.py",
+    "tests/test_phase53b_controlled_exact_resume_change_set_approved_change_plan_packet_dry_run_command_default_off.py",
+    "tests/test_phase54a_controlled_exact_resume_change_set_approved_change_plan_readback_adapter_default_off.py",
+    "tests/test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off.py",
+    "tests/test_phase55b_live_jd_llm_extraction_planning_scan_readback_ui_api_default_off.py",
+    "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+    "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",
+    "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off.py",
+    "tests/test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off.py",
+    "tests/test_phase59a_approved_change_plan_guarded_resume_copy_artifact_wiring_default_off.py",
+    "tests/test_phase59b_approved_change_plan_guarded_resume_copy_artifact_readback_ui_api_default_off.py",
+    "tests/test_phase60a_guarded_resume_copy_artifact_readback_verification_default_off.py",
+    "tests/test_phase60b_guarded_resume_copy_artifact_verification_readback_ui_api_default_off.py",
+    "tests/test_phase61a_verified_artifact_operator_review_packet_wiring_default_off.py",
+    "tests/test_phase61b_verified_artifact_operator_review_packet_readback_ui_api_default_off.py",
+    "tests/test_phase62a_verified_artifact_operator_decision_capture_wiring_default_off.py",
+    "tests/test_phase62b_verified_artifact_operator_decision_capture_readback_ui_api_default_off.py",
+    "tests/test_phase63a_operator_approved_artifact_application_readiness_packet_wiring_default_off.py",
+    "tests/test_phase69b_agentic_workflow_production_readiness_readback_ui_api_default_off.py",
+    "tests/test_phase70a_ux_polish_agentic_workflow_demo_readiness_default_off.py",
+    "tests/test_phase70b_ux_polish_agentic_workflow_demo_readiness_readback_default_off.py",
+    "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+    "tests/test_provider_live_activation_safety_plan_default_off.py",
+    "tests/test_provider_live_config_gate_default_off.py",
+    "tests/test_provider_runtime_activation_plan_default_off.py",
+    "tests/test_provider_runtime_api_readback_default_off.py",
+    "tests/test_provider_runtime_readiness_checkpoint_default_off.py",
+    "tests/test_provider_runtime_service_bridge_default_off.py",
+    "tests/test_provider_runtime_ui_readback_default_off.py",
+    "tests/test_shadow_semantic_evidence_agent_input_default_off.py",
+    "tests/test_tailoring_provider_shadow_default_off.py",
+    "tests/test_three_agent_llmops_aggregate_default_off.py",
+    "tests/test_three_agent_llmops_observability_api_default_off.py",
+    "tests/test_three_agent_llmops_observability_readback_default_off.py",
+    "tests/test_three_agent_llmops_observability_service_bridge_default_off.py",
+    "tests/test_three_agent_llmops_observability_ui_default_off.py",
+    "tests/test_three_agent_llmops_trace_contract_default_off.py",
+    "tests/test_three_agent_provider_handoff_default_off.py",
+    "tests/test_three_agent_shadow_workflow_default_off.py",
+    "tests/test_three_agent_workflow_readiness_default_off.py",
+    "tests/test_three_core_shadow_readiness_wrap_default_off.py",
+    "tests/test_vector_evidence_api_no_db_no_ui.py",
+    "tests/test_vector_evidence_embedding_indexing_helper_default_off.py",
+    "tests/test_vector_evidence_embedding_provider_contract_default_off.py",
+    "tests/test_vector_evidence_embedding_retrieval_helper_default_off.py",
+    "tests/test_vector_evidence_embedding_runtime_adapter_default_off.py",
+    "tests/test_vector_evidence_embedding_runtime_service_bridge_default_off.py",
+    "tests/test_vector_evidence_readback_api_default_off.py",
+    "tests/test_vector_evidence_readback_service_helper_default_off.py",
+    "tests/test_vector_evidence_readback_ui_default_off.py",
+    "tests/test_vector_evidence_service_connection_provider_bridge_default_off.py",
+    "tests/test_vector_evidence_service_db_executor_bridge_default_off.py",
+    "tests/test_vector_evidence_service_pgvector_store_flagged_default_off.py",
+    "tests/test_vector_evidence_ui_no_db_readonly.py",
+}
+
+
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
     value = str(path).strip().replace("\\", "/")
@@ -1194,6 +1666,43 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/support/phase_guard_registry.py",
             "tests/test_phase85b_legacy_guard_registry_default_off.py",
         },
+        "phase11_step2_job_prioritization_graph_contract": {
+            "src/agents/job_prioritization_graph_verification.py",
+            "tests/test_phase11_step2_job_prioritization_graph_contract.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        },
+        "phase11_step3_job_prioritization_graph_integration": {
+            "application_execution_queue.py",
+            "src/agents/job_prioritization_graph_verification.py",
+            "src/agents/job_prioritization_graph_integration.py",
+            "tests/test_phase11_step3_job_prioritization_graph_integration.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_phase85b_legacy_guard_registry_default_off.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        }
+        | PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
+        "phase13c_authoritative_job_prioritization_node": (
+            PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES
+        ),
+        "phase14b_authoritative_tailoring_caller": (
+            PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES
+        ),
+        "phase14c_authoritative_tailoring_node": (
+            PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
+        ),
+        "phase15b_conditional_operator_review_caller": (
+            PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
+        ),
+        "phase15c_conditional_operator_review_node": (
+            PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
+        ),
+        "phase17c_tailoring_generation_llm_closure": (
+            PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES
+        ),
         "phase9_step12_dependency_driver_compatibility": {
             "tests/test_agent_trace_store.py",
             "tests/test_jd_provider_runtime_api_readback_default_off.py",
@@ -1309,8 +1818,54 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
             "phase10_step11_postgres_planning_corpus_snapshot"
         )
         | legacy_guard_allowlist(
+            "phase11_step2_job_prioritization_graph_contract"
+        )
+        | legacy_guard_allowlist(
+            "phase11_step3_job_prioritization_graph_integration"
+        )
+        | legacy_guard_allowlist(
+            "phase13c_authoritative_job_prioritization_node"
+        )
+        | legacy_guard_allowlist(
+            "phase14b_authoritative_tailoring_caller"
+        )
+        | legacy_guard_allowlist(
+            "phase14c_authoritative_tailoring_node"
+        )
+        | legacy_guard_allowlist(
+            "phase15b_conditional_operator_review_caller"
+        )
+        | legacy_guard_allowlist(
+            "phase15c_conditional_operator_review_node"
+        )
+        | legacy_guard_allowlist(
+            "phase17c_tailoring_generation_llm_closure"
+        )
+        | legacy_guard_allowlist(
             "phase9_step12_dependency_driver_compatibility"
         )
+        | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
+        | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
+        | PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES
+        | PHASE11_STEP8O_PROVIDER_FIXTURE_BENCHMARK_FILES
+        | PHASE11_STEP8P_CONTROLLED_PROVIDER_BENCHMARK_PLAN_FILES
+        | PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES
+        | PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES
+        | PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES
+        | PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES
+        | PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES
+        | PHASE11_STEP8Y_GROQ_CANARY_RUN_IDENTITY_FILES
+        | PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES
+        | PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES
+        | PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES
+        | PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES
+        | PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES
+        | PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES
+        | PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES
+        | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
+        | PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
+        | PHASE21_RELEASE_CANDIDATE_FILES
+        | PHASE21R_HISTORICAL_GUARD_FILES
     )
 
 
@@ -1350,17 +1905,37 @@ def assert_protected_hashes(
 ) -> None:
     phase88b_runtime_hash_compatibility = {
         (
+            "application_execution_queue.py",
+            "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
+        (
+            "application_execution_queue.py",
+            "28ac5d153eeb1d3e6238bed57418a45b603f72caea6c0f671a8dcbb3b0a76097",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
+        (
+            "application_execution_queue.py",
+            "17256e6fe4554ca5d3136468cbae7602f765666c9f98e963508b2a6d822a49d5",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
+        (
+            "application_execution_queue.py",
+            "417ee7a37bf05c4cbfa7fe01c1b1d09376a2c7680d2a97867d3ebb529c48cf9f",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
+        (
+            "application_execution_queue.py",
+            "c68a0a6eda5e96e348dc1b47ccba826df2f1041c18c4cc46f42861fdb35e105e",
+        ): "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
+        (
             "requirements.txt",
             "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
         ): "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "fc5487b793cf3e36018bb37863b426ec8f1134224f0e3bf20ad0aa2990b7a241",
+        ): "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "8fdd9eb765fef33d6855a2992c4a5e12aa48c97d055fd41b26076034833a98c6",
+        ): "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
@@ -1368,11 +1943,11 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-        ): "cf11fdbb368ee350613dcae9647573201c26de0aaabf76b5436b71178e0b6f20",
+        ): "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
         (
             "src/app/services.py",
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
-        ): "8fdd9eb765fef33d6855a2992c4a5e12aa48c97d055fd41b26076034833a98c6",
+        ): "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
             (
                 "src/agents/jd_intelligence.py",
                 "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",
@@ -1396,7 +1971,23 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
-        ): "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",
+        ): "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
+        (
+            "src/pipeline/collector.py",
+            "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",
+        ): "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
+        (
+            "src/pipeline/collector.py",
+            "6bc823a688fdd7d270739ea9c1dbc83ef561988cc7f5625b8495bf50c7386689",
+        ): "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
+        (
+            "generate_tailoring_suggestions.py",
+            "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28",
+        ): "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d",
+        (
+            "generate_tailoring_suggestions.py",
+            "58ec07a92d2df1ab1ab72a9029d6fd685576c7c0124532bdeefd1e1fd52ed10c",
+        ): "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d",
         (
             "src/app/static/agentic_review.js",
             "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
@@ -1409,6 +2000,12 @@ def assert_protected_hashes(
             *(legacy_guard_allowlist(profile) for profile in profiles),
             legacy_guard_allowlist(
                 "phase9_step12_postgres_runtime_repository_integration"
+            ),
+            legacy_guard_allowlist(
+                "phase11_step3_job_prioritization_graph_integration"
+            ),
+            legacy_guard_allowlist(
+                "phase17c_tailoring_generation_llm_closure"
             ),
         )
         if profiles

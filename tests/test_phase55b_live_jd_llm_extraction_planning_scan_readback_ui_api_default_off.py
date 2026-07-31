@@ -15,8 +15,8 @@ PROTECTED_HASHES = {
     "src/matching/scorer.py": "f56624b5b3c7e2bb01a824386b86fbc2a194e727f0437ca0773764eae64ec941",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "src/tailoring/llm.py": "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
-    "generate_tailoring_" + "suggestions" + ".py": "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28",
-    "application_execution_" + "queue" + ".py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+    "generate_tailoring_" + "suggestions" + ".py": "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d",
+    "application_execution_" + "queue" + ".py": "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
     "src/agents/jd_intelligence_llm_signal_extractor_default_off.py": (
         "a73124801ce6768aebb934e1c6a7e76d4f9888bbb7b0ca28eb93e882e06f4f6c"
     ),

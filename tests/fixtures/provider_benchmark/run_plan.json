@@ -1,0 +1,52 @@
+{
+  "fixture_version": "controlled-provider-benchmark-run-plan-fixture-v1",
+  "request_limits": {
+    "temperature": 0,
+    "timeout_seconds": 30,
+    "maximum_input_tokens_per_request": 4096,
+    "maximum_completion_tokens_per_request": 1024,
+    "harness_retry_limit": 0,
+    "maximum_requests_per_case": 3,
+    "serial_execution_required": true,
+    "parallel_execution_allowed": false,
+    "ambiguous_timeout_retry_allowed": false,
+    "recursive_execution_allowed": false
+  },
+  "duration_limits": {
+    "maximum_run_duration_seconds": 900,
+    "maximum_provider_duration_seconds": {
+      "groq": 600,
+      "openai": 300
+    }
+  },
+  "token_budget_policy": {
+    "observed_input_tokens_required": true,
+    "observed_output_tokens_required": true,
+    "missing_usage_blocks_cost_comparison": true,
+    "stop_on_input_budget_exceeded": true,
+    "stop_on_output_budget_exceeded": true
+  },
+  "cost_budget_schema": {
+    "pricing_table_version_required": true,
+    "operator_approved_pricing_table_required": true,
+    "maximum_observed_cost_per_model_required": true,
+    "maximum_total_observed_cost_required": true,
+    "positive_dollar_ceiling_required": true,
+    "missing_cost_blocks_comparison": true,
+    "stop_on_cost_ceiling_exceeded": true,
+    "currency": "USD"
+  },
+  "artifact_retention_policy": {
+    "automatic_persistence": false,
+    "ignored_artifact_only": true,
+    "normalized_output_only": true,
+    "raw_sdk_object_allowed": false,
+    "raw_response_envelope_allowed": false,
+    "provider_request_id_allowed": false,
+    "reasoning_trace_allowed": false,
+    "required_file_mode": "0600",
+    "maximum_retention_days": 7,
+    "operator_review_required_before_deletion": true,
+    "delete_after_review": true
+  }
+}

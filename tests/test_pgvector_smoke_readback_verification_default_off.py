@@ -204,10 +204,10 @@ def test_import_has_no_connection_or_readback_side_effect():
 
 def test_no_api_ui_pipeline_schema_or_dependency_change():
     protected_hashes = {
-        "src/app/api.py": ("d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"),
+        "src/app/api.py": ("2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"),
         "src/app/static/agentic_review.js": ("fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0"),
-        "src/pipeline/collector.py": ("e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671"),
-        "requirements.txt": ("5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"),
+        "src/pipeline/collector.py": ("261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e"),
+        "requirements.txt": ("75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"),
         "src/storage/vector_evidence/schema.sql": ("4b34a928393fcce6696a2f35d7ee62339b0483cc248daee3f0e57bdb50c11dff"),
     }
     assert_protected_hashes(

@@ -1,0 +1,26 @@
+{
+  "currency": null,
+  "expires_at_utc": null,
+  "operator_approved": false,
+  "prices": [
+    {
+      "input_price_per_million_tokens": null,
+      "model": "openai/gpt-oss-20b",
+      "output_price_per_million_tokens": null,
+      "provider": "groq"
+    },
+    {
+      "input_price_per_million_tokens": null,
+      "model": "openai/gpt-oss-120b",
+      "output_price_per_million_tokens": null,
+      "provider": "groq"
+    }
+  ],
+  "pricing_schema_version": "controlled-groq-provider-canary-pricing-v1",
+  "pricing_table_sha256": null,
+  "pricing_template_version": "controlled-groq-provider-canary-pricing-template-v1",
+  "pricing_version": null,
+  "source_classification": null,
+  "source_effective_at_utc": null,
+  "valid_from_utc": null
+}

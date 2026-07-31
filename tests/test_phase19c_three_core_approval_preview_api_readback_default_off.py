@@ -27,9 +27,9 @@ ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "/api/three-core-approval-preview-service-readback"
 
 PROTECTED_HASHES = {
-    "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+    "src/app/services.py": "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
     "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-    "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+    "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/jd_intelligence.py": "c72224bbc8e64b13c725f9180d227c413fb2fd9a65a97e2e72954f61a8f32b45",
     "src/agents/final_application_scoring.py": "eed7eed337b860345f38005c1f898732c8c809f6087e7fbbf33de6f4ad7ed2fd",

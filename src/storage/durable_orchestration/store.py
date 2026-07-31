@@ -627,11 +627,22 @@ def prepare_final_checkpoint_commit(
         final_checkpoint_row, _CHECKPOINT_COLUMNS, "final_checkpoint"
     )
     parent_id = _clean_text(parent_checkpoint_id)
+    production_review = (
+        final_checkpoint_row.get("checkpoint_status")
+        == "production_execution"
+        and final_checkpoint_row.get("checkpoint_schema_version")
+        == "production-human-review-checkpoint-v1"
+    )
+    expected_completed = (
+        ["operator_review", "finalize"]
+        if production_review
+        else [*harness.ORDERED_AGENT_KEYS, "finalize"]
+    )
     if (
         final_checkpoint_row["next_node_key"]
         != FINAL_CHECKPOINT_NEXT_NODE_KEY
         or final_checkpoint_row["completed_node_keys_json"]
-        != [*harness.ORDERED_AGENT_KEYS, "finalize"]
+        != expected_completed
         or final_checkpoint_row["checkpoint_id"] == parent_id
         or final_checkpoint_row["checkpoint_envelope_digest"]
         != harness._checkpoint_digest(
@@ -699,13 +710,24 @@ SELECT * FROM accepted_checkpoint
 
 def _graph_run_params(row: Mapping[str, Any]) -> dict[str, Any]:
     _require_exact_fields(row, _GRAPH_RUN_COLUMNS, "graph_run_row")
-    if row["graph_engine"] != harness.CHECKPOINT_GRAPH_ENGINE:
-        raise ValueError("checkpoint_graph_engine_unsupported")
+    production_graph = str(row.get("graph_engine") or "").startswith(
+        "langgraph-production:"
+    )
     if (
+        row["graph_engine"] != harness.CHECKPOINT_GRAPH_ENGINE
+        and not production_graph
+    ):
+        raise ValueError("checkpoint_graph_engine_unsupported")
+    if not production_graph and (
         row["graph_state_schema_version"]
         != harness.GRAPH_STATE_SCHEMA_VERSION
     ):
         raise ValueError("checkpoint_graph_state_schema_version_unsupported")
+    if production_graph and re.fullmatch(
+        r"[a-z0-9][a-z0-9._:-]{0,127}",
+        str(row.get("graph_state_schema_version") or ""),
+    ) is None:
+        raise ValueError("production_graph_state_schema_version_unsupported")
     if row["run_status"] not in GRAPH_RUN_STATUS_VALUES:
         raise ValueError("graph_run_status_unsupported")
     _require_nonnegative_int(row["lock_version"], "lock_version")
@@ -715,13 +737,52 @@ def _graph_run_params(row: Mapping[str, Any]) -> dict[str, Any]:
 
 def _checkpoint_params(row: Mapping[str, Any]) -> dict[str, Any]:
     _require_exact_fields(row, _CHECKPOINT_COLUMNS, "checkpoint_row")
-    rebuilt = prepare_checkpoint_row(
-        row["checkpoint_envelope_json"],
-        committed_at=_require_text(row, "committed_at"),
-        purge_after=row.get("purge_after"),
-    )
-    if not checkpoint_rows_are_identical(rebuilt, row):
-        raise ValueError("checkpoint_row_content_mismatch")
+    if row.get("checkpoint_status") == "production_execution":
+        envelope = row.get("checkpoint_envelope_json")
+        if not isinstance(envelope, Mapping):
+            raise ValueError("production_checkpoint_envelope_invalid")
+        for field in (
+            "checkpoint_id",
+            "graph_invocation_id",
+            "checkpoint_schema_version",
+            "graph_state_schema_version",
+            *_IDENTITY_COLUMNS,
+        ):
+            envelope_field = (
+                "production_state_version"
+                if field == "graph_state_schema_version"
+                else field
+            )
+            if envelope.get(envelope_field) != row.get(field):
+                raise ValueError(
+                    f"production_checkpoint_identity_mismatch:{field}"
+                )
+        if (
+            envelope.get("checkpoint_sequence")
+            != row.get("checkpoint_sequence")
+            or envelope.get("completed_node_keys")
+            != row.get("completed_node_keys_json")
+            or envelope.get("next_node_key") != row.get("next_node_key")
+            or envelope.get("production_execution") is not True
+            or envelope.get("read_only") is not True
+            or envelope.get("application_authorization") is not False
+            or envelope.get("mutation_authorization") is not False
+            or envelope.get("ats_authorization") is not False
+            or row.get("checkpoint_envelope_digest")
+            != harness._checkpoint_digest(envelope)
+        ):
+            raise ValueError("production_checkpoint_row_content_mismatch")
+        _reject_prohibited_payload(
+            envelope, field_path="production_checkpoint_envelope"
+        )
+    else:
+        rebuilt = prepare_checkpoint_row(
+            row["checkpoint_envelope_json"],
+            committed_at=_require_text(row, "committed_at"),
+            purge_after=row.get("purge_after"),
+        )
+        if not checkpoint_rows_are_identical(rebuilt, row):
+            raise ValueError("checkpoint_row_content_mismatch")
     params = deepcopy(dict(row))
     params["checkpoint_envelope_json"] = _canonical_json(
         row["checkpoint_envelope_json"],
@@ -740,14 +801,65 @@ def _interrupt_params(
     checkpoint_envelope: Mapping[str, Any],
 ) -> dict[str, Any]:
     _require_exact_fields(row, _INTERRUPT_COLUMNS, "interrupt_row")
-    rebuilt = prepare_interrupt_request_row(
-        row["interrupt_request_json"],
-        checkpoint_envelope=checkpoint_envelope,
-        created_at=_require_text(row, "created_at"),
-        expires_at=row.get("expires_at"),
-    )
-    if not interrupt_rows_are_identical(rebuilt, row):
-        raise ValueError("interrupt_row_content_mismatch")
+    if row.get("diagnostic_only") is False:
+        payload = row.get("interrupt_request_json")
+        if not isinstance(payload, Mapping):
+            raise ValueError("production_interrupt_payload_invalid")
+        if (
+            row.get("interrupt_request_schema_version")
+            != "production-human-review-interrupt-v1"
+            or row.get("node_key") != "operator_review"
+            or row.get("safe_next_node_key") != "finalize"
+            or row.get("allowed_decision_values_json")
+            != ["continue_read_only", "needs_revision", "cancel"]
+            or row.get("read_only") is not True
+            or row.get("application_authorization") is not False
+            or row.get("resume_authorization") is not False
+        ):
+            raise ValueError("production_interrupt_contract_invalid")
+        for field in (
+            "interrupt_request_id",
+            "graph_invocation_id",
+            "checkpoint_id",
+            "interrupt_request_schema_version",
+            "checkpoint_schema_version",
+            "graph_state_schema_version",
+            *_IDENTITY_COLUMNS,
+            "node_key",
+            "safe_next_node_key",
+            "operator_review_artifact_type",
+            "operator_review_artifact_version",
+            "operator_review_artifact_digest",
+            "read_only",
+            "diagnostic_only",
+            "application_authorization",
+            "resume_authorization",
+        ):
+            if payload.get(field) != row.get(field):
+                raise ValueError(
+                    f"production_interrupt_identity_mismatch:{field}"
+                )
+        if payload.get("allowed_decision_values") != row.get(
+            "allowed_decision_values_json"
+        ):
+            raise ValueError("production_interrupt_decisions_mismatch")
+        if (
+            checkpoint_envelope.get("review_artifact_digest")
+            != row.get("operator_review_artifact_digest")
+        ):
+            raise ValueError("production_interrupt_artifact_mismatch")
+        _reject_prohibited_payload(
+            payload, field_path="production_interrupt_request"
+        )
+    else:
+        rebuilt = prepare_interrupt_request_row(
+            row["interrupt_request_json"],
+            checkpoint_envelope=checkpoint_envelope,
+            created_at=_require_text(row, "created_at"),
+            expires_at=row.get("expires_at"),
+        )
+        if not interrupt_rows_are_identical(rebuilt, row):
+            raise ValueError("interrupt_row_content_mismatch")
     params = deepcopy(dict(row))
     params["allowed_decision_values_json"] = _canonical_json(
         row["allowed_decision_values_json"],
@@ -946,16 +1058,31 @@ def prepare_checkpoint_interrupt_commit(
     ):
         if interrupt_row[key] != checkpoint_row[key]:
             raise ValueError(f"checkpoint_interrupt_identity_mismatch:{key}")
-    if checkpoint_row["completed_node_keys_json"] != list(
-        harness.ORDERED_AGENT_KEYS
-    ):
-        raise ValueError("checkpoint_interrupt_completed_node_keys_invalid")
-    if checkpoint_row["next_node_key"] != (
-        harness.OPERATOR_REVIEW_INTERRUPT_SAFE_NEXT_NODE_KEY
-    ):
-        raise ValueError("checkpoint_interrupt_next_node_invalid")
-    if interrupt_row["node_key"] != harness.OPERATOR_REVIEW_INTERRUPT_NODE_KEY:
-        raise ValueError("checkpoint_interrupt_node_invalid")
+    if checkpoint_row.get("checkpoint_status") == "production_execution":
+        if checkpoint_row["completed_node_keys_json"] != ["operator_review"]:
+            raise ValueError(
+                "production_checkpoint_interrupt_completed_nodes_invalid"
+            )
+        if (
+            checkpoint_row["next_node_key"] != "finalize"
+            or interrupt_row["node_key"] != "operator_review"
+            or interrupt_row.get("diagnostic_only") is not False
+        ):
+            raise ValueError("production_checkpoint_interrupt_boundary_invalid")
+    else:
+        if checkpoint_row["completed_node_keys_json"] != list(
+            harness.ORDERED_AGENT_KEYS
+        ):
+            raise ValueError("checkpoint_interrupt_completed_node_keys_invalid")
+        if checkpoint_row["next_node_key"] != (
+            harness.OPERATOR_REVIEW_INTERRUPT_SAFE_NEXT_NODE_KEY
+        ):
+            raise ValueError("checkpoint_interrupt_next_node_invalid")
+        if (
+            interrupt_row["node_key"]
+            != harness.OPERATOR_REVIEW_INTERRUPT_NODE_KEY
+        ):
+            raise ValueError("checkpoint_interrupt_node_invalid")
     interrupt_params = _interrupt_params(
         interrupt_row,
         checkpoint_envelope=checkpoint_row["checkpoint_envelope_json"],

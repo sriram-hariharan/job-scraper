@@ -216,9 +216,9 @@ DOC_MARKERS = (
 )
 
 PROTECTED_HASHES = {
-    "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+    "src/app/services.py": "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
     "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-    "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
+    "src/app/static/app_redesign.css": "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
     "src/agents/manual_generate_ai_tailoring_preview_normalized_response_preview_packet_contract.py": "715ef0c6af0c40b5029b05144346d89fe91e99a4b0e2d53743c7058d646f35d7",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_normalization_contract.py": "2b31a53bd2cb8f8c4aa8359d5fcbcd246cd9618e65228b38675d7bd2af9470a4",
     "src/agents/manual_generate_ai_tailoring_preview_provider_response_validation_contract.py": "993952603b37420a40f9db750feb4ebbfa44fab4dbffe5751975aa1ee0f657d7",
@@ -230,13 +230,13 @@ PROTECTED_HASHES = {
     "src/agents/manual_generate_ai_tailoring_preview_contract.py": "98e2c69010061fa8e98cf50541f88537ad9eaff72c7c13a270e57822196eeb45",
     "src/agents/generate_ai_tailoring_action_boundary_contract.py": "5c7675f889daa3342258be5d8eac5c191b196a84795238c658eb73cb76672953",
     "src/agents/tailoring_agent_opportunity_contract.py": "e61e910176a315e11b2e403a33920a53726c9df8ed0213f0121b5c6eb0c1d8b3",
-    "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+    "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
     "src/pipeline/job_filter.py": "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
     "src/matching/scorer.py": "f56624b5b3c7e2bb01a824386b86fbc2a194e727f0437ca0773764eae64ec941",
     "src/tailoring/llm.py": "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
-    "generate_tailoring_suggestions.py": "2422452d1c7a54777684b399730d02c11e58ce1ad6ac5658527ad71bb9050f28",
-    "application_execution_queue.py": "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0",
+    "generate_tailoring_suggestions.py": "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d",
+    "application_execution_queue.py": "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f",
 }
 
 

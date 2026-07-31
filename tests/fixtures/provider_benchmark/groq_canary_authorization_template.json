@@ -1,0 +1,66 @@
+{
+  "application_authority_allowed": false,
+  "approved_case_aliases": [
+    "case_fb2b069aa9340571b60e1fb5",
+    "case_5360b349ebc160b8c7335cf0",
+    "case_db0a584dd7f8653ca842281f",
+    "case_ece85e9411ca52b579359fb8"
+  ],
+  "approved_schedule_keys": [
+    "canary_6ee9934ebe7f25bd0612d19a12d9923a",
+    "canary_67e00c3471c03a2d231049fb31441ee1",
+    "canary_8b167323a8667845ab0e26083b5294f5",
+    "canary_969374f055f6d3a74a60a3e4ce6ee440"
+  ],
+  "ats_authority_allowed": false,
+  "authorization_template_version": "controlled-groq-provider-canary-authorization-template-v1",
+  "authorization_version": "controlled-groq-provider-canary-authorization-v1",
+  "canary_sha256": "43241c341fe4d69c8cbeb2d6e95b6c56e68e67134b693c91396a932775a673bf",
+  "canary_version": "controlled-groq-provider-canary-v1",
+  "candidate_provider_models": [
+    {
+      "model": "openai/gpt-oss-20b",
+      "provider": "groq"
+    },
+    {
+      "model": "openai/gpt-oss-120b",
+      "provider": "groq"
+    }
+  ],
+  "controlled_full_plan_sha256": "a3ef53ff992a2d1daf43f8fa9b0556202268d34e21f7611eb5de4d26e9abe6b6",
+  "expires_at_utc": null,
+  "fallback_allowed": false,
+  "fixture_corpus_sha256": "0ddc82e62745856c0d5d4d3f0efbe3fc86bd4e84e5da070f54f4ea635e74b05c",
+  "gemini_allowed": false,
+  "harness_sha256": "eacf13521305689a0e7c7e3768c5e18c083308d30e6bb6b69f8d5cab1f125572",
+  "maximum_observed_cost_per_model": {
+    "groq/openai/gpt-oss-120b": null,
+    "groq/openai/gpt-oss-20b": null
+  },
+  "maximum_total_observed_cost": null,
+  "openai_allowed": false,
+  "operator_approved": false,
+  "pricing_table_sha256": null,
+  "production_activation_allowed": false,
+  "request_counts": {
+    "automatic_expansion": false,
+    "conditional_additional_calls": false,
+    "maximum_requests_per_case": 1,
+    "maximum_requests_per_provider_model": {
+      "groq/openai/gpt-oss-120b": 2,
+      "groq/openai/gpt-oss-20b": 2
+    },
+    "maximum_total_requests": 4,
+    "serial_concurrency": 1
+  },
+  "retry_count": 0,
+  "token_ceilings": {
+    "maximum_aggregate_input_tokens": 16384,
+    "maximum_aggregate_output_tokens": 4096,
+    "maximum_input_tokens_per_request": 4096,
+    "maximum_output_tokens_per_request": 1024,
+    "missing_usage_estimation_allowed": false,
+    "observed_usage_required": true
+  },
+  "valid_from_utc": null
+}

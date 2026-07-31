@@ -3,6 +3,35 @@ from pathlib import Path
 import pytest
 
 from tests.support.phase_guard_registry import (
+    PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
+    PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES,
+    PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES,
+    PHASE11_STEP8O_PROVIDER_FIXTURE_BENCHMARK_FILES,
+    PHASE11_STEP8P_CONTROLLED_PROVIDER_BENCHMARK_PLAN_FILES,
+    PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES,
+    PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES,
+    PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES,
+    PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES,
+    PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES,
+    PHASE11_STEP8Y_GROQ_CANARY_RUN_IDENTITY_FILES,
+    PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES,
+    PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES,
+    PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES,
+    PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES,
+    PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES,
+    PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES,
+    PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES,
+    PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES,
+    PHASE11_STEP3_DIRECT_HASH_GUARD_FILES,
+    PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES,
+    PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES,
+    PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES,
+    PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES,
+    PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES,
+    PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES,
+    PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES,
+    PHASE21_RELEASE_CANDIDATE_FILES,
+    PHASE21R_HISTORICAL_GUARD_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1245,6 +1274,56 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "requirements.txt",
     }.isdisjoint(phase10_step11_profile)
 
+    phase11_step2_profile = legacy_guard_allowlist(
+        "phase11_step2_job_prioritization_graph_contract"
+    )
+    assert phase11_step2_profile == {
+        "src/agents/job_prioritization_graph_verification.py",
+        "tests/test_phase11_step2_job_prioritization_graph_contract.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }
+    assert not any("*" in path for path in phase11_step2_profile)
+    assert {
+        "application_execution_queue.py",
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "src/agents/job_prioritization_agent.py",
+        "src/pipeline/collector.py",
+        "main.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/storage/durable_orchestration/repository.py",
+    }.isdisjoint(phase11_step2_profile)
+
+    phase11_step3_profile = legacy_guard_allowlist(
+        "phase11_step3_job_prioritization_graph_integration"
+    )
+    assert phase11_step3_profile == {
+        "application_execution_queue.py",
+        "src/agents/job_prioritization_graph_verification.py",
+        "src/agents/job_prioritization_graph_integration.py",
+        "tests/test_phase11_step3_job_prioritization_graph_integration.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    } | PHASE11_STEP3_DIRECT_HASH_GUARD_FILES
+    assert not any("*" in path for path in phase11_step3_profile)
+    assert {
+        "main.py",
+        "run_application_planning.py",
+        "src/agents/job_prioritization_agent.py",
+        "src/agents/evidence_chain_langgraph_harness.py",
+        "src/agents/evidence_chain_composition.py",
+        "src/pipeline/collector.py",
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/config/settings.py",
+        "src/storage/durable_orchestration/repository.py",
+    }.isdisjoint(phase11_step3_profile)
+
     phase9_step12_compatibility_profile = legacy_guard_allowlist(
         "phase9_step12_dependency_driver_compatibility"
     )
@@ -1320,7 +1399,287 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase10_step5c_profile
         | phase10_step8_profile
         | phase10_step11_profile
+        | phase11_step2_profile
+        | phase11_step3_profile
+        | PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES
+        | PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES
+        | PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
+        | PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
+        | PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
+        | PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES
         | phase9_step12_compatibility_profile
+        | PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
+        | PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
+        | PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES
+        | PHASE11_STEP8O_PROVIDER_FIXTURE_BENCHMARK_FILES
+        | PHASE11_STEP8P_CONTROLLED_PROVIDER_BENCHMARK_PLAN_FILES
+        | PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES
+        | PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES
+        | PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES
+        | PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES
+        | PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES
+        | PHASE11_STEP8Y_GROQ_CANARY_RUN_IDENTITY_FILES
+        | PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES
+        | PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES
+        | PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES
+        | PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES
+        | PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES
+        | PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES
+        | PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES
+        | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
+        | PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
+        | PHASE21_RELEASE_CANDIDATE_FILES
+        | PHASE21R_HISTORICAL_GUARD_FILES
+    )
+    assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
+        "application_execution_queue.py",
+        "src/agents/job_prioritization_authoritative_graph.py",
+        "tests/test_phase13c_first_authoritative_job_prioritization_node.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase8_pgvector_backend_readiness_schema_plan_no_runtime_change.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES
+    )
+    assert PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES == {
+        "application_execution_queue.py",
+        "src/agents/tailoring_decision_agent.py",
+        "tests/test_phase14b_authoritative_tailoring_caller_reconciliation.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE14B_AUTHORITATIVE_TAILORING_CALLER_FILES
+    )
+    assert PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES == {
+        "application_execution_queue.py",
+        "src/agents/tailoring_decision_authoritative_graph.py",
+        "tests/test_phase14c_second_authoritative_tailoring_node.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE14C_AUTHORITATIVE_TAILORING_NODE_FILES
+    )
+    assert PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES == {
+        "application_execution_queue.py",
+        "src/agents/operator_review_agent.py",
+        "tests/test_phase15b_conditional_operator_review_caller_reconciliation.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE15B_CONDITIONAL_OPERATOR_REVIEW_CALLER_FILES
+    )
+    assert PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES == {
+        "application_execution_queue.py",
+        "src/agents/operator_review_authoritative_graph.py",
+        "tests/test_phase15b_conditional_operator_review_caller_reconciliation.py",
+        "tests/test_phase15c_conditional_authoritative_operator_review_node.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES
+    )
+    assert PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES == {
+        "src/agents/production_shadow_artifact_adapter.py",
+        "src/agents/production_shadow_graph.py",
+        "src/agents/production_shadow_job_priority_owner.py",
+        "src/agents/production_shadow_state.py",
+        "tests/test_phase12b_artifact_only_production_shadow_foundation.py",
+        "tests/test_phase12d_first_deterministic_production_owner.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
+    )
+    assert PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES == {
+        "src/evaluation/provider_benchmark_contract.py",
+        "tests/fixtures/provider_benchmark/manifest.json",
+        "tests/test_provider_benchmark_contract.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES
+    )
+    assert PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES == {
+        "src/evaluation/provider_client_compatibility.py",
+        "tests/test_provider_client_compatibility.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES
+    )
+    assert PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES == {
+        "src/ai/llm_client.py",
+        "tests/test_llm_client_safety.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES
+    )
+    assert PHASE11_STEP8O_PROVIDER_FIXTURE_BENCHMARK_FILES == {
+        "src/evaluation/provider_fixture_benchmark.py",
+        "tests/fixtures/provider_benchmark/cases.json",
+        "tests/test_provider_fixture_benchmark.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8O_PROVIDER_FIXTURE_BENCHMARK_FILES
+    )
+    assert PHASE11_STEP8P_CONTROLLED_PROVIDER_BENCHMARK_PLAN_FILES == {
+        "src/evaluation/controlled_provider_benchmark_plan.py",
+        "tests/fixtures/provider_benchmark/run_plan.json",
+        "tests/test_controlled_provider_benchmark_plan.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8P_CONTROLLED_PROVIDER_BENCHMARK_PLAN_FILES
+    )
+    assert PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES == {
+        "tests/fixtures/provider_benchmark/cases.json",
+        "tests/test_provider_fixture_benchmark.py",
+        "tests/test_transmission_safe_provider_fixtures.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8PA_TRANSMISSION_SAFE_FIXTURE_FILES
+    )
+    assert PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES == {
+        "src/evaluation/controlled_provider_benchmark_harness.py",
+        "tests/fixtures/provider_benchmark/synthetic_authorization.json",
+        "tests/fixtures/provider_benchmark/synthetic_pricing.json",
+        "tests/test_controlled_provider_benchmark_harness.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8Q_CONTROLLED_PROVIDER_BENCHMARK_HARNESS_FILES
+    )
+    assert PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES == {
+        "docs/controlled_groq_provider_canary_runbook.md",
+        "src/evaluation/controlled_groq_provider_canary.py",
+        "tests/fixtures/provider_benchmark/groq_canary_authorization_template.json",
+        "tests/fixtures/provider_benchmark/groq_canary_pricing_template.json",
+        "tests/test_controlled_groq_provider_canary.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8R_GROQ_LIVE_CANARY_PREPARATION_FILES
+    )
+    assert PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES == {
+        "src/evaluation/controlled_groq_canary_transport.py",
+        "tests/test_controlled_groq_canary_transport.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8T_REAL_GROQ_CANARY_TRANSPORT_FILES
+    )
+    assert PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES == {
+        "src/evaluation/controlled_groq_canary_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_evidence_runtime.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8V_GROQ_CANARY_EVIDENCE_RUNTIME_FILES
+    )
+    assert PHASE11_STEP8Y_GROQ_CANARY_RUN_IDENTITY_FILES == {
+        "src/evaluation/controlled_groq_canary_run_identity.py",
+        "tests/test_controlled_groq_canary_run_identity.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8Y_GROQ_CANARY_RUN_IDENTITY_FILES
+    )
+    assert PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES == {
+        "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_evidence_runtime.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8Z_GROQ_CANARY_RUN_EVIDENCE_RUNTIME_FILES
+    )
+    assert PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES == {
+        "src/evaluation/controlled_groq_canary_run_003_plan.py",
+        "tests/test_controlled_groq_canary_run_003_plan.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8ZE_GROQ_CANARY_RUN_003_PLAN_FILES
+    )
+    assert PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES == {
+        "src/evaluation/controlled_groq_canary_run_003_identity.py",
+        "tests/test_controlled_groq_canary_run_003_identity.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8ZF_GROQ_CANARY_RUN_003_IDENTITY_FILES
+    )
+    assert PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES == {
+        "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_003_transport.py",
+        "tests/test_controlled_groq_canary_run_003_evidence_runtime.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8ZG_GROQ_CANARY_RUN_003_RUNTIME_FILES
+    )
+    assert PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES == {
+        "src/evaluation/controlled_groq_canary_run_004_plan.py",
+        "src/evaluation/controlled_groq_canary_run_004_identity.py",
+        "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_004_plan.py",
+        "tests/test_controlled_groq_canary_run_004_identity.py",
+        "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8ZK_GROQ_CANARY_RUN_004_OFFLINE_RUNTIME_FILES
+    )
+    assert PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES == {
+        "src/evaluation/provider_fixture_benchmark.py",
+        "tests/test_provider_fixture_benchmark.py",
+        "src/evaluation/controlled_groq_canary_run_005_plan.py",
+        "src/evaluation/controlled_groq_canary_run_005_identity.py",
+        "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_005_plan.py",
+        "tests/test_controlled_groq_canary_run_005_identity.py",
+        "tests/test_controlled_groq_canary_run_005_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_004_evidence_runtime.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8ZN_GROQ_CANARY_RUN_005_DIAGNOSTIC_RUNTIME_FILES
+    )
+    assert PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES == {
+        "src/evaluation/controlled_tailoring_benchmark_request_adapter.py",
+        "src/evaluation/controlled_groq_tailoring_canary_transport.py",
+        "tests/test_controlled_tailoring_benchmark_request_adapter.py",
+        "tests/test_controlled_groq_tailoring_canary_transport.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8ZQ_ADDITIVE_TAILORING_TRANSPORT_FILES
+    )
+    assert PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES == {
+        "tests/test_rag_endpoint_behavior.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
     )
     assert {"src/app/api.py", "src/app/services.py"} <= phase129_profile
     assert len(phase129_profile) == 206

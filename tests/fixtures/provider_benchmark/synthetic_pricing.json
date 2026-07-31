@@ -1,0 +1,36 @@
+{
+  "pricing_schema_version": "controlled-provider-pricing-table-v1",
+  "pricing_version": "synthetic-operator-pricing-v1",
+  "valid_from_utc": "2026-01-01T00:00:00Z",
+  "expires_at_utc": "2027-01-01T00:00:00Z",
+  "prices": [
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "input_price_per_million_tokens": 1.25,
+      "output_price_per_million_tokens": 2.5
+    },
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "input_price_per_million_tokens": 2.5,
+      "output_price_per_million_tokens": 5.0
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "input_price_per_million_tokens": 3.75,
+      "output_price_per_million_tokens": 7.5
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.1",
+      "input_price_per_million_tokens": 5.0,
+      "output_price_per_million_tokens": 10.0
+    }
+  ],
+  "currency": "USD",
+  "operator_approved": true,
+  "source_classification": "synthetic_non_current_test_only",
+  "pricing_table_sha256": "f57997043c62c625ff69ceceed92572e6afbc6c25b4915c929cc7e5972a4c1f0"
+}

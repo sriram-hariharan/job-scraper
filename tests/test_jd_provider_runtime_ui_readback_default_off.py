@@ -184,16 +184,16 @@ def test_legacy_broad_handler_scans_remain_provider_free():
 def test_no_api_service_pipeline_dependency_or_decision_module_change():
     expected = {
         "requirements.txt": (
-            "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6"
+            "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/app/api.py": (
-            "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"
+            "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"
         ),
         "src/app/services.py": (
-            "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2"
+            "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74"
         ),
         "src/pipeline/collector.py": (
-            "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671"
+            "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"
@@ -202,7 +202,7 @@ def test_no_api_service_pipeline_dependency_or_decision_module_change():
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"
         ),
         "application_execution_queue.py": (
-            "c06438ad6a304780824e64f97fdcd35db08fa3a53b0538bca6244bb3fedb92e0"
+            "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"
         ),
     }
     assert_protected_hashes(

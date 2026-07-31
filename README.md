@@ -149,6 +149,29 @@ It supports:
 - Tailoring packet generation.
 - LLM fallback/adjudication modes where configured.
 
+### Production Orchestration Release Candidate
+
+ApplyLens retains its existing production owners and can route bounded stages
+through default-off LangGraph nodes. Deterministic routes cover
+prefilter/deduplication, final scoring, job prioritization, tailoring decision,
+and conditional operator review. Cache-first LLM routes cover JD intelligence,
+semantic job-fit evaluation, and tailoring generation. The critic remains
+deterministic.
+
+Tailoring generation is the representative durable node: committed execution
+can be reopened or replayed after restart without repeating the graph, owner,
+provider, or cache write. Unified production telemetry is representative—not
+all-agent—and currently covers final scoring, tailoring generation, and durable
+tailoring execution/replay.
+
+A durable tailoring review can be resolved through an authenticated,
+owner-scoped action using only `continue_read_only`, `needs_revision`, or
+`cancel`. The one-time continuation token is stored only as a SHA-256 hash,
+expires, and is consumed once. Human-reviewed status is not application
+approval. The action cannot auto-apply, mark a job applied, replace a source
+resume, contact a recruiter, or submit to an ATS. Production graph, live LLM,
+durability, telemetry, and human-checkpoint capabilities remain default-off.
+
 ### Hybrid Resume-Job Scoring
 
 Final resume-job scoring combines deterministic evidence dimensions with an always-on local `semantic_alignment` component. Semantic alignment uses deterministic token-cosine similarity with a fixed weight of `0.05`; its weighted score is included in `final_score`. Scoring does not call a provider, Groq, an LLM, RAG, an embedding service, or a vector store.

@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / "src/app/static/agentic_review.js"
 
 PROTECTED_HASHES = {
-    "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-    "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-    "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+    "src/app/api.py": "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+    "src/app/services.py": "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
+    "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
     "src/agents/three_core_approval_preview_runtime.py": "8dfe50739f22d42df97db0ea0f2a2dac70d93abf720bbcfe62ad3df205073bbc",
     "src/agents/three_core_approval_preview_service_readback.py": "aed9fc35ee7f0c72ddb46e5db87efde799e5bb5218be252db113e7ac7ab5c71c",
 }

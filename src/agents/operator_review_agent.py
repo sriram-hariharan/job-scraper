@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import os
 import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 from src.agents import llmops, trace as trace_store
 from src.agents.resume_match_agent import (
@@ -18,6 +19,7 @@ from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
 AGENT_NAME = "Operator Review Agent"
 AGENT_VERSION = "phase_9a_v1"
+OPERATOR_REVIEW_SHARED_RESULT_VERSION = "operator-review-shared-result-v1"
 
 OPERATOR_REVIEW_LANES = {
     "ready_to_apply",
@@ -788,10 +790,21 @@ def render_operator_review(
     }
 
 
-def render_operator_review_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    payload = render_operator_review(rows=rows)
+def _render_operator_review_rows_from_payload(
+    payload: Mapping[str, Any],
+) -> List[Dict[str, str]]:
+    output_payload = payload.get("output")
+    if not isinstance(output_payload, Mapping):
+        raise ValueError("operator_review_shared_result_output_invalid")
+    reviews = output_payload.get("reviews")
+    if not isinstance(reviews, list):
+        raise ValueError("operator_review_shared_result_reviews_invalid")
     rendered_rows: List[Dict[str, str]] = []
-    for item in payload["output"].get("reviews", []) or []:
+    for item in reviews:
+        if not isinstance(item, Mapping):
+            raise ValueError(
+                "operator_review_shared_result_review_row_invalid"
+            )
         rendered_rows.append(
             {
                 "job_id": _clean_text(item.get("job_id")),
@@ -820,6 +833,277 @@ def render_operator_review_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, st
     return rendered_rows
 
 
+def validate_operator_review_shared_result(
+    result: Mapping[str, Any],
+    *,
+    expected_rows: List[Mapping[str, Any]] | None = None,
+    pipeline_run_id: str | None = None,
+    owner_user_id: str | None = None,
+    source_artifact_path: str | None = None,
+) -> Dict[str, Any]:
+    if not isinstance(result, Mapping):
+        raise ValueError("operator_review_shared_result_must_be_mapping")
+    candidate = deepcopy(dict(result))
+    if set(candidate) != {"contract_version", "payload", "rendered_rows"}:
+        raise ValueError("operator_review_shared_result_sections_invalid")
+    if (
+        candidate.get("contract_version")
+        != OPERATOR_REVIEW_SHARED_RESULT_VERSION
+    ):
+        raise ValueError("operator_review_shared_result_version_invalid")
+
+    payload = candidate.get("payload")
+    rendered_rows = candidate.get("rendered_rows")
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "input",
+        "output",
+        "validation",
+        "summary",
+    }:
+        raise ValueError("operator_review_shared_result_payload_invalid")
+    if not isinstance(rendered_rows, list):
+        raise ValueError(
+            "operator_review_shared_result_rendered_rows_invalid"
+        )
+
+    input_payload = payload.get("input")
+    output_payload = payload.get("output")
+    validation_payload = payload.get("validation")
+    summary_payload = payload.get("summary")
+    if not all(
+        isinstance(section, Mapping)
+        for section in (
+            input_payload,
+            output_payload,
+            validation_payload,
+            summary_payload,
+        )
+    ):
+        raise ValueError(
+            "operator_review_shared_result_payload_section_invalid"
+        )
+    input_payload = deepcopy(dict(input_payload))
+    output_payload = deepcopy(dict(output_payload))
+    validation_payload = deepcopy(dict(validation_payload))
+    summary_payload = deepcopy(dict(summary_payload))
+
+    if set(input_payload) != {
+        "agent_name",
+        "agent_version",
+        "pipeline_run_id",
+        "owner_user_id",
+        "source_artifact_path",
+        "row_count",
+        "rows",
+    }:
+        raise ValueError(
+            "operator_review_shared_result_input_payload_invalid"
+        )
+    if (
+        input_payload.get("agent_name") != AGENT_NAME
+        or input_payload.get("agent_version") != AGENT_VERSION
+    ):
+        raise ValueError(
+            "operator_review_shared_result_agent_identity_invalid"
+        )
+    if set(output_payload) != {"total_rows", "lane_counts", "reviews"}:
+        raise ValueError(
+            "operator_review_shared_result_output_payload_invalid"
+        )
+
+    input_rows = input_payload.get("rows")
+    reviews = output_payload.get("reviews")
+    lane_counts = output_payload.get("lane_counts")
+    if (
+        not isinstance(input_rows, list)
+        or not isinstance(reviews, list)
+        or not isinstance(lane_counts, Mapping)
+    ):
+        raise ValueError("operator_review_shared_result_rows_invalid")
+    if not all(isinstance(row, Mapping) for row in input_rows):
+        raise ValueError(
+            "operator_review_shared_result_input_row_invalid"
+        )
+    if not all(isinstance(row, Mapping) for row in reviews):
+        raise ValueError(
+            "operator_review_shared_result_review_row_invalid"
+        )
+    if not all(isinstance(row, Mapping) for row in rendered_rows):
+        raise ValueError(
+            "operator_review_shared_result_rendered_row_invalid"
+        )
+    if any(list(row) != OPERATOR_REVIEW_FIELDNAMES for row in rendered_rows):
+        raise ValueError(
+            "operator_review_shared_result_rendered_schema_invalid"
+        )
+
+    row_count = len(input_rows)
+    if (
+        input_payload.get("row_count") != row_count
+        or output_payload.get("total_rows") != row_count
+        or len(reviews) != row_count
+        or len(rendered_rows) != row_count
+    ):
+        raise ValueError("operator_review_shared_result_count_mismatch")
+
+    input_job_ids = [_clean_text(row.get("job_id")) for row in input_rows]
+    review_job_ids = [_clean_text(row.get("job_id")) for row in reviews]
+    rendered_job_ids = [
+        _clean_text(row.get("job_id")) for row in rendered_rows
+    ]
+    if any(not job_id for job_id in input_job_ids):
+        raise ValueError(
+            "operator_review_shared_result_job_identity_missing"
+        )
+    if len(set(input_job_ids)) != len(input_job_ids):
+        raise ValueError(
+            "operator_review_shared_result_job_identity_duplicate"
+        )
+    if (
+        set(review_job_ids) != set(input_job_ids)
+        or set(rendered_job_ids) != set(input_job_ids)
+    ):
+        raise ValueError("operator_review_shared_result_identity_mismatch")
+    if (
+        review_job_ids != input_job_ids
+        or rendered_job_ids != input_job_ids
+    ):
+        raise ValueError("operator_review_shared_result_order_mismatch")
+
+    expected_lane_counts: Dict[str, int] = {}
+    for input_row, review, rendered in zip(
+        input_rows, reviews, rendered_rows
+    ):
+        expected_identity = tuple(
+            _clean_text(input_row.get(field))
+            for field in ("job_id", "company", "title")
+        )
+        if tuple(
+            _clean_text(review.get(field))
+            for field in ("job_id", "company", "title")
+        ) != expected_identity or tuple(
+            _clean_text(rendered.get(field))
+            for field in ("job_id", "company", "title")
+        ) != expected_identity:
+            raise ValueError(
+                "operator_review_shared_result_identity_mismatch"
+            )
+        lane = _clean_text(review.get("operator_review_lane"))
+        if lane not in OPERATOR_REVIEW_LANES:
+            raise ValueError("operator_review_shared_result_lane_invalid")
+        if not isinstance(review.get("operator_reason_codes"), list):
+            raise ValueError(
+                "operator_review_shared_result_reason_codes_invalid"
+            )
+        expected_lane_counts[lane] = expected_lane_counts.get(lane, 0) + 1
+
+    if dict(lane_counts) != dict(sorted(expected_lane_counts.items())):
+        raise ValueError(
+            "operator_review_shared_result_lane_counts_mismatch"
+        )
+
+    payload_copy = {
+        "input": input_payload,
+        "output": output_payload,
+        "validation": validation_payload,
+        "summary": summary_payload,
+    }
+    expected_rendered_rows = _render_operator_review_rows_from_payload(
+        payload_copy
+    )
+    if rendered_rows != expected_rendered_rows:
+        raise ValueError(
+            "operator_review_shared_result_rendered_rows_mismatch"
+        )
+    expected_validation = build_operator_review_agent_validation_payload(
+        input_payload=input_payload,
+        output_payload=output_payload,
+    )
+    if validation_payload != expected_validation:
+        raise ValueError(
+            "operator_review_shared_result_validation_mismatch"
+        )
+    expected_summary = build_operator_review_agent_summary_payload(
+        input_payload=input_payload,
+        output_payload=output_payload,
+        validation_payload=validation_payload,
+    )
+    if summary_payload != expected_summary:
+        raise ValueError(
+            "operator_review_shared_result_summary_mismatch"
+        )
+
+    if expected_rows is not None:
+        normalized_expected: List[Dict[str, Any]] = []
+        for row in expected_rows:
+            if not isinstance(row, Mapping):
+                raise ValueError(
+                    "operator_review_shared_result_expected_row_invalid"
+                )
+            normalized_expected.append(
+                _normalize_input_row(deepcopy(dict(row)))
+            )
+        if input_rows != normalized_expected:
+            raise ValueError(
+                "operator_review_shared_result_input_mismatch"
+            )
+
+    for field, expected in (
+        ("pipeline_run_id", pipeline_run_id),
+        ("owner_user_id", owner_user_id),
+        ("source_artifact_path", source_artifact_path),
+    ):
+        if (
+            expected is not None
+            and _clean_text(input_payload.get(field))
+            != _clean_text(expected)
+        ):
+            raise ValueError(
+                "operator_review_shared_result_metadata_mismatch"
+            )
+
+    return {
+        "contract_version": OPERATOR_REVIEW_SHARED_RESULT_VERSION,
+        "payload": deepcopy(payload_copy),
+        "rendered_rows": deepcopy(expected_rendered_rows),
+    }
+
+
+def build_operator_review_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    source_artifact_path: str = "",
+) -> Dict[str, Any]:
+    caller_rows_before = deepcopy(rows)
+    payload = render_operator_review(
+        rows=deepcopy(rows),
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    if rows != caller_rows_before:
+        raise RuntimeError("operator_review_shared_result_input_mutated")
+    result = {
+        "contract_version": OPERATOR_REVIEW_SHARED_RESULT_VERSION,
+        "payload": deepcopy(payload),
+        "rendered_rows": _render_operator_review_rows_from_payload(payload),
+    }
+    return validate_operator_review_shared_result(
+        result,
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+
+
+def render_operator_review_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    payload = render_operator_review(rows=rows)
+    return deepcopy(_render_operator_review_rows_from_payload(payload))
+
+
 def write_operator_review_artifacts(
     *,
     rows: List[Dict[str, Any]],
@@ -828,20 +1112,38 @@ def write_operator_review_artifacts(
     pipeline_run_id: str = "",
     owner_user_id: str = "",
     source_artifact_path: str = "",
+    shared_result: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    payload = render_operator_review(
-        rows=rows,
-        pipeline_run_id=pipeline_run_id,
-        owner_user_id=owner_user_id,
-        source_artifact_path=source_artifact_path,
+    shared = (
+        build_operator_review_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        if shared_result is None
+        else validate_operator_review_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
     )
+    payload = deepcopy(shared["payload"])
+    rendered_rows = deepcopy(shared["rendered_rows"])
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=OPERATOR_REVIEW_FIELDNAMES)
         writer.writeheader()
-        for row in render_operator_review_rows(rows):
-            writer.writerow({field: row.get(field, "") for field in OPERATOR_REVIEW_FIELDNAMES})
+        for row in rendered_rows:
+            writer.writerow(
+                {
+                    field: row.get(field, "")
+                    for field in OPERATOR_REVIEW_FIELDNAMES
+                }
+            )
 
     summary_path = None
     if summary_json_path:
@@ -894,6 +1196,7 @@ def record_operator_review_agent_trace(
     source_artifact_path: str = "",
     env: Dict[str, str] | None = None,
     trace_module: Any = trace_store,
+    shared_result: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     env_map = env if env is not None else os.environ
     if not agent_trace_enabled(env_map):
@@ -905,11 +1208,21 @@ def record_operator_review_agent_trace(
 
     try:
         started_at = _utc_now_iso()
-        payload = render_operator_review(
-            rows=rows,
-            pipeline_run_id=context["pipeline_run_id"],
-            owner_user_id=context["owner_user_id"],
-            source_artifact_path=source_artifact_path,
+        payload = (
+            render_operator_review(
+                rows=rows,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                source_artifact_path=source_artifact_path,
+            )
+            if shared_result is None
+            else validate_operator_review_shared_result(
+                shared_result,
+                expected_rows=rows,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                source_artifact_path=source_artifact_path,
+            )["payload"]
         )
         run_payload = trace_module.create_agent_run(
             record={
@@ -918,7 +1231,7 @@ def record_operator_review_agent_trace(
                 "context_id": context["context_id"],
                 "status": "running",
                 "started_at": started_at,
-                "summary_json": payload["summary"],
+                "summary_json": deepcopy(payload["summary"]),
             }
         )
         agent_run_id = _clean_text((run_payload.get("run") or {}).get("agent_run_id"))
@@ -940,7 +1253,7 @@ def record_operator_review_agent_trace(
                 "context_id": context["context_id"],
                 "agent_name": AGENT_NAME,
                 "agent_version": AGENT_VERSION,
-                "input_json": payload["input"],
+                "input_json": deepcopy(payload["input"]),
                 "status": "running",
                 "started_at": started_at,
             },
@@ -955,14 +1268,14 @@ def record_operator_review_agent_trace(
         trace_module.complete_agent_step(
             agent_step_id=agent_step_id,
             owner_user_id=context["owner_user_id"],
-            output_json=payload["output"],
-            validation_json=payload["validation"],
+            output_json=deepcopy(payload["output"]),
+            validation_json=deepcopy(payload["validation"]),
             completed_at=completed_at,
         )
         trace_module.complete_agent_run(
             agent_run_id=agent_run_id,
             owner_user_id=context["owner_user_id"],
-            summary_json=payload["summary"],
+            summary_json=deepcopy(payload["summary"]),
             completed_at=completed_at,
         )
         return {
@@ -970,8 +1283,8 @@ def record_operator_review_agent_trace(
             "recorded": True,
             "agent_run_id": agent_run_id,
             "agent_step_id": agent_step_id,
-            "summary": payload["summary"],
-            "validation": payload["validation"],
+            "summary": deepcopy(payload["summary"]),
+            "validation": deepcopy(payload["validation"]),
         }
     except Exception as exc:
         if agent_trace_strict(env_map):

@@ -1,0 +1,26 @@
+{
+  "currency": "USD",
+  "expires_at_utc": "2027-01-01T00:00:00Z",
+  "operator_approved": true,
+  "prices": [
+    {
+      "input_price_per_million_tokens": "0.075",
+      "model": "openai/gpt-oss-20b",
+      "output_price_per_million_tokens": "0.30",
+      "provider": "groq"
+    },
+    {
+      "input_price_per_million_tokens": "0.15",
+      "model": "openai/gpt-oss-120b",
+      "output_price_per_million_tokens": "0.60",
+      "provider": "groq"
+    }
+  ],
+  "pricing_schema_version": "controlled-groq-provider-canary-pricing-v1",
+  "pricing_table_sha256": "e77bf21f334f570efd509391ae882e5fc2247a372a0274336a377efbcf52867b",
+  "pricing_template_version": "controlled-groq-provider-canary-pricing-template-v1",
+  "pricing_version": "synthetic-groq-canary-pricing-v1",
+  "source_classification": "synthetic_non_current_test_only",
+  "source_effective_at_utc": "2026-01-01T00:00:00Z",
+  "valid_from_utc": "2026-01-01T00:00:00Z"
+}

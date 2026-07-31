@@ -25,10 +25,10 @@ ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "/api/provider-call-readiness-readback"
 
 PROTECTED_HASHES = {
-    "src/app/services.py": "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
+    "src/app/services.py": "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
     "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-    "src/app/static/app_redesign.css": "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
-    "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+    "src/app/static/app_redesign.css": "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
+    "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
     "src/agents/provider_call_readiness_experiment.py": "d4176e889893b3acfb348c15a59a73418818e369e326f3935f4d673a50d88d28",
 }
 
@@ -819,7 +819,7 @@ def test_phase20b_changes_only_api_doc_test_and_legacy_guards():
             marker in path.read_text(encoding="utf-8")
             for marker in (
                 "src/app/api.py",
-                "300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab",
+                "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
             )
         )
     }

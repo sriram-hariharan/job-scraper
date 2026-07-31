@@ -94,6 +94,11 @@ def _install_live_pipeline_fakes(monkeypatch, tmp_path, captured, preferences=No
         "_persist_user_pipeline_status_snapshot",
         lambda **kwargs: captured.setdefault("persisted", kwargs),
     )
+    monkeypatch.setattr(
+        services,
+        "_release_user_pipeline_active_run",
+        lambda **kwargs: captured.setdefault("released", kwargs),
+    )
 
     def fake_popen(cmd, stdout=None, stderr=None, env=None):
         captured["cmd"] = list(cmd)
@@ -234,6 +239,7 @@ def test_phase71a_live_pipeline_rejects_oversized_argv_before_popen(monkeypatch,
         )
 
     assert "cmd" not in captured
+    assert captured["released"]["owner_user_id"] == "user_123"
 
 
 def test_phase71a_rag_export_streams_large_sql_over_stdin_without_truncation(monkeypatch):

@@ -244,10 +244,10 @@ def test_no_database_api_ui_pipeline_dependency_or_mutation_wiring():
         assert marker not in sources
 
     expected = {
-        "requirements.txt": "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
-        "src/app/api.py": "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
+        "requirements.txt": "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
+        "src/app/api.py": "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
         "src/app/static/agentic_review.js": "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-        "src/pipeline/collector.py": "e5af36527801b2a1a55501622619d4e62ccaa7472e835500613e2894843d1671",
+        "src/pipeline/collector.py": "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
         "src/pipeline/application_scorer.py": "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b",
         "src/pipeline/job_ranker.py": "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
     }

@@ -26,6 +26,35 @@ company discovery
 
 Application planning writes artifacts such as source health, best resume by job, application shortlist, execution queue, tailoring decision summaries, operator review summaries, job packets, workflow summaries, verification payloads, dry-run outputs, and RAG Evaluation reports when those diagnostic hooks are present.
 
+## Bounded Production Orchestration
+
+The direct production owners remain authoritative. Default-off LangGraph routes
+wrap only bounded, source-proven stages: deterministic prefilter/deduplication,
+final scoring, job prioritization, tailoring decision, and conditional operator
+review; plus cache-first JD intelligence, semantic job-fit evaluation, and
+tailoring generation. Each route uses a real `StateGraph`, but enabling a graph
+does not add decision, mutation, application, or ATS authority.
+
+Tailoring generation is the representative durable node. The production durable
+repository and PostgreSQL checkpointer support committed restart/replay; a
+committed replay does not rerun the graph, tailoring owner, provider, or cache
+write. This is not a claim of exactly-once provider execution across an
+ambiguous uncommitted crash.
+
+Unified production telemetry is default-off and representative rather than
+all-node. The shared adapter currently covers deterministic final scoring,
+cache-first tailoring generation, and durable tailoring first execution/replay.
+It normalizes existing facts and does not invoke owners, providers, or caches.
+
+Tailoring can enter a durable human-review pause. The authenticated API action
+resolves owner and actor from the server-side session and accepts exactly
+`continue_read_only`, `needs_revision`, or `cancel`. A continuation token is
+hashed, expires, and is consumed once; plaintext is neither persisted nor
+returned. `continue_read_only` finalizes only the bounded review artifact. It is
+not application approval and grants no mutation, application, or ATS authority.
+All graph, live-LLM, durability, telemetry, and human-checkpoint capabilities
+remain default-off.
+
 ## Hybrid Scoring And Adjudicator Readback
 
 The resume selector first computes deterministic evidence dimensions. It always adds local `semantic_alignment`, calculated with deterministic token-cosine similarity at weight `0.05`, and includes that weighted contribution in `final_score`. This scoring path has no provider, Groq, LLM, RAG, embedding, or vector-store call.
@@ -116,3 +145,6 @@ The benchmark is designed for repeatable portfolio demos and regression checks; 
 - No production decision mutation from Agentic Review, feedback export, RAG Evaluation, workflow verification, or dry-run runner diagnostics.
 - No advisory diagnostics change scoring, ranking, filtering, queue action, job ordering, resume selection, tailoring generation, packet generation, RAG retrieval, scheduler behavior, source behavior, or pipeline execution.
 - Missing diagnostic artifacts are warnings or empty states unless existing strict verifier behavior is explicitly enabled.
+- Human-reviewed status is distinct from application approval. ApplyLens does
+  not automatically apply, mark a job applied, replace a source resume, contact
+  recruiters, or submit to an ATS.

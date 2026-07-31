@@ -7,7 +7,7 @@ import re
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 from src.agents import llmops, trace as trace_store
 from src.agents.resume_match_agent import (
@@ -20,6 +20,9 @@ from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
 AGENT_NAME = "Tailoring Decision Agent"
 AGENT_VERSION = "phase_8a_v1"
+TAILORING_DECISION_SHARED_RESULT_VERSION = (
+    "tailoring-decision-shared-result-v1"
+)
 
 TAILORING_DECISIONS = {
     "no_tailoring_needed",
@@ -417,10 +420,21 @@ def render_tailoring_decisions(
     }
 
 
-def render_tailoring_decision_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    payload = render_tailoring_decisions(rows=rows)
+def _render_tailoring_decision_rows_from_payload(
+    payload: Mapping[str, Any],
+) -> List[Dict[str, str]]:
+    output_payload = payload.get("output")
+    if not isinstance(output_payload, Mapping):
+        raise ValueError("tailoring_decision_shared_result_output_invalid")
+    decisions = output_payload.get("decisions")
+    if not isinstance(decisions, list):
+        raise ValueError("tailoring_decision_shared_result_decisions_invalid")
     rendered_rows: List[Dict[str, str]] = []
-    for item in payload["output"].get("decisions", []) or []:
+    for item in decisions:
+        if not isinstance(item, Mapping):
+            raise ValueError(
+                "tailoring_decision_shared_result_decision_row_invalid"
+            )
         rendered_rows.append(
             {
                 "job_id": _clean_text(item.get("job_id")),
@@ -448,6 +462,261 @@ def render_tailoring_decision_rows(rows: List[Dict[str, Any]]) -> List[Dict[str,
     return rendered_rows
 
 
+def validate_tailoring_decision_shared_result(
+    result: Mapping[str, Any],
+    *,
+    expected_rows: List[Mapping[str, Any]] | None = None,
+    pipeline_run_id: str | None = None,
+    owner_user_id: str | None = None,
+    source_artifact_path: str | None = None,
+) -> Dict[str, Any]:
+    if not isinstance(result, Mapping):
+        raise ValueError("tailoring_decision_shared_result_must_be_mapping")
+    candidate = deepcopy(dict(result))
+    if set(candidate) != {"contract_version", "payload", "rendered_rows"}:
+        raise ValueError("tailoring_decision_shared_result_sections_invalid")
+    if (
+        candidate.get("contract_version")
+        != TAILORING_DECISION_SHARED_RESULT_VERSION
+    ):
+        raise ValueError("tailoring_decision_shared_result_version_invalid")
+
+    payload = candidate.get("payload")
+    rendered_rows = candidate.get("rendered_rows")
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "input",
+        "output",
+        "validation",
+        "summary",
+    }:
+        raise ValueError("tailoring_decision_shared_result_payload_invalid")
+    if not isinstance(rendered_rows, list):
+        raise ValueError(
+            "tailoring_decision_shared_result_rendered_rows_invalid"
+        )
+
+    input_payload = payload.get("input")
+    output_payload = payload.get("output")
+    validation_payload = payload.get("validation")
+    summary_payload = payload.get("summary")
+    if not all(
+        isinstance(section, Mapping)
+        for section in (
+            input_payload,
+            output_payload,
+            validation_payload,
+            summary_payload,
+        )
+    ):
+        raise ValueError(
+            "tailoring_decision_shared_result_payload_section_invalid"
+        )
+    input_payload = deepcopy(dict(input_payload))
+    output_payload = deepcopy(dict(output_payload))
+    validation_payload = deepcopy(dict(validation_payload))
+    summary_payload = deepcopy(dict(summary_payload))
+
+    input_rows = input_payload.get("rows")
+    decisions = output_payload.get("decisions")
+    if not isinstance(input_rows, list) or not isinstance(decisions, list):
+        raise ValueError("tailoring_decision_shared_result_rows_invalid")
+    if not all(isinstance(row, Mapping) for row in input_rows):
+        raise ValueError(
+            "tailoring_decision_shared_result_input_row_invalid"
+        )
+    if not all(isinstance(row, Mapping) for row in decisions):
+        raise ValueError(
+            "tailoring_decision_shared_result_decision_row_invalid"
+        )
+    if not all(isinstance(row, Mapping) for row in rendered_rows):
+        raise ValueError(
+            "tailoring_decision_shared_result_rendered_row_invalid"
+        )
+    if any(
+        list(row) != TAILORING_DECISION_FIELDNAMES
+        for row in rendered_rows
+    ):
+        raise ValueError(
+            "tailoring_decision_shared_result_rendered_schema_invalid"
+        )
+
+    row_count = len(input_rows)
+    if (
+        input_payload.get("row_count") != row_count
+        or output_payload.get("total_rows") != row_count
+        or len(decisions) != row_count
+        or len(rendered_rows) != row_count
+    ):
+        raise ValueError("tailoring_decision_shared_result_count_mismatch")
+
+    input_job_ids = [_clean_text(row.get("job_id")) for row in input_rows]
+    decision_job_ids = [_clean_text(row.get("job_id")) for row in decisions]
+    rendered_job_ids = [
+        _clean_text(row.get("job_id")) for row in rendered_rows
+    ]
+    if any(not job_id for job_id in input_job_ids):
+        raise ValueError(
+            "tailoring_decision_shared_result_job_identity_missing"
+        )
+    if len(set(input_job_ids)) != len(input_job_ids):
+        raise ValueError(
+            "tailoring_decision_shared_result_job_identity_duplicate"
+        )
+    if (
+        set(decision_job_ids) != set(input_job_ids)
+        or set(rendered_job_ids) != set(input_job_ids)
+    ):
+        raise ValueError(
+            "tailoring_decision_shared_result_identity_mismatch"
+        )
+    if (
+        decision_job_ids != input_job_ids
+        or rendered_job_ids != input_job_ids
+    ):
+        raise ValueError("tailoring_decision_shared_result_order_mismatch")
+
+    for input_row, decision, rendered in zip(
+        input_rows, decisions, rendered_rows
+    ):
+        expected_identity = tuple(
+            _clean_text(input_row.get(field))
+            for field in ("job_id", "company", "title")
+        )
+        if tuple(
+            _clean_text(decision.get(field))
+            for field in ("job_id", "company", "title")
+        ) != expected_identity or tuple(
+            _clean_text(rendered.get(field))
+            for field in ("job_id", "company", "title")
+        ) != expected_identity:
+            raise ValueError(
+                "tailoring_decision_shared_result_identity_mismatch"
+            )
+        if (
+            _clean_text(decision.get("tailoring_decision"))
+            not in TAILORING_DECISIONS
+        ):
+            raise ValueError(
+                "tailoring_decision_shared_result_decision_invalid"
+            )
+
+    expected_counts: Dict[str, int] = {}
+    for decision in decisions:
+        decision_value = _clean_text(decision.get("tailoring_decision"))
+        expected_counts[decision_value] = (
+            expected_counts.get(decision_value, 0) + 1
+        )
+    if output_payload.get("decision_counts") != dict(
+        sorted(expected_counts.items())
+    ):
+        raise ValueError(
+            "tailoring_decision_shared_result_decision_counts_mismatch"
+        )
+
+    payload_copy = {
+        "input": input_payload,
+        "output": output_payload,
+        "validation": validation_payload,
+        "summary": summary_payload,
+    }
+    expected_rendered_rows = (
+        _render_tailoring_decision_rows_from_payload(payload_copy)
+    )
+    if rendered_rows != expected_rendered_rows:
+        raise ValueError(
+            "tailoring_decision_shared_result_rendered_rows_mismatch"
+        )
+    expected_validation = build_tailoring_decision_agent_validation_payload(
+        input_payload=input_payload,
+        output_payload=output_payload,
+    )
+    if validation_payload != expected_validation:
+        raise ValueError(
+            "tailoring_decision_shared_result_validation_mismatch"
+        )
+    expected_summary = build_tailoring_decision_agent_summary_payload(
+        input_payload=input_payload,
+        output_payload=output_payload,
+        validation_payload=validation_payload,
+    )
+    if summary_payload != expected_summary:
+        raise ValueError(
+            "tailoring_decision_shared_result_summary_mismatch"
+        )
+
+    if expected_rows is not None:
+        normalized_expected: List[Dict[str, Any]] = []
+        for row in expected_rows:
+            if not isinstance(row, Mapping):
+                raise ValueError(
+                    "tailoring_decision_shared_result_expected_row_invalid"
+                )
+            normalized_expected.append(
+                _normalize_input_row(deepcopy(dict(row)))
+            )
+        if input_rows != normalized_expected:
+            raise ValueError(
+                "tailoring_decision_shared_result_input_mismatch"
+            )
+
+    for field, expected in (
+        ("pipeline_run_id", pipeline_run_id),
+        ("owner_user_id", owner_user_id),
+        ("source_artifact_path", source_artifact_path),
+    ):
+        if (
+            expected is not None
+            and _clean_text(input_payload.get(field))
+            != _clean_text(expected)
+        ):
+            raise ValueError(
+                "tailoring_decision_shared_result_metadata_mismatch"
+            )
+
+    return {
+        "contract_version": TAILORING_DECISION_SHARED_RESULT_VERSION,
+        "payload": deepcopy(payload_copy),
+        "rendered_rows": deepcopy(expected_rendered_rows),
+    }
+
+
+def build_tailoring_decision_shared_result(
+    *,
+    rows: List[Dict[str, Any]],
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    source_artifact_path: str = "",
+) -> Dict[str, Any]:
+    copied_rows = deepcopy(rows)
+    payload = render_tailoring_decisions(
+        rows=copied_rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    result = {
+        "contract_version": TAILORING_DECISION_SHARED_RESULT_VERSION,
+        "payload": deepcopy(payload),
+        "rendered_rows": (
+            _render_tailoring_decision_rows_from_payload(payload)
+        ),
+    }
+    return validate_tailoring_decision_shared_result(
+        result,
+        expected_rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+
+
+def render_tailoring_decision_rows(
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    payload = render_tailoring_decisions(rows=rows)
+    return deepcopy(_render_tailoring_decision_rows_from_payload(payload))
+
+
 def write_tailoring_decision_artifacts(
     *,
     rows: List[Dict[str, Any]],
@@ -456,19 +725,32 @@ def write_tailoring_decision_artifacts(
     pipeline_run_id: str = "",
     owner_user_id: str = "",
     source_artifact_path: str = "",
+    shared_result: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    payload = render_tailoring_decisions(
-        rows=rows,
-        pipeline_run_id=pipeline_run_id,
-        owner_user_id=owner_user_id,
-        source_artifact_path=source_artifact_path,
+    shared = (
+        build_tailoring_decision_shared_result(
+            rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
+        if shared_result is None
+        else validate_tailoring_decision_shared_result(
+            shared_result,
+            expected_rows=rows,
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            source_artifact_path=source_artifact_path,
+        )
     )
+    payload = deepcopy(shared["payload"])
+    rendered_rows = deepcopy(shared["rendered_rows"])
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=TAILORING_DECISION_FIELDNAMES)
         writer.writeheader()
-        for row in render_tailoring_decision_rows(rows):
+        for row in rendered_rows:
             writer.writerow({field: row.get(field, "") for field in TAILORING_DECISION_FIELDNAMES})
 
     summary_path = None
@@ -522,6 +804,7 @@ def record_tailoring_decision_agent_trace(
     source_artifact_path: str = "",
     env: Dict[str, str] | None = None,
     trace_module: Any = trace_store,
+    shared_result: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     env_map = env if env is not None else os.environ
     if not agent_trace_enabled(env_map):
@@ -533,11 +816,21 @@ def record_tailoring_decision_agent_trace(
 
     try:
         started_at = _utc_now_iso()
-        payload = render_tailoring_decisions(
-            rows=rows,
-            pipeline_run_id=context["pipeline_run_id"],
-            owner_user_id=context["owner_user_id"],
-            source_artifact_path=source_artifact_path,
+        payload = (
+            render_tailoring_decisions(
+                rows=rows,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                source_artifact_path=source_artifact_path,
+            )
+            if shared_result is None
+            else validate_tailoring_decision_shared_result(
+                shared_result,
+                expected_rows=rows,
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                source_artifact_path=source_artifact_path,
+            )["payload"]
         )
         run_payload = trace_module.create_agent_run(
             record={

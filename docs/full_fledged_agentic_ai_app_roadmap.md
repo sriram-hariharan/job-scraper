@@ -8,9 +8,26 @@ The target is not a chatbot. The target is not fake agents talking to each other
 
 ## Current Honest Position
 
-The current system is a production-style deterministic and read-only agentic workflow foundation. The current agents are mostly advisory and deterministic. That is intentional because the workflow touches resumes, approvals, application planning, and future application execution.
+The system now has bounded production orchestration without replacing its
+existing owners. Deterministic production responsibilities cover prefiltering,
+deduplication, final scoring, job prioritization, tailoring decision, and
+conditional operator review. Cache-first LLM responsibilities cover JD
+intelligence, semantic job-fit evaluation, and tailoring generation. The critic
+remains deterministic.
 
-Evidence-backed resume matching now includes deterministic dimensions and always-on local semantic alignment at weight `0.05`. A default-off LLM adjudicator can provide readback-only commentary after deterministic selection. LLM score mutation and winner override are not implemented. Broader persisted per-run and per-job traces, LLM-backed tailoring suggestions, benchmark expansion, LLMOps observability, human feedback loops, and RAG evaluation dashboards remain roadmap work.
+All authoritative graph routes remain default-off. Tailoring generation is the
+representative durable node, with committed replay/restart support. Unified
+production telemetry is also default-off and currently covers representative
+final-scoring, tailoring, and durable execution routes—not every agent.
+Tailoring can pause for durable human review, and one authenticated action can
+record `continue_read_only`, `needs_revision`, or `cancel`. Human-reviewed state
+does not authorize application submission, ATS activity, source-resume
+replacement, or any automatic application.
+
+Evidence-backed resume matching still includes deterministic dimensions and
+always-on local semantic alignment at weight `0.05`. The default-off LLM
+adjudicator remains read-only and cannot override the winner, final score,
+ranking, queue, or action.
 
 ## Product Principle
 
@@ -258,15 +275,17 @@ Metrics:
 - required skill coverage
 - unsupported claims prevented by evidence checks
 
-## Phase 13: Optional Graph Orchestration
+## Phase 13: Optional Graph Orchestration — Implemented, Default Off
 
-Only after contracts and trace persistence are stable.
+Separate authoritative `StateGraph` routes now wrap proven owners for bounded
+deterministic and cache-first LLM responsibilities. Direct and graph routes are
+mutually exclusive at each caller boundary, and direct owners remain the
+business authority.
 
-Potential graph:
-
-Discovery -> Prefilter -> Deduplication -> JD Intelligence -> Resume Match -> Tailoring -> Critic -> Strategy -> Human Approval
-
-LangGraph or similar orchestration should wrap proven contracts, not replace the architecture.
+Production durability, representative unified telemetry, and the durable
+human-review checkpoint/action are implemented behind additional default-off
+gates. The review continuation is read-only; it is not general human approval
+and never authorizes application or ATS actions.
 
 ## Phase 14: Demo Mode and Portfolio Packaging
 

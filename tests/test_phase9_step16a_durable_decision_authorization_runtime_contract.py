@@ -271,8 +271,6 @@ def test_repository_remains_explicitly_enabled_and_has_no_runtime_expansion():
         "DATABASE_URL",
         "from langgraph",
         "src.agents",
-        "node_attempt",
-        "terminalization",
         "application_action",
         "auto_apply",
         "submit_application",

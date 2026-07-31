@@ -22,10 +22,15 @@ from src.utils.logging import get_logger
 
 
 SHADOW_FLAG = "APPLYLENS_DURABLE_EVIDENCE_CHAIN_SHADOW_ENABLED"
+PRODUCTION_SHADOW_FLAG = "APPLYLENS_ARTIFACT_ONLY_PRODUCTION_SHADOW_ENABLED"
+DETERMINISTIC_OWNER_FLAG = (
+    "APPLYLENS_PRODUCTION_SHADOW_JOB_PRIORITY_OWNER_ENABLED"
+)
 SHADOW_HOOK_VERSION = "applylens-post-planning-shadow-v1"
 AUTHORITATIVE_FACTS_VERSION = "applylens-shadow-authoritative-facts-v1"
 SHADOW_EXECUTION_VERSION = "evidence-chain-shadow-execution-v1"
 SHADOW_PARITY_VERSION = "evidence-chain-shadow-parity-v1"
+PRODUCTION_SHADOW_EXECUTION_VERSION = "production-shadow-graph-execution-v3"
 MAX_SHADOW_JOBS = 25
 MAX_FACTS_BYTES = 256_000
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -40,6 +45,16 @@ _EXPECTED_NODES = [
     "tailoring_decision",
     "operator_review",
 ]
+_PRODUCTION_SHADOW_NODES = [
+    "load_authoritative_identity",
+    "project_resume_selection",
+    "project_queue_priority",
+    "project_tailoring_decision",
+    "project_operator_review",
+    "compare_authoritative_parity",
+    "finalize_shadow_observation",
+]
+_PRODUCTION_OWNER_NODE = "invoke_job_prioritization_owner"
 _logger = get_logger(__name__)
 _CLEANUP_CATEGORIES = {
     "process_terminate_failed",
@@ -85,6 +100,30 @@ class CleanupResult:
 def shadow_enabled(env: Mapping[str, str] | None = None) -> bool:
     source = os.environ if env is None else env
     return str(source.get(SHADOW_FLAG, "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def production_shadow_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    source = os.environ if env is None else env
+    return str(source.get(PRODUCTION_SHADOW_FLAG, "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def deterministic_owner_enabled(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    source = os.environ if env is None else env
+    return str(source.get(DETERMINISTIC_OWNER_FLAG, "") or "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -381,7 +420,7 @@ def _shadow_subprocess_environment() -> dict[str, str]:
     for key, value in os.environ.items():
         normalized = key.upper()
         if (
-            normalized == SHADOW_FLAG
+            normalized in {SHADOW_FLAG, DETERMINISTIC_OWNER_FLAG}
             or normalized == "DATABASE_URL"
             or "DURABLE" in normalized
             or "LLM" in normalized
@@ -491,6 +530,8 @@ def _run_shadow_command(command: Sequence[str]) -> dict[str, Any]:
 def _classify_command_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, Mapping):
         return {"classification": "shadow_execution_failure"}
+    if payload.get("execution_version") == PRODUCTION_SHADOW_EXECUTION_VERSION:
+        return _classify_production_shadow_payload(payload)
     results = payload.get("results")
     if (
         payload.get("execution_version") != SHADOW_EXECUTION_VERSION
@@ -653,10 +694,309 @@ def _classify_command_payload(payload: Any) -> dict[str, Any]:
     }
 
 
+def _classify_production_shadow_payload(
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    results = payload.get("results")
+    if (
+        payload.get("status")
+        not in {"completed", "write_suppression_violation"}
+        or not isinstance(results, list)
+        or not results
+        or len(results) > MAX_SHADOW_JOBS
+        or payload.get("job_count") != len(results)
+    ):
+        return {"classification": "shadow_execution_failure"}
+    aggregates = {
+        "jobs_attempted": len(results),
+        "shadow_completed": 0,
+        "adapter_rejection_count": 0,
+        "graph_failure_count": 0,
+        "parity_processing_failure_count": 0,
+        "shadow_parity_matches": 0,
+        "shadow_parity_mismatches": 0,
+    }
+    if (
+        payload.get("status") == "write_suppression_violation"
+        or payload.get("artifacts_unchanged") is not True
+    ):
+        return {
+            **aggregates,
+            "classification": "shadow_safety_violation",
+            "shadow_write_suppression_violations": 1,
+            "safety_violation_count": 1,
+        }
+    max_latency = 0
+    parity_jobs: list[dict[str, Any]] = []
+    status_counts: dict[str, int] = {}
+    exact_identity_total = 0
+    exact_identity_matched = 0
+    selected_resume_total = 0
+    selected_resume_matched = 0
+    categorical_total = 0
+    categorical_matched = 0
+    incomparable_total = 0
+    owner_gate_enabled = bool(payload.get("deterministic_owner_enabled"))
+    owner_attempted = 0
+    owner_completed = 0
+    owner_invocations = 0
+    owner_max_latency_ms = 0
+    owner_status_counts: dict[str, int] = {}
+    for ordinal, row in enumerate(results):
+        if not isinstance(row, Mapping):
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        job_status = str(row.get("status") or "")
+        status_counts[job_status] = status_counts.get(job_status, 0) + 1
+        if job_status == "input_rejected":
+            aggregates["adapter_rejection_count"] += 1
+            continue
+        if job_status in {"graph_execution_failed", "parity_failed"}:
+            aggregates["graph_failure_count"] += 1
+            continue
+        if job_status not in {
+            "parity_completed",
+            "parity_incomplete",
+            "parity_mismatch",
+        }:
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        row_owner_enabled = bool(row.get("deterministic_owner_enabled"))
+        expected_nodes = list(_PRODUCTION_SHADOW_NODES)
+        if row_owner_enabled:
+            expected_nodes.insert(
+                expected_nodes.index("project_tailoring_decision"),
+                _PRODUCTION_OWNER_NODE,
+            )
+        if (
+            row_owner_enabled is not owner_gate_enabled
+            or row.get("completed_node_order") != expected_nodes
+            or row.get("pending_node") != "operator_review"
+            or row.get("operator_review_required") is not True
+        ):
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        owner_status = str(row.get("deterministic_owner_status") or "")
+        owner_count = _bounded_int(
+            row.get("deterministic_owner_invocation_count")
+        )
+        if owner_count > 1:
+            return {
+                **aggregates,
+                "classification": "shadow_safety_violation",
+                "safety_violation_count": 1,
+            }
+        if not row_owner_enabled:
+            if (
+                owner_status != "owner_not_enabled"
+                or owner_count != 0
+                or row.get("deterministic_owner_invocation_attempted")
+                is not False
+                or row.get("deterministic_owner_invocation_completed")
+                is not False
+            ):
+                return {
+                    **aggregates,
+                    "classification": "shadow_safety_violation",
+                    "safety_violation_count": 1,
+                }
+        elif owner_status not in {
+            "owner_input_incomplete",
+            "owner_invocation_completed",
+            "owner_parity_passed",
+            "owner_parity_mismatch",
+            "owner_output_invalid",
+            "owner_invocation_failed",
+        }:
+            return {**aggregates, "classification": "shadow_execution_failure"}
+        owner_status_counts[owner_status] = (
+            owner_status_counts.get(owner_status, 0) + 1
+        )
+        owner_attempted += int(
+            row.get("deterministic_owner_invocation_attempted") is True
+        )
+        owner_completed += int(
+            row.get("deterministic_owner_invocation_completed") is True
+        )
+        owner_invocations += owner_count
+        owner_max_latency_ms = max(
+            owner_max_latency_ms,
+            _bounded_int(
+                row.get("deterministic_owner_invocation_latency_ms")
+            ),
+        )
+        for field in (
+            "provider_call_count",
+            "production_write_count",
+            "mutation_count",
+            "application_count",
+            "ats_count",
+        ):
+            if row.get(field) != 0:
+                return {
+                    **aggregates,
+                    "classification": "shadow_safety_violation",
+                    "shadow_write_suppression_violations": int(
+                        field == "production_write_count"
+                    ),
+                    "safety_violation_count": 1,
+                }
+        parity = row.get("parity")
+        if (
+            not isinstance(parity, Mapping)
+            or parity.get("parity_version")
+            != "production-shadow-parity-v1"
+            or parity.get("parity_status")
+            not in {"passed", "mismatch", "incomplete", "incomparable"}
+            or not isinstance(parity.get("comparison_records"), list)
+        ):
+            aggregates["parity_processing_failure_count"] += 1
+            continue
+        comparisons = parity["comparison_records"]
+        for comparison in comparisons:
+            if not isinstance(comparison, Mapping):
+                aggregates["parity_processing_failure_count"] += 1
+                continue
+            field = comparison.get("field")
+            classification = comparison.get("classification")
+            if field == "job_id":
+                exact_identity_total += 1
+                exact_identity_matched += int(
+                    classification == "exact_match"
+                )
+            if field == "selected_resume_id":
+                selected_resume_total += 1
+                selected_resume_matched += int(
+                    classification == "exact_match"
+                )
+        categorical_total += _bounded_int(
+            parity.get("substantive_field_count")
+        )
+        categorical_matched += _bounded_int(
+            parity.get("substantive_exact_match_count")
+        )
+        incomparable_total += _bounded_int(
+            parity.get("incomparable_count")
+        )
+        if ordinal < 1:
+            parity_jobs.append(
+                {
+                    "job_ordinal": ordinal,
+                    "parity_status": parity["parity_status"],
+                    "compared_field_count": _bounded_int(
+                        parity.get("compared_field_count")
+                    ),
+                    "exact_match_count": _bounded_int(
+                        parity.get("exact_match_count")
+                    ),
+                    "mismatch_count": _bounded_int(
+                        parity.get("mismatch_count")
+                    ),
+                    "authoritative_missing_count": _bounded_int(
+                        parity.get("authoritative_missing_count")
+                    ),
+                    "shadow_missing_count": _bounded_int(
+                        parity.get("shadow_missing_count")
+                    ),
+                    "incomparable_count": _bounded_int(
+                        parity.get("incomparable_count")
+                    ),
+                    "substantive_field_count": _bounded_int(
+                        parity.get("substantive_field_count")
+                    ),
+                    "substantive_exact_match_count": _bounded_int(
+                        parity.get("substantive_exact_match_count")
+                    ),
+                    "substantive_mismatch_count": _bounded_int(
+                        parity.get("substantive_mismatch_count")
+                    ),
+                    "comparison_records": [
+                        dict(comparison) for comparison in comparisons[:12]
+                    ],
+                }
+            )
+        max_latency = max(
+            max_latency, _bounded_int(row.get("graph_latency_ms"))
+        )
+    completed = sum(
+        status_counts.get(status, 0)
+        for status in (
+            "parity_completed",
+            "parity_incomplete",
+            "parity_mismatch",
+        )
+    )
+    mismatches = status_counts.get("parity_mismatch", 0)
+    incomplete = (
+        status_counts.get("parity_incomplete", 0)
+        + status_counts.get("input_rejected", 0)
+        + status_counts.get("parity_failed", 0)
+        + status_counts.get("graph_execution_failed", 0)
+        + aggregates["parity_processing_failure_count"]
+    )
+    aggregates["shadow_completed"] = completed
+    aggregates["shadow_parity_matches"] = status_counts.get(
+        "parity_completed", 0
+    )
+    aggregates["shadow_parity_mismatches"] = mismatches
+    return {
+        **aggregates,
+        "classification": (
+            "parity_mismatch"
+            if mismatches
+            else "shadow_execution_failure"
+            if incomplete
+            else "shadow_completed"
+        ),
+        "parity_mismatch_count": mismatches,
+        "exact_identity_total": exact_identity_total,
+        "exact_identity_matched": exact_identity_matched,
+        "selected_resume_total": selected_resume_total,
+        "selected_resume_matched": selected_resume_matched,
+        "categorical_parity_total": categorical_total,
+        "categorical_parity_matched": categorical_matched,
+        "intentionally_incomparable_count": incomparable_total,
+        "production_parity": {
+            "version": "production-shadow-observation-parity-v1",
+            "job_count": len(results),
+            "persisted_job_count": len(parity_jobs),
+            "truncated_job_count": max(0, len(results) - len(parity_jobs)),
+            "jobs": parity_jobs,
+        },
+        "deterministic_owner": {
+            "version": "production-shadow-owner-observation-v1",
+            "gate_enabled": owner_gate_enabled,
+            "job_count": len(results),
+            "invocation_attempted_count": owner_attempted,
+            "invocation_completed_count": owner_completed,
+            "invocation_count": owner_invocations,
+            "owner_not_enabled_count": owner_status_counts.get(
+                "owner_not_enabled", 0
+            ),
+            "owner_input_incomplete_count": owner_status_counts.get(
+                "owner_input_incomplete", 0
+            ),
+            "owner_parity_passed_count": owner_status_counts.get(
+                "owner_parity_passed", 0
+            ),
+            "owner_parity_mismatch_count": owner_status_counts.get(
+                "owner_parity_mismatch", 0
+            ),
+            "owner_output_invalid_count": owner_status_counts.get(
+                "owner_output_invalid", 0
+            ),
+            "owner_invocation_failed_count": owner_status_counts.get(
+                "owner_invocation_failed", 0
+            ),
+            "max_invocation_latency_ms": owner_max_latency_ms,
+        },
+        "max_job_graph_latency_ms": max_latency,
+    }
+
+
 @dataclass
 class PostPlanningShadowLifecycle:
     enabled: bool
     armed: bool
+    production_graph: bool = False
+    deterministic_owner: bool = False
     owner_id: str = ""
     pipeline_run_id: str = ""
     context_id: str = ""
@@ -675,7 +1015,7 @@ class PostPlanningShadowLifecycle:
 
     @property
     def planning_arguments(self) -> list[str]:
-        if not self.armed:
+        if not self.armed or self.production_graph:
             return []
         return [
             "--shadow-resume-evidence-output",
@@ -692,7 +1032,7 @@ class PostPlanningShadowLifecycle:
         output_dir: str | Path,
     ) -> list[str]:
         output = Path(output_dir)
-        return [
+        command = [
             sys.executable,
             "run_evidence_chain_shadow.py",
             "--execute-shadow",
@@ -704,8 +1044,6 @@ class PostPlanningShadowLifecycle:
             str(output / "application_execution_queue.csv"),
             "--packet-manifest",
             str(output / "job_packet_manifest.csv"),
-            "--resume-evidence",
-            str(self.projection_path),
             "--authoritative-facts",
             str(self.facts_path),
             "--owner-id",
@@ -715,6 +1053,47 @@ class PostPlanningShadowLifecycle:
             "--context-id",
             self.context_id,
         ]
+        if self.production_graph:
+            command.extend(
+                [
+                    "--production-shadow",
+                    "--job-prioritization",
+                    str(output / "job_prioritization_recommendations.csv"),
+                    "--tailoring-decision",
+                    str(output / "tailoring_decision_recommendations.csv"),
+                    "--operator-review",
+                    str(output / "operator_review_recommendations.csv"),
+                ]
+            )
+            if self.deterministic_owner:
+                command.append("--invoke-job-prioritization-owner")
+        else:
+            command.extend(
+                ["--resume-evidence", str(self.projection_path)]
+            )
+        return command
+
+    def _execute_production_graph(
+        self,
+        *,
+        job_corpus_path: str | Path,
+        output_dir: str | Path,
+    ) -> dict[str, Any]:
+        output = Path(output_dir)
+        facts, skipped_by_limit = build_authoritative_facts(
+            execution_queue_path=output / "application_execution_queue.csv",
+            packet_manifest_path=output / "job_packet_manifest.csv",
+            pipeline_run_id=self.pipeline_run_id,
+        )
+        _atomic_json(self.facts_path, facts)
+        outcome = _run_shadow_command(
+            self._command(
+                job_corpus_path=job_corpus_path,
+                output_dir=output_dir,
+            )
+        )
+        outcome["shadow_skipped_by_limit"] = skipped_by_limit
+        return outcome
 
     def complete_after_authoritative_success(
         self,
@@ -728,7 +1107,12 @@ class PostPlanningShadowLifecycle:
             or "shadow_execution_failure"
         }
         try:
-            if self.armed:
+            if self.armed and self.production_graph:
+                outcome = self._execute_production_graph(
+                    job_corpus_path=job_corpus_path,
+                    output_dir=output_dir,
+                )
+            elif self.armed:
                 from src.pipeline.shadow_resume_evidence_projection import (
                     ProjectionError,
                     load_handoff_status,
@@ -1070,6 +1454,20 @@ class PostPlanningShadowLifecycle:
                 process_liveness_confirmed=(
                     cleanup.process_liveness_confirmed
                 ),
+                production_parity=(
+                    dict(outcome["production_parity"])
+                    if self.production_graph
+                    and isinstance(outcome.get("production_parity"), Mapping)
+                    else None
+                ),
+                deterministic_owner=(
+                    dict(outcome["deterministic_owner"])
+                    if self.production_graph
+                    and isinstance(
+                        outcome.get("deterministic_owner"), Mapping
+                    )
+                    else None
+                ),
             )
             return store.append(record).status
         except Exception as exc:
@@ -1133,6 +1531,10 @@ def prepare_post_planning_shadow(
             armed=False,
             initial_classification="shadow_disabled",
         )
+    production_graph = production_shadow_enabled(source)
+    deterministic_owner = bool(
+        production_graph and deterministic_owner_enabled(source)
+    )
     owner_id = _identity(source.get("JOB_STACK_OWNER_USER_ID"))
     pipeline_run_id = _identity(source.get("JOB_APP_PIPELINE_RUN_ID"))
     explicit_context = str(
@@ -1159,12 +1561,26 @@ def prepare_post_planning_shadow(
     return PostPlanningShadowLifecycle(
         enabled=True,
         armed=True,
+        production_graph=production_graph,
+        deterministic_owner=deterministic_owner,
         owner_id=owner_id,
         pipeline_run_id=pipeline_run_id,
         context_id=context_id,
         directory=directory,
-        projection_path=directory / "resume_evidence.json",
-        status_path=directory / "projection_status.json",
+        projection_path=(
+            None
+            if production_graph
+            else directory / "resume_evidence.json"
+        ),
+        status_path=(
+            None
+            if production_graph
+            else directory / "projection_status.json"
+        ),
         facts_path=directory / "authoritative_facts.json",
-        initial_classification="shadow_projection_ready",
+        initial_classification=(
+            "production_shadow_ready"
+            if production_graph
+            else "shadow_projection_ready"
+        ),
     )

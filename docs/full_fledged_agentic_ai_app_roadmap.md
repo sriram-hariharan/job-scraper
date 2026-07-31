@@ -18,7 +18,11 @@ remains deterministic.
 All authoritative graph routes remain default-off. Tailoring generation is the
 representative durable node, with committed replay/restart support. Unified
 production telemetry is also default-off and currently covers representative
-final-scoring, tailoring, and durable execution routes—not every agent.
+authoritative paired prefilter/dedup graph, final-scoring, tailoring, and
+durable execution routes—not every agent. Prefilter/dedup telemetry requires
+both its graph gate and the telemetry gate; the direct route remains
+uninstrumented. Its events are sanitized and non-authoritative. Discovery, JD
+intelligence, semantic evaluation, critic, and strategy are not newly covered.
 Tailoring can pause for durable human review, and one authenticated action can
 record `continue_read_only`, `needs_revision`, or `cancel`. Human-reviewed state
 does not authorize application submission, ATS activity, source-resume

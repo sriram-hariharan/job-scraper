@@ -42,9 +42,14 @@ write. This is not a claim of exactly-once provider execution across an
 ambiguous uncommitted crash.
 
 Unified production telemetry is default-off and representative rather than
-all-node. The shared adapter currently covers deterministic final scoring,
-cache-first tailoring generation, and durable tailoring first execution/replay.
-It normalizes existing facts and does not invoke owners, providers, or caches.
+all-node. The shared adapter currently covers authoritative paired
+prefilter/dedup graph execution, deterministic final scoring, cache-first
+tailoring generation, and durable tailoring first execution/replay.
+Prefilter/dedup telemetry requires both the paired graph gate and telemetry
+gate; its direct route is not instrumented. The sanitized events normalize
+existing facts and do not invoke owners, providers, caches, application
+actions, ATS actions, or resume mutation. Discovery, JD intelligence, semantic
+evaluation, critic, and strategy are not newly covered.
 
 Tailoring can enter a durable human-review pause. The authenticated API action
 resolves owner and actor from the server-side session and accepts exactly

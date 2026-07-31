@@ -837,7 +837,6 @@ def test_activation_reach_is_limited_to_application_queue_and_no_defaults():
         "src/app/api.py",
         "src/app/services.py",
         "src/config/settings.py",
-        ".env",
     ):
         assert FLAG not in (ROOT / path).read_text(encoding="utf-8")
 

@@ -271,6 +271,10 @@ PHASE21_RELEASE_CANDIDATE_FILES = {
     "tests/test_phase21_release_candidate_documentation.py",
 }
 
+PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES = {
+    "tests/fixtures/provider_benchmark/hermetic_groq_canary_pricing.json",
+}
+
 PHASE21R_HISTORICAL_GUARD_FILES = {
     "tests/test_controlled_groq_tailoring_canary_transport.py",
     "tests/test_critic_provider_shadow_default_off.py",
@@ -1865,6 +1869,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE11_STEP8MA_RAG_TEST_ISOLATION_FILES
         | PHASE12D_DETERMINISTIC_PRODUCTION_OWNER_SHADOW_FILES
         | PHASE21_RELEASE_CANDIDATE_FILES
+        | PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES
         | PHASE21R_HISTORICAL_GUARD_FILES
     )
 

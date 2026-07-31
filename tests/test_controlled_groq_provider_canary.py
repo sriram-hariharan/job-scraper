@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 import subprocess
@@ -29,6 +30,14 @@ OWNER_PATH = (
     ROOT / "src/evaluation/controlled_groq_provider_canary.py"
 )
 RUNBOOK_PATH = ROOT / "docs/controlled_groq_provider_canary_runbook.md"
+HERMETIC_PRICING_PATH = (
+    ROOT
+    / "tests/fixtures/provider_benchmark"
+    / "hermetic_groq_canary_pricing.json"
+)
+HERMETIC_PRICING_FILE_SHA256 = (
+    "b79b01ec855112358d8d3664e3620ebbf8d44117da39d663e5feaa89b423c7e1"
+)
 EXECUTION_TIME = "2026-07-25T00:00:00Z"
 STEP8L_SHA256 = (
     "ba4e817f4e82f9df967011709a42bc7d2f22998f176f555cfee9dfc9e0071b98"
@@ -517,6 +526,20 @@ def test_valid_synthetic_non_current_pricing_passes():
     assert canary.validate_operator_approved_pricing(
         _pricing(),
         execution_at_utc=EXECUTION_TIME,
+    )
+
+
+def test_hermetic_pricing_fixture_is_fixed_synthetic_and_valid():
+    assert sha256(HERMETIC_PRICING_PATH.read_bytes()).hexdigest() == (
+        HERMETIC_PRICING_FILE_SHA256
+    )
+    pricing = json.loads(HERMETIC_PRICING_PATH.read_text(encoding="utf-8"))
+    assert pricing["source_classification"] == (
+        "synthetic_non_current_test_only"
+    )
+    assert canary.validate_operator_approved_pricing(
+        pricing,
+        execution_at_utc="2026-07-25T10:40:33Z",
     )
 
 

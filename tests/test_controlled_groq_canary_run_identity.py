@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
-from hashlib import sha256
 import json
 import os
 from pathlib import Path
 import socket
-import stat
 import subprocess
 import sys
 
@@ -23,25 +21,10 @@ ROOT = Path(__file__).resolve().parents[1]
 OWNER_PATH = (
     ROOT / "src/evaluation/controlled_groq_canary_run_identity.py"
 )
-CHECKPOINT_001 = (
-    ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_checkpoint_001.json"
-)
-RESULT_001 = (
-    ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_result_001.json"
-)
 PRICING_001 = (
     ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_pricing_001.json"
-)
-AUTHORIZATION_001 = (
-    ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_authorization_001.json"
+    / "tests/fixtures/provider_benchmark"
+    / "hermetic_groq_canary_pricing.json"
 )
 EXECUTION_TIME = "2026-07-25T10:40:33Z"
 CANARY_SHA256 = (
@@ -50,31 +33,34 @@ CANARY_SHA256 = (
 TRANSPORT_SHA256 = (
     "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
 )
-INCIDENT_SHA256 = (
-    "63be65e2db0f6a2877f79d8a8927692175abec949ea596fc5b86f3ae0b7f75ad"
-)
-RUN_002_ARTIFACT_SHA256 = {
-    "pricing": (
-        "1ff5154cc369e3b29cca238db78b35d88cf83538f46f04a04a08bc6a4b5823f4"
-    ),
-    "authorization": (
-        "a9f8b67bbe48965b669f9f56209ef6ca4127e07fad29377db624adb9cf018133"
-    ),
-    "checkpoint": (
-        "2b0f54607b6a818bdadb2e0acada644ee9ded78bfeb7f1808cad7b99b3befe72"
-    ),
-    "result": (
-        "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
-    ),
-}
-
-
 def _contract():
     return identity.build_run_identity_contract()
 
 
 def _template():
     return identity.build_run_authorization_template()
+
+
+def _pricing():
+    return json.loads(PRICING_001.read_text(encoding="utf-8"))
+
+
+def _base_authorization():
+    authorization = canary.build_operator_authorization_template()
+    authorization.update(
+        {
+            "maximum_observed_cost_per_model": {
+                "groq/openai/gpt-oss-20b": "0.10",
+                "groq/openai/gpt-oss-120b": "0.20",
+            },
+            "maximum_total_observed_cost": "0.30",
+            "valid_from_utc": "2026-01-01T00:00:00Z",
+            "expires_at_utc": "2027-01-01T00:00:00Z",
+            "pricing_table_sha256": canary.pricing_table_sha256(_pricing()),
+            "operator_approved": True,
+        }
+    )
+    return authorization
 
 
 def test_versions_and_run_identifier_are_exact():
@@ -162,7 +148,7 @@ def test_schedule_bounds_and_model_assignments_remain_exact():
     assert contract["request_bounds"]["maximum_requests_per_case"] == 1
 
 
-def test_reserved_artifact_paths_are_exact_and_terminal_evidence_is_immutable():
+def test_reserved_artifact_paths_are_exact_without_runtime_prerequisites():
     assert _contract()["future_artifact_identities"] == {
         "pricing": (
             "outputs/provider_benchmark/phase11_groq_canary_pricing_002.json"
@@ -179,26 +165,17 @@ def test_reserved_artifact_paths_are_exact_and_terminal_evidence_is_immutable():
             "outputs/provider_benchmark/phase11_groq_canary_result_002.json"
         ),
     }
-    for kind, relative_path in identity.RUN_002_ARTIFACT_PATHS.items():
-        path = ROOT / relative_path
-        assert path.is_file() and not path.is_symlink()
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        assert sha256(path.read_bytes()).hexdigest() == (
-            RUN_002_ARTIFACT_SHA256[kind]
-        )
+    assert all(
+        not (ROOT / relative_path).exists()
+        for relative_path in identity.RUN_002_ARTIFACT_PATHS.values()
+    )
 
 
-def test_incident_checkpoint_is_valid_empty_secure_and_unchanged():
-    before = CHECKPOINT_001.read_bytes()
-    assert sha256(before).hexdigest() == INCIDENT_SHA256
-    assert CHECKPOINT_001.is_file() and not CHECKPOINT_001.is_symlink()
-    assert stat.S_IMODE(CHECKPOINT_001.stat().st_mode) == 0o600
+def test_empty_checkpoint_contract_is_hermetic_and_valid():
     assert "outputs/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
-    pricing = json.loads(PRICING_001.read_text(encoding="utf-8"))
-    authorization = json.loads(AUTHORIZATION_001.read_text(encoding="utf-8"))
-    checkpoint = evidence.load_checkpoint(
-        CHECKPOINT_001,
-        repository_root=ROOT,
+    pricing = _pricing()
+    authorization = _base_authorization()
+    checkpoint = evidence.build_empty_checkpoint(
         authorization=authorization,
         pricing=pricing,
         execution_at_utc=EXECUTION_TIME,
@@ -210,8 +187,13 @@ def test_incident_checkpoint_is_valid_empty_secure_and_unchanged():
         execution_at_utc=EXECUTION_TIME,
         canary=canary.build_controlled_groq_canary_contract(),
     )
-    assert CHECKPOINT_001.read_bytes() == before
-    assert not RESULT_001.exists()
+    assert evidence.validate_checkpoint(
+        checkpoint,
+        authorization=authorization,
+        pricing=pricing,
+        execution_at_utc=EXECUTION_TIME,
+        canary=canary.build_controlled_groq_canary_contract(),
+    )
 
 
 def test_authorization_template_is_placeholder_only_and_inactive():

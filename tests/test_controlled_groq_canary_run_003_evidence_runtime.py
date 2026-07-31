@@ -54,46 +54,18 @@ SCHEDULE_KEY = (
     "canary_run_003_"
     "0ba1bf8c9270b5bbe777b6a27c05342cb906ab2e0e25609714a81dde9cf4fb46"
 )
-PRIOR_ARTIFACT_SHA256 = {
-    "phase11_groq_canary_checkpoint_001.json": (
-        "63be65e2db0f6a2877f79d8a8927692175abec949ea596fc5b86f3ae0b7f75ad"
-    ),
-    "phase11_groq_canary_pricing_002.json": (
-        "1ff5154cc369e3b29cca238db78b35d88cf83538f46f04a04a08bc6a4b5823f4"
-    ),
-    "phase11_groq_canary_authorization_002.json": (
-        "a9f8b67bbe48965b669f9f56209ef6ca4127e07fad29377db624adb9cf018133"
-    ),
-    "phase11_groq_canary_checkpoint_002.json": (
-        "2b0f54607b6a818bdadb2e0acada644ee9ded78bfeb7f1808cad7b99b3befe72"
-    ),
-    "phase11_groq_canary_result_002.json": (
-        "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
-    ),
-}
-RUN_003_ARTIFACT_SHA256 = {
-    "pricing": "4802ca143f9db7a5891033c045ba9a24898f4bf6c924586ea9619b98720046a8",
-    "authorization": "a3d55c8f8c44c92709c6d354b5f01b4f747b72ebd125542b076cecfbc063cba2",
-    "checkpoint": "6fced7c4ef08f2bbe19138347db9c31eaa5b483aadf03163331d32b8cb0b2b1f",
-    "result": "d9f01c7f699a3389af3fe46cd73f764405a7446102eedf095824bb6865557d07",
-}
-
-
-def _assert_run_003_artifacts_are_immutable():
-    for kind, relative_path in identity.RUN_003_ARTIFACT_PATHS.items():
-        path = ROOT / relative_path
-        assert path.is_file() and not path.is_symlink()
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        assert sha256(path.read_bytes()).hexdigest() == (
-            RUN_003_ARTIFACT_SHA256[kind]
-        )
+def _assert_run_003_artifacts_are_absent():
+    assert all(
+        not (ROOT / relative_path).exists()
+        for relative_path in identity.RUN_003_ARTIFACT_PATHS.values()
+    )
 
 
 def _pricing():
     path = (
         ROOT
-        / "outputs/provider_benchmark"
-        / "phase11_groq_canary_pricing_002.json"
+        / "tests/fixtures/provider_benchmark"
+        / "hermetic_groq_canary_pricing.json"
     )
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -799,7 +771,7 @@ def test_persistence_rejects_symlink_and_traversal(tmp_path):
         )
 
 
-def test_pinned_owners_and_prior_artifacts_are_immutable():
+def test_pinned_owners_are_immutable_without_runtime_artifact_prerequisites():
     assert plan.run_003_plan_sha256() == PLAN_SHA
     assert identity.run_003_identity_sha256() == IDENTITY_SHA
     assert identity.run_003_authorization_template_sha256() == (
@@ -809,14 +781,8 @@ def test_pinned_owners_and_prior_artifacts_are_immutable():
         BASE_TRANSPORT_SHA
     )
     assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
-    output = ROOT / "outputs/provider_benchmark"
-    for name, digest in PRIOR_ARTIFACT_SHA256.items():
-        path = output / name
-        assert path.is_file() and not path.is_symlink()
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        assert sha256(path.read_bytes()).hexdigest() == digest
-    assert not (output / "phase11_groq_canary_result_001.json").exists()
-    _assert_run_003_artifacts_are_immutable()
+    assert not (ROOT / "outputs/provider_benchmark").exists()
+    _assert_run_003_artifacts_are_absent()
 
 
 def test_base_runtime_public_cost_behavior_is_unchanged():
@@ -903,7 +869,7 @@ def test_runtime_persists_no_normalized_raw_or_credential_material():
     }.isdisjoint(keys)
 
 
-def test_offline_builds_leave_real_run003_artifacts_immutable():
+def test_offline_builds_leave_runtime_artifacts_absent():
     _empty()
     _complete()
-    _assert_run_003_artifacts_are_immutable()
+    _assert_run_003_artifacts_are_absent()

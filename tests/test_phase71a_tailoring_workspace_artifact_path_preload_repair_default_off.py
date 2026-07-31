@@ -11,6 +11,22 @@ from src.app import planning_ui
 from src.app import services
 
 
+@pytest.fixture
+def synthetic_resume_dir(monkeypatch, tmp_path):
+    resume_dir = tmp_path / "synthetic_resumes"
+    resume_dir.mkdir()
+    (resume_dir / "resume.pdf").write_bytes(b"%PDF-1.4\n%synthetic-test\n")
+    monkeypatch.setenv("RESUME_DIR", str(resume_dir))
+    monkeypatch.setattr(
+        "src.resume.resume_loader.extract_resume_texts",
+        lambda _path: {
+            "raw_text": "Built Python services.",
+            "text": "Built Python services.",
+        },
+    )
+    return resume_dir
+
+
 def _write_tailoring_artifact(output_dir: Path, *, suggestions: bool = True) -> Path:
     packet_dir = output_dir / "job_packets"
     packet_dir.mkdir(parents=True, exist_ok=True)
@@ -127,7 +143,10 @@ def _write_base_packet(output_dir: Path, *, selected_resume: str = "resume.pdf")
     return packet_path
 
 
-def test_run_scoped_tailoring_artifact_loads_without_relaxing_path_guard(tmp_path):
+def test_run_scoped_tailoring_artifact_loads_without_relaxing_path_guard(
+    tmp_path,
+    synthetic_resume_dir,
+):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)
     artifact_key = artifact_path.relative_to(output_dir).as_posix()
@@ -176,7 +195,10 @@ def test_repo_relative_run_scoped_artifact_path_resolves_inside_output_guard(
         )
 
 
-def test_tailoring_workspace_draft_and_scan_preload_use_same_run_scoped_output_dir(tmp_path):
+def test_tailoring_workspace_draft_and_scan_preload_use_same_run_scoped_output_dir(
+    tmp_path,
+    synthetic_resume_dir,
+):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)
     artifact_key = artifact_path.relative_to(output_dir).as_posix()
@@ -201,7 +223,11 @@ def test_tailoring_workspace_draft_and_scan_preload_use_same_run_scoped_output_d
     assert preload["artifact_references"]["tailoring_json_key"] == artifact_key
 
 
-def test_ai_optimize_preload_merges_saved_github_with_extracted_linkedin(monkeypatch, tmp_path):
+def test_ai_optimize_preload_merges_saved_github_with_extracted_linkedin(
+    monkeypatch,
+    tmp_path,
+    synthetic_resume_dir,
+):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)
     artifact_key = artifact_path.relative_to(output_dir).as_posix()
@@ -767,7 +793,11 @@ def test_actual_browse_route_resolves_repo_relative_run_scoped_manifest_paths(
     assert ready_payload["rows"][0]["tailoring_actionable_replacement_count"] == 1
 
 
-def test_source_resume_preview_uses_resume_resolver_not_planning_artifact_guard(monkeypatch, tmp_path):
+def test_source_resume_preview_uses_resume_resolver_not_planning_artifact_guard(
+    monkeypatch,
+    tmp_path,
+    synthetic_resume_dir,
+):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)
     artifact_key = artifact_path.relative_to(output_dir).as_posix()
@@ -820,7 +850,11 @@ def test_source_resume_preview_uses_resume_resolver_not_planning_artifact_guard(
     assert source_resume_path.parent != output_dir
 
 
-def test_rendered_workspace_preview_applies_source_resume_linkedin_and_github(monkeypatch, tmp_path):
+def test_rendered_workspace_preview_applies_source_resume_linkedin_and_github(
+    monkeypatch,
+    tmp_path,
+    synthetic_resume_dir,
+):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir)
     artifact_key = artifact_path.relative_to(output_dir).as_posix()

@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
-from hashlib import sha256
 import json
 import os
 from pathlib import Path
-import stat
 import subprocess
 import sys
 
@@ -27,9 +25,6 @@ ROOT = Path(__file__).resolve().parents[1]
 OWNER_PATH = (
     ROOT / "src/evaluation/controlled_groq_canary_run_003_plan.py"
 )
-INCIDENT_SHA = (
-    "63be65e2db0f6a2877f79d8a8927692175abec949ea596fc5b86f3ae0b7f75ad"
-)
 RUN_002_IDENTITY_SHA = (
     "e1c7159d42daebe64ad2c8ddea5f0bb40b45c0ff1cd56111e980a52585685fef"
 )
@@ -48,28 +43,6 @@ CORPUS_SHA = (
 STEP8O_SHA = (
     "7a6463fc465d963633f82a18de0b067daab31dc387680b1d004e706c61a55c15"
 )
-RUN_002_ARTIFACT_SHAS = {
-    "phase11_groq_canary_pricing_002.json": (
-        "1ff5154cc369e3b29cca238db78b35d88cf83538f46f04a04a08bc6a4b5823f4"
-    ),
-    "phase11_groq_canary_authorization_002.json": (
-        "a9f8b67bbe48965b669f9f56209ef6ca4127e07fad29377db624adb9cf018133"
-    ),
-    "phase11_groq_canary_checkpoint_002.json": (
-        "2b0f54607b6a818bdadb2e0acada644ee9ded78bfeb7f1808cad7b99b3befe72"
-    ),
-    "phase11_groq_canary_result_002.json": (
-        "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
-    ),
-}
-RUN_003_ARTIFACT_SHAS = {
-    "pricing": "4802ca143f9db7a5891033c045ba9a24898f4bf6c924586ea9619b98720046a8",
-    "authorization": "a3d55c8f8c44c92709c6d354b5f01b4f747b72ebd125542b076cecfbc063cba2",
-    "checkpoint": "6fced7c4ef08f2bbe19138347db9c31eaa5b483aadf03163331d32b8cb0b2b1f",
-    "result": "d9f01c7f699a3389af3fe46cd73f764405a7446102eedf095824bb6865557d07",
-}
-
-
 def _contract():
     return owner.build_run_003_plan_contract()
 
@@ -415,21 +388,13 @@ def test_completed_contracts_remain_unchanged():
     assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
 
 
-def test_prior_and_completed_run003_artifacts_are_byte_identical():
+def test_runtime_artifacts_are_not_plan_test_prerequisites():
     output = ROOT / "outputs/provider_benchmark"
-    checkpoint_001 = output / "phase11_groq_canary_checkpoint_001.json"
-    assert sha256(checkpoint_001.read_bytes()).hexdigest() == INCIDENT_SHA
-    assert stat.S_IMODE(checkpoint_001.stat().st_mode) == 0o600
-    assert not (output / "phase11_groq_canary_result_001.json").exists()
-    for name, expected in RUN_002_ARTIFACT_SHAS.items():
-        path = output / name
-        assert sha256(path.read_bytes()).hexdigest() == expected
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    for kind, expected in RUN_003_ARTIFACT_SHAS.items():
-        path = output / f"phase11_groq_canary_{kind}_003.json"
-        assert path.is_file() and not path.is_symlink()
-        assert sha256(path.read_bytes()).hexdigest() == expected
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert not output.exists()
+    assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
+    assert owner.run_003_plan_sha256() == (
+        "5d63ef8bc8749645c19211184e8b7be16aa1909fbdb8a3682b9073af7270e9e8"
+    )
 
 
 def test_only_exact_run003_owners_import_run003_plan_owner():

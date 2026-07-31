@@ -34,13 +34,8 @@ OWNER_PATH = (
 )
 PRICING_PATH = (
     ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_pricing_001.json"
-)
-AUTHORIZATION_PATH = (
-    ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_authorization_001.json"
+    / "tests/fixtures/provider_benchmark"
+    / "hermetic_groq_canary_pricing.json"
 )
 REAL_RESULT_PATH = (
     ROOT
@@ -63,15 +58,28 @@ TRANSPORT_SHA256 = (
     "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
 )
 PRICING_FILE_SHA256 = (
-    "05a67642a30fd111ad8fb5f44dd0479595b8b8ab493d6868104ad67b20e767e7"
+    "b79b01ec855112358d8d3664e3620ebbf8d44117da39d663e5feaa89b423c7e1"
 )
-AUTHORIZATION_FILE_SHA256 = (
-    "a3eef7c83614b9a11c58de56e1d2968d29ce46e8d15660040bd9b784aa6aa631"
+AUTHORIZATION_CANONICAL_SHA256 = (
+    "f2b11eb0fb7bb0736222fd976bf6430987aeb86d48d74eec7cf0bfc956904b84"
 )
 
 _BASE_PRICING = json.loads(PRICING_PATH.read_text(encoding="utf-8"))
-_BASE_AUTHORIZATION = json.loads(
-    AUTHORIZATION_PATH.read_text(encoding="utf-8")
+_BASE_AUTHORIZATION = canary_owner.build_operator_authorization_template()
+_BASE_AUTHORIZATION.update(
+    {
+        "maximum_observed_cost_per_model": {
+            "groq/openai/gpt-oss-20b": "0.10",
+            "groq/openai/gpt-oss-120b": "0.20",
+        },
+        "maximum_total_observed_cost": "0.30",
+        "valid_from_utc": "2026-01-01T00:00:00Z",
+        "expires_at_utc": "2027-01-01T00:00:00Z",
+        "pricing_table_sha256": canary_owner.pricing_table_sha256(
+            _BASE_PRICING
+        ),
+        "operator_approved": True,
+    }
 )
 _BASE_CANARY = canary_owner.build_controlled_groq_canary_contract()
 _BASE_PLAN = build_controlled_provider_benchmark_plan()
@@ -389,11 +397,19 @@ def test_checkpoint_digest_is_stable_across_fresh_process():
         "import json;"
         "from pathlib import Path;"
         "from src.evaluation import controlled_groq_canary_evidence_runtime as r;"
+        "from src.evaluation import controlled_groq_provider_canary as c;"
         "root=Path.cwd();"
-        "p=json.loads((root/'outputs/provider_benchmark/"
-        "phase11_groq_canary_pricing_001.json').read_text());"
-        "a=json.loads((root/'outputs/provider_benchmark/"
-        "phase11_groq_canary_authorization_001.json').read_text());"
+        "p=json.loads((root/'tests/fixtures/provider_benchmark/"
+        "hermetic_groq_canary_pricing.json').read_text());"
+        "a=c.build_operator_authorization_template();"
+        "a.update({'maximum_observed_cost_per_model':"
+        "{'groq/openai/gpt-oss-20b':'0.10',"
+        "'groq/openai/gpt-oss-120b':'0.20'},"
+        "'maximum_total_observed_cost':'0.30',"
+        "'valid_from_utc':'2026-01-01T00:00:00Z',"
+        "'expires_at_utc':'2027-01-01T00:00:00Z',"
+        "'pricing_table_sha256':c.pricing_table_sha256(p),"
+        "'operator_approved':True});"
         "c=r.build_empty_checkpoint(authorization=a,pricing=p,"
         f"execution_at_utc='{EXECUTION_TIME}');"
         "print(r.checkpoint_sha256(c,authorization=a,pricing=p,"
@@ -1313,8 +1329,15 @@ def test_fake_run_reaches_no_socket(tmp_path, monkeypatch):
 def test_operator_inputs_are_byte_identical_and_valid():
     assert sha256(PRICING_PATH.read_bytes()).hexdigest() == PRICING_FILE_SHA256
     assert (
-        sha256(AUTHORIZATION_PATH.read_bytes()).hexdigest()
-        == AUTHORIZATION_FILE_SHA256
+        sha256(
+            json.dumps(
+                _authorization(),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        == AUTHORIZATION_CANONICAL_SHA256
     )
     assert canary_owner.validate_operator_approved_pricing(
         _pricing(),
@@ -1327,23 +1350,17 @@ def test_operator_inputs_are_byte_identical_and_valid():
     )
 
 
-def test_real_reserved_artifacts_are_absent_or_exact_empty_incident():
+def test_runtime_evidence_is_not_a_test_prerequisite():
     assert not REAL_RESULT_PATH.exists()
     assert not (ROOT / canary_owner.RECOVERY_006_STATUS_PATH).exists()
-    if not REAL_CHECKPOINT_PATH.exists():
-        return
-    assert REAL_CHECKPOINT_PATH.is_file()
-    assert not REAL_CHECKPOINT_PATH.is_symlink()
-    assert stat.S_IMODE(REAL_CHECKPOINT_PATH.stat().st_mode) == 0o600
-    incident = runtime.load_checkpoint(
-        REAL_CHECKPOINT_PATH,
-        repository_root=ROOT,
+    assert not REAL_CHECKPOINT_PATH.exists()
+    assert runtime.validate_checkpoint(
+        _empty(),
         authorization=_authorization(),
         pricing=_pricing(),
         execution_at_utc=EXECUTION_TIME,
         canary=_canary(),
     )
-    assert incident == _empty()
 
 
 def test_runtime_authority_remains_zero():

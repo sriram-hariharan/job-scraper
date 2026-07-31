@@ -33,13 +33,8 @@ OWNER_PATH = (
 PRODUCTION_CLIENT_PATH = ROOT / "src/ai/llm_client.py"
 PRICING_PATH = (
     ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_pricing_001.json"
-)
-AUTHORIZATION_PATH = (
-    ROOT
-    / "outputs/provider_benchmark"
-    / "phase11_groq_canary_authorization_001.json"
+    / "tests/fixtures/provider_benchmark"
+    / "hermetic_groq_canary_pricing.json"
 )
 RESULT_PATH = (
     ROOT
@@ -63,10 +58,10 @@ PRODUCTION_CLIENT_SHA256 = (
     "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2"
 )
 PRICING_FILE_SHA256 = (
-    "05a67642a30fd111ad8fb5f44dd0479595b8b8ab493d6868104ad67b20e767e7"
+    "b79b01ec855112358d8d3664e3620ebbf8d44117da39d663e5feaa89b423c7e1"
 )
-AUTHORIZATION_FILE_SHA256 = (
-    "a3eef7c83614b9a11c58de56e1d2968d29ce46e8d15660040bd9b784aa6aa631"
+AUTHORIZATION_CANONICAL_SHA256 = (
+    "f2b11eb0fb7bb0736222fd976bf6430987aeb86d48d74eec7cf0bfc956904b84"
 )
 
 
@@ -76,6 +71,28 @@ def _plan():
 
 def _canary():
     return canary.build_controlled_groq_canary_contract()
+
+
+def _pricing():
+    return json.loads(PRICING_PATH.read_text(encoding="utf-8"))
+
+
+def _authorization():
+    authorization = canary.build_operator_authorization_template()
+    authorization.update(
+        {
+            "maximum_observed_cost_per_model": {
+                "groq/openai/gpt-oss-20b": "0.10",
+                "groq/openai/gpt-oss-120b": "0.20",
+            },
+            "maximum_total_observed_cost": "0.30",
+            "valid_from_utc": "2026-01-01T00:00:00Z",
+            "expires_at_utc": "2027-01-01T00:00:00Z",
+            "pricing_table_sha256": canary.pricing_table_sha256(_pricing()),
+            "operator_approved": True,
+        }
+    )
+    return authorization
 
 
 def _scheduled(index=0):
@@ -929,53 +946,30 @@ def test_owner_has_no_database_subprocess_thread_or_artifact_write_reach():
 
 def test_no_result_or_checkpoint_artifact_is_written():
     assert not RESULT_PATH.exists()
-    incident_bytes = (
-        CHECKPOINT_PATH.read_bytes() if CHECKPOINT_PATH.exists() else None
-    )
-    if incident_bytes is not None:
-        assert CHECKPOINT_PATH.is_file()
-        assert not CHECKPOINT_PATH.is_symlink()
-        assert stat.S_IMODE(CHECKPOINT_PATH.stat().st_mode) == 0o600
-        pricing = json.loads(PRICING_PATH.read_text(encoding="utf-8"))
-        authorization = json.loads(
-            AUTHORIZATION_PATH.read_text(encoding="utf-8")
-        )
-        checkpoint = evidence.load_checkpoint(
-            CHECKPOINT_PATH,
-            repository_root=ROOT,
-            authorization=authorization,
-            pricing=pricing,
-            execution_at_utc=EXECUTION_TIME,
-            canary=_canary(),
-        )
-        assert checkpoint == evidence.build_empty_checkpoint(
-            authorization=authorization,
-            pricing=pricing,
-            execution_at_utc=EXECUTION_TIME,
-            canary=_canary(),
-        )
+    assert not CHECKPOINT_PATH.exists()
 
     _execute()
 
     assert not RESULT_PATH.exists()
-    if incident_bytes is None:
-        assert not CHECKPOINT_PATH.exists()
-    else:
-        assert CHECKPOINT_PATH.read_bytes() == incident_bytes
-        assert stat.S_IMODE(CHECKPOINT_PATH.stat().st_mode) == 0o600
+    assert not CHECKPOINT_PATH.exists()
 
 
 def test_operator_inputs_are_unchanged_and_still_validate():
     assert sha256(PRICING_PATH.read_bytes()).hexdigest() == (
         PRICING_FILE_SHA256
     )
-    assert sha256(AUTHORIZATION_PATH.read_bytes()).hexdigest() == (
-        AUTHORIZATION_FILE_SHA256
+    authorization = _authorization()
+    assert sha256(
+        json.dumps(
+            authorization,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest() == (
+        AUTHORIZATION_CANONICAL_SHA256
     )
-    pricing = json.loads(PRICING_PATH.read_text(encoding="utf-8"))
-    authorization = json.loads(
-        AUTHORIZATION_PATH.read_text(encoding="utf-8")
-    )
+    pricing = _pricing()
 
     assert canary.validate_operator_approved_pricing(
         pricing,

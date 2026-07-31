@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
-from hashlib import sha256
 import json
 import os
 from pathlib import Path
 import socket
-import stat
 import subprocess
 import sys
 
@@ -40,45 +38,11 @@ BASE_CANARY_SHA = (
 RUN_002_IDENTITY_SHA = (
     "e1c7159d42daebe64ad2c8ddea5f0bb40b45c0ff1cd56111e980a52585685fef"
 )
-PRIOR_ARTIFACT_SHA256 = {
-    "phase11_groq_canary_pricing_001.json": (
-        "05a67642a30fd111ad8fb5f44dd0479595b8b8ab493d6868104ad67b20e767e7"
-    ),
-    "phase11_groq_canary_authorization_001.json": (
-        "a3eef7c83614b9a11c58de56e1d2968d29ce46e8d15660040bd9b784aa6aa631"
-    ),
-    "phase11_groq_canary_checkpoint_001.json": (
-        "63be65e2db0f6a2877f79d8a8927692175abec949ea596fc5b86f3ae0b7f75ad"
-    ),
-    "phase11_groq_canary_pricing_002.json": (
-        "1ff5154cc369e3b29cca238db78b35d88cf83538f46f04a04a08bc6a4b5823f4"
-    ),
-    "phase11_groq_canary_authorization_002.json": (
-        "a9f8b67bbe48965b669f9f56209ef6ca4127e07fad29377db624adb9cf018133"
-    ),
-    "phase11_groq_canary_checkpoint_002.json": (
-        "2b0f54607b6a818bdadb2e0acada644ee9ded78bfeb7f1808cad7b99b3befe72"
-    ),
-    "phase11_groq_canary_result_002.json": (
-        "09018df2f2a82d565ff46b3f7aacf1867cb801efb7a194e97dd49bbc8f23a9ee"
-    ),
-}
-RUN_003_ARTIFACT_SHA256 = {
-    "pricing": "4802ca143f9db7a5891033c045ba9a24898f4bf6c924586ea9619b98720046a8",
-    "authorization": "a3d55c8f8c44c92709c6d354b5f01b4f747b72ebd125542b076cecfbc063cba2",
-    "checkpoint": "6fced7c4ef08f2bbe19138347db9c31eaa5b483aadf03163331d32b8cb0b2b1f",
-    "result": "d9f01c7f699a3389af3fe46cd73f764405a7446102eedf095824bb6865557d07",
-}
-
-
-def _assert_run_003_artifacts_are_immutable():
-    for kind, relative_path in owner.RUN_003_ARTIFACT_PATHS.items():
-        path = ROOT / relative_path
-        assert path.is_file() and not path.is_symlink()
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        assert sha256(path.read_bytes()).hexdigest() == (
-            RUN_003_ARTIFACT_SHA256[kind]
-        )
+def _assert_run_003_artifacts_are_absent():
+    assert all(
+        not (ROOT / relative_path).exists()
+        for relative_path in owner.RUN_003_ARTIFACT_PATHS.values()
+    )
 
 
 def _identity():
@@ -236,12 +200,12 @@ def test_request_token_and_stop_policy_are_exact_plan_bindings():
     assert identity["stop_policy"]["harness_retry_limit"] == 0
 
 
-def test_run003_artifacts_are_exact_and_immutable():
+def test_run003_artifact_paths_are_exact_without_runtime_prerequisites():
     contract = _identity()
     assert contract["future_artifact_identities"] == (
         owner.RUN_003_ARTIFACT_PATHS
     )
-    _assert_run_003_artifacts_are_immutable()
+    _assert_run_003_artifacts_are_absent()
 
 
 def test_prior_run_artifact_paths_are_exact():
@@ -557,15 +521,10 @@ def test_pinned_plan_controlled_plan_canary_and_run002_identity_are_immutable():
     assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
 
 
-def test_prior_and_run003_artifacts_are_byte_exact_and_secure():
+def test_prior_and_run003_runtime_artifacts_are_not_test_prerequisites():
     output_root = ROOT / "outputs/provider_benchmark"
-    for name, digest in PRIOR_ARTIFACT_SHA256.items():
-        path = output_root / name
-        assert path.is_file() and not path.is_symlink()
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        assert sha256(path.read_bytes()).hexdigest() == digest
-    assert not (output_root / "phase11_groq_canary_result_001.json").exists()
-    _assert_run_003_artifacts_are_immutable()
+    assert not output_root.exists()
+    _assert_run_003_artifacts_are_absent()
 
 
 def test_owner_imports_no_environment_sdk_network_database_or_write_reach():
@@ -661,7 +620,7 @@ def test_import_and_build_create_no_real_artifacts():
     )
     after = {path: path.read_bytes() for path in before}
     assert after == before
-    _assert_run_003_artifacts_are_immutable()
+    _assert_run_003_artifacts_are_absent()
 
 
 def test_only_exact_run003_runtime_owners_import_run003_identity_owner():

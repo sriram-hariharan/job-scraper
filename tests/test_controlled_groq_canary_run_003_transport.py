@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
-from hashlib import sha256
 import json
 import os
 from pathlib import Path
 import socket
-import stat
 import subprocess
 import sys
 
@@ -32,14 +30,6 @@ IDENTITY_SHA = (
 BASE_TRANSPORT_SHA = (
     "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
 )
-RUN_003_ARTIFACT_SHA256 = {
-    "pricing": "4802ca143f9db7a5891033c045ba9a24898f4bf6c924586ea9619b98720046a8",
-    "authorization": "a3d55c8f8c44c92709c6d354b5f01b4f747b72ebd125542b076cecfbc063cba2",
-    "checkpoint": "6fced7c4ef08f2bbe19138347db9c31eaa5b483aadf03163331d32b8cb0b2b1f",
-    "result": "d9f01c7f699a3389af3fe46cd73f764405a7446102eedf095824bb6865557d07",
-}
-
-
 def _packet():
     return plan.build_run_003_transmittable_request_packet()
 
@@ -501,16 +491,13 @@ def test_fake_execution_reaches_no_environment_socket_or_write(monkeypatch):
     assert result["provider_outcome_category"] == "success"
 
 
-def test_pinned_owners_and_real_artifact_absence_are_immutable():
+def test_pinned_owners_and_runtime_artifacts_are_hermetic():
     assert plan.run_003_plan_sha256() == PLAN_SHA
     assert identity.run_003_identity_sha256() == IDENTITY_SHA
     assert base_transport.controlled_groq_transport_sha256() == (
         BASE_TRANSPORT_SHA
     )
-    for kind, relative_path in identity.RUN_003_ARTIFACT_PATHS.items():
-        path = ROOT / relative_path
-        assert path.is_file() and not path.is_symlink()
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        assert sha256(path.read_bytes()).hexdigest() == (
-            RUN_003_ARTIFACT_SHA256[kind]
-        )
+    assert all(
+        not (ROOT / relative_path).exists()
+        for relative_path in identity.RUN_003_ARTIFACT_PATHS.values()
+    )

@@ -1,9 +1,12 @@
+import asyncio
 import json
 import sys
 import tempfile
 import types
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 
 class _FakeTqdm:
@@ -391,3 +394,369 @@ def test_preference_runtime_status_is_carried_into_run_config_json(monkeypatch, 
 
     assert child_status["config"]["preference_runtime"] == preference_runtime
     assert captured["record"]["config_json"]["config"]["preference_runtime"] == preference_runtime
+
+
+class _DropPctLogger:
+    def __init__(self, messages):
+        self.messages = messages
+
+    def _record(self, message, *args):
+        self.messages.append(message % args if args else str(message))
+
+    info = _record
+    warning = _record
+    error = _record
+
+
+def _install_drop_pct_collector_fakes(
+    monkeypatch,
+    tmp_path,
+    *,
+    jobs,
+    filtered_count,
+    graph_route,
+    user_pipeline,
+):
+    captured = {
+        "logs": [],
+        "route_events": [],
+        "stage_completions": [],
+    }
+    filtered_jobs = list(jobs[:filtered_count])
+
+    monkeypatch.setenv(
+        "JOB_STACK_JOB_CORPUS_PATH",
+        str(tmp_path / "synthetic-corpus.jsonl"),
+    )
+    monkeypatch.delenv(
+        collector.JD_INTELLIGENCE_CONTROLLED_LLM_FLAG,
+        raising=False,
+    )
+    monkeypatch.setattr(collector, "logger", _DropPctLogger(captured["logs"]))
+    monkeypatch.setattr(
+        collector,
+        "resolve_pipeline_preference_runtime",
+        lambda: {
+            "effective": {
+                "selected_role_families": [],
+                "target_seniority": [],
+                "preferred_locations": [],
+                "preferred_skills": [],
+                "excluded_keywords": [],
+            },
+            "effective_sha256": "0" * 64,
+            "schema_version": "test-v1",
+        },
+    )
+    monkeypatch.setattr(collector, "update_config", lambda **_kwargs: None)
+    monkeypatch.setattr(collector, "update_counts", lambda **_kwargs: None)
+    monkeypatch.setattr(collector, "start_stage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        collector,
+        "complete_stage",
+        lambda stage, **_kwargs: captured["stage_completions"].append(stage),
+    )
+    monkeypatch.setattr(collector, "section", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        collector,
+        "_is_user_pipeline_mode",
+        lambda: user_pipeline,
+    )
+    monkeypatch.setattr(collector, "log_company_hiring", lambda *_args: None)
+    monkeypatch.setattr(collector, "log_market_insights", lambda *_args: None)
+
+    for name in (
+        "_record_relevance_prefilter_agent_trace",
+        "_maybe_execute_authoritative_jd_intelligence_graph",
+        "_maybe_build_jd_intelligence_existing_output_diagnostics_after_intelligence",
+        "_maybe_execute_authoritative_semantic_evaluation_graph",
+        "_maybe_execute_authoritative_final_scoring_graph",
+        "_maybe_collect_vector_evidence_after_application_priority",
+        "_maybe_run_shadow_sidecar_after_application_priority",
+        "_maybe_invoke_advisory_chain_diagnostics_after_application_priority",
+        "_maybe_build_evidence_chain_collector_diagnostics",
+        "_maybe_run_controlled_evidence_chain_execution_after_application_priority",
+        "_maybe_persist_controlled_evidence_chain_execution_trace",
+    ):
+        monkeypatch.setattr(
+            collector,
+            name,
+            lambda *_args, **_kwargs: None,
+        )
+
+    def execute_prefilter_graph(**kwargs):
+        if not graph_route:
+            return None
+        captured["route_events"].extend(["graph_filter", "graph_dedupe"])
+        kwargs["on_prefilter_completed"](filtered_jobs, {}, [])
+        kwargs["on_dedupe_completed"](filtered_jobs)
+        return {
+            "filtered_jobs": filtered_jobs,
+            "filter_diagnostics": {},
+            "role_title_audit_rows": [],
+            "deduplicated_jobs": filtered_jobs,
+            "execution_metadata": {
+                "execution_mode": "langgraph",
+                "node_order": ["filter_jobs", "dedupe_jobs"],
+            },
+        }
+
+    monkeypatch.setattr(
+        collector,
+        "_maybe_execute_authoritative_prefilter_dedupe_graph",
+        execute_prefilter_graph,
+    )
+
+    def install_module(name, **members):
+        monkeypatch.setitem(sys.modules, name, types.SimpleNamespace(**members))
+
+    install_module(
+        "src.ai.job_fit_evaluator",
+        evaluate_jobs=lambda rows: list(rows),
+        get_eval_cache_metrics=lambda: {
+            "eval_cache_hits": 0,
+            "eval_cache_misses": 0,
+            "eval_cache_stores": 0,
+            "eval_cache_only_skips": 0,
+            "eval_live_failures": 0,
+        },
+    )
+    install_module(
+        "src.ai.llm_client",
+        get_provider_metrics=lambda: {
+            "primary_attempts": 0,
+            "fallback_attempts": 0,
+            "groq_calls": 0,
+            "gemini_calls": 0,
+            "fallback_successes": 0,
+            "provider_failures": 0,
+        },
+        reset_provider_metrics=lambda: None,
+    )
+    install_module("src.ai.resume_matcher", match_resumes=lambda rows: list(rows))
+    install_module(
+        "src.ai.skill_llm_enricher",
+        get_skill_cache_metrics=lambda: {
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "cache_stores": 0,
+            "cache_only_skips": 0,
+            "live_failures": 0,
+        },
+        reset_skill_cache_metrics=lambda: None,
+    )
+    install_module(
+        "src.discovery.domain_learner",
+        learn_domains_from_jobs=lambda _rows: None,
+    )
+    install_module(
+        "src.discovery.persist_discovered",
+        persist_discovered_companies=lambda: None,
+    )
+    install_module(
+        "src.intelligence.job_intelligence",
+        ai_evaluation_skip_summary=lambda _rows, limit=10: {
+            "skipped_count": 0,
+            "reason_counts": {},
+            "skipped_samples": [],
+            "skipped_jobs": [],
+        },
+        build_job_intelligence=lambda row: dict(row),
+        filter_jobs_for_ai_evaluation=lambda rows: list(rows),
+    )
+    install_module(
+        "src.intelligence.skill_discovery",
+        discover_new_skills=lambda _rows: [],
+    )
+    install_module(
+        "src.intelligence.skill_frequency",
+        top_skills=lambda _rows, top_n=50: [],
+    )
+    install_module("src.pipeline.application_scorer", score_jobs=lambda rows: list(rows))
+
+    def direct_dedupe(rows):
+        captured["route_events"].append("direct_dedupe")
+        return list(rows)
+
+    install_module("src.pipeline.dedupe", dedupe_jobs=direct_dedupe)
+    install_module(
+        "src.pipeline.embedding_prefilter",
+        prefilter_jobs_by_embedding=lambda rows, top_n=None: list(rows),
+    )
+    install_module(
+        "src.pipeline.job_details",
+        enrich_job_details=lambda rows: list(rows),
+    )
+
+    def direct_filter(_rows, **_kwargs):
+        captured["route_events"].append("direct_filter")
+        return list(filtered_jobs), {}
+
+    install_module(
+        "src.pipeline.job_filter",
+        build_source_health_report_rows=lambda *_args: [],
+        filter_jobs=direct_filter,
+        role_title_filter_audit_counts=lambda _rows: {
+            "role_title_audit_total": 0,
+            "role_title_audit_pass": 0,
+            "role_title_audit_reject": 0,
+            "role_title_audit_suspected_false_negative": 0,
+        },
+        write_source_health_report_csv=lambda *_args: None,
+        write_role_title_filter_audit_csv=lambda *_args: None,
+    )
+    install_module("src.pipeline.job_ranker", rank_jobs=lambda rows, **_kwargs: list(rows))
+    install_module(
+        "src.rag.export_job_corpus",
+        export_job_corpus=lambda rows, _path: len(rows),
+    )
+
+    scraper_modules = {
+        "src.scrapers.workday_scraper": "scrape_all_workday",
+        "src.scrapers.greenhouse_scraper": "scrape_all_greenhouse",
+        "src.scrapers.lever_scraper": "scrape_all_lever",
+        "src.scrapers.ashby_scraper": "scrape_all_ashby",
+        "src.scrapers.workable_scraper": "scrape_all_workable",
+        "src.scrapers.jobvite_scraper": "scrape_all_jobvite",
+        "src.scrapers.smartrecruiters_scraper": "scrape_all_smartrecruiters",
+        "src.scrapers.builtin_scraper": "scrape_all_builtin",
+    }
+    for index, (module_name, function_name) in enumerate(scraper_modules.items()):
+        rows = list(jobs) if index == 0 else []
+        install_module(module_name, **{function_name: lambda rows=rows, **_kwargs: rows})
+
+    def global_metrics_not_allowed(*_args, **_kwargs):
+        raise AssertionError("user pipeline must not use the global metrics store")
+
+    if user_pipeline:
+        metrics_members = {
+            name: global_metrics_not_allowed
+            for name in (
+                "get_hiring_momentum",
+                "get_last_ats_counts",
+                "get_last_run",
+                "record_ats_counts",
+                "record_company_hiring",
+                "record_pipeline_run",
+            )
+        }
+    else:
+        def record_pipeline_run(**kwargs):
+            captured["persisted_metrics"] = dict(kwargs)
+            return "synthetic-run"
+
+        metrics_members = {
+            "get_hiring_momentum": lambda: [],
+            "get_last_ats_counts": lambda _stage: {},
+            "get_last_run": lambda: None,
+            "record_ats_counts": lambda *_args: None,
+            "record_company_hiring": lambda *_args: None,
+            "record_pipeline_run": record_pipeline_run,
+        }
+    install_module("src.storage.metrics_store", **metrics_members)
+    install_module(
+        "src.storage.skill_corpus_store",
+        get_top_corpus_skills=lambda limit=100: [],
+        store_job_skills=lambda *_args: None,
+    )
+
+    def check_pipeline_regression(_previous, current, _logger):
+        if user_pipeline:
+            global_metrics_not_allowed()
+        captured["current_metrics"] = dict(current)
+
+    install_module(
+        "src.utils.ats_health",
+        check_ats_failure=(
+            global_metrics_not_allowed if user_pipeline else lambda *_args: None
+        ),
+        check_ats_health=lambda _rows: None,
+        check_pipeline_regression=check_pipeline_regression,
+    )
+    install_module(
+        "src.utils.job_cache",
+        cache_keys_for_jobs=lambda rows: [row["job_id"] for row in rows],
+        filter_new_jobs=lambda rows, _seen: (
+            list(rows),
+            [row["job_id"] for row in rows],
+        ),
+        load_seen_job_ids=lambda: set(),
+        save_new_job_ids=lambda _ids: None,
+    )
+
+    def log_stage_metrics(stage, rows):
+        captured.setdefault("logged_stage_counts", []).append(
+            (stage, len(rows))
+        )
+        return {"count": len(rows)}
+
+    install_module("src.utils.pipeline_metrics", log_stage_metrics=log_stage_metrics)
+    return captured
+
+
+@pytest.mark.parametrize(
+    (
+        "input_count",
+        "filtered_count",
+        "graph_route",
+        "user_pipeline",
+        "expected_drop_pct",
+    ),
+    [
+        (0, 0, False, False, 0),
+        (3, 2, False, False, 33.33),
+        (3, 2, True, False, 33.33),
+        (3, 2, True, True, 33.33),
+    ],
+)
+def test_completed_collector_paths_share_defined_drop_pct(
+    monkeypatch,
+    tmp_path,
+    input_count,
+    filtered_count,
+    graph_route,
+    user_pipeline,
+    expected_drop_pct,
+):
+    jobs = [
+        {
+            "job_id": f"job-{index}",
+            "title": "Synthetic Engineer",
+            "company": "Synthetic",
+            "location": "United States",
+        }
+        for index in range(input_count)
+    ]
+    captured = _install_drop_pct_collector_fakes(
+        monkeypatch,
+        tmp_path,
+        jobs=jobs,
+        filtered_count=filtered_count,
+        graph_route=graph_route,
+        user_pipeline=user_pipeline,
+    )
+
+    result = asyncio.run(collector.collect_all_jobs_async())
+
+    assert [row["job_id"] for row in result] == [
+        row["job_id"] for row in jobs[:filtered_count]
+    ]
+    assert captured["stage_completions"].count("filtering") == 1
+    assert captured["stage_completions"].count("dedupe") == 1
+    assert captured["stage_completions"].index("filtering") < captured[
+        "stage_completions"
+    ].index("dedupe")
+    expected_route_events = (
+        ["graph_filter", "graph_dedupe"]
+        if graph_route
+        else ["direct_filter", "direct_dedupe"]
+    )
+    assert captured["route_events"] == expected_route_events
+    assert f"Filter drop rate: {expected_drop_pct}%" in captured["logs"]
+
+    if user_pipeline:
+        assert "current_metrics" not in captured
+        assert "persisted_metrics" not in captured
+    else:
+        assert captured["current_metrics"]["drop_pct"] == expected_drop_pct
+        assert captured["persisted_metrics"]["drop_pct"] == expected_drop_pct

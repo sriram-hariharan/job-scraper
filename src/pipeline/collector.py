@@ -2457,7 +2457,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
 
     role_title_audit_rows = [] if _is_user_pipeline_mode() and selected_role_families else None
-    deterministic_stage_results: Dict[str, Any] = {}
+    deterministic_stage_results: Dict[str, Any] = {"drop_pct": 0}
 
     def complete_prefilter_stage(
         completed_filtered_jobs: List[Dict[str, Any]],
@@ -2506,6 +2506,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
                 (1 - len(completed_filtered_jobs) / len(all_jobs)) * 100,
                 2,
             )
+        deterministic_stage_results["drop_pct"] = drop_pct
 
         logger.info("Filter drop rate: %s%%", drop_pct)
         complete_stage(
@@ -2642,6 +2643,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         )
     filtered_counts = deterministic_stage_results["filtered_counts"]
     deduped_counts = deterministic_stage_results["deduped_counts"]
+    drop_pct = deterministic_stage_results["drop_pct"]
     if prefilter_dedupe_graph_result is not None:
         logger.info(
             "Authoritative prefilter/dedupe execution: %s",

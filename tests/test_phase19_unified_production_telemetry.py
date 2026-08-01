@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import inspect
+import json
 from pathlib import Path
 import sys
 import types
@@ -21,8 +22,14 @@ FINAL_GRAPH_GATE = (
 TAILORING_GRAPH_GATE = (
     "APPLYLENS_AUTHORITATIVE_TAILORING_GENERATION_LANGGRAPH_ENABLED"
 )
+PREFILTER_DEDUPE_GRAPH_GATE = (
+    "APPLYLENS_AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_ENABLED"
+)
 TELEMETRY_GATE = "APPLYLENS_PRODUCTION_AGENT_TELEMETRY_ENABLED"
 FINAL_GRAPH_MODULE = "src.agents.final_scoring_authoritative_graph"
+PREFILTER_DEDUPE_GRAPH_MODULE = (
+    "src.agents.deterministic_prefilter_dedupe_authoritative_graph"
+)
 NOW = "2026-07-30T12:00:00Z"
 
 
@@ -88,6 +95,126 @@ def _install_final_graph(monkeypatch, execute):
         types.SimpleNamespace(
             execute_authoritative_final_scoring_graph=execute
         ),
+    )
+
+
+def _prefilter_jobs():
+    return [
+        {
+            "job_id": "prefilter-1",
+            "company": "Private Example",
+            "title": "Data Scientist",
+            "location": "New York, NY",
+            "source": "greenhouse",
+            "posted_at": "2099-01-01T00:00:00Z",
+            "url": "https://jobs.example/prefilter-1",
+        },
+        {
+            "job_id": "prefilter-2",
+            "company": "Private Example",
+            "title": "Data Scientist",
+            "location": "New York, NY",
+            "source": "greenhouse",
+            "posted_at": "2099-01-01T00:00:00Z",
+            "url": "https://jobs.example/prefilter-2",
+        },
+        {
+            "job_id": "prefilter-3",
+            "company": "Private Example",
+            "title": "Accountant",
+            "location": "New York, NY",
+            "source": "greenhouse",
+            "posted_at": "2099-01-01T00:00:00Z",
+            "url": "https://jobs.example/prefilter-3",
+        },
+    ]
+
+
+def _prefilter_env(
+    *,
+    graph_enabled: bool,
+    telemetry_enabled: bool,
+    include_identity: bool = True,
+) -> dict[str, str]:
+    values = {
+        PREFILTER_DEDUPE_GRAPH_GATE: "1" if graph_enabled else "0",
+        TELEMETRY_GATE: "1" if telemetry_enabled else "0",
+    }
+    if include_identity:
+        values.update(
+            {
+                "JOB_APP_PIPELINE_RUN_ID": "run-phase22p-a",
+                "JOB_STACK_OWNER_USER_ID": "owner-phase22p-a",
+                "APPLYLENS_AGENT_CONTEXT_ID": "context-phase22p-a",
+            }
+        )
+    return values
+
+
+def _prefilter_result():
+    jobs = _prefilter_jobs()
+    return {
+        "filtered_jobs": deepcopy(jobs[:2]),
+        "filter_diagnostics": {
+            "title_pass": 2,
+            "location_pass": 2,
+            "title_mismatch": 1,
+        },
+        "role_title_audit_rows": [],
+        "deduplicated_jobs": deepcopy(jobs[:1]),
+        "execution_metadata": {
+            "graph_version": "authoritative-prefilter-dedupe-graph-v1",
+            "state_version": "authoritative-prefilter-dedupe-state-v1",
+            "execution_mode": "langgraph",
+            "node_order": ["filter_jobs", "dedupe_jobs"],
+            "production_node_count": 2,
+            "prefilter_invocation_count": 1,
+            "dedupe_invocation_count": 1,
+            "input_count": 3,
+            "prefilter_output_count": 2,
+            "dedupe_output_count": 1,
+            "prefilter_latency_ms": 11,
+            "dedupe_latency_ms": 7,
+            "status": "completed",
+            "failure_classification": "",
+            "deterministic": True,
+            "read_only": True,
+            "provider_calls_allowed": False,
+            "mutation_authority": False,
+            "application_authority": False,
+            "ats_authority": False,
+        },
+    }
+
+
+def _install_prefilter_graph(monkeypatch, execute):
+    monkeypatch.setitem(
+        sys.modules,
+        PREFILTER_DEDUPE_GRAPH_MODULE,
+        types.SimpleNamespace(
+            execute_authoritative_prefilter_dedupe_graph=execute
+        ),
+    )
+
+
+def _invoke_prefilter(
+    *,
+    env,
+    telemetry_sink=None,
+    jobs=None,
+    on_prefilter_completed=None,
+    on_dedupe_completed=None,
+):
+    return collector._maybe_execute_authoritative_prefilter_dedupe_graph(
+        jobs=_prefilter_jobs() if jobs is None else jobs,
+        selected_role_families=None,
+        filter_mode="strict_live",
+        role_title_audit_rows=None,
+        excluded_keywords=[],
+        on_prefilter_completed=on_prefilter_completed,
+        on_dedupe_completed=on_dedupe_completed,
+        env=env,
+        telemetry_sink=telemetry_sink,
     )
 
 
@@ -412,6 +539,381 @@ def test_sink_failure_is_bounded_and_does_not_raise():
         "failure_classification": "sink_failure",
         "reason_code": "telemetry_sink_failed",
     }
+
+
+@pytest.mark.parametrize("telemetry_enabled", [False, True])
+def test_prefilter_graph_off_imports_nothing_and_returns_direct_sentinel(
+    monkeypatch,
+    telemetry_enabled,
+):
+    events = []
+    monkeypatch.delitem(
+        sys.modules,
+        PREFILTER_DEDUPE_GRAPH_MODULE,
+        raising=False,
+    )
+    monkeypatch.delitem(
+        sys.modules,
+        "src.agents.production_telemetry",
+        raising=False,
+    )
+
+    result = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=False,
+            telemetry_enabled=telemetry_enabled,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    assert result is None
+    assert events == []
+    assert PREFILTER_DEDUPE_GRAPH_MODULE not in sys.modules
+    assert "src.agents.production_telemetry" not in sys.modules
+
+
+def test_prefilter_graph_on_telemetry_off_executes_once_without_import(
+    monkeypatch,
+):
+    calls, events = [], []
+
+    def execute(**_kwargs):
+        calls.append("graph")
+        return deepcopy(_prefilter_result())
+
+    _install_prefilter_graph(monkeypatch, execute)
+    monkeypatch.delitem(
+        sys.modules,
+        "src.agents.production_telemetry",
+        raising=False,
+    )
+
+    result = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=False,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    assert result == _prefilter_result()
+    assert calls == ["graph"]
+    assert events == []
+    assert "src.agents.production_telemetry" not in sys.modules
+
+
+def test_prefilter_both_gates_on_emit_two_exact_ordered_node_events(
+    monkeypatch,
+):
+    calls, events = [], []
+
+    def execute(**_kwargs):
+        calls.append("graph")
+        return deepcopy(_prefilter_result())
+
+    _install_prefilter_graph(monkeypatch, execute)
+    result = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    assert result == _prefilter_result()
+    assert calls == ["graph"]
+    assert [event["node_key"] for event in events] == [
+        "filter_jobs",
+        "dedupe_jobs",
+    ]
+    assert [
+        (event["input_count"], event["output_count"])
+        for event in events
+    ] == [(3, 2), (2, 1)]
+    assert [event["latency_ms"] for event in events] == [11, 7]
+    for event in events:
+        assert event["workload_classification"] == "deterministic"
+        assert event["execution_route"] == "graph"
+        assert event["status"] == "completed"
+        assert event["invocation_count"] == 1
+        assert event["mutation_authority"] is False
+        assert event["application_authority"] is False
+        assert event["ats_authority"] is False
+
+
+def test_prefilter_telemetry_on_off_output_parity_and_order(monkeypatch):
+    calls = []
+
+    def execute(**_kwargs):
+        calls.append("graph")
+        return deepcopy(_prefilter_result())
+
+    _install_prefilter_graph(monkeypatch, execute)
+    without_telemetry = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=False,
+        )
+    )
+    events = []
+    with_telemetry = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    assert with_telemetry == without_telemetry
+    assert [
+        row["job_id"] for row in with_telemetry["filtered_jobs"]
+    ] == ["prefilter-1", "prefilter-2"]
+    assert [
+        row["job_id"] for row in with_telemetry["deduplicated_jobs"]
+    ] == ["prefilter-1"]
+    assert calls == ["graph", "graph"]
+    assert len(events) == 2
+
+
+def test_prefilter_real_collector_boundary_has_telemetry_output_parity():
+    without_telemetry = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=False,
+        )
+    )
+    events = []
+    with_telemetry = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    for field in (
+        "filtered_jobs",
+        "filter_diagnostics",
+        "role_title_audit_rows",
+        "deduplicated_jobs",
+    ):
+        assert with_telemetry[field] == without_telemetry[field]
+    with_metadata = dict(with_telemetry["execution_metadata"])
+    without_metadata = dict(without_telemetry["execution_metadata"])
+    for latency_field in ("prefilter_latency_ms", "dedupe_latency_ms"):
+        with_metadata.pop(latency_field)
+        without_metadata.pop(latency_field)
+    assert with_metadata == without_metadata
+    assert [event["node_key"] for event in events] == [
+        "filter_jobs",
+        "dedupe_jobs",
+    ]
+
+
+def test_prefilter_real_boundary_owners_callbacks_and_telemetry_order(
+    monkeypatch,
+):
+    from src.pipeline import dedupe, job_filter
+
+    order, events = [], []
+    real_filter = job_filter.filter_jobs
+    real_dedupe = dedupe.dedupe_jobs
+
+    def counted_filter(*args, **kwargs):
+        order.append("filter_owner")
+        return real_filter(*args, **kwargs)
+
+    def counted_dedupe(*args, **kwargs):
+        order.append("dedupe_owner")
+        return real_dedupe(*args, **kwargs)
+
+    def sink(event):
+        order.append(f"telemetry:{event['node_key']}")
+        events.append(event)
+
+    monkeypatch.setattr(job_filter, "filter_jobs", counted_filter)
+    monkeypatch.setattr(dedupe, "dedupe_jobs", counted_dedupe)
+    result = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+        ),
+        telemetry_sink=sink,
+        on_prefilter_completed=lambda *_args: order.append(
+            "filter_completed"
+        ),
+        on_dedupe_completed=lambda *_args: order.append(
+            "dedupe_completed"
+        ),
+    )
+
+    assert result is not None
+    assert order == [
+        "filter_owner",
+        "filter_completed",
+        "dedupe_owner",
+        "dedupe_completed",
+        "telemetry:filter_jobs",
+        "telemetry:dedupe_jobs",
+    ]
+    assert len(events) == 2
+
+
+def test_prefilter_empty_input_emits_two_truthful_zero_count_events():
+    events = []
+    result = _invoke_prefilter(
+        jobs=[],
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    assert result["filtered_jobs"] == []
+    assert result["deduplicated_jobs"] == []
+    assert len(events) == 2
+    assert [
+        (event["input_count"], event["output_count"])
+        for event in events
+    ] == [(0, 0), (0, 0)]
+    assert all(0 <= event["latency_ms"] <= 300_000 for event in events)
+
+
+def test_prefilter_sink_failure_preserves_output_without_graph_rerun(
+    monkeypatch,
+):
+    calls, sink_calls = [], []
+
+    def execute(**_kwargs):
+        calls.append("graph")
+        return deepcopy(_prefilter_result())
+
+    def failed_sink(event):
+        sink_calls.append(event["node_key"])
+        raise RuntimeError("sink unavailable")
+
+    _install_prefilter_graph(monkeypatch, execute)
+    result = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+        ),
+        telemetry_sink=failed_sink,
+    )
+
+    assert result == _prefilter_result()
+    assert calls == ["graph"]
+    assert sink_calls == ["filter_jobs", "dedupe_jobs"]
+
+
+def test_prefilter_contract_rejection_preserves_output_without_retry(
+    monkeypatch,
+):
+    calls, events = [], []
+
+    def execute(**_kwargs):
+        calls.append("graph")
+        return deepcopy(_prefilter_result())
+
+    _install_prefilter_graph(monkeypatch, execute)
+    result = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+            include_identity=False,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    assert result == _prefilter_result()
+    assert calls == ["graph"]
+    assert events == []
+
+
+def test_prefilter_invalid_graph_result_emits_nothing(monkeypatch):
+    calls, events = [], []
+    invalid = _prefilter_result()
+    invalid["execution_metadata"]["status"] = "failed"
+
+    def execute(**_kwargs):
+        calls.append("graph")
+        return deepcopy(invalid)
+
+    _install_prefilter_graph(monkeypatch, execute)
+    with pytest.raises(
+        RuntimeError,
+        match="authoritative_prefilter_dedupe_execution_metadata_invalid",
+    ):
+        _invoke_prefilter(
+            env=_prefilter_env(
+                graph_enabled=True,
+                telemetry_enabled=True,
+            ),
+            telemetry_sink=events.append,
+        )
+
+    assert calls == ["graph"]
+    assert events == []
+
+
+def test_prefilter_events_exclude_business_provider_and_credential_payloads(
+    monkeypatch,
+):
+    events = []
+    private_result = _prefilter_result()
+    private_result["filtered_jobs"][0]["description_text"] = (
+        "private job description"
+    )
+    private_result["filtered_jobs"][0]["resume_text"] = "private resume"
+
+    _install_prefilter_graph(
+        monkeypatch,
+        lambda **_kwargs: deepcopy(private_result),
+    )
+    result = _invoke_prefilter(
+        env=_prefilter_env(
+            graph_enabled=True,
+            telemetry_enabled=True,
+        ),
+        telemetry_sink=events.append,
+    )
+
+    assert result == private_result
+    assert len(events) == 2
+    prohibited = {
+        "jobs",
+        "rows",
+        "company",
+        "title",
+        "location",
+        "description",
+        "description_text",
+        "resume",
+        "resume_text",
+        "provider_request",
+        "provider_response",
+        "cache",
+        "api_key",
+        "authorization",
+        "token",
+        "environment",
+    }
+    for event in events:
+        assert prohibited.isdisjoint(event)
+        assert (
+            len(
+                json.dumps(
+                    event,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            )
+            <= telemetry.MAX_TELEMETRY_PAYLOAD_BYTES
+        )
+        assert "Private Example" not in repr(event)
+        assert "private job description" not in repr(event)
+        assert "private resume" not in repr(event)
 
 
 def test_final_scoring_gate_off_emits_nothing_and_does_not_import(monkeypatch):

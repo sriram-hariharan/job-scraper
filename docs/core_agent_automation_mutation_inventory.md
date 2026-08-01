@@ -39,8 +39,9 @@ are infrastructure or contracts; they are not additional agents.
      `APPLYLENS_AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_ENABLED` is off.
    - Cache behavior: no LLM cache.
    - Durability: no production durable-node integration.
-   - Telemetry: existing stage metrics/logging; not unified production-node
-     telemetry.
+   - Telemetry: the default-off paired graph emits one sanitized unified
+     production event only when both the graph and telemetry gates are on;
+     the direct route is not instrumented.
    - Human-review relationship: reduces the candidate set before manual
      planning.
    - Authority: no resume mutation, application authority, or ATS authority.
@@ -57,8 +58,9 @@ are infrastructure or contracts; they are not additional agents.
      `APPLYLENS_AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_ENABLED` is off.
    - Cache behavior: no LLM cache.
    - Durability: no production durable-node integration.
-   - Telemetry: existing stage counts/logging; not unified production-node
-     telemetry.
+   - Telemetry: the default-off paired graph emits one sanitized unified
+     production event after the prefilter event only when both gates are on;
+     the direct route is not instrumented.
    - Human-review relationship: prevents duplicate review work.
    - Authority: no resume mutation, application authority, or ATS authority.
 
@@ -182,9 +184,14 @@ are infrastructure or contracts; they are not additional agents.
   counted as production agents.
 
 Unified telemetry coverage is intentionally representative, not all-agent:
-deterministic final scoring, cache-first tailoring generation, and durable
-tailoring first execution/replay use the shared adapter. No claim of complete
-all-node telemetry is made.
+authoritative paired prefilter/dedup graph execution, deterministic final
+scoring, cache-first tailoring generation, and durable tailoring first
+execution/replay use the shared adapter. Prefilter/dedup events are sanitized,
+non-authoritative, and require both default-off gates; the direct route is not
+instrumented. Discovery, JD intelligence, semantic evaluation, critic, and
+strategy are not newly covered. No claim of complete all-node telemetry is
+made, and no autonomous application, ATS, or resume-mutation authority was
+added.
 
 ## Phase 22 historical inventory
 

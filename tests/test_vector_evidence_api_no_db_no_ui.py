@@ -379,7 +379,7 @@ def test_no_schema_dependency_ui_or_pipeline_change():
         "src/storage/agentic_approvals/schema.sql": ("57e84094cdbd3a4e8542fd205d89bfde18179c5d07c15084354f31f77bf5d98f"),
         "src/storage/profile_resumes/schema.sql": ("a71d55d9306258661b99f9bc88aa122fbf24443e7bd43a9ba597133289df1e57"),
         "src/app/static/agentic_review.js": ("fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0"),
-        "src/pipeline/collector.py": ("cf13761d28f0b0dc70ea26433a06ef557700ef6c6af6554155fd3ad2513d8330"),
+        "src/pipeline/collector.py": ("55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23"),
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),
         "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
     }

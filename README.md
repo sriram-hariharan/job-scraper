@@ -161,8 +161,13 @@ deterministic.
 Tailoring generation is the representative durable node: committed execution
 can be reopened or replayed after restart without repeating the graph, owner,
 provider, or cache write. Unified production telemetry is representative—not
-all-agent—and currently covers final scoring, tailoring generation, and durable
-tailoring execution/replay.
+all-agent—and currently covers authoritative paired prefilter/dedup graph
+execution, final scoring, tailoring generation, and durable tailoring
+execution/replay. Prefilter/dedup telemetry requires both its graph gate and
+the telemetry gate; the direct route is not instrumented. These sanitized,
+non-authoritative events add no mutation, resume, application, or ATS
+authority. Discovery, JD intelligence, semantic evaluation, critic, and
+strategy are not newly covered.
 
 A durable tailoring review can be resolved through an authenticated,
 owner-scoped action using only `continue_read_only`, `needs_revision`, or

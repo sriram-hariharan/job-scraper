@@ -454,6 +454,7 @@ def _maybe_execute_authoritative_prefilter_dedupe_graph(
     on_dedupe_completed: Callable[[List[Dict[str, Any]]], None]
     | None = None,
     env: Dict[str, str] | None = None,
+    telemetry_sink: Callable[[Dict[str, Any]], Any] | None = None,
 ) -> Dict[str, Any] | None:
     env_map = env if env is not None else os.environ
     if not _authoritative_prefilter_dedupe_langgraph_enabled(env_map):
@@ -490,6 +491,55 @@ def _maybe_execute_authoritative_prefilter_dedupe_graph(
         raise RuntimeError(
             "authoritative_prefilter_dedupe_execution_metadata_invalid"
         )
+    if _production_agent_telemetry_enabled(env_map):
+        from src.agents.production_telemetry import (
+            emit_production_telemetry,
+        )
+
+        node_order = list(metadata.get("node_order") or [])
+        if len(node_order) == 2:
+            prefilter_metadata = {
+                **metadata,
+                "node_name": node_order[0],
+                "invocation_count": metadata.get(
+                    "prefilter_invocation_count"
+                ),
+                "node_latency_ms": metadata.get(
+                    "prefilter_latency_ms"
+                ),
+            }
+            dedupe_metadata = {
+                **metadata,
+                "node_name": node_order[1],
+                "invocation_count": metadata.get(
+                    "dedupe_invocation_count"
+                ),
+                "node_latency_ms": metadata.get(
+                    "dedupe_latency_ms"
+                ),
+            }
+            emit_production_telemetry(
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                context_id=context["context_id"],
+                node_key=node_order[0],
+                workload_classification="deterministic",
+                execution_metadata=prefilter_metadata,
+                input_count=metadata.get("input_count"),
+                output_count=metadata.get("prefilter_output_count"),
+                sink=telemetry_sink,
+            )
+            emit_production_telemetry(
+                pipeline_run_id=context["pipeline_run_id"],
+                owner_user_id=context["owner_user_id"],
+                context_id=context["context_id"],
+                node_key=node_order[1],
+                workload_classification="deterministic",
+                execution_metadata=dedupe_metadata,
+                input_count=metadata.get("prefilter_output_count"),
+                output_count=metadata.get("dedupe_output_count"),
+                sink=telemetry_sink,
+            )
     return result
 
 

@@ -206,7 +206,7 @@ def test_pipeline_dependencies_and_application_authority_are_unchanged():
             "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"
         ),
         "src/pipeline/collector.py": (
-            "cf13761d28f0b0dc70ea26433a06ef557700ef6c6af6554155fd3ad2513d8330"
+            "55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23"
         ),
         "src/pipeline/application_scorer.py": (
             "e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"

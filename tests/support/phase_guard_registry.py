@@ -1979,6 +1979,10 @@ def assert_protected_hashes(
         ): "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
         (
             "src/pipeline/collector.py",
+            "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
+        ): "cf13761d28f0b0dc70ea26433a06ef557700ef6c6af6554155fd3ad2513d8330",
+        (
+            "src/pipeline/collector.py",
             "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",
         ): "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
         (

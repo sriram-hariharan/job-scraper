@@ -371,13 +371,15 @@ def test_generate_suggestions_loader_steps_and_states_are_present():
     markup = PLANNING_UI.read_text(encoding="utf-8")
 
     for label in [
-        "Reading job details",
-        "Checking resume evidence",
         "Building targeted edits",
         "Preparing review packet",
         "Opening workspace",
     ]:
         assert label in source
+    assert source.index("Building targeted edits") < source.index("Preparing review packet")
+    assert source.index("Preparing review packet") < source.index("Opening workspace")
+    assert "Reading job details" not in source
+    assert "Checking resume evidence" not in source
 
     for element_id in [
         "generateSuggestionsLoader",
@@ -386,8 +388,14 @@ def test_generate_suggestions_loader_steps_and_states_are_present():
         "generateSuggestionsRetryBtn",
         "generateSuggestionsOpenWorkspaceBtn",
         "generateSuggestionsCancelBtn",
+        "generateSuggestionsStatusIcon",
     ]:
         assert element_id in markup
+
+    assert 'aria-labelledby="generateSuggestionsLoaderTitle"' in markup
+    assert 'aria-describedby="generateSuggestionsLoaderText"' in markup
+    assert 'aria-busy="false"' in markup
+    assert "Suggestions stay in review until you open the workspace." in markup
 
     assert "generate-suggestions-fullpage" in markup
     assert "generate-suggestions-fullpage-card" in markup
@@ -408,6 +416,8 @@ def test_generate_suggestions_loader_steps_and_states_are_present():
     assert "generate-suggestions-step-item" in runner_source
     assert "workflow-step-track" in runner_source
     assert "workflow-step__indicator" in runner_source
+    assert "GENERATE_SUGGESTIONS_STEP_DESCRIPTIONS" in runner_source
+    assert 'aria-current="step"' in runner_source
     assert 'isComplete ? "is-complete"' in runner_source
     assert 'isFailed ? "is-error"' in runner_source
     assert 'isActive ? "is-active"' in runner_source
@@ -415,6 +425,11 @@ def test_generate_suggestions_loader_steps_and_states_are_present():
     assert "generate-suggestions-step-progress" not in runner_source
     assert "buildResumeChoiceLoadingStepsHtml" not in render_source
     assert "GENERATE_SUGGESTIONS_STEPS.map" not in render_source
+    assert 'step.setAttribute("aria-current", "step")' in render_source
+    assert 'step.removeAttribute("aria-current")' in render_source
+    assert "getGenerateSuggestionsStepPositionClass" not in render_source
+    assert "renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false)" in loader_source
+    assert "renderGenerateSuggestionsSteps(GENERATE_SUGGESTIONS_STEPS.length - 1, true)" in loader_source
     timer_source = _function_source(source, "startGenerateSuggestionsStepTimer")
     assert "window.setInterval" in timer_source
     assert "lastProcessingCue" in timer_source

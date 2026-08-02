@@ -525,30 +525,49 @@ html[data-theme="dark"] .shared-filter-select__menu {
 
 .planning-react-segmented {
   display: grid;
-  height: 40px;
+  height: 50px;
   grid-template-columns: 1fr 1fr;
-  padding: 3px;
+  padding: 2px;
   border: 1px solid var(--queue-border-strong);
   border-radius: 6px;
   background: var(--queue-surface-muted);
 }
 
 .planning-react-segmented button {
-  border: 0;
+  min-height: 44px;
+  border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   background-image: none;
   box-shadow: none;
-  color: var(--queue-muted);
+  color: var(--queue-ink);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
 }
 
 .planning-react-segmented button.is-active {
-  background: var(--queue-surface-strong);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
-  color: var(--queue-accent);
+  border-color: #2563eb;
+  background: #2563eb;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+.planning-react-segmented button:not(.is-active):hover {
+  background: color-mix(in srgb, var(--queue-ink) 7%, transparent);
+  color: var(--queue-ink);
+}
+
+.planning-react-segmented button.is-active:hover {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .planning-react-segmented button.is-active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
 }
 
 .planning-react-limit-field {

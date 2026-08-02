@@ -153,6 +153,10 @@ def test_generate_suggestions_waits_for_explicit_workspace_action():
     assert "workflow-step-viewport" in markup
     assert "generate-suggestions-document-stack" not in markup
     assert "workflow-overlay__footer" in markup
+    assert 'aria-labelledby="generateSuggestionsLoaderTitle"' in markup
+    assert 'aria-describedby="generateSuggestionsLoaderText"' in markup
+    assert 'aria-current="step"' in script
+    assert "setGenerateSuggestionsBackgroundInert" in script
     assert "Your suggestions and review packet are ready for inspection." in script
     assert 'button.disabled = true' in script[script.index("function openGenerateSuggestionsWorkspace"):]
 
@@ -248,6 +252,27 @@ def test_processing_surfaces_share_compact_moving_step_viewport_and_reduced_moti
     assert ".workflow-step.is-next" in source
     assert ".workflow-step.is-upcoming" in source
     assert ".workflow-step.is-hidden" in source
+    tailoring_panel_start = source.index(
+        "html[data-theme] body .workflow-overlay--tailoring .workflow-overlay__panel"
+    )
+    tailoring_panel_end = source.index(".workflow-overlay--tailoring .workflow-overlay__header", tailoring_panel_start)
+    tailoring_panel_css = source[tailoring_panel_start:tailoring_panel_end]
+    assert "width: min(680px, calc(100vw - 32px)) !important" in tailoring_panel_css
+    assert "border-radius: 22px !important" in tailoring_panel_css
+    assert "grid-template-rows: auto auto minmax(0, 1fr) auto !important" in tailoring_panel_css
+    tailoring_steps_start = source.index(".workflow-overlay--tailoring .workflow-step,")
+    tailoring_steps_end = source.index(
+        ".workflow-overlay--tailoring .workflow-step:not(:last-child)::after",
+        tailoring_steps_start,
+    )
+    tailoring_steps_css = source[tailoring_steps_start:tailoring_steps_end]
+    assert "position: relative !important" in tailoring_steps_css
+    assert "opacity: 1 !important" in tailoring_steps_css
+    assert "transform: none !important" in tailoring_steps_css
+    assert ".workflow-overlay--tailoring.is-error .workflow-step:not(.is-active-position)" in source
+    assert "body.tailoring-workflow-open" in source
+    assert ".workflow-overlay--tailoring .workflow-overlay__safety" in source
+    assert ".workflow-overlay--tailoring .workflow-overlay__actions button" in source
     pipeline_timeline_start = source.index(".workflow-overlay--pipeline .workflow-step-track")
     pipeline_timeline_end = source.index(".workflow-overlay--pipeline .workflow-step {", pipeline_timeline_start)
     pipeline_timeline_css = source[pipeline_timeline_start:pipeline_timeline_end]
@@ -282,7 +307,9 @@ def test_step_tracks_update_from_state_without_rebuilding_every_poll():
     assert "getWorkflowStepPositionClass" in pipeline_render
     assert "track.children.length !== GENERATE_SUGGESTIONS_STEPS.length" in suggestions_render
     assert 'track.dataset.activeIndex = String(cappedIndex)' in suggestions_render
-    assert "getGenerateSuggestionsStepPositionClass" in suggestions_render
+    assert "getGenerateSuggestionsStepPositionClass" not in suggestions_render
+    assert 'step.setAttribute("aria-current", "step")' in suggestions_render
+    assert 'step.removeAttribute("aria-current")' in suggestions_render
     assert "%" not in pipeline_render
     assert "%" not in suggestions_render
 

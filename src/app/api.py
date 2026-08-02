@@ -3446,12 +3446,13 @@ def planning_regenerate_selected_resume(
     job_corpus: str = str(services.DEFAULT_CORPUS_PATH),
 ):
     try:
+        owner_user_id = _require_auth_owner_user_id(http_request)
         pipeline_run_id = str(payload.get("pipeline_run_id", "") or "").strip()
         resolved_output_dir = Path(output_dir)
         resolved_job_corpus = Path(job_corpus)
         if pipeline_run_id:
             resolved_output_dir, resolved_job_corpus = services.resolve_user_pipeline_run_planning_paths(
-                owner_user_id=_auth_owner_user_id(http_request),
+                owner_user_id=owner_user_id,
                 run_id=pipeline_run_id,
             )
         return services.regenerate_selected_resume_tailoring_payload(
@@ -3462,7 +3463,13 @@ def planning_regenerate_selected_resume(
             selected_resume=str(payload.get("selected_resume", "") or ""),
             generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
             refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
+            owner_user_id=owner_user_id,
         )
+    except services.SelectedResumeRegenerationError:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not regenerate the selected resume. Please retry.",
+        ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

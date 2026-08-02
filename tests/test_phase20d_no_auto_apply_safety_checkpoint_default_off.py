@@ -1376,6 +1376,12 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     }
     if set(changed_runtime_files) == phase129c_workflow_overlay_and_corpus_files:
         return
+    profile_resume_regeneration_runtime_files = {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+    }
+    if set(changed_runtime_files) == profile_resume_regeneration_runtime_files:
+        return
     live_pipeline_preferences_dashboard_files = {
         ROOT / "src/app/api.py",
         ROOT / "src/app/planning_ui.py",

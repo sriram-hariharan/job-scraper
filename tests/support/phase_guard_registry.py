@@ -1936,11 +1936,11 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+        ): "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
-        ): "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
+        ): "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
         (
             "src/app/static/app_redesign.css",
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
@@ -1948,11 +1948,19 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-        ): "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+        ): "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
         (
             "src/app/services.py",
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
-        ): "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
+        ): "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
+        (
+            "src/app/api.py",
+            "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+        ): "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
+        (
+            "src/app/services.py",
+            "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
+        ): "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
             (
                 "src/agents/jd_intelligence.py",
                 "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",

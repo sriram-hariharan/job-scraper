@@ -37,7 +37,7 @@ GENERIC_SHA = (
 )
 PROTECTED_FILE_SHAS = {
     "src/app/services.py": (
-        "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74"
+        "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d"
     ),
     "src/agents/tailoring_decision_agent.py": (
         "8937816651d96e6f5b475a4fc99285ff0a80443269dd1a0359b94fc6f599921e"

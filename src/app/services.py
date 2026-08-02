@@ -210,6 +210,11 @@ from src.agents.jd_intelligence_planning_artifact_enricher_default_off import (
 logger = logging.getLogger(__name__)
 _PROCESS_IDENTITY_POPEN = subprocess.Popen
 
+
+class SelectedResumeRegenerationError(RuntimeError):
+    """Bounded failure raised by targeted resume-regeneration subprocesses."""
+
+
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
 AGENT_FEEDBACK_SUMMARY_MAX_LIMIT = 1000
 AGENT_FEEDBACK_EXPORT_MAX_LIMIT = 5000
@@ -13357,8 +13362,47 @@ def _write_csv_rows(path: Path, fieldnames: List[str], rows: List[Dict[str, Any]
             writer.writerow(row)
 
 
-def _run_checked_cmd(cmd: List[str]) -> None:
-    subprocess.run(cmd, check=True)
+def _run_checked_cmd(
+    cmd: List[str],
+    *,
+    env: Optional[Dict[str, str]] = None,
+) -> None:
+    if env is None:
+        subprocess.run(cmd, check=True)
+        return
+    subprocess.run(cmd, check=True, env=env)
+
+
+def _targeted_regeneration_child_env(
+    owner_user_id: str,
+) -> Optional[Dict[str, str]]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return None
+
+    child_env = os.environ.copy()
+    child_env["JOB_STACK_USER_PIPELINE_MODE"] = "1"
+    child_env["JOB_STACK_OWNER_USER_ID"] = owner
+    return child_env
+
+
+def _run_selected_resume_regeneration_cmd(
+    cmd: List[str],
+    *,
+    env: Optional[Dict[str, str]],
+    stage: str,
+) -> None:
+    try:
+        _run_checked_cmd(cmd, env=env)
+    except subprocess.CalledProcessError as exc:
+        logger.error(
+            "Selected resume regeneration subprocess failed stage=%s return_code=%s",
+            stage,
+            exc.returncode,
+        )
+        raise SelectedResumeRegenerationError(
+            "Selected resume regeneration failed. Please retry."
+        ) from None
 
 
 def _read_regenerated_llm_status(llm_json_path: Path) -> Dict[str, str]:
@@ -13439,6 +13483,7 @@ def regenerate_selected_resume_tailoring_payload(
     selected_resume: str = "",
     generate_llm_tailoring: bool = False,
     refresh_llm_tailoring: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
     merged_rows = ja._build_job_index(output_dir)
@@ -13516,7 +13561,12 @@ def regenerate_selected_resume_tailoring_payload(
         str(packet_json_path),
     ]
 
-    _run_checked_cmd(diff_cmd)
+    child_env = _targeted_regeneration_child_env(owner_user_id)
+    _run_selected_resume_regeneration_cmd(
+        diff_cmd,
+        env=child_env,
+        stage="resume_diff",
+    )
 
     tailoring_cmd = [
         sys.executable,
@@ -13562,7 +13612,11 @@ def regenerate_selected_resume_tailoring_payload(
         ):
             tailoring_cmd.append("--enable-safe-app-ready-rewrite-promotion")
 
-    _run_checked_cmd(tailoring_cmd)
+    _run_selected_resume_regeneration_cmd(
+        tailoring_cmd,
+        env=child_env,
+        stage="tailoring_generation",
+    )
 
     if generate_llm_tailoring:
         llm_status = _read_regenerated_llm_status(tailoring_llm_json_path)

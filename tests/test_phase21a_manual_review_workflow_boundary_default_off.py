@@ -1768,6 +1768,14 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     }
     if set(changed_runtime_files) == phase133g_premium_planning_runtime_files:
         return
+    planning_ui_polish_runtime_files = {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/styles.css",
+    }
+    if set(changed_runtime_files) == planning_ui_polish_runtime_files:
+        return
     phase133g_s1_shared_filter_runtime_files = phase133g_premium_planning_runtime_files | {
         ROOT / "src/app/ui.py",
         ROOT / "src/app/static/app_redesign.css",

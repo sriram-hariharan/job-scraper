@@ -14,11 +14,15 @@ let resumeChoiceState = {
 };
 
 const GENERATE_SUGGESTIONS_STEPS = [
-  "Reading job details",
-  "Checking resume evidence",
   "Building targeted edits",
   "Preparing review packet",
   "Opening workspace",
+];
+
+const GENERATE_SUGGESTIONS_STEP_DESCRIPTIONS = [
+  "Drafting job-specific resume suggestions.",
+  "Packaging suggestions for human review.",
+  "Finishing the review workspace handoff.",
 ];
 
 let generateSuggestionsState = {
@@ -30,6 +34,7 @@ let generateSuggestionsState = {
   stepTimer: null,
   requestSeq: 0,
   cancelledRequestSeq: null,
+  returnFocus: null,
 };
 
 const PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY = "planningTableLastResponse_v4";
@@ -12384,23 +12389,17 @@ function buildGenerateSuggestionsStepRunnerHtml(activeIndex = 0, completed = fal
         const marker = isComplete ? "✓" : (isFailed ? "!" : "");
         const indicatorLabel = isComplete ? "Complete" : (isFailed ? "Needs attention" : (isActive ? "Current" : "Pending"));
         return `
-          <div class="workflow-step generate-suggestions-step-item ${stateClass}" data-workflow-step-index="${index}">
+          <div class="workflow-step generate-suggestions-step-item ${stateClass}" data-workflow-step-index="${index}"${isActive ? ' aria-current="step"' : ""}>
             <span class="workflow-step__indicator generate-suggestions-step-marker" aria-label="${escapeHtml(indicatorLabel)}">${escapeHtml(marker)}</span>
-            <span class="workflow-step__label generate-suggestions-step-label">${escapeHtml(label)}</span>
+            <span class="workflow-step__label generate-suggestions-step-label">
+              ${escapeHtml(label)}
+              <small>${escapeHtml(GENERATE_SUGGESTIONS_STEP_DESCRIPTIONS[index] || "")}</small>
+            </span>
           </div>
         `;
       }).join("")}
     </div>
   `;
-}
-
-function getGenerateSuggestionsStepPositionClass(index, activeIndex) {
-  const distance = index - activeIndex;
-  if (distance < -1 || distance > 2) return "is-hidden";
-  if (distance === -1) return "is-previous";
-  if (distance === 0) return "is-active-position";
-  if (distance === 1) return "is-next";
-  return "is-upcoming";
 }
 
 function renderGenerateSuggestionsSteps(activeIndex = 0, completed = false, failed = false) {
@@ -12427,13 +12426,31 @@ function renderGenerateSuggestionsSteps(activeIndex = 0, completed = false, fail
     const marker = isComplete ? "✓" : (isFailed ? "!" : "");
     const indicatorLabel = isComplete ? "Complete" : (isFailed ? "Needs attention" : (isActive ? "Current" : "Pending"));
 
-    step.className = `workflow-step generate-suggestions-step-item ${stateClass} ${getGenerateSuggestionsStepPositionClass(index, cappedIndex)}`;
-    step.setAttribute("aria-hidden", step.classList.contains("is-hidden") ? "true" : "false");
+    step.className = `workflow-step generate-suggestions-step-item ${stateClass}`;
+    if (isActive) step.setAttribute("aria-current", "step");
+    else step.removeAttribute("aria-current");
     if (indicator) {
       indicator.textContent = marker;
       indicator.setAttribute("aria-label", indicatorLabel);
     }
   });
+}
+
+function setGenerateSuggestionsBackgroundInert(isInert) {
+  const loader = getGenerateSuggestionsLoader();
+  Array.from(document.body.children).forEach((element) => {
+    if (element === loader || element.contains(loader) || element.tagName === "SCRIPT") return;
+    if (isInert) {
+      if (!element.hasAttribute("inert")) {
+        element.setAttribute("data-generate-suggestions-inert", "true");
+        element.setAttribute("inert", "");
+      }
+    } else if (element.getAttribute("data-generate-suggestions-inert") === "true") {
+      element.removeAttribute("inert");
+      element.removeAttribute("data-generate-suggestions-inert");
+    }
+  });
+  document.body.classList.toggle("tailoring-workflow-open", isInert);
 }
 
 function startGenerateSuggestionsStepTimer() {
@@ -12462,9 +12479,21 @@ function setGenerateSuggestionsLoaderState(state, {
   const retryBtn = qs("generateSuggestionsRetryBtn");
   const openBtn = qs("generateSuggestionsOpenWorkspaceBtn");
   const cancelBtn = qs("generateSuggestionsCancelBtn");
+  const statusIcon = qs("generateSuggestionsStatusIcon");
+  const wasHidden = loader.classList.contains("hidden");
+
+  if (wasHidden) {
+    generateSuggestionsState.returnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  }
 
   loader.classList.remove("hidden");
   loader.classList.remove("is-success", "is-error");
+  loader.dataset.workflowState = state;
+  loader.setAttribute("aria-busy", state === "running" ? "true" : "false");
+  setGenerateSuggestionsBackgroundInert(true);
+  if (statusIcon) statusIcon.textContent = "";
 
   if (errorEl) {
     errorEl.textContent = "";
@@ -12483,6 +12512,7 @@ function setGenerateSuggestionsLoaderState(state, {
     if (badgeEl) badgeEl.textContent = "Running";
     if (textEl) textEl.textContent = "Building review-ready suggestions from the selected job and resume.";
     renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false);
+    if (wasHidden) window.requestAnimationFrame(() => cancelBtn?.focus());
     return;
   }
 
@@ -12491,6 +12521,7 @@ function setGenerateSuggestionsLoaderState(state, {
 
   if (state === "success") {
     loader.classList.add("is-success");
+    if (statusIcon) statusIcon.textContent = "✓";
     renderGenerateSuggestionsSteps(GENERATE_SUGGESTIONS_STEPS.length - 1, true);
     if (titleEl) titleEl.textContent = "Tailoring workspace is ready";
     if (badgeEl) badgeEl.textContent = "Ready";
@@ -12501,6 +12532,7 @@ function setGenerateSuggestionsLoaderState(state, {
 
   renderGenerateSuggestionsSteps(generateSuggestionsState.stepIndex, false, true);
   loader.classList.add("is-error");
+  if (statusIcon) statusIcon.textContent = "!";
   if (titleEl) titleEl.textContent = "Could not generate suggestions";
   if (badgeEl) badgeEl.textContent = "Needs attention";
   if (textEl) textEl.textContent = message || "Review the message below.";
@@ -12519,6 +12551,10 @@ function closeGenerateSuggestionsLoader() {
   generateSuggestionsState.isRunning = false;
   clearGenerateSuggestionsStepTimer();
   getGenerateSuggestionsLoader()?.classList.add("hidden");
+  setGenerateSuggestionsBackgroundInert(false);
+  const returnFocus = generateSuggestionsState.returnFocus;
+  generateSuggestionsState.returnFocus = null;
+  if (returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus();
 }
 
 function getPlanningRowFromTailoringDataset(button) {

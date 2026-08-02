@@ -199,3 +199,33 @@ it("uses the shared controlled filters without requesting until Apply", () => {
   expect(lastAction(listener.actions)).toEqual({ type: "clear_filters" });
   listener.stop();
 });
+
+it("keeps exactly one truthful Undecided only segment active", () => {
+  const listener = listenForActions();
+  const initialState = planningState();
+  const { container, rerender } = render(<PlanningFiltersToolbar state={initialState} />);
+
+  expect(screen.getByRole("button", { name: "No" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Yes" })).toHaveAttribute("aria-pressed", "false");
+  expect(container.querySelectorAll(".planning-react-segmented .is-active")).toHaveLength(1);
+
+  fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+  expect(lastAction(listener.actions)).toEqual(expect.objectContaining({
+    type: "filters_change",
+    filters: expect.objectContaining({ undecidedOnly: true }),
+  }));
+
+  rerender(<PlanningFiltersToolbar state={planningState({
+    filters: { ...initialState.filters, undecidedOnly: true },
+  })} />);
+  expect(screen.getByRole("button", { name: "No" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "Yes" })).toHaveAttribute("aria-pressed", "true");
+  expect(container.querySelectorAll(".planning-react-segmented .is-active")).toHaveLength(1);
+
+  fireEvent.click(screen.getByRole("button", { name: "No" }));
+  expect(lastAction(listener.actions)).toEqual(expect.objectContaining({
+    type: "filters_change",
+    filters: expect.objectContaining({ undecidedOnly: false }),
+  }));
+  listener.stop();
+});

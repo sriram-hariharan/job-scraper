@@ -202,13 +202,52 @@ def test_all_migrated_authenticated_pages_use_the_new_cache_marker():
 
 def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
     old_bundle_marker = "item2_phase3_shared_header_r1"
-    assert f"executive-kpi.css?v={old_bundle_marker}" in UI_SOURCE
-    assert f"executive-kpi.js?v={old_bundle_marker}" in UI_SOURCE
-    assert f"executive-kpi.css?v={old_bundle_marker}" in PLANNING_UI_SOURCE
-    assert f"executive-kpi.js?v={old_bundle_marker}" in PLANNING_UI_SOURCE
-    # shell.js / planning.js / scan_workspace.js markers untouched.
-    assert 'shell.js?v=phase133h_r1' in UI_SOURCE
-    assert 'planning.js?v=phase133g_s1_r1' in PLANNING_UI_SOURCE
+    planning_marker = "planning_tailoring_workflow_polish_r1"
+    old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_bundle_marker}'
+    old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_bundle_marker}'
+
+    planning_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '@router.get("/planning", response_class=HTMLResponse)',
+        '@router.get("/scan-workspace", response_class=HTMLResponse)',
+    )
+    tailoring_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '@router.get("/tailoring-workspace", response_class=HTMLResponse)',
+        '@router.get("/advanced-diagnostics", response_class=HTMLResponse)',
+    )
+    advanced_diagnostics_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '@router.get("/advanced-diagnostics", response_class=HTMLResponse)',
+        "\ndef scan_workspace(",
+    )
+    scan_workspace_renderer = PLANNING_UI_SOURCE.split("\ndef scan_workspace(", 1)[1]
+
+    # Planning UI polish owns only these exact Planning route references. The
+    # unchanged executive JavaScript bundle remains on its Phase 3 marker.
+    assert f'/static/styles.css?v={planning_marker}' in planning_route
+    assert f'/static/build/executive-kpi/executive-kpi.css?v={planning_marker}' in planning_route
+    assert f'/static/planning.js?v={planning_marker}' in planning_route
+    assert old_js in planning_route
+    assert old_css not in planning_route
+    assert '/static/shell.js?v=phase133h_r1' in planning_route
+
+    # The unaffected Phase 3 surfaces still use both complete old bundle
+    # references, including Advanced Diagnostics in planning_ui.py.
+    assert old_css in UI_SOURCE
+    assert old_js in UI_SOURCE
+    assert old_css in advanced_diagnostics_route
+    assert old_js in advanced_diagnostics_route
+
+    # Tailoring Workspace and Scan Workspace retain their distinct historical
+    # script ownership and never acquire the Planning-only marker.
+    assert '/static/shell.js?v=phase133h_r1' in tailoring_route
+    assert '/static/planning.js?v=planning_ui_20260512_tailoring_tabs8' in tailoring_route
+    assert planning_marker not in tailoring_route
+    assert '/static/shell.js?v=phase133h_r1' in scan_workspace_renderer
+    assert '/static/planning.js?v=planning_ui_20260518_scan_replacement_markers' in scan_workspace_renderer
+    assert '/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll' in scan_workspace_renderer
+    assert planning_marker not in scan_workspace_renderer
 
 
 # --- 22. Onboarding/preferences/auth not migrated ----------------------------

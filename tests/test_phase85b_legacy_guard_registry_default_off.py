@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tests.support.phase_guard_registry import (
+    BROAD_TECH_PREFILTER_TAXONOMY_FILES,
     PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
     PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES,
     PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES,
@@ -348,6 +349,17 @@ def test_scraper_prefilter_ownership_boundary_surface_is_exact():
         "tests/test_scraper_transport_pagination_hardening.py",
     }
     assert not any("*" in path for path in SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES)
+
+
+def test_broad_tech_prefilter_taxonomy_surface_is_exact():
+    assert BROAD_TECH_PREFILTER_TAXONOMY_FILES == {
+        "src/config/role_taxonomy.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_broad_tech_prefilter_taxonomy.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_user_pipeline_role_preferences.py",
+    }
+    assert not any("*" in path for path in BROAD_TECH_PREFILTER_TAXONOMY_FILES)
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
@@ -1458,6 +1470,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
+        | BROAD_TECH_PREFILTER_TAXONOMY_FILES
     )
     assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
         "application_execution_queue.py",

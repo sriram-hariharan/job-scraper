@@ -561,6 +561,14 @@ SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
     "tests/test_scraper_transport_pagination_hardening.py",
 }
 
+BROAD_TECH_PREFILTER_TAXONOMY_FILES = {
+    "src/config/role_taxonomy.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_broad_tech_prefilter_taxonomy.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1946,6 +1954,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
+        | BROAD_TECH_PREFILTER_TAXONOMY_FILES
     )
 
 

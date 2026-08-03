@@ -147,6 +147,7 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "data_engineering",
         "display_name": "Data Engineering",
         "title_include_patterns": (
+            r"\bdatabase engineer\b",
             r"data engineer",
             r"data software engineer",
             r"software engineer data",
@@ -345,6 +346,8 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "software_engineering",
         "display_name": "Software Engineering",
         "title_include_patterns": (
+            r"\bmobile (?:software )?(?:engineer|developer)\b",
+            r"\b(?:ios|android) (?:software )?(?:engineer|developer)\b",
             r"software engineer",
             r"\bswe\b",
             r"software development engineer",
@@ -537,6 +540,7 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "systems_it",
         "display_name": "Systems / IT",
         "title_include_patterns": (
+            r"\btechnical support engineer\b",
             r"systems engineer",
             r"system engineer",
             r"infrastructure systems engineer",
@@ -574,6 +578,7 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "solutions_engineering",
         "display_name": "Solutions Engineering",
         "title_include_patterns": (
+            r"\bimplementation engineer\b",
             r"solutions engineer",
             r"solution engineer",
             r"solutions architect",

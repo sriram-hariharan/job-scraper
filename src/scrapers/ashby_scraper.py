@@ -7,6 +7,7 @@ from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
 from src.utils.http_retry import http_post
+from src.utils.pipeline_metrics import observe_acquisition
 from src.discovery.crawl_scheduler import (
     AcquisitionOutcome,
     AcquisitionStatus,
@@ -241,10 +242,16 @@ def _fetch_company_outcome(company):
             status,
             tuple(jobs),
             reason="parse_error",
+            raw_job_count=len(jobs_data),
         )
 
     status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
-    return AcquisitionOutcome(company, status, tuple(jobs))
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        raw_job_count=len(jobs_data),
+    )
 
 
 def fetch_company_jobs(company):
@@ -252,7 +259,14 @@ def fetch_company_jobs(company):
 
 
 def _fetch_company_result(company):
-    return [_fetch_company_outcome(company)]
+    return [
+        observe_acquisition(
+            "ashby",
+            lambda: _fetch_company_outcome(company),
+            schedule_on_success=True,
+            company=company,
+        )
+    ]
 
 
 def scrape_all_ashby():

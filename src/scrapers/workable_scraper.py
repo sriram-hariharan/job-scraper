@@ -2,6 +2,7 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.utils.http_retry import retry_request
+from src.utils.pipeline_metrics import observe_acquisition
 from src.config.consts import (
     WORKABLE_MAX_PAGES,
     WORKABLE_PAGE_SIZE,
@@ -263,6 +264,7 @@ def _fetch_company_outcome(company):
             tuple(jobs),
             reason="parse_error",
             page_count=page_count,
+            raw_job_count=len(jobs_data),
         )
 
     # resolve missing timestamps via v2 API
@@ -307,10 +309,17 @@ def _fetch_company_outcome(company):
             tuple(jobs),
             reason=reason,
             page_count=page_count,
+            raw_job_count=len(jobs_data),
         )
 
     status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
-    return AcquisitionOutcome(company, status, tuple(jobs), page_count=page_count)
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        page_count=page_count,
+        raw_job_count=len(jobs_data),
+    )
 
 
 def fetch_company_jobs(company):
@@ -318,7 +327,14 @@ def fetch_company_jobs(company):
 
 
 def _fetch_company_result(company):
-    return [_fetch_company_outcome(company)]
+    return [
+        observe_acquisition(
+            "workable",
+            lambda: _fetch_company_outcome(company),
+            schedule_on_success=True,
+            company=company,
+        )
+    ]
 
 
 def scrape_all_workable():

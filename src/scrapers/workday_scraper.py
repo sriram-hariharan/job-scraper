@@ -17,6 +17,7 @@ from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.pipeline.job_filter import title_matches, posted_within_24h
 from src.discovery.learned_companies import learn_from_job_url
 from src.utils.url_normalizer import normalize_workday_url
+from src.utils.pipeline_metrics import observe_acquisition
 from src.discovery.crawl_scheduler import (
     AcquisitionOutcome,
     AcquisitionStatus,
@@ -52,12 +53,20 @@ def get_us_country_facet(data):
     return None, None
 
 
-def _workday_completed_outcome(company, jobs, page_count):
+def _workday_completed_outcome(company, jobs, page_count, raw_job_count=None):
     status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
-    return AcquisitionOutcome(company, status, tuple(jobs), page_count=page_count)
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        page_count=page_count,
+        raw_job_count=raw_job_count,
+    )
 
 
-def _workday_interrupted_outcome(company, jobs, reason, page_count):
+def _workday_interrupted_outcome(
+    company, jobs, reason, page_count, raw_job_count=None
+):
     status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
     if status is AcquisitionStatus.PARTIAL and reason in {
         "transport_error",
@@ -71,6 +80,7 @@ def _workday_interrupted_outcome(company, jobs, reason, page_count):
         tuple(jobs),
         reason=reason,
         page_count=page_count,
+        raw_job_count=raw_job_count,
     )
 
 
@@ -131,12 +141,13 @@ def _scrape_company_outcome(board_url):
     facet_name = None
     country_filter = None
     page_count = 0
+    raw_job_count = 0
 
     while True:
 
         if page_count >= WORKDAY_MAX_PAGES:
             return _workday_interrupted_outcome(
-                board_url, jobs, "pagination_interrupted", page_count
+                board_url, jobs, "pagination_interrupted", page_count, raw_job_count
             )
 
         payload = {
@@ -154,24 +165,24 @@ def _scrape_company_outcome(board_url):
             r = workday_post(api_url, json=payload, headers=headers, timeout=10)
         except Exception:
             return _workday_interrupted_outcome(
-                board_url, jobs, "transport_error", page_count
+                board_url, jobs, "transport_error", page_count, raw_job_count
             )
 
         if r is None or r.status_code != 200:
             return _workday_interrupted_outcome(
-                board_url, jobs, "non_200_response", page_count
+                board_url, jobs, "non_200_response", page_count, raw_job_count
             )
 
         try:
             data = r.json()
         except Exception:
             return _workday_interrupted_outcome(
-                board_url, jobs, "malformed_payload", page_count
+                board_url, jobs, "malformed_payload", page_count, raw_job_count
             )
 
         if not isinstance(data, dict):
             return _workday_interrupted_outcome(
-                board_url, jobs, "malformed_payload", page_count
+                board_url, jobs, "malformed_payload", page_count, raw_job_count
             )
 
         page_count += 1
@@ -182,7 +193,7 @@ def _scrape_company_outcome(board_url):
                 facet_name, country_filter = get_us_country_facet(data)
             except Exception:
                 return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count
+                    board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
         if total is None:
@@ -192,7 +203,7 @@ def _scrape_company_outcome(board_url):
 
         if not any(key in data for key in ("jobPostings", "jobs", "items")):
             return _workday_interrupted_outcome(
-                board_url, jobs, "malformed_payload", page_count
+                board_url, jobs, "malformed_payload", page_count, raw_job_count
             )
 
         postings = (
@@ -209,11 +220,15 @@ def _scrape_company_outcome(board_url):
             isinstance(job, dict) for job in postings
         ):
             return _workday_interrupted_outcome(
-                board_url, jobs, "malformed_payload", page_count
+                board_url, jobs, "malformed_payload", page_count, raw_job_count
             )
 
+        raw_job_count += len(postings)
+
         if not postings:
-            return _workday_completed_outcome(board_url, jobs, page_count)
+            return _workday_completed_outcome(
+                board_url, jobs, page_count, raw_job_count
+            )
 
         page_ids = tuple(
             job.get("externalPath")
@@ -226,7 +241,7 @@ def _scrape_company_outcome(board_url):
 
         if page_signature in seen_page_signatures or not new_provider_ids:
             return _workday_interrupted_outcome(
-                board_url, jobs, "pagination_interrupted", page_count
+                board_url, jobs, "pagination_interrupted", page_count, raw_job_count
             )
 
         seen_page_signatures.add(page_signature)
@@ -240,7 +255,7 @@ def _scrape_company_outcome(board_url):
 
             if job_id and not isinstance(job_id, str):
                 return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count
+                    board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
             if job_id:
@@ -248,19 +263,19 @@ def _scrape_company_outcome(board_url):
                     ts = fetch_workday_timestamp(board_url, job_id)
                 except Exception:
                     return _workday_interrupted_outcome(
-                        board_url, jobs, "parse_error", page_count
+                        board_url, jobs, "parse_error", page_count, raw_job_count
                     )
 
                 try:
                     is_stale = ts and not posted_within_24h(ts)
                 except Exception:
                     return _workday_interrupted_outcome(
-                        board_url, jobs, "parse_error", page_count
+                        board_url, jobs, "parse_error", page_count, raw_job_count
                     )
 
                 if is_stale:
                     return _workday_completed_outcome(
-                        board_url, jobs, page_count
+                        board_url, jobs, page_count, raw_job_count
                     )
 
         for job in postings:
@@ -272,7 +287,7 @@ def _scrape_company_outcome(board_url):
 
             if not isinstance(job_id, str):
                 return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count
+                    board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
             if job_id in seen_jobs:
@@ -292,7 +307,7 @@ def _scrape_company_outcome(board_url):
                 matches_title = title_matches(title)
             except Exception:
                 return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count
+                    board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
             if not matches_title:
@@ -321,7 +336,7 @@ def _scrape_company_outcome(board_url):
             info = job.get("jobPostingInfo", {})
             if not isinstance(info, dict):
                 return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count
+                    board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
             posted_at = (
@@ -342,7 +357,7 @@ def _scrape_company_outcome(board_url):
                     learn_from_job_url(normalized)
             except Exception:
                 return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count
+                    board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
             job_req_id = None
@@ -367,20 +382,26 @@ def _scrape_company_outcome(board_url):
                 )
             except Exception:
                 return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count
+                    board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
         offset += limit
 
         if total is not None and offset >= total:
-            return _workday_completed_outcome(board_url, jobs, page_count)
+            return _workday_completed_outcome(
+                board_url, jobs, page_count, raw_job_count
+            )
 
         if total is None and len(postings) < limit:
-            return _workday_completed_outcome(board_url, jobs, page_count)
+            return _workday_completed_outcome(
+                board_url, jobs, page_count, raw_job_count
+            )
 
         time.sleep(0.01)
 
-    return _workday_completed_outcome(board_url, jobs, page_count)
+    return _workday_completed_outcome(
+        board_url, jobs, page_count, raw_job_count
+    )
 
 
 def scrape_company(board_url):
@@ -388,7 +409,14 @@ def scrape_company(board_url):
 
 
 def _scrape_company_result(company):
-    return [_scrape_company_outcome(company)]
+    return [
+        observe_acquisition(
+            "workday",
+            lambda: _scrape_company_outcome(company),
+            schedule_on_success=True,
+            company=company,
+        )
+    ]
 
 
 def scrape_all_workday():

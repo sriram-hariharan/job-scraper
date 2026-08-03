@@ -30,8 +30,12 @@ from src.discovery.crawl_scheduler import (
 from src.utils.http_retry import (
     TRANSIENT_HTTP_STATUSES,
     http_get,
+    record_http_request,
+    record_http_response_status,
+    record_http_retry,
     retry_delay_seconds,
 )
+from src.utils.pipeline_metrics import observe_acquisition_async
 
 logger = get_logger("lever")
 
@@ -39,12 +43,15 @@ logger = get_logger("lever")
 async def _fetch_json(session, url):
     for attempt in range(SCRAPER_RETRY_ATTEMPTS):
         try:
+            record_http_request()
             async with session.get(
                 url,
                 headers={"User-Agent": "Mozilla/5.0"},
             ) as resp:
+                record_http_response_status(resp.status)
                 if resp.status in TRANSIENT_HTTP_STATUSES:
                     if attempt < SCRAPER_RETRY_ATTEMPTS - 1:
+                        record_http_retry()
                         await asyncio.sleep(
                             retry_delay_seconds(
                                 getattr(resp, "headers", None),
@@ -65,6 +72,7 @@ async def _fetch_json(session, url):
         except (asyncio.TimeoutError, aiohttp.ClientConnectionError, OSError):
             if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
                 return None, "transport_error"
+            record_http_retry()
             await asyncio.sleep(SCRAPER_RETRY_DELAY_SECONDS)
         except Exception:
             return None, "transport_error"
@@ -224,6 +232,7 @@ async def _fetch_company_outcome(session, company, *, selected_role_families=Non
             status,
             tuple(jobs),
             reason="parse_error",
+            raw_job_count=len(data),
         )
 
     if payload_incomplete:
@@ -233,10 +242,16 @@ async def _fetch_company_outcome(session, company, *, selected_role_families=Non
             status,
             tuple(jobs),
             reason="malformed_payload",
+            raw_job_count=len(data),
         )
 
     status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
-    return AcquisitionOutcome(company, status, tuple(jobs))
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        raw_job_count=len(data),
+    )
 
 
 async def fetch_company_jobs(session, company, *, selected_role_families=None):
@@ -271,10 +286,15 @@ async def scrape_all_lever_async(*, selected_role_families=None):
         sem = asyncio.Semaphore(100)
         async def limited_fetch(company):
             async with sem:
-                return await _fetch_company_outcome(
-                    session,
-                    company,
-                    selected_role_families=selected_role_families,
+                return await observe_acquisition_async(
+                    "lever",
+                    lambda: _fetch_company_outcome(
+                        session,
+                        company,
+                        selected_role_families=selected_role_families,
+                    ),
+                    schedule_on_success=True,
+                    company=company,
                 )
 
         async def run_company(company):

@@ -21,7 +21,14 @@ from src.discovery.crawl_scheduler import (
     mark_scraped
 )
 from src.pipeline.job_filter import title_matches, us_location, posted_within_24h
-from src.utils.http_retry import TRANSIENT_HTTP_STATUSES, retry_delay_seconds
+from src.utils.http_retry import (
+    TRANSIENT_HTTP_STATUSES,
+    record_http_request,
+    record_http_response_status,
+    record_http_retry,
+    retry_delay_seconds,
+)
+from src.utils.pipeline_metrics import observe_acquisition_async
 
 logger = get_logger("greenhouse")
 
@@ -29,12 +36,15 @@ logger = get_logger("greenhouse")
 async def _fetch_json(session, url):
     for attempt in range(SCRAPER_RETRY_ATTEMPTS):
         try:
+            record_http_request()
             async with session.get(
                 url,
                 headers={"User-Agent": "Mozilla/5.0"},
             ) as resp:
+                record_http_response_status(resp.status)
                 if resp.status in TRANSIENT_HTTP_STATUSES:
                     if attempt < SCRAPER_RETRY_ATTEMPTS - 1:
+                        record_http_retry()
                         await asyncio.sleep(
                             retry_delay_seconds(
                                 getattr(resp, "headers", None),
@@ -55,6 +65,7 @@ async def _fetch_json(session, url):
         except (asyncio.TimeoutError, aiohttp.ClientConnectionError, OSError):
             if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
                 return None, "transport_error"
+            record_http_retry()
             await asyncio.sleep(SCRAPER_RETRY_DELAY_SECONDS)
         except Exception:
             return None, "transport_error"
@@ -133,10 +144,16 @@ async def _fetch_company_outcome(session, company):
             status,
             tuple(jobs),
             reason="parse_error",
+            raw_job_count=len(postings),
         )
 
     status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
-    return AcquisitionOutcome(company, status, tuple(jobs))
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        raw_job_count=len(postings),
+    )
 
 
 async def fetch_company_jobs(session, company):
@@ -144,7 +161,12 @@ async def fetch_company_jobs(session, company):
     return list(outcome.jobs)
 
 async def run_company(session, company):
-    return await _fetch_company_outcome(session, company)
+    return await observe_acquisition_async(
+        "greenhouse",
+        lambda: _fetch_company_outcome(session, company),
+        schedule_on_success=True,
+        company=company,
+    )
 
 async def scrape_all_greenhouse_async():
 

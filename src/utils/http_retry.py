@@ -1,6 +1,10 @@
 import functools
 import math
 import time
+from collections import Counter
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from datetime import timezone
 from email.utils import parsedate_to_datetime
 
@@ -16,6 +20,59 @@ from src.config.consts import (
 
 TRANSIENT_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
 RETRYABLE_REQUEST_EXCEPTIONS = (requests.Timeout, requests.ConnectionError)
+
+
+@dataclass
+class HttpRequestMetrics:
+    request_count: int = 0
+    retry_count: int = 0
+    response_status_counts: Counter = field(default_factory=Counter)
+
+    def snapshot(self):
+        return {
+            "request_count": self.request_count,
+            "retry_count": self.retry_count,
+            "response_status_counts": tuple(
+                sorted(self.response_status_counts.items())
+            ),
+        }
+
+
+_active_http_metrics = ContextVar("active_http_metrics", default=None)
+
+
+@contextmanager
+def capture_http_metrics():
+    metrics = HttpRequestMetrics()
+    token = _active_http_metrics.set(metrics)
+    try:
+        yield metrics
+    finally:
+        _active_http_metrics.reset(token)
+
+
+def record_http_request():
+    metrics = _active_http_metrics.get()
+    if metrics is not None:
+        metrics.request_count += 1
+
+
+def record_http_response_status(status_code):
+    metrics = _active_http_metrics.get()
+    if metrics is None:
+        return
+    try:
+        status = int(status_code)
+    except (TypeError, ValueError):
+        return
+    if 100 <= status <= 599:
+        metrics.response_status_counts[status] += 1
+
+
+def record_http_retry():
+    metrics = _active_http_metrics.get()
+    if metrics is not None:
+        metrics.retry_count += 1
 
 
 def retry_delay_seconds(
@@ -72,12 +129,16 @@ def retry_request(
             for attempt in range(retries):
 
                 try:
+                    record_http_request()
                     response = func(*args, **kwargs)
 
                     if response is None:
                         return None
 
                     last_response = response
+                    record_http_response_status(
+                        getattr(response, "status_code", None)
+                    )
 
                     if response.status_code not in retry_status:
                         return response
@@ -89,6 +150,7 @@ def retry_request(
                     raise
 
                 if attempt < retries - 1:
+                    record_http_retry()
                     headers = getattr(last_response, "headers", None)
                     time.sleep(
                         retry_delay_seconds(

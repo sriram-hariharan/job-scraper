@@ -505,6 +505,30 @@ SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES = {
     "tests/test_scraper_transport_pagination_hardening.py",
 }
 
+SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
+    "src/config/consts.py",
+    "src/discovery/crawl_scheduler.py",
+    "src/pipeline/collector.py",
+    "src/scrapers/ashby_scraper.py",
+    "src/scrapers/builtin_scraper.py",
+    "src/scrapers/greenhouse_scraper.py",
+    "src/scrapers/jobvite_scraper.py",
+    "src/scrapers/lever_scraper.py",
+    "src/scrapers/smartrecruiters_scraper.py",
+    "src/scrapers/workable_scraper.py",
+    "src/scrapers/workday_scraper.py",
+    "src/storage/metrics_store.py",
+    "src/utils/ats_health.py",
+    "src/utils/http_retry.py",
+    "src/utils/pipeline_metrics.py",
+    "src/utils/workday_timestamp.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_scraper_source_health_metrics.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1886,6 +1910,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
+        | SCRAPER_SOURCE_HEALTH_METRICS_FILES
     )
 
 
@@ -2003,7 +2028,11 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
-        ): "55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23",
+        ): "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+        (
+            "src/pipeline/collector.py",
+            "55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23",
+        ): "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
         (
             "src/pipeline/collector.py",
             "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",

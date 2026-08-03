@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from src.utils.html_timestamp_extractor import extract_jsonld_dateposted
 from src.utils.http_retry import retry_request
+from src.utils.pipeline_metrics import observe_acquisition
 from src.config.consts import JOBVITE_URL_PATTERNS
 from models.job import Job
 from src.utils.file_loader import load_lines
@@ -85,6 +86,7 @@ def _fetch_company_outcome(company):
         )
 
     jobs = []
+    raw_job_count = 0
 
     links = soup.find_all("a", href=True)
 
@@ -102,6 +104,7 @@ def _fetch_company_outcome(company):
                 continue
 
             seen_urls.add(job_url)
+            raw_job_count += 1
 
             # find job container
             container = link.find_parent("div")
@@ -139,10 +142,16 @@ def _fetch_company_outcome(company):
             status,
             tuple(jobs),
             reason="parse_error",
+            raw_job_count=raw_job_count,
         )
 
     status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
-    return AcquisitionOutcome(company, status, tuple(jobs))
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        raw_job_count=raw_job_count,
+    )
 
 
 def fetch_company_jobs(company):
@@ -150,7 +159,14 @@ def fetch_company_jobs(company):
 
 
 def _fetch_company_result(company):
-    return [_fetch_company_outcome(company)]
+    return [
+        observe_acquisition(
+            "jobvite",
+            lambda: _fetch_company_outcome(company),
+            schedule_on_success=True,
+            company=company,
+        )
+    ]
 
 
 def scrape_all_jobvite():

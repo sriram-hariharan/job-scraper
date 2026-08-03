@@ -31,6 +31,7 @@ class AcquisitionOutcome:
     jobs: Tuple[Dict[str, Any], ...] = ()
     reason: str = ""
     page_count: Optional[int] = None
+    raw_job_count: Optional[int] = None
 
     def __post_init__(self):
         if not isinstance(self.company, str) or not self.company.strip():
@@ -45,6 +46,10 @@ class AcquisitionOutcome:
             not isinstance(self.page_count, int) or self.page_count < 0
         ):
             raise ValueError("page_count must be a nonnegative integer")
+        if self.raw_job_count is not None and (
+            not isinstance(self.raw_job_count, int) or self.raw_job_count < 0
+        ):
+            raise ValueError("raw_job_count must be a nonnegative integer")
 
         has_jobs = bool(self.jobs)
         if self.status in {AcquisitionStatus.SUCCESS, AcquisitionStatus.PARTIAL}:

@@ -6,6 +6,9 @@ import subprocess
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Dict
+from urllib.parse import urlsplit
+
+from src.discovery.crawl_scheduler import ACQUISITION_FAILURE_REASONS
 
 
 _init_lock = Lock()
@@ -54,11 +57,57 @@ ON company_hiring_metrics (run_id);
 
 CREATE INDEX IF NOT EXISTS idx_company_hiring_metrics_company_ats
 ON company_hiring_metrics (company, ats);
+
+CREATE TABLE IF NOT EXISTS scraper_source_health_metrics (
+    id BIGSERIAL PRIMARY KEY,
+    run_id BIGINT NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
+    source VARCHAR(64) NOT NULL,
+    company VARCHAR(256) NOT NULL DEFAULT '',
+    acquisition_status VARCHAR(16) NOT NULL DEFAULT '',
+    reason_code VARCHAR(64) NOT NULL DEFAULT '',
+    request_count INTEGER NOT NULL DEFAULT 0,
+    response_status_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    page_count INTEGER,
+    partial_result_count INTEGER NOT NULL DEFAULT 0,
+    raw_job_count INTEGER,
+    normalized_job_count INTEGER NOT NULL DEFAULT 0,
+    filter_drop_count INTEGER NOT NULL DEFAULT 0,
+    duplicate_drop_count INTEGER NOT NULL DEFAULT 0,
+    final_retained_job_count INTEGER NOT NULL DEFAULT 0,
+    canonical_url_present_count INTEGER NOT NULL DEFAULT 0,
+    canonical_url_missing_count INTEGER NOT NULL DEFAULT 0,
+    timestamp_present_count INTEGER NOT NULL DEFAULT 0,
+    timestamp_missing_count INTEGER NOT NULL DEFAULT 0,
+    description_present_count INTEGER NOT NULL DEFAULT 0,
+    description_missing_count INTEGER NOT NULL DEFAULT 0,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    duration_ms INTEGER,
+    schedule_advanced BOOLEAN NOT NULL DEFAULT FALSE,
+    health VARCHAR(16) NOT NULL DEFAULT 'unknown',
+    UNIQUE (run_id, source, company)
+);
+
+CREATE INDEX IF NOT EXISTS idx_scraper_source_health_run
+ON scraper_source_health_metrics (run_id, source, company);
 """.strip()
 
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _bounded_text(value: Any, limit: int) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def _safe_identity(value: Any, limit: int) -> str:
+    text = _bounded_text(value, limit * 2)
+    if "://" in text:
+        parsed = urlsplit(text)
+        text = f"{parsed.hostname or ''}{parsed.path or ''}"
+    return _bounded_text(text, limit)
 
 
 def _database_url() -> str:
@@ -340,6 +389,166 @@ VALUES
 
     with _db_write_lock:
         _run_psql_statement(sql)
+
+
+def _metric_value(metric, name, default=None):
+    if isinstance(metric, dict):
+        return metric.get(name, default)
+    return getattr(metric, name, default)
+
+
+def _optional_nonnegative_int(value):
+    if value is None:
+        return None
+    return max(0, int(value or 0))
+
+
+def _source_health_row(metric):
+    status = _bounded_text(_metric_value(metric, "acquisition_status", ""), 16)
+    if status not in {"", "SUCCESS", "EMPTY", "PARTIAL", "FAILED"}:
+        status = ""
+    reason = _bounded_text(_metric_value(metric, "reason_code", ""), 64)
+    if reason not in ACQUISITION_FAILURE_REASONS:
+        reason = ""
+    health = _bounded_text(_metric_value(metric, "health", "unknown"), 16)
+    if health not in {"healthy", "degraded", "unhealthy", "unknown"}:
+        health = "unknown"
+
+    response_counts = {}
+    for code, count in _metric_value(metric, "response_status_counts", ()) or ():
+        safe_code = int(code)
+        if 100 <= safe_code <= 599:
+            response_counts[str(safe_code)] = max(0, int(count or 0))
+
+    def bounded_timestamp(name):
+        value = _metric_value(metric, name)
+        if value is None:
+            return ""
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        return _bounded_text(value, 64)
+
+    return {
+        "source": _safe_identity(_metric_value(metric, "source", ""), 64),
+        "company": _safe_identity(_metric_value(metric, "company", ""), 256),
+        "acquisition_status": status,
+        "reason_code": reason,
+        "request_count": max(0, int(_metric_value(metric, "request_count", 0) or 0)),
+        "response_status_counts": response_counts,
+        "retry_count": max(0, int(_metric_value(metric, "retry_count", 0) or 0)),
+        "page_count": _optional_nonnegative_int(_metric_value(metric, "page_count")),
+        "partial_result_count": max(0, int(_metric_value(metric, "partial_result_count", 0) or 0)),
+        "raw_job_count": _optional_nonnegative_int(_metric_value(metric, "raw_job_count")),
+        "normalized_job_count": max(0, int(_metric_value(metric, "normalized_job_count", 0) or 0)),
+        "filter_drop_count": max(0, int(_metric_value(metric, "filter_drop_count", 0) or 0)),
+        "duplicate_drop_count": max(0, int(_metric_value(metric, "duplicate_drop_count", 0) or 0)),
+        "final_retained_job_count": max(0, int(_metric_value(metric, "final_retained_job_count", 0) or 0)),
+        "canonical_url_present_count": max(0, int(_metric_value(metric, "canonical_url_present_count", 0) or 0)),
+        "canonical_url_missing_count": max(0, int(_metric_value(metric, "canonical_url_missing_count", 0) or 0)),
+        "timestamp_present_count": max(0, int(_metric_value(metric, "timestamp_present_count", 0) or 0)),
+        "timestamp_missing_count": max(0, int(_metric_value(metric, "timestamp_missing_count", 0) or 0)),
+        "description_present_count": max(0, int(_metric_value(metric, "description_present_count", 0) or 0)),
+        "description_missing_count": max(0, int(_metric_value(metric, "description_missing_count", 0) or 0)),
+        "started_at": bounded_timestamp("started_at"),
+        "completed_at": bounded_timestamp("completed_at"),
+        "duration_ms": _optional_nonnegative_int(_metric_value(metric, "duration_ms")),
+        "schedule_advanced": bool(_metric_value(metric, "schedule_advanced", False)),
+        "health": health,
+    }
+
+
+def record_source_health_metrics(run_id, metrics):
+    init_metrics_db()
+    safe_run_id = int(run_id or 0)
+    if safe_run_id <= 0:
+        return 0
+
+    rows = [_source_health_row(metric) for metric in metrics or ()]
+    rows = [row for row in rows if row["source"]]
+    rows.sort(key=lambda row: (row["source"], row["company"]))
+    if not rows:
+        return 0
+
+    values = []
+    for row in rows:
+        nullable = lambda value, cast="": (
+            "NULL" if value in {None, ""} else f"{_sql_quote_text(value)}{cast}"
+        )
+        page_count = "NULL" if row["page_count"] is None else str(row["page_count"])
+        raw_job_count = "NULL" if row["raw_job_count"] is None else str(row["raw_job_count"])
+        duration_ms = "NULL" if row["duration_ms"] is None else str(min(row["duration_ms"], 86_400_000))
+        values.append(
+            "(" + ", ".join([
+                str(safe_run_id),
+                _sql_quote_text(row["source"]),
+                _sql_quote_text(row["company"]),
+                _sql_quote_text(row["acquisition_status"]),
+                _sql_quote_text(row["reason_code"]),
+                str(row["request_count"]),
+                _sql_quote_text(json.dumps(row["response_status_counts"], sort_keys=True)) + "::jsonb",
+                str(row["retry_count"]),
+                page_count,
+                str(row["partial_result_count"]),
+                raw_job_count,
+                str(row["normalized_job_count"]),
+                str(row["filter_drop_count"]),
+                str(row["duplicate_drop_count"]),
+                str(row["final_retained_job_count"]),
+                str(row["canonical_url_present_count"]),
+                str(row["canonical_url_missing_count"]),
+                str(row["timestamp_present_count"]),
+                str(row["timestamp_missing_count"]),
+                str(row["description_present_count"]),
+                str(row["description_missing_count"]),
+                nullable(row["started_at"], "::timestamptz"),
+                nullable(row["completed_at"], "::timestamptz"),
+                duration_ms,
+                "TRUE" if row["schedule_advanced"] else "FALSE",
+                _sql_quote_text(row["health"]),
+            ]) + ")"
+        )
+
+    sql = f"""
+INSERT INTO scraper_source_health_metrics (
+    run_id, source, company, acquisition_status, reason_code,
+    request_count, response_status_counts, retry_count, page_count,
+    partial_result_count, raw_job_count, normalized_job_count,
+    filter_drop_count, duplicate_drop_count, final_retained_job_count,
+    canonical_url_present_count, canonical_url_missing_count,
+    timestamp_present_count, timestamp_missing_count,
+    description_present_count, description_missing_count,
+    started_at, completed_at, duration_ms, schedule_advanced, health
+)
+VALUES
+{",\n".join(values)}
+ON CONFLICT (run_id, source, company) DO UPDATE SET
+    acquisition_status = EXCLUDED.acquisition_status,
+    reason_code = EXCLUDED.reason_code,
+    request_count = EXCLUDED.request_count,
+    response_status_counts = EXCLUDED.response_status_counts,
+    retry_count = EXCLUDED.retry_count,
+    page_count = EXCLUDED.page_count,
+    partial_result_count = EXCLUDED.partial_result_count,
+    raw_job_count = EXCLUDED.raw_job_count,
+    normalized_job_count = EXCLUDED.normalized_job_count,
+    filter_drop_count = EXCLUDED.filter_drop_count,
+    duplicate_drop_count = EXCLUDED.duplicate_drop_count,
+    final_retained_job_count = EXCLUDED.final_retained_job_count,
+    canonical_url_present_count = EXCLUDED.canonical_url_present_count,
+    canonical_url_missing_count = EXCLUDED.canonical_url_missing_count,
+    timestamp_present_count = EXCLUDED.timestamp_present_count,
+    timestamp_missing_count = EXCLUDED.timestamp_missing_count,
+    description_present_count = EXCLUDED.description_present_count,
+    description_missing_count = EXCLUDED.description_missing_count,
+    started_at = EXCLUDED.started_at,
+    completed_at = EXCLUDED.completed_at,
+    duration_ms = EXCLUDED.duration_ms,
+    schedule_advanced = EXCLUDED.schedule_advanced,
+    health = EXCLUDED.health;
+""".strip()
+    with _db_write_lock:
+        _run_psql_statement(sql)
+    return len(rows)
 
 
 def get_hiring_momentum():

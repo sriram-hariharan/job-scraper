@@ -149,6 +149,23 @@ WORKABLE_V2_DETAIL_API = "https://apply.workable.com/api/v2/accounts/{}/jobs/{}"
 WORKDAY_API_URL_TEMPLATE = "https://{host}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs"
 WORKDAY_ORIGIN_TEMPLATE = "https://{host}.myworkdayjobs.com"
 
+# ============================================================
+# SCRAPER TRANSPORT / PAGINATION BOUNDS
+# ============================================================
+
+SCRAPER_HTTP_TIMEOUT_SECONDS = 10
+SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS = 10
+SCRAPER_RETRY_ATTEMPTS = 2
+SCRAPER_RETRY_DELAY_SECONDS = 0.5
+SCRAPER_RETRY_MAX_DELAY_SECONDS = 30.0
+
+WORKDAY_PAGE_SIZE = 20
+WORKDAY_MAX_PAGES = 100
+WORKABLE_PAGE_SIZE = 50
+WORKABLE_MAX_PAGES = 100
+
+BUILTIN_HTTP_TIMEOUT_SECONDS = 15
+
 JOBVITE_URL_PATTERNS = [
     "https://jobs.jobvite.com/{company}/jobs/alljobs",
     "https://jobs.jobvite.com/{company}/jobs",

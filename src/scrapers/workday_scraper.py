@@ -4,7 +4,9 @@ import time
 from src.utils.http_retry import retry_request
 from src.config.consts import (
     WORKDAY_API_URL_TEMPLATE,
-    WORKDAY_ORIGIN_TEMPLATE
+    WORKDAY_MAX_PAGES,
+    WORKDAY_ORIGIN_TEMPLATE,
+    WORKDAY_PAGE_SIZE,
 )
 
 from models.job import Job
@@ -83,6 +85,8 @@ def _scrape_company_outcome(board_url):
         )
 
     seen_jobs = set()
+    seen_page_signatures = set()
+    seen_provider_ids = set()
 
     host_part = board_url.split(".myworkdayjobs.com")[0]
     host = host_part.replace("https://", "")
@@ -121,7 +125,7 @@ def _scrape_company_outcome(board_url):
 
     jobs = []
     offset = 0
-    limit = 20
+    limit = WORKDAY_PAGE_SIZE
     total = None
 
     facet_name = None
@@ -129,6 +133,11 @@ def _scrape_company_outcome(board_url):
     page_count = 0
 
     while True:
+
+        if page_count >= WORKDAY_MAX_PAGES:
+            return _workday_interrupted_outcome(
+                board_url, jobs, "pagination_interrupted", page_count
+            )
 
         payload = {
             "limit": limit,
@@ -205,6 +214,23 @@ def _scrape_company_outcome(board_url):
 
         if not postings:
             return _workday_completed_outcome(board_url, jobs, page_count)
+
+        page_ids = tuple(
+            job.get("externalPath")
+            for job in postings
+            if isinstance(job.get("externalPath"), str)
+            and job.get("externalPath")
+        )
+        page_signature = page_ids
+        new_provider_ids = set(page_ids) - seen_provider_ids
+
+        if page_signature in seen_page_signatures or not new_provider_ids:
+            return _workday_interrupted_outcome(
+                board_url, jobs, "pagination_interrupted", page_count
+            )
+
+        seen_page_signatures.add(page_signature)
+        seen_provider_ids.update(new_provider_ids)
 
         page_number = offset // limit
 

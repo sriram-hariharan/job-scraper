@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Dict, List, Optional
@@ -8,6 +9,13 @@ from urllib.parse import urljoin
 
 from models.job import Job
 from src.discovery.learned_companies import learn_from_job_url
+from src.config.consts import (
+    BUILTIN_HTTP_TIMEOUT_SECONDS,
+    SCRAPER_RETRY_ATTEMPTS,
+    SCRAPER_RETRY_DELAY_SECONDS,
+    SCRAPER_RETRY_MAX_DELAY_SECONDS,
+)
+from src.utils.http_retry import TRANSIENT_HTTP_STATUSES, retry_delay_seconds
 from src.utils.logging import get_logger
 
 logger = get_logger("builtin")
@@ -219,19 +227,41 @@ def extract_builtin_jobs_from_html(html_text: str, *, now: Optional[datetime] = 
 
 
 def fetch_builtin_jobs_html() -> str:
-    try:
-        request = Request(
-            BUILTIN_JOBS_URL,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        with urlopen(request, timeout=15) as response:
-            if response.status != 200:
-                logger.warning("Built In jobs fetch returned status=%s", response.status)
+    request = Request(
+        BUILTIN_JOBS_URL,
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+
+    for attempt in range(SCRAPER_RETRY_ATTEMPTS):
+        try:
+            with urlopen(request, timeout=BUILTIN_HTTP_TIMEOUT_SECONDS) as response:
+                if response.status != 200:
+                    logger.warning(
+                        "Built In jobs fetch returned status=%s", response.status
+                    )
+                    return ""
+                return response.read().decode("utf-8", "replace")
+        except HTTPError as exc:
+            if (
+                exc.code not in TRANSIENT_HTTP_STATUSES
+                or attempt == SCRAPER_RETRY_ATTEMPTS - 1
+            ):
+                logger.warning("Built In jobs fetch failed with status=%s", exc.code)
                 return ""
-            return response.read().decode("utf-8", "replace")
-    except (HTTPError, URLError, TimeoutError, OSError) as exc:
-        logger.warning("Built In jobs fetch failed: %s", exc)
-        return ""
+            time.sleep(
+                retry_delay_seconds(
+                    exc.headers,
+                    fallback_delay=SCRAPER_RETRY_DELAY_SECONDS,
+                    max_delay=SCRAPER_RETRY_MAX_DELAY_SECONDS,
+                )
+            )
+        except (URLError, TimeoutError, OSError):
+            if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
+                logger.warning("Built In jobs fetch failed with transport_error")
+                return ""
+            time.sleep(SCRAPER_RETRY_DELAY_SECONDS)
+
+    return ""
 
 
 def smoke_builtin_live(limit: int = 5) -> List[Dict[str, str]]:

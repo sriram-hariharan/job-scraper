@@ -491,6 +491,20 @@ PHASE21R_HISTORICAL_GUARD_FILES = {
     "tests/test_vector_evidence_ui_no_db_readonly.py",
 }
 
+SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES = {
+    "src/config/consts.py",
+    "src/scrapers/builtin_scraper.py",
+    "src/scrapers/greenhouse_scraper.py",
+    "src/scrapers/lever_scraper.py",
+    "src/scrapers/workable_scraper.py",
+    "src/scrapers/workday_scraper.py",
+    "src/utils/http_retry.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_scraper_acquisition_outcomes.py",
+    "tests/test_scraper_transport_pagination_hardening.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1871,6 +1885,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE21_RELEASE_CANDIDATE_FILES
         | PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES
         | PHASE21R_HISTORICAL_GUARD_FILES
+        | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
     )
 
 

@@ -2,7 +2,13 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.utils.http_retry import retry_request
-from src.config.consts import WORKABLE_V1_API, WORKABLE_V2_DETAIL_API, WORKABLE_V3_API
+from src.config.consts import (
+    WORKABLE_MAX_PAGES,
+    WORKABLE_PAGE_SIZE,
+    WORKABLE_V1_API,
+    WORKABLE_V2_DETAIL_API,
+    WORKABLE_V3_API,
+)
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
@@ -65,17 +71,32 @@ def extract_v3_jobs(data):
     return values
 
 
+def _workable_stable_id(job):
+    value = job.get("id") or job.get("shortcode") or job.get("url")
+    if value is None:
+        return ""
+    if not isinstance(value, (str, int)):
+        raise ValueError("unsupported Workable stable identifier")
+    return str(value).strip()
+
+
 def _fetch_company_outcome(company):
 
     jobs_data = []
     v3_url = WORKABLE_V3_API.format(company)
 
-    limit = 50
+    limit = WORKABLE_PAGE_SIZE
     offset = 0
     page_count = 0
     interruption_reason = ""
+    seen_page_signatures = set()
+    seen_provider_ids = set()
 
     while True:
+
+        if page_count >= WORKABLE_MAX_PAGES:
+            interruption_reason = "pagination_interrupted"
+            break
 
         try:
             r = workable_post(
@@ -114,6 +135,25 @@ def _fetch_company_outcome(company):
         if not postings:
             break
 
+        try:
+            page_ids = tuple(
+                stable_id
+                for stable_id in (_workable_stable_id(job) for job in postings)
+                if stable_id
+            )
+        except (TypeError, ValueError):
+            interruption_reason = "parse_error"
+            break
+        page_signature = page_ids
+        new_provider_ids = set(page_ids) - seen_provider_ids
+
+        if page_signature in seen_page_signatures or not new_provider_ids:
+            interruption_reason = "pagination_interrupted"
+            break
+
+        seen_page_signatures.add(page_signature)
+        seen_provider_ids.update(new_provider_ids)
+
         jobs_data.extend(postings)
 
         if len(postings) < limit:
@@ -122,7 +162,7 @@ def _fetch_company_outcome(company):
         offset += limit
 
     # fallback to v1 widget API
-    if not jobs_data:
+    if not jobs_data and not interruption_reason:
 
         v1_url = WORKABLE_V1_API.format(company)
 

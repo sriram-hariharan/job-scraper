@@ -7,6 +7,7 @@
 from pathlib import Path
 
 from tests.support.phase_guard_registry import (
+    SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     assert_changed_files_allowed,
     assert_protected_hashes,
     get_changed_files,
@@ -811,6 +812,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    scraper_transport_pagination_runtime_files = {
+        ROOT / relative_path
+        for relative_path in SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == scraper_transport_pagination_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase11_step8l_provider_benchmark_runtime_files = {
         ROOT / "src/evaluation/provider_benchmark_contract.py",
     }

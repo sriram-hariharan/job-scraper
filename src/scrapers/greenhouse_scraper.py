@@ -1,7 +1,13 @@
 import asyncio
 import aiohttp
 from tqdm import tqdm
-from src.config.consts import GREENHOUSE_API
+from src.config.consts import (
+    GREENHOUSE_API,
+    SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS,
+    SCRAPER_RETRY_ATTEMPTS,
+    SCRAPER_RETRY_DELAY_SECONDS,
+    SCRAPER_RETRY_MAX_DELAY_SECONDS,
+)
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
@@ -15,8 +21,45 @@ from src.discovery.crawl_scheduler import (
     mark_scraped
 )
 from src.pipeline.job_filter import title_matches, us_location, posted_within_24h
+from src.utils.http_retry import TRANSIENT_HTTP_STATUSES, retry_delay_seconds
 
 logger = get_logger("greenhouse")
+
+
+async def _fetch_json(session, url):
+    for attempt in range(SCRAPER_RETRY_ATTEMPTS):
+        try:
+            async with session.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as resp:
+                if resp.status in TRANSIENT_HTTP_STATUSES:
+                    if attempt < SCRAPER_RETRY_ATTEMPTS - 1:
+                        await asyncio.sleep(
+                            retry_delay_seconds(
+                                getattr(resp, "headers", None),
+                                fallback_delay=SCRAPER_RETRY_DELAY_SECONDS,
+                                max_delay=SCRAPER_RETRY_MAX_DELAY_SECONDS,
+                            )
+                        )
+                        continue
+                    return None, "non_200_response"
+
+                if resp.status != 200:
+                    return None, "non_200_response"
+
+                try:
+                    return await resp.json(), ""
+                except Exception:
+                    return None, "malformed_payload"
+        except (asyncio.TimeoutError, aiohttp.ClientConnectionError, OSError):
+            if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
+                return None, "transport_error"
+            await asyncio.sleep(SCRAPER_RETRY_DELAY_SECONDS)
+        except Exception:
+            return None, "transport_error"
+
+    return None, "transport_error"
 
 async def _fetch_company_outcome(session, company):
 
@@ -24,29 +67,12 @@ async def _fetch_company_outcome(session, company):
 
     jobs = []
 
-    try:
-        async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
-
-            if resp.status != 200:
-                return AcquisitionOutcome(
-                    company,
-                    AcquisitionStatus.FAILED,
-                    reason="non_200_response",
-                )
-
-            try:
-                data = await resp.json()
-            except Exception:
-                return AcquisitionOutcome(
-                    company,
-                    AcquisitionStatus.FAILED,
-                    reason="malformed_payload",
-                )
-    except Exception:
+    data, failure_reason = await _fetch_json(session, url)
+    if failure_reason:
         return AcquisitionOutcome(
             company,
             AcquisitionStatus.FAILED,
-            reason="transport_error",
+            reason=failure_reason,
         )
 
     if (
@@ -135,7 +161,8 @@ async def scrape_all_greenhouse_async():
     connector = aiohttp.TCPConnector(limit=50)
     all_jobs = []
 
-    async with aiohttp.ClientSession(connector=connector) as session:
+    timeout = aiohttp.ClientTimeout(total=SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
 
         tasks = [
             asyncio.create_task(run_company(session, c))

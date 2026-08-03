@@ -3,7 +3,13 @@ import aiohttp
 import json
 import os
 from tqdm import tqdm
-from src.config.consts import LEVER_API
+from src.config.consts import (
+    LEVER_API,
+    SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS,
+    SCRAPER_RETRY_ATTEMPTS,
+    SCRAPER_RETRY_DELAY_SECONDS,
+    SCRAPER_RETRY_MAX_DELAY_SECONDS,
+)
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
@@ -21,9 +27,49 @@ from src.discovery.crawl_scheduler import (
     should_scrape,
     mark_scraped
 )
-from src.utils.http_retry import http_get
+from src.utils.http_retry import (
+    TRANSIENT_HTTP_STATUSES,
+    http_get,
+    retry_delay_seconds,
+)
 
 logger = get_logger("lever")
+
+
+async def _fetch_json(session, url):
+    for attempt in range(SCRAPER_RETRY_ATTEMPTS):
+        try:
+            async with session.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as resp:
+                if resp.status in TRANSIENT_HTTP_STATUSES:
+                    if attempt < SCRAPER_RETRY_ATTEMPTS - 1:
+                        await asyncio.sleep(
+                            retry_delay_seconds(
+                                getattr(resp, "headers", None),
+                                fallback_delay=SCRAPER_RETRY_DELAY_SECONDS,
+                                max_delay=SCRAPER_RETRY_MAX_DELAY_SECONDS,
+                            )
+                        )
+                        continue
+                    return None, "non_200_response"
+
+                if resp.status != 200:
+                    return None, "non_200_response"
+
+                try:
+                    return await resp.json(), ""
+                except Exception:
+                    return None, "malformed_payload"
+        except (asyncio.TimeoutError, aiohttp.ClientConnectionError, OSError):
+            if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
+                return None, "transport_error"
+            await asyncio.sleep(SCRAPER_RETRY_DELAY_SECONDS)
+        except Exception:
+            return None, "transport_error"
+
+    return None, "transport_error"
 
 
 def _selected_role_families_from_env():
@@ -116,30 +162,12 @@ async def _fetch_company_outcome(session, company, *, selected_role_families=Non
     if selected_role_families is None:
         selected_role_families = _selected_role_families_from_env()
 
-    try:
-        async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
-
-            if resp.status != 200:
-                return AcquisitionOutcome(
-                    company,
-                    AcquisitionStatus.FAILED,
-                    reason="non_200_response",
-                )
-
-            try:
-                data = await resp.json()
-            except Exception:
-                return AcquisitionOutcome(
-                    company,
-                    AcquisitionStatus.FAILED,
-                    reason="malformed_payload",
-                )
-
-    except Exception:
+    data, failure_reason = await _fetch_json(session, url)
+    if failure_reason:
         return AcquisitionOutcome(
             company,
             AcquisitionStatus.FAILED,
-            reason="transport_error",
+            reason=failure_reason,
         )
 
     if not isinstance(data, list):
@@ -237,7 +265,8 @@ async def scrape_all_lever_async(*, selected_role_families=None):
 
     all_jobs = []
 
-    async with aiohttp.ClientSession(connector=connector) as session:
+    timeout = aiohttp.ClientTimeout(total=SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
 
         sem = asyncio.Semaphore(100)
         async def limited_fetch(company):

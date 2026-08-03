@@ -477,6 +477,10 @@ def _greenhouse_payload():
 
 
 def test_greenhouse_success_empty_and_failure_outcomes(monkeypatch):
+    async def no_sleep(seconds):
+        return None
+
+    monkeypatch.setattr(greenhouse_scraper.asyncio, "sleep", no_sleep)
     monkeypatch.setattr(greenhouse_scraper, "title_matches", lambda title: True)
     monkeypatch.setattr(greenhouse_scraper, "us_location", lambda location, source: True)
     monkeypatch.setattr(greenhouse_scraper, "posted_within_24h", lambda posted: True)
@@ -539,6 +543,10 @@ def _lever_payload():
 
 
 def test_lever_success_empty_and_failure_outcomes(monkeypatch):
+    async def no_sleep(seconds):
+        return None
+
+    monkeypatch.setattr(lever_scraper.asyncio, "sleep", no_sleep)
     monkeypatch.setattr(lever_scraper, "title_matches", lambda *args, **kwargs: True)
     monkeypatch.setattr(lever_scraper, "us_location", lambda location, source: True)
     monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted: True)

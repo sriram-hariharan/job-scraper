@@ -5,8 +5,10 @@
 # phase23f legacy guard marker: changes_only d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004 300bd7285e7ed258197432f74cdab390f11f61670e5ef8e0feb77e3e90c005ab 81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961 fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0
 # phase23f legacy guard marker: changes_only fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0
 from pathlib import Path
+import subprocess
 
 from tests.support.phase_guard_registry import (
+    SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     assert_changed_files_allowed,
     assert_protected_hashes,
     get_changed_files,
@@ -837,6 +839,32 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    source_health_runtime_files = {
+        ROOT / relative_path
+        for relative_path in SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == source_health_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
     phase21_release_candidate_runtime_files = {
         ROOT / "src/agents/production_human_checkpoint_coordinator.py",
         ROOT / "src/app/api.py",

@@ -26,6 +26,22 @@ from src.utils.logging import get_logger
 
 logger = get_logger("collector")
 
+
+def _persist_source_health_safely(run_id, metrics, writer):
+    try:
+        stored_rows = writer(run_id, metrics)
+    except Exception as exc:
+        logger.warning(
+            "source_health_event event=persistence_failed error_type=%s",
+            type(exc).__name__,
+        )
+        return 0
+    logger.info(
+        "source_health_event event=persistence_succeeded rows=%s",
+        stored_rows,
+    )
+    return int(stored_rows or 0)
+
 AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_FLAG = (
     "APPLYLENS_AUTHORITATIVE_PREFILTER_DEDUPE_LANGGRAPH_ENABLED"
 )
@@ -2352,6 +2368,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         check_ats_health,
         check_pipeline_regression,
     )
+    from src.utils import ats_health as ats_health_owner
     from src.utils.job_cache import (
         cache_keys_for_jobs,
         filter_new_jobs,
@@ -2359,6 +2376,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         save_new_job_ids,
     )
     from src.utils.pipeline_metrics import log_stage_metrics
+    from src.utils import pipeline_metrics as source_health_metrics_owner
 
     preference_runtime = resolve_pipeline_preference_runtime()
     pipeline_preferences = preference_runtime["effective"]
@@ -2408,6 +2426,12 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     start_total = time.time()
     loop = asyncio.get_running_loop()
+    reset_source_metrics = getattr(
+        source_health_metrics_owner,
+        "reset_acquisition_metrics",
+        lambda: None,
+    )
+    reset_source_metrics()
 
     async def run_scraper(name: str, fn):
         start = time.time()
@@ -2452,6 +2476,19 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     learn_domains_from_jobs(all_jobs)
     check_ats_health(all_jobs)
+    acquisition_source_metrics = tuple(
+        getattr(
+            source_health_metrics_owner,
+            "acquisition_metrics_snapshot",
+            lambda: (),
+        )()
+    )
+    enforce_source_health = getattr(
+        ats_health_owner,
+        "enforce_source_health",
+        lambda _metrics: {},
+    )
+    enforce_source_health(acquisition_source_metrics)
 
     section("FILTER PIPELINE", logger)
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
@@ -3048,6 +3085,17 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         "details": len(detailed_jobs),
         "drop_pct": drop_pct,
     }
+    combine_source_metrics = getattr(
+        source_health_metrics_owner,
+        "combine_source_stage_metrics",
+        lambda metrics, **_kwargs: tuple(metrics),
+    )
+    persisted_source_health_metrics = combine_source_metrics(
+        acquisition_source_metrics,
+        filtered_jobs=filtered_jobs,
+        deduped_jobs=deduped_jobs,
+        final_jobs=scored_jobs,
+    )
 
     if _is_user_pipeline_mode():
         section("PIPELINE HEALTH", logger)
@@ -3082,6 +3130,20 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         record_ats_counts(run_id, "DEDUPED", deduped_counts)
         record_ats_counts(run_id, "RANKED", log_stage_metrics("RANKED", ranked_jobs))
         record_ats_counts(run_id, "DETAILS", details_counts)
+
+        try:
+            from src.storage.metrics_store import record_source_health_metrics
+
+            _persist_source_health_safely(
+                run_id,
+                persisted_source_health_metrics,
+                record_source_health_metrics,
+            )
+        except Exception as exc:
+            logger.warning(
+                "source_health_event event=persistence_failed error_type=%s",
+                type(exc).__name__,
+            )
 
         logger.info("Pipeline metrics stored")
 

@@ -1,37 +1,111 @@
 import asyncio
 import aiohttp
 from tqdm import tqdm
-from src.config.consts import GREENHOUSE_API
+from src.config.consts import (
+    GREENHOUSE_API,
+    SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS,
+    SCRAPER_RETRY_ATTEMPTS,
+    SCRAPER_RETRY_DELAY_SECONDS,
+    SCRAPER_RETRY_MAX_DELAY_SECONDS,
+)
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
 from src.discovery.crawl_scheduler import (
+    AcquisitionOutcome,
+    AcquisitionStatus,
     load_schedule,
     save_schedule,
     should_scrape,
     mark_scraped
 )
 from src.pipeline.job_filter import title_matches, us_location, posted_within_24h
+from src.utils.http_retry import (
+    TRANSIENT_HTTP_STATUSES,
+    record_http_request,
+    record_http_response_status,
+    record_http_retry,
+    retry_delay_seconds,
+)
+from src.utils.pipeline_metrics import observe_acquisition_async
 
 logger = get_logger("greenhouse")
 
-async def fetch_company_jobs(session, company):
+
+async def _fetch_json(session, url):
+    for attempt in range(SCRAPER_RETRY_ATTEMPTS):
+        try:
+            record_http_request()
+            async with session.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as resp:
+                record_http_response_status(resp.status)
+                if resp.status in TRANSIENT_HTTP_STATUSES:
+                    if attempt < SCRAPER_RETRY_ATTEMPTS - 1:
+                        record_http_retry()
+                        await asyncio.sleep(
+                            retry_delay_seconds(
+                                getattr(resp, "headers", None),
+                                fallback_delay=SCRAPER_RETRY_DELAY_SECONDS,
+                                max_delay=SCRAPER_RETRY_MAX_DELAY_SECONDS,
+                            )
+                        )
+                        continue
+                    return None, "non_200_response"
+
+                if resp.status != 200:
+                    return None, "non_200_response"
+
+                try:
+                    return await resp.json(), ""
+                except Exception:
+                    return None, "malformed_payload"
+        except (asyncio.TimeoutError, aiohttp.ClientConnectionError, OSError):
+            if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
+                return None, "transport_error"
+            record_http_retry()
+            await asyncio.sleep(SCRAPER_RETRY_DELAY_SECONDS)
+        except Exception:
+            return None, "transport_error"
+
+    return None, "transport_error"
+
+async def _fetch_company_outcome(session, company):
 
     url = GREENHOUSE_API.format(company)
 
     jobs = []
 
+    data, failure_reason = await _fetch_json(session, url)
+    if failure_reason:
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason=failure_reason,
+        )
+
+    if (
+        not isinstance(data, dict)
+        or "jobs" not in data
+        or not isinstance(data.get("jobs"), list)
+    ):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
+    postings = data.get("jobs", [])
+    if not all(isinstance(job, dict) for job in postings):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
     try:
-        async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
-
-            if resp.status != 200:
-                return jobs
-
-            data = await resp.json()
-
-        postings = data.get("jobs", [])
-
         for job in postings:
 
             title = job.get("title", "")
@@ -63,14 +137,36 @@ async def fetch_company_jobs(session, company):
                 ).to_dict()
             )
 
-        return jobs
-
     except Exception:
-        return jobs
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="parse_error",
+            raw_job_count=len(postings),
+        )
+
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        raw_job_count=len(postings),
+    )
+
+
+async def fetch_company_jobs(session, company):
+    outcome = await _fetch_company_outcome(session, company)
+    return list(outcome.jobs)
 
 async def run_company(session, company):
-    jobs = await fetch_company_jobs(session, company)
-    return company, jobs
+    return await observe_acquisition_async(
+        "greenhouse",
+        lambda: _fetch_company_outcome(session, company),
+        schedule_on_success=True,
+        company=company,
+    )
 
 async def scrape_all_greenhouse_async():
 
@@ -87,7 +183,8 @@ async def scrape_all_greenhouse_async():
     connector = aiohttp.TCPConnector(limit=50)
     all_jobs = []
 
-    async with aiohttp.ClientSession(connector=connector) as session:
+    timeout = aiohttp.ClientTimeout(total=SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
 
         tasks = [
             asyncio.create_task(run_company(session, c))
@@ -100,11 +197,16 @@ async def scrape_all_greenhouse_async():
             desc="Greenhouse scraping"
         ):
 
-            company, jobs = await task
+            try:
+                outcome = await task
+            except Exception as exc:
+                logger.warning(f"Greenhouse worker failed: {exc}")
+                continue
 
-            all_jobs.extend(jobs)
+            all_jobs.extend(outcome.jobs)
 
-            mark_scraped(company, schedule)
+            if outcome.should_mark_scraped:
+                mark_scraped(outcome.company, schedule)
             
     save_schedule(schedule)
     return all_jobs

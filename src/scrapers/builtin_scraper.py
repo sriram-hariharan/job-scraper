@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Dict, List, Optional
@@ -8,7 +9,22 @@ from urllib.parse import urljoin
 
 from models.job import Job
 from src.discovery.learned_companies import learn_from_job_url
+from src.discovery.crawl_scheduler import AcquisitionOutcome, AcquisitionStatus
+from src.config.consts import (
+    BUILTIN_HTTP_TIMEOUT_SECONDS,
+    SCRAPER_RETRY_ATTEMPTS,
+    SCRAPER_RETRY_DELAY_SECONDS,
+    SCRAPER_RETRY_MAX_DELAY_SECONDS,
+)
+from src.utils.http_retry import (
+    TRANSIENT_HTTP_STATUSES,
+    record_http_request,
+    record_http_response_status,
+    record_http_retry,
+    retry_delay_seconds,
+)
 from src.utils.logging import get_logger
+from src.utils.pipeline_metrics import observe_acquisition
 
 logger = get_logger("builtin")
 
@@ -218,20 +234,51 @@ def extract_builtin_jobs_from_html(html_text: str, *, now: Optional[datetime] = 
     return jobs
 
 
+def _fetch_builtin_jobs_html_result():
+    request = Request(
+        BUILTIN_JOBS_URL,
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+
+    for attempt in range(SCRAPER_RETRY_ATTEMPTS):
+        try:
+            record_http_request()
+            with urlopen(request, timeout=BUILTIN_HTTP_TIMEOUT_SECONDS) as response:
+                record_http_response_status(response.status)
+                if response.status != 200:
+                    logger.warning(
+                        "Built In jobs fetch returned status=%s", response.status
+                    )
+                    return "", "non_200_response"
+                return response.read().decode("utf-8", "replace"), ""
+        except HTTPError as exc:
+            record_http_response_status(exc.code)
+            if (
+                exc.code not in TRANSIENT_HTTP_STATUSES
+                or attempt == SCRAPER_RETRY_ATTEMPTS - 1
+            ):
+                logger.warning("Built In jobs fetch failed with status=%s", exc.code)
+                return "", "non_200_response"
+            record_http_retry()
+            time.sleep(
+                retry_delay_seconds(
+                    exc.headers,
+                    fallback_delay=SCRAPER_RETRY_DELAY_SECONDS,
+                    max_delay=SCRAPER_RETRY_MAX_DELAY_SECONDS,
+                )
+            )
+        except (URLError, TimeoutError, OSError):
+            if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
+                logger.warning("Built In jobs fetch failed with transport_error")
+                return "", "transport_error"
+            record_http_retry()
+            time.sleep(SCRAPER_RETRY_DELAY_SECONDS)
+
+    return "", "transport_error"
+
+
 def fetch_builtin_jobs_html() -> str:
-    try:
-        request = Request(
-            BUILTIN_JOBS_URL,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        with urlopen(request, timeout=15) as response:
-            if response.status != 200:
-                logger.warning("Built In jobs fetch returned status=%s", response.status)
-                return ""
-            return response.read().decode("utf-8", "replace")
-    except (HTTPError, URLError, TimeoutError, OSError) as exc:
-        logger.warning("Built In jobs fetch failed: %s", exc)
-        return ""
+    return _fetch_builtin_jobs_html_result()[0]
 
 
 def smoke_builtin_live(limit: int = 5) -> List[Dict[str, str]]:
@@ -241,8 +288,34 @@ def smoke_builtin_live(limit: int = 5) -> List[Dict[str, str]]:
     return extract_builtin_jobs_from_html(html_text)[:limit]
 
 
+def _fetch_builtin_outcome():
+    company = "<global_feed>"
+    html_text, reason = _fetch_builtin_jobs_html_result()
+    if reason:
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason=reason,
+        )
+    jobs = extract_builtin_jobs_from_html(html_text)
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        page_count=1,
+        raw_job_count=len(set(JOB_HREF_RE.findall(html_text))),
+    )
+
+
 def scrape_all_builtin() -> List[Dict[str, str]]:
-    jobs = smoke_builtin_live(limit=10_000)
+    outcome = observe_acquisition(
+        "builtin",
+        _fetch_builtin_outcome,
+        schedule_on_success=False,
+        company="<global_feed>",
+    )
+    jobs = list(outcome.jobs)[:10_000]
     for job in jobs:
         learn_from_job_url(job.get("url"))
 

@@ -3,7 +3,13 @@ import aiohttp
 import json
 import os
 from tqdm import tqdm
-from src.config.consts import LEVER_API
+from src.config.consts import (
+    LEVER_API,
+    SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS,
+    SCRAPER_RETRY_ATTEMPTS,
+    SCRAPER_RETRY_DELAY_SECONDS,
+    SCRAPER_RETRY_MAX_DELAY_SECONDS,
+)
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
@@ -14,14 +20,64 @@ from src.pipeline.job_filter import (
     posted_within_24h
 )
 from src.discovery.crawl_scheduler import (
+    AcquisitionOutcome,
+    AcquisitionStatus,
     load_schedule,
     save_schedule,
     should_scrape,
     mark_scraped
 )
-from src.utils.http_retry import http_get
+from src.utils.http_retry import (
+    TRANSIENT_HTTP_STATUSES,
+    http_get,
+    record_http_request,
+    record_http_response_status,
+    record_http_retry,
+    retry_delay_seconds,
+)
+from src.utils.pipeline_metrics import observe_acquisition_async
 
 logger = get_logger("lever")
+
+
+async def _fetch_json(session, url):
+    for attempt in range(SCRAPER_RETRY_ATTEMPTS):
+        try:
+            record_http_request()
+            async with session.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as resp:
+                record_http_response_status(resp.status)
+                if resp.status in TRANSIENT_HTTP_STATUSES:
+                    if attempt < SCRAPER_RETRY_ATTEMPTS - 1:
+                        record_http_retry()
+                        await asyncio.sleep(
+                            retry_delay_seconds(
+                                getattr(resp, "headers", None),
+                                fallback_delay=SCRAPER_RETRY_DELAY_SECONDS,
+                                max_delay=SCRAPER_RETRY_MAX_DELAY_SECONDS,
+                            )
+                        )
+                        continue
+                    return None, "non_200_response"
+
+                if resp.status != 200:
+                    return None, "non_200_response"
+
+                try:
+                    return await resp.json(), ""
+                except Exception:
+                    return None, "malformed_payload"
+        except (asyncio.TimeoutError, aiohttp.ClientConnectionError, OSError):
+            if attempt == SCRAPER_RETRY_ATTEMPTS - 1:
+                return None, "transport_error"
+            record_http_retry()
+            await asyncio.sleep(SCRAPER_RETRY_DELAY_SECONDS)
+        except Exception:
+            return None, "transport_error"
+
+    return None, "transport_error"
 
 
 def _selected_role_families_from_env():
@@ -108,62 +164,103 @@ def seed_valid_lever_companies(slugs, *, source="manual_lever_validation"):
     )
 
 
-async def fetch_company_jobs(session, company, *, selected_role_families=None):
+async def _fetch_company_outcome(session, company, *, selected_role_families=None):
 
     url = _lever_company_url(company)
     if selected_role_families is None:
         selected_role_families = _selected_role_families_from_env()
 
-    try:
-        async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
-
-            if resp.status != 200:
-                return []
-
-            data = await resp.json()
-
-    except Exception:
-        return []
-
-    jobs = []
-
-    for job in _parse_lever_postings_payload(data):
-
-        title = job.get("text", "")
-        location = job.get("categories", {}).get("location", "")
-        job_url = job.get("hostedUrl", "")
-        posted_at = job.get("createdAt")
-
-        learn_from_job_url(job_url)
-
-        # ---------- EARLY FILTERS ----------
-
-        if not title_matches(
-            title,
-            selected_role_families=selected_role_families or None,
-        ):
-            continue
-
-        if not us_location(location, "lever"):
-            continue
-
-        if not posted_within_24h(posted_at):
-            continue
-        # -----------------------------------
-
-        jobs.append(
-            Job(
-                company=company,
-                title=title,
-                location=location,
-                url=job_url,
-                source="lever",
-                posted_at=posted_at,
-                job_id=f"lv_{job.get('id')}"
-            ).to_dict()
+    data, failure_reason = await _fetch_json(session, url)
+    if failure_reason:
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason=failure_reason,
         )
 
-    return jobs
+    if not isinstance(data, list):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
+    jobs = []
+    postings = _parse_lever_postings_payload(data)
+    payload_incomplete = len(postings) != len(data)
+
+    try:
+        for job in postings:
+
+            title = job.get("text", "")
+            location = job.get("categories", {}).get("location", "")
+            job_url = job.get("hostedUrl", "")
+            posted_at = job.get("createdAt")
+
+            learn_from_job_url(job_url)
+
+            # ---------- EARLY FILTERS ----------
+
+            if not title_matches(
+                title,
+                selected_role_families=selected_role_families or None,
+            ):
+                continue
+
+            if not us_location(location, "lever"):
+                continue
+
+            if not posted_within_24h(posted_at):
+                continue
+            # -----------------------------------
+
+            jobs.append(
+                Job(
+                    company=company,
+                    title=title,
+                    location=location,
+                    url=job_url,
+                    source="lever",
+                    posted_at=posted_at,
+                    job_id=f"lv_{job.get('id')}"
+                ).to_dict()
+            )
+    except Exception:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="parse_error",
+            raw_job_count=len(data),
+        )
+
+    if payload_incomplete:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="malformed_payload",
+            raw_job_count=len(data),
+        )
+
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        raw_job_count=len(data),
+    )
+
+
+async def fetch_company_jobs(session, company, *, selected_role_families=None):
+    outcome = await _fetch_company_outcome(
+        session,
+        company,
+        selected_role_families=selected_role_families,
+    )
+    return list(outcome.jobs)
 
 
 async def scrape_all_lever_async(*, selected_role_families=None):
@@ -183,20 +280,25 @@ async def scrape_all_lever_async(*, selected_role_families=None):
 
     all_jobs = []
 
-    async with aiohttp.ClientSession(connector=connector) as session:
+    timeout = aiohttp.ClientTimeout(total=SCRAPER_ASYNC_TOTAL_TIMEOUT_SECONDS)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
 
         sem = asyncio.Semaphore(100)
         async def limited_fetch(company):
             async with sem:
-                return await fetch_company_jobs(
-                    session,
-                    company,
-                    selected_role_families=selected_role_families,
+                return await observe_acquisition_async(
+                    "lever",
+                    lambda: _fetch_company_outcome(
+                        session,
+                        company,
+                        selected_role_families=selected_role_families,
+                    ),
+                    schedule_on_success=True,
+                    company=company,
                 )
 
         async def run_company(company):
-            jobs = await limited_fetch(company)
-            return company, jobs
+            return await limited_fetch(company)
 
         tasks = [
             asyncio.create_task(run_company(c))
@@ -209,11 +311,16 @@ async def scrape_all_lever_async(*, selected_role_families=None):
             desc="Lever scraping"
         ):
 
-            company, jobs = await task
+            try:
+                outcome = await task
+            except Exception as exc:
+                logger.warning(f"Lever worker failed: {exc}")
+                continue
 
-            all_jobs.extend(jobs)
+            all_jobs.extend(outcome.jobs)
 
-            mark_scraped(company, schedule)
+            if outcome.should_mark_scraped:
+                mark_scraped(outcome.company, schedule)
 
     save_schedule(schedule)
     return all_jobs

@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from src.utils.html_timestamp_extractor import extract_jsonld_dateposted
 from src.utils.http_retry import retry_request
+from src.utils.pipeline_metrics import observe_acquisition
 from src.config.consts import JOBVITE_URL_PATTERNS
 from models.job import Job
 from src.utils.file_loader import load_lines
@@ -9,6 +10,8 @@ from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
 from src.discovery.crawl_scheduler import (
+    AcquisitionOutcome,
+    AcquisitionStatus,
     load_schedule,
     save_schedule,
     should_scrape,
@@ -42,85 +45,129 @@ def fetch_jobvite_posted_date(job_url):
 
     return ts
 
-def fetch_company_jobs(company):
+def _fetch_company_outcome(company):
 
     urls = [u.format(company=company) for u in JOBVITE_URL_PATTERNS]
     html = None
+    completed_request = False
+    failure_reason = "non_200_response"
 
     for url in urls:
 
-        r = jobvite_get(url, timeout=10)
+        try:
+            r = jobvite_get(url, timeout=10)
+        except Exception:
+            failure_reason = "transport_error"
+            continue
+
         if r is None or r.status_code != 200:
             continue
+        completed_request = True
         html = r.text
         # if page actually contains jobs stop trying
         if "/job/" in html:
             break
 
-    if not html:
+    if not completed_request or not isinstance(html, str) or not html:
         logger.warning(f"{company} no jobvite page found")
-        return []
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason=failure_reason if not completed_request else "malformed_payload",
+        )
 
-    soup = BeautifulSoup(html, "html.parser")
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="parse_error",
+        )
 
     jobs = []
+    raw_job_count = 0
 
     links = soup.find_all("a", href=True)
 
     seen_urls = set()
 
-    for link in links:
-        href = link["href"]
-        if "/job/" not in href:
-            continue
+    try:
+        for link in links:
+            href = link["href"]
+            if "/job/" not in href:
+                continue
 
-        job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
-        jobvite_id = job_url.split("/job/")[-1].split("?")[0]
-        if job_url in seen_urls:
-            continue
+            job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
+            jobvite_id = job_url.split("/job/")[-1].split("?")[0]
+            if job_url in seen_urls:
+                continue
 
-        seen_urls.add(job_url)
+            seen_urls.add(job_url)
+            raw_job_count += 1
 
-        # find job container
-        container = link.find_parent("div")
+            # find job container
+            container = link.find_parent("div")
 
-        is_new = False
-        if container:
-            if container.find("span", class_="jv-tag-new"):
-                is_new = True
+            is_new = False
+            if container:
+                if container.find("span", class_="jv-tag-new"):
+                    is_new = True
 
-        title = link.text.strip()
+            title = link.text.strip()
 
-        learn_from_job_url(job_url)
-        posted_at = None
-        if is_new:
-            posted_at = fetch_jobvite_posted_date(job_url)
+            learn_from_job_url(job_url)
+            posted_at = None
+            if is_new:
+                posted_at = fetch_jobvite_posted_date(job_url)
 
-        # jobs.append({
-        #     "company": company,
-        #     "title": title,
-        #     "location": "",
-        #     "url": job_url,
-        #     "source": "jobvite",
-        #     "posted_at": posted_at,
-        #     "is_new": is_new
-        # })
-        jobs.append(
-            Job(
-                company=company,
-                title=title,
-                location="",
-                url=job_url,
-                source="jobvite",
-                posted_at=posted_at,
-                meta={
-                    "is_new": is_new
-                },
-                job_id=f"jv_{jobvite_id}",
-            ).to_dict()
+            jobs.append(
+                Job(
+                    company=company,
+                    title=title,
+                    location="",
+                    url=job_url,
+                    source="jobvite",
+                    posted_at=posted_at,
+                    meta={
+                        "is_new": is_new
+                    },
+                    job_id=f"jv_{jobvite_id}",
+                ).to_dict()
+            )
+    except Exception:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="parse_error",
+            raw_job_count=raw_job_count,
         )
 
-    return jobs
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(
+        company,
+        status,
+        tuple(jobs),
+        raw_job_count=raw_job_count,
+    )
+
+
+def fetch_company_jobs(company):
+    return list(_fetch_company_outcome(company).jobs)
+
+
+def _fetch_company_result(company):
+    return [
+        observe_acquisition(
+            "jobvite",
+            lambda: _fetch_company_outcome(company),
+            schedule_on_success=True,
+            company=company,
+        )
+    ]
+
 
 def scrape_all_jobvite():
 
@@ -136,20 +183,18 @@ def scrape_all_jobvite():
     companies = list(set(companies))
     results = run_parallel(
         companies,
-        fetch_company_jobs,
+        _fetch_company_result,
         max_workers=8,
         desc="Jobvite scraping"
         )
     
     all_jobs = []
 
-    for company, jobs in zip(companies, results):
+    for outcome in results:
+        all_jobs.extend(outcome.jobs)
 
-        if isinstance(jobs, list):
-            all_jobs.extend(jobs)
-
-            # only mark if scrape succeeded
-            mark_scraped(company, schedule)
+        if outcome.should_mark_scraped:
+            mark_scraped(outcome.company, schedule)
 
     save_schedule(schedule)
 

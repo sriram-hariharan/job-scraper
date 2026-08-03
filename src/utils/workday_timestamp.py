@@ -1,4 +1,5 @@
 import requests
+from src.utils.http_retry import record_http_request, record_http_response_status
 
 session = requests.Session()
 session.headers.update({
@@ -19,7 +20,9 @@ def fetch_workday_timestamp(board_url, external_path):
             f"/wday/cxs/{tenant}/{site}{external_path}"
         )
 
+        record_http_request()
         r = session.get(detail_url, timeout=10)
+        record_http_response_status(r.status_code)
 
         if r.status_code != 200:
             return None

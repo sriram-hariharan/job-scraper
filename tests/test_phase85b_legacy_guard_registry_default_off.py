@@ -38,6 +38,7 @@ from tests.support.phase_guard_registry import (
     PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES,
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
+    PERSONIO_SOURCE_INTEGRATION_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
@@ -353,6 +354,26 @@ def test_scraper_prefilter_ownership_boundary_surface_is_exact():
         "tests/test_scraper_transport_pagination_hardening.py",
     }
     assert not any("*" in path for path in SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES)
+
+
+def test_personio_source_integration_surface_is_exact():
+    assert PERSONIO_SOURCE_INTEGRATION_FILES == {
+        "src/config/consts.py",
+        "src/config/curated_ats_sources.json",
+        "src/discovery/curated_ats_sources.py",
+        "src/pipeline/collector.py",
+        "src/scrapers/personio_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_curated_ats_sources.py",
+        "tests/test_personio_scraper.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_scraper_prefilter_ownership_boundary.py",
+        "tests/test_scraper_source_health_metrics.py",
+        "tests/test_scraper_transport_pagination_hardening.py",
+    }
+    assert not any("*" in path for path in PERSONIO_SOURCE_INTEGRATION_FILES)
 
 
 def test_broad_tech_prefilter_taxonomy_surface_is_exact():
@@ -1562,6 +1583,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        | PERSONIO_SOURCE_INTEGRATION_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES

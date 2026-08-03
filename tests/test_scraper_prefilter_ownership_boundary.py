@@ -8,6 +8,7 @@ from src.pipeline.job_filter import filter_jobs
 from src.scrapers import (
     greenhouse_scraper,
     lever_scraper,
+    personio_scraper,
     recruitee_scraper,
     workday_scraper,
 )
@@ -138,10 +139,34 @@ def _recruitee_outcome(monkeypatch):
     return recruitee_scraper._fetch_company_outcome("acme")
 
 
+def _personio_outcome(monkeypatch):
+    response = type(
+        "Response",
+        (),
+        {
+            "status_code": 200,
+            "headers": {"Content-Type": "text/xml"},
+            "content": b"""
+                <workzag-jobs><position><id>1</id><name>Backend Engineer</name>
+                <office>London, UK</office><createdAt>2000-01-01T00:00:00Z</createdAt>
+                </position></workzag-jobs>
+            """,
+        },
+    )()
+    monkeypatch.setattr(personio_scraper, "_request_feed", lambda _host: response)
+    return personio_scraper._fetch_company_outcome("acme.jobs.personio.de")
+
+
 @pytest.mark.parametrize(
     "outcome_factory",
-    [_greenhouse_outcome, _lever_outcome, _workday_outcome, _recruitee_outcome],
-    ids=["greenhouse", "lever", "workday", "recruitee"],
+    [
+        _greenhouse_outcome,
+        _lever_outcome,
+        _workday_outcome,
+        _personio_outcome,
+        _recruitee_outcome,
+    ],
+    ids=["greenhouse", "lever", "workday", "personio", "recruitee"],
 )
 def test_acquisition_retains_nonmatching_non_us_and_old_jobs(
     monkeypatch, outcome_factory
@@ -232,6 +257,7 @@ def test_source_health_counts_normalized_job_before_central_drop(monkeypatch):
         (greenhouse_scraper, greenhouse_scraper._fetch_company_outcome),
         (lever_scraper, lever_scraper._fetch_company_outcome),
         (workday_scraper, workday_scraper._scrape_company_outcome),
+        (personio_scraper, personio_scraper._fetch_company_outcome),
         (recruitee_scraper, recruitee_scraper._fetch_company_outcome),
     ],
 )

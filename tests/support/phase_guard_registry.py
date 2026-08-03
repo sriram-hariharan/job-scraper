@@ -546,6 +546,23 @@ RECRUITEE_SOURCE_INTEGRATION_FILES = {
     "tests/test_scraper_source_health_metrics.py",
 }
 
+PERSONIO_SOURCE_INTEGRATION_FILES = {
+    "src/config/consts.py",
+    "src/config/curated_ats_sources.json",
+    "src/discovery/curated_ats_sources.py",
+    "src/pipeline/collector.py",
+    "src/scrapers/personio_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_curated_ats_sources.py",
+    "tests/test_personio_scraper.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_scraper_prefilter_ownership_boundary.py",
+    "tests/test_scraper_source_health_metrics.py",
+    "tests/test_scraper_transport_pagination_hardening.py",
+}
+
 SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
     "src/pipeline/collector.py",
     "src/scrapers/greenhouse_scraper.py",
@@ -704,6 +721,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "personio_source_integration": PERSONIO_SOURCE_INTEGRATION_FILES,
         "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
@@ -2035,6 +2053,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        | PERSONIO_SOURCE_INTEGRATION_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
@@ -2168,6 +2187,7 @@ def assert_protected_hashes(
             "83d14c9634cd22cdee8d31fe1be675aba23ab2b5ad333a56fbd6b23638a07dc1",
             "8bc8673fcf3701f1ff232a760082dfe965c4477bb48dd9ee265a2f3ca4c9f282",
             "f52fdf16c5dea4d4afbe0d36aad41a3b774f0aa91d129844138a895fffe88297",
+            "29f51fec60aceb8798cbcecda6dbe41f315e79557b193668d019de4e6f716929",
         }),
         (
             "src/pipeline/job_ranker.py",

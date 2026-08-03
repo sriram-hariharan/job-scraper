@@ -11,6 +11,7 @@ from tests.support.phase_guard_registry import (
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
+    PERSONIO_SOURCE_INTEGRATION_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
@@ -121,6 +122,7 @@ def test_protected_runtime_files_are_unchanged():
         PROTECTED_HASHES,
         compatibility_profiles=(
             "phase129c_workflow_overlay_and_run_scoped_corpus",
+            "personio_source_integration",
             "recruitee_source_integration",
             "phase2d_a_independent_seniority_policy",
             "phase2d_b2_strict_seniority_filter",
@@ -841,6 +843,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "llm_adjudicator_readback_default_off",
             "phase133g_premium_planning_dashboard",
             "phase10_step8_shadow_observation_safety",
+            "personio_source_integration",
         ),
     )
 
@@ -934,6 +937,32 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == recruitee_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    personio_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PERSONIO_SOURCE_INTEGRATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == personio_runtime_files:
         diff = subprocess.check_output(
             [
                 "git",

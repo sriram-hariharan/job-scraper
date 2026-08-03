@@ -5,6 +5,7 @@ import pytest
 from tests.support.phase_guard_registry import (
     BROAD_TECH_PREFILTER_TAXONOMY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
+    PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
     PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES,
@@ -400,6 +401,23 @@ def test_phase2d_a_independent_seniority_policy_surface_is_exact():
     }
     assert not any(
         "*" in path for path in PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+    )
+
+
+def test_phase2d_b1_default_eligibility_ownership_surface_is_exact():
+    assert PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES == {
+        "src/config/role_taxonomy.py",
+        "src/config/seniority_policy.py",
+        "src/pipeline/job_filter.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_independent_seniority_prefilter.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
     )
 
 
@@ -1514,6 +1532,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
         | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        | PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
     )
     assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
         "application_execution_queue.py",

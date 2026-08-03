@@ -26,6 +26,10 @@ from src.config.role_taxonomy import (
     DEFAULT_ROLE_FAMILY_IDS,
     ROLE_TAXONOMY,
 )
+from src.config.seniority_policy import (
+    classify_title_seniority,
+    default_prefilter_seniority_is_eligible,
+)
 from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp_result
 
@@ -186,15 +190,21 @@ def _matched_role_title_decision(normalized_title, selected_role_families=None):
                     for exclude_pattern in role_family.get("title_exclude_patterns", ()) or ()
                 )
                 if not excluded:
-                    return True, "include_pattern_match", role_family_id, pattern
+                    return (
+                        True,
+                        "include_pattern_match",
+                        role_family_id,
+                        pattern,
+                        first_excluded_match,
+                    )
                 if first_excluded_match is None:
                     first_excluded_match = (role_family_id, pattern)
 
     if first_excluded_match is not None:
         role_family_id, pattern = first_excluded_match
-        return False, "exclude_pattern_match", role_family_id, pattern
+        return False, "exclude_pattern_match", role_family_id, pattern, None
 
-    return False, "no_include_pattern_match", "", ""
+    return False, "no_include_pattern_match", "", "", None
 
 
 def _suspected_role_family_hint(title, selected_role_families=None):
@@ -225,10 +235,30 @@ def title_match_detail(title, selected_role_families=None):
         return detail
 
     normalized = normalize_title(title)
-    matched, reason, matched_role_family, matched_pattern = _matched_role_title_decision(
+    (
+        matched,
+        reason,
+        matched_role_family,
+        matched_pattern,
+        prior_excluded_match,
+    ) = _matched_role_title_decision(
         normalized,
         selected_role_families=selected_role_families,
     )
+    if matched:
+        technical_management_role = matched_role_family in {
+            "technical_product_management",
+            "technical_program_management",
+        }
+        seniority = classify_title_seniority(
+            title,
+            technical_management_role=technical_management_role,
+        )
+        if not default_prefilter_seniority_is_eligible(seniority):
+            matched = False
+            reason = "exclude_pattern_match"
+            if prior_excluded_match is not None:
+                matched_role_family, matched_pattern = prior_excluded_match
     detail["matched"] = matched
     detail["reason"] = reason
     detail["matched_role_family"] = matched_role_family

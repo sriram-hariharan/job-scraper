@@ -21,6 +21,19 @@ SENIORITY_CLASSIFICATION_OUTCOMES: Tuple[str, ...] = (
     "unknown",
 )
 
+DEFAULT_PREFILTER_ELIGIBLE_SENIORITY_OUTCOMES: Tuple[str, ...] = (
+    "entry",
+    "mid",
+    "senior",
+    "unknown",
+)
+
+DEFAULT_PREFILTER_REJECTED_SENIORITY_OUTCOMES: Tuple[str, ...] = (
+    "intern",
+    "staff",
+    "manager_or_above",
+)
+
 _LEGACY_TARGET_SENIORITY_ALIASES = {
     "staff_or_above": "staff",
 }
@@ -109,3 +122,9 @@ def classify_title_seniority(
     if _MID_REGEX.search(text):
         return "mid"
     return "unknown"
+
+
+def default_prefilter_seniority_is_eligible(classification: Any) -> bool:
+    return str(classification or "").strip().lower() in (
+        DEFAULT_PREFILTER_ELIGIBLE_SENIORITY_OUTCOMES
+    )

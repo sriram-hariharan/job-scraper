@@ -9,6 +9,7 @@ import subprocess
 
 from tests.support.phase_guard_registry import (
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
+    PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
@@ -838,6 +839,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == phase2d_a_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase2d_b1_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == phase2d_b1_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

@@ -600,6 +600,17 @@ PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES = {
     "tests/test_user_pipeline_role_preferences.py",
 }
 
+PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES = {
+    "src/config/role_taxonomy.py",
+    "src/config/seniority_policy.py",
+    "src/pipeline/job_filter.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_independent_seniority_prefilter.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1304,6 +1315,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase2d_a_independent_seniority_policy": (
             PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
         ),
+        "phase2d_b1_default_eligibility_ownership": (
+            PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        ),
         "phase133a_executive_kpi_react_island": {
             ".gitignore",
             "Dockerfile",
@@ -1849,6 +1863,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase129c_workflow_overlay_and_run_scoped_corpus")
         | legacy_guard_allowlist("phase132b_premium_preferences_ui")
         | legacy_guard_allowlist("phase2d_a_independent_seniority_policy")
+        | legacy_guard_allowlist("phase2d_b1_default_eligibility_ownership")
         | legacy_guard_allowlist("phase133a_executive_kpi_react_island")
         | legacy_guard_allowlist("phase133b_executive_queue_react_island")
         | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
@@ -1992,6 +2007,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
         | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        | PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
     )
 
 

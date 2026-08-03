@@ -5,18 +5,6 @@ from typing import Any, Dict, Iterable, List, Pattern, Tuple
 
 
 COMMON_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = (
-    r"\bstaff\b",
-    r"\bprincipal\b",
-    r"\blead\b",
-    r"\bmember of technical staff\b",
-    r"\bmts\b",
-    r"\bdirector\b",
-    r"\bvp\b",
-    r"\bvice president\b",
-    r"\bhead of\b",
-    r"\bmanager\b",
-    r"\bintern\b",
-    r"\bstudent\b",
     r"\brecruiter\b",
     r"\bsales\b",
     r"\bgtm\b",

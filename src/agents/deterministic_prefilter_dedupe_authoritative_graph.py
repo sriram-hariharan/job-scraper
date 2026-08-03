@@ -5,6 +5,7 @@ import time
 from typing import Any, Callable, Dict, List, Mapping, TypedDict
 
 from src.pipeline import dedupe, job_filter
+from src.config.seniority_policy import normalize_seniority_filter_preferences
 
 
 AUTHORITATIVE_PREFILTER_DEDUPE_GRAPH_VERSION = (
@@ -32,6 +33,8 @@ class AuthoritativePrefilterDedupeState(TypedDict, total=False):
     context_id: str
     input_jobs: List[Dict[str, Any]]
     selected_role_families: List[str] | None
+    target_seniority: List[str]
+    seniority_strict_match: bool
     filter_mode: str
     excluded_keywords: List[str]
     role_title_audit_enabled: bool
@@ -141,6 +144,13 @@ def build_authoritative_prefilter_dedupe_graph(
             field_name="authoritative_prefilter_selected_role_families",
             allow_none=True,
         )
+        target_seniority = _copy_string_list(
+            state.get("target_seniority"),
+            field_name="authoritative_prefilter_target_seniority",
+        )
+        seniority_strict_match = state.get("seniority_strict_match")
+        if not isinstance(seniority_strict_match, bool):
+            raise TypeError("authoritative_prefilter_seniority_strict_match_must_be_boolean")
         excluded_keywords = _copy_string_list(
             state.get("excluded_keywords"),
             field_name="authoritative_prefilter_excluded_keywords",
@@ -156,6 +166,8 @@ def build_authoritative_prefilter_dedupe_graph(
         result = job_filter.filter_jobs(
             deepcopy(input_jobs),
             selected_role_families=selected_role_families,
+            target_seniority=target_seniority,
+            seniority_strict_match=seniority_strict_match,
             filter_mode=str(state.get("filter_mode") or "strict_live"),
             return_diagnostics=True,
             role_title_audit_rows=working_audit_rows,
@@ -242,6 +254,8 @@ def execute_authoritative_prefilter_dedupe_graph(
     *,
     jobs: List[Mapping[str, Any]],
     selected_role_families: List[str] | None = None,
+    target_seniority: List[str] | None = None,
+    seniority_strict_match: bool = False,
     filter_mode: str = "strict_live",
     role_title_audit_rows: List[Mapping[str, Any]] | None = None,
     excluded_keywords: List[str] | None = None,
@@ -279,6 +293,10 @@ def execute_authoritative_prefilter_dedupe_graph(
         list(excluded_keywords or []),
         field_name="authoritative_prefilter_excluded_keywords",
     )
+    canonical_targets, strict_match = normalize_seniority_filter_preferences(
+        target_seniority,
+        seniority_strict_match,
+    )
     initial_state: AuthoritativePrefilterDedupeState = {
         "graph_version": AUTHORITATIVE_PREFILTER_DEDUPE_GRAPH_VERSION,
         "state_version": AUTHORITATIVE_PREFILTER_DEDUPE_STATE_VERSION,
@@ -288,6 +306,8 @@ def execute_authoritative_prefilter_dedupe_graph(
         "context_id": str(context_id or "").strip(),
         "input_jobs": copied_jobs,
         "selected_role_families": selected_roles,
+        "target_seniority": canonical_targets,
+        "seniority_strict_match": strict_match,
         "filter_mode": str(filter_mode or "strict_live"),
         "excluded_keywords": excluded or [],
         "role_title_audit_enabled": role_title_audit_rows is not None,

@@ -187,7 +187,8 @@ def _workflow_summary_html(*, prefix: str) -> str:
           </div>
           <dl class="preferences-summary-list">
             <div><dt>Role interests</dt><dd data-preferences-summary="roles">None selected</dd></div>
-            <div><dt>Seniority</dt><dd data-preferences-summary="seniority">Not selected</dd></div>
+            <div><dt>Seniority used for ranking</dt><dd data-preferences-summary="seniority">Not selected</dd></div>
+            <div><dt>Strict seniority filtering</dt><dd data-preferences-summary="seniority_policy">Disabled</dd></div>
             <div><dt>Locations</dt><dd data-preferences-summary="locations">No preferred locations</dd></div>
             <div><dt>Location policy</dt><dd data-preferences-summary="policy">Flexible matching</dd></div>
             <div><dt>Preferred skills</dt><dd data-preferences-summary="skills">None added</dd></div>
@@ -205,7 +206,8 @@ def _workflow_review_html(*, prefix: str, include_resume: bool) -> str:
     safe_prefix = escape(prefix)
     groups = (
         ("roles", "Role interests", 0),
-        ("seniority", "Seniority", 1),
+        ("seniority", "Seniority used for ranking", 1),
+        ("seniority_policy", "Strict seniority filtering", 1),
         ("locations", "Preferred locations", 2),
         ("policy", "Location policy", 2),
         ("skills", "Preferred skills", 3),
@@ -302,6 +304,16 @@ def _preferences_workflow_form_html(*, prefix: str, mode: str) -> str:
               <label><input type="checkbox" name="target_seniority" value="senior" /><span>Senior</span></label>
               <label><input type="checkbox" name="target_seniority" value="staff" /><span>Staff</span></label>
             </fieldset>
+            <div class="preference-location-policy">
+              <label class="preference-policy-option" data-seniority-strict-row>
+                <input type="checkbox" name="seniority_strict_match" data-seniority-strict disabled />
+                <span class="preference-policy-switch" aria-hidden="true"></span>
+                <span class="preference-policy-copy">
+                  <strong>Only show selected seniority levels</strong>
+                  <small>When enabled, jobs with other or unknown seniority levels are removed.</small>
+                </span>
+              </label>
+            </div>
           </section>
 
           <section class="preferences-step-panel preference-location-panel" id="{safe_prefix}PreferenceStep2" data-preferences-step="2" aria-labelledby="{safe_prefix}PreferenceStep2Title" hidden>

@@ -92,11 +92,11 @@ def test_default_prefilter_outcome_partition_is_exact():
         "entry",
         "mid",
         "senior",
+        "staff",
         "unknown",
     )
     assert DEFAULT_PREFILTER_REJECTED_SENIORITY_OUTCOMES == (
         "intern",
-        "staff",
         "manager_or_above",
     )
     assert set(DEFAULT_PREFILTER_ELIGIBLE_SENIORITY_OUTCOMES) | set(
@@ -123,55 +123,70 @@ def test_existing_default_eligible_titles_remain_eligible():
         assert title_matches(title, [family_id]) is True
 
 
-def test_existing_default_rejected_titles_remain_rejected():
-    titles = (
-        "Intern Software Engineer",
-        "Student Software Engineer",
+def test_flexible_staff_titles_are_allowed_and_fixed_rejections_remain():
+    staff_titles = (
         "Staff Software Engineer",
         "Principal Data Scientist",
         "Lead Backend Engineer",
         "Member of Technical Staff",
         "MTS Engineer",
+        "Staff Technical Product Manager",
+        "Principal Technical Product Manager",
+        "Lead Technical Program Manager",
+    )
+    for title in staff_titles:
+        assert title_matches(title, ALL_ROLE_FAMILIES) is True
+
+    rejected_titles = (
+        "Intern Software Engineer",
+        "Student Software Engineer",
         "Director of Engineering",
         "VP Engineering",
         "Vice President of Engineering",
         "Head of Engineering",
         "Engineering Manager",
         "Senior Engineering Manager",
-        "Staff Technical Product Manager",
-        "Principal Technical Product Manager",
-        "Lead Technical Program Manager",
         "Director of Technical Program Management",
     )
-    for title in titles:
+    for title in rejected_titles:
         assert title_matches(title, ALL_ROLE_FAMILIES) is False
 
 
-def test_seniority_rejection_retains_family_pattern_reason_and_order_independence():
+def test_strict_seniority_rejection_retains_family_order_independence():
     first = title_match_detail(
         "Staff Technical Product Manager, Platform Engineer",
         ["technical_product_management", "software_engineering"],
+        target_seniority=["senior"],
+        seniority_strict_match=True,
     )
     reversed_input = title_match_detail(
         "Staff Technical Product Manager, Platform Engineer",
         ["software_engineering", "technical_product_management"],
+        target_seniority=["senior"],
+        seniority_strict_match=True,
     )
     assert first == reversed_input
     assert first["matched"] is False
     assert first["reason"] == "exclude_pattern_match"
+    assert first["seniority_reason"] == "strict_selected_level_mismatch"
     assert first["matched_role_family"] == "software_engineering"
     assert first["matched_pattern"]
 
 
 def test_title_score_keeps_central_filter_parity():
     assert title_score("Backend Engineer", ["backend_engineering"]) == 25
-    assert title_score("Staff Backend Engineer", ["backend_engineering"]) == -100
+    assert title_score("Staff Backend Engineer", ["backend_engineering"]) == 25
+    assert title_score("Backend Engineering Manager", ["backend_engineering"]) == -100
     assert title_score("Account Executive", ["backend_engineering"]) == 0
 
 
-def test_target_seniority_remains_outside_filter_and_graph_contracts():
-    assert "target_seniority" not in inspect.signature(filter_jobs).parameters
-    assert "target_seniority" not in inspect.signature(
+def test_strict_seniority_is_in_filter_and_graph_contracts():
+    assert "target_seniority" in inspect.signature(filter_jobs).parameters
+    assert "seniority_strict_match" in inspect.signature(filter_jobs).parameters
+    assert "target_seniority" in inspect.signature(
+        execute_authoritative_prefilter_dedupe_graph
+    ).parameters
+    assert "seniority_strict_match" in inspect.signature(
         execute_authoritative_prefilter_dedupe_graph
     ).parameters
 

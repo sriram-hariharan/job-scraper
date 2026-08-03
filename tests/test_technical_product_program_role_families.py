@@ -26,6 +26,7 @@ from src.app.onboarding_ui import (
 )
 from src.config.role_scoring_profiles import ROLE_SCORING_PROFILES
 from src.config.role_taxonomy import DEFAULT_ROLE_FAMILY_IDS, ROLE_TAXONOMY
+from src.config.seniority_policy import classify_title_seniority
 from src.intelligence.role_family_classifier import (
     SKILL_ROLE_PRIORITY,
     TITLE_ROLE_PRIORITY,
@@ -141,15 +142,37 @@ def test_generic_and_nonapproved_management_titles_remain_rejected():
         assert title_matches(title, ["technical_program_management"]) is False
 
 
-def test_existing_seniority_exclusions_remain_in_force_for_new_families():
-    cases = (
+def test_staff_seniority_policy_applies_to_technical_management_families():
+    staff_cases = (
         ("Staff Technical Product Manager", "technical_product_management"),
         ("Principal Technical Product Manager", "technical_product_management"),
         ("Lead Technical Program Manager", "technical_program_management"),
-        ("Director of Technical Program Management", "technical_program_management"),
     )
-    for title, role_family_id in cases:
-        assert title_matches(title, [role_family_id]) is False
+    for title, role_family_id in staff_cases:
+        assert classify_title_seniority(
+            title,
+            technical_management_role=True,
+        ) == "staff"
+        assert title_matches(title, [role_family_id]) is True
+        assert title_matches(
+            title,
+            [role_family_id],
+            target_seniority=["staff"],
+            seniority_strict_match=True,
+        ) is True
+        assert title_matches(
+            title,
+            [role_family_id],
+            target_seniority=["senior"],
+            seniority_strict_match=True,
+        ) is False
+
+    director = "Director of Technical Program Management"
+    assert classify_title_seniority(
+        director,
+        technical_management_role=True,
+    ) == "manager_or_above"
+    assert title_matches(director, ["technical_program_management"]) is False
 
 
 def test_multifamily_matching_is_canonical_ordered_and_exclusions_are_family_specific():
@@ -173,26 +196,37 @@ def test_multifamily_matching_is_canonical_ordered_and_exclusions_are_family_spe
     )
     assert canonical_winner["matched_role_family"] == "backend_engineering"
 
-    all_excluded = title_match_detail(
+    flexible_staff = title_match_detail(
         "Staff Technical Product Manager, Platform Engineer",
         ["technical_product_management", "software_engineering"],
     )
-    assert all_excluded["matched"] is False
-    assert all_excluded["reason"] == "exclude_pattern_match"
-    assert all_excluded["matched_role_family"] == "software_engineering"
+    assert flexible_staff["matched"] is True
+    assert flexible_staff["matched_role_family"] == "technical_product_management"
+    assert flexible_staff["classified_seniority"] == "staff"
+    assert flexible_staff["seniority_reason"] == "flexible_level_allowed"
+
+    strict_senior = title_match_detail(
+        "Staff Technical Product Manager, Platform Engineer",
+        ["technical_product_management", "software_engineering"],
+        target_seniority=["senior"],
+        seniority_strict_match=True,
+    )
+    assert strict_senior["matched"] is False
+    assert strict_senior["reason"] == "exclude_pattern_match"
+    assert strict_senior["seniority_reason"] == "strict_selected_level_mismatch"
 
 
 def test_title_ranking_uses_the_same_matched_family_decision():
     selected = ["software_engineering", "technical_product_management"]
     assert title_matches("Technical Product Manager, Platform Engineer", selected) is True
     assert title_score("Technical Product Manager, Platform Engineer", selected) == 25
-    assert title_score("Staff Technical Product Manager", ["technical_product_management"]) == -100
+    assert title_score("Staff Technical Product Manager", ["technical_product_management"]) == 25
     assert title_score("Product Manager", ["technical_product_management"]) == 0
     assert title_score("", selected) == 0
 
     existing_cases = (
         ("Backend Engineer", "backend_engineering", 25),
-        ("Staff Backend Engineer", "backend_engineering", -100),
+        ("Staff Backend Engineer", "backend_engineering", 25),
         ("Account Executive", "backend_engineering", 0),
     )
     for title, role_family_id, expected_score in existing_cases:

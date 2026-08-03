@@ -106,7 +106,7 @@ def test_role_seniority_and_summary_contracts_preserve_existing_values_and_icons
     assert ONBOARDING_UI.count('class="onboarding-role-icon-svg"') == 14
     for value in ("entry", "mid", "senior", "staff"):
         assert f'name="target_seniority" value="{value}"' in ONBOARDING_UI
-    for key in ("roles", "seniority", "locations", "policy", "skills", "excluded"):
+    for key in ("roles", "seniority", "seniority_policy", "locations", "policy", "skills", "excluded"):
         assert f'data-preferences-summary="{key}"' in ONBOARDING_FORM
         assert f'data-preferences-review="{key}"' in ONBOARDING_FORM
     assert "selectedRoleNames" in WORKFLOW_JS

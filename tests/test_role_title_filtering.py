@@ -139,8 +139,8 @@ def test_latest_audit_technical_false_negatives_match_narrow_families():
         assert title_matches(title, selected_role_families=selected_role_families) is True
 
 
-def test_super_senior_and_business_titles_remain_rejected_for_all_families():
-    titles = [
+def test_staff_titles_are_flexible_and_business_titles_remain_rejected():
+    staff_titles = [
         "Staff Software Engineer",
         "Staff Software Engineer, Platform",
         "Principal Software Engineer",
@@ -151,6 +151,11 @@ def test_super_senior_and_business_titles_remain_rejected_for_all_families():
         "Member of Technical Staff (AI Infrastructure Engineer)",
         "Member of Technical Staff (AI Inference Engineer)",
         "MTS, Machine Learning Engineer",
+    ]
+    for title in staff_titles:
+        assert title_matches(title, selected_role_families=ALL_SELECTED_ROLE_FAMILIES) is True
+
+    titles = [
         "Engineering Manager",
         "Senior Product Manager - AI Agent",
         "Product Manager, Analytics",

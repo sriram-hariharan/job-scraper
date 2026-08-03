@@ -261,8 +261,11 @@ _PREFERENCE_ENV_NAMES = {
 }
 
 
-def _empty_pipeline_preferences() -> Dict[str, List[str]]:
-    return {field_name: [] for field_name in PREFERENCE_LIST_FIELDS}
+def _empty_pipeline_preferences() -> Dict[str, Any]:
+    return {
+        **{field_name: [] for field_name in PREFERENCE_LIST_FIELDS},
+        "seniority_strict_match": False,
+    }
 
 
 def _json_list_from_env(
@@ -313,7 +316,7 @@ def _pipeline_preferences_from_env(
     return preferences
 
 
-def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:
+def _normalized_preference_snapshot(preferences: Any) -> Dict[str, Any]:
     if not isinstance(preferences, dict):
         raise ValueError("Preference snapshot must be an object.")
 
@@ -325,6 +328,10 @@ def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:
             not isinstance(item, str) for item in field_value
         ):
             raise ValueError(f"Preference field {field_name} must be a list of strings.")
+    if "seniority_strict_match" in preferences and not isinstance(
+        preferences["seniority_strict_match"], bool
+    ):
+        raise ValueError("Preference field seniority_strict_match must be a boolean.")
 
     normalized = validate_onboarding_preferences_payload(
         {
@@ -333,15 +340,18 @@ def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:
                 field_name: preferences.get(field_name)
                 for field_name in PREFERENCE_LIST_FIELDS
             },
+            "seniority_strict_match": preferences.get(
+                "seniority_strict_match", False
+            ),
         }
     )
     return {
         field_name: list(normalized.get(field_name, []) or [])
         for field_name in PREFERENCE_LIST_FIELDS
-    }
+    } | {"seniority_strict_match": normalized["seniority_strict_match"]}
 
 
-def _preference_snapshot_sha256(preferences: Dict[str, List[str]]) -> str:
+def _preference_snapshot_sha256(preferences: Dict[str, Any]) -> str:
     canonical_json = json.dumps(
         preferences,
         ensure_ascii=False,
@@ -354,7 +364,7 @@ def _preference_snapshot_sha256(preferences: Dict[str, List[str]]) -> str:
 def _load_launch_config_preference_snapshot(
     *,
     env: Dict[str, str] | None = None,
-) -> tuple[Dict[str, List[str]], set[str], str]:
+) -> tuple[Dict[str, Any], set[str], str]:
     env_map = env if env is not None else os.environ
     launch_config_path = str(
         env_map.get("JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH", "") or ""
@@ -391,12 +401,16 @@ def _load_launch_config_preference_snapshot(
 
     present_fields = {
         field_name
-        for field_name in PREFERENCE_LIST_FIELDS
+        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
         if field_name in raw_preferences
     }
     item_counts = {
-        field_name: len(normalized[field_name])
-        for field_name in PREFERENCE_LIST_FIELDS
+        field_name: (
+            len(normalized[field_name])
+            if isinstance(normalized[field_name], list)
+            else int(normalized[field_name])
+        )
+        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
     }
     logger.info(
         "Launch preference snapshot loaded fields=%s item_counts=%s",
@@ -428,10 +442,20 @@ def resolve_pipeline_preference_runtime(
         else:
             sources[field_name] = "defaults"
 
+    if launch_status == "loaded" and "seniority_strict_match" in launch_fields:
+        effective["seniority_strict_match"] = requested["seniority_strict_match"]
+        sources["seniority_strict_match"] = "launch_config"
+    else:
+        sources["seniority_strict_match"] = "defaults"
+
     effective_sha256 = _preference_snapshot_sha256(effective)
     item_counts = {
-        field_name: len(effective[field_name])
-        for field_name in PREFERENCE_LIST_FIELDS
+        field_name: (
+            len(effective[field_name])
+            if isinstance(effective[field_name], list)
+            else int(effective[field_name])
+        )
+        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
     }
     source_counts = dict(Counter(sources.values()))
     logger.info(
@@ -469,6 +493,8 @@ def _maybe_execute_authoritative_prefilter_dedupe_graph(
     filter_mode: str,
     role_title_audit_rows: List[Dict[str, Any]] | None,
     excluded_keywords: List[str],
+    target_seniority: List[str] | None = None,
+    seniority_strict_match: bool = False,
     on_prefilter_completed: Callable[
         [
             List[Dict[str, Any]],
@@ -498,6 +524,8 @@ def _maybe_execute_authoritative_prefilter_dedupe_graph(
     result = execute_authoritative_prefilter_dedupe_graph(
         jobs=jobs,
         selected_role_families=selected_role_families,
+        target_seniority=list(target_seniority or []),
+        seniority_strict_match=seniority_strict_match,
         filter_mode=filter_mode,
         role_title_audit_rows=role_title_audit_rows,
         excluded_keywords=excluded_keywords,
@@ -2648,6 +2676,8 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         _maybe_execute_authoritative_prefilter_dedupe_graph(
             jobs=all_jobs,
             selected_role_families=selected_role_families or None,
+            target_seniority=pipeline_preferences["target_seniority"],
+            seniority_strict_match=bool(pipeline_preferences.get("seniority_strict_match", False)),
             filter_mode=(
                 "user_pipeline" if _is_user_pipeline_mode() else "strict_live"
             ),
@@ -2661,6 +2691,8 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         filter_result = filter_jobs(
             all_jobs,
             selected_role_families=selected_role_families or None,
+            target_seniority=pipeline_preferences["target_seniority"],
+            seniority_strict_match=bool(pipeline_preferences.get("seniority_strict_match", False)),
             filter_mode=(
                 "user_pipeline" if _is_user_pipeline_mode() else "strict_live"
             ),

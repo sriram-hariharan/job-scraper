@@ -126,7 +126,8 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
                 "preferences": {
                     "onboarding_completed": True,
                     "selected_role_families": ["backend_engineering"],
-                    "target_seniority": ["senior"],
+                        "target_seniority": ["senior"],
+                        "seniority_strict_match": True,
                     "preferred_locations": ["New York"],
                     "preferred_skills": ["Python"],
                     "excluded_keywords": ["intern"],
@@ -169,6 +170,7 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
 
     assert payload["pipeline"]["config"]["selected_role_families"] == ["backend_engineering"]
     assert payload["pipeline"]["config"]["preferences"]["target_seniority"] == ["senior"]
+    assert payload["pipeline"]["config"]["preferences"]["seniority_strict_match"] is True
     assert captured["state"]["config"]["selected_role_families"] == ["backend_engineering"]
     assert captured["state"]["config"]["preferences"]["target_seniority"] == ["senior"]
     assert captured["state"]["config"]["preference_runtime"] == {
@@ -176,6 +178,7 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
         "requested": {
             "selected_role_families": ["backend_engineering"],
             "target_seniority": ["senior"],
+            "seniority_strict_match": True,
             "preferred_locations": ["New York"],
             "preferred_skills": ["Python"],
             "excluded_keywords": ["intern"],
@@ -296,6 +299,7 @@ def test_malformed_launch_preferences_do_not_partially_apply(tmp_path):
         "preferred_locations": [],
         "preferred_skills": [],
         "excluded_keywords": [],
+        "seniority_strict_match": False,
     }
     assert preference_runtime["effective"] == preference_runtime["requested"]
     assert set(preference_runtime["sources"].values()) == {"defaults"}
@@ -332,6 +336,7 @@ def test_launch_seniority_is_canonical_and_invalid_snapshot_is_all_or_nothing(tm
         "preferred_locations": [],
         "preferred_skills": [],
         "excluded_keywords": [],
+        "seniority_strict_match": False,
     }
     assert invalid["effective"] == invalid["requested"]
     assert set(invalid["sources"].values()) == {"defaults"}
@@ -375,6 +380,16 @@ def test_effective_hash_uses_canonical_seniority_values():
     )
     assert legacy == canonical
     assert collector._preference_snapshot_sha256(legacy) == collector._preference_snapshot_sha256(canonical)
+
+
+def test_effective_hash_includes_strict_seniority_boolean():
+    flexible = collector._normalized_preference_snapshot(
+        {"target_seniority": ["senior"], "seniority_strict_match": False}
+    )
+    strict = collector._normalized_preference_snapshot(
+        {"target_seniority": ["senior"], "seniority_strict_match": True}
+    )
+    assert collector._preference_snapshot_sha256(flexible) != collector._preference_snapshot_sha256(strict)
 
 
 def test_effective_preference_hash_is_canonical_distinct_and_secret_free(tmp_path):
@@ -516,6 +531,7 @@ def _install_drop_pct_collector_fakes(
             "effective": {
                 "selected_role_families": [],
                 "target_seniority": [],
+                "seniority_strict_match": False,
                 "preferred_locations": [],
                 "preferred_skills": [],
                 "excluded_keywords": [],

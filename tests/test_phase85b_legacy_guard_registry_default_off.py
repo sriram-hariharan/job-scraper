@@ -6,6 +6,7 @@ from tests.support.phase_guard_registry import (
     BROAD_TECH_PREFILTER_TAXONOMY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
+    PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
     PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES,
@@ -418,6 +419,40 @@ def test_phase2d_b1_default_eligibility_ownership_surface_is_exact():
     assert not any(
         "*" in path
         for path in PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+    )
+
+
+def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
+    assert PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES == {
+        "src/agents/deterministic_prefilter_dedupe_authoritative_graph.py",
+        "src/app/onboarding_ui.py",
+        "src/app/services.py",
+        "src/app/static/onboarding.js",
+        "src/app/static/preferences_workflow.js",
+        "src/app/static/profile.js",
+        "src/config/seniority_policy.py",
+        "src/pipeline/collector.py",
+        "src/pipeline/job_filter.py",
+        "src/storage/onboarding_preferences/schema.sql",
+        "src/storage/onboarding_preferences/store.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_independent_seniority_policy.py",
+        "tests/test_independent_seniority_prefilter.py",
+        "tests/test_onboarding_api.py",
+        "tests/test_onboarding_preferences_store.py",
+        "tests/test_onboarding_ui_contract.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase16a_lean_deterministic_prefilter_dedupe_orchestration.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_role_title_filtering.py",
+        "tests/test_strict_seniority_filter.py",
+        "tests/test_technical_product_program_role_families.py",
+        "tests/test_user_pipeline_role_preferences.py",
+    }
+    assert not any(
+        "*" in path for path in PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
     )
 
 
@@ -1533,6 +1568,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
         | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
         | PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        | PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
     )
     assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
         "application_execution_queue.py",

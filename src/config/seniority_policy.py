@@ -25,12 +25,12 @@ DEFAULT_PREFILTER_ELIGIBLE_SENIORITY_OUTCOMES: Tuple[str, ...] = (
     "entry",
     "mid",
     "senior",
+    "staff",
     "unknown",
 )
 
 DEFAULT_PREFILTER_REJECTED_SENIORITY_OUTCOMES: Tuple[str, ...] = (
     "intern",
-    "staff",
     "manager_or_above",
 )
 
@@ -97,6 +97,21 @@ def normalize_target_seniority_ids(value: Any) -> List[str]:
     return normalized
 
 
+def normalize_seniority_filter_preferences(
+    target_seniority: Any,
+    seniority_strict_match: Any = False,
+) -> Tuple[List[str], bool]:
+    if not isinstance(seniority_strict_match, bool):
+        raise ValueError("seniority_strict_match must be a boolean")
+    normalized_targets = normalize_target_seniority_ids(target_seniority)
+    if seniority_strict_match and not normalized_targets:
+        raise ValueError(
+            "target_seniority must contain at least one value when "
+            "seniority_strict_match is enabled"
+        )
+    return normalized_targets, seniority_strict_match
+
+
 def classify_title_seniority(
     title: Any,
     *,
@@ -128,3 +143,48 @@ def default_prefilter_seniority_is_eligible(classification: Any) -> bool:
     return str(classification or "").strip().lower() in (
         DEFAULT_PREFILTER_ELIGIBLE_SENIORITY_OUTCOMES
     )
+
+
+def seniority_prefilter_decision(
+    classification: Any,
+    *,
+    target_seniority: Any = None,
+    seniority_strict_match: Any = False,
+):
+    targets, strict_match = normalize_seniority_filter_preferences(
+        target_seniority,
+        seniority_strict_match,
+    )
+    outcome = str(classification or "unknown").strip().lower()
+    if outcome == "intern":
+        return {"eligible": False, "decision": "reject", "reason": "intern_rejected"}
+    if outcome == "manager_or_above":
+        return {
+            "eligible": False,
+            "decision": "reject",
+            "reason": "manager_or_above_rejected",
+        }
+    if not strict_match:
+        eligible = outcome in DEFAULT_PREFILTER_ELIGIBLE_SENIORITY_OUTCOMES
+        return {
+            "eligible": eligible,
+            "decision": "allow" if eligible else "reject",
+            "reason": "flexible_level_allowed",
+        }
+    if outcome == "unknown":
+        return {
+            "eligible": False,
+            "decision": "reject",
+            "reason": "strict_unknown_rejected",
+        }
+    if outcome in targets:
+        return {
+            "eligible": True,
+            "decision": "allow",
+            "reason": "strict_selected_level_match",
+        }
+    return {
+        "eligible": False,
+        "decision": "reject",
+        "reason": "strict_selected_level_mismatch",
+    }

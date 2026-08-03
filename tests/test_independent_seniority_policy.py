@@ -123,7 +123,7 @@ def test_location_and_skill_bonuses_remain_additive_and_unchanged():
     ) == 10
 
 
-def test_phase_2d_a_does_not_change_filter_eligibility():
+def test_flexible_filter_allows_staff_but_still_rejects_interns():
     selected = [
         "software_engineering",
         "technical_product_management",
@@ -134,10 +134,10 @@ def test_phase_2d_a_does_not_change_filter_eligibility():
         "Principal Software Engineer",
         "Lead Software Engineer",
         "MTS, Software Engineer",
-        "Software Engineer Intern",
         "Staff Technical Product Manager",
         "Lead Technical Program Manager",
     ):
-        assert title_matches(title, selected) is False
+        assert title_matches(title, selected) is True
 
+    assert title_matches("Software Engineer Intern", selected) is False
     assert title_matches("Senior Technical Product Manager", selected) is True

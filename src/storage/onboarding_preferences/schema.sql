@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS user_onboarding_preferences (
     onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
     selected_role_families JSONB NOT NULL DEFAULT '[]'::jsonb,
     target_seniority JSONB NOT NULL DEFAULT '[]'::jsonb,
+    seniority_strict_match BOOLEAN NOT NULL DEFAULT FALSE,
     preferred_locations JSONB NOT NULL DEFAULT '[]'::jsonb,
     preferred_location_specs JSONB NOT NULL DEFAULT '[]'::jsonb,
     location_strict_match BOOLEAN NOT NULL DEFAULT FALSE,
@@ -13,6 +14,9 @@ CREATE TABLE IF NOT EXISTS user_onboarding_preferences (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE user_onboarding_preferences
+ADD COLUMN IF NOT EXISTS seniority_strict_match BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE user_onboarding_preferences
 ADD COLUMN IF NOT EXISTS preferred_location_specs JSONB NOT NULL DEFAULT '[]'::jsonb;

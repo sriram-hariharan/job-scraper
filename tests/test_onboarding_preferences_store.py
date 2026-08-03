@@ -14,6 +14,8 @@ def test_onboarding_preferences_schema_contains_table_name():
     assert "CREATE TABLE IF NOT EXISTS user_onboarding_preferences" in sql
     assert "owner_user_id TEXT PRIMARY KEY REFERENCES auth_users(user_id) ON DELETE CASCADE" in sql
     assert "selected_role_families JSONB NOT NULL DEFAULT '[]'::jsonb" in sql
+    assert "seniority_strict_match BOOLEAN NOT NULL DEFAULT FALSE" in sql
+    assert "ADD COLUMN IF NOT EXISTS seniority_strict_match" in sql
     assert "preferred_location_specs JSONB NOT NULL DEFAULT '[]'::jsonb" in sql
     assert "location_strict_match BOOLEAN NOT NULL DEFAULT FALSE" in sql
     assert "location_show_others_if_unmatched BOOLEAN NOT NULL DEFAULT FALSE" in sql
@@ -42,6 +44,7 @@ def test_valid_preferences_normalize_and_save_payload_shape_print_only():
         "onboarding_completed": True,
         "selected_role_families": ["backend_engineering"],
         "target_seniority": ["senior"],
+        "seniority_strict_match": False,
         "preferred_locations": ["Virginia", "Arlington, VA"],
         "preferred_location_specs": [
             {
@@ -141,6 +144,26 @@ def test_legacy_stored_target_seniority_reads_back_canonically():
         }
     )
     assert payload["preferences"]["target_seniority"] == ["staff"]
+    assert payload["preferences"]["seniority_strict_match"] is False
+
+
+def test_strict_seniority_validates_boolean_target_and_legacy_alias():
+    assert validate_onboarding_preferences_payload({})["seniority_strict_match"] is False
+    normalized = validate_onboarding_preferences_payload(
+        {
+            "target_seniority": ["staff_or_above"],
+            "seniority_strict_match": True,
+        }
+    )
+    assert normalized["target_seniority"] == ["staff"]
+    assert normalized["seniority_strict_match"] is True
+
+    with pytest.raises(ValueError, match="must be a boolean"):
+        validate_onboarding_preferences_payload(
+            {"target_seniority": ["senior"], "seniority_strict_match": 1}
+        )
+    with pytest.raises(ValueError, match="at least one value"):
+        validate_onboarding_preferences_payload({"seniority_strict_match": True})
 
 
 @pytest.mark.parametrize(

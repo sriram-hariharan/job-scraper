@@ -956,12 +956,13 @@ def onboarding_status_payload(
     }
 
 
-def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
+def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     if not owner:
         return {
             "selected_role_families": [],
             "target_seniority": [],
+            "seniority_strict_match": False,
             "preferred_locations": [],
             "preferred_skills": [],
             "excluded_keywords": [],
@@ -986,6 +987,7 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
         return {
             "selected_role_families": [],
             "target_seniority": [],
+            "seniority_strict_match": False,
             "preferred_locations": [],
             "preferred_skills": [],
             "excluded_keywords": [],
@@ -994,6 +996,7 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
     return {
         "selected_role_families": list(normalized.get("selected_role_families", []) or []),
         "target_seniority": list(normalized.get("target_seniority", []) or []),
+        "seniority_strict_match": bool(normalized.get("seniority_strict_match", False)),
         "preferred_locations": list(normalized.get("preferred_locations", []) or []),
         "preferred_skills": list(normalized.get("preferred_skills", []) or []),
         "excluded_keywords": list(normalized.get("excluded_keywords", []) or []),
@@ -9227,7 +9230,7 @@ def run_live_pipeline_payload(
         options=launch_options,
     )
     preference_item_counts = {
-        field_name: len(values)
+        field_name: len(values) if isinstance(values, list) else int(bool(values))
         for field_name, values in pipeline_preferences.items()
     }
     logger.info(

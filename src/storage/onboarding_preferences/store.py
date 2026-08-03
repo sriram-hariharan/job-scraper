@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
 from src.config.role_taxonomy import ROLE_TAXONOMY
-from src.config.seniority_policy import normalize_target_seniority_ids
+from src.config.seniority_policy import normalize_seniority_filter_preferences
 from src.pipeline.location_preferences import normalize_location_specs
 
 
@@ -233,12 +233,15 @@ def validate_onboarding_preferences_payload(preferences: Any) -> Dict[str, Any]:
             "onboarding_completed cannot be true without at least one selected role family."
         )
 
+    target_seniority, seniority_strict_match = normalize_seniority_filter_preferences(
+        preferences.get("target_seniority"),
+        preferences.get("seniority_strict_match", False),
+    )
     normalized: Dict[str, Any] = {
         "onboarding_completed": onboarding_completed,
         "selected_role_families": selected_role_families,
-        "target_seniority": normalize_target_seniority_ids(
-            preferences.get("target_seniority")
-        ),
+        "target_seniority": target_seniority,
+        "seniority_strict_match": seniority_strict_match,
     }
 
     for field_name in PREFERENCE_LIST_FIELDS:
@@ -273,6 +276,7 @@ def _row_to_preferences_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "onboarding_completed": bool(row.get("onboarding_completed", False)),
         "selected_role_families": row.get("selected_role_families") or [],
         "target_seniority": row.get("target_seniority") or [],
+        "seniority_strict_match": row.get("seniority_strict_match", False),
         "preferred_locations": row.get("preferred_locations") or [],
         "preferred_location_specs": row.get("preferred_location_specs") or [],
         "location_strict_match": row.get("location_strict_match", False),
@@ -329,6 +333,7 @@ SELECT COALESCE(
             'onboarding_completed', onboarding_completed,
             'selected_role_families', selected_role_families,
             'target_seniority', target_seniority,
+            'seniority_strict_match', seniority_strict_match,
             'preferred_locations', preferred_locations,
             'preferred_location_specs', preferred_location_specs,
             'location_strict_match', location_strict_match,
@@ -394,6 +399,7 @@ WITH upserted AS (
         onboarding_completed,
         selected_role_families,
         target_seniority,
+        seniority_strict_match,
         preferred_locations,
         preferred_location_specs,
         location_strict_match,
@@ -406,6 +412,7 @@ WITH upserted AS (
         {_sql_bool_literal(normalized["onboarding_completed"])},
         {_sql_quote_jsonb(normalized["selected_role_families"])},
         {_sql_quote_jsonb(normalized["target_seniority"])},
+        {_sql_bool_literal(normalized["seniority_strict_match"])},
         {_sql_quote_jsonb(normalized["preferred_locations"])},
         {_sql_quote_jsonb(normalized["preferred_location_specs"])},
         {_sql_bool_literal(normalized["location_strict_match"])},
@@ -417,6 +424,7 @@ WITH upserted AS (
         onboarding_completed = EXCLUDED.onboarding_completed,
         selected_role_families = EXCLUDED.selected_role_families,
         target_seniority = EXCLUDED.target_seniority,
+        seniority_strict_match = EXCLUDED.seniority_strict_match,
         preferred_locations = EXCLUDED.preferred_locations,
         preferred_location_specs = EXCLUDED.preferred_location_specs,
         location_strict_match = EXCLUDED.location_strict_match,
@@ -429,6 +437,7 @@ WITH upserted AS (
         onboarding_completed,
         selected_role_families,
         target_seniority,
+        seniority_strict_match,
         preferred_locations,
         preferred_location_specs,
         location_strict_match,
@@ -444,6 +453,7 @@ SELECT json_build_object(
     'onboarding_completed', onboarding_completed,
     'selected_role_families', selected_role_families,
     'target_seniority', target_seniority,
+    'seniority_strict_match', seniority_strict_match,
     'preferred_locations', preferred_locations,
     'preferred_location_specs', preferred_location_specs,
     'location_strict_match', location_strict_match,

@@ -611,6 +611,35 @@ PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES = {
+    "src/agents/deterministic_prefilter_dedupe_authoritative_graph.py",
+    "src/app/onboarding_ui.py",
+    "src/app/services.py",
+    "src/app/static/onboarding.js",
+    "src/app/static/preferences_workflow.js",
+    "src/app/static/profile.js",
+    "src/config/seniority_policy.py",
+    "src/pipeline/collector.py",
+    "src/pipeline/job_filter.py",
+    "src/storage/onboarding_preferences/schema.sql",
+    "src/storage/onboarding_preferences/store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_independent_seniority_policy.py",
+    "tests/test_independent_seniority_prefilter.py",
+    "tests/test_onboarding_api.py",
+    "tests/test_onboarding_preferences_store.py",
+    "tests/test_onboarding_ui_contract.py",
+    "tests/test_phase132b2r3_guided_preferences_workflow.py",
+    "tests/test_phase16a_lean_deterministic_prefilter_dedupe_orchestration.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_role_title_filtering.py",
+    "tests/test_strict_seniority_filter.py",
+    "tests/test_technical_product_program_role_families.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1318,6 +1347,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "phase2d_b1_default_eligibility_ownership": (
             PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
         ),
+        "phase2d_b2_strict_seniority_filter": (
+            PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
+        ),
         "phase133a_executive_kpi_react_island": {
             ".gitignore",
             "Dockerfile",
@@ -1864,6 +1896,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase132b_premium_preferences_ui")
         | legacy_guard_allowlist("phase2d_a_independent_seniority_policy")
         | legacy_guard_allowlist("phase2d_b1_default_eligibility_ownership")
+        | legacy_guard_allowlist("phase2d_b2_strict_seniority_filter")
         | legacy_guard_allowlist("phase133a_executive_kpi_react_island")
         | legacy_guard_allowlist("phase133b_executive_queue_react_island")
         | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
@@ -2008,6 +2041,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
         | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
         | PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        | PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
     )
 
 
@@ -2097,7 +2131,10 @@ def assert_protected_hashes(
         (
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
-        ): "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
+        ): frozenset({
+            "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
+            "b71cf683a281bfa07de70fe41a101975f066c35179e7607af6d078f10ee35835",
+        }),
             (
                 "src/agents/jd_intelligence.py",
                 "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",
@@ -2130,6 +2167,7 @@ def assert_protected_hashes(
             "33815928d0165154f6ec1f102a6c32b510acf167ac8bc83aa42837e4f310529b",
             "83d14c9634cd22cdee8d31fe1be675aba23ab2b5ad333a56fbd6b23638a07dc1",
             "8bc8673fcf3701f1ff232a760082dfe965c4477bb48dd9ee265a2f3ca4c9f282",
+            "f52fdf16c5dea4d4afbe0d36aad41a3b774f0aa91d129844138a895fffe88297",
         }),
         (
             "src/pipeline/job_ranker.py",

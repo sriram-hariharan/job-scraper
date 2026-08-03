@@ -34,9 +34,9 @@ def test_planning_route_mounts_the_scoped_react_islands_and_canonical_bundle() -
     assert '/static/planning_dashboard.css?v=phase133g_s1_r1' in html
     # Bundle cache marker bumped to item2_phase3_shared_header_r1 when Planning's
     # header was migrated onto the shared .app-page-header contract.
-    assert '/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1' in html
+    assert '/static/build/executive-kpi/executive-kpi.css?v=planning_tailoring_workflow_polish_r1' in html
     assert '/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1' in html
-    assert '/static/planning.js?v=phase133g_s1_r1' in html
+    assert '/static/planning.js?v=planning_tailoring_workflow_polish_r1' in html
 
 
 def test_executive_and_planning_import_the_same_real_table_primitives() -> None:
@@ -221,6 +221,19 @@ def test_filter_toolbar_preserves_all_controls_and_uses_a_dedicated_actions_grou
     assert "position: absolute" not in actions
     assert "margin: -" not in actions
     assert "transform:" not in actions
+
+    segmented_start = css.index(".planning-react-segmented button.is-active {")
+    segmented_active = css[segmented_start:css.index("}", segmented_start) + 1]
+    assert "border-color: #2563eb" in segmented_active
+    assert "background: #2563eb" in segmented_active
+    assert "box-shadow: none" in segmented_active
+    assert "color: #ffffff" in segmented_active
+    inactive_start = css.index(".planning-react-segmented button {")
+    inactive = css[inactive_start:css.index("}", inactive_start) + 1]
+    assert "min-height: 44px" in inactive
+    assert "color: var(--queue-ink)" in inactive
+    assert 'html[data-theme="dark"] .planning-react-segmented button.is-active' in css
+    assert ".planning-react-segmented button.is-active:hover" in css
 
     responsive_start = css.index("@media (max-width: 1180px)", css.index(".planning-react-filter-grid"))
     responsive = css[responsive_start:css.index("@media (max-width: 760px)", responsive_start)]

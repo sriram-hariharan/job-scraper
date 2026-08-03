@@ -43,6 +43,11 @@ SHARED_HEADER_CLASSES = (
 )
 
 
+def _route_block(source: str, start_marker: str, end_marker: str | None = None) -> str:
+    block = source.split(start_marker, 1)[1]
+    return block.split(end_marker, 1)[0] if end_marker else block
+
+
 # --- 1. Shared class contract exists ----------------------------------------
 
 
@@ -227,19 +232,64 @@ def test_no_global_shell_toolbar_markup_changed():
 
 
 def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
-    # The Phase 3 marker still owns the executive-kpi bundle references on the
-    # seven Phase 3 routes; app_redesign.css's own marker was legitimately
-    # bumped again in Item 2 Phase 4 (a further app_redesign.css change),
-    # covered by tests/test_item2_phase4_secondary_page_headers.py.
-    marker = "item2_phase3_shared_header_r1"
-    occurrences = (
-        UI_SOURCE.count(marker)
-        + PLANNING_UI_SOURCE.count(marker)
-        + DECISIONS_UI_SOURCE.count(marker)
-        + APPLICATION_HUB_UI_SOURCE.count(marker)
+    old_marker = "item2_phase3_shared_header_r1"
+    planning_marker = "planning_tailoring_workflow_polish_r1"
+    old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_marker}'
+    old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_marker}'
+    planning_css = f'/static/build/executive-kpi/executive-kpi.css?v={planning_marker}'
+
+    overview_route = _route_block(
+        UI_SOURCE,
+        '@router.get("/", response_class=HTMLResponse)',
+        '@router.get("/pipeline", response_class=HTMLResponse)',
     )
-    # 7 migrated routes x 2 bundle asset references (executive-kpi.css, executive-kpi.js).
-    assert occurrences == 14
+    pipeline_route = _route_block(
+        UI_SOURCE,
+        '@router.get("/pipeline", response_class=HTMLResponse)',
+        '@router.get("/scheduler", response_class=HTMLResponse)',
+    )
+    scheduler_route = _route_block(
+        UI_SOURCE,
+        '@router.get("/scheduler", response_class=HTMLResponse)',
+    )
+    planning_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '@router.get("/planning", response_class=HTMLResponse)',
+        '@router.get("/scan-workspace", response_class=HTMLResponse)',
+    )
+    advanced_diagnostics_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '@router.get("/advanced-diagnostics", response_class=HTMLResponse)',
+        "\ndef scan_workspace(",
+    )
+    decisions_route = _route_block(
+        DECISIONS_UI_SOURCE,
+        '@router.get("/decisions-ui", response_class=HTMLResponse)',
+    )
+    applications_route = _route_block(
+        APPLICATION_HUB_UI_SOURCE,
+        '@router.get("/applications", response_class=HTMLResponse)',
+    )
+
+    # Planning intentionally owns the polished stylesheet marker while its
+    # unchanged JavaScript bundle remains owned by the Phase 3 marker.
+    assert planning_css in planning_route
+    assert old_js in planning_route
+    assert old_css not in planning_route
+
+    # Every unaffected Phase 3 route retains both exact bundle references and
+    # must not acquire the Planning-only marker.
+    for route in (
+        overview_route,
+        pipeline_route,
+        scheduler_route,
+        advanced_diagnostics_route,
+        decisions_route,
+        applications_route,
+    ):
+        assert old_css in route
+        assert old_js in route
+        assert planning_marker not in route
 
 
 # --- 19. Scan Workspace / Tailoring Workspace exceptions untouched -----------

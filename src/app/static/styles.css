@@ -4264,6 +4264,239 @@ html:not([data-theme="light"]) .workflow-overlay__panel.is-empty-result .pipelin
   opacity: 0 !important;
 }
 
+/* Planning tailoring workflow: compact, explicit-review dialog. */
+body.tailoring-workflow-open {
+  overflow: hidden;
+}
+
+.workflow-overlay--tailoring {
+  padding: 16px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+html[data-theme] body .workflow-overlay--tailoring .workflow-overlay__panel,
+.workflow-overlay--tailoring .workflow-overlay__panel {
+  width: min(680px, calc(100vw - 32px)) !important;
+  max-height: calc(100dvh - 32px) !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+  gap: 16px !important;
+  padding: 26px 28px 22px !important;
+  overflow: hidden auto !important;
+  border-radius: 22px !important;
+  box-shadow: 0 24px 70px rgba(2, 8, 23, 0.38) !important;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  justify-content: stretch;
+  gap: 14px !important;
+  text-align: left;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__header > div {
+  width: auto;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__header-copy {
+  min-width: 0;
+}
+
+.workflow-dialog-status-icon {
+  position: relative;
+  width: 44px !important;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--workflow-accent) 42%, var(--workflow-card-border));
+  border-radius: 14px;
+  background: var(--workflow-accent-soft);
+  color: var(--workflow-accent-strong);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.workflow-overlay--tailoring:not(.is-success):not(.is-error) .workflow-dialog-status-icon::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border: 2px solid color-mix(in srgb, var(--workflow-accent) 24%, transparent);
+  border-top-color: var(--workflow-accent-strong);
+  border-radius: 999px;
+  animation: workflow-step-spin 900ms linear infinite;
+}
+
+.workflow-overlay--tailoring.is-success .workflow-dialog-status-icon {
+  border-color: color-mix(in srgb, var(--workflow-complete) 44%, var(--workflow-card-border));
+  background: var(--workflow-complete-soft);
+  color: var(--workflow-complete);
+}
+
+.workflow-overlay--tailoring.is-error .workflow-dialog-status-icon {
+  border-color: color-mix(in srgb, var(--workflow-error) 44%, var(--workflow-card-border));
+  background: var(--workflow-error-soft);
+  color: var(--workflow-error);
+}
+
+.workflow-overlay--tailoring .workflow-overlay__header h3 {
+  max-width: none;
+  margin: 3px 0 0 !important;
+  font-size: clamp(22px, 3vw, 26px) !important;
+  line-height: 1.18 !important;
+  text-align: left !important;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__metrics {
+  width: 100%;
+  justify-items: start;
+  text-align: left;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__supporting {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__body,
+.workflow-overlay--tailoring.is-error .workflow-overlay__body {
+  display: grid !important;
+  grid-template-rows: auto auto;
+  place-items: stretch !important;
+  align-content: start !important;
+  gap: 12px !important;
+  overflow: visible;
+}
+
+.workflow-overlay--tailoring .workflow-step-viewport,
+.workflow-overlay--tailoring.is-error .workflow-step-viewport {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  padding: 14px 16px;
+  border-radius: 16px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.workflow-overlay--tailoring .workflow-step-track {
+  height: auto;
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-overlay--tailoring .workflow-step,
+.workflow-overlay--tailoring.is-error .workflow-step {
+  position: relative !important;
+  inset: auto !important;
+  min-height: 62px;
+  grid-template-columns: 36px minmax(0, 1fr) !important;
+  gap: 13px !important;
+  padding: 8px 4px !important;
+  opacity: 1 !important;
+  transform: none !important;
+  transition: color 180ms ease;
+  will-change: auto;
+}
+
+.workflow-overlay--tailoring.is-error .workflow-step:not(.is-active-position) {
+  opacity: 1 !important;
+}
+
+.workflow-overlay--tailoring .workflow-step:not(:last-child)::after {
+  content: "" !important;
+  position: absolute;
+  z-index: 0;
+  left: 21px;
+  top: 44px;
+  bottom: -10px;
+  width: 1px;
+  background: var(--workflow-card-border);
+}
+
+.workflow-overlay--tailoring .workflow-step__indicator,
+.workflow-overlay--tailoring .workflow-step__label {
+  position: relative;
+  z-index: 1;
+}
+
+.workflow-overlay--tailoring .workflow-step.is-complete:not(:last-child)::after {
+  background: color-mix(in srgb, var(--workflow-complete) 50%, var(--workflow-card-border));
+}
+
+.workflow-overlay--tailoring .workflow-step__indicator {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.workflow-overlay--tailoring .workflow-step.is-active .workflow-step__indicator {
+  border-color: var(--workflow-accent-strong) !important;
+  background: var(--workflow-accent-soft) !important;
+  animation: none;
+}
+
+.workflow-overlay--tailoring .workflow-step.is-active .workflow-step__indicator::after {
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, var(--workflow-accent) 25%, transparent);
+  border-top-color: var(--workflow-accent-strong);
+  background: transparent;
+  animation: workflow-step-spin 900ms linear infinite;
+}
+
+.workflow-overlay--tailoring .workflow-step__label {
+  color: inherit !important;
+  font-size: 15px;
+  font-weight: 780;
+}
+
+.workflow-overlay--tailoring .workflow-step__label small {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.workflow-overlay--tailoring .generate-suggestions-loader-error {
+  width: 100%;
+  text-align: left;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__footer {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__safety {
+  max-width: 290px;
+  margin: 0;
+  color: var(--workflow-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.workflow-overlay--tailoring .workflow-overlay__actions button {
+  min-width: 88px;
+  min-height: 44px;
+}
+
+.workflow-overlay--tailoring #generateSuggestionsOpenWorkspaceBtn {
+  min-width: 198px;
+}
+
 @keyframes workflow-step-spin {
   to { transform: rotate(360deg); }
 }
@@ -4307,6 +4540,33 @@ html:not([data-theme="light"]) .workflow-overlay__panel.is-empty-result .pipelin
   .workflow-overlay--pipeline .pipeline-overlay-success,
   .workflow-overlay--pipeline .pipeline-overlay-failure {
     padding-inline: 16px;
+  }
+
+  html[data-theme] body .workflow-overlay--tailoring .workflow-overlay__panel,
+  .workflow-overlay--tailoring .workflow-overlay__panel {
+    width: calc(100vw - 20px) !important;
+    height: auto !important;
+    max-height: calc(100dvh - 20px) !important;
+    padding: 20px !important;
+    border-radius: 20px !important;
+  }
+
+  .workflow-overlay--tailoring .workflow-overlay__footer {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-overlay--tailoring .workflow-overlay__safety {
+    max-width: none;
+  }
+
+  .workflow-overlay--tailoring .workflow-overlay__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-overlay--tailoring .workflow-overlay__actions button,
+  .workflow-overlay--tailoring #generateSuggestionsOpenWorkspaceBtn {
+    width: 100%;
   }
 
   .workflow-overlay--pipeline .workflow-overlay__header {
@@ -4387,6 +4647,11 @@ html:not([data-theme="light"]) .workflow-overlay__panel.is-empty-result .pipelin
   .workflow-step.is-active .pipeline-step-marker::after,
   .workflow-step.is-active .generate-suggestions-step-marker::after {
     display: none;
+  }
+
+  .workflow-overlay--tailoring .workflow-dialog-status-icon::after,
+  .workflow-overlay--tailoring .workflow-step.is-active .workflow-step__indicator::after {
+    animation: none !important;
   }
 }
 

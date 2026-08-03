@@ -120,10 +120,10 @@ def planning_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/styles.css?v=planning_tailoring_workflow_polish_r1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=planning_tailoring_workflow_polish_r1" />
 </head>
 <body class="planning-dashboard-page">
 {render_top_shell("/planning")}
@@ -195,15 +195,18 @@ def planning_dashboard() -> str:
     id="generateSuggestionsLoader"
     aria-live="polite"
     aria-modal="true"
+    aria-labelledby="generateSuggestionsLoaderTitle"
+    aria-describedby="generateSuggestionsLoaderText"
+    aria-busy="false"
     role="dialog"
   >
     <div class="generate-suggestions-fullpage-card workflow-overlay__panel">
       <div class="generate-suggestions-loader-topline workflow-overlay__header">
-        <div>
+        <div class="workflow-dialog-status-icon" id="generateSuggestionsStatusIcon" aria-hidden="true"></div>
+        <div class="workflow-overlay__header-copy">
           <div class="subtext workflow-overlay__eyebrow" id="generateSuggestionsLoaderBadge">
             Preparing
           </div>
-          <div class="workflow-completion-indicator" aria-hidden="true">✓</div>
           <h3 id="generateSuggestionsLoaderTitle">Preparing tailoring workspace</h3>
         </div>
       </div>
@@ -220,27 +223,30 @@ def planning_dashboard() -> str:
       </div>
 
       <div class="modal-actions generate-suggestions-loader-actions workflow-overlay__footer">
-        <button
-          type="button"
-          class="ghost-btn hidden"
-          id="generateSuggestionsOpenWorkspaceBtn"
-        >
-          Open Tailoring Workspace
-        </button>
-        <button
-          type="button"
-          class="ghost-btn hidden"
-          id="generateSuggestionsRetryBtn"
-        >
-          Retry
-        </button>
-        <button
-          type="button"
-          class="ghost-btn"
-          id="generateSuggestionsCancelBtn"
-        >
-          Cancel
-        </button>
+        <p class="workflow-overlay__safety">Suggestions stay in review until you open the workspace.</p>
+        <div class="workflow-overlay__actions">
+          <button
+            type="button"
+            class="workflow-primary-action hidden"
+            id="generateSuggestionsOpenWorkspaceBtn"
+          >
+            Open Tailoring Workspace
+          </button>
+          <button
+            type="button"
+            class="ghost-btn hidden"
+            id="generateSuggestionsRetryBtn"
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            class="ghost-btn"
+            id="generateSuggestionsCancelBtn"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   </section>
@@ -578,7 +584,7 @@ def planning_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
-  <script src="/static/planning.js?v=phase133g_s1_r1"></script>
+  <script src="/static/planning.js?v=planning_tailoring_workflow_polish_r1"></script>
 </body>
 </html>
     """.strip()

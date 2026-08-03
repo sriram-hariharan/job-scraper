@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
 from src.config.role_taxonomy import ROLE_TAXONOMY
+from src.config.seniority_policy import normalize_target_seniority_ids
 from src.pipeline.location_preferences import normalize_location_specs
 
 
@@ -235,10 +236,13 @@ def validate_onboarding_preferences_payload(preferences: Any) -> Dict[str, Any]:
     normalized: Dict[str, Any] = {
         "onboarding_completed": onboarding_completed,
         "selected_role_families": selected_role_families,
+        "target_seniority": normalize_target_seniority_ids(
+            preferences.get("target_seniority")
+        ),
     }
 
     for field_name in PREFERENCE_LIST_FIELDS:
-        if field_name == "selected_role_families":
+        if field_name in {"selected_role_families", "target_seniority"}:
             continue
         normalized[field_name] = _normalize_string_list(preferences.get(field_name))
 

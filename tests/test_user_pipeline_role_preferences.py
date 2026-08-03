@@ -301,6 +301,82 @@ def test_malformed_launch_preferences_do_not_partially_apply(tmp_path):
     assert set(preference_runtime["sources"].values()) == {"defaults"}
 
 
+def test_launch_seniority_is_canonical_and_invalid_snapshot_is_all_or_nothing(tmp_path):
+    valid_path = _write_launch_config(
+        tmp_path / "valid_seniority_launch.json",
+        {
+            "selected_role_families": ["backend_engineering"],
+            "target_seniority": [" STAFF_OR_ABOVE ", "staff"],
+        },
+    )
+    valid = collector.resolve_pipeline_preference_runtime(
+        env={"JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH": str(valid_path)}
+    )
+    assert valid["requested"]["target_seniority"] == ["staff"]
+    assert valid["effective"]["target_seniority"] == ["staff"]
+    assert valid["sources"]["target_seniority"] == "launch_config"
+
+    invalid_path = _write_launch_config(
+        tmp_path / "invalid_seniority_launch.json",
+        {
+            "selected_role_families": ["backend_engineering"],
+            "target_seniority": ["principal"],
+        },
+    )
+    invalid = collector.resolve_pipeline_preference_runtime(
+        env={"JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH": str(invalid_path)}
+    )
+    assert invalid["requested"] == {
+        "selected_role_families": [],
+        "target_seniority": [],
+        "preferred_locations": [],
+        "preferred_skills": [],
+        "excluded_keywords": [],
+    }
+    assert invalid["effective"] == invalid["requested"]
+    assert set(invalid["sources"].values()) == {"defaults"}
+
+
+def test_explicit_seniority_override_is_canonical_and_invalid_isolated(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        collector.logger,
+        "warning",
+        lambda message, *args: warnings.append(message % args if args else message),
+    )
+    legacy = collector.resolve_pipeline_preference_runtime(
+        env={"JOB_STACK_TARGET_SENIORITY": '["staff_or_above", "STAFF"]'}
+    )
+    assert legacy["effective"]["target_seniority"] == ["staff"]
+    assert legacy["sources"]["target_seniority"] == "explicit_override"
+
+    invalid = collector.resolve_pipeline_preference_runtime(
+        env={
+            "JOB_STACK_TARGET_SENIORITY": '["principal"]',
+            "JOB_STACK_SELECTED_ROLE_FAMILIES": '["backend_engineering"]',
+        }
+    )
+    assert invalid["effective"]["target_seniority"] == []
+    assert invalid["effective"]["selected_role_families"] == ["backend_engineering"]
+    assert invalid["sources"]["target_seniority"] == "explicit_override"
+    assert invalid["sources"]["selected_role_families"] == "explicit_override"
+    assert any(
+        "Ignoring unsupported JOB_STACK_TARGET_SENIORITY" in message
+        for message in warnings
+    )
+
+
+def test_effective_hash_uses_canonical_seniority_values():
+    legacy = collector._normalized_preference_snapshot(
+        {"target_seniority": ["staff_or_above"]}
+    )
+    canonical = collector._normalized_preference_snapshot(
+        {"target_seniority": ["staff"]}
+    )
+    assert legacy == canonical
+    assert collector._preference_snapshot_sha256(legacy) == collector._preference_snapshot_sha256(canonical)
+
+
 def test_effective_preference_hash_is_canonical_distinct_and_secret_free(tmp_path):
     first = collector._normalized_preference_snapshot({
         "selected_role_families": [" backend_engineering ", "backend_engineering"],

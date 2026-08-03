@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 
 from tests.support.phase_guard_registry import (
+    PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
@@ -127,6 +128,7 @@ def test_protected_runtime_files_are_unchanged():
         compatibility_profiles=(
             "phase129c_workflow_overlay_and_run_scoped_corpus",
             "recruitee_source_integration",
+            "phase2d_a_independent_seniority_policy",
         ),
     )
 
@@ -824,6 +826,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == phase2c_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase2d_a_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == phase2d_a_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

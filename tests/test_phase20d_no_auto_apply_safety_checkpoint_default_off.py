@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 
 from tests.support.phase_guard_registry import (
+    PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
@@ -848,6 +849,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == phase2c_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase2d_a_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == phase2d_a_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

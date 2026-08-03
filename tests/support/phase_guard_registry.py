@@ -586,6 +586,20 @@ TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES = {
     "tests/test_technical_product_program_role_families.py",
 }
 
+PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES = {
+    "src/config/seniority_policy.py",
+    "src/pipeline/collector.py",
+    "src/pipeline/job_ranker.py",
+    "src/storage/onboarding_preferences/store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_independent_seniority_policy.py",
+    "tests/test_onboarding_preferences_store.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1287,6 +1301,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_queue_ui_metadata_contract.py",
             "tests/test_role_expansion_ui_contract.py",
         },
+        "phase2d_a_independent_seniority_policy": (
+            PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        ),
         "phase133a_executive_kpi_react_island": {
             ".gitignore",
             "Dockerfile",
@@ -1831,6 +1848,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | legacy_guard_allowlist("phase129c_workflow_overlay_and_run_scoped_corpus")
         | legacy_guard_allowlist("phase132b_premium_preferences_ui")
+        | legacy_guard_allowlist("phase2d_a_independent_seniority_policy")
         | legacy_guard_allowlist("phase133a_executive_kpi_react_island")
         | legacy_guard_allowlist("phase133b_executive_queue_react_island")
         | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
@@ -1973,6 +1991,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
+        | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
     )
 
 
@@ -2094,7 +2113,12 @@ def assert_protected_hashes(
             "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
             "33815928d0165154f6ec1f102a6c32b510acf167ac8bc83aa42837e4f310529b",
             "83d14c9634cd22cdee8d31fe1be675aba23ab2b5ad333a56fbd6b23638a07dc1",
+            "8bc8673fcf3701f1ff232a760082dfe965c4477bb48dd9ee265a2f3ca4c9f282",
         }),
+        (
+            "src/pipeline/job_ranker.py",
+            "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
+        ): "fd387af3c640674de4a998078bc3679747c84ee335d5c275008749f8433a09e5",
         (
             "src/pipeline/collector.py",
             "55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23",

@@ -1,4 +1,7 @@
+import pytest
+
 from src.storage.onboarding_preferences.store import (
+    _row_to_preferences_payload,
     onboarding_preferences_schema_sql_text,
     upsert_onboarding_preferences_payload,
     validate_onboarding_preferences_payload,
@@ -118,6 +121,35 @@ def test_work_modes_input_is_ignored_for_backward_compatible_reads():
     )
 
     assert "work_modes" not in normalized
+
+
+def test_target_seniority_is_canonical_validated_and_scalar_compatible():
+    assert validate_onboarding_preferences_payload(
+        {"target_seniority": " Senior "}
+    )["target_seniority"] == ["senior"]
+    assert validate_onboarding_preferences_payload(
+        {"target_seniority": ["staff_or_above", "STAFF", "mid", "staff"]}
+    )["target_seniority"] == ["staff", "mid"]
+
+
+def test_legacy_stored_target_seniority_reads_back_canonically():
+    payload = _row_to_preferences_payload(
+        {
+            "owner_user_id": "user_legacy",
+            "selected_role_families": ["software_engineering"],
+            "target_seniority": ["staff_or_above"],
+        }
+    )
+    assert payload["preferences"]["target_seniority"] == ["staff"]
+
+
+@pytest.mark.parametrize(
+    "unsupported",
+    ("sr", "principal", "lead", "manager", "manager_or_above", "intern", "executive"),
+)
+def test_unsupported_target_seniority_rejects_without_database_activity(unsupported):
+    with pytest.raises(ValueError, match="Unsupported target seniority"):
+        validate_onboarding_preferences_payload({"target_seniority": [unsupported]})
 
 
 def test_existing_location_strings_are_canonicalized_without_discarding_unknown_values():

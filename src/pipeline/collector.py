@@ -10,6 +10,7 @@ import time
 from uuid import uuid4
 from pathlib import Path
 
+from src.config.seniority_policy import normalize_target_seniority_ids
 from src.pipeline.runtime_status import (
     PREFERENCE_RUNTIME_SCHEMA_VERSION,
     complete_stage,
@@ -296,10 +297,20 @@ def _pipeline_preferences_from_env(
     *,
     env: Dict[str, str] | None = None,
 ) -> Dict[str, List[str]]:
-    return {
+    preferences = {
         field_name: _json_list_from_env(env_name, env=env)
         for field_name, env_name in _PREFERENCE_ENV_NAMES.items()
     }
+    try:
+        preferences["target_seniority"] = normalize_target_seniority_ids(
+            preferences["target_seniority"]
+        )
+    except ValueError:
+        logger.warning(
+            "Ignoring unsupported JOB_STACK_TARGET_SENIORITY value; using an empty explicit seniority override."
+        )
+        preferences["target_seniority"] = []
+    return preferences
 
 
 def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:

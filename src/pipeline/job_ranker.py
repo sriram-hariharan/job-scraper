@@ -1,6 +1,11 @@
 from datetime import datetime, timezone
 import re
 
+from src.config.role_taxonomy import ROLE_TAXONOMY
+from src.config.seniority_policy import (
+    classify_title_seniority,
+    normalize_target_seniority_ids,
+)
 from src.pipeline.job_filter import title_match_detail
 
 
@@ -34,18 +39,18 @@ def _normalize_preference_list(values):
 
 
 def classify_seniority(title: str) -> str:
-    text = f" {WHITESPACE_REGEX.sub(' ', str(title or '').lower())} "
-    if re.search(r"\b(manager|director|vp|vice president|head of)\b", text):
-        return "manager_or_above"
-    if re.search(r"\b(staff|principal|lead|member of technical staff|mts)\b", text):
-        return "staff_or_above"
-    if re.search(r"\b(senior|sr)\b", text):
-        return "senior"
-    if re.search(r"\b(entry|junior|jr|new grad|graduate|associate)\b", text):
-        return "entry"
-    if re.search(r"\b(mid|software engineer ii|engineer ii|level 2)\b", text):
-        return "mid"
-    return "unknown"
+    role_detail = title_match_detail(
+        title,
+        selected_role_families=tuple(ROLE_TAXONOMY),
+    )
+    technical_management_role = role_detail["matched_role_family"] in {
+        "technical_product_management",
+        "technical_program_management",
+    }
+    return classify_title_seniority(
+        title,
+        technical_management_role=technical_management_role,
+    )
 
 
 def _normalized_job_text(job):
@@ -107,7 +112,7 @@ def preference_score(
     job["_preference_seniority_match"] = False
     job["_preference_seniority_unknown"] = False
 
-    target_seniority_values = set(_normalize_preference_list(target_seniority))
+    target_seniority_values = set(normalize_target_seniority_ids(target_seniority))
     if target_seniority_values:
         if seniority in target_seniority_values:
             job["_preference_seniority_match"] = True

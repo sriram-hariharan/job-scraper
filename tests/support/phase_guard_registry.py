@@ -529,6 +529,23 @@ SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "tests/test_scraper_source_health_metrics.py",
 }
 
+RECRUITEE_SOURCE_INTEGRATION_FILES = {
+    "src/config/consts.py",
+    "src/config/curated_ats_sources.json",
+    "src/discovery/curated_ats_sources.py",
+    "src/pipeline/collector.py",
+    "src/scrapers/recruitee_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_curated_ats_sources.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_recruitee_scraper.py",
+    "tests/test_scraper_acquisition_outcomes.py",
+    "tests/test_scraper_parallel_result_contract.py",
+    "tests/test_scraper_source_health_metrics.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -593,6 +610,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -1911,6 +1929,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        | RECRUITEE_SOURCE_INTEGRATION_FILES
     )
 
 
@@ -2028,7 +2047,10 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
-        ): "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+        ): frozenset({
+            "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+            "33815928d0165154f6ec1f102a6c32b510acf167ac8bc83aa42837e4f310529b",
+        }),
         (
             "src/pipeline/collector.py",
             "55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23",
@@ -2080,7 +2102,12 @@ def assert_protected_hashes(
         compatible_hash = phase88b_runtime_hash_compatibility.get(
             (normalized, expected_hash)
         )
-        if compatible_hash == actual_hash and (
+        compatible_hashes = (
+            compatible_hash
+            if isinstance(compatible_hash, (set, frozenset, tuple))
+            else (compatible_hash,)
+        )
+        if actual_hash in compatible_hashes and (
             compatible_paths is None or normalized in compatible_paths
         ):
             continue

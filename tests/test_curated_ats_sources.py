@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from src.discovery.curated_ats_sources import (
     load_curated_ats_sources,
     seed_curated_ats_sources,
@@ -106,3 +108,23 @@ def test_seed_curated_ats_sources_skips_unsupported_ats(tmp_path):
     assert inserted == []
     assert summary["unknownats"]["status"] == "skipped_unsupported_ats"
     assert summary["unknownats"]["invalid"] == ["example"]
+
+
+def test_checked_in_recruitee_sources_are_empty_and_supported():
+    config = load_curated_ats_sources()
+    assert config["recruitee"] == []
+
+    summary = seed_curated_ats_sources(
+        validators={"recruitee": lambda slugs: set(slugs)},
+        existing_func=lambda ats: set(),
+        upsert_func=lambda ats, companies: pytest.fail("empty source must not upsert"),
+    )
+
+    assert summary["recruitee"] == {
+        "status": "seeded",
+        "candidate_count": 0,
+        "valid_count": 0,
+        "existing_count": 0,
+        "inserted_count": 0,
+        "invalid": [],
+    }

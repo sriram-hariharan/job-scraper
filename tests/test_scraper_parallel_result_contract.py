@@ -7,6 +7,7 @@ from src.discovery.crawl_scheduler import AcquisitionOutcome, AcquisitionStatus
 from src.scrapers import (
     ashby_scraper,
     jobvite_scraper,
+    recruitee_scraper,
     smartrecruiters_scraper,
     workable_scraper,
     workday_scraper,
@@ -90,8 +91,14 @@ def test_run_parallel_default_contract_still_flattens_and_isolates_failures(
             "_fetch_company_outcome",
             ("jobvite_get",),
         ),
+        (
+            recruitee_scraper,
+            "scrape_all_recruitee",
+            "_fetch_company_outcome",
+            ("_request_offers",),
+        ),
     ],
-    ids=["workday", "workable", "jobvite"],
+    ids=["workday", "workable", "jobvite", "recruitee"],
 )
 def test_scheduled_scrapers_keep_company_results_under_reordered_completion(
     monkeypatch,
@@ -150,8 +157,9 @@ def test_scheduled_scrapers_keep_company_results_under_reordered_completion(
         (workday_scraper, "scrape_all_workday", "_scrape_company_outcome", False),
         (workable_scraper, "scrape_all_workable", "_fetch_company_outcome", True),
         (jobvite_scraper, "scrape_all_jobvite", "_fetch_company_outcome", True),
+        (recruitee_scraper, "scrape_all_recruitee", "_fetch_company_outcome", True),
     ],
-    ids=["workday", "workable", "jobvite"],
+    ids=["workday", "workable", "jobvite", "recruitee"],
 )
 def test_scheduled_scraper_duplicate_behavior_is_unchanged(
     monkeypatch,

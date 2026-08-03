@@ -11,6 +11,7 @@ from src.scrapers import (
     greenhouse_scraper,
     jobvite_scraper,
     lever_scraper,
+    recruitee_scraper,
     smartrecruiters_scraper,
     workable_scraper,
     workday_scraper,
@@ -152,8 +153,9 @@ def _fixture_parallel(completion_order):
         (workable_scraper, "scrape_all_workable", "_fetch_company_outcome"),
         (jobvite_scraper, "scrape_all_jobvite", "_fetch_company_outcome"),
         (ashby_scraper, "scrape_all_ashby", "_fetch_company_outcome"),
+        (recruitee_scraper, "scrape_all_recruitee", "_fetch_company_outcome"),
     ],
-    ids=["workday", "workable", "jobvite", "ashby"],
+    ids=["workday", "workable", "jobvite", "ashby", "recruitee"],
 )
 def test_threaded_schedule_matrix_and_completion_ownership(
     monkeypatch,

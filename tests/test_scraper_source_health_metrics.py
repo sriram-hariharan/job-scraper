@@ -285,6 +285,7 @@ def test_collector_persistence_failure_preserves_truthful_metrics():
         ("src.scrapers.jobvite_scraper", "_fetch_company_result", "jobvite"),
         ("src.scrapers.workable_scraper", "_fetch_company_result", "workable"),
         ("src.scrapers.workday_scraper", "_scrape_company_result", "workday"),
+        ("src.scrapers.recruitee_scraper", "_fetch_company_result", "recruitee"),
     ],
 )
 def test_sync_production_company_wrappers_emit_metrics(

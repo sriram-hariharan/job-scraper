@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 
 from tests.support.phase_guard_registry import (
+    RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     assert_changed_files_allowed,
     assert_protected_hashes,
@@ -846,6 +847,32 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == source_health_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    recruitee_runtime_files = {
+        ROOT / relative_path
+        for relative_path in RECRUITEE_SOURCE_INTEGRATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == recruitee_runtime_files:
         diff = subprocess.check_output(
             [
                 "git",

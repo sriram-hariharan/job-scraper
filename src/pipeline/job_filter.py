@@ -7,8 +7,6 @@ from pathlib import Path
 from src.utils.posted_at_utils import parse_posted_at
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.config.consts import (
-    TITLE_INCLUDE_REGEX,
-    TITLE_EXCLUDE_REGEX,
     US_STATES,
     US_STATE_NAMES,
     ALL_COUNTRIES,
@@ -27,7 +25,6 @@ from src.config.consts import (
 from src.config.role_taxonomy import (
     DEFAULT_ROLE_FAMILY_IDS,
     ROLE_TAXONOMY,
-    compile_role_title_regexes,
 )
 from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp_result
@@ -78,6 +75,8 @@ ROLE_TITLE_FILTER_AUDIT_FIELDNAMES = [
 ]
 
 ROLE_TITLE_HINT_PATTERNS = (
+    ("technical_product_management", re.compile(r"\b(?:technical product manager|product manager)\b", re.I)),
+    ("technical_program_management", re.compile(r"\b(?:technical program manager|program manager)\b", re.I)),
     ("ml_ai_engineering", re.compile(r"\b(?:ml|machine learning|ai|llm|computer vision|research engineer)\b", re.I)),
     ("data_engineering", re.compile(r"\b(?:data platform|data infra|data infrastructure|data engineer)\b", re.I)),
     ("analytics", re.compile(r"\b(?:analytics|data analyst|bi|business intelligence)\b", re.I)),
@@ -111,12 +110,6 @@ SOURCE_HEALTH_REPORT_FIELDNAMES = [
     "notes",
 ]
 
-
-def _role_title_regexes(selected_role_families=None):
-    if selected_role_families:
-        return compile_role_title_regexes(selected_role_families)
-
-    return TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
 
 def normalize_title(title):
     if not title:
@@ -171,24 +164,37 @@ def matched_excluded_keyword(job, excluded_keywords=None):
 
 def _selected_role_family_ids(selected_role_families=None):
     if selected_role_families:
-        return tuple(
+        selected = {
             role_family_id
             for role_family_id in (str(value or "").strip() for value in selected_role_families)
             if role_family_id in ROLE_TAXONOMY
-        )
+        }
+        return tuple(role_family_id for role_family_id in ROLE_TAXONOMY if role_family_id in selected)
 
     return DEFAULT_ROLE_FAMILY_IDS
 
 
-def _first_role_title_include_match(normalized_title, selected_role_families=None):
+def _matched_role_title_decision(normalized_title, selected_role_families=None):
+    first_excluded_match = None
     for role_family_id in _selected_role_family_ids(selected_role_families):
         role_family = ROLE_TAXONOMY.get(role_family_id, {})
         for pattern in role_family.get("title_include_patterns", ()) or ():
             regex = re.compile(pattern, re.I)
             if regex.search(normalized_title):
-                return role_family_id, pattern
+                excluded = any(
+                    re.search(exclude_pattern, normalized_title, re.I)
+                    for exclude_pattern in role_family.get("title_exclude_patterns", ()) or ()
+                )
+                if not excluded:
+                    return True, "include_pattern_match", role_family_id, pattern
+                if first_excluded_match is None:
+                    first_excluded_match = (role_family_id, pattern)
 
-    return "", ""
+    if first_excluded_match is not None:
+        role_family_id, pattern = first_excluded_match
+        return False, "exclude_pattern_match", role_family_id, pattern
+
+    return False, "no_include_pattern_match", "", ""
 
 
 def _suspected_role_family_hint(title, selected_role_families=None):
@@ -218,12 +224,13 @@ def title_match_detail(title, selected_role_families=None):
     if not title:
         return detail
 
-    include_regexes, exclude_regexes = _role_title_regexes(selected_role_families)
     normalized = normalize_title(title)
-    matched_role_family, matched_pattern = _first_role_title_include_match(
+    matched, reason, matched_role_family, matched_pattern = _matched_role_title_decision(
         normalized,
         selected_role_families=selected_role_families,
     )
+    detail["matched"] = matched
+    detail["reason"] = reason
     detail["matched_role_family"] = matched_role_family
     detail["matched_pattern"] = matched_pattern
     detail["suspected_role_family_hint"] = _suspected_role_family_hint(
@@ -231,16 +238,6 @@ def title_match_detail(title, selected_role_families=None):
         selected_role_families=selected_role_families,
     )
 
-    if not any(regex.search(normalized) for regex in include_regexes):
-        detail["reason"] = "no_include_pattern_match"
-        return detail
-
-    if any(regex.search(normalized) for regex in exclude_regexes):
-        detail["reason"] = "exclude_pattern_match"
-        return detail
-
-    detail["matched"] = True
-    detail["reason"] = "include_pattern_match"
     return detail
 
 

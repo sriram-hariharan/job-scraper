@@ -26,6 +26,8 @@ _ROLE_FAMILY_SUBTITLE_LABELS = {
     "security": "IAM, Okta, Splunk",
     "systems_it": "Linux, Active Directory, Intune",
     "solutions_engineering": "APIs, SQL, Salesforce",
+    "technical_product_management": "Productboard, Pendo, Amplitude",
+    "technical_program_management": "Planview, Smartsheet, Microsoft Project",
 }
 
 ROLE_FAMILY_ICON_SVGS = {
@@ -44,6 +46,13 @@ ROLE_FAMILY_ICON_SVGS = {
     "systems_it": """<svg class="onboarding-role-icon-svg" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M7 20h10" /><path d="M9 16v4" /><path d="M15 16v4" /><path d="M18 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 0 0 0 -5z" /><path d="M18 8v1.5" /><path d="M18 14.5v1.5" /></svg>""",
     "solutions_engineering": """<svg class="onboarding-role-icon-svg" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v12h-18z" /><path d="M7 20h10" /><path d="M9 16v4" /><path d="M15 16v4" /><path d="M8 12v-3" /><path d="M12 12v-5" /><path d="M16 12v-2" /></svg>""",
 }
+
+ROLE_FAMILY_ICON_SVGS.update(
+    {
+        "technical_product_management": ROLE_FAMILY_ICON_SVGS["solutions_engineering"],
+        "technical_program_management": ROLE_FAMILY_ICON_SVGS["cloud_devops"],
+    }
+)
 
 
 def _role_family_subtitle(role_family_id: str) -> str:

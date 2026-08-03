@@ -4,6 +4,7 @@ import pytest
 
 from tests.support.phase_guard_registry import (
     BROAD_TECH_PREFILTER_TAXONOMY_FILES,
+    TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
     PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES,
     PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES,
@@ -360,6 +361,26 @@ def test_broad_tech_prefilter_taxonomy_surface_is_exact():
         "tests/test_user_pipeline_role_preferences.py",
     }
     assert not any("*" in path for path in BROAD_TECH_PREFILTER_TAXONOMY_FILES)
+
+
+def test_technical_product_program_role_family_surface_is_exact():
+    assert TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES == {
+        "src/app/onboarding_ui.py",
+        "src/config/role_scoring_profiles.py",
+        "src/config/role_taxonomy.py",
+        "src/intelligence/role_family_classifier.py",
+        "src/pipeline/job_filter.py",
+        "src/pipeline/job_ranker.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_broad_tech_prefilter_taxonomy.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_role_taxonomy.py",
+        "tests/test_role_title_filtering.py",
+        "tests/test_technical_product_program_role_families.py",
+    }
+    assert not any("*" in path for path in TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES)
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():

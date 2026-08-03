@@ -15,6 +15,8 @@ TITLE_ROLE_PRIORITY = (
     "qa_automation",
     "security",
     "systems_it",
+    "technical_product_management",
+    "technical_program_management",
     "solutions_engineering",
     "software_engineering",
 )
@@ -34,6 +36,8 @@ SKILL_ROLE_PRIORITY = (
     "backend_engineering",
     "frontend_engineering",
     "software_engineering",
+    "technical_product_management",
+    "technical_program_management",
 )
 
 

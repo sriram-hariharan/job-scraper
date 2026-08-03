@@ -1,19 +1,11 @@
 from datetime import datetime, timezone
 import re
 
-from src.config.consts import TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
-from src.config.role_taxonomy import compile_role_title_regexes
+from src.pipeline.job_filter import title_match_detail
 
 
 WHITESPACE_REGEX = re.compile(r"\s+")
 PUNCT_REGEX = re.compile(r"[^\w\s]")
-
-
-def _role_title_regexes(selected_role_families=None):
-    if selected_role_families:
-        return compile_role_title_regexes(selected_role_families)
-
-    return TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
 
 
 def title_score(title: str, selected_role_families=None):
@@ -21,20 +13,12 @@ def title_score(title: str, selected_role_families=None):
     if not title:
         return 0
 
-    t = title.lower()
-    include_regexes, exclude_regexes = _role_title_regexes(selected_role_families)
-
-    for r in exclude_regexes:
-        if r.search(t):
-            return -100
-
-    score = 0
-
-    for r in include_regexes:
-        if r.search(t):
-            score += 25
-
-    return score
+    detail = title_match_detail(title, selected_role_families=selected_role_families)
+    if detail["matched"]:
+        return 25
+    if detail["reason"] == "exclude_pattern_match":
+        return -100
+    return 0
 
 
 def _normalize_preference_list(values):

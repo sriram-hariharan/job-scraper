@@ -42,6 +42,27 @@ COMMON_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = (
     r"\bvideo editor\b",
 )
 
+TECHNICAL_PRODUCT_MANAGEMENT_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = tuple(
+    pattern
+    for pattern in COMMON_TITLE_EXCLUDE_PATTERNS
+    if pattern not in {r"\bmanager\b", r"\bproduct manager\b"}
+) + (
+    r"\bassociate product manager\b",
+    r"\bmarketing product manager\b",
+    r"\bproduct marketing manager\b",
+    r"\bcustomer product manager\b",
+)
+
+TECHNICAL_PROGRAM_MANAGEMENT_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = tuple(
+    pattern
+    for pattern in COMMON_TITLE_EXCLUDE_PATTERNS
+    if pattern != r"\bmanager\b"
+) + (
+    r"\bproject manager\b",
+    r"\bimplementation project manager\b",
+    r"\bsales program manager\b",
+)
+
 DEFAULT_ROLE_FAMILY_IDS: Tuple[str, ...] = (
     "data_science",
     "ml_ai_engineering",
@@ -611,6 +632,61 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
             r"build proof of concept",
             r"advise customers",
             r"design customer solutions",
+        ),
+    },
+    "technical_product_management": {
+        "role_family_id": "technical_product_management",
+        "display_name": "Technical Product Management",
+        "title_include_patterns": (
+            r"\btechnical product manager\b",
+            r"\bproduct manager (?:platform|developer experience|developer platform|apis?|infrastructure|data platform|ai platform)\b",
+        ),
+        "title_exclude_patterns": TECHNICAL_PRODUCT_MANAGEMENT_TITLE_EXCLUDE_PATTERNS,
+        "skill_patterns": (
+            r"\btechnical product management\b",
+            r"\bplatform product strategy\b",
+            r"\bdeveloper experience product work\b",
+            r"\bapi product management\b",
+            r"\btechnical product discovery\b",
+        ),
+        "tooling_patterns": (
+            r"\bproductboard\b",
+            r"\bpendo\b",
+            r"\bamplitude\b",
+        ),
+        "responsibility_patterns": (
+            r"\btechnical roadmap ownership\b",
+            r"\bplatform prioritization\b",
+            r"\bengineering partnership\b",
+            r"\btechnical requirements\b",
+            r"\bproduct outcome measurement\b",
+        ),
+    },
+    "technical_program_management": {
+        "role_family_id": "technical_program_management",
+        "display_name": "Technical Program Management",
+        "title_include_patterns": (
+            r"\btechnical program manager\b",
+        ),
+        "title_exclude_patterns": TECHNICAL_PROGRAM_MANAGEMENT_TITLE_EXCLUDE_PATTERNS,
+        "skill_patterns": (
+            r"\btechnical program management\b",
+            r"\bengineering program delivery\b",
+            r"\btechnical dependency management\b",
+            r"\bdelivery risk management\b",
+            r"\bcross functional technical execution\b",
+        ),
+        "tooling_patterns": (
+            r"\bplanview\b",
+            r"\bsmartsheet\b",
+            r"\bmicrosoft project\b",
+        ),
+        "responsibility_patterns": (
+            r"\btechnical program leadership\b",
+            r"\bengineering dependency coordination\b",
+            r"\bmilestone governance\b",
+            r"\brisk management\b",
+            r"\bcross functional delivery\b",
         ),
     },
 }

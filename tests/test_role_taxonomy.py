@@ -26,6 +26,8 @@ EXPECTED_ROLE_FAMILY_IDS = {
     "security",
     "systems_it",
     "solutions_engineering",
+    "technical_product_management",
+    "technical_program_management",
 }
 
 REQUIRED_FIELDS = {

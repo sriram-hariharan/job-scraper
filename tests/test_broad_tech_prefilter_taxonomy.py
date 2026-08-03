@@ -26,6 +26,8 @@ EXPECTED_ROLE_FAMILY_IDS = (
     "security",
     "systems_it",
     "solutions_engineering",
+    "technical_product_management",
+    "technical_program_management",
 )
 
 APPROVED_TITLE_ALIASES = (
@@ -87,9 +89,7 @@ def test_required_business_and_nonengineering_negatives_remain_rejected():
         "Call Center Representative",
         "Guest Service Representative",
         "Product Manager",
-        "Technical Product Manager",
         "Program Manager",
-        "Technical Program Manager",
         "Engineering Manager",
     )
 

@@ -569,6 +569,23 @@ BROAD_TECH_PREFILTER_TAXONOMY_FILES = {
     "tests/test_user_pipeline_role_preferences.py",
 }
 
+TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES = {
+    "src/app/onboarding_ui.py",
+    "src/config/role_scoring_profiles.py",
+    "src/config/role_taxonomy.py",
+    "src/intelligence/role_family_classifier.py",
+    "src/pipeline/job_filter.py",
+    "src/pipeline/job_ranker.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_broad_tech_prefilter_taxonomy.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_role_taxonomy.py",
+    "tests/test_role_title_filtering.py",
+    "tests/test_technical_product_program_role_families.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1955,6 +1972,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
+        | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
     )
 
 

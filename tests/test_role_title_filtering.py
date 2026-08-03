@@ -38,6 +38,8 @@ ALL_SELECTED_ROLE_FAMILIES = [
     "security",
     "systems_it",
     "solutions_engineering",
+    "technical_product_management",
+    "technical_program_management",
 ]
 
 

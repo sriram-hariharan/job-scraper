@@ -203,6 +203,11 @@ def fetch_company_jobs(company):
     return jobs
 
 
+def _fetch_company_result(company):
+    jobs = fetch_company_jobs(company)
+    return [(company, jobs)] if jobs else []
+
+
 def scrape_all_workable():
 
     companies = load_lines("discovery://ats/workable")
@@ -217,13 +222,13 @@ def scrape_all_workable():
     companies = list(set(companies))
     results = run_parallel(
         companies,
-        fetch_company_jobs,
+        _fetch_company_result,
         max_workers=5,
         desc="Workable scraping"
         )
     
     all_jobs = []
-    for company, jobs in zip(companies, results):
+    for company, jobs in results:
 
         if isinstance(jobs, list):
             all_jobs.extend(jobs)

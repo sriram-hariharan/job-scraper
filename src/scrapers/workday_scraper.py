@@ -242,6 +242,11 @@ def scrape_company(board_url):
     return jobs
 
 
+def _scrape_company_result(company):
+    jobs = scrape_company(company)
+    return [(company, jobs)] if jobs else []
+
+
 def scrape_all_workday():
 
     companies = load_lines("discovery://ats/workday")
@@ -254,13 +259,13 @@ def scrape_all_workday():
 
     results = run_parallel(
         companies,
-        scrape_company,
+        _scrape_company_result,
         max_workers=5,
         desc="Workday scraping"
     )
     all_jobs = []
 
-    for company, jobs in zip(companies, results):
+    for company, jobs in results:
 
         if isinstance(jobs, list):
             all_jobs.extend(jobs)

@@ -124,6 +124,12 @@ def fetch_company_jobs(company):
 
     return jobs
 
+
+def _fetch_company_board_result(company):
+    jobs = fetch_company_board(company)
+    return [(company, jobs)] if jobs else []
+
+
 def scrape_all_smartrecruiters():
 
     all_jobs = []
@@ -146,13 +152,13 @@ def scrape_all_smartrecruiters():
 
     results = run_parallel(
         companies,
-        fetch_company_board,
+        _fetch_company_board_result,
         max_workers=20,
         desc="SmartRecruiters boards"
     )
 
-    for r in results:
-        if isinstance(r, list):
-            all_jobs.extend(r)
+    for _, jobs in results:
+        if isinstance(jobs, list):
+            all_jobs.extend(jobs)
 
     return all_jobs

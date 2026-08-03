@@ -33,6 +33,7 @@ from tests.support.phase_guard_registry import (
     PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES,
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
+    SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -1432,6 +1433,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE21_RELEASE_CANDIDATE_FILES
         | PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES
         | PHASE21R_HISTORICAL_GUARD_FILES
+        | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
     )
     assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
         "application_execution_queue.py",

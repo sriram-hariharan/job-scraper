@@ -14,6 +14,8 @@ from src.pipeline.job_filter import (
     posted_within_24h
 )
 from src.discovery.crawl_scheduler import (
+    AcquisitionOutcome,
+    AcquisitionStatus,
     load_schedule,
     save_schedule,
     should_scrape,
@@ -108,7 +110,7 @@ def seed_valid_lever_companies(slugs, *, source="manual_lever_validation"):
     )
 
 
-async def fetch_company_jobs(session, company, *, selected_role_families=None):
+async def _fetch_company_outcome(session, company, *, selected_role_families=None):
 
     url = _lever_company_url(company)
     if selected_role_families is None:
@@ -118,52 +120,104 @@ async def fetch_company_jobs(session, company, *, selected_role_families=None):
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
-                return []
+                return AcquisitionOutcome(
+                    company,
+                    AcquisitionStatus.FAILED,
+                    reason="non_200_response",
+                )
 
-            data = await resp.json()
+            try:
+                data = await resp.json()
+            except Exception:
+                return AcquisitionOutcome(
+                    company,
+                    AcquisitionStatus.FAILED,
+                    reason="malformed_payload",
+                )
 
     except Exception:
-        return []
-
-    jobs = []
-
-    for job in _parse_lever_postings_payload(data):
-
-        title = job.get("text", "")
-        location = job.get("categories", {}).get("location", "")
-        job_url = job.get("hostedUrl", "")
-        posted_at = job.get("createdAt")
-
-        learn_from_job_url(job_url)
-
-        # ---------- EARLY FILTERS ----------
-
-        if not title_matches(
-            title,
-            selected_role_families=selected_role_families or None,
-        ):
-            continue
-
-        if not us_location(location, "lever"):
-            continue
-
-        if not posted_within_24h(posted_at):
-            continue
-        # -----------------------------------
-
-        jobs.append(
-            Job(
-                company=company,
-                title=title,
-                location=location,
-                url=job_url,
-                source="lever",
-                posted_at=posted_at,
-                job_id=f"lv_{job.get('id')}"
-            ).to_dict()
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="transport_error",
         )
 
-    return jobs
+    if not isinstance(data, list):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
+    jobs = []
+    postings = _parse_lever_postings_payload(data)
+    payload_incomplete = len(postings) != len(data)
+
+    try:
+        for job in postings:
+
+            title = job.get("text", "")
+            location = job.get("categories", {}).get("location", "")
+            job_url = job.get("hostedUrl", "")
+            posted_at = job.get("createdAt")
+
+            learn_from_job_url(job_url)
+
+            # ---------- EARLY FILTERS ----------
+
+            if not title_matches(
+                title,
+                selected_role_families=selected_role_families or None,
+            ):
+                continue
+
+            if not us_location(location, "lever"):
+                continue
+
+            if not posted_within_24h(posted_at):
+                continue
+            # -----------------------------------
+
+            jobs.append(
+                Job(
+                    company=company,
+                    title=title,
+                    location=location,
+                    url=job_url,
+                    source="lever",
+                    posted_at=posted_at,
+                    job_id=f"lv_{job.get('id')}"
+                ).to_dict()
+            )
+    except Exception:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="parse_error",
+        )
+
+    if payload_incomplete:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="malformed_payload",
+        )
+
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(company, status, tuple(jobs))
+
+
+async def fetch_company_jobs(session, company, *, selected_role_families=None):
+    outcome = await _fetch_company_outcome(
+        session,
+        company,
+        selected_role_families=selected_role_families,
+    )
+    return list(outcome.jobs)
 
 
 async def scrape_all_lever_async(*, selected_role_families=None):
@@ -188,15 +242,14 @@ async def scrape_all_lever_async(*, selected_role_families=None):
         sem = asyncio.Semaphore(100)
         async def limited_fetch(company):
             async with sem:
-                return await fetch_company_jobs(
+                return await _fetch_company_outcome(
                     session,
                     company,
                     selected_role_families=selected_role_families,
                 )
 
         async def run_company(company):
-            jobs = await limited_fetch(company)
-            return company, jobs
+            return await limited_fetch(company)
 
         tasks = [
             asyncio.create_task(run_company(c))
@@ -209,11 +262,16 @@ async def scrape_all_lever_async(*, selected_role_families=None):
             desc="Lever scraping"
         ):
 
-            company, jobs = await task
+            try:
+                outcome = await task
+            except Exception as exc:
+                logger.warning(f"Lever worker failed: {exc}")
+                continue
 
-            all_jobs.extend(jobs)
+            all_jobs.extend(outcome.jobs)
 
-            mark_scraped(company, schedule)
+            if outcome.should_mark_scraped:
+                mark_scraped(outcome.company, schedule)
 
     save_schedule(schedule)
     return all_jobs

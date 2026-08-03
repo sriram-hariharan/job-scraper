@@ -8,6 +8,8 @@ from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
 from src.utils.http_retry import http_post
 from src.discovery.crawl_scheduler import (
+    AcquisitionOutcome,
+    AcquisitionStatus,
     load_schedule,
     save_schedule,
     should_scrape,
@@ -130,7 +132,7 @@ def fetch_ashby_timestamp(company, job_id):
     result = fetch_ashby_timestamp_result(company, job_id)
     return result.get("posted_at")
 
-def fetch_company_jobs(company):
+def _fetch_company_outcome(company):
 
     payload = {
         "operationName": "ApiJobBoardWithTeams",
@@ -145,48 +147,112 @@ def fetch_company_jobs(company):
             timeout=10
         )
     except Exception:
-        return []
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="transport_error",
+        )
 
     if r is None or r.status_code != 200:
-        return []
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="non_200_response",
+        )
 
-    data = r.json()
+    try:
+        data = r.json()
+    except Exception:
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
+    if not isinstance(data, dict):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
     data_root = data.get("data")
-    if not data_root:
-        return []
+    if not isinstance(data_root, dict):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
 
     job_board = data_root.get("jobBoard")
 
-    if not job_board:
-        return []
+    if not isinstance(job_board, dict):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
 
-    jobs_data = job_board.get("jobPostings", [])
+    if "jobPostings" not in job_board:
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
+    jobs_data = job_board.get("jobPostings")
+    if not isinstance(jobs_data, list) or not all(
+        isinstance(job, dict) for job in jobs_data
+    ):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
 
     jobs = []
 
-    for job in jobs_data:
-        
-        title = job.get("title", "")
-        job_id = job.get("id")
+    try:
+        for job in jobs_data:
 
-        job_url = f"https://jobs.ashbyhq.com/{company}/{job_id}"
+            title = job.get("title", "")
+            job_id = job.get("id")
 
-        learn_from_job_url(job_url)
+            job_url = f"https://jobs.ashbyhq.com/{company}/{job_id}"
 
-        jobs.append(
-            Job(
-                company=company,
-                title=title,
-                location=job.get("locationName") or "",
-                url=job_url,
-                source="ashby",
-                posted_at=None,
-                meta={"_job_id": job_id},
-                job_id=f"as_{job_id}",
-            ).to_dict()
+            learn_from_job_url(job_url)
+
+            jobs.append(
+                Job(
+                    company=company,
+                    title=title,
+                    location=job.get("locationName") or "",
+                    url=job_url,
+                    source="ashby",
+                    posted_at=None,
+                    meta={"_job_id": job_id},
+                    job_id=f"as_{job_id}",
+                ).to_dict()
+            )
+    except Exception:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="parse_error",
         )
 
-    return jobs
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(company, status, tuple(jobs))
+
+
+def fetch_company_jobs(company):
+    return list(_fetch_company_outcome(company).jobs)
+
+
+def _fetch_company_result(company):
+    return [_fetch_company_outcome(company)]
 
 
 def scrape_all_ashby():
@@ -204,20 +270,17 @@ def scrape_all_ashby():
 
     results = run_parallel(
     companies,
-    fetch_company_jobs,
+    _fetch_company_result,
     max_workers=20,
     desc="Ashby scraping"   
     )
 
-    for company in companies:
-        mark_scraped(company, schedule)
-
     all_jobs = []
-    for r in results:
-        if isinstance(r, list):
-            all_jobs.extend(r)
-        elif isinstance(r, dict):
-            all_jobs.append(r)
+    for outcome in results:
+        all_jobs.extend(outcome.jobs)
+
+        if outcome.should_mark_scraped:
+            mark_scraped(outcome.company, schedule)
 
     save_schedule(schedule)
     

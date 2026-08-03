@@ -7,6 +7,8 @@ from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
 from src.discovery.crawl_scheduler import (
+    AcquisitionOutcome,
+    AcquisitionStatus,
     load_schedule,
     save_schedule,
     should_scrape,
@@ -16,7 +18,7 @@ from src.pipeline.job_filter import title_matches, us_location, posted_within_24
 
 logger = get_logger("greenhouse")
 
-async def fetch_company_jobs(session, company):
+async def _fetch_company_outcome(session, company):
 
     url = GREENHOUSE_API.format(company)
 
@@ -26,12 +28,47 @@ async def fetch_company_jobs(session, company):
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
-                return jobs
+                return AcquisitionOutcome(
+                    company,
+                    AcquisitionStatus.FAILED,
+                    reason="non_200_response",
+                )
 
-            data = await resp.json()
+            try:
+                data = await resp.json()
+            except Exception:
+                return AcquisitionOutcome(
+                    company,
+                    AcquisitionStatus.FAILED,
+                    reason="malformed_payload",
+                )
+    except Exception:
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="transport_error",
+        )
 
-        postings = data.get("jobs", [])
+    if (
+        not isinstance(data, dict)
+        or "jobs" not in data
+        or not isinstance(data.get("jobs"), list)
+    ):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
 
+    postings = data.get("jobs", [])
+    if not all(isinstance(job, dict) for job in postings):
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.FAILED,
+            reason="malformed_payload",
+        )
+
+    try:
         for job in postings:
 
             title = job.get("title", "")
@@ -63,14 +100,25 @@ async def fetch_company_jobs(session, company):
                 ).to_dict()
             )
 
-        return jobs
-
     except Exception:
-        return jobs
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="parse_error",
+        )
+
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(company, status, tuple(jobs))
+
+
+async def fetch_company_jobs(session, company):
+    outcome = await _fetch_company_outcome(session, company)
+    return list(outcome.jobs)
 
 async def run_company(session, company):
-    jobs = await fetch_company_jobs(session, company)
-    return company, jobs
+    return await _fetch_company_outcome(session, company)
 
 async def scrape_all_greenhouse_async():
 
@@ -100,11 +148,16 @@ async def scrape_all_greenhouse_async():
             desc="Greenhouse scraping"
         ):
 
-            company, jobs = await task
+            try:
+                outcome = await task
+            except Exception as exc:
+                logger.warning(f"Greenhouse worker failed: {exc}")
+                continue
 
-            all_jobs.extend(jobs)
+            all_jobs.extend(outcome.jobs)
 
-            mark_scraped(company, schedule)
+            if outcome.should_mark_scraped:
+                mark_scraped(outcome.company, schedule)
             
     save_schedule(schedule)
     return all_jobs

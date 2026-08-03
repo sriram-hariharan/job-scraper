@@ -3,6 +3,7 @@ from collections import Counter
 import pytest
 
 from src.discovery import sitemap_discovery
+from src.discovery.crawl_scheduler import AcquisitionOutcome, AcquisitionStatus
 from src.scrapers import (
     ashby_scraper,
     jobvite_scraper,
@@ -69,16 +70,26 @@ def test_run_parallel_default_contract_still_flattens_and_isolates_failures(
 
 
 @pytest.mark.parametrize(
-    ("scraper", "entrypoint_name", "worker_name", "request_names"),
+    ("scraper", "entrypoint_name", "outcome_worker_name", "request_names"),
     [
-        (workday_scraper, "scrape_all_workday", "scrape_company", ("workday_post",)),
+        (
+            workday_scraper,
+            "scrape_all_workday",
+            "_scrape_company_outcome",
+            ("workday_post",),
+        ),
         (
             workable_scraper,
             "scrape_all_workable",
-            "fetch_company_jobs",
+            "_fetch_company_outcome",
             ("workable_get", "workable_post"),
         ),
-        (jobvite_scraper, "scrape_all_jobvite", "fetch_company_jobs", ("jobvite_get",)),
+        (
+            jobvite_scraper,
+            "scrape_all_jobvite",
+            "_fetch_company_outcome",
+            ("jobvite_get",),
+        ),
     ],
     ids=["workday", "workable", "jobvite"],
 )
@@ -86,7 +97,7 @@ def test_scheduled_scrapers_keep_company_results_under_reordered_completion(
     monkeypatch,
     scraper,
     entrypoint_name,
-    worker_name,
+    outcome_worker_name,
     request_names,
 ):
     companies = ["alpha", "empty", "failed", "omega"]
@@ -99,8 +110,12 @@ def test_scheduled_scrapers_keep_company_results_under_reordered_completion(
         if company == "failed":
             raise RuntimeError("fixture failure")
         if company == "empty":
-            return []
-        return [_job(company)]
+            return AcquisitionOutcome(company, AcquisitionStatus.EMPTY)
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.SUCCESS,
+            (_job(company),),
+        )
 
     monkeypatch.setattr(scraper, "load_lines", lambda path: list(companies))
     monkeypatch.setattr(scraper, "load_schedule", lambda: schedule)
@@ -111,7 +126,7 @@ def test_scheduled_scrapers_keep_company_results_under_reordered_completion(
         lambda company, value: marked.append((company, value)),
     )
     monkeypatch.setattr(scraper, "save_schedule", lambda value: saved.append(value))
-    monkeypatch.setattr(scraper, worker_name, worker)
+    monkeypatch.setattr(scraper, outcome_worker_name, worker)
     monkeypatch.setattr(
         scraper,
         "run_parallel",
@@ -124,17 +139,17 @@ def test_scheduled_scrapers_keep_company_results_under_reordered_completion(
 
     assert results == [_job("omega"), _job("alpha")]
     assert all(isinstance(job, dict) for job in results)
-    assert [company for company, _ in marked] == ["omega", "alpha"]
+    assert [company for company, _ in marked] == ["omega", "empty", "alpha"]
     assert all(value is schedule for _, value in marked)
     assert saved == [schedule]
 
 
 @pytest.mark.parametrize(
-    ("scraper", "entrypoint_name", "worker_name", "deduplicates"),
+    ("scraper", "entrypoint_name", "outcome_worker_name", "deduplicates"),
     [
-        (workday_scraper, "scrape_all_workday", "scrape_company", False),
-        (workable_scraper, "scrape_all_workable", "fetch_company_jobs", True),
-        (jobvite_scraper, "scrape_all_jobvite", "fetch_company_jobs", True),
+        (workday_scraper, "scrape_all_workday", "_scrape_company_outcome", False),
+        (workable_scraper, "scrape_all_workable", "_fetch_company_outcome", True),
+        (jobvite_scraper, "scrape_all_jobvite", "_fetch_company_outcome", True),
     ],
     ids=["workday", "workable", "jobvite"],
 )
@@ -142,7 +157,7 @@ def test_scheduled_scraper_duplicate_behavior_is_unchanged(
     monkeypatch,
     scraper,
     entrypoint_name,
-    worker_name,
+    outcome_worker_name,
     deduplicates,
 ):
     input_companies = ["alpha", "alpha", "omega"]
@@ -152,14 +167,18 @@ def test_scheduled_scraper_duplicate_behavior_is_unchanged(
 
     def worker(company):
         calls.append(company)
-        return [_job(company, str(len(calls)))]
+        return AcquisitionOutcome(
+            company,
+            AcquisitionStatus.SUCCESS,
+            (_job(company, str(len(calls))),),
+        )
 
     monkeypatch.setattr(scraper, "load_lines", lambda path: list(input_companies))
     monkeypatch.setattr(scraper, "load_schedule", lambda: {})
     monkeypatch.setattr(scraper, "should_scrape", lambda company, schedule: True)
     monkeypatch.setattr(scraper, "mark_scraped", lambda company, schedule: None)
     monkeypatch.setattr(scraper, "save_schedule", lambda schedule: saved.append(schedule))
-    monkeypatch.setattr(scraper, worker_name, worker)
+    monkeypatch.setattr(scraper, outcome_worker_name, worker)
     monkeypatch.setattr(
         scraper,
         "run_parallel",
@@ -225,8 +244,12 @@ def test_ashby_default_flattened_usage_remains_compatible(monkeypatch):
     monkeypatch.setattr(ashby_scraper, "should_scrape", lambda company, schedule: True)
     monkeypatch.setattr(
         ashby_scraper,
-        "fetch_company_jobs",
-        lambda company: [_job(company)],
+        "_fetch_company_outcome",
+        lambda company: AcquisitionOutcome(
+            company,
+            AcquisitionStatus.SUCCESS,
+            (_job(company),),
+        ),
     )
     monkeypatch.setattr(ashby_scraper, "http_post", _unexpected_request)
     monkeypatch.setattr(

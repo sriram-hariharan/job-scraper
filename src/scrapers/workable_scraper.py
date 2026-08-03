@@ -9,6 +9,8 @@ from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
 from src.discovery.crawl_scheduler import (
+    AcquisitionOutcome,
+    AcquisitionStatus,
     load_schedule,
     save_schedule,
     should_scrape,
@@ -63,43 +65,61 @@ def extract_v3_jobs(data):
     return values
 
 
-def fetch_company_jobs(company):
+def _fetch_company_outcome(company):
 
     jobs_data = []
     v3_url = WORKABLE_V3_API.format(company)
 
     limit = 50
     offset = 0
+    page_count = 0
+    interruption_reason = ""
 
-    try:
+    while True:
 
-        while True:
-
+        try:
             r = workable_post(
                 v3_url,
                 json={"limit": limit, "offset": offset},
                 headers={"Content-Type": "application/json"},
                 timeout=10
             )
+        except Exception:
+            interruption_reason = "transport_error"
+            break
 
-            if r is None or r.status_code != 200:
-                break
+        if r is None or r.status_code != 200:
+            interruption_reason = "non_200_response"
+            break
 
+        try:
             data = r.json()
-            postings = extract_v3_jobs(data)
+        except Exception:
+            interruption_reason = "malformed_payload"
+            break
 
-            if not postings:
-                break
+        if not isinstance(data, dict):
+            interruption_reason = "malformed_payload"
+            break
 
-            jobs_data.extend(postings)
+        postings = extract_v3_jobs(data)
+        if not isinstance(postings, list) or not all(
+            isinstance(job, dict) for job in postings
+        ):
+            interruption_reason = "malformed_payload"
+            break
 
-            if len(postings) < limit:
-                break
+        page_count += 1
 
-            offset += limit
+        if not postings:
+            break
 
-    except Exception:
-        pass
+        jobs_data.extend(postings)
+
+        if len(postings) < limit:
+            break
+
+        offset += limit
 
     # fallback to v1 widget API
     if not jobs_data:
@@ -108,64 +128,102 @@ def fetch_company_jobs(company):
 
         try:
             r = workable_get(v1_url, timeout=10)
-
-            if r is None or r.status_code != 200:
-                return []
-
-            data = r.json()
-            jobs_data = data.get("jobs", [])
-
         except Exception:
-            return []
+            return AcquisitionOutcome(
+                company,
+                AcquisitionStatus.FAILED,
+                reason="transport_error",
+                page_count=page_count,
+            )
+
+        if r is None or r.status_code != 200:
+            return AcquisitionOutcome(
+                company,
+                AcquisitionStatus.FAILED,
+                reason="non_200_response",
+                page_count=page_count,
+            )
+
+        try:
+            data = r.json()
+        except Exception:
+            return AcquisitionOutcome(
+                company,
+                AcquisitionStatus.FAILED,
+                reason="malformed_payload",
+                page_count=page_count,
+            )
+
+        if (
+            not isinstance(data, dict)
+            or "jobs" not in data
+            or not isinstance(data.get("jobs"), list)
+        ):
+            return AcquisitionOutcome(
+                company,
+                AcquisitionStatus.FAILED,
+                reason="malformed_payload",
+                page_count=page_count,
+            )
+
+        jobs_data = data.get("jobs", [])
+        if not all(isinstance(job, dict) for job in jobs_data):
+            return AcquisitionOutcome(
+                company,
+                AcquisitionStatus.FAILED,
+                reason="malformed_payload",
+                page_count=page_count,
+            )
+        page_count += 1
+        interruption_reason = ""
 
     jobs = []
 
-    for job in jobs_data:
+    try:
+        for job in jobs_data:
 
-        city = (job.get("city") or "").strip()
-        state = (job.get("state") or "").strip()
-        country = (job.get("country") or "").strip()
+            city = (job.get("city") or "").strip()
+            state = (job.get("state") or "").strip()
+            country = (job.get("country") or "").strip()
 
-        location = ", ".join(p for p in [city, state, country] if p)
-        if not location:
-            location = country
-        shortcode = job.get("shortcode")
+            location = ", ".join(p for p in [city, state, country] if p)
+            if not location:
+                location = country
+            shortcode = job.get("shortcode")
 
-        url = job.get("url")
-        if not url and shortcode:
-            url = f"https://apply.workable.com/{company}/j/{shortcode}/"
-        learn_from_job_url(url)
-        # jobs.append({
-        #     "company": company,
-        #     "title": job.get("title"),
-        #     "location": location,
-        #     "url": url,
-        #     "source": "workable",
-        #     "posted_at": job.get("published")
-        #     or job.get("published_on")
-        #     or job.get("created_at"),
-        #     "_shortcode": shortcode
-        # })
-        workable_id = job.get("id")
-        if not workable_id and url:
-            workable_id = url.split("/j/")[-1].split("/")[0]
+            url = job.get("url")
+            if not url and shortcode:
+                url = f"https://apply.workable.com/{company}/j/{shortcode}/"
+            learn_from_job_url(url)
+            workable_id = job.get("id")
+            if not workable_id and url:
+                workable_id = url.split("/j/")[-1].split("/")[0]
 
-        jobs.append(Job(
-            company=company,
-            title=job.get("title"),
-            location=location,
-            url=url,
-            source="workable",  
-            posted_at=(
-                job.get("published")
-                or job.get("published_on")
-                or job.get("created_at")
-            ),
-            meta={
-                "_shortcode": shortcode
-            },
-            job_id=f"wb_{workable_id}" if workable_id else None
-        ).to_dict())
+            jobs.append(Job(
+                company=company,
+                title=job.get("title"),
+                location=location,
+                url=url,
+                source="workable",
+                posted_at=(
+                    job.get("published")
+                    or job.get("published_on")
+                    or job.get("created_at")
+                ),
+                meta={
+                    "_shortcode": shortcode
+                },
+                job_id=f"wb_{workable_id}" if workable_id else None
+            ).to_dict())
+    except Exception:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason="parse_error",
+            page_count=page_count,
+        )
 
     # resolve missing timestamps via v2 API
     missing_jobs = [
@@ -200,12 +258,27 @@ def fetch_company_jobs(company):
     for job in jobs:
         job.pop("_shortcode", None)
 
-    return jobs
+    if interruption_reason:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+        reason = "pagination_interrupted" if jobs else interruption_reason
+        return AcquisitionOutcome(
+            company,
+            status,
+            tuple(jobs),
+            reason=reason,
+            page_count=page_count,
+        )
+
+    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+    return AcquisitionOutcome(company, status, tuple(jobs), page_count=page_count)
+
+
+def fetch_company_jobs(company):
+    return list(_fetch_company_outcome(company).jobs)
 
 
 def _fetch_company_result(company):
-    jobs = fetch_company_jobs(company)
-    return [(company, jobs)] if jobs else []
+    return [_fetch_company_outcome(company)]
 
 
 def scrape_all_workable():
@@ -228,13 +301,11 @@ def scrape_all_workable():
         )
     
     all_jobs = []
-    for company, jobs in results:
+    for outcome in results:
+        all_jobs.extend(outcome.jobs)
 
-        if isinstance(jobs, list):
-            all_jobs.extend(jobs)
-
-            # mark successful scrape
-            mark_scraped(company, schedule)
+        if outcome.should_mark_scraped:
+            mark_scraped(outcome.company, schedule)
 
     save_schedule(schedule)
     

@@ -88,10 +88,8 @@ def _workable_posting(index):
 
 
 def _prepare_workday(monkeypatch):
-    monkeypatch.setattr(workday_scraper, "title_matches", lambda title: True)
     monkeypatch.setattr(workday_scraper, "normalize_workday_url", lambda url: url)
     monkeypatch.setattr(workday_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(workday_scraper, "fetch_workday_timestamp", lambda *args: None)
     monkeypatch.setattr(workday_scraper.time, "sleep", lambda seconds: None)
 
 

@@ -13,7 +13,6 @@ from src.discovery.crawl_scheduler import (
     save_schedule,
     should_scrape,
 )
-from src.pipeline.job_filter import posted_within_24h, title_matches, us_location
 from src.utils.file_loader import load_lines
 from src.utils.http_retry import http_get
 from src.utils.logging import get_logger
@@ -155,13 +154,6 @@ def _fetch_company_outcome(company):
         posted_at = offer.get("published_at")
 
         try:
-            if not title_matches(title):
-                continue
-            if not us_location(location, "recruitee"):
-                continue
-            if not posted_within_24h(posted_at):
-                continue
-
             jobs.append(
                 Job(
                     company=tenant,

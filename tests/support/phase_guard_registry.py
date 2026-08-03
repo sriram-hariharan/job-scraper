@@ -546,6 +546,21 @@ RECRUITEE_SOURCE_INTEGRATION_FILES = {
     "tests/test_scraper_source_health_metrics.py",
 }
 
+SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
+    "src/pipeline/collector.py",
+    "src/scrapers/greenhouse_scraper.py",
+    "src/scrapers/lever_scraper.py",
+    "src/scrapers/recruitee_scraper.py",
+    "src/scrapers/workday_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_lever_role_expansion_filtering.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_recruitee_scraper.py",
+    "tests/test_scraper_acquisition_outcomes.py",
+    "tests/test_scraper_prefilter_ownership_boundary.py",
+    "tests/test_scraper_transport_pagination_hardening.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -1930,6 +1945,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
+        | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
     )
 
 
@@ -2050,6 +2066,7 @@ def assert_protected_hashes(
         ): frozenset({
             "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
             "33815928d0165154f6ec1f102a6c32b510acf167ac8bc83aa42837e4f310529b",
+            "83d14c9634cd22cdee8d31fe1be675aba23ab2b5ad333a56fbd6b23638a07dc1",
         }),
         (
             "src/pipeline/collector.py",

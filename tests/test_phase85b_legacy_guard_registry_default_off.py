@@ -34,6 +34,7 @@ from tests.support.phase_guard_registry import (
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
+    SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     assert_changed_files_allowed,
@@ -329,6 +330,24 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
                 legacy_guard_profiles=("llm_adjudicator_readback_default_off",),
                 include_current_milestone_compatibility=False,
             )
+
+
+def test_scraper_prefilter_ownership_boundary_surface_is_exact():
+    assert SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES == {
+        "src/pipeline/collector.py",
+        "src/scrapers/greenhouse_scraper.py",
+        "src/scrapers/lever_scraper.py",
+        "src/scrapers/recruitee_scraper.py",
+        "src/scrapers/workday_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_lever_role_expansion_filtering.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_recruitee_scraper.py",
+        "tests/test_scraper_acquisition_outcomes.py",
+        "tests/test_scraper_prefilter_ownership_boundary.py",
+        "tests/test_scraper_transport_pagination_hardening.py",
+    }
+    assert not any("*" in path for path in SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES)
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
@@ -1438,6 +1457,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
+        | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
     )
     assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
         "application_execution_queue.py",

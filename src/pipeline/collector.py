@@ -2396,12 +2396,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     scrapers = [
         ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),
-        (
-            "lever",
-            lambda: scrape_all_lever(
-                selected_role_families=selected_role_families,
-            ),
-        ),
+        ("lever", scrape_all_lever),
         ("ashby", scrape_all_ashby),
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),

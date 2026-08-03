@@ -277,7 +277,6 @@ def _workday_posting(index):
 
 def test_workday_outcomes_include_partial_pagination(monkeypatch):
     board = "https://acme.myworkdayjobs.com/jobs"
-    monkeypatch.setattr(workday_scraper, "title_matches", lambda title: True)
     monkeypatch.setattr(workday_scraper, "normalize_workday_url", lambda url: url)
     monkeypatch.setattr(workday_scraper, "learn_from_job_url", lambda url: None)
     monkeypatch.setattr(workday_scraper.time, "sleep", lambda seconds: None)
@@ -296,7 +295,6 @@ def test_workday_outcomes_include_partial_pagination(monkeypatch):
         _SyncResponse({"total": 21, "jobPostings": [malformed_second_page]}),
     ])
     monkeypatch.setattr(workday_scraper, "workday_post", lambda *args, **kwargs: next(responses))
-    monkeypatch.setattr(workday_scraper, "fetch_workday_timestamp", lambda *args: None)
     parse_partial = workday_scraper._scrape_company_outcome(board)
 
     monkeypatch.setattr(
@@ -483,9 +481,6 @@ def test_greenhouse_success_empty_and_failure_outcomes(monkeypatch):
         return None
 
     monkeypatch.setattr(greenhouse_scraper.asyncio, "sleep", no_sleep)
-    monkeypatch.setattr(greenhouse_scraper, "title_matches", lambda title: True)
-    monkeypatch.setattr(greenhouse_scraper, "us_location", lambda location, source: True)
-    monkeypatch.setattr(greenhouse_scraper, "posted_within_24h", lambda posted: True)
     monkeypatch.setattr(greenhouse_scraper, "learn_from_job_url", lambda url: None)
 
     success = asyncio.run(
@@ -515,8 +510,8 @@ def test_greenhouse_success_empty_and_failure_outcomes(monkeypatch):
     )
     monkeypatch.setattr(
         greenhouse_scraper,
-        "title_matches",
-        lambda title: (_ for _ in ()).throw(ValueError("bad posting")),
+        "Job",
+        lambda **kwargs: (_ for _ in ()).throw(ValueError("bad posting")),
     )
     parse_error = asyncio.run(
         greenhouse_scraper._fetch_company_outcome(
@@ -549,9 +544,6 @@ def test_lever_success_empty_and_failure_outcomes(monkeypatch):
         return None
 
     monkeypatch.setattr(lever_scraper.asyncio, "sleep", no_sleep)
-    monkeypatch.setattr(lever_scraper, "title_matches", lambda *args, **kwargs: True)
-    monkeypatch.setattr(lever_scraper, "us_location", lambda location, source: True)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted: True)
     monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
 
     success = asyncio.run(

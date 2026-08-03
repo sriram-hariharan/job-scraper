@@ -45,22 +45,7 @@ def _offer(suffix="1", **overrides):
     return offer
 
 
-def _allow_all_filters(monkeypatch):
-    monkeypatch.setattr(recruitee_scraper, "title_matches", lambda _title: True)
-    monkeypatch.setattr(
-        recruitee_scraper,
-        "us_location",
-        lambda _location, _source: True,
-    )
-    monkeypatch.setattr(
-        recruitee_scraper,
-        "posted_within_24h",
-        lambda _posted_at: True,
-    )
-
-
 def test_valid_success_uses_stable_id_canonical_url_and_public_fields(monkeypatch):
-    _allow_all_filters(monkeypatch)
     payload = {"offers": [_offer()]}
     monkeypatch.setattr(
         recruitee_scraper,
@@ -105,22 +90,27 @@ def test_valid_empty_board_is_empty(monkeypatch):
     assert outcome.raw_job_count == 0
 
 
-def test_all_valid_jobs_filtered_out_is_empty(monkeypatch):
-    monkeypatch.setattr(recruitee_scraper, "title_matches", lambda _title: False)
-    monkeypatch.setattr(
-        recruitee_scraper,
-        "us_location",
-        lambda _location, _source: pytest.fail("later filter must not run"),
-    )
+def test_populated_board_is_success_before_central_filter(monkeypatch):
     monkeypatch.setattr(
         recruitee_scraper,
         "_request_offers",
-        lambda tenant: _Response({"offers": [_offer()]}),
+        lambda tenant: _Response(
+            {
+                "offers": [
+                    _offer(
+                        title="Backend Engineer",
+                        location="London, UK",
+                        published_at="2000-01-01T00:00:00Z",
+                    )
+                ]
+            }
+        ),
     )
 
     outcome = recruitee_scraper._fetch_company_outcome("acme")
 
-    assert outcome.status is AcquisitionStatus.EMPTY
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert [job["title"] for job in outcome.jobs] == ["Backend Engineer"]
     assert outcome.raw_job_count == 1
 
 
@@ -180,7 +170,6 @@ def test_every_record_malformed_is_failed(monkeypatch):
 
 
 def test_mixed_valid_and_malformed_records_are_partial(monkeypatch):
-    _allow_all_filters(monkeypatch)
     monkeypatch.setattr(
         recruitee_scraper,
         "_request_offers",
@@ -265,7 +254,6 @@ def test_company_validator_accepts_empty_board_and_rejects_bad_contract(monkeypa
 
 
 def test_one_observed_outcome_captures_transport_and_completeness(monkeypatch):
-    _allow_all_filters(monkeypatch)
     monkeypatch.setattr(
         http_retry.requests,
         "get",

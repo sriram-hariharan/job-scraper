@@ -563,6 +563,18 @@ PERSONIO_SOURCE_INTEGRATION_FILES = {
     "tests/test_scraper_transport_pagination_hardening.py",
 }
 
+USAJOBS_SOURCE_INTEGRATION_FILES = {
+    "src/config/consts.py",
+    "src/config/usajobs_query_profiles.json",
+    "src/pipeline/collector.py",
+    "src/scrapers/usajobs_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_usajobs_scraper.py",
+}
+
 SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
     "src/pipeline/collector.py",
     "src/scrapers/greenhouse_scraper.py",
@@ -721,6 +733,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "usajobs_source_integration": USAJOBS_SOURCE_INTEGRATION_FILES,
         "personio_source_integration": PERSONIO_SOURCE_INTEGRATION_FILES,
         "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
         "config_vocabulary_scoring_change": {
@@ -2186,9 +2199,10 @@ def assert_protected_hashes(
             "33815928d0165154f6ec1f102a6c32b510acf167ac8bc83aa42837e4f310529b",
             "83d14c9634cd22cdee8d31fe1be675aba23ab2b5ad333a56fbd6b23638a07dc1",
             "8bc8673fcf3701f1ff232a760082dfe965c4477bb48dd9ee265a2f3ca4c9f282",
-            "f52fdf16c5dea4d4afbe0d36aad41a3b774f0aa91d129844138a895fffe88297",
-            "29f51fec60aceb8798cbcecda6dbe41f315e79557b193668d019de4e6f716929",
-        }),
+                "f52fdf16c5dea4d4afbe0d36aad41a3b774f0aa91d129844138a895fffe88297",
+                "29f51fec60aceb8798cbcecda6dbe41f315e79557b193668d019de4e6f716929",
+                "c70367eb9a9cd1da5a2f2a4c5f37c4be3e96dbd0f29ec73bfa32bba5cc580ad4",
+            }),
         (
             "src/pipeline/job_ranker.py",
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",

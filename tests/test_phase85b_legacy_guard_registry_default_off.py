@@ -43,6 +43,7 @@ from tests.support.phase_guard_registry import (
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
+    USAJOBS_SOURCE_INTEGRATION_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -374,6 +375,21 @@ def test_personio_source_integration_surface_is_exact():
         "tests/test_scraper_transport_pagination_hardening.py",
     }
     assert not any("*" in path for path in PERSONIO_SOURCE_INTEGRATION_FILES)
+
+
+def test_usajobs_source_integration_surface_is_exact():
+    assert USAJOBS_SOURCE_INTEGRATION_FILES == {
+        "src/config/consts.py",
+        "src/config/usajobs_query_profiles.json",
+        "src/pipeline/collector.py",
+        "src/scrapers/usajobs_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_usajobs_scraper.py",
+    }
+    assert not any("*" in path for path in USAJOBS_SOURCE_INTEGRATION_FILES)
 
 
 def test_broad_tech_prefilter_taxonomy_surface_is_exact():

@@ -5,6 +5,7 @@ import pytest
 from tests.support.phase_guard_registry import (
     BROAD_TECH_PREFILTER_TAXONOMY_FILES,
     HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
+    HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -495,6 +496,22 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    himalayas_step6b2_profile = legacy_guard_allowlist(
+        "himalayas_step6b2_source_integration"
+    )
+    assert himalayas_step6b2_profile == {
+        "src/config/consts.py",
+        "src/config/himalayas_query_profiles.json",
+        "src/pipeline/collector.py",
+        "src/scrapers/himalayas_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_scraper.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert himalayas_step6b2_profile == HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES
+    assert not any("*" in path for path in himalayas_step6b2_profile)
     himalayas_step6b1_profile = legacy_guard_allowlist(
         "himalayas_step6b1_attribution_foundation"
     )
@@ -1540,7 +1557,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }.isdisjoint(phase9_step12_compatibility_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
-        himalayas_step6b1_profile
+        himalayas_step6b2_profile
+        | himalayas_step6b1_profile
         | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | phase129_profile

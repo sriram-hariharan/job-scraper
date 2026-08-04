@@ -146,6 +146,7 @@ LEVER_API = "https://api.lever.co/v0/postings"
 RECRUITEE_API = "https://{tenant}.recruitee.com/api/offers/"
 PERSONIO_XML_URL = "https://{host}/xml?language=en"
 USAJOBS_SEARCH_API = "https://data.usajobs.gov/api/search"
+HIMALAYAS_SEARCH_API = "https://himalayas.app/jobs/api/search"
 WORKABLE_V3_API = "https://apply.workable.com/api/v3/accounts/{}/jobs"
 WORKABLE_V1_API = "https://apply.workable.com/api/v1/widget/accounts/{}"
 WORKABLE_V2_DETAIL_API = "https://apply.workable.com/api/v2/accounts/{}/jobs/{}"
@@ -178,6 +179,13 @@ USAJOBS_MAX_PAGES_PER_PROFILE = 2
 USAJOBS_DATE_POSTED_DAYS = 7
 USAJOBS_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 USAJOBS_MAX_DESCRIPTION_CHARS = 100_000
+
+HIMALAYAS_QUERY_PROFILES_PATH = "src/config/himalayas_query_profiles.json"
+HIMALAYAS_MAX_QUERY_PROFILES = 4
+HIMALAYAS_RESULTS_PER_PAGE = 20
+HIMALAYAS_MAX_PAGES_PER_PROFILE = 2
+HIMALAYAS_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+HIMALAYAS_MAX_DESCRIPTION_CHARS = 100_000
 
 BUILTIN_HTTP_TIMEOUT_SECONDS = 15
 

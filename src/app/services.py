@@ -9503,6 +9503,7 @@ def _clean_text(value: Any) -> str:
 _PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH = 200
 _PROVIDER_ATTRIBUTION_URL_MAX_LENGTH = 2048
 _HIMALAYAS_ACTIVE_RETENTION_FLAG = "APPLYLENS_HIMALAYAS_ACTIVE_RETENTION_ENABLED"
+_HIMALAYAS_ACTIVE_IDENTITY_LIMIT = 250_000
 
 def _provider_attribution_fields(
     record: Dict[str, Any],
@@ -9556,11 +9557,18 @@ def _himalayas_retention_metadata_fields(
         else safe_metadata.get("expiry_date")
     )
     expiry_date = raw_expiry.strip()[:64] if isinstance(raw_expiry, str) else ""
+    from src.pipeline.himalayas_retention import stable_identity
+
+    identity_record = {
+        field: safe_record.get(field) or safe_metadata.get(field)
+        for field in ("merge_key", "doc_id", "job_doc_id", "job_id")
+    }
     return {
         "source": _clean_text(
             safe_record.get("source") or safe_metadata.get("source")
         )[:64],
         "expiry_date": expiry_date,
+        "active_identity": stable_identity(identity_record),
     }
 
 
@@ -9586,17 +9594,53 @@ def _apply_himalayas_retention_metadata(
 
 def _filter_expired_himalayas_active_rows(
     rows: List[Dict[str, Any]],
+    *,
+    active_identities: set[str] | frozenset[str] | None = None,
 ) -> List[Dict[str, Any]]:
     if not _env_flag_enabled(_HIMALAYAS_ACTIVE_RETENTION_FLAG):
         return rows
-    from src.pipeline.himalayas_retention import classify_expired_record
+    from src.pipeline.himalayas_retention import (
+        classify_expired_record,
+        stable_identity,
+    )
 
     clock = _himalayas_retention_utc_now()
-    return [
-        row
-        for row in rows
-        if not classify_expired_record(row, now=clock)["eligible"]
-    ]
+    retained = []
+    for row in rows:
+        if classify_expired_record(row, now=clock)["eligible"]:
+            continue
+        if row.get("source") == "himalayas" and active_identities is not None:
+            identity = stable_identity(row)
+            if identity and identity not in active_identities:
+                continue
+        retained.append(row)
+    return retained
+
+
+def _active_himalayas_identity_authority(
+    job_corpus: Path = DEFAULT_CORPUS_PATH,
+) -> frozenset[str] | None:
+    if not _env_flag_enabled(_HIMALAYAS_ACTIVE_RETENTION_FLAG):
+        return None
+    resolved = Path(job_corpus).expanduser().resolve()
+    try:
+        if not resolved.exists() or not resolved.is_file():
+            return None
+        overlays = _load_job_metadata_overlay_from_corpus(resolved)
+        if not overlays and resolved.stat().st_size > 0:
+            return None
+    except (OSError, ValueError):
+        return None
+
+    identities = set()
+    for overlay in overlays.values():
+        identity = _clean_text(overlay.get("active_identity"))
+        if _clean_text(overlay.get("source")) != "himalayas" or not identity:
+            continue
+        identities.add(identity)
+        if len(identities) > _HIMALAYAS_ACTIVE_IDENTITY_LIMIT:
+            return None
+    return frozenset(identities)
 
 def _scan_issue_display_label(value: Any) -> str:
     raw = _clean_text(value)
@@ -14170,7 +14214,10 @@ def _overlay_job_metadata(
 
         overlaid_rows.append(merged)
 
-    return _filter_expired_himalayas_active_rows(overlaid_rows)
+    return _filter_expired_himalayas_active_rows(
+        overlaid_rows,
+        active_identities=_active_himalayas_identity_authority(job_corpus),
+    )
 
 def _csv_rows_from_text(text: Any) -> List[Dict[str, str]]:
     raw = str(text or "")
@@ -27604,7 +27651,10 @@ def _overlay_job_metadata_from_map(
 
         overlaid_rows.append(merged)
 
-    return _filter_expired_himalayas_active_rows(overlaid_rows)
+    return _filter_expired_himalayas_active_rows(
+        overlaid_rows,
+        active_identities=_active_himalayas_identity_authority(DEFAULT_CORPUS_PATH),
+    )
 
 
 def _latest_user_pipeline_artifact_context(
@@ -28029,7 +28079,10 @@ def status_payload(
         
         top_queue.append(overlay_row)
 
-    top_queue = _filter_expired_himalayas_active_rows(top_queue)[:top_k]
+    top_queue = _filter_expired_himalayas_active_rows(
+        top_queue,
+        active_identities=_active_himalayas_identity_authority(job_corpus),
+    )[:top_k]
 
     return {
         "summary": {

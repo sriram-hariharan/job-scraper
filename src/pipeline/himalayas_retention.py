@@ -76,6 +76,15 @@ def classify_expired_record(
     }
 
 
+def classify_retirement_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(record, dict) or record.get("source") != MANAGED_SOURCE:
+        return {"eligible": False, "reason": "unmanaged_source", "identity": ""}
+    identity = stable_identity(record)
+    if not identity:
+        return {"eligible": False, "reason": "missing_identity", "identity": ""}
+    return {"eligible": True, "reason": "managed_source", "identity": identity}
+
+
 def summarize_expiry_candidates(
     records: Iterable[Dict[str, Any]],
     *,
@@ -219,5 +228,217 @@ def run_himalayas_retention_foundation(
             "attempted": False,
             "reason": "owner_not_requested",
         }
+
+    return result
+
+
+def _retirement_failure(
+    result: Dict[str, Any],
+    surface: str,
+    exc: BaseException | None = None,
+) -> Dict[str, Any]:
+    result["ok"] = False
+    result["failures"].append(
+        {
+            "surface": surface,
+            "error": exc.__class__.__name__ if exc is not None else "operation_failed",
+        }
+    )
+    return result
+
+
+def run_himalayas_source_retirement(
+    *,
+    corpus_path: str | Path,
+    owner_user_id: str = "",
+    dry_run: bool = True,
+    batch_size: int = MAX_BATCH_SIZE,
+    database_url_env: str = "DATABASE_URL",
+    jsonl_retirement_owner: Optional[Callable[..., Dict[str, Any]]] = None,
+    rag_candidate_lister: Optional[Callable[..., Dict[str, Any]]] = None,
+    rag_deleter: Optional[Callable[..., Dict[str, Any]]] = None,
+    seen_candidate_lister: Optional[Callable[..., Dict[str, Any]]] = None,
+    seen_deleter: Optional[Callable[..., Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    safe_batch = int(batch_size)
+    if safe_batch < 1 or safe_batch > MAX_BATCH_SIZE:
+        raise ValueError("Himalayas retirement batch size must be between 1 and 250.")
+    owner = _clean_string(owner_user_id, MAX_IDENTITY_LENGTH)
+    if not dry_run and not owner:
+        raise ValueError("Execute mode requires an owner for seen-job cleanup.")
+
+    if jsonl_retirement_owner is None:
+        from src.rag.export_job_corpus import retire_himalayas_jsonl
+
+        jsonl_retirement_owner = retire_himalayas_jsonl
+    if rag_candidate_lister is None or rag_deleter is None:
+        from src.storage.rag_store import (
+            delete_himalayas_rag_merge_keys,
+            list_himalayas_rag_candidates,
+        )
+
+        rag_candidate_lister = rag_candidate_lister or list_himalayas_rag_candidates
+        rag_deleter = rag_deleter or delete_himalayas_rag_merge_keys
+    if owner and (seen_candidate_lister is None or seen_deleter is None):
+        from src.storage.user_pipeline.store import (
+            delete_himalayas_seen_jobs_exact_postgres_payload,
+            list_himalayas_seen_job_candidates_postgres_payload,
+        )
+
+        if seen_candidate_lister is None:
+            seen_candidate_lister = lambda **kwargs: (
+                list_himalayas_seen_job_candidates_postgres_payload(
+                    database_url_env=database_url_env,
+                    **kwargs,
+                )
+            )
+        if seen_deleter is None:
+            seen_deleter = lambda **kwargs: (
+                delete_himalayas_seen_jobs_exact_postgres_payload(
+                    database_url_env=database_url_env,
+                    **kwargs,
+                )
+            )
+
+    result: Dict[str, Any] = {
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "cross_store_atomic": False,
+        "surface_order": ["preflight", "jsonl", "rag", "seen"],
+        "surfaces": {},
+        "failures": [],
+    }
+
+    try:
+        jsonl_preflight = jsonl_retirement_owner(corpus_path, dry_run=True)
+        result["surfaces"]["jsonl_preflight"] = dict(jsonl_preflight or {})
+    except Exception as exc:
+        return _retirement_failure(result, "jsonl_preflight", exc)
+
+    try:
+        rag_listing = rag_candidate_lister(limit=safe_batch)
+        if not isinstance(rag_listing, dict) or rag_listing.get("ok") is not True:
+            return _retirement_failure(result, "rag_candidates")
+        rag_rows = list(rag_listing.get("rows", []) or [])
+        if len(rag_rows) > safe_batch or any(
+            not isinstance(row, dict)
+            or row.get("source") != MANAGED_SOURCE
+            or not isinstance(row.get("merge_key"), str)
+            or not row["merge_key"].strip()
+            for row in rag_rows
+        ):
+            return _retirement_failure(result, "rag_candidates")
+        merge_keys = sorted(
+            {
+                row.get("merge_key", "").strip()
+                for row in rag_rows
+                if isinstance(row, dict)
+                and isinstance(row.get("merge_key"), str)
+                and row.get("source") == MANAGED_SOURCE
+                and row["merge_key"].strip()
+            }
+        )
+        result["surfaces"]["rag_candidates"] = {
+            "candidate_count": len(merge_keys),
+            "next_cursor_present": bool(rag_listing.get("next_cursor")),
+        }
+    except Exception as exc:
+        return _retirement_failure(result, "rag_candidates", exc)
+
+    seen_keys = []
+    if owner:
+        try:
+            seen_listing = seen_candidate_lister(
+                owner_user_id=owner,
+                limit=safe_batch,
+            )
+            if not isinstance(seen_listing, dict) or seen_listing.get("ok") is not True:
+                return _retirement_failure(result, "seen_candidates")
+            seen_rows = list(seen_listing.get("rows", []) or [])
+            if len(seen_rows) > safe_batch or any(
+                not isinstance(row, dict)
+                or not isinstance(row.get("seen_key"), str)
+                or not row["seen_key"].strip()
+                for row in seen_rows
+            ):
+                return _retirement_failure(result, "seen_candidates")
+            seen_keys = sorted(
+                {
+                    row.get("seen_key", "").strip()
+                    for row in seen_rows
+                    if isinstance(row, dict)
+                    and isinstance(row.get("seen_key"), str)
+                    and row["seen_key"].strip()
+                }
+            )
+            result["surfaces"]["seen_candidates"] = {
+                "candidate_count": len(seen_keys),
+                "next_cursor_present": bool(seen_listing.get("next_cursor")),
+            }
+        except Exception as exc:
+            return _retirement_failure(result, "seen_candidates", exc)
+    else:
+        result["surfaces"]["seen_candidates"] = {
+            "candidate_count": 0,
+            "attempted": False,
+            "reason": "owner_not_requested",
+        }
+
+    if dry_run:
+        try:
+            rag_result = rag_deleter(merge_keys, dry_run=True)
+            result["surfaces"]["rag"] = rag_result
+            if not isinstance(rag_result, dict) or rag_result.get("ok") is not True:
+                return _retirement_failure(result, "rag")
+        except Exception as exc:
+            return _retirement_failure(result, "rag", exc)
+        if owner:
+            try:
+                seen_result = seen_deleter(
+                    owner_user_id=owner,
+                    seen_keys=seen_keys,
+                    dry_run=True,
+                )
+                result["surfaces"]["seen"] = seen_result
+                if not isinstance(seen_result, dict) or seen_result.get("ok") is not True:
+                    return _retirement_failure(result, "seen")
+            except Exception as exc:
+                return _retirement_failure(result, "seen", exc)
+        else:
+            result["surfaces"]["seen"] = {
+                "attempted": False,
+                "reason": "owner_not_requested",
+                "promoted_candidate_count": 0,
+                "staging_candidate_count": 0,
+            }
+        return result
+
+    try:
+        result["surfaces"]["jsonl"] = jsonl_retirement_owner(
+            corpus_path,
+            dry_run=False,
+        )
+    except Exception as exc:
+        return _retirement_failure(result, "jsonl", exc)
+
+    try:
+        rag_result = rag_deleter(merge_keys, dry_run=False)
+        result["surfaces"]["rag"] = rag_result
+        if not isinstance(rag_result, dict) or rag_result.get("ok") is not True:
+            return _retirement_failure(result, "rag")
+    except Exception as exc:
+        return _retirement_failure(result, "rag", exc)
+
+    try:
+        seen_result = seen_deleter(
+            owner_user_id=owner,
+            seen_keys=seen_keys,
+            dry_run=False,
+        )
+        result["surfaces"]["seen"] = seen_result
+        if not isinstance(seen_result, dict) or seen_result.get("ok") is not True:
+            return _retirement_failure(result, "seen")
+    except Exception as exc:
+        return _retirement_failure(result, "seen", exc)
 
     return result

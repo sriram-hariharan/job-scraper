@@ -265,7 +265,9 @@ def test_current_status_path_filters_after_metadata_but_history_owner_is_untouch
     status_start = source.index("def status_payload(")
     browse_start = source.index("def browse_payload(")
     status_source = source[status_start:browse_start]
-    assert "_filter_expired_himalayas_active_rows(top_queue)" in status_source
+    assert "_filter_expired_himalayas_active_rows(" in status_source
+    assert "top_queue," in status_source
+    assert "active_identities=_active_himalayas_identity_authority(job_corpus)" in status_source
 
     history_start = source.index("def profile_pipeline_run_detail_payload(")
     history_end = source.index("def profile_pipeline_run_agentic_review_payload(")

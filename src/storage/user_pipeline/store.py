@@ -1280,6 +1280,62 @@ SELECT json_build_object(
     }
 
 
+def list_himalayas_seen_job_candidates_postgres_payload(
+    *,
+    owner_user_id: str,
+    after_seen_key: str = "",
+    limit: int = 250,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_limit = int(limit)
+    if safe_limit < 1 or safe_limit > 250:
+        raise ValueError("Himalayas seen candidate limit must be between 1 and 250.")
+    cursor = _clean_text(after_seen_key)
+    cursor_filter = f"AND seen_key > {_sql_quote_text(cursor)}" if cursor else ""
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH candidates AS (
+    SELECT seen_key FROM user_seen_jobs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND source = 'himalayas'
+      {cursor_filter}
+    UNION
+    SELECT seen_key FROM user_seen_jobs_staging
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND source = 'himalayas'
+      {cursor_filter}
+), bounded AS (
+    SELECT seen_key
+    FROM candidates
+    ORDER BY seen_key ASC
+    LIMIT {safe_limit}
+)
+SELECT json_build_object(
+    'rows', COALESCE((SELECT json_agg(row_to_json(bounded)) FROM bounded), '[]'::json)
+);
+""".strip()
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    rows = [dict(row or {}) for row in list(payload.get("data", {}).get("rows", []) or [])]
+    return {
+        "ok": True,
+        "rows": rows,
+        "count": len(rows),
+        "next_cursor": _clean_text(rows[-1].get("seen_key")) if rows else "",
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
 def delete_himalayas_seen_jobs_exact_postgres_payload(
     *,
     owner_user_id: str,

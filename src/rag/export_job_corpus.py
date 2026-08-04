@@ -184,6 +184,85 @@ def prune_expired_himalayas_jsonl(
                 pass
 
 
+def retire_himalayas_jsonl(
+    output_path: str | Path,
+    *,
+    dry_run: bool = True,
+) -> Dict[str, Any]:
+    from src.pipeline.himalayas_retention import classify_retirement_record
+
+    path = Path(output_path)
+    summary = {
+        "inspected": 0,
+        "retained": 0,
+        "retirement_candidates": 0,
+        "retired": 0,
+        "malformed_records": 0,
+        "missing_identity": 0,
+        "write_performed": False,
+    }
+    _assert_safe_existing_jsonl_path(path)
+    if not path.exists():
+        return summary
+    if not path.is_file():
+        raise ValueError("JSONL retirement target must be a regular file.")
+
+    retained_lines = []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for line in handle:
+            summary["inspected"] += 1
+            try:
+                record = json.loads(line.strip())
+            except (json.JSONDecodeError, UnicodeError):
+                summary["malformed_records"] += 1
+                summary["retained"] += 1
+                retained_lines.append(line)
+                continue
+            if not isinstance(record, dict):
+                summary["malformed_records"] += 1
+                summary["retained"] += 1
+                retained_lines.append(line)
+                continue
+
+            classification = classify_retirement_record(record)
+            if classification["eligible"]:
+                summary["retirement_candidates"] += 1
+                if not dry_run:
+                    summary["retired"] += 1
+                continue
+            if classification["reason"] == "missing_identity":
+                summary["missing_identity"] += 1
+            summary["retained"] += 1
+            retained_lines.append(line)
+
+    if dry_run or not summary["retirement_candidates"]:
+        return summary
+
+    temporary_path = None
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=str(path.parent),
+        )
+        temporary_path = Path(temporary_name)
+        os.chmod(temporary_path, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
+            handle.writelines(retained_lines)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        temporary_path = None
+        summary["write_performed"] = True
+        return summary
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
+
+
 def export_job_corpus(
     jobs: List[Dict[str, Any]],
     output_path: str,

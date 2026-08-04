@@ -154,7 +154,6 @@ def test_protected_runtime_files_are_unchanged():
 
 def test_phase21a_changes_only_docs_tests_and_legacy_guards():
     changed = _changed_files() - {
-        ".env.swp",
         "src/evaluation/provider_fixture_benchmark.py",
         "tests/test_provider_fixture_benchmark.py",
         "src/evaluation/controlled_groq_canary_run_005_plan.py",

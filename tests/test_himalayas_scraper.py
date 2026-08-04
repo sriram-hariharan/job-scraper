@@ -167,10 +167,31 @@ def _contains_prohibited_application_data(value):
     return any(marker in text for marker in prohibited_values)
 
 
-def test_checked_in_query_profiles_are_exactly_empty():
+def test_checked_in_query_profiles_are_exactly_the_bounded_data_us_activation():
     path = Path(consts.HIMALAYAS_QUERY_PROFILES_PATH)
-    assert path.read_text(encoding="utf-8").strip() == "[]"
-    assert json.loads(path.read_text(encoding="utf-8")) == []
+    assert json.loads(path.read_text(encoding="utf-8")) == [
+        {
+            "profile_id": "data-us",
+            "query": "data",
+            "country": "US",
+            "exclude_worldwide": True,
+            "sort": "recent",
+        }
+    ]
+    assert himalayas_scraper._load_query_profiles(path) == [
+        {
+            "profile_id": "data-us",
+            "query": "data",
+            "country": "US",
+            "worldwide": False,
+            "exclude_worldwide": True,
+            "timezone": "",
+            "seniority": (),
+            "employment_type": (),
+            "company_slugs": (),
+            "sort": "recent",
+        }
+    ]
 
 
 def test_empty_profiles_exit_before_http_metrics_workers_or_schedule(monkeypatch):

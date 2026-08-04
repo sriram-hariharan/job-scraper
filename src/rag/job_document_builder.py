@@ -20,6 +20,22 @@ def _dedupe_keep_order(items: List[str]) -> List[str]:
     return result
 
 
+def _normalize_location(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if not isinstance(value, list):
+        return ""
+
+    locations = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        location = item.strip()
+        if location:
+            locations.append(location)
+    return ", ".join(_dedupe_keep_order(locations))
+
+
 def build_job_doc_id(job: Dict[str, Any]) -> str:
     url = (job.get("url") or "").strip()
     if url:
@@ -27,7 +43,7 @@ def build_job_doc_id(job: Dict[str, Any]) -> str:
 
     company = (job.get("company") or "").strip().lower()
     title = (job.get("title") or "").strip().lower()
-    location = (job.get("location") or "").strip().lower()
+    location = _normalize_location(job.get("location")).lower()
     source = (job.get("source") or "").strip().lower()
     description = (
         (job.get("description_text") or job.get("description") or "")
@@ -98,7 +114,7 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "doc_id": build_job_doc_id(job),
         "company": (job.get("company") or "").strip(),
         "title": (job.get("title") or "").strip(),
-        "location": (job.get("location") or "").strip(),
+        "location": _normalize_location(job.get("location")),
         "source": (job.get("source") or "").strip(),
         "job_url": (job.get("url") or "").strip(),
         "posted_at": _clean_text_value(job.get("posted_at")),

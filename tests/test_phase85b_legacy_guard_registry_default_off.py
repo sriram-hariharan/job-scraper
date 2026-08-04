@@ -10,6 +10,7 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES,
     HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
     HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
+    HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -500,6 +501,27 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    himalayas_step6e_r1_profile = legacy_guard_allowlist(
+        "himalayas_step6e_r1_location_activation"
+    )
+    assert himalayas_step6e_r1_profile == {
+        "src/config/himalayas_query_profiles.json",
+        "src/pipeline/scheduler.py",
+        "src/rag/job_document_builder.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_activation.py",
+        "tests/test_himalayas_scraper.py",
+        "tests/test_himalayas_source_retirement.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_rag_export_job_corpus.py",
+    }
+    assert (
+        himalayas_step6e_r1_profile
+        == HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES
+    )
+    assert not any("*" in path for path in himalayas_step6e_r1_profile)
     himalayas_step6d_c_profile = legacy_guard_allowlist(
         "himalayas_step6d_c_source_retirement"
     )

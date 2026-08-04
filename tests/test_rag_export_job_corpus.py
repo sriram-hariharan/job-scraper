@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import types
+from copy import deepcopy
 from pathlib import Path
 
 class _FakeTqdm:
@@ -148,6 +149,34 @@ def test_build_job_document_accepts_non_string_posted_at():
     )
 
     assert doc["posted_at"] == "20260522"
+
+
+def test_job_document_normalizes_list_location_without_mutating_input():
+    from src.rag.job_document_builder import build_job_document
+
+    job = _job("list-location")
+    job["location"] = ["United States", "Canada", "United States", "", 7]
+    original = deepcopy(job)
+
+    doc = build_job_document(job)
+
+    assert doc["location"] == "United States, Canada"
+    assert "Location: United States, Canada" in doc["retrieval_text"]
+    assert doc["doc_id"] == job["url"]
+    assert job == original
+
+    fallback_job = deepcopy(job)
+    fallback_job["url"] = ""
+    assert build_job_document(fallback_job)["doc_id"] == build_job_document(
+        deepcopy(fallback_job)
+    )["doc_id"]
+
+    string_job = _job("string-location")
+    string_job["location"] = "  New York, NY  "
+    assert build_job_document(string_job)["location"] == "New York, NY"
+    empty_list_job = _job("empty-list-location")
+    empty_list_job["location"] = []
+    assert build_job_document(empty_list_job)["location"] == ""
 
 
 def test_job_document_preserves_bounded_attribution_outside_retrieval_text():

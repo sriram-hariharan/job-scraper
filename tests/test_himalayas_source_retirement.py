@@ -378,8 +378,16 @@ def test_history_and_automatic_pipeline_do_not_invoke_retirement_command():
         )
 
 
-def test_default_off_profiles_and_no_new_stage():
-    assert json.loads(Path("src/config/himalayas_query_profiles.json").read_text()) == []
+def test_bounded_himalayas_profile_other_sources_default_off_and_no_new_stage():
+    assert json.loads(Path("src/config/himalayas_query_profiles.json").read_text()) == [
+        {
+            "profile_id": "data-us",
+            "query": "data",
+            "country": "US",
+            "exclude_worldwide": True,
+            "sort": "recent",
+        }
+    ]
     assert json.loads(Path("src/config/usajobs_query_profiles.json").read_text()) == []
     curated = json.loads(Path("src/config/curated_ats_sources.json").read_text())
     assert curated["personio"] == []

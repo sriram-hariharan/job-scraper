@@ -611,6 +611,21 @@ HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES = {
+    "src/pipeline/himalayas_retention.py",
+    "src/rag/export_job_corpus.py",
+    "src/rag/job_document_builder.py",
+    "src/storage/rag_store.py",
+    "src/storage/user_pipeline/schema.sql",
+    "src/storage/user_pipeline/store.py",
+    "src/utils/job_cache.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_active_retention.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
     "src/pipeline/collector.py",
     "src/scrapers/greenhouse_scraper.py",
@@ -769,6 +784,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "himalayas_step6d_b1_retention_foundation": HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES,
         "himalayas_step6c1_pagination_repair": HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
         "himalayas_step6b2_source_integration": HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
         "himalayas_step6b1_attribution_foundation": HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,

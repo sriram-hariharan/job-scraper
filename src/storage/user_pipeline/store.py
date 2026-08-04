@@ -66,6 +66,12 @@ def user_pipeline_table_specs() -> Dict[str, Any]:
                 {"name": "last_run_id", "type": "text", "nullable": False},
                 {"name": "metadata_json", "type": "jsonb", "nullable": False},
             ],
+            "indexes": [
+                {
+                    "name": "idx_user_seen_jobs_owner_source_seen_key",
+                    "columns": ["owner_user_id", "source", "seen_key"],
+                },
+            ],
         },
         "user_seen_jobs_staging": {
             "description": "Run-scoped staged seen-job rows promoted only after successful user pipeline completion.",
@@ -82,6 +88,12 @@ def user_pipeline_table_specs() -> Dict[str, Any]:
                 {"name": "title", "type": "text", "nullable": False},
                 {"name": "staged_at", "type": "timestamptz", "nullable": False},
                 {"name": "metadata_json", "type": "jsonb", "nullable": False},
+            ],
+            "indexes": [
+                {
+                    "name": "idx_user_seen_jobs_staging_owner_source_seen_key",
+                    "columns": ["owner_user_id", "source", "seen_key"],
+                },
             ],
         },
         "user_pipeline_active_runs": {
@@ -196,6 +208,9 @@ def render_user_pipeline_schema_sql() -> str:
             "CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_job_url",
             "ON user_seen_jobs (job_url);",
             "",
+            "CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_owner_source_seen_key",
+            "ON user_seen_jobs (owner_user_id, source, seen_key);",
+            "",
             "CREATE TABLE IF NOT EXISTS user_seen_jobs_staging (",
             "    owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,",
             "    run_id TEXT NOT NULL REFERENCES user_pipeline_runs(run_id) ON DELETE CASCADE,",
@@ -215,6 +230,9 @@ def render_user_pipeline_schema_sql() -> str:
             "",
             "CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_staging_owner_staged",
             "ON user_seen_jobs_staging (owner_user_id, staged_at DESC);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_staging_owner_source_seen_key",
+            "ON user_seen_jobs_staging (owner_user_id, source, seen_key);",
             "",
             "CREATE TABLE IF NOT EXISTS user_pipeline_artifacts (",
             "    artifact_id TEXT PRIMARY KEY,",
@@ -1259,6 +1277,97 @@ SELECT json_build_object(
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
         "table_name": "user_seen_jobs",
+    }
+
+
+def delete_himalayas_seen_jobs_exact_postgres_payload(
+    *,
+    owner_user_id: str,
+    seen_keys: List[str],
+    dry_run: bool = True,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    keys = sorted(
+        {
+            value.strip()
+            for value in seen_keys
+            if isinstance(value, str) and value.strip()
+        }
+    )
+    if len(keys) > 250:
+        raise ValueError("At most 250 exact Himalayas seen keys may be deleted.")
+    if not keys:
+        return {
+            "ok": True,
+            "dry_run": bool(dry_run),
+            "promoted_candidate_count": 0,
+            "staging_candidate_count": 0,
+            "promoted_deleted_count": 0,
+            "staging_deleted_count": 0,
+        }
+
+    values = ", ".join(_sql_quote_text(value) for value in keys)
+    if dry_run:
+        sql = _schema_prefix(ensure_schema) + f"""
+SELECT json_build_object(
+    'promoted_candidate_count', (
+        SELECT COUNT(*) FROM user_seen_jobs
+        WHERE owner_user_id = {_sql_quote_text(owner)}
+          AND source = 'himalayas'
+          AND seen_key IN ({values})
+    ),
+    'staging_candidate_count', (
+        SELECT COUNT(*) FROM user_seen_jobs_staging
+        WHERE owner_user_id = {_sql_quote_text(owner)}
+          AND source = 'himalayas'
+          AND seen_key IN ({values})
+    )
+);
+""".strip()
+    else:
+        sql = _schema_prefix(ensure_schema) + f"""
+WITH deleted_promoted AS (
+    DELETE FROM user_seen_jobs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND source = 'himalayas'
+      AND seen_key IN ({values})
+    RETURNING seen_key
+),
+deleted_staging AS (
+    DELETE FROM user_seen_jobs_staging
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND source = 'himalayas'
+      AND seen_key IN ({values})
+    RETURNING seen_key
+)
+SELECT json_build_object(
+    'promoted_deleted_count', (SELECT COUNT(*) FROM deleted_promoted),
+    'staging_deleted_count', (SELECT COUNT(*) FROM deleted_staging)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    data = dict(payload.get("data", {}) or {})
+    return {
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "promoted_candidate_count": int(data.get("promoted_candidate_count", 0) or 0),
+        "staging_candidate_count": int(data.get("staging_candidate_count", 0) or 0),
+        "promoted_deleted_count": int(data.get("promoted_deleted_count", 0) or 0),
+        "staging_deleted_count": int(data.get("staging_deleted_count", 0) or 0),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
     }
 
 

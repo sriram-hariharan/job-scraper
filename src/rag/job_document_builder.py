@@ -75,6 +75,12 @@ def _clean_text_value(value: object) -> str:
 def _bounded_text_value(value: object, maximum_length: int) -> str:
     return _clean_text_value(value)[:maximum_length]
 
+
+def _bounded_optional_string(value: object, maximum_length: int) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()[:maximum_length]
+
 def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
     intelligence = job.get("intelligence", {}) or {}
     skills = intelligence.get("skills", {}) or {}
@@ -96,6 +102,7 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "source": (job.get("source") or "").strip(),
         "job_url": (job.get("url") or "").strip(),
         "posted_at": _clean_text_value(job.get("posted_at")),
+        "expiry_date": _bounded_optional_string(job.get("expiry_date"), 64),
         "freshness_status": (job.get("_freshness_status") or job.get("freshness_status") or "").strip(),
         "ashby_timestamp_status": (
             job.get("_ashby_timestamp_status") or job.get("ashby_timestamp_status") or ""

@@ -2,6 +2,10 @@ import hashlib
 from typing import Dict, Any, List
 
 
+_PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH = 200
+_PROVIDER_ATTRIBUTION_URL_MAX_LENGTH = 2048
+
+
 def _dedupe_keep_order(items: List[str]) -> List[str]:
     seen = set()
     result = []
@@ -67,6 +71,10 @@ def _clean_text_value(value: object) -> str:
         return ""
     return str(value).strip()
 
+
+def _bounded_text_value(value: object, maximum_length: int) -> str:
+    return _clean_text_value(value)[:maximum_length]
+
 def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
     intelligence = job.get("intelligence", {}) or {}
     skills = intelligence.get("skills", {}) or {}
@@ -103,6 +111,17 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "ai_fit_score": job.get("ai_fit_score"),
         "ai_fit_reason": job.get("ai_fit_reason", ""),
         "resume_matches": job.get("resume_matches", []),
+        "provider_attribution_required": (
+            job.get("provider_attribution_required") is True
+        ),
+        "provider_attribution_label": _bounded_text_value(
+            job.get("provider_attribution_label"),
+            _PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH,
+        ),
+        "provider_attribution_url": _bounded_text_value(
+            job.get("provider_attribution_url"),
+            _PROVIDER_ATTRIBUTION_URL_MAX_LENGTH,
+        ),
     }
 
     job_doc["retrieval_text"] = build_retrieval_text(job_doc)

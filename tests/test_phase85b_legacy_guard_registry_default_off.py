@@ -4,6 +4,7 @@ import pytest
 
 from tests.support.phase_guard_registry import (
     BROAD_TECH_PREFILTER_TAXONOMY_FILES,
+    HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -494,6 +495,25 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    himalayas_step6b1_profile = legacy_guard_allowlist(
+        "himalayas_step6b1_attribution_foundation"
+    )
+    assert himalayas_step6b1_profile == {
+        "src/app/services.py",
+        "src/app/static/app.js",
+        "src/pipeline/dedupe.py",
+        "src/rag/job_document_builder.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase16a_lean_deterministic_prefilter_dedupe_orchestration.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_provider_attribution_ui.py",
+        "tests/test_rag_export_job_corpus.py",
+        "tests/test_supplemental_source_dedupe.py",
+    }
+    assert himalayas_step6b1_profile == HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES
+    assert not any("*" in path for path in himalayas_step6b1_profile)
     phase129_profile = legacy_guard_allowlist(
         "phase129c_workflow_overlay_and_run_scoped_corpus"
     )
@@ -1520,7 +1540,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }.isdisjoint(phase9_step12_compatibility_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
-        legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+        himalayas_step6b1_profile
+        | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | phase129_profile
         | phase132_profile

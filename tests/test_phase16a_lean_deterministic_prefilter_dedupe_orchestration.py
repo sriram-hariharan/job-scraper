@@ -238,6 +238,24 @@ def test_production_path_direct_and_graph_outputs_are_identical():
     assert graph["deduplicated_jobs"] == direct["deduplicated_jobs"]
 
 
+def test_supplemental_replacement_has_direct_and_graph_parity():
+    supplemental = {
+        **_job("himalayas", source="himalayas"),
+        "provider_attribution_required": True,
+        "provider_attribution_label": "Himalayas",
+        "provider_attribution_url": "https://himalayas.app",
+    }
+    direct_job = _job("direct", source="greenhouse")
+
+    direct = _direct([supplemental, direct_job])
+    graph = _graph([supplemental, direct_job])
+
+    assert direct["deduplicated_jobs"] == [direct_job]
+    assert graph["deduplicated_jobs"] == direct["deduplicated_jobs"]
+    assert graph["execution_metadata"]["production_node_count"] == 2
+    assert graph["execution_metadata"]["dedupe_invocation_count"] == 1
+
+
 def test_strict_seniority_direct_and_graph_outputs_are_identical():
     jobs = [
         _job("senior", title="Senior Data Scientist"),

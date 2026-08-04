@@ -9500,6 +9500,40 @@ def run_live_pipeline_payload(
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+_PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH = 200
+_PROVIDER_ATTRIBUTION_URL_MAX_LENGTH = 2048
+
+def _provider_attribution_fields(
+    record: Dict[str, Any],
+    metadata: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    safe_record = record if isinstance(record, dict) else {}
+    safe_metadata = metadata if isinstance(metadata, dict) else {}
+
+    required_value = (
+        safe_record["provider_attribution_required"]
+        if "provider_attribution_required" in safe_record
+        else safe_metadata.get("provider_attribution_required", False)
+    )
+    label_value = (
+        safe_record.get("provider_attribution_label")
+        or safe_metadata.get("provider_attribution_label")
+    )
+    url_value = (
+        safe_record.get("provider_attribution_url")
+        or safe_metadata.get("provider_attribution_url")
+    )
+
+    return {
+        "provider_attribution_required": required_value is True,
+        "provider_attribution_label": _clean_text(label_value)[
+            :_PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH
+        ],
+        "provider_attribution_url": _clean_text(url_value)[
+            :_PROVIDER_ATTRIBUTION_URL_MAX_LENGTH
+        ],
+    }
+
 def _env_flag_enabled(name: str, env: Dict[str, str] | None = None) -> bool:
     env_map = env if env is not None else os.environ
     return _clean_text(env_map.get(name)).lower() in {"1", "true", "yes", "on"}
@@ -14018,6 +14052,7 @@ def _load_job_metadata_overlay_from_corpus(
                 "ashby_timestamp_status": ashby_timestamp_status,
                 "job_url": job_url,
                 "role_family": role_family,
+                **_provider_attribution_fields(record, metadata),
             }
 
             for key in _application_row_key_candidates(key_row):
@@ -14044,6 +14079,7 @@ def _overlay_job_metadata(
         merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
         merged["role_family"] = _clean_text(merged.get("role_family"))
+        merged.update(_provider_attribution_fields(merged))
 
         if latest_by_key:
             for key in _application_row_key_candidates(merged):
@@ -14063,6 +14099,7 @@ def _overlay_job_metadata(
                     merged["job_url"] = overlay["job_url"]
                 if overlay.get("role_family"):
                     merged["role_family"] = overlay["role_family"]
+                merged.update(_provider_attribution_fields(overlay))
                 break
 
         overlaid_rows.append(merged)
@@ -27446,6 +27483,7 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
             "ashby_timestamp_status": ashby_timestamp_status,
             "job_url": job_url,
             "role_family": role_family,
+            **_provider_attribution_fields(record, metadata),
         }
 
         for key in _application_row_key_candidates(key_row):
@@ -27469,6 +27507,7 @@ def _overlay_job_metadata_from_map(
         merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
         merged["role_family"] = _clean_text(merged.get("role_family"))
+        merged.update(_provider_attribution_fields(merged))
 
         if latest_by_key:
             for key in _application_row_key_candidates(merged):
@@ -27488,6 +27527,7 @@ def _overlay_job_metadata_from_map(
                     merged["job_url"] = overlay["job_url"]
                 if overlay.get("role_family"):
                     merged["role_family"] = overlay["role_family"]
+                merged.update(_provider_attribution_fields(overlay))
                 break
 
         overlaid_rows.append(merged)
@@ -27843,6 +27883,7 @@ def status_payload(
         overlay_row["freshness_status"] = _clean_text(overlay_row.get("freshness_status"))
         overlay_row["ashby_timestamp_status"] = _clean_text(overlay_row.get("ashby_timestamp_status"))
         overlay_row["job_url"] = _clean_text(overlay_row.get("job_url")) or _clean_text(overlay_row.get("job_doc_id"))
+        overlay_row.update(_provider_attribution_fields(overlay_row))
         for field in ja.OPERATOR_DECISION_OVERLAY_FIELDS:
             overlay_row.setdefault(field, "")
 
@@ -27875,6 +27916,7 @@ def status_payload(
                 overlay_row["ashby_timestamp_status"] = metadata["ashby_timestamp_status"]
             if metadata.get("job_url") and not _clean_text(overlay_row.get("job_url")):
                 overlay_row["job_url"] = metadata["job_url"]
+            overlay_row.update(_provider_attribution_fields(metadata))
             break
 
         for key in _application_row_key_candidates(overlay_row):

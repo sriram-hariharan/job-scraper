@@ -334,7 +334,7 @@ def test_foundation_is_injected_ordered_unwired_and_truthful(monkeypatch):
     assert order == ["jsonl", "list", ("rag", ["expired"]), ("seen", ["himalayas:job:expired"])]
     collector = Path("src/pipeline/collector.py").read_text(encoding="utf-8")
     main = Path("main.py").read_text(encoding="utf-8")
-    assert "run_himalayas_retention_foundation" not in collector
+    assert collector.count("run_himalayas_retention_foundation") == 2
     assert "run_himalayas_retention_foundation" not in main
 
 

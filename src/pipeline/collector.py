@@ -58,6 +58,9 @@ AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_FLAG = (
 PRODUCTION_AGENT_TELEMETRY_FLAG = (
     "APPLYLENS_PRODUCTION_AGENT_TELEMETRY_ENABLED"
 )
+HIMALAYAS_ACTIVE_RETENTION_FLAG = (
+    "APPLYLENS_HIMALAYAS_ACTIVE_RETENTION_ENABLED"
+)
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
 )
@@ -475,6 +478,230 @@ def resolve_pipeline_preference_runtime(
 
 def _truthy_env_value(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _himalayas_active_retention_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(env_map.get(HIMALAYAS_ACTIVE_RETENTION_FLAG))
+
+
+def _himalayas_retention_seen_owner(
+    env: Dict[str, str] | None = None,
+) -> str:
+    env_map = env if env is not None else os.environ
+    backend = str(env_map.get("JOB_STACK_SEEN_JOBS_BACKEND", "") or "").strip().lower()
+    if backend != "postgres":
+        return ""
+    owner = str(env_map.get("JOB_STACK_OWNER_USER_ID", "") or "").strip()
+    if not owner:
+        raise RuntimeError(
+            "Himalayas active retention requires an owner for PostgreSQL seen jobs."
+        )
+    return owner
+
+
+def _retention_count(value: Any, key: str) -> int:
+    if isinstance(value, bool):
+        raise RuntimeError(f"Invalid Himalayas retention count: {key}.")
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"Invalid Himalayas retention count: {key}.") from exc
+    if count < 0:
+        raise RuntimeError(f"Invalid Himalayas retention count: {key}.")
+    return count
+
+
+def _himalayas_retention_stage_counts(
+    result: Dict[str, Any],
+    *,
+    owner_user_id: str,
+) -> Dict[str, int]:
+    if not isinstance(result, dict) or result.get("ok") is not True:
+        raise RuntimeError("Himalayas active retention failed.")
+    if result.get("dry_run") is not False or result.get("cross_store_atomic") is not False:
+        raise RuntimeError("Himalayas active retention returned unsafe execution metadata.")
+    failures = result.get("failures")
+    if not isinstance(failures, list) or failures:
+        raise RuntimeError("Himalayas active retention failed.")
+    surfaces = result.get("surfaces")
+    if not isinstance(surfaces, dict):
+        raise RuntimeError("Himalayas active retention returned incomplete results.")
+
+    jsonl = surfaces.get("jsonl")
+    rag_candidates = surfaces.get("rag_candidates")
+    rag_delete = surfaces.get("rag_delete")
+    rag_summary = surfaces.get("rag_expiry_summary")
+    seen_delete = surfaces.get("seen_delete")
+    if not all(isinstance(value, dict) for value in (
+        jsonl,
+        rag_candidates,
+        rag_delete,
+        rag_summary,
+        seen_delete,
+    )):
+        raise RuntimeError("Himalayas active retention returned incomplete results.")
+    if rag_delete.get("ok") is not True:
+        raise RuntimeError("Himalayas active retention RAG cleanup failed.")
+    _retention_count(rag_candidates.get("count"), "rag_candidate_count")
+    if owner_user_id:
+        if seen_delete.get("ok") is not True:
+            raise RuntimeError("Himalayas active retention seen cleanup failed.")
+        promoted_deleted = seen_delete.get("promoted_deleted_count")
+        staging_deleted = seen_delete.get("staging_deleted_count")
+    elif (
+        seen_delete.get("attempted") is not False
+        or seen_delete.get("reason") != "owner_not_requested"
+    ):
+        raise RuntimeError("Himalayas active retention requested unsafe seen cleanup.")
+    else:
+        promoted_deleted = 0
+        staging_deleted = 0
+
+    invalid_jsonl = _retention_count(
+        jsonl.get("missing_or_invalid_expiry"),
+        "jsonl_missing_or_invalid_expiry",
+    )
+    invalid_rag = _retention_count(
+        rag_summary.get("missing_or_invalid_expiry"),
+        "rag_missing_or_invalid_expiry",
+    )
+    malformed_jsonl = _retention_count(
+        jsonl.get("malformed_lines"),
+        "jsonl_malformed_lines",
+    )
+    return {
+        "himalayas_retention_inspected": _retention_count(
+            jsonl.get("inspected"), "jsonl_inspected"
+        ) + _retention_count(rag_summary.get("inspected"), "rag_inspected"),
+        "himalayas_retention_expired_eligible": _retention_count(
+            rag_summary.get("eligible_expired"), "rag_eligible_expired"
+        ),
+        "himalayas_retention_jsonl_pruned": _retention_count(
+            jsonl.get("expired_pruned"), "jsonl_expired_pruned"
+        ),
+        "himalayas_retention_rag_deleted": _retention_count(
+            rag_delete.get("deleted_count"), "rag_deleted_count"
+        ),
+        "himalayas_retention_seen_promoted_deleted": _retention_count(
+            promoted_deleted,
+            "seen_promoted_deleted_count",
+        ),
+        "himalayas_retention_seen_staging_deleted": _retention_count(
+            staging_deleted,
+            "seen_staging_deleted_count",
+        ),
+        "himalayas_retention_invalid_expiry_skipped": (
+            malformed_jsonl + invalid_jsonl + invalid_rag
+        ),
+        "himalayas_retention_failures": 0,
+    }
+
+
+def _complete_rag_export_with_optional_himalayas_retention(
+    scored_jobs: List[Dict[str, Any]],
+    corpus_path: str,
+    *,
+    export_owner: Callable[[List[Dict[str, Any]], str], int],
+    env: Dict[str, str] | None = None,
+    retention_owner: Callable[..., Dict[str, Any]] | None = None,
+    clock_owner: Callable[[], datetime] | None = None,
+    stage_completer: Callable[..., None] | None = None,
+) -> Dict[str, int]:
+    corpus_file = Path(corpus_path)
+    if scored_jobs:
+        rag_export_count = export_owner(scored_jobs, corpus_path)
+        logger.info("RAG corpus exported: %s documents", rag_export_count)
+    elif corpus_file.exists() and corpus_file.stat().st_size > 0:
+        rag_export_count = 0
+        logger.info(
+            "RAG export skipped because scored_jobs is empty; preserving existing corpus at %s",
+            corpus_path,
+        )
+    else:
+        rag_export_count = export_owner(scored_jobs, corpus_path)
+        logger.info("RAG corpus exported: %s documents", rag_export_count)
+
+    counts = {"rag_export_count": int(rag_export_count or 0)}
+    if _himalayas_active_retention_enabled(env):
+        try:
+            owner_user_id = _himalayas_retention_seen_owner(env)
+        except RuntimeError:
+            logger.error(
+                "Himalayas active retention failed failures=1 error_type=RuntimeError"
+            )
+            raise
+        try:
+            if retention_owner is None:
+                from src.pipeline.himalayas_retention import (
+                    run_himalayas_retention_foundation,
+                )
+
+                retention_owner = run_himalayas_retention_foundation
+            clock = (clock_owner or (lambda: datetime.now(timezone.utc)))()
+            result = retention_owner(
+                corpus_path=corpus_path,
+                owner_user_id=owner_user_id,
+                dry_run=False,
+                batch_size=250,
+                now=clock,
+            )
+            retention_counts = _himalayas_retention_stage_counts(
+                result,
+                owner_user_id=owner_user_id,
+            )
+        except Exception as exc:
+            logger.error(
+                "Himalayas active retention failed failures=1 error_type=%s",
+                type(exc).__name__,
+            )
+            raise RuntimeError("Himalayas active retention failed.") from exc
+        counts.update(retention_counts)
+        logger.info(
+            "Himalayas active retention completed inspected=%s expired_eligible=%s "
+            "jsonl_pruned=%s rag_deleted=%s seen_promoted_deleted=%s "
+            "seen_staging_deleted=%s invalid_expiry_skipped=%s failures=%s",
+            retention_counts["himalayas_retention_inspected"],
+            retention_counts["himalayas_retention_expired_eligible"],
+            retention_counts["himalayas_retention_jsonl_pruned"],
+            retention_counts["himalayas_retention_rag_deleted"],
+            retention_counts["himalayas_retention_seen_promoted_deleted"],
+            retention_counts["himalayas_retention_seen_staging_deleted"],
+            retention_counts["himalayas_retention_invalid_expiry_skipped"],
+            retention_counts["himalayas_retention_failures"],
+        )
+
+    (stage_completer or complete_stage)("rag_export", counts=counts)
+    return counts
+
+
+def _save_seen_jobs_with_optional_himalayas_expiry(
+    scored_jobs: List[Dict[str, Any]],
+    *,
+    env: Dict[str, str] | None = None,
+    cache_key_owner: Callable[[List[Dict[str, Any]]], List[str]],
+    key_save_owner: Callable[[List[str]], None],
+    structured_record_owner: Callable[[List[Dict[str, Any]]], List[Dict[str, str]]],
+    structured_save_owner: Callable[[List[Dict[str, str]]], None],
+) -> None:
+    if not _himalayas_active_retention_enabled(env):
+        key_save_owner(cache_key_owner(scored_jobs))
+        return
+
+    _himalayas_retention_seen_owner(env)
+    expected_keys = cache_key_owner(scored_jobs)
+    records = structured_record_owner(scored_jobs)
+    normalized_records = []
+    for value in records:
+        record = dict(value or {})
+        if str(record.get("source", "") or "").strip() != "himalayas":
+            record["expiry_date"] = ""
+        normalized_records.append(record)
+    if [record.get("seen_key", "") for record in normalized_records] != expected_keys:
+        raise RuntimeError("Structured seen-job keys differ from existing cache keys.")
+    structured_save_owner(normalized_records)
 
 
 def _authoritative_prefilter_dedupe_langgraph_enabled(
@@ -2416,7 +2643,9 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         cache_keys_for_jobs,
         filter_new_jobs,
         load_seen_job_ids,
+        save_new_job_records,
         save_new_job_ids,
+        structured_seen_records_for_jobs,
     )
     from src.utils.pipeline_metrics import log_stage_metrics
     from src.utils import pipeline_metrics as source_health_metrics_owner
@@ -2456,7 +2685,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
         or "postgres://rag_job_documents"
     ).strip()
-    corpus_file = Path(corpus_path)
     if selected_role_families:
         logger.info(
             "Using selected role families for title filtering/ranking: %s",
@@ -3093,31 +3321,21 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
 
-    if scored_jobs:
-        rag_export_count = export_job_corpus(
-            scored_jobs,
-            corpus_path,
-        )
-        logger.info(f"RAG corpus exported: {rag_export_count} documents")
-    else:
-        if corpus_file.exists() and corpus_file.stat().st_size > 0:
-            rag_export_count = 0
-            logger.info(
-                "RAG export skipped because scored_jobs is empty; preserving existing corpus at %s",
-                corpus_path,
-            )
-        else:
-            rag_export_count = export_job_corpus(
-                scored_jobs,
-                corpus_path,
-            )
-            logger.info(f"RAG corpus exported: {rag_export_count} documents")
-
-    complete_stage("rag_export", counts={"rag_export_count": rag_export_count})
+    _complete_rag_export_with_optional_himalayas_retention(
+        scored_jobs,
+        corpus_path,
+        export_owner=export_job_corpus,
+    )
 
     log_market_insights(detailed_jobs)
 
-    save_new_job_ids(cache_keys_for_jobs(scored_jobs))
+    _save_seen_jobs_with_optional_himalayas_expiry(
+        scored_jobs,
+        cache_key_owner=cache_keys_for_jobs,
+        key_save_owner=save_new_job_ids,
+        structured_record_owner=structured_seen_records_for_jobs,
+        structured_save_owner=save_new_job_records,
+    )
     persist_discovered_companies()
 
     pipeline_runtime = round(time.time() - start_total, 2)

@@ -626,6 +626,17 @@ HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES = {
+    "src/app/services.py",
+    "src/pipeline/collector.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_active_retention.py",
+    "tests/test_himalayas_retention_integration.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
     "src/pipeline/collector.py",
     "src/scrapers/greenhouse_scraper.py",
@@ -784,6 +795,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "himalayas_step6d_b2_retention_integration": HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
         "himalayas_step6d_b1_retention_foundation": HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES,
         "himalayas_step6c1_pagination_repair": HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
         "himalayas_step6b2_source_integration": HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
@@ -2225,6 +2237,7 @@ def assert_protected_hashes(
             "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
             "b71cf683a281bfa07de70fe41a101975f066c35179e7607af6d078f10ee35835",
             "4f9c9b7a8266d0017bdef62a1db3809fa7d9bd2b4d7d975e8f134e84fe00c386",
+            "11cbcf9097bfaa72f6695fc85afd432a6cae6c71efc78bb4ec1e694e037e21a6",
         }),
             (
                 "src/agents/jd_intelligence.py",
@@ -2262,6 +2275,7 @@ def assert_protected_hashes(
                 "29f51fec60aceb8798cbcecda6dbe41f315e79557b193668d019de4e6f716929",
                 "c70367eb9a9cd1da5a2f2a4c5f37c4be3e96dbd0f29ec73bfa32bba5cc580ad4",
                 "4a9d20dbaf51da7695c0b5e63ac5b4f6b0e9bd4312ff444c7ce6ad3f4887b65e",
+                "daa47b63bbfa06d218b82f50a0ae46e536c9bd89e39543f386c1298008757032",
             }),
         (
             "src/pipeline/job_ranker.py",

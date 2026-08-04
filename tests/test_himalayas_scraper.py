@@ -368,7 +368,7 @@ def test_http_request_retry_metrics_are_captured_without_schedule_advancement(mo
         _response({**_payload([]), "updatedAt": True}),
         _response(_payload({}, total=0)),
         _response(_payload([_item(str(i)) for i in range(21)], total=21)),
-        _response(_payload([], page=1, total=1)),
+        _response(_payload([_item("excess")], total=0)),
         _response(_payload([], page=1, total=0, limit=21)),
         _response(_payload([], page=1, total=0, offset=20)),
     ],
@@ -578,10 +578,17 @@ def test_first_page_transport_and_non_200_outcomes_are_sanitized(monkeypatch):
     )
 
 
-@pytest.mark.parametrize("second", [_Response(status_code=503), RuntimeError("private")])
-def test_later_page_failure_retains_earlier_jobs(monkeypatch, second):
-    first_items = [_item(f"job-{index}") for index in range(20)]
-    first = _response(_payload(first_items, page=1, total=21))
+@pytest.mark.parametrize(
+    "second",
+    [
+        _Response(status_code=503),
+        RuntimeError("private"),
+        _response({"jobs": []}),
+    ],
+)
+def test_later_page_failure_retains_short_first_page_jobs(monkeypatch, second):
+    first_items = [_item(f"job-{index}") for index in range(18)]
+    first = _response(_payload(first_items, page=1, total=41))
     if isinstance(second, Exception):
         values = iter([first, second])
 
@@ -597,7 +604,91 @@ def test_later_page_failure_retains_earlier_jobs(monkeypatch, second):
     outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
     assert outcome.status is AcquisitionStatus.PARTIAL
     assert outcome.reason == "pagination_interrupted"
-    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (1, 20, 20)
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (1, 18, 18)
+
+
+def test_short_nonterminal_page_continues_with_exact_http_metrics(monkeypatch):
+    first = [_item(f"first-{index}") for index in range(18)]
+    second = [_item(f"second-{index}") for index in range(15)]
+    responses = iter(
+        [
+            _response(_payload(first, page=1, total=35)),
+            _response(_payload(second, page=2, total=35)),
+        ]
+    )
+    calls = []
+
+    def get(*args, **kwargs):
+        calls.append((args, kwargs))
+        return next(responses)
+
+    monkeypatch.setattr(himalayas_scraper.requests, "get", get)
+    outcome = pipeline_metrics.observe_acquisition(
+        "himalayas",
+        lambda: himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW),
+        schedule_on_success=False,
+        company="himalayas:engineering",
+    )
+    metric = pipeline_metrics.acquisition_metrics_snapshot()[0]
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 33, 33)
+    assert len(calls) == 2
+    assert (metric.request_count, metric.retry_count) == (2, 0)
+    assert metric.response_status_counts == ((200, 2),)
+    assert metric.schedule_advanced is False
+
+
+def test_short_terminal_page_stops_without_requesting_page_two(monkeypatch):
+    requests = []
+
+    def request(_profile, page):
+        requests.append(page)
+        return _response(_payload([_item(str(index)) for index in range(18)], total=18))
+
+    monkeypatch.setattr(himalayas_scraper, "_request_page", request)
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (1, 18, 18)
+    assert requests == [1]
+
+
+def test_zero_row_nonterminal_page_continues(monkeypatch):
+    _set_page_responses(
+        monkeypatch,
+        _response(_payload([], page=1, total=21)),
+        _response(_payload([_item("last")], page=2, total=21)),
+    )
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 1, 1)
+
+
+def test_two_short_nonterminal_pages_reach_cap_without_page_three(monkeypatch, capsys):
+    requests = []
+    pages = {
+        1: _response(
+            _payload([_item(f"first-{index}") for index in range(18)], page=1, total=41)
+        ),
+        2: _response(
+            _payload([_item(f"second-{index}") for index in range(18)], page=2, total=41)
+        ),
+    }
+
+    def request(_profile, page):
+        requests.append(page)
+        return pages[page]
+
+    monkeypatch.setattr(himalayas_scraper, "_request_page", request)
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+    logged = capsys.readouterr().out
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 36, 36)
+    assert requests == [1, 2]
+    assert "bounded_page_cap_reached=true" in logged
 
 
 def test_intentional_page_cap_retains_40_jobs_and_logs_bounded_marker(monkeypatch, capsys):

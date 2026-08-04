@@ -379,9 +379,7 @@ def _parse_page(response, page):
         raise _MalformedPayload("inconsistent pagination")
     if offset + len(items) > total_count:
         raise _MalformedPayload("impossible result count")
-    has_more = offset + len(items) < total_count
-    if has_more and len(items) != HIMALAYAS_RESULTS_PER_PAGE:
-        raise _MalformedPayload("incomplete intermediate page")
+    has_more = offset + limit < total_count
     return items, has_more
 
 
@@ -745,7 +743,7 @@ def _fetch_profile_outcome(profile, *, now=None):
             else:
                 jobs.append(job)
 
-        if not has_more or len(items) < HIMALAYAS_RESULTS_PER_PAGE:
+        if not has_more:
             break
         if page == HIMALAYAS_MAX_PAGES_PER_PROFILE:
             logger.info("himalayas_event bounded_page_cap_reached=true")

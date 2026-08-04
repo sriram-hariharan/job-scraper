@@ -602,6 +602,15 @@ HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES = {
+    "src/scrapers/himalayas_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_scraper.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
     "src/pipeline/collector.py",
     "src/scrapers/greenhouse_scraper.py",
@@ -760,6 +769,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "himalayas_step6c1_pagination_repair": HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
         "himalayas_step6b2_source_integration": HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
         "himalayas_step6b1_attribution_foundation": HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
         "usajobs_source_integration": USAJOBS_SOURCE_INTEGRATION_FILES,
@@ -1950,7 +1960,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
-        legacy_guard_allowlist("himalayas_step6b2_source_integration")
+        legacy_guard_allowlist("himalayas_step6c1_pagination_repair")
+        | legacy_guard_allowlist("himalayas_step6b2_source_integration")
         | legacy_guard_allowlist("himalayas_step6b1_attribution_foundation")
         | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")

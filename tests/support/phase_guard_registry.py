@@ -2269,6 +2269,7 @@ def assert_protected_hashes(
             "4f9c9b7a8266d0017bdef62a1db3809fa7d9bd2b4d7d975e8f134e84fe00c386",
             "11cbcf9097bfaa72f6695fc85afd432a6cae6c71efc78bb4ec1e694e037e21a6",
             "0fbfc4ee3b57b29626cce7ffdbd9b1f9a8e1e3475f098371a398161dabfbe51e",
+            "e25bf271beb6da9bc27597d1c2a8b564b36970f4db31ce763f5d3a08523419fc",
         }),
             (
                 "src/agents/jd_intelligence.py",
@@ -2307,6 +2308,7 @@ def assert_protected_hashes(
                 "c70367eb9a9cd1da5a2f2a4c5f37c4be3e96dbd0f29ec73bfa32bba5cc580ad4",
                 "4a9d20dbaf51da7695c0b5e63ac5b4f6b0e9bd4312ff444c7ce6ad3f4887b65e",
                 "daa47b63bbfa06d218b82f50a0ae46e536c9bd89e39543f386c1298008757032",
+                "c3d103420c5613c8717c64ec0a66d1636e00c721ec2a754c22978c9feaab85d4",
             }),
         (
             "src/pipeline/job_ranker.py",

@@ -411,7 +411,17 @@ def test_adapter_has_no_mutation_capable_http_helper():
     assert "candidate" not in source.lower()
 
 
-def test_checked_in_curated_configuration_is_empty_and_default_off():
+def test_checked_in_curated_configuration_contains_validated_tenants():
     with open("src/config/curated_ats_sources.json", encoding="utf-8") as handle:
         payload = json.load(handle)
-    assert payload["recruitee"] == []
+
+    sources = payload["recruitee"]
+
+    assert len(sources) == 24
+    assert sources == sorted(set(sources))
+    assert "aetherflux" in sources
+    assert "basispathinc" in sources
+    assert "hudsonmanpower" in sources
+    assert "transperfect" in sources
+    assert "careermentors" not in sources
+    assert "firstfactory" not in sources

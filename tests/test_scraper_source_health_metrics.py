@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -176,6 +177,104 @@ def test_stage_aggregation_uses_source_owned_counts_without_overwriting_boards()
         ("alpha", 0),
         ("beta", 0),
     ]
+
+
+def test_run_scoped_artifact_is_deterministic_source_neutral_and_payload_safe(tmp_path):
+    now = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    metrics = (
+        pipeline_metrics.SourceHealthMetrics(
+            source="usajobs",
+            company="usajobs:public-it-data-us",
+            acquisition_status="SUCCESS",
+            request_count=2,
+            response_status_counts=((200, 2),),
+            page_count=2,
+            raw_job_count=60,
+            normalized_job_count=59,
+            canonical_url_present_count=59,
+            timestamp_present_count=59,
+            description_present_count=59,
+            started_at=now,
+            completed_at=now,
+            health="healthy",
+        ),
+        pipeline_metrics.SourceHealthMetrics(
+            source="ashby",
+            company="https://boards.example/acme?api_key=secret",
+            acquisition_status="PARTIAL",
+            reason_code="pagination_interrupted",
+            request_count=2,
+            retry_count=1,
+            response_status_counts=((200, 1), (503, 1)),
+            health="degraded",
+        ),
+        pipeline_metrics.SourceHealthMetrics(
+            source="usajobs",
+            company="",
+            normalized_job_count=59,
+            filter_drop_count=9,
+            duplicate_drop_count=2,
+            final_retained_job_count=7,
+            health="healthy",
+        ),
+    )
+    output = tmp_path / pipeline_metrics.SOURCE_ACQUISITION_METRICS_ARTIFACT
+
+    assert pipeline_metrics.write_source_acquisition_metrics_artifact(
+        metrics, output
+    ) == output
+    first = output.read_bytes()
+    pipeline_metrics.write_source_acquisition_metrics_artifact(reversed(metrics), output)
+    assert output.read_bytes() == first
+    assert not output.with_suffix(".json.tmp").exists()
+
+    payload = json.loads(first)
+    assert [row["source"] for row in payload["acquisition_metrics"]] == [
+        "ashby",
+        "usajobs",
+    ]
+    assert payload["source_stage_metrics"] == [
+        {
+            "after_central_filter_count": 50,
+            "after_dedupe_count": 48,
+            "duplicate_drop_count": 2,
+            "filter_drop_count": 9,
+            "final_retained_job_count": 7,
+            "normalized_job_count": 59,
+            "source": "usajobs",
+            "source_health": "healthy",
+        }
+    ]
+    serialized = first.decode("utf-8")
+    assert "api_key=secret" not in serialized
+    assert "jobs.example" not in serialized
+    assert "Role description" not in serialized
+    assert "headers" not in serialized.lower()
+    assert "credential" not in serialized.lower()
+
+
+def test_run_scoped_artifact_accepts_empty_finalized_metrics(tmp_path):
+    output = tmp_path / pipeline_metrics.SOURCE_ACQUISITION_METRICS_ARTIFACT
+    pipeline_metrics.write_source_acquisition_metrics_artifact((), output)
+    assert json.loads(output.read_text(encoding="utf-8")) == {
+        "schema_version": pipeline_metrics.SOURCE_ACQUISITION_METRICS_SCHEMA_VERSION,
+        "acquisition_metrics": [],
+        "source_stage_metrics": [],
+    }
+
+
+def test_run_scoped_artifact_rejects_rows_over_bound_without_partial_file(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(pipeline_metrics, "SOURCE_ACQUISITION_METRICS_MAX_ROWS", 1)
+    output = tmp_path / pipeline_metrics.SOURCE_ACQUISITION_METRICS_ARTIFACT
+    rows = (
+        pipeline_metrics.SourceHealthMetrics(source="ashby", company="a"),
+        pipeline_metrics.SourceHealthMetrics(source="lever", company="b"),
+    )
+    with pytest.raises(ValueError, match="row limit"):
+        pipeline_metrics.write_source_acquisition_metrics_artifact(rows, output)
+    assert not output.exists()
 
 
 def test_ats_health_enforces_failed_and_partial_truth():

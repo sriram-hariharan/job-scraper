@@ -41,6 +41,14 @@ _APPLICATION_FLOW_PATTERN = re.compile(
 )
 _JSON_MEDIA_TYPES = frozenset({"application/json", "text/json"})
 _PUBLIC_HOSTS = frozenset({"usajobs.gov", "www.usajobs.gov"})
+_PUBLIC_AUTHORITIES = frozenset(
+    {
+        "usajobs.gov",
+        "www.usajobs.gov",
+        "usajobs.gov:443",
+        "www.usajobs.gov:443",
+    }
+)
 _PROHIBITED_URL_PATH_PARTS = (
     "/apply",
     "/application",
@@ -265,6 +273,25 @@ def _strict_nonnegative_int(value, name):
     return value
 
 
+def _usajobs_number_of_pages(value):
+    maximum_provider_pages = 10_000 // USAJOBS_RESULTS_PER_PAGE
+    if isinstance(value, bool):
+        raise _MalformedPayload("invalid page count")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+        if len(value) > len(str(maximum_provider_pages)):
+            raise _MalformedPayload("page count exceeds result window")
+        parsed = int(value)
+    else:
+        raise _MalformedPayload("invalid page count")
+    if parsed < 0:
+        raise _MalformedPayload("invalid page count")
+    if parsed > maximum_provider_pages:
+        raise _MalformedPayload("page count exceeds result window")
+    return parsed
+
+
 def _parse_page(response, page):
     payload = _response_json(response)
     search_result = payload.get("SearchResult")
@@ -283,9 +310,7 @@ def _parse_page(response, page):
     user_area = search_result.get("UserArea")
     if not isinstance(user_area, dict):
         raise _MalformedPayload("missing pagination metadata")
-    number_of_pages = _strict_nonnegative_int(
-        user_area.get("NumberOfPages"), "page count"
-    )
+    number_of_pages = _usajobs_number_of_pages(user_area.get("NumberOfPages"))
 
     if returned_count != len(items) or returned_count > total_count:
         raise _MalformedPayload("inconsistent result counts")
@@ -328,7 +353,8 @@ def _canonical_url(value, control_number):
         or parsed.hostname not in _PUBLIC_HOSTS
         or parsed.username is not None
         or parsed.password is not None
-        or port is not None
+        or parsed.netloc.lower() not in _PUBLIC_AUTHORITIES
+        or port not in {None, 443}
         or not parsed.path
         or parsed.query
         or parsed.fragment
@@ -457,6 +483,7 @@ def _metadata(descriptor, *, remote_only):
     description = _description(descriptor)
     if description:
         metadata["description"] = description
+        metadata["description_text"] = description
 
     scalar_fields = (
         ("agency", descriptor.get("OrganizationName")),

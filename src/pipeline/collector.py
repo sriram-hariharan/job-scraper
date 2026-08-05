@@ -3362,6 +3362,27 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
 
     if _is_user_pipeline_mode():
+        source_health_artifact_path = (
+            Path(corpus_path)
+            .expanduser()
+            .with_name("source_acquisition_metrics.json")
+        )
+        write_source_health_artifact = getattr(
+            source_health_metrics_owner,
+            "write_source_acquisition_metrics_artifact",
+            None,
+        )
+        if not callable(write_source_health_artifact):
+            raise RuntimeError("Run-scoped source-health artifact owner is unavailable.")
+        write_source_health_artifact(
+            persisted_source_health_metrics,
+            source_health_artifact_path,
+        )
+        logger.info(
+            "Run-scoped source acquisition metrics written: %s | rows=%s",
+            source_health_artifact_path,
+            len(persisted_source_health_metrics),
+        )
         section("PIPELINE HEALTH", logger)
         logger.info(
             "Skipping global pipeline metrics store for user pipeline run. "

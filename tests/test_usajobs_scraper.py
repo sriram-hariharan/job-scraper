@@ -8,7 +8,7 @@ import pytest
 
 from src.config import consts
 from src.discovery.crawl_scheduler import AcquisitionStatus
-from src.pipeline import collector
+from src.pipeline import collector, job_details
 from src.scrapers import usajobs_scraper
 from src.utils import http_retry, pipeline_metrics
 
@@ -108,6 +108,17 @@ def _payload(items, *, pages=1, total=None):
     }
 
 
+def _full_page_items(page):
+    first_control_number = ((page - 1) * consts.USAJOBS_RESULTS_PER_PAGE) + 1
+    return [
+        _item(str(control_number))
+        for control_number in range(
+            first_control_number,
+            first_control_number + consts.USAJOBS_RESULTS_PER_PAGE,
+        )
+    ]
+
+
 def _set_page_responses(monkeypatch, *responses):
     values = iter(responses)
     monkeypatch.setattr(
@@ -137,10 +148,121 @@ def _contains_prohibited_application_data(value):
     return any(marker in text for marker in prohibited_values)
 
 
-def test_checked_in_query_profiles_are_exactly_empty():
+def test_number_of_pages_accepts_nonnegative_integer():
+    assert usajobs_scraper._usajobs_number_of_pages(0) == 0
+    assert usajobs_scraper._usajobs_number_of_pages(12) == 12
+
+
+@pytest.mark.parametrize("value", ["0", "1", "12"])
+def test_number_of_pages_accepts_canonical_decimal_string(value):
+    assert usajobs_scraper._usajobs_number_of_pages(value) == int(value)
+
+
+def test_provider_payload_with_string_number_of_pages_parses_successfully():
+    items = [_item(str(index)) for index in range(1, 51)]
+    parsed_items, number_of_pages = usajobs_scraper._parse_page(
+        _Response(_payload(items, pages="2", total=51)),
+        1,
+    )
+    assert parsed_items == items
+    assert number_of_pages == 2
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        True,
+        False,
+        -1,
+        "+1",
+        "-1",
+        " 1",
+        "1 ",
+        "1.0",
+        "1e2",
+        "",
+        1.0,
+        None,
+        {},
+        [],
+    ],
+)
+def test_number_of_pages_rejects_noncanonical_values(value):
+    with pytest.raises(usajobs_scraper._MalformedPayload):
+        usajobs_scraper._usajobs_number_of_pages(value)
+
+
+@pytest.mark.parametrize("value", [201, "201", "9" * 5_000])
+def test_number_of_pages_exceeding_provider_window_is_rejected(value):
+    with pytest.raises(usajobs_scraper._MalformedPayload):
+        usajobs_scraper._parse_page(_Response(_payload([], pages=value, total=0)), 1)
+
+
+@pytest.mark.parametrize("field", ["SearchResultCount", "SearchResultCountAll"])
+def test_result_counts_retain_strict_integer_contract(field):
+    payload = _payload([], pages=0, total=0)
+    payload["SearchResult"][field] = "0"
+    with pytest.raises(usajobs_scraper._MalformedPayload):
+        usajobs_scraper._parse_page(_Response(payload), 1)
+
+
+def test_checked_in_query_profile_activates_exact_broad_public_it_data_scope():
     path = Path(consts.USAJOBS_QUERY_PROFILES_PATH)
-    assert path.read_text(encoding="utf-8").strip() == "[]"
-    assert json.loads(path.read_text(encoding="utf-8")) == []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload == [
+        {
+            "profile_id": "public-it-data-us",
+            "keyword": "",
+            "location_name": "",
+            "organization_codes": [],
+            "job_category_codes": [
+                "0391",
+                "0854",
+                "0855",
+                "1515",
+                "1529",
+                "1530",
+                "1550",
+                "1560",
+                "2210",
+            ],
+            "remote_only": False,
+        }
+    ]
+
+    profiles = usajobs_scraper._load_query_profiles()
+    assert len(profiles) == 1
+    assert usajobs_scraper._profile_params(profiles[0], 1) == {
+        "WhoMayApply": "Public",
+        "Fields": "Full",
+        "DatePosted": 1,
+        "ResultsPerPage": 50,
+        "Page": 1,
+        "JobCategoryCode": "0391;0854;0855;1515;1529;1530;1550;1560;2210",
+    }
+
+
+def test_active_checked_in_profile_is_eligible_for_acquisition_without_live_http(monkeypatch):
+    monkeypatch.setenv("USAJOBS_API_KEY", "fixture-key")
+    monkeypatch.setenv("USAJOBS_USER_AGENT_EMAIL", "owner@example.test")
+    captured = []
+
+    def acquire(profile, api_key, user_agent_email):
+        captured.append((profile, api_key, user_agent_email))
+        return usajobs_scraper.AcquisitionOutcome(
+            "usajobs:public-it-data-us",
+            AcquisitionStatus.SUCCESS,
+            ({"source": "usajobs", "job_id": "usajobs_123"},),
+            page_count=1,
+            raw_job_count=1,
+        )
+
+    monkeypatch.setattr(usajobs_scraper, "_fetch_profile_outcome", acquire)
+    assert usajobs_scraper.scrape_all_usajobs() == [
+        {"source": "usajobs", "job_id": "usajobs_123"}
+    ]
+    assert len(captured) == 1
+    assert captured[0][0]["profile_id"] == "public-it-data-us"
 
 
 def test_empty_profiles_exit_before_credentials_http_metrics_or_schedule(monkeypatch):
@@ -242,7 +364,7 @@ def test_profile_parameter_mapping_is_exact_and_bounded():
     assert usajobs_scraper._profile_params(profile, 2) == {
         "WhoMayApply": "Public",
         "Fields": "Full",
-        "DatePosted": 7,
+        "DatePosted": 1,
         "ResultsPerPage": 50,
         "Page": 2,
         "Keyword": "software",
@@ -367,6 +489,15 @@ def test_success_normalizes_documented_vacancy_without_application_data(monkeypa
             "Evaluations\nExperience is evaluated.\n\n"
             "Other job information\nRead more at"
         ),
+        "description_text": (
+            "Summary\nBuild public systems.\n\n"
+            "Duties\nDesign APIs\n\n"
+            "Qualifications\nQualified candidates build systems.\n\n"
+            "Education\nDegree or experience.\n\n"
+            "Requirements\nPublic trust.\n\n"
+            "Evaluations\nExperience is evaluated.\n\n"
+            "Other job information\nRead more at"
+        ),
         "agency": "Agency",
         "department": "Department",
         "subagency": "Subagency",
@@ -387,8 +518,43 @@ def test_success_normalizes_documented_vacancy_without_application_data(monkeypa
         "salary_rate_interval": "Per Year",
         "remote": True,
     }
+    assert job["description_text"] == job["description"]
     assert _contains_prohibited_application_data(job) is False
     assert "telework" not in repr(job).lower()
+
+
+def test_description_text_is_the_same_sanitized_bounded_provider_text():
+    item = _item()
+    details = item["MatchedObjectDescriptor"]["UserArea"]["Details"]
+    details["JobSummary"] = (
+        "<p>" + ("Build secure public systems. " * 10_000) + "</p>"
+        "<form>Upload a resume at https://apply.example.test</form>"
+    )
+    job = usajobs_scraper._normalize_result(item, remote_only=False)
+    assert job is not None
+    assert job["description_text"] == job["description"]
+    assert len(job["description_text"]) <= consts.USAJOBS_MAX_DESCRIPTION_CHARS
+    assert _contains_prohibited_application_data(job["description_text"]) is False
+
+
+def test_empty_sanitized_description_does_not_invent_compatibility_content():
+    item = _item()
+    descriptor = item["MatchedObjectDescriptor"]
+    descriptor["QualificationSummary"] = ""
+    details = descriptor["UserArea"]["Details"]
+    for key in (
+        "JobSummary",
+        "MajorDuties",
+        "Education",
+        "Requirements",
+        "Evaluations",
+        "OtherInformation",
+    ):
+        details[key] = ""
+    job = usajobs_scraper._normalize_result(item, remote_only=False)
+    assert job is not None
+    assert "description" not in job
+    assert "description_text" not in job
 
 
 def test_location_fallback_remote_and_invalid_optional_values(monkeypatch):
@@ -412,6 +578,73 @@ def test_location_fallback_remote_and_invalid_optional_values(monkeypatch):
     assert "salary_maximum" not in job
     assert "remote" not in job
     assert "telework" not in job
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.usajobs.gov/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:443/GetJob/ViewDetails/123",
+        "https://usajobs.gov:443/GetJob/ViewDetails/123",
+        "https://WWW.USAJOBS.GOV:443/GetJob/ViewDetails/123",
+    ],
+)
+def test_canonical_url_accepts_exact_public_https_authorities(url):
+    assert usajobs_scraper._canonical_url(url, "123") == url
+
+
+def test_provider_shaped_explicit_https_port_item_normalizes():
+    url = "https://www.usajobs.gov:443/GetJob/ViewDetails/123"
+    job = usajobs_scraper._normalize_result(_item(url=url), remote_only=False)
+    assert job is not None
+    assert job["url"] == url
+    assert job["job_id"] == "usajobs_123"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.usajobs.gov:80/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:444/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:0443/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:+443/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:-443/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:443%20/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:443 /GetJob/ViewDetails/123",
+    ],
+)
+def test_canonical_url_rejects_nondefault_or_ambiguous_ports(url):
+    assert usajobs_scraper._canonical_url(url, "123") == ""
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://user@www.usajobs.gov:443/GetJob/ViewDetails/123",
+        "https://evil.example:443/GetJob/ViewDetails/123",
+        "http://www.usajobs.gov:443/GetJob/ViewDetails/123",
+        "https://www.usajobs.gov:443",
+        "https://www.usajobs.gov:443/Apply/123",
+    ],
+)
+def test_explicit_https_port_does_not_weaken_authority_protections(url):
+    assert usajobs_scraper._canonical_url(url, "123") == ""
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.usajobs.gov:443/GetJob/ViewDetails/123?source=test",
+        "https://www.usajobs.gov:443/GetJob/ViewDetails/123#details",
+    ],
+)
+def test_explicit_https_port_preserves_query_and_fragment_protections(url):
+    assert usajobs_scraper._canonical_url(url, "123") == ""
+
+
+def test_explicit_https_port_preserves_exact_control_number_path_segment():
+    url = "https://www.usajobs.gov:443/GetJob/ViewDetails/1234"
+    assert usajobs_scraper._canonical_url(url, "123") == ""
 
 
 @pytest.mark.parametrize(
@@ -514,22 +747,127 @@ def test_later_page_failure_retains_first_page_jobs(monkeypatch, second):
     assert len(outcome.jobs) == 50
 
 
-def test_intentional_page_cap_is_success_and_logs_only_bounded_marker(monkeypatch, capsys):
-    page_one = [_item(str(index)) for index in range(1, 51)]
-    page_two = [_item(str(index)) for index in range(51, 101)]
+def test_later_page_malformed_payload_retains_first_page_jobs(monkeypatch):
+    first_items = _full_page_items(1)
     _set_page_responses(
         monkeypatch,
-        _Response(_payload(page_one, pages=3, total=150)),
-        _Response(_payload(page_two, pages=3, total=150)),
+        _Response(_payload(first_items, pages=2, total=100)),
+        _Response(raw=b"{", content_type="application/json"),
     )
     outcome = usajobs_scraper._fetch_profile_outcome(
         _profile(), "dummy-test-key", "owner@example.test"
     )
-    logged = capsys.readouterr().out
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_interrupted"
+    assert outcome.page_count == 1
+    assert outcome.raw_job_count == 50
+    assert len(outcome.jobs) == 50
+
+
+def test_single_advertised_page_causes_one_request(monkeypatch):
+    requested_pages = []
+
+    def request(_profile_value, page, *_args):
+        requested_pages.append(page)
+        return _Response(_payload([_item()], pages=1, total=1))
+
+    monkeypatch.setattr(usajobs_scraper, "_request_page", request)
+    outcome = usajobs_scraper._fetch_profile_outcome(
+        _profile(), "dummy-test-key", "owner@example.test"
+    )
+    assert requested_pages == [1]
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.page_count == 1
+    assert outcome.raw_job_count == 1
+
+
+def test_four_advertised_pages_are_requested_sequentially(monkeypatch):
+    requested_pages = []
+
+    def request(_profile_value, page, *_args):
+        requested_pages.append(page)
+        return _Response(
+            _payload(_full_page_items(page), pages=4, total=200)
+        )
+
+    monkeypatch.setattr(usajobs_scraper, "_request_page", request)
+    outcome = usajobs_scraper._fetch_profile_outcome(
+        _profile(), "dummy-test-key", "owner@example.test"
+    )
+    assert requested_pages == [1, 2, 3, 4]
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.page_count == 4
+    assert outcome.raw_job_count == 200
+    assert len(outcome.jobs) == 200
+    assert {job["job_id"] for job in outcome.jobs} == {
+        f"usajobs_{control_number}" for control_number in range(1, 201)
+    }
+
+
+def test_twenty_advertised_pages_are_completely_collected(monkeypatch):
+    requested_pages = []
+
+    def request(_profile_value, page, *_args):
+        requested_pages.append(page)
+        return _Response(
+            _payload(_full_page_items(page), pages=20, total=1_000)
+        )
+
+    monkeypatch.setattr(usajobs_scraper, "_request_page", request)
+    outcome = usajobs_scraper._fetch_profile_outcome(
+        _profile(), "dummy-test-key", "owner@example.test"
+    )
+    assert requested_pages == list(range(1, 21))
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.page_count == 20
+    assert outcome.raw_job_count == 1_000
+    assert len(outcome.jobs) == 1_000
+    assert outcome.jobs[0]["job_id"] == "usajobs_1"
+    assert outcome.jobs[-1]["job_id"] == "usajobs_1000"
+
+
+def test_empty_page_stops_pagination_and_retains_prior_jobs(monkeypatch):
+    requested_pages = []
+
+    def request(_profile_value, page, *_args):
+        requested_pages.append(page)
+        if page == 1:
+            return _Response(
+                _payload(_full_page_items(1), pages=4, total=200)
+            )
+        return _Response(_payload([], pages=0, total=0))
+
+    monkeypatch.setattr(usajobs_scraper, "_request_page", request)
+    outcome = usajobs_scraper._fetch_profile_outcome(
+        _profile(), "dummy-test-key", "owner@example.test"
+    )
+    assert requested_pages == [1, 2]
     assert outcome.status is AcquisitionStatus.SUCCESS
     assert outcome.page_count == 2
-    assert outcome.raw_job_count == 100
-    assert len(outcome.jobs) == 100
+    assert outcome.raw_job_count == 50
+    assert len(outcome.jobs) == 50
+
+
+def test_intentional_page_cap_is_success_and_logs_only_bounded_marker(monkeypatch, capsys):
+    requested_pages = []
+
+    def request(_profile_value, page, *_args):
+        requested_pages.append(page)
+        return _Response(
+            _payload(_full_page_items(page), pages=21, total=1_050)
+        )
+
+    monkeypatch.setattr(usajobs_scraper, "_request_page", request)
+    outcome = usajobs_scraper._fetch_profile_outcome(
+        _profile(), "dummy-test-key", "owner@example.test"
+    )
+    logged = capsys.readouterr().out
+    assert requested_pages == list(range(1, 21))
+    assert 21 not in requested_pages
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.page_count == 20
+    assert outcome.raw_job_count == 1_000
+    assert len(outcome.jobs) == 1_000
     assert "bounded_page_cap_reached=true" in logged
     assert "dummy-test-key" not in logged
     assert "engineer" not in logged
@@ -598,15 +936,20 @@ def test_acquisition_owner_has_no_central_relevance_predicates():
         assert marker not in source.lower()
 
 
-def test_bounds_limit_theoretical_rows_to_400():
+def test_bounds_limit_theoretical_rows_to_1000_per_profile_and_4000_total():
     assert consts.USAJOBS_MAX_QUERY_PROFILES == 4
-    assert consts.USAJOBS_MAX_PAGES_PER_PROFILE == 2
+    assert consts.USAJOBS_MAX_PAGES_PER_PROFILE == 20
     assert consts.USAJOBS_RESULTS_PER_PAGE == 50
+    assert (
+        consts.USAJOBS_MAX_PAGES_PER_PROFILE
+        * consts.USAJOBS_RESULTS_PER_PAGE
+        == 1_000
+    )
     assert (
         consts.USAJOBS_MAX_QUERY_PROFILES
         * consts.USAJOBS_MAX_PAGES_PER_PROFILE
         * consts.USAJOBS_RESULTS_PER_PAGE
-        == 400
+        == 4_000
     )
 
 
@@ -618,6 +961,42 @@ def test_collector_registers_usajobs_once_after_existing_sources_before_filter_a
     filter_position = source.index("filter_jobs(", usajobs_position)
     dedupe_position = source.index("dedupe_jobs(", filter_position)
     assert builtin_position < usajobs_position < filter_position < dedupe_position
+    assert "all_jobs.extend(jobs)" in source[usajobs_position:filter_position]
+    assert "selected_role_families=selected_role_families or None" in source[
+        filter_position:dedupe_position
+    ]
+
+
+def test_usajobs_description_survives_common_detail_stage_without_secondary_request(monkeypatch):
+    job = {
+        "source": "usajobs",
+        "job_id": "usajobs_123",
+        "description": "Sanitized provider description.",
+        "description_text": "Sanitized provider description.",
+    }
+    monkeypatch.setattr(job_details, "init_cache", lambda: None)
+    for owner in (
+        "fetch_ashby_details",
+        "fetch_builtin_details",
+        "fetch_greenhouse_details",
+        "fetch_jobvite_details",
+        "fetch_lever_details",
+        "fetch_smartrecruiters_details",
+        "fetch_workable_details",
+        "fetch_workday_details",
+    ):
+        monkeypatch.setattr(
+            job_details,
+            owner,
+            lambda *_args, _owner=owner, **_kwargs: pytest.fail(
+                f"{_owner} must not run for USAJobs"
+            ),
+        )
+
+    assert "usajobs" not in job_details.ENRICHABLE_SOURCES
+    assert job_details.enrich_job_details([job]) == [
+        {**job, "_details_fetched": "skipped"}
+    ]
 
 
 def test_usajobs_module_has_no_schedule_persistence_or_application_authority():

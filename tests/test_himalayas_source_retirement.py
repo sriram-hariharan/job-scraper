@@ -378,7 +378,7 @@ def test_history_and_automatic_pipeline_do_not_invoke_retirement_command():
         )
 
 
-def test_bounded_himalayas_profile_other_sources_default_off_and_no_new_stage():
+def test_bounded_himalayas_profile_usajobs_active_and_no_new_stage():
     assert json.loads(Path("src/config/himalayas_query_profiles.json").read_text()) == [
         {
             "profile_id": "data-us",
@@ -388,7 +388,26 @@ def test_bounded_himalayas_profile_other_sources_default_off_and_no_new_stage():
             "sort": "recent",
         }
     ]
-    assert json.loads(Path("src/config/usajobs_query_profiles.json").read_text()) == []
+    assert json.loads(Path("src/config/usajobs_query_profiles.json").read_text()) == [
+        {
+            "profile_id": "public-it-data-us",
+            "keyword": "",
+            "location_name": "",
+            "organization_codes": [],
+            "job_category_codes": [
+                "0391",
+                "0854",
+                "0855",
+                "1515",
+                "1529",
+                "1530",
+                "1550",
+                "1560",
+                "2210",
+            ],
+            "remote_only": False,
+        }
+    ]
     curated = json.loads(Path("src/config/curated_ats_sources.json").read_text())
     assert curated["personio"] == []
     collector_source = Path("src/pipeline/collector.py").read_text(encoding="utf-8")

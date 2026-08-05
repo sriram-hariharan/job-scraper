@@ -5,12 +5,37 @@ beforeEach(() => {
   vi.resetModules();
   document.body.innerHTML = '<section id="executiveKpiRoot"></section>';
   delete window.__APPLYLENS_EXECUTIVE_KPI_STATE__;
+  delete window.__APPLYLENS_SOURCE_YIELD_STATE__;
   delete window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__;
   delete window.__APPLYLENS_PLANNING_WORKLIST_STATE__;
   delete window.__APPLYLENS_DECISIONS_STATE__;
   delete window.__APPLYLENS_APPLICATIONS_STATE__;
   delete window.__APPLYLENS_DECISIONS_REACT_READY__;
   delete window.__APPLYLENS_APPLICATIONS_REACT_READY__;
+});
+
+it("hydrates and refreshes the source yield island from the status bridge", async () => {
+  document.body.innerHTML = '<section id="sourceYieldRoot"></section>';
+  window.__APPLYLENS_SOURCE_YIELD_STATE__ = {
+    status: "ready",
+    data: {
+      available: true,
+      run_id: "run-source-yield",
+      generated_from: { source_health_report: true, source_acquisition_metrics: true, current_run_job_corpus: false },
+      totals: { source_count: 0, accounts_queried: 0, scraped_jobs: 0, title_pass_jobs: 0, location_pass_jobs: 0, freshness_pass_jobs: 0, final_corpus_jobs: 0, final_display_jobs: 0 },
+      sources: [],
+    },
+  };
+
+  await act(async () => { await import("./main"); });
+  await waitFor(() => expect(screen.getByText("No source activity")).toBeInTheDocument());
+
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("applylens:source-yield-state", {
+      detail: { status: "error", message: "source refresh failed" },
+    }));
+  });
+  await waitFor(() => expect(screen.getByText("source refresh failed")).toBeInTheDocument());
 });
 
 it("updates the mounted KPI island when the existing status owner publishes refresh states", async () => {

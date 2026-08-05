@@ -27715,6 +27715,8 @@ def _latest_user_pipeline_artifact_context(
     tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
     operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
     corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
+    source_health_report_text = _artifact_text_by_name(artifacts, "source_health_report.csv")
+    source_acquisition_metrics_text = _artifact_text_by_name(artifacts, "source_acquisition_metrics.json")
     workflow_summary = _agentic_workflow_summary_from_artifacts(artifacts)
     workflow_verification = _agentic_workflow_verification_from_artifacts(artifacts)
 
@@ -27744,6 +27746,8 @@ def _latest_user_pipeline_artifact_context(
         "agentic_workflow_summary": workflow_summary,
         "agentic_workflow_verification": workflow_verification,
         "current_run_job_corpus_text": corpus_text,
+        "source_health_report_text": source_health_report_text,
+        "source_acquisition_metrics_text": source_acquisition_metrics_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
         "zero_result_run": zero_result_run,
     }
@@ -27781,6 +27785,8 @@ def _latest_user_pipeline_filesystem_context(
     tailoring_decision_text = _read_text_if_file(output_dir / "tailoring_decision_recommendations.csv")
     operator_review_text = _read_text_if_file(output_dir / "operator_review_recommendations.csv")
     corpus_text = _read_text_if_file(output_dir / "current_run_job_corpus.jsonl")
+    source_health_report_text = _read_text_if_file(output_dir / "source_health_report.csv")
+    source_acquisition_metrics_text = _read_text_if_file(output_dir / "source_acquisition_metrics.json")
 
     status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
     final_job_count = run.get("final_job_count", status_json.get("final_job_count"))
@@ -27809,8 +27815,190 @@ def _latest_user_pipeline_filesystem_context(
         "agentic_workflow_summary": _agentic_workflow_summary_from_dir(output_dir),
         "agentic_workflow_verification": _agentic_workflow_verification_from_dir(output_dir),
         "current_run_job_corpus_text": corpus_text,
+        "source_health_report_text": source_health_report_text,
+        "source_acquisition_metrics_text": source_acquisition_metrics_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
         "zero_result_run": zero_result_run,
+    }
+
+
+SOURCE_YIELD_FUNNEL_FIELDS = (
+    "scraped_jobs",
+    "title_pass_jobs",
+    "title_reject_jobs",
+    "location_pass_jobs",
+    "location_reject_jobs",
+    "freshness_pass_jobs",
+    "not_recent_jobs",
+    "missing_timestamp_jobs",
+    "final_corpus_jobs",
+    "final_display_jobs",
+)
+SOURCE_YIELD_ACQUISITION_FIELDS = (
+    "raw_job_count",
+    "normalized_job_count",
+    "page_count",
+    "request_count",
+    "retry_count",
+    "partial_result_count",
+    "timestamp_present_count",
+    "timestamp_missing_count",
+    "description_present_count",
+    "description_missing_count",
+    "canonical_url_present_count",
+    "canonical_url_missing_count",
+)
+SOURCE_YIELD_STATUS_VALUES = ("SUCCESS", "PARTIAL", "EMPTY", "FAILED")
+
+
+def _source_yield_nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(float(str(value or "0").strip())))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _source_yield_source(value: Any) -> str:
+    return " ".join(_clean_text(value).lower().split())
+
+
+def _empty_source_yield_row(source: str) -> Dict[str, Any]:
+    return {
+        "source": source,
+        "accounts_queried": 0,
+        **{field: 0 for field in SOURCE_YIELD_FUNNEL_FIELDS},
+        "yield_percent": 0.0,
+        **{field: 0 for field in SOURCE_YIELD_ACQUISITION_FIELDS},
+        "acquisition_status_counts": {status: 0 for status in SOURCE_YIELD_STATUS_VALUES},
+    }
+
+
+def _source_yield_payload(
+    *,
+    run_id: Any = "",
+    source_health_report_text: Any = "",
+    source_acquisition_metrics_text: Any = "",
+    current_run_job_corpus_text: Any = "",
+) -> Dict[str, Any]:
+    health_text = str(source_health_report_text or "")
+    acquisition_text = str(source_acquisition_metrics_text or "")
+    corpus_text = str(current_run_job_corpus_text or "")
+    health_present = bool(health_text.strip())
+    acquisition_present = bool(acquisition_text.strip())
+    rows_by_source: Dict[str, Dict[str, Any]] = {}
+    health_sources = set()
+    stage_final_counts: Dict[str, int] = {}
+
+    if health_present:
+        try:
+            for raw_row in csv.DictReader(health_text.splitlines()):
+                row = dict(raw_row or {})
+                source = _source_yield_source(row.get("source"))
+                if not source:
+                    continue
+                target = rows_by_source.setdefault(source, _empty_source_yield_row(source))
+                health_sources.add(source)
+                for field in SOURCE_YIELD_FUNNEL_FIELDS:
+                    target[field] += _source_yield_nonnegative_int(row.get(field))
+        except (csv.Error, TypeError, ValueError):
+            pass
+
+    acquisition_payload: Dict[str, Any] = {}
+    if acquisition_present:
+        try:
+            parsed = json.loads(acquisition_text)
+            if isinstance(parsed, dict):
+                acquisition_payload = parsed
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    acquisition_rows = acquisition_payload.get("acquisition_metrics", [])
+    if isinstance(acquisition_rows, list):
+        for raw_row in acquisition_rows:
+            if not isinstance(raw_row, dict):
+                continue
+            source = _source_yield_source(raw_row.get("source"))
+            if not source:
+                continue
+            target = rows_by_source.setdefault(source, _empty_source_yield_row(source))
+            target["accounts_queried"] += 1
+            for field in SOURCE_YIELD_ACQUISITION_FIELDS:
+                target[field] += _source_yield_nonnegative_int(raw_row.get(field))
+            status = _clean_text(raw_row.get("acquisition_status")).upper()
+            if status in SOURCE_YIELD_STATUS_VALUES:
+                target["acquisition_status_counts"][status] += 1
+
+    stage_rows = acquisition_payload.get("source_stage_metrics", [])
+    if isinstance(stage_rows, list):
+        for raw_row in stage_rows:
+            if not isinstance(raw_row, dict):
+                continue
+            source = _source_yield_source(raw_row.get("source"))
+            if not source:
+                continue
+            rows_by_source.setdefault(source, _empty_source_yield_row(source))
+            stage_final_counts[source] = (
+                stage_final_counts.get(source, 0)
+                + _source_yield_nonnegative_int(raw_row.get("final_retained_job_count"))
+            )
+
+    for source, target in rows_by_source.items():
+        if source not in health_sources:
+            target["scraped_jobs"] = target["raw_job_count"]
+
+    for source, final_count in stage_final_counts.items():
+        if source not in health_sources:
+            rows_by_source[source]["final_corpus_jobs"] = final_count
+            rows_by_source[source]["final_display_jobs"] = final_count
+
+    corpus_fallback_used = False
+    if (health_present or acquisition_present) and corpus_text.strip():
+        corpus_counts: Counter[str] = Counter()
+        for line in corpus_text.splitlines():
+            try:
+                corpus_row = json.loads(line)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+            if not isinstance(corpus_row, dict):
+                continue
+            source = _source_yield_source(corpus_row.get("source"))
+            if source:
+                corpus_counts[source] += 1
+        for source, count in corpus_counts.items():
+            target = rows_by_source.setdefault(source, _empty_source_yield_row(source))
+            if source not in health_sources and source not in stage_final_counts:
+                target["final_corpus_jobs"] = count
+                target["final_display_jobs"] = count
+                corpus_fallback_used = True
+
+    sources = list(rows_by_source.values())
+    for row in sources:
+        acquired = row["scraped_jobs"] or row["raw_job_count"]
+        row["yield_percent"] = round((row["final_display_jobs"] / acquired) * 100, 1) if acquired else 0.0
+    sources.sort(key=lambda row: (-row["final_display_jobs"], -row["final_corpus_jobs"], row["source"]))
+
+    total_fields = (
+        "accounts_queried",
+        "scraped_jobs",
+        "title_pass_jobs",
+        "location_pass_jobs",
+        "freshness_pass_jobs",
+        "final_corpus_jobs",
+        "final_display_jobs",
+    )
+    return {
+        "available": health_present or acquisition_present,
+        "run_id": _clean_text(run_id),
+        "generated_from": {
+            "source_health_report": health_present,
+            "source_acquisition_metrics": acquisition_present,
+            "current_run_job_corpus": corpus_fallback_used,
+        },
+        "totals": {
+            "source_count": len(sources),
+            **{field: sum(row[field] for row in sources) for field in total_fields},
+        },
+        "sources": sources,
     }
 
 
@@ -27934,6 +28122,12 @@ def status_payload(
             manifest_rows=manifest_rows,
         )
         job_corpus_rows = int(artifact_context.get("job_corpus_rows", 0) or 0)
+        source_yield = _source_yield_payload(
+            run_id=artifact_context.get("run_id", ""),
+            source_health_report_text=artifact_context.get("source_health_report_text", ""),
+            source_acquisition_metrics_text=artifact_context.get("source_acquisition_metrics_text", ""),
+            current_run_job_corpus_text=artifact_context.get("current_run_job_corpus_text", ""),
+        )
         if _clean_text(artifact_context.get("output_dir")):
             planning_output_dir_value = _clean_text(artifact_context.get("output_dir"))
         else:
@@ -27954,6 +28148,11 @@ def status_payload(
         agentic_workflow_verification = _agentic_workflow_verification_from_dir(output_dir)
         merged_rows = ja._build_job_index(output_dir)
         job_corpus_rows = ja._count_jsonl_rows(job_corpus)
+        source_yield = _source_yield_payload(
+            source_health_report_text=_read_text_if_file(output_dir / "source_health_report.csv"),
+            source_acquisition_metrics_text=_read_text_if_file(output_dir / "source_acquisition_metrics.json"),
+            current_run_job_corpus_text=_read_text_if_file(job_corpus),
+        )
         planning_output_dir_value = str(output_dir)
 
     decision_rows = _load_latest_operator_decision_rows(owner_user_id=owner_user_id)
@@ -28108,6 +28307,7 @@ def status_payload(
         "llm_tailoring_status_counts": dict(sorted(llm_tailoring_counts.items())),
         "agentic_workflow_summary": agentic_workflow_summary,
         "agentic_workflow_verification": agentic_workflow_verification,
+        "source_yield": source_yield,
         "top_queue_rows": top_queue,
     }
 

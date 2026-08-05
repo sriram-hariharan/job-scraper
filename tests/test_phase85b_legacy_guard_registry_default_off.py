@@ -50,6 +50,7 @@ from tests.support.phase_guard_registry import (
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
+    SOURCE_YIELD_UI_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
@@ -640,6 +641,9 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     phase133d_profile = legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
     phase133g_profile = legacy_guard_allowlist("phase133g_premium_planning_dashboard")
     phase133ef_profile = legacy_guard_allowlist("phase133ef_decisions_applications_dashboards")
+    source_yield_ui_profile = legacy_guard_allowlist("source_yield_ui")
+    assert source_yield_ui_profile == SOURCE_YIELD_UI_FILES
+    assert not any("*" in path for path in source_yield_ui_profile)
     expected_phase132_profile = {
         "src/app/api.py",
         "src/app/onboarding_ui.py",
@@ -1669,6 +1673,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133d_profile
         | phase133g_profile
         | phase133ef_profile
+        | source_yield_ui_profile
         | phase133h_profile
         | scheduler_admin_health_profile
         | scheduler_visual_correction_profile

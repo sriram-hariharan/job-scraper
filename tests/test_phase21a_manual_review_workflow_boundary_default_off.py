@@ -148,6 +148,7 @@ def test_protected_runtime_files_are_unchanged():
             "recruitee_source_integration",
             "phase2d_a_independent_seniority_policy",
             "phase2d_b2_strict_seniority_filter",
+            "source_yield_ui",
         ),
     )
 
@@ -2114,6 +2115,12 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
     }
     if set(changed_runtime_files) == phase133a_executive_kpi_runtime_files:
+        return
+    source_yield_ui_runtime_files = phase133a_executive_kpi_runtime_files | {
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app_redesign.css",
+    }
+    if set(changed_runtime_files) == source_yield_ui_runtime_files:
         return
     phase133b_executive_dashboard_runtime_files = (
         phase133a_executive_kpi_runtime_files

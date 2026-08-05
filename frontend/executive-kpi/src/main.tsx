@@ -3,6 +3,12 @@ import { createRoot } from "react-dom/client";
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
 import type { ExecutiveKpiState } from "./AnalyticsDashboard";
 import {
+  DEFAULT_SOURCE_YIELD_STATE,
+  SOURCE_YIELD_EVENT,
+  SourceYield,
+  type SourceYieldState,
+} from "./SourceYield";
+import {
   DEFAULT_QUEUE_STATE,
   ExecutiveQueue,
   QUEUE_STATE_EVENT,
@@ -39,7 +45,25 @@ const DEFAULT_STATE: ExecutiveKpiState = { status: "loading" };
 declare global {
   interface Window {
     __APPLYLENS_EXECUTIVE_KPI_STATE__?: ExecutiveKpiState;
+    __APPLYLENS_SOURCE_YIELD_STATE__?: SourceYieldState;
   }
+}
+
+function SourceYieldIsland() {
+  const [state, setState] = useState<SourceYieldState>(
+    () => window.__APPLYLENS_SOURCE_YIELD_STATE__ || DEFAULT_SOURCE_YIELD_STATE,
+  );
+
+  useEffect(() => {
+    const handleState = (event: Event) => {
+      const nextState = (event as CustomEvent<SourceYieldState>).detail;
+      if (nextState?.status) setState(nextState);
+    };
+    window.addEventListener(SOURCE_YIELD_EVENT, handleState);
+    return () => window.removeEventListener(SOURCE_YIELD_EVENT, handleState);
+  }, []);
+
+  return <SourceYield state={state} />;
 }
 
 function ExecutiveKpiIsland() {
@@ -137,6 +161,15 @@ if (queueMount) {
   createRoot(queueMount).render(
     <StrictMode>
       <ExecutiveQueueIsland />
+    </StrictMode>,
+  );
+}
+
+const sourceYieldMount = document.getElementById("sourceYieldRoot");
+if (sourceYieldMount) {
+  createRoot(sourceYieldMount).render(
+    <StrictMode>
+      <SourceYieldIsland />
     </StrictMode>,
   );
 }

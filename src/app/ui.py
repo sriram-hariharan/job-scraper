@@ -68,6 +68,16 @@ def executive_dashboard() -> str:
       <noscript>Enable JavaScript to view the Executive queue metrics.</noscript>
     </section>
 
+    <section
+      id="sourceYieldRoot"
+      class="source-yield-root"
+      aria-label="Source yield"
+      aria-live="polite"
+    >
+      <div class="source-yield-server-fallback">Loading source yield...</div>
+      <noscript>Enable JavaScript to view source yield.</noscript>
+    </section>
+
     <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
     <section
       id="executiveQueueRoot"

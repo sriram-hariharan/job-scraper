@@ -185,7 +185,7 @@ html[data-theme="light"] .notification-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -208,7 +208,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button),
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
   color: #ffffff !important;
@@ -227,7 +227,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .job-apply-btn:not(:disabled):hover,
 .apply-btn:not(:disabled):hover,
@@ -243,6 +243,39 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   opacity: 0.58 !important;
   transform: none !important;
   box-shadow: none !important;
+}
+
+body .source-yield-source-button {
+  min-height: 34px !important;
+  padding: 4px 8px !important;
+  border: 1px solid color-mix(in srgb, var(--app-border-2) 82%, transparent) !important;
+  border-radius: 9px !important;
+  background: color-mix(in srgb, var(--app-primary) 7%, var(--app-surface-3)) !important;
+  color: color-mix(in srgb, var(--app-text) 88%, #334e72) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body .source-yield-source-button:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--app-primary) 28%, var(--app-border-2)) !important;
+  background: color-mix(in srgb, var(--app-primary) 11%, var(--app-surface-3)) !important;
+  box-shadow: 0 2px 7px rgba(51, 78, 114, 0.09) !important;
+  transform: none !important;
+}
+
+body .source-yield-source-button:focus-visible {
+  outline: 3px solid var(--app-focus) !important;
+  outline-offset: 2px;
+}
+
+html[data-theme="dark"] body .source-yield-source-button {
+  border-color: var(--app-border-2) !important;
+  background: color-mix(in srgb, var(--app-primary) 14%, var(--app-surface-2)) !important;
+  color: var(--app-text) !important;
+}
+
+html[data-theme="dark"] body .source-yield-source-button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--app-primary) 20%, var(--app-surface-2)) !important;
 }
 
 input,

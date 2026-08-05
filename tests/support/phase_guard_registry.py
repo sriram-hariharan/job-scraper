@@ -759,6 +759,26 @@ PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES = {
     "tests/test_user_pipeline_role_preferences.py",
 }
 
+SOURCE_YIELD_UI_FILES = {
+    "frontend/executive-kpi/src/SourceYield.test.tsx",
+    "frontend/executive-kpi/src/SourceYield.tsx",
+    "frontend/executive-kpi/src/main.test.tsx",
+    "frontend/executive-kpi/src/main.tsx",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/services.py",
+    "src/app/static/app.js",
+    "src/app/static/app_redesign.css",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/app/ui.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_source_yield_status.py",
+    "tests/test_source_yield_ui_contract.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -833,6 +853,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "usajobs_source_integration": USAJOBS_SOURCE_INTEGRATION_FILES,
         "personio_source_integration": PERSONIO_SOURCE_INTEGRATION_FILES,
         "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
+        "source_yield_ui": SOURCE_YIELD_UI_FILES,
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -2041,6 +2062,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item2_phase3_shared_page_header_foundation")
         | legacy_guard_allowlist("item2_phase4_secondary_page_headers")
         | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
+        | legacy_guard_allowlist("source_yield_ui")
         | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
         | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
         | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")
@@ -2249,6 +2271,10 @@ def assert_protected_hashes(
             "81eede647edd99ca1f8c0f5b759b35ecf40e223db9d9dbd4b976f487ecf49961",
         ): "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
         (
+            "src/app/static/app_redesign.css",
+            "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
+        ): "f544310044957fcd28c74e9375093695a0b94814e2473435ff1fdefe7fc93df5",
+        (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
         ): "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
@@ -2270,6 +2296,7 @@ def assert_protected_hashes(
             "11cbcf9097bfaa72f6695fc85afd432a6cae6c71efc78bb4ec1e694e037e21a6",
             "0fbfc4ee3b57b29626cce7ffdbd9b1f9a8e1e3475f098371a398161dabfbe51e",
             "e25bf271beb6da9bc27597d1c2a8b564b36970f4db31ce763f5d3a08523419fc",
+            "ea8e18c8a25c3630e389a527a42b238bdd09084e3c89b07ed12ec348eec54caf",
         }),
             (
                 "src/agents/jd_intelligence.py",

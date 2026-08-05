@@ -68,10 +68,16 @@ def load_curated_ats_sources(path: Optional[Path | str] = None) -> Dict[str, Lis
 def _default_validators() -> Dict[str, Callable[[Iterable[str]], Iterable[str]]]:
     from src.discovery.greenhouse_api_discovery import validate_greenhouse_companies
     from src.scrapers.lever_scraper import validate_lever_companies
+    from src.scrapers.personio_scraper import validate_personio_companies
+    from src.scrapers.recruitee_scraper import validate_recruitee_companies
+    from src.scrapers.workable_scraper import validate_workable_companies
 
     return {
         "greenhouse": validate_greenhouse_companies,
         "lever": validate_lever_companies,
+        "personio": validate_personio_companies,
+        "recruitee": validate_recruitee_companies,
+        "workable": validate_workable_companies,
     }
 
 

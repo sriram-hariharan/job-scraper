@@ -41,6 +41,20 @@ def _job(title):
     }
 
 
+def _usajobs_job(title, **overrides):
+    job = {
+        "title": title,
+        "company": "Federal Agency",
+        "location": "Washington, District of Columbia",
+        "source": "usajobs",
+        "posted_at": datetime.now(timezone.utc).isoformat(),
+        "description": "Sanitized federal vacancy description.",
+        "description_text": "Sanitized federal vacancy description.",
+    }
+    job.update(overrides)
+    return job
+
+
 def _write_launch_config(path, preferences):
     path.write_text(
         json.dumps(
@@ -76,6 +90,56 @@ def test_missing_preferences_preserves_default_data_ai_behavior():
     filtered = filter_jobs(jobs, selected_role_families=None)
 
     assert [job["title"] for job in filtered] == ["Data Scientist"]
+
+
+@pytest.mark.parametrize(
+    ("role_family", "selected_title", "unselected_title"),
+    [
+        ("systems_it", "Systems Engineer", "Security Engineer"),
+        ("security", "Security Analyst", "Cloud Engineer"),
+        ("software_engineering", "Software Developer", "Data Engineer"),
+        ("cloud_devops", "Cloud Infrastructure Engineer", "Systems Administrator"),
+        ("data_engineering", "Data Engineer", "Data Scientist"),
+        ("data_science", "Data Scientist", "Analytics Engineer"),
+        ("analytics", "Data Analyst", "Software Engineer"),
+    ],
+)
+def test_usajobs_titles_use_selected_central_role_family_only(
+    role_family,
+    selected_title,
+    unselected_title,
+):
+    filtered = filter_jobs(
+        [_usajobs_job(selected_title), _usajobs_job(unselected_title)],
+        selected_role_families=[role_family],
+    )
+    assert [job["title"] for job in filtered] == [selected_title]
+
+
+def test_usajobs_uses_default_central_families_when_none_selected():
+    filtered = filter_jobs(
+        [_usajobs_job("Data Scientist"), _usajobs_job("Systems Engineer")],
+        selected_role_families=None,
+    )
+    assert [job["title"] for job in filtered] == ["Data Scientist"]
+
+
+def test_usajobs_central_seniority_and_excluded_keyword_contracts_are_unchanged():
+    jobs = [
+        _usajobs_job("Senior Data Scientist"),
+        _usajobs_job(
+            "Data Scientist",
+            description_text="Intern program for data scientists.",
+        ),
+    ]
+    filtered = filter_jobs(
+        jobs,
+        selected_role_families=["data_science"],
+        target_seniority=["senior"],
+        seniority_strict_match=True,
+        excluded_keywords=["intern"],
+    )
+    assert [job["title"] for job in filtered] == ["Senior Data Scientist"]
 
 
 class _FakeProcess:
@@ -126,7 +190,8 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
                 "preferences": {
                     "onboarding_completed": True,
                     "selected_role_families": ["backend_engineering"],
-                    "target_seniority": ["senior"],
+                        "target_seniority": ["senior"],
+                        "seniority_strict_match": True,
                     "preferred_locations": ["New York"],
                     "preferred_skills": ["Python"],
                     "excluded_keywords": ["intern"],
@@ -169,6 +234,7 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
 
     assert payload["pipeline"]["config"]["selected_role_families"] == ["backend_engineering"]
     assert payload["pipeline"]["config"]["preferences"]["target_seniority"] == ["senior"]
+    assert payload["pipeline"]["config"]["preferences"]["seniority_strict_match"] is True
     assert captured["state"]["config"]["selected_role_families"] == ["backend_engineering"]
     assert captured["state"]["config"]["preferences"]["target_seniority"] == ["senior"]
     assert captured["state"]["config"]["preference_runtime"] == {
@@ -176,6 +242,7 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
         "requested": {
             "selected_role_families": ["backend_engineering"],
             "target_seniority": ["senior"],
+            "seniority_strict_match": True,
             "preferred_locations": ["New York"],
             "preferred_skills": ["Python"],
             "excluded_keywords": ["intern"],
@@ -296,9 +363,97 @@ def test_malformed_launch_preferences_do_not_partially_apply(tmp_path):
         "preferred_locations": [],
         "preferred_skills": [],
         "excluded_keywords": [],
+        "seniority_strict_match": False,
     }
     assert preference_runtime["effective"] == preference_runtime["requested"]
     assert set(preference_runtime["sources"].values()) == {"defaults"}
+
+
+def test_launch_seniority_is_canonical_and_invalid_snapshot_is_all_or_nothing(tmp_path):
+    valid_path = _write_launch_config(
+        tmp_path / "valid_seniority_launch.json",
+        {
+            "selected_role_families": ["backend_engineering"],
+            "target_seniority": [" STAFF_OR_ABOVE ", "staff"],
+        },
+    )
+    valid = collector.resolve_pipeline_preference_runtime(
+        env={"JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH": str(valid_path)}
+    )
+    assert valid["requested"]["target_seniority"] == ["staff"]
+    assert valid["effective"]["target_seniority"] == ["staff"]
+    assert valid["sources"]["target_seniority"] == "launch_config"
+
+    invalid_path = _write_launch_config(
+        tmp_path / "invalid_seniority_launch.json",
+        {
+            "selected_role_families": ["backend_engineering"],
+            "target_seniority": ["principal"],
+        },
+    )
+    invalid = collector.resolve_pipeline_preference_runtime(
+        env={"JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH": str(invalid_path)}
+    )
+    assert invalid["requested"] == {
+        "selected_role_families": [],
+        "target_seniority": [],
+        "preferred_locations": [],
+        "preferred_skills": [],
+        "excluded_keywords": [],
+        "seniority_strict_match": False,
+    }
+    assert invalid["effective"] == invalid["requested"]
+    assert set(invalid["sources"].values()) == {"defaults"}
+
+
+def test_explicit_seniority_override_is_canonical_and_invalid_isolated(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        collector.logger,
+        "warning",
+        lambda message, *args: warnings.append(message % args if args else message),
+    )
+    legacy = collector.resolve_pipeline_preference_runtime(
+        env={"JOB_STACK_TARGET_SENIORITY": '["staff_or_above", "STAFF"]'}
+    )
+    assert legacy["effective"]["target_seniority"] == ["staff"]
+    assert legacy["sources"]["target_seniority"] == "explicit_override"
+
+    invalid = collector.resolve_pipeline_preference_runtime(
+        env={
+            "JOB_STACK_TARGET_SENIORITY": '["principal"]',
+            "JOB_STACK_SELECTED_ROLE_FAMILIES": '["backend_engineering"]',
+        }
+    )
+    assert invalid["effective"]["target_seniority"] == []
+    assert invalid["effective"]["selected_role_families"] == ["backend_engineering"]
+    assert invalid["sources"]["target_seniority"] == "explicit_override"
+    assert invalid["sources"]["selected_role_families"] == "explicit_override"
+    assert any(
+        "Ignoring unsupported JOB_STACK_TARGET_SENIORITY" in message
+        for message in warnings
+    )
+
+
+def test_effective_hash_uses_canonical_seniority_values():
+    legacy = collector._normalized_preference_snapshot(
+        {"target_seniority": ["staff_or_above"]}
+    )
+    canonical = collector._normalized_preference_snapshot(
+        {"target_seniority": ["staff"]}
+    )
+    assert legacy == canonical
+    assert collector._preference_snapshot_sha256(legacy) == collector._preference_snapshot_sha256(canonical)
+
+
+def test_effective_hash_includes_strict_seniority_boolean():
+    flexible = collector._normalized_preference_snapshot(
+        {"target_seniority": ["senior"], "seniority_strict_match": False}
+    )
+    strict = collector._normalized_preference_snapshot(
+        {"target_seniority": ["senior"], "seniority_strict_match": True}
+    )
+    assert collector._preference_snapshot_sha256(flexible) != collector._preference_snapshot_sha256(strict)
 
 
 def test_effective_preference_hash_is_canonical_distinct_and_secret_free(tmp_path):
@@ -416,6 +571,8 @@ def _install_drop_pct_collector_fakes(
     filtered_count,
     graph_route,
     user_pipeline,
+    scraper_source="workday",
+    selected_role_families=None,
 ):
     captured = {
         "logs": [],
@@ -438,8 +595,9 @@ def _install_drop_pct_collector_fakes(
         "resolve_pipeline_preference_runtime",
         lambda: {
             "effective": {
-                "selected_role_families": [],
+                "selected_role_families": list(selected_role_families or []),
                 "target_seniority": [],
+                "seniority_strict_match": False,
                 "preferred_locations": [],
                 "preferred_skills": [],
                 "excluded_keywords": [],
@@ -561,7 +719,10 @@ def _install_drop_pct_collector_fakes(
             "skipped_samples": [],
             "skipped_jobs": [],
         },
-        build_job_intelligence=lambda row: dict(row),
+        build_job_intelligence=lambda row: (
+            captured.setdefault("intelligence_inputs", []).append(dict(row))
+            or dict(row)
+        ),
         filter_jobs_for_ai_evaluation=lambda rows: list(rows),
     )
     install_module(
@@ -585,11 +746,16 @@ def _install_drop_pct_collector_fakes(
     )
     install_module(
         "src.pipeline.job_details",
-        enrich_job_details=lambda rows: list(rows),
+        enrich_job_details=lambda rows: (
+            captured.setdefault("detail_inputs", []).extend(dict(row) for row in rows)
+            or list(rows)
+        ),
     )
 
-    def direct_filter(_rows, **_kwargs):
+    def direct_filter(_rows, **kwargs):
         captured["route_events"].append("direct_filter")
+        captured["filter_inputs"] = list(_rows)
+        captured["filter_kwargs"] = dict(kwargs)
         return list(filtered_jobs), {}
 
     install_module(
@@ -618,11 +784,16 @@ def _install_drop_pct_collector_fakes(
         "src.scrapers.ashby_scraper": "scrape_all_ashby",
         "src.scrapers.workable_scraper": "scrape_all_workable",
         "src.scrapers.jobvite_scraper": "scrape_all_jobvite",
+        "src.scrapers.personio_scraper": "scrape_all_personio",
+        "src.scrapers.recruitee_scraper": "scrape_all_recruitee",
         "src.scrapers.smartrecruiters_scraper": "scrape_all_smartrecruiters",
         "src.scrapers.builtin_scraper": "scrape_all_builtin",
+        "src.scrapers.usajobs_scraper": "scrape_all_usajobs",
+        "src.scrapers.himalayas_scraper": "scrape_all_himalayas",
     }
-    for index, (module_name, function_name) in enumerate(scraper_modules.items()):
-        rows = list(jobs) if index == 0 else []
+    selected_scraper_module = f"src.scrapers.{scraper_source}_scraper"
+    for module_name, function_name in scraper_modules.items():
+        rows = list(jobs) if module_name == selected_scraper_module else []
         install_module(module_name, **{function_name: lambda rows=rows, **_kwargs: rows})
 
     def global_metrics_not_allowed(*_args, **_kwargs):
@@ -681,7 +852,9 @@ def _install_drop_pct_collector_fakes(
             [row["job_id"] for row in rows],
         ),
         load_seen_job_ids=lambda: set(),
+        save_new_job_records=lambda _records: None,
         save_new_job_ids=lambda _ids: None,
+        structured_seen_records_for_jobs=lambda rows: list(rows),
     )
 
     def log_stage_metrics(stage, rows):
@@ -757,6 +930,62 @@ def test_completed_collector_paths_share_defined_drop_pct(
     if user_pipeline:
         assert "current_metrics" not in captured
         assert "persisted_metrics" not in captured
+        assert (tmp_path / "source_acquisition_metrics.json").is_file()
     else:
         assert captured["current_metrics"]["drop_pct"] == expected_drop_pct
         assert captured["persisted_metrics"]["drop_pct"] == expected_drop_pct
+        assert not (tmp_path / "source_acquisition_metrics.json").exists()
+
+
+def test_usajobs_rows_join_common_collector_filter_and_only_retained_rows_continue(
+    monkeypatch,
+    tmp_path,
+):
+    jobs = [
+        {
+            "job_id": "usajobs_1",
+            "source": "usajobs",
+            "title": "Data Scientist",
+            "company": "Federal Agency",
+            "location": "Washington, District of Columbia",
+            "description_text": "Retained sanitized provider description.",
+        },
+        {
+            "job_id": "usajobs_2",
+            "source": "usajobs",
+            "title": "Systems Engineer",
+            "company": "Federal Agency",
+            "location": "Washington, District of Columbia",
+            "description_text": "Filtered sanitized provider description.",
+        },
+    ]
+    captured = _install_drop_pct_collector_fakes(
+        monkeypatch,
+        tmp_path,
+        jobs=jobs,
+        filtered_count=1,
+        graph_route=False,
+        user_pipeline=True,
+        scraper_source="usajobs",
+        selected_role_families=["data_science"],
+    )
+
+    result = asyncio.run(collector.collect_all_jobs_async())
+
+    assert [row["job_id"] for row in captured["filter_inputs"]] == [
+        "usajobs_1",
+        "usajobs_2",
+    ]
+    assert captured["filter_kwargs"]["selected_role_families"] == [
+        "data_science"
+    ]
+    assert [row["job_id"] for row in captured["detail_inputs"]] == [
+        "usajobs_1"
+    ]
+    assert [row["job_id"] for row in captured["intelligence_inputs"]] == [
+        "usajobs_1"
+    ]
+    assert captured["intelligence_inputs"][0]["description_text"] == (
+        "Retained sanitized provider description."
+    )
+    assert [row["job_id"] for row in result] == ["usajobs_1"]

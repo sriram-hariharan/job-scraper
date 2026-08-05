@@ -5,18 +5,6 @@ from typing import Any, Dict, Iterable, List, Pattern, Tuple
 
 
 COMMON_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = (
-    r"\bstaff\b",
-    r"\bprincipal\b",
-    r"\blead\b",
-    r"\bmember of technical staff\b",
-    r"\bmts\b",
-    r"\bdirector\b",
-    r"\bvp\b",
-    r"\bvice president\b",
-    r"\bhead of\b",
-    r"\bmanager\b",
-    r"\bintern\b",
-    r"\bstudent\b",
     r"\brecruiter\b",
     r"\bsales\b",
     r"\bgtm\b",
@@ -40,6 +28,27 @@ COMMON_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = (
     r"\bcontent creator\b",
     r"\bcreative producer\b",
     r"\bvideo editor\b",
+)
+
+TECHNICAL_PRODUCT_MANAGEMENT_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = tuple(
+    pattern
+    for pattern in COMMON_TITLE_EXCLUDE_PATTERNS
+    if pattern not in {r"\bmanager\b", r"\bproduct manager\b"}
+) + (
+    r"\bassociate product manager\b",
+    r"\bmarketing product manager\b",
+    r"\bproduct marketing manager\b",
+    r"\bcustomer product manager\b",
+)
+
+TECHNICAL_PROGRAM_MANAGEMENT_TITLE_EXCLUDE_PATTERNS: Tuple[str, ...] = tuple(
+    pattern
+    for pattern in COMMON_TITLE_EXCLUDE_PATTERNS
+    if pattern != r"\bmanager\b"
+) + (
+    r"\bproject manager\b",
+    r"\bimplementation project manager\b",
+    r"\bsales program manager\b",
 )
 
 DEFAULT_ROLE_FAMILY_IDS: Tuple[str, ...] = (
@@ -147,6 +156,7 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "data_engineering",
         "display_name": "Data Engineering",
         "title_include_patterns": (
+            r"\bdatabase engineer\b",
             r"data engineer",
             r"data software engineer",
             r"software engineer data",
@@ -345,6 +355,8 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "software_engineering",
         "display_name": "Software Engineering",
         "title_include_patterns": (
+            r"\bmobile (?:software )?(?:engineer|developer)\b",
+            r"\b(?:ios|android) (?:software )?(?:engineer|developer)\b",
             r"software engineer",
             r"\bswe\b",
             r"software development engineer",
@@ -537,6 +549,7 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "systems_it",
         "display_name": "Systems / IT",
         "title_include_patterns": (
+            r"\btechnical support engineer\b",
             r"systems engineer",
             r"system engineer",
             r"infrastructure systems engineer",
@@ -574,6 +587,7 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "role_family_id": "solutions_engineering",
         "display_name": "Solutions Engineering",
         "title_include_patterns": (
+            r"\bimplementation engineer\b",
             r"solutions engineer",
             r"solution engineer",
             r"solutions architect",
@@ -606,6 +620,61 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
             r"build proof of concept",
             r"advise customers",
             r"design customer solutions",
+        ),
+    },
+    "technical_product_management": {
+        "role_family_id": "technical_product_management",
+        "display_name": "Technical Product Management",
+        "title_include_patterns": (
+            r"\btechnical product manager\b",
+            r"\bproduct manager (?:platform|developer experience|developer platform|apis?|infrastructure|data platform|ai platform)\b",
+        ),
+        "title_exclude_patterns": TECHNICAL_PRODUCT_MANAGEMENT_TITLE_EXCLUDE_PATTERNS,
+        "skill_patterns": (
+            r"\btechnical product management\b",
+            r"\bplatform product strategy\b",
+            r"\bdeveloper experience product work\b",
+            r"\bapi product management\b",
+            r"\btechnical product discovery\b",
+        ),
+        "tooling_patterns": (
+            r"\bproductboard\b",
+            r"\bpendo\b",
+            r"\bamplitude\b",
+        ),
+        "responsibility_patterns": (
+            r"\btechnical roadmap ownership\b",
+            r"\bplatform prioritization\b",
+            r"\bengineering partnership\b",
+            r"\btechnical requirements\b",
+            r"\bproduct outcome measurement\b",
+        ),
+    },
+    "technical_program_management": {
+        "role_family_id": "technical_program_management",
+        "display_name": "Technical Program Management",
+        "title_include_patterns": (
+            r"\btechnical program manager\b",
+        ),
+        "title_exclude_patterns": TECHNICAL_PROGRAM_MANAGEMENT_TITLE_EXCLUDE_PATTERNS,
+        "skill_patterns": (
+            r"\btechnical program management\b",
+            r"\bengineering program delivery\b",
+            r"\btechnical dependency management\b",
+            r"\bdelivery risk management\b",
+            r"\bcross functional technical execution\b",
+        ),
+        "tooling_patterns": (
+            r"\bplanview\b",
+            r"\bsmartsheet\b",
+            r"\bmicrosoft project\b",
+        ),
+        "responsibility_patterns": (
+            r"\btechnical program leadership\b",
+            r"\bengineering dependency coordination\b",
+            r"\bmilestone governance\b",
+            r"\brisk management\b",
+            r"\bcross functional delivery\b",
         ),
     },
 }

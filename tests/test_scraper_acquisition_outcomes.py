@@ -11,6 +11,7 @@ from src.scrapers import (
     greenhouse_scraper,
     jobvite_scraper,
     lever_scraper,
+    recruitee_scraper,
     smartrecruiters_scraper,
     workable_scraper,
     workday_scraper,
@@ -152,8 +153,9 @@ def _fixture_parallel(completion_order):
         (workable_scraper, "scrape_all_workable", "_fetch_company_outcome"),
         (jobvite_scraper, "scrape_all_jobvite", "_fetch_company_outcome"),
         (ashby_scraper, "scrape_all_ashby", "_fetch_company_outcome"),
+        (recruitee_scraper, "scrape_all_recruitee", "_fetch_company_outcome"),
     ],
-    ids=["workday", "workable", "jobvite", "ashby"],
+    ids=["workday", "workable", "jobvite", "ashby", "recruitee"],
 )
 def test_threaded_schedule_matrix_and_completion_ownership(
     monkeypatch,
@@ -275,7 +277,6 @@ def _workday_posting(index):
 
 def test_workday_outcomes_include_partial_pagination(monkeypatch):
     board = "https://acme.myworkdayjobs.com/jobs"
-    monkeypatch.setattr(workday_scraper, "title_matches", lambda title: True)
     monkeypatch.setattr(workday_scraper, "normalize_workday_url", lambda url: url)
     monkeypatch.setattr(workday_scraper, "learn_from_job_url", lambda url: None)
     monkeypatch.setattr(workday_scraper.time, "sleep", lambda seconds: None)
@@ -294,7 +295,6 @@ def test_workday_outcomes_include_partial_pagination(monkeypatch):
         _SyncResponse({"total": 21, "jobPostings": [malformed_second_page]}),
     ])
     monkeypatch.setattr(workday_scraper, "workday_post", lambda *args, **kwargs: next(responses))
-    monkeypatch.setattr(workday_scraper, "fetch_workday_timestamp", lambda *args: None)
     parse_partial = workday_scraper._scrape_company_outcome(board)
 
     monkeypatch.setattr(
@@ -350,61 +350,84 @@ def _workable_posting(index):
     }
 
 
-def test_workable_outcomes_include_partial_pagination_and_verified_empty(monkeypatch):
-    monkeypatch.setattr(workable_scraper, "learn_from_job_url", lambda url: None)
-    responses = iter([
-        _SyncResponse({"results": [_workable_posting(i) for i in range(50)]}),
-        _SyncResponse(status_code=503),
-    ])
-    monkeypatch.setattr(workable_scraper, "workable_post", lambda *args, **kwargs: next(responses))
-    monkeypatch.setattr(workable_scraper, "workable_get", lambda *args, **kwargs: _SyncResponse({"jobs": []}))
-    partial = workable_scraper._fetch_company_outcome("acme")
+def test_workable_outcomes_include_success_empty_and_failures(monkeypatch):
+    monkeypatch.setattr(
+        workable_scraper,
+        "learn_from_job_url",
+        lambda url: None,
+    )
 
-    monkeypatch.setattr(workable_scraper, "workable_post", lambda *args, **kwargs: _SyncResponse({"results": []}))
-    monkeypatch.setattr(workable_scraper, "workable_get", lambda *args, **kwargs: _SyncResponse({"jobs": []}))
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            {
+                "jobs": [
+                    _workable_posting(index)
+                    for index in range(3)
+                ]
+            }
+        ),
+    )
+    success = workable_scraper._fetch_company_outcome("acme")
+
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            {"jobs": []}
+        ),
+    )
     empty = workable_scraper._fetch_company_outcome("empty")
 
     monkeypatch.setattr(
         workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline")),
-    )
-    monkeypatch.setattr(
-        workable_scraper,
         "workable_get",
-        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline")),
+        lambda *args, **kwargs: (
+            _ for _ in ()
+        ).throw(OSError("offline")),
     )
     failed = workable_scraper._fetch_company_outcome("failed")
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: _SyncResponse(status_code=503),
-    )
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_get",
-        lambda *args, **kwargs: _SyncResponse(status_code=503),
-    )
-    non_200 = workable_scraper._fetch_company_outcome("missing")
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: _SyncResponse(payload=[]),
-    )
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_get",
-        lambda *args, **kwargs: _SyncResponse(payload=[]),
-    )
-    malformed = workable_scraper._fetch_company_outcome("malformed")
 
-    assert partial.status is AcquisitionStatus.PARTIAL
-    assert len(partial.jobs) == 50
-    assert partial.reason == "pagination_interrupted"
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            status_code=503
+        ),
+    )
+    non_200 = workable_scraper._fetch_company_outcome(
+        "missing"
+    )
+
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            payload=[]
+        ),
+    )
+    malformed = workable_scraper._fetch_company_outcome(
+        "malformed"
+    )
+
+    assert success.status is AcquisitionStatus.SUCCESS
+    assert len(success.jobs) == 3
+    assert success.page_count == 1
+    assert success.raw_job_count == 3
+
     assert empty.status is AcquisitionStatus.EMPTY
+    assert empty.page_count == 1
+    assert empty.should_mark_scraped is True
+
     assert failed.status is AcquisitionStatus.FAILED
     assert failed.reason == "transport_error"
+    assert failed.should_mark_scraped is False
+
+    assert non_200.status is AcquisitionStatus.FAILED
     assert non_200.reason == "non_200_response"
+
+    assert malformed.status is AcquisitionStatus.FAILED
     assert malformed.reason == "malformed_payload"
 
 
@@ -481,9 +504,6 @@ def test_greenhouse_success_empty_and_failure_outcomes(monkeypatch):
         return None
 
     monkeypatch.setattr(greenhouse_scraper.asyncio, "sleep", no_sleep)
-    monkeypatch.setattr(greenhouse_scraper, "title_matches", lambda title: True)
-    monkeypatch.setattr(greenhouse_scraper, "us_location", lambda location, source: True)
-    monkeypatch.setattr(greenhouse_scraper, "posted_within_24h", lambda posted: True)
     monkeypatch.setattr(greenhouse_scraper, "learn_from_job_url", lambda url: None)
 
     success = asyncio.run(
@@ -513,8 +533,8 @@ def test_greenhouse_success_empty_and_failure_outcomes(monkeypatch):
     )
     monkeypatch.setattr(
         greenhouse_scraper,
-        "title_matches",
-        lambda title: (_ for _ in ()).throw(ValueError("bad posting")),
+        "Job",
+        lambda **kwargs: (_ for _ in ()).throw(ValueError("bad posting")),
     )
     parse_error = asyncio.run(
         greenhouse_scraper._fetch_company_outcome(
@@ -547,9 +567,6 @@ def test_lever_success_empty_and_failure_outcomes(monkeypatch):
         return None
 
     monkeypatch.setattr(lever_scraper.asyncio, "sleep", no_sleep)
-    monkeypatch.setattr(lever_scraper, "title_matches", lambda *args, **kwargs: True)
-    monkeypatch.setattr(lever_scraper, "us_location", lambda location, source: True)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted: True)
     monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
 
     success = asyncio.run(

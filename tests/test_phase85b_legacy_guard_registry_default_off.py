@@ -3,6 +3,18 @@ from pathlib import Path
 import pytest
 
 from tests.support.phase_guard_registry import (
+    BROAD_TECH_PREFILTER_TAXONOMY_FILES,
+    HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
+    HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
+    HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
+    HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES,
+    HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
+    HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
+    HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
+    PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
+    PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
+    PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
+    TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     PHASE11_STEP8L_PROVIDER_BENCHMARK_CONTRACT_FILES,
     PHASE11_STEP8M_PROVIDER_CLIENT_COMPATIBILITY_FILES,
     PHASE11_STEP8N_SHARED_LLM_CLIENT_SAFETY_FILES,
@@ -33,8 +45,12 @@ from tests.support.phase_guard_registry import (
     PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES,
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
+    PERSONIO_SOURCE_INTEGRATION_FILES,
+    RECRUITEE_SOURCE_INTEGRATION_FILES,
+    SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
+    USAJOBS_SOURCE_INTEGRATION_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -330,7 +346,291 @@ def test_llm_adjudicator_readback_default_off_profile_is_narrow():
             )
 
 
+def test_scraper_prefilter_ownership_boundary_surface_is_exact():
+    assert SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES == {
+        "src/pipeline/collector.py",
+        "src/scrapers/greenhouse_scraper.py",
+        "src/scrapers/lever_scraper.py",
+        "src/scrapers/recruitee_scraper.py",
+        "src/scrapers/workday_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_lever_role_expansion_filtering.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_recruitee_scraper.py",
+        "tests/test_scraper_acquisition_outcomes.py",
+        "tests/test_scraper_prefilter_ownership_boundary.py",
+        "tests/test_scraper_transport_pagination_hardening.py",
+    }
+    assert not any("*" in path for path in SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES)
+
+
+def test_personio_source_integration_surface_is_exact():
+    assert PERSONIO_SOURCE_INTEGRATION_FILES == {
+        "src/config/consts.py",
+        "src/config/curated_ats_sources.json",
+        "src/discovery/curated_ats_sources.py",
+        "src/pipeline/collector.py",
+        "src/scrapers/personio_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_curated_ats_sources.py",
+        "tests/test_personio_scraper.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_scraper_prefilter_ownership_boundary.py",
+        "tests/test_scraper_source_health_metrics.py",
+        "tests/test_scraper_transport_pagination_hardening.py",
+    }
+    assert not any("*" in path for path in PERSONIO_SOURCE_INTEGRATION_FILES)
+
+
+def test_usajobs_source_integration_surface_is_exact():
+    assert USAJOBS_SOURCE_INTEGRATION_FILES == {
+        "src/config/consts.py",
+        "src/config/usajobs_query_profiles.json",
+        "src/pipeline/collector.py",
+        "src/scrapers/usajobs_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_usajobs_scraper.py",
+    }
+    assert not any("*" in path for path in USAJOBS_SOURCE_INTEGRATION_FILES)
+
+
+def test_broad_tech_prefilter_taxonomy_surface_is_exact():
+    assert BROAD_TECH_PREFILTER_TAXONOMY_FILES == {
+        "src/config/role_taxonomy.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_broad_tech_prefilter_taxonomy.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_user_pipeline_role_preferences.py",
+    }
+    assert not any("*" in path for path in BROAD_TECH_PREFILTER_TAXONOMY_FILES)
+
+
+def test_technical_product_program_role_family_surface_is_exact():
+    assert TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES == {
+        "src/app/onboarding_ui.py",
+        "src/config/role_scoring_profiles.py",
+        "src/config/role_taxonomy.py",
+        "src/intelligence/role_family_classifier.py",
+        "src/pipeline/job_filter.py",
+        "src/pipeline/job_ranker.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_broad_tech_prefilter_taxonomy.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_role_taxonomy.py",
+        "tests/test_role_title_filtering.py",
+        "tests/test_technical_product_program_role_families.py",
+    }
+    assert not any("*" in path for path in TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES)
+
+
+def test_phase2d_a_independent_seniority_policy_surface_is_exact():
+    assert PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES == {
+        "src/config/seniority_policy.py",
+        "src/pipeline/collector.py",
+        "src/pipeline/job_ranker.py",
+        "src/storage/onboarding_preferences/store.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_independent_seniority_policy.py",
+        "tests/test_onboarding_preferences_store.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_user_pipeline_role_preferences.py",
+    }
+    assert not any(
+        "*" in path for path in PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+    )
+
+
+def test_phase2d_b1_default_eligibility_ownership_surface_is_exact():
+    assert PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES == {
+        "src/config/role_taxonomy.py",
+        "src/config/seniority_policy.py",
+        "src/pipeline/job_filter.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_independent_seniority_prefilter.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path
+        for path in PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+    )
+
+
+def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
+    assert PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES == {
+        "src/agents/deterministic_prefilter_dedupe_authoritative_graph.py",
+        "src/app/onboarding_ui.py",
+        "src/app/services.py",
+        "src/app/static/onboarding.js",
+        "src/app/static/preferences_workflow.js",
+        "src/app/static/profile.js",
+        "src/config/seniority_policy.py",
+        "src/pipeline/collector.py",
+        "src/pipeline/job_filter.py",
+        "src/storage/onboarding_preferences/schema.sql",
+        "src/storage/onboarding_preferences/store.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_independent_seniority_policy.py",
+        "tests/test_independent_seniority_prefilter.py",
+        "tests/test_onboarding_api.py",
+        "tests/test_onboarding_preferences_store.py",
+        "tests/test_onboarding_ui_contract.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase16a_lean_deterministic_prefilter_dedupe_orchestration.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_role_title_filtering.py",
+        "tests/test_strict_seniority_filter.py",
+        "tests/test_technical_product_program_role_families.py",
+        "tests/test_user_pipeline_role_preferences.py",
+    }
+    assert not any(
+        "*" in path for path in PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
+    )
+
+
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    himalayas_step6e_r1_profile = legacy_guard_allowlist(
+        "himalayas_step6e_r1_location_activation"
+    )
+    assert himalayas_step6e_r1_profile == {
+        "src/config/himalayas_query_profiles.json",
+        "src/pipeline/scheduler.py",
+        "src/rag/job_document_builder.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_activation.py",
+        "tests/test_himalayas_scraper.py",
+        "tests/test_himalayas_source_retirement.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_rag_export_job_corpus.py",
+    }
+    assert (
+        himalayas_step6e_r1_profile
+        == HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES
+    )
+    assert not any("*" in path for path in himalayas_step6e_r1_profile)
+    himalayas_step6d_c_profile = legacy_guard_allowlist(
+        "himalayas_step6d_c_source_retirement"
+    )
+    assert himalayas_step6d_c_profile == {
+        "manage_himalayas_retention.py",
+        "src/app/services.py",
+        "src/pipeline/himalayas_retention.py",
+        "src/rag/export_job_corpus.py",
+        "src/storage/user_pipeline/store.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_retention_integration.py",
+        "tests/test_himalayas_source_retirement.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert (
+        himalayas_step6d_c_profile
+        == HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES
+    )
+    assert not any("*" in path for path in himalayas_step6d_c_profile)
+    himalayas_step6d_b2_profile = legacy_guard_allowlist(
+        "himalayas_step6d_b2_retention_integration"
+    )
+    assert himalayas_step6d_b2_profile == {
+        "src/app/services.py",
+        "src/pipeline/collector.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_active_retention.py",
+        "tests/test_himalayas_retention_integration.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert (
+        himalayas_step6d_b2_profile
+        == HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES
+    )
+    assert not any("*" in path for path in himalayas_step6d_b2_profile)
+    himalayas_step6d_b1_profile = legacy_guard_allowlist(
+        "himalayas_step6d_b1_retention_foundation"
+    )
+    assert himalayas_step6d_b1_profile == {
+        "src/pipeline/himalayas_retention.py",
+        "src/rag/export_job_corpus.py",
+        "src/rag/job_document_builder.py",
+        "src/storage/rag_store.py",
+        "src/storage/user_pipeline/schema.sql",
+        "src/storage/user_pipeline/store.py",
+        "src/utils/job_cache.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_active_retention.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert (
+        himalayas_step6d_b1_profile
+        == HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES
+    )
+    assert not any("*" in path for path in himalayas_step6d_b1_profile)
+    himalayas_step6c1_profile = legacy_guard_allowlist(
+        "himalayas_step6c1_pagination_repair"
+    )
+    assert himalayas_step6c1_profile == {
+        "src/scrapers/himalayas_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_scraper.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert himalayas_step6c1_profile == HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES
+    assert not any("*" in path for path in himalayas_step6c1_profile)
+    himalayas_step6b2_profile = legacy_guard_allowlist(
+        "himalayas_step6b2_source_integration"
+    )
+    assert himalayas_step6b2_profile == {
+        "src/config/consts.py",
+        "src/config/himalayas_query_profiles.json",
+        "src/pipeline/collector.py",
+        "src/scrapers/himalayas_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_himalayas_scraper.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert himalayas_step6b2_profile == HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES
+    assert not any("*" in path for path in himalayas_step6b2_profile)
+    himalayas_step6b1_profile = legacy_guard_allowlist(
+        "himalayas_step6b1_attribution_foundation"
+    )
+    assert himalayas_step6b1_profile == {
+        "src/app/services.py",
+        "src/app/static/app.js",
+        "src/pipeline/dedupe.py",
+        "src/rag/job_document_builder.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase16a_lean_deterministic_prefilter_dedupe_orchestration.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_provider_attribution_ui.py",
+        "tests/test_rag_export_job_corpus.py",
+        "tests/test_supplemental_source_dedupe.py",
+    }
+    assert himalayas_step6b1_profile == HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES
+    assert not any("*" in path for path in himalayas_step6b1_profile)
     phase129_profile = legacy_guard_allowlist(
         "phase129c_workflow_overlay_and_run_scoped_corpus"
     )
@@ -1357,7 +1657,10 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }.isdisjoint(phase9_step12_compatibility_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
-        legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+        himalayas_step6c1_profile
+        | himalayas_step6b2_profile
+        | himalayas_step6b1_profile
+        | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | phase129_profile
         | phase132_profile
@@ -1436,6 +1739,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        | PERSONIO_SOURCE_INTEGRATION_FILES
+        | RECRUITEE_SOURCE_INTEGRATION_FILES
+        | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
+        | BROAD_TECH_PREFILTER_TAXONOMY_FILES
+        | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
+        | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        | PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        | PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
     )
     assert PHASE13C_AUTHORITATIVE_JOB_PRIORITIZATION_NODE_FILES == {
         "application_execution_queue.py",

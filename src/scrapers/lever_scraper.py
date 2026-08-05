@@ -1,7 +1,5 @@
 import asyncio
 import aiohttp
-import json
-import os
 from tqdm import tqdm
 from src.config.consts import (
     LEVER_API,
@@ -14,11 +12,6 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
-from src.pipeline.job_filter import (
-    title_matches,
-    us_location,
-    posted_within_24h
-)
 from src.discovery.crawl_scheduler import (
     AcquisitionOutcome,
     AcquisitionStatus,
@@ -78,29 +71,6 @@ async def _fetch_json(session, url):
             return None, "transport_error"
 
     return None, "transport_error"
-
-
-def _selected_role_families_from_env():
-    raw = str(os.environ.get("JOB_STACK_SELECTED_ROLE_FAMILIES", "") or "").strip()
-    if not raw:
-        return []
-
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning("Ignoring invalid JOB_STACK_SELECTED_ROLE_FAMILIES JSON.")
-        return []
-
-    if not isinstance(parsed, list):
-        logger.warning("Ignoring non-list JOB_STACK_SELECTED_ROLE_FAMILIES value.")
-        return []
-
-    selected = []
-    for value in parsed:
-        role_family_id = str(value or "").strip()
-        if role_family_id and role_family_id not in selected:
-            selected.append(role_family_id)
-    return selected
 
 
 def _lever_company_url(company):
@@ -164,11 +134,9 @@ def seed_valid_lever_companies(slugs, *, source="manual_lever_validation"):
     )
 
 
-async def _fetch_company_outcome(session, company, *, selected_role_families=None):
+async def _fetch_company_outcome(session, company):
 
     url = _lever_company_url(company)
-    if selected_role_families is None:
-        selected_role_families = _selected_role_families_from_env()
 
     data, failure_reason = await _fetch_json(session, url)
     if failure_reason:
@@ -198,21 +166,6 @@ async def _fetch_company_outcome(session, company, *, selected_role_families=Non
             posted_at = job.get("createdAt")
 
             learn_from_job_url(job_url)
-
-            # ---------- EARLY FILTERS ----------
-
-            if not title_matches(
-                title,
-                selected_role_families=selected_role_families or None,
-            ):
-                continue
-
-            if not us_location(location, "lever"):
-                continue
-
-            if not posted_within_24h(posted_at):
-                continue
-            # -----------------------------------
 
             jobs.append(
                 Job(
@@ -254,16 +207,12 @@ async def _fetch_company_outcome(session, company, *, selected_role_families=Non
     )
 
 
-async def fetch_company_jobs(session, company, *, selected_role_families=None):
-    outcome = await _fetch_company_outcome(
-        session,
-        company,
-        selected_role_families=selected_role_families,
-    )
+async def fetch_company_jobs(session, company):
+    outcome = await _fetch_company_outcome(session, company)
     return list(outcome.jobs)
 
 
-async def scrape_all_lever_async(*, selected_role_families=None):
+async def scrape_all_lever_async():
 
     companies = load_lines("discovery://ats/lever")
     schedule = load_schedule()
@@ -288,11 +237,7 @@ async def scrape_all_lever_async(*, selected_role_families=None):
             async with sem:
                 return await observe_acquisition_async(
                     "lever",
-                    lambda: _fetch_company_outcome(
-                        session,
-                        company,
-                        selected_role_families=selected_role_families,
-                    ),
+                    lambda: _fetch_company_outcome(session, company),
                     schedule_on_success=True,
                     company=company,
                 )
@@ -326,12 +271,8 @@ async def scrape_all_lever_async(*, selected_role_families=None):
     return all_jobs
 
 
-def scrape_all_lever(*, selected_role_families=None):
+def scrape_all_lever():
 
-    jobs = asyncio.run(
-        scrape_all_lever_async(
-            selected_role_families=selected_role_families,
-        )
-    )
+    jobs = asyncio.run(scrape_all_lever_async())
 
     return jobs

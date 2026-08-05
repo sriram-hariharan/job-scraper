@@ -20,7 +20,6 @@ from src.discovery.crawl_scheduler import (
     should_scrape,
     mark_scraped
 )
-from src.pipeline.job_filter import title_matches, us_location, posted_within_24h
 from src.utils.http_retry import (
     TRANSIENT_HTTP_STATUSES,
     record_http_request,
@@ -112,16 +111,6 @@ async def _fetch_company_outcome(session, company):
             location = job.get("location", {}).get("name", "")
             job_url = job.get("absolute_url")
             posted_at = job.get("updated_at")
-
-            # --- PRE FILTERS ---
-            if not title_matches(title):
-                continue
-
-            if not us_location(location, "greenhouse"):
-                continue
-
-            if not posted_within_24h(posted_at):
-                continue
 
             learn_from_job_url(job_url)
 

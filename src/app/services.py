@@ -295,6 +295,7 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "job_packet_manifest.csv",
     "role_title_filter_audit.csv",
     "source_health_report.csv",
+    "source_acquisition_metrics.json",
 }
 _PIPELINE_JOB_PACKET_SUFFIXES = {".json", ".jsonl", ".md", ".txt"}
 
@@ -956,12 +957,13 @@ def onboarding_status_payload(
     }
 
 
-def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
+def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     if not owner:
         return {
             "selected_role_families": [],
             "target_seniority": [],
+            "seniority_strict_match": False,
             "preferred_locations": [],
             "preferred_skills": [],
             "excluded_keywords": [],
@@ -986,6 +988,7 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
         return {
             "selected_role_families": [],
             "target_seniority": [],
+            "seniority_strict_match": False,
             "preferred_locations": [],
             "preferred_skills": [],
             "excluded_keywords": [],
@@ -994,6 +997,7 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
     return {
         "selected_role_families": list(normalized.get("selected_role_families", []) or []),
         "target_seniority": list(normalized.get("target_seniority", []) or []),
+        "seniority_strict_match": bool(normalized.get("seniority_strict_match", False)),
         "preferred_locations": list(normalized.get("preferred_locations", []) or []),
         "preferred_skills": list(normalized.get("preferred_skills", []) or []),
         "excluded_keywords": list(normalized.get("excluded_keywords", []) or []),
@@ -7559,6 +7563,7 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "job_packet_manifest.csv": "job_packet_manifest",
         "role_title_filter_audit.csv": "role_title_filter_audit",
         "source_health_report.csv": "source_health_report",
+        "source_acquisition_metrics.json": "source_acquisition_metrics",
     }
 
     if name in root_kind_by_name:
@@ -9227,7 +9232,7 @@ def run_live_pipeline_payload(
         options=launch_options,
     )
     preference_item_counts = {
-        field_name: len(values)
+        field_name: len(values) if isinstance(values, list) else int(bool(values))
         for field_name, values in pipeline_preferences.items()
     }
     logger.info(
@@ -9497,9 +9502,147 @@ def run_live_pipeline_payload(
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+_PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH = 200
+_PROVIDER_ATTRIBUTION_URL_MAX_LENGTH = 2048
+_HIMALAYAS_ACTIVE_RETENTION_FLAG = "APPLYLENS_HIMALAYAS_ACTIVE_RETENTION_ENABLED"
+_HIMALAYAS_ACTIVE_IDENTITY_LIMIT = 250_000
+
+def _provider_attribution_fields(
+    record: Dict[str, Any],
+    metadata: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    safe_record = record if isinstance(record, dict) else {}
+    safe_metadata = metadata if isinstance(metadata, dict) else {}
+
+    required_value = (
+        safe_record["provider_attribution_required"]
+        if "provider_attribution_required" in safe_record
+        else safe_metadata.get("provider_attribution_required", False)
+    )
+    label_value = (
+        safe_record.get("provider_attribution_label")
+        or safe_metadata.get("provider_attribution_label")
+    )
+    url_value = (
+        safe_record.get("provider_attribution_url")
+        or safe_metadata.get("provider_attribution_url")
+    )
+
+    return {
+        "provider_attribution_required": required_value is True,
+        "provider_attribution_label": _clean_text(label_value)[
+            :_PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH
+        ],
+        "provider_attribution_url": _clean_text(url_value)[
+            :_PROVIDER_ATTRIBUTION_URL_MAX_LENGTH
+        ],
+    }
+
 def _env_flag_enabled(name: str, env: Dict[str, str] | None = None) -> bool:
     env_map = env if env is not None else os.environ
     return _clean_text(env_map.get(name)).lower() in {"1", "true", "yes", "on"}
+
+
+def _himalayas_retention_utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _himalayas_retention_metadata_fields(
+    record: Dict[str, Any],
+    metadata: Dict[str, Any] | None = None,
+) -> Dict[str, str]:
+    safe_record = record if isinstance(record, dict) else {}
+    safe_metadata = metadata if isinstance(metadata, dict) else {}
+    raw_expiry = (
+        safe_record.get("expiry_date")
+        if "expiry_date" in safe_record
+        else safe_metadata.get("expiry_date")
+    )
+    expiry_date = raw_expiry.strip()[:64] if isinstance(raw_expiry, str) else ""
+    from src.pipeline.himalayas_retention import stable_identity
+
+    identity_record = {
+        field: safe_record.get(field) or safe_metadata.get(field)
+        for field in ("merge_key", "doc_id", "job_doc_id", "job_id")
+    }
+    return {
+        "source": _clean_text(
+            safe_record.get("source") or safe_metadata.get("source")
+        )[:64],
+        "expiry_date": expiry_date,
+        "active_identity": stable_identity(identity_record),
+    }
+
+
+def _apply_himalayas_retention_metadata(
+    row: Dict[str, Any],
+    overlay: Dict[str, Any],
+) -> None:
+    if not _env_flag_enabled(_HIMALAYAS_ACTIVE_RETENTION_FLAG):
+        return
+    row_source = _clean_text(row.get("source"))
+    overlay_source = _clean_text(overlay.get("source"))
+    if not row_source and overlay_source:
+        row["source"] = overlay_source
+        row_source = overlay_source
+    if row_source and overlay_source and row_source != overlay_source:
+        return
+    row["expiry_date"] = (
+        overlay.get("expiry_date", "")
+        if isinstance(overlay.get("expiry_date", ""), str)
+        else ""
+    )
+
+
+def _filter_expired_himalayas_active_rows(
+    rows: List[Dict[str, Any]],
+    *,
+    active_identities: set[str] | frozenset[str] | None = None,
+) -> List[Dict[str, Any]]:
+    if not _env_flag_enabled(_HIMALAYAS_ACTIVE_RETENTION_FLAG):
+        return rows
+    from src.pipeline.himalayas_retention import (
+        classify_expired_record,
+        stable_identity,
+    )
+
+    clock = _himalayas_retention_utc_now()
+    retained = []
+    for row in rows:
+        if classify_expired_record(row, now=clock)["eligible"]:
+            continue
+        if row.get("source") == "himalayas" and active_identities is not None:
+            identity = stable_identity(row)
+            if identity and identity not in active_identities:
+                continue
+        retained.append(row)
+    return retained
+
+
+def _active_himalayas_identity_authority(
+    job_corpus: Path = DEFAULT_CORPUS_PATH,
+) -> frozenset[str] | None:
+    if not _env_flag_enabled(_HIMALAYAS_ACTIVE_RETENTION_FLAG):
+        return None
+    resolved = Path(job_corpus).expanduser().resolve()
+    try:
+        if not resolved.exists() or not resolved.is_file():
+            return None
+        overlays = _load_job_metadata_overlay_from_corpus(resolved)
+        if not overlays and resolved.stat().st_size > 0:
+            return None
+    except (OSError, ValueError):
+        return None
+
+    identities = set()
+    for overlay in overlays.values():
+        identity = _clean_text(overlay.get("active_identity"))
+        if _clean_text(overlay.get("source")) != "himalayas" or not identity:
+            continue
+        identities.add(identity)
+        if len(identities) > _HIMALAYAS_ACTIVE_IDENTITY_LIMIT:
+            return None
+    return frozenset(identities)
 
 def _scan_issue_display_label(value: Any) -> str:
     raw = _clean_text(value)
@@ -14015,6 +14158,8 @@ def _load_job_metadata_overlay_from_corpus(
                 "ashby_timestamp_status": ashby_timestamp_status,
                 "job_url": job_url,
                 "role_family": role_family,
+                **_provider_attribution_fields(record, metadata),
+                **_himalayas_retention_metadata_fields(record, metadata),
             }
 
             for key in _application_row_key_candidates(key_row):
@@ -14041,6 +14186,11 @@ def _overlay_job_metadata(
         merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
         merged["role_family"] = _clean_text(merged.get("role_family"))
+        merged.update(_provider_attribution_fields(merged))
+        _apply_himalayas_retention_metadata(
+            merged,
+            _himalayas_retention_metadata_fields(merged),
+        )
 
         if latest_by_key:
             for key in _application_row_key_candidates(merged):
@@ -14060,11 +14210,16 @@ def _overlay_job_metadata(
                     merged["job_url"] = overlay["job_url"]
                 if overlay.get("role_family"):
                     merged["role_family"] = overlay["role_family"]
+                merged.update(_provider_attribution_fields(overlay))
+                _apply_himalayas_retention_metadata(merged, overlay)
                 break
 
         overlaid_rows.append(merged)
 
-    return overlaid_rows
+    return _filter_expired_himalayas_active_rows(
+        overlaid_rows,
+        active_identities=_active_himalayas_identity_authority(job_corpus),
+    )
 
 def _csv_rows_from_text(text: Any) -> List[Dict[str, str]]:
     raw = str(text or "")
@@ -27443,6 +27598,8 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
             "ashby_timestamp_status": ashby_timestamp_status,
             "job_url": job_url,
             "role_family": role_family,
+            **_provider_attribution_fields(record, metadata),
+            **_himalayas_retention_metadata_fields(record, metadata),
         }
 
         for key in _application_row_key_candidates(key_row):
@@ -27466,6 +27623,11 @@ def _overlay_job_metadata_from_map(
         merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
         merged["role_family"] = _clean_text(merged.get("role_family"))
+        merged.update(_provider_attribution_fields(merged))
+        _apply_himalayas_retention_metadata(
+            merged,
+            _himalayas_retention_metadata_fields(merged),
+        )
 
         if latest_by_key:
             for key in _application_row_key_candidates(merged):
@@ -27485,11 +27647,16 @@ def _overlay_job_metadata_from_map(
                     merged["job_url"] = overlay["job_url"]
                 if overlay.get("role_family"):
                     merged["role_family"] = overlay["role_family"]
+                merged.update(_provider_attribution_fields(overlay))
+                _apply_himalayas_retention_metadata(merged, overlay)
                 break
 
         overlaid_rows.append(merged)
 
-    return overlaid_rows
+    return _filter_expired_himalayas_active_rows(
+        overlaid_rows,
+        active_identities=_active_himalayas_identity_authority(DEFAULT_CORPUS_PATH),
+    )
 
 
 def _latest_user_pipeline_artifact_context(
@@ -27830,7 +27997,7 @@ def status_payload(
             int(str(row.get("queue_rank", "999999") or "999999")),
             -ja._parse_float(row.get("winner_score", "0")),
         ),
-    )[:top_k]
+    )
 
     top_queue = []
     for row in top_rows:
@@ -27840,6 +28007,11 @@ def status_payload(
         overlay_row["freshness_status"] = _clean_text(overlay_row.get("freshness_status"))
         overlay_row["ashby_timestamp_status"] = _clean_text(overlay_row.get("ashby_timestamp_status"))
         overlay_row["job_url"] = _clean_text(overlay_row.get("job_url")) or _clean_text(overlay_row.get("job_doc_id"))
+        overlay_row.update(_provider_attribution_fields(overlay_row))
+        _apply_himalayas_retention_metadata(
+            overlay_row,
+            _himalayas_retention_metadata_fields(overlay_row),
+        )
         for field in ja.OPERATOR_DECISION_OVERLAY_FIELDS:
             overlay_row.setdefault(field, "")
 
@@ -27872,6 +28044,8 @@ def status_payload(
                 overlay_row["ashby_timestamp_status"] = metadata["ashby_timestamp_status"]
             if metadata.get("job_url") and not _clean_text(overlay_row.get("job_url")):
                 overlay_row["job_url"] = metadata["job_url"]
+            overlay_row.update(_provider_attribution_fields(metadata))
+            _apply_himalayas_retention_metadata(overlay_row, metadata)
             break
 
         for key in _application_row_key_candidates(overlay_row):
@@ -27906,6 +28080,11 @@ def status_payload(
                 break
         
         top_queue.append(overlay_row)
+
+    top_queue = _filter_expired_himalayas_active_rows(
+        top_queue,
+        active_identities=_active_himalayas_identity_authority(job_corpus),
+    )[:top_k]
 
     return {
         "summary": {

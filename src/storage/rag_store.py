@@ -72,11 +72,12 @@ def _cache_set_docs_safe(key: str, docs: List[Dict[str, Any]]) -> None:
         return
 
 
-def _invalidate_rag_document_cache() -> None:
+def _invalidate_rag_document_cache() -> bool:
     try:
         cache_delete_prefix(_RAG_JOB_DOCUMENTS_CACHE_PREFIX)
+        return True
     except Exception:
-        return
+        return False
 
 
 _RAG_SCHEMA_SQL = """
@@ -102,6 +103,9 @@ ON rag_job_documents (company, title);
 
 CREATE INDEX IF NOT EXISTS idx_rag_job_documents_updated
 ON rag_job_documents (updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_rag_job_documents_source_merge_key
+ON rag_job_documents (source, merge_key);
 """.strip()
 
 
@@ -373,3 +377,116 @@ SELECT json_build_object(
 
     result = _run_psql_json_query(sql)
     return int(result.get("count", 0) or 0)
+
+
+def list_himalayas_rag_candidates(
+    *,
+    after_merge_key: str = "",
+    limit: int = 250,
+) -> Dict[str, Any]:
+    safe_limit = int(limit)
+    if safe_limit < 1 or safe_limit > 250:
+        raise ValueError("Himalayas RAG candidate limit must be between 1 and 250.")
+    cursor = _clean_text(after_merge_key)
+    cursor_filter = (
+        f"AND merge_key > {_sql_quote_text(cursor)}" if cursor else ""
+    )
+
+    init_rag_store()
+    sql = f"""
+WITH candidates AS (
+    SELECT
+        merge_key,
+        doc_id,
+        source,
+        payload_json ->> 'expiry_date' AS expiry_date,
+        payload_json ->> 'job_id' AS job_id
+    FROM rag_job_documents
+    WHERE source = 'himalayas'
+      {cursor_filter}
+    ORDER BY merge_key ASC
+    LIMIT {safe_limit}
+)
+SELECT json_build_object(
+    'rows', COALESCE((SELECT json_agg(row_to_json(candidates)) FROM candidates), '[]'::json)
+);
+""".strip()
+    result = _run_psql_json_query(sql)
+    rows = [dict(row or {}) for row in list(result.get("rows", []) or [])]
+    return {
+        "ok": True,
+        "rows": rows,
+        "count": len(rows),
+        "next_cursor": _clean_text(rows[-1].get("merge_key")) if rows else "",
+    }
+
+
+def delete_himalayas_rag_merge_keys(
+    merge_keys: Iterable[str],
+    *,
+    dry_run: bool = True,
+) -> Dict[str, Any]:
+    keys = sorted(
+        {
+            value.strip()
+            for value in merge_keys
+            if isinstance(value, str) and value.strip()
+        }
+    )
+    if len(keys) > 250:
+        raise ValueError("At most 250 exact Himalayas RAG merge keys may be deleted.")
+    if not keys:
+        return {
+            "ok": True,
+            "dry_run": bool(dry_run),
+            "candidate_count": 0,
+            "deleted_count": 0,
+            "cache_invalidation_attempted": False,
+            "cache_invalidation_succeeded": False,
+        }
+
+    init_rag_store()
+    values = ", ".join(_sql_quote_text(value) for value in keys)
+    if dry_run:
+        sql = f"""
+SELECT json_build_object(
+    'candidate_count', (
+        SELECT COUNT(*)
+        FROM rag_job_documents
+        WHERE source = 'himalayas'
+          AND merge_key IN ({values})
+    )
+);
+""".strip()
+        result = _run_psql_json_query(sql)
+        return {
+            "ok": True,
+            "dry_run": True,
+            "candidate_count": int(result.get("candidate_count", 0) or 0),
+            "deleted_count": 0,
+            "cache_invalidation_attempted": False,
+            "cache_invalidation_succeeded": False,
+        }
+
+    sql = f"""
+WITH deleted AS (
+    DELETE FROM rag_job_documents
+    WHERE source = 'himalayas'
+      AND merge_key IN ({values})
+    RETURNING merge_key
+)
+SELECT json_build_object(
+    'deleted_count', (SELECT COUNT(*) FROM deleted)
+);
+""".strip()
+    result = _run_psql_json_query(sql)
+    deleted_count = int(result.get("deleted_count", 0) or 0)
+    invalidated = _invalidate_rag_document_cache()
+    return {
+        "ok": bool(invalidated),
+        "dry_run": False,
+        "candidate_count": deleted_count,
+        "deleted_count": deleted_count,
+        "cache_invalidation_attempted": True,
+        "cache_invalidation_succeeded": bool(invalidated),
+    }

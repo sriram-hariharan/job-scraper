@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from src.discovery.curated_ats_sources import (
     load_curated_ats_sources,
     seed_curated_ats_sources,
@@ -106,3 +108,100 @@ def test_seed_curated_ats_sources_skips_unsupported_ats(tmp_path):
     assert inserted == []
     assert summary["unknownats"]["status"] == "skipped_unsupported_ats"
     assert summary["unknownats"]["invalid"] == ["example"]
+
+
+def test_checked_in_recruitee_sources_are_validated_and_supported():
+    config = load_curated_ats_sources()
+    sources = config["recruitee"]
+
+    assert len(sources) == 24
+    assert sources == sorted(set(sources))
+    assert "aetherflux" in sources
+    assert "basispathinc" in sources
+    assert "hudsonmanpower" in sources
+    assert "transperfect" in sources
+    assert "careermentors" not in sources
+    assert "firstfactory" not in sources
+
+    inserted = []
+
+    summary = seed_curated_ats_sources(
+        validators={
+            "recruitee": lambda tenants: set(tenants),
+        },
+        existing_func=lambda ats: set(),
+        upsert_func=lambda ats, companies: (
+            inserted.append((ats, list(companies)))
+            or len(list(companies))
+        ),
+    )
+
+    assert summary["recruitee"] == {
+        "status": "seeded",
+        "candidate_count": 24,
+        "valid_count": 24,
+        "existing_count": 0,
+        "inserted_count": 24,
+        "invalid": [],
+    }
+    assert inserted == [
+        ("recruitee", sources),
+    ]
+
+
+def test_checked_in_personio_sources_are_empty_and_supported():
+    config = load_curated_ats_sources()
+    assert config["personio"] == []
+
+    summary = seed_curated_ats_sources(
+        validators={"personio": lambda hosts: set(hosts)},
+        existing_func=lambda ats: set(),
+        upsert_func=lambda ats, companies: pytest.fail("empty source must not upsert"),
+    )
+
+    assert summary["personio"] == {
+        "status": "seeded",
+        "candidate_count": 0,
+        "valid_count": 0,
+        "existing_count": 0,
+        "inserted_count": 0,
+        "invalid": [],
+    }
+
+def test_checked_in_workable_sources_are_validated_and_supported():
+    config = load_curated_ats_sources()
+    sources = config["workable"]
+
+    assert len(sources) == 189
+    assert sources == sorted(set(sources))
+    assert "huggingface" in sources
+    assert "tiger-analytics" in sources
+    assert "api" not in sources
+    assert "j" not in sources
+    assert "company" not in sources
+    assert "careers" not in sources
+
+    inserted = []
+
+    summary = seed_curated_ats_sources(
+        validators={
+            "workable": lambda slugs: set(slugs),
+        },
+        existing_func=lambda ats: set(),
+        upsert_func=lambda ats, companies: (
+            inserted.append((ats, list(companies)))
+            or len(list(companies))
+        ),
+    )
+
+    assert summary["workable"] == {
+        "status": "seeded",
+        "candidate_count": 189,
+        "valid_count": 189,
+        "existing_count": 0,
+        "inserted_count": 189,
+        "invalid": [],
+    }
+    assert inserted == [
+        ("workable", sources),
+    ]

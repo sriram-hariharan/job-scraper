@@ -34,6 +34,14 @@ function setOnboardingCheckboxGroup(name, checked) {
   });
 }
 
+function syncOnboardingSeniorityStrictToggle() {
+  const strictToggle = document.querySelector('#onboardingForm input[name="seniority_strict_match"]');
+  if (!strictToggle) return;
+  const hasSeniority = checkedValues("target_seniority").length > 0;
+  strictToggle.disabled = !hasSeniority;
+  if (!hasSeniority) strictToggle.checked = false;
+}
+
 function updateOnboardingConfigurationSummary() {
   const summary = onboardingQs("onboardingConfigurationSummary");
   if (!summary) return;
@@ -80,6 +88,7 @@ async function onboardingFetchJson(url, options = {}) {
 }
 
 function collectOnboardingPreferences(onboardingCompleted) {
+  syncOnboardingSeniorityStrictToggle();
   const locationPreferences = onboardingLocationSelector?.serialize() || {
     preferred_locations: [],
     preferred_location_specs: [],
@@ -90,6 +99,9 @@ function collectOnboardingPreferences(onboardingCompleted) {
     onboarding_completed: Boolean(onboardingCompleted),
     selected_role_families: checkedValues("selected_role_families"),
     target_seniority: checkedValues("target_seniority"),
+    seniority_strict_match: Boolean(
+      document.querySelector('#onboardingForm input[name="seniority_strict_match"]')?.checked
+    ),
     ...locationPreferences,
     preferred_skills: splitPreferenceList(onboardingQs("preferredSkillsInput")?.value),
     excluded_keywords: splitPreferenceList(onboardingQs("excludedKeywordsInput")?.value),
@@ -155,6 +167,9 @@ function renderRequirementStatus(requirements) {
 function hydrateOnboardingForm(preferences) {
   setCheckedValues("selected_role_families", preferences?.selected_role_families || []);
   setCheckedValues("target_seniority", preferences?.target_seniority || []);
+  const strictToggle = document.querySelector('#onboardingForm input[name="seniority_strict_match"]');
+  if (strictToggle) strictToggle.checked = preferences?.seniority_strict_match === true;
+  syncOnboardingSeniorityStrictToggle();
   onboardingLocationSelector?.setPreferences(preferences || {});
   setTextareaList("preferredSkillsInput", preferences?.preferred_skills || []);
   setTextareaList("excludedKeywordsInput", preferences?.excluded_keywords || []);
@@ -237,6 +252,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("#onboardingForm input, #onboardingForm textarea").forEach((field) => {
     if (field.closest("[data-location-selector]")) return;
     field.addEventListener("change", () => {
+      syncOnboardingSeniorityStrictToggle();
       renderRequirementStatus({});
       markOnboardingPreferencesDirty();
     });

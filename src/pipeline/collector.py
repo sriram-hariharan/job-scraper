@@ -10,6 +10,7 @@ import time
 from uuid import uuid4
 from pathlib import Path
 
+from src.config.seniority_policy import normalize_target_seniority_ids
 from src.pipeline.runtime_status import (
     PREFERENCE_RUNTIME_SCHEMA_VERSION,
     complete_stage,
@@ -56,6 +57,9 @@ AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_FLAG = (
 )
 PRODUCTION_AGENT_TELEMETRY_FLAG = (
     "APPLYLENS_PRODUCTION_AGENT_TELEMETRY_ENABLED"
+)
+HIMALAYAS_ACTIVE_RETENTION_FLAG = (
+    "APPLYLENS_HIMALAYAS_ACTIVE_RETENTION_ENABLED"
 )
 THREE_CORE_SHADOW_PIPELINE_HOOK_FLAG = (
     "APPLYLENS_AGENTIC_PIPELINE_THREE_CORE_SHADOW_PIPELINE_HOOK_ENABLED"
@@ -260,8 +264,11 @@ _PREFERENCE_ENV_NAMES = {
 }
 
 
-def _empty_pipeline_preferences() -> Dict[str, List[str]]:
-    return {field_name: [] for field_name in PREFERENCE_LIST_FIELDS}
+def _empty_pipeline_preferences() -> Dict[str, Any]:
+    return {
+        **{field_name: [] for field_name in PREFERENCE_LIST_FIELDS},
+        "seniority_strict_match": False,
+    }
 
 
 def _json_list_from_env(
@@ -296,13 +303,23 @@ def _pipeline_preferences_from_env(
     *,
     env: Dict[str, str] | None = None,
 ) -> Dict[str, List[str]]:
-    return {
+    preferences = {
         field_name: _json_list_from_env(env_name, env=env)
         for field_name, env_name in _PREFERENCE_ENV_NAMES.items()
     }
+    try:
+        preferences["target_seniority"] = normalize_target_seniority_ids(
+            preferences["target_seniority"]
+        )
+    except ValueError:
+        logger.warning(
+            "Ignoring unsupported JOB_STACK_TARGET_SENIORITY value; using an empty explicit seniority override."
+        )
+        preferences["target_seniority"] = []
+    return preferences
 
 
-def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:
+def _normalized_preference_snapshot(preferences: Any) -> Dict[str, Any]:
     if not isinstance(preferences, dict):
         raise ValueError("Preference snapshot must be an object.")
 
@@ -314,6 +331,10 @@ def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:
             not isinstance(item, str) for item in field_value
         ):
             raise ValueError(f"Preference field {field_name} must be a list of strings.")
+    if "seniority_strict_match" in preferences and not isinstance(
+        preferences["seniority_strict_match"], bool
+    ):
+        raise ValueError("Preference field seniority_strict_match must be a boolean.")
 
     normalized = validate_onboarding_preferences_payload(
         {
@@ -322,15 +343,18 @@ def _normalized_preference_snapshot(preferences: Any) -> Dict[str, List[str]]:
                 field_name: preferences.get(field_name)
                 for field_name in PREFERENCE_LIST_FIELDS
             },
+            "seniority_strict_match": preferences.get(
+                "seniority_strict_match", False
+            ),
         }
     )
     return {
         field_name: list(normalized.get(field_name, []) or [])
         for field_name in PREFERENCE_LIST_FIELDS
-    }
+    } | {"seniority_strict_match": normalized["seniority_strict_match"]}
 
 
-def _preference_snapshot_sha256(preferences: Dict[str, List[str]]) -> str:
+def _preference_snapshot_sha256(preferences: Dict[str, Any]) -> str:
     canonical_json = json.dumps(
         preferences,
         ensure_ascii=False,
@@ -343,7 +367,7 @@ def _preference_snapshot_sha256(preferences: Dict[str, List[str]]) -> str:
 def _load_launch_config_preference_snapshot(
     *,
     env: Dict[str, str] | None = None,
-) -> tuple[Dict[str, List[str]], set[str], str]:
+) -> tuple[Dict[str, Any], set[str], str]:
     env_map = env if env is not None else os.environ
     launch_config_path = str(
         env_map.get("JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH", "") or ""
@@ -380,12 +404,16 @@ def _load_launch_config_preference_snapshot(
 
     present_fields = {
         field_name
-        for field_name in PREFERENCE_LIST_FIELDS
+        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
         if field_name in raw_preferences
     }
     item_counts = {
-        field_name: len(normalized[field_name])
-        for field_name in PREFERENCE_LIST_FIELDS
+        field_name: (
+            len(normalized[field_name])
+            if isinstance(normalized[field_name], list)
+            else int(normalized[field_name])
+        )
+        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
     }
     logger.info(
         "Launch preference snapshot loaded fields=%s item_counts=%s",
@@ -417,10 +445,20 @@ def resolve_pipeline_preference_runtime(
         else:
             sources[field_name] = "defaults"
 
+    if launch_status == "loaded" and "seniority_strict_match" in launch_fields:
+        effective["seniority_strict_match"] = requested["seniority_strict_match"]
+        sources["seniority_strict_match"] = "launch_config"
+    else:
+        sources["seniority_strict_match"] = "defaults"
+
     effective_sha256 = _preference_snapshot_sha256(effective)
     item_counts = {
-        field_name: len(effective[field_name])
-        for field_name in PREFERENCE_LIST_FIELDS
+        field_name: (
+            len(effective[field_name])
+            if isinstance(effective[field_name], list)
+            else int(effective[field_name])
+        )
+        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
     }
     source_counts = dict(Counter(sources.values()))
     logger.info(
@@ -442,6 +480,230 @@ def _truthy_env_value(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _himalayas_active_retention_enabled(
+    env: Dict[str, str] | None = None,
+) -> bool:
+    env_map = env if env is not None else os.environ
+    return _truthy_env_value(env_map.get(HIMALAYAS_ACTIVE_RETENTION_FLAG))
+
+
+def _himalayas_retention_seen_owner(
+    env: Dict[str, str] | None = None,
+) -> str:
+    env_map = env if env is not None else os.environ
+    backend = str(env_map.get("JOB_STACK_SEEN_JOBS_BACKEND", "") or "").strip().lower()
+    if backend != "postgres":
+        return ""
+    owner = str(env_map.get("JOB_STACK_OWNER_USER_ID", "") or "").strip()
+    if not owner:
+        raise RuntimeError(
+            "Himalayas active retention requires an owner for PostgreSQL seen jobs."
+        )
+    return owner
+
+
+def _retention_count(value: Any, key: str) -> int:
+    if isinstance(value, bool):
+        raise RuntimeError(f"Invalid Himalayas retention count: {key}.")
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"Invalid Himalayas retention count: {key}.") from exc
+    if count < 0:
+        raise RuntimeError(f"Invalid Himalayas retention count: {key}.")
+    return count
+
+
+def _himalayas_retention_stage_counts(
+    result: Dict[str, Any],
+    *,
+    owner_user_id: str,
+) -> Dict[str, int]:
+    if not isinstance(result, dict) or result.get("ok") is not True:
+        raise RuntimeError("Himalayas active retention failed.")
+    if result.get("dry_run") is not False or result.get("cross_store_atomic") is not False:
+        raise RuntimeError("Himalayas active retention returned unsafe execution metadata.")
+    failures = result.get("failures")
+    if not isinstance(failures, list) or failures:
+        raise RuntimeError("Himalayas active retention failed.")
+    surfaces = result.get("surfaces")
+    if not isinstance(surfaces, dict):
+        raise RuntimeError("Himalayas active retention returned incomplete results.")
+
+    jsonl = surfaces.get("jsonl")
+    rag_candidates = surfaces.get("rag_candidates")
+    rag_delete = surfaces.get("rag_delete")
+    rag_summary = surfaces.get("rag_expiry_summary")
+    seen_delete = surfaces.get("seen_delete")
+    if not all(isinstance(value, dict) for value in (
+        jsonl,
+        rag_candidates,
+        rag_delete,
+        rag_summary,
+        seen_delete,
+    )):
+        raise RuntimeError("Himalayas active retention returned incomplete results.")
+    if rag_delete.get("ok") is not True:
+        raise RuntimeError("Himalayas active retention RAG cleanup failed.")
+    _retention_count(rag_candidates.get("count"), "rag_candidate_count")
+    if owner_user_id:
+        if seen_delete.get("ok") is not True:
+            raise RuntimeError("Himalayas active retention seen cleanup failed.")
+        promoted_deleted = seen_delete.get("promoted_deleted_count")
+        staging_deleted = seen_delete.get("staging_deleted_count")
+    elif (
+        seen_delete.get("attempted") is not False
+        or seen_delete.get("reason") != "owner_not_requested"
+    ):
+        raise RuntimeError("Himalayas active retention requested unsafe seen cleanup.")
+    else:
+        promoted_deleted = 0
+        staging_deleted = 0
+
+    invalid_jsonl = _retention_count(
+        jsonl.get("missing_or_invalid_expiry"),
+        "jsonl_missing_or_invalid_expiry",
+    )
+    invalid_rag = _retention_count(
+        rag_summary.get("missing_or_invalid_expiry"),
+        "rag_missing_or_invalid_expiry",
+    )
+    malformed_jsonl = _retention_count(
+        jsonl.get("malformed_lines"),
+        "jsonl_malformed_lines",
+    )
+    return {
+        "himalayas_retention_inspected": _retention_count(
+            jsonl.get("inspected"), "jsonl_inspected"
+        ) + _retention_count(rag_summary.get("inspected"), "rag_inspected"),
+        "himalayas_retention_expired_eligible": _retention_count(
+            rag_summary.get("eligible_expired"), "rag_eligible_expired"
+        ),
+        "himalayas_retention_jsonl_pruned": _retention_count(
+            jsonl.get("expired_pruned"), "jsonl_expired_pruned"
+        ),
+        "himalayas_retention_rag_deleted": _retention_count(
+            rag_delete.get("deleted_count"), "rag_deleted_count"
+        ),
+        "himalayas_retention_seen_promoted_deleted": _retention_count(
+            promoted_deleted,
+            "seen_promoted_deleted_count",
+        ),
+        "himalayas_retention_seen_staging_deleted": _retention_count(
+            staging_deleted,
+            "seen_staging_deleted_count",
+        ),
+        "himalayas_retention_invalid_expiry_skipped": (
+            malformed_jsonl + invalid_jsonl + invalid_rag
+        ),
+        "himalayas_retention_failures": 0,
+    }
+
+
+def _complete_rag_export_with_optional_himalayas_retention(
+    scored_jobs: List[Dict[str, Any]],
+    corpus_path: str,
+    *,
+    export_owner: Callable[[List[Dict[str, Any]], str], int],
+    env: Dict[str, str] | None = None,
+    retention_owner: Callable[..., Dict[str, Any]] | None = None,
+    clock_owner: Callable[[], datetime] | None = None,
+    stage_completer: Callable[..., None] | None = None,
+) -> Dict[str, int]:
+    corpus_file = Path(corpus_path)
+    if scored_jobs:
+        rag_export_count = export_owner(scored_jobs, corpus_path)
+        logger.info("RAG corpus exported: %s documents", rag_export_count)
+    elif corpus_file.exists() and corpus_file.stat().st_size > 0:
+        rag_export_count = 0
+        logger.info(
+            "RAG export skipped because scored_jobs is empty; preserving existing corpus at %s",
+            corpus_path,
+        )
+    else:
+        rag_export_count = export_owner(scored_jobs, corpus_path)
+        logger.info("RAG corpus exported: %s documents", rag_export_count)
+
+    counts = {"rag_export_count": int(rag_export_count or 0)}
+    if _himalayas_active_retention_enabled(env):
+        try:
+            owner_user_id = _himalayas_retention_seen_owner(env)
+        except RuntimeError:
+            logger.error(
+                "Himalayas active retention failed failures=1 error_type=RuntimeError"
+            )
+            raise
+        try:
+            if retention_owner is None:
+                from src.pipeline.himalayas_retention import (
+                    run_himalayas_retention_foundation,
+                )
+
+                retention_owner = run_himalayas_retention_foundation
+            clock = (clock_owner or (lambda: datetime.now(timezone.utc)))()
+            result = retention_owner(
+                corpus_path=corpus_path,
+                owner_user_id=owner_user_id,
+                dry_run=False,
+                batch_size=250,
+                now=clock,
+            )
+            retention_counts = _himalayas_retention_stage_counts(
+                result,
+                owner_user_id=owner_user_id,
+            )
+        except Exception as exc:
+            logger.error(
+                "Himalayas active retention failed failures=1 error_type=%s",
+                type(exc).__name__,
+            )
+            raise RuntimeError("Himalayas active retention failed.") from exc
+        counts.update(retention_counts)
+        logger.info(
+            "Himalayas active retention completed inspected=%s expired_eligible=%s "
+            "jsonl_pruned=%s rag_deleted=%s seen_promoted_deleted=%s "
+            "seen_staging_deleted=%s invalid_expiry_skipped=%s failures=%s",
+            retention_counts["himalayas_retention_inspected"],
+            retention_counts["himalayas_retention_expired_eligible"],
+            retention_counts["himalayas_retention_jsonl_pruned"],
+            retention_counts["himalayas_retention_rag_deleted"],
+            retention_counts["himalayas_retention_seen_promoted_deleted"],
+            retention_counts["himalayas_retention_seen_staging_deleted"],
+            retention_counts["himalayas_retention_invalid_expiry_skipped"],
+            retention_counts["himalayas_retention_failures"],
+        )
+
+    (stage_completer or complete_stage)("rag_export", counts=counts)
+    return counts
+
+
+def _save_seen_jobs_with_optional_himalayas_expiry(
+    scored_jobs: List[Dict[str, Any]],
+    *,
+    env: Dict[str, str] | None = None,
+    cache_key_owner: Callable[[List[Dict[str, Any]]], List[str]],
+    key_save_owner: Callable[[List[str]], None],
+    structured_record_owner: Callable[[List[Dict[str, Any]]], List[Dict[str, str]]],
+    structured_save_owner: Callable[[List[Dict[str, str]]], None],
+) -> None:
+    if not _himalayas_active_retention_enabled(env):
+        key_save_owner(cache_key_owner(scored_jobs))
+        return
+
+    _himalayas_retention_seen_owner(env)
+    expected_keys = cache_key_owner(scored_jobs)
+    records = structured_record_owner(scored_jobs)
+    normalized_records = []
+    for value in records:
+        record = dict(value or {})
+        if str(record.get("source", "") or "").strip() != "himalayas":
+            record["expiry_date"] = ""
+        normalized_records.append(record)
+    if [record.get("seen_key", "") for record in normalized_records] != expected_keys:
+        raise RuntimeError("Structured seen-job keys differ from existing cache keys.")
+    structured_save_owner(normalized_records)
+
+
 def _authoritative_prefilter_dedupe_langgraph_enabled(
     env: Dict[str, str] | None = None,
 ) -> bool:
@@ -458,6 +720,8 @@ def _maybe_execute_authoritative_prefilter_dedupe_graph(
     filter_mode: str,
     role_title_audit_rows: List[Dict[str, Any]] | None,
     excluded_keywords: List[str],
+    target_seniority: List[str] | None = None,
+    seniority_strict_match: bool = False,
     on_prefilter_completed: Callable[
         [
             List[Dict[str, Any]],
@@ -487,6 +751,8 @@ def _maybe_execute_authoritative_prefilter_dedupe_graph(
     result = execute_authoritative_prefilter_dedupe_graph(
         jobs=jobs,
         selected_role_families=selected_role_families,
+        target_seniority=list(target_seniority or []),
+        seniority_strict_match=seniority_strict_match,
         filter_mode=filter_mode,
         role_title_audit_rows=role_title_audit_rows,
         excluded_keywords=excluded_keywords,
@@ -2349,9 +2615,13 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.scrapers.ashby_scraper import scrape_all_ashby
     from src.scrapers.builtin_scraper import scrape_all_builtin
     from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
+    from src.scrapers.himalayas_scraper import scrape_all_himalayas
     from src.scrapers.jobvite_scraper import scrape_all_jobvite
     from src.scrapers.lever_scraper import scrape_all_lever
+    from src.scrapers.personio_scraper import scrape_all_personio
+    from src.scrapers.recruitee_scraper import scrape_all_recruitee
     from src.scrapers.smartrecruiters_scraper import scrape_all_smartrecruiters
+    from src.scrapers.usajobs_scraper import scrape_all_usajobs
     from src.scrapers.workable_scraper import scrape_all_workable
     from src.scrapers.workday_scraper import scrape_all_workday
     from src.storage.metrics_store import (
@@ -2373,7 +2643,9 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         cache_keys_for_jobs,
         filter_new_jobs,
         load_seen_job_ids,
+        save_new_job_records,
         save_new_job_ids,
+        structured_seen_records_for_jobs,
     )
     from src.utils.pipeline_metrics import log_stage_metrics
     from src.utils import pipeline_metrics as source_health_metrics_owner
@@ -2395,17 +2667,16 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     scrapers = [
         ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),
-        (
-            "lever",
-            lambda: scrape_all_lever(
-                selected_role_families=selected_role_families,
-            ),
-        ),
+        ("lever", scrape_all_lever),
         ("ashby", scrape_all_ashby),
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
+        ("personio", scrape_all_personio),
+        ("recruitee", scrape_all_recruitee),
         ("smartrecruiters", scrape_all_smartrecruiters),
         ("builtin", scrape_all_builtin),
+        ("usajobs", scrape_all_usajobs),
+        ("himalayas", scrape_all_himalayas),
     ]
 
     all_jobs: List[Dict[str, Any]] = []
@@ -2414,7 +2685,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
         or "postgres://rag_job_documents"
     ).strip()
-    corpus_file = Path(corpus_path)
     if selected_role_families:
         logger.info(
             "Using selected role families for title filtering/ranking: %s",
@@ -2640,6 +2910,8 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         _maybe_execute_authoritative_prefilter_dedupe_graph(
             jobs=all_jobs,
             selected_role_families=selected_role_families or None,
+            target_seniority=pipeline_preferences["target_seniority"],
+            seniority_strict_match=bool(pipeline_preferences.get("seniority_strict_match", False)),
             filter_mode=(
                 "user_pipeline" if _is_user_pipeline_mode() else "strict_live"
             ),
@@ -2653,6 +2925,8 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         filter_result = filter_jobs(
             all_jobs,
             selected_role_families=selected_role_families or None,
+            target_seniority=pipeline_preferences["target_seniority"],
+            seniority_strict_match=bool(pipeline_preferences.get("seniority_strict_match", False)),
             filter_mode=(
                 "user_pipeline" if _is_user_pipeline_mode() else "strict_live"
             ),
@@ -3047,31 +3321,21 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
 
-    if scored_jobs:
-        rag_export_count = export_job_corpus(
-            scored_jobs,
-            corpus_path,
-        )
-        logger.info(f"RAG corpus exported: {rag_export_count} documents")
-    else:
-        if corpus_file.exists() and corpus_file.stat().st_size > 0:
-            rag_export_count = 0
-            logger.info(
-                "RAG export skipped because scored_jobs is empty; preserving existing corpus at %s",
-                corpus_path,
-            )
-        else:
-            rag_export_count = export_job_corpus(
-                scored_jobs,
-                corpus_path,
-            )
-            logger.info(f"RAG corpus exported: {rag_export_count} documents")
-
-    complete_stage("rag_export", counts={"rag_export_count": rag_export_count})
+    _complete_rag_export_with_optional_himalayas_retention(
+        scored_jobs,
+        corpus_path,
+        export_owner=export_job_corpus,
+    )
 
     log_market_insights(detailed_jobs)
 
-    save_new_job_ids(cache_keys_for_jobs(scored_jobs))
+    _save_seen_jobs_with_optional_himalayas_expiry(
+        scored_jobs,
+        cache_key_owner=cache_keys_for_jobs,
+        key_save_owner=save_new_job_ids,
+        structured_record_owner=structured_seen_records_for_jobs,
+        structured_save_owner=save_new_job_records,
+    )
     persist_discovered_companies()
 
     pipeline_runtime = round(time.time() - start_total, 2)
@@ -3098,6 +3362,27 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
 
     if _is_user_pipeline_mode():
+        source_health_artifact_path = (
+            Path(corpus_path)
+            .expanduser()
+            .with_name("source_acquisition_metrics.json")
+        )
+        write_source_health_artifact = getattr(
+            source_health_metrics_owner,
+            "write_source_acquisition_metrics_artifact",
+            None,
+        )
+        if not callable(write_source_health_artifact):
+            raise RuntimeError("Run-scoped source-health artifact owner is unavailable.")
+        write_source_health_artifact(
+            persisted_source_health_metrics,
+            source_health_artifact_path,
+        )
+        logger.info(
+            "Run-scoped source acquisition metrics written: %s | rows=%s",
+            source_health_artifact_path,
+            len(persisted_source_health_metrics),
+        )
         section("PIPELINE HEALTH", logger)
         logger.info(
             "Skipping global pipeline metrics store for user pipeline run. "

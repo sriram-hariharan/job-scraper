@@ -437,6 +437,7 @@ def build_scheduler_launchd_plist_payload(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     allow_contract_drift: bool = False,
+    himalayas_active_retention_enabled: bool = False,
     launchd_interval_seconds: Any = DEFAULT_LAUNCHD_INTERVAL_SECONDS,
     launchd_out_dir: Any = DEFAULT_LAUNCHD_OUT_DIR,
     launchd_log_dir: Any = DEFAULT_LAUNCHD_LOG_DIR,
@@ -492,6 +493,13 @@ def build_scheduler_launchd_plist_payload(
         "ProcessType": "Background",
         "AbandonProcessGroup": True,
     }
+    if (
+        get_scheduled_job_definition(job_name)["name"] == "live_pipeline"
+        and himalayas_active_retention_enabled
+    ):
+        plist_data["EnvironmentVariables"] = {
+            "APPLYLENS_HIMALAYAS_ACTIVE_RETENTION_ENABLED": "1",
+        }
     plist_xml = plistlib.dumps(
         plist_data,
         fmt=plistlib.FMT_XML,
@@ -502,6 +510,9 @@ def build_scheduler_launchd_plist_payload(
         "job_name": get_scheduled_job_definition(job_name)["name"],
         "planning_only": bool(planning_only),
         "run_application_planning": bool(run_application_planning),
+        "himalayas_active_retention_enabled": bool(
+            himalayas_active_retention_enabled
+        ),
         "label": label,
         "launchd_label_prefix": _normalize_launchd_label_piece(
             launchd_label_prefix,
@@ -828,6 +839,11 @@ def _parse_args():
         help="For optional Postgres run-history sync: allow sync even if scheduler SQL artifact drift checks fail.",
     )
     parser.add_argument(
+        "--enable-himalayas-active-retention",
+        action="store_true",
+        help="For live_pipeline launchd only: enable Himalayas active retention.",
+    )
+    parser.add_argument(
         "--emit-launchd-plist",
         action="store_true",
         help="Build and print a launchd plist preview for this scheduler job instead of running it.",
@@ -961,6 +977,9 @@ def main() -> int:
         "database_url_env": args.database_url_env,
         "psql_bin": args.psql_bin,
         "allow_contract_drift": bool(args.allow_contract_drift),
+        "himalayas_active_retention_enabled": bool(
+            args.enable_himalayas_active_retention
+        ),
         "launchd_interval_seconds": args.launchd_interval_seconds,
         "launchd_out_dir": args.launchd_out_dir,
         "launchd_log_dir": args.launchd_log_dir,

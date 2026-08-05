@@ -41,6 +41,7 @@ def test_onboarding_client_saves_preferences():
     assert '"/onboarding/preferences"' in source
     assert "selected_role_families" in source
     assert "onboarding_completed" in source
+    assert "seniority_strict_match" in source
     assert "work_modes" not in source
 
 
@@ -74,6 +75,27 @@ def test_onboarding_and_profile_share_accessible_location_selector_contract():
     assert "location_show_others_if_unmatched" in profile_js
     assert "preferredLocationsInput" not in onboarding_form
     assert "profilePreferredLocationsInput" not in profile_form
+
+
+def test_onboarding_and_profile_share_strict_seniority_switch_contract():
+    onboarding_js = Path("src/app/static/onboarding.js").read_text(encoding="utf-8")
+    profile_js = Path("src/app/static/profile.js").read_text(encoding="utf-8")
+    workflow_js = Path("src/app/static/preferences_workflow.js").read_text(encoding="utf-8")
+    onboarding_form = _preferences_workflow_form_html(prefix="onboarding", mode="onboarding")
+    profile_form = _preferences_workflow_form_html(prefix="profilePreferences", mode="profile")
+
+    for form in (onboarding_form, profile_form):
+        assert 'name="seniority_strict_match"' in form
+        assert 'data-seniority-strict disabled' in form
+        assert "Only show selected seniority levels" in form
+        assert "When enabled, jobs with other or unknown seniority levels are removed." in form
+        assert "Seniority used for ranking" in form
+        assert "Strict seniority filtering" in form
+    assert "syncOnboardingSeniorityStrictToggle" in onboarding_js
+    assert "syncProfileSeniorityStrictToggle" in profile_js
+    assert "strictToggle.checked = false" in onboarding_js
+    assert "strictToggle.checked = false" in profile_js
+    assert "seniority_policy" in workflow_js
 
 
 def test_location_selector_preserves_legacy_chips_and_strict_fallback_semantics():

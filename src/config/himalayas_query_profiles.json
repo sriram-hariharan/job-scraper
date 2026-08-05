@@ -1,0 +1,9 @@
+[
+  {
+    "profile_id": "data-us",
+    "query": "data",
+    "country": "US",
+    "exclude_worldwide": true,
+    "sort": "recent"
+  }
+]

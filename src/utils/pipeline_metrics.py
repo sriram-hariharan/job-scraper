@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Iterable, Optional, Tuple
 from urllib.parse import urlsplit
@@ -25,6 +27,10 @@ DEGRADED = "degraded"
 UNHEALTHY = "unhealthy"
 UNKNOWN = "unknown"
 _HEALTH_ORDER = {UNKNOWN: 0, HEALTHY: 1, DEGRADED: 2, UNHEALTHY: 3}
+SOURCE_ACQUISITION_METRICS_ARTIFACT = "source_acquisition_metrics.json"
+SOURCE_ACQUISITION_METRICS_SCHEMA_VERSION = "source-acquisition-metrics-v1"
+SOURCE_ACQUISITION_METRICS_MAX_ROWS = 10_000
+SOURCE_ACQUISITION_METRICS_MAX_BYTES = 5 * 1024 * 1024
 
 
 def _bounded_text(value: Any, limit: int) -> str:
@@ -368,6 +374,114 @@ def combine_source_stage_metrics(
     return tuple(
         sorted(acquisitions + tuple(summaries), key=lambda item: (item.source, item.company))
     )
+
+
+def _artifact_timestamp(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    return ""
+
+
+def _acquisition_artifact_row(metric: SourceHealthMetrics) -> dict:
+    return {
+        "source": _safe_identity(metric.source, 64),
+        "company": _safe_identity(metric.company),
+        "acquisition_status": _bounded_text(metric.acquisition_status, 16),
+        "reason_code": _bounded_text(metric.reason_code, 64),
+        "source_health": _bounded_text(metric.health, 16),
+        "request_count": max(0, int(metric.request_count or 0)),
+        "retry_count": max(0, int(metric.retry_count or 0)),
+        "response_status_counts": {
+            str(int(code)): max(0, int(count))
+            for code, count in sorted(metric.response_status_counts or ())
+        },
+        "page_count": metric.page_count,
+        "raw_job_count": metric.raw_job_count,
+        "normalized_job_count": max(0, int(metric.normalized_job_count or 0)),
+        "partial_result_count": max(0, int(metric.partial_result_count or 0)),
+        "canonical_url_present_count": max(
+            0, int(metric.canonical_url_present_count or 0)
+        ),
+        "canonical_url_missing_count": max(
+            0, int(metric.canonical_url_missing_count or 0)
+        ),
+        "timestamp_present_count": max(0, int(metric.timestamp_present_count or 0)),
+        "timestamp_missing_count": max(0, int(metric.timestamp_missing_count or 0)),
+        "description_present_count": max(
+            0, int(metric.description_present_count or 0)
+        ),
+        "description_missing_count": max(
+            0, int(metric.description_missing_count or 0)
+        ),
+        "started_at": _artifact_timestamp(metric.started_at),
+        "completed_at": _artifact_timestamp(metric.completed_at),
+        "duration_ms": metric.duration_ms,
+        "schedule_advanced": bool(metric.schedule_advanced),
+    }
+
+
+def _source_stage_artifact_row(metric: SourceHealthMetrics) -> dict:
+    normalized_count = max(0, int(metric.normalized_job_count or 0))
+    filter_drop_count = max(0, int(metric.filter_drop_count or 0))
+    filtered_count = max(0, normalized_count - filter_drop_count)
+    duplicate_drop_count = max(0, int(metric.duplicate_drop_count or 0))
+    return {
+        "source": _safe_identity(metric.source, 64),
+        "source_health": _bounded_text(metric.health, 16),
+        "normalized_job_count": normalized_count,
+        "filter_drop_count": filter_drop_count,
+        "after_central_filter_count": filtered_count,
+        "duplicate_drop_count": duplicate_drop_count,
+        "after_dedupe_count": max(0, filtered_count - duplicate_drop_count),
+        "final_retained_job_count": max(
+            0, int(metric.final_retained_job_count or 0)
+        ),
+    }
+
+
+def write_source_acquisition_metrics_artifact(
+    metrics: Iterable[SourceHealthMetrics],
+    output_path: Path,
+) -> Path:
+    """Atomically write bounded, run-scoped evidence from finalized metrics."""
+    rows = tuple(metrics or ())
+    if len(rows) > SOURCE_ACQUISITION_METRICS_MAX_ROWS:
+        raise ValueError("Source acquisition metrics artifact row limit exceeded.")
+
+    ordered = sorted(rows, key=lambda item: (item.source, item.company))
+    payload = {
+        "schema_version": SOURCE_ACQUISITION_METRICS_SCHEMA_VERSION,
+        "acquisition_metrics": [
+            _acquisition_artifact_row(metric)
+            for metric in ordered
+            if str(metric.company or "").strip()
+        ],
+        "source_stage_metrics": [
+            _source_stage_artifact_row(metric)
+            for metric in ordered
+            if not str(metric.company or "").strip()
+        ],
+    }
+    rendered = json.dumps(
+        payload,
+        indent=2,
+        ensure_ascii=False,
+        sort_keys=True,
+        allow_nan=False,
+    ) + "\n"
+    if len(rendered.encode("utf-8")) > SOURCE_ACQUISITION_METRICS_MAX_BYTES:
+        raise ValueError("Source acquisition metrics artifact byte limit exceeded.")
+
+    path = Path(output_path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp_path.write_text(rendered, encoding="utf-8")
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
+    return path
 
 
 def log_stage_metrics(stage_name, jobs):

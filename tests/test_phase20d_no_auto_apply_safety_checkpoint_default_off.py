@@ -8,7 +8,21 @@ from pathlib import Path
 import subprocess
 
 from tests.support.phase_guard_registry import (
+    HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
+    HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
+    HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
+    HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES,
+    HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
+    HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
+    HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
+    PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
+    PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
+    PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
+    PERSONIO_SOURCE_INTEGRATION_FILES,
+    RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
+    TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
+    USAJOBS_SOURCE_INTEGRATION_FILES,
     assert_changed_files_allowed,
     assert_protected_hashes,
     get_changed_files,
@@ -111,7 +125,23 @@ def test_docs_confirm_phase20a_through_c_performed_no_live_actions():
 
 
 def test_protected_runtime_files_are_unchanged():
-    assert_protected_hashes(ROOT, PROTECTED_HASHES)
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "himalayas_step6d_c_source_retirement",
+            "himalayas_step6d_b2_retention_integration",
+            "himalayas_step6c1_pagination_repair",
+            "himalayas_step6b2_source_integration",
+            "himalayas_step6b1_attribution_foundation",
+            "phase129c_workflow_overlay_and_run_scoped_corpus",
+            "usajobs_source_integration",
+            "personio_source_integration",
+            "recruitee_source_integration",
+            "phase2d_a_independent_seniority_policy",
+            "phase2d_b2_strict_seniority_filter",
+        ),
+    )
 
 
 def test_phase20d_changes_only_docs_tests_and_legacy_guards():
@@ -817,6 +847,13 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         changed,
         allowed | legacy_guards,
         legacy_guard_profiles=(
+            "himalayas_step6e_r1_location_activation",
+            "himalayas_step6d_c_source_retirement",
+            "himalayas_step6d_b2_retention_integration",
+            "himalayas_step6d_b1_retention_foundation",
+            "himalayas_step6c1_pagination_repair",
+            "himalayas_step6b2_source_integration",
+            "himalayas_step6b1_attribution_foundation",
             "phase85b_registry",
             "config_vocabulary_scoring_change",
             "active_ts_clearance_diagnostic",
@@ -827,6 +864,8 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "llm_adjudicator_readback_default_off",
             "phase133g_premium_planning_dashboard",
             "phase10_step8_shadow_observation_safety",
+            "usajobs_source_integration",
+            "personio_source_integration",
         ),
     )
 
@@ -839,6 +878,158 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    himalayas_step6e_r1_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step6e_r1_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    himalayas_step6d_c_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step6d_c_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    himalayas_step6d_b2_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step6d_b2_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    himalayas_step6d_b1_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step6d_b1_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    phase2c_runtime_files = {
+        ROOT / relative_path
+        for relative_path in TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == phase2c_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase2d_a_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == phase2d_a_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase2d_b1_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == phase2d_b1_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    phase2d_b2_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == phase2d_b2_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     source_health_runtime_files = {
         ROOT / relative_path
         for relative_path in SCRAPER_SOURCE_HEALTH_METRICS_FILES
@@ -846,6 +1037,162 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == source_health_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    recruitee_runtime_files = {
+        ROOT / relative_path
+        for relative_path in RECRUITEE_SOURCE_INTEGRATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == recruitee_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    personio_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PERSONIO_SOURCE_INTEGRATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == personio_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    himalayas_step6c1_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step6c1_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    himalayas_step6b2_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step6b2_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    himalayas_step6b1_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step6b1_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    usajobs_runtime_files = {
+        ROOT / relative_path
+        for relative_path in USAJOBS_SOURCE_INTEGRATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == usajobs_runtime_files:
         diff = subprocess.check_output(
             [
                 "git",

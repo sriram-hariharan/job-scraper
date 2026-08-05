@@ -12,6 +12,7 @@ from src.scrapers import (
     builtin_scraper,
     greenhouse_scraper,
     lever_scraper,
+    personio_scraper,
     workable_scraper,
     workday_scraper,
 )
@@ -88,10 +89,8 @@ def _workable_posting(index):
 
 
 def _prepare_workday(monkeypatch):
-    monkeypatch.setattr(workday_scraper, "title_matches", lambda title: True)
     monkeypatch.setattr(workday_scraper, "normalize_workday_url", lambda url: url)
     monkeypatch.setattr(workday_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(workday_scraper, "fetch_workday_timestamp", lambda *args: None)
     monkeypatch.setattr(workday_scraper.time, "sleep", lambda seconds: None)
 
 
@@ -527,29 +526,62 @@ def test_workday_later_page_failure_retains_earlier_jobs(monkeypatch):
     assert outcome.should_mark_scraped is False
 
 
-def test_workable_verified_empty_and_normal_short_page(monkeypatch):
+def test_workable_verified_empty_and_normal_public_payload(monkeypatch):
     _prepare_workable(monkeypatch)
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: _Response({"results": []}),
-    )
-    empty = workable_scraper._fetch_company_outcome("empty")
+    calls = []
+    responses = iter([
+        _Response({"jobs": []}),
+        _Response(
+            {
+                "jobs": [
+                    _workable_posting(index)
+                    for index in range(3)
+                ]
+            }
+        ),
+    ])
+
+    def get(url, **kwargs):
+        calls.append(
+            (
+                url,
+                kwargs.get("params"),
+                kwargs.get("timeout"),
+            )
+        )
+        return next(responses)
 
     monkeypatch.setattr(
         workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: _Response(
-            {"results": [_workable_posting(index) for index in range(3)]}
-        ),
+        "workable_get",
+        get,
     )
+
+    empty = workable_scraper._fetch_company_outcome("empty")
     success = workable_scraper._fetch_company_outcome("acme")
 
     assert empty.status is AcquisitionStatus.EMPTY
+    assert empty.page_count == 1
     assert success.status is AcquisitionStatus.SUCCESS
+    assert success.page_count == 1
     assert len(success.jobs) == 3
     assert success.company == "acme"
-    assert {job["company"] for job in success.jobs} == {"acme"}
+    assert {
+        job["company"]
+        for job in success.jobs
+    } == {"acme"}
+    assert calls == [
+        (
+            "https://www.workable.com/api/accounts/empty",
+            {"details": "true"},
+            10,
+        ),
+        (
+            "https://www.workable.com/api/accounts/acme",
+            {"details": "true"},
+            10,
+        ),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -557,94 +589,65 @@ def test_workable_verified_empty_and_normal_short_page(monkeypatch):
     [
         (_Response(status_code=503), "non_200_response"),
         (_Response(payload=[]), "malformed_payload"),
+        (
+            _Response(payload={"jobs": {}}),
+            "malformed_payload",
+        ),
     ],
 )
-def test_workable_first_page_failure_does_not_fall_back_to_empty(
+def test_workable_public_request_failures_are_explicit(
     monkeypatch,
     response,
     reason,
 ):
     _prepare_workable(monkeypatch)
-    fallback_calls = []
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: response,
-    )
     monkeypatch.setattr(
         workable_scraper,
         "workable_get",
-        lambda *args, **kwargs: fallback_calls.append(True) or _Response({"jobs": []}),
+        lambda *args, **kwargs: response,
     )
 
     outcome = workable_scraper._fetch_company_outcome("acme")
 
     assert outcome.status is AcquisitionStatus.FAILED
     assert outcome.reason == reason
-    assert fallback_calls == []
+    assert outcome.should_mark_scraped is False
 
 
-@pytest.mark.parametrize("mode", ["repeated", "no_progress"])
-def test_workable_repeated_and_no_progress_pages_are_partial(monkeypatch, mode):
+def test_workable_public_payload_is_not_locally_page_truncated(
+    monkeypatch,
+):
     _prepare_workable(monkeypatch)
-    first_jobs = [_workable_posting(index) for index in range(50)]
-    second_jobs = list(first_jobs)
-    if mode == "no_progress":
-        second_jobs = list(reversed(second_jobs))
-    responses = iter([
-        _Response({"results": first_jobs}),
-        _Response({"results": second_jobs}),
-    ])
+    jobs = [
+        _workable_posting(index)
+        for index in range(75)
+    ]
+
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _Response(
+            {"jobs": jobs}
+        ),
+    )
     monkeypatch.setattr(
         workable_scraper,
         "workable_post",
-        lambda *args, **kwargs: next(responses),
+        lambda *args, **kwargs: (
+            _ for _ in ()
+        ).throw(
+            AssertionError(
+                "obsolete Workable POST route was called"
+            )
+        ),
     )
 
     outcome = workable_scraper._fetch_company_outcome("acme")
 
-    assert outcome.status is AcquisitionStatus.PARTIAL
-    assert outcome.reason == "pagination_interrupted"
-    assert len(outcome.jobs) == 50
-    assert outcome.should_mark_scraped is False
-
-
-def test_workable_page_cap_is_finite_and_partial(monkeypatch):
-    _prepare_workable(monkeypatch)
-    calls = []
-    monkeypatch.setattr(workable_scraper, "WORKABLE_MAX_PAGES", 1)
-
-    def post(*args, **kwargs):
-        calls.append(kwargs["json"]["offset"])
-        return _Response(
-            {"results": [_workable_posting(index) for index in range(50)]}
-        )
-
-    monkeypatch.setattr(workable_scraper, "workable_post", post)
-    outcome = workable_scraper._fetch_company_outcome("acme")
-
-    assert calls == [0]
-    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.status is AcquisitionStatus.SUCCESS
     assert outcome.page_count == 1
-    assert outcome.should_mark_scraped is False
-
-
-def test_workable_later_page_failure_retains_earlier_jobs(monkeypatch):
-    _prepare_workable(monkeypatch)
-    responses = iter([
-        _Response({"results": [_workable_posting(index) for index in range(50)]}),
-        _Response(status_code=503),
-    ])
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: next(responses),
-    )
-    outcome = workable_scraper._fetch_company_outcome("acme")
-
-    assert outcome.status is AcquisitionStatus.PARTIAL
-    assert len(outcome.jobs) == 50
-    assert outcome.should_mark_scraped is False
+    assert outcome.raw_job_count == 75
+    assert len(outcome.jobs) == 75
 
 
 def test_source_retry_and_pagination_constants_are_bounded():
@@ -655,6 +658,10 @@ def test_source_retry_and_pagination_constants_are_bounded():
     assert consts.WORKDAY_PAGE_SIZE == 20
     assert consts.WORKABLE_PAGE_SIZE == 50
 
+    assert 0 < personio_scraper.PERSONIO_MAX_XML_BYTES <= 10 * 1024 * 1024
+    assert 0 < personio_scraper.PERSONIO_MAX_POSITIONS < 10_000
+    assert 0 < personio_scraper.PERSONIO_MAX_DESCRIPTION_CHARS <= 200_000
+
 
 def test_hardening_paths_add_no_persistence_or_application_authority():
     modules = (
@@ -664,6 +671,7 @@ def test_hardening_paths_add_no_persistence_or_application_authority():
         workday_scraper,
         workable_scraper,
         builtin_scraper,
+        personio_scraper,
     )
     forbidden = (
         "submit_application",

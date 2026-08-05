@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import types
+from copy import deepcopy
 from pathlib import Path
 
 class _FakeTqdm:
@@ -149,3 +150,95 @@ def test_build_job_document_accepts_non_string_posted_at():
 
     assert doc["posted_at"] == "20260522"
 
+
+def test_job_document_normalizes_list_location_without_mutating_input():
+    from src.rag.job_document_builder import build_job_document
+
+    job = _job("list-location")
+    job["location"] = ["United States", "Canada", "United States", "", 7]
+    original = deepcopy(job)
+
+    doc = build_job_document(job)
+
+    assert doc["location"] == "United States, Canada"
+    assert "Location: United States, Canada" in doc["retrieval_text"]
+    assert doc["doc_id"] == job["url"]
+    assert job == original
+
+    fallback_job = deepcopy(job)
+    fallback_job["url"] = ""
+    assert build_job_document(fallback_job)["doc_id"] == build_job_document(
+        deepcopy(fallback_job)
+    )["doc_id"]
+
+    string_job = _job("string-location")
+    string_job["location"] = "  New York, NY  "
+    assert build_job_document(string_job)["location"] == "New York, NY"
+    empty_list_job = _job("empty-list-location")
+    empty_list_job["location"] = []
+    assert build_job_document(empty_list_job)["location"] == ""
+
+
+def test_job_document_preserves_bounded_attribution_outside_retrieval_text():
+    from src.rag import job_document_builder
+
+    job = _job("attributed")
+    job.update(
+        {
+            "provider_attribution_required": True,
+            "provider_attribution_label": "  " + "H" * 250 + "  ",
+            "provider_attribution_url": "  https://himalayas.app/" + "x" * 2200 + "  ",
+        }
+    )
+    doc = job_document_builder.build_job_document(job)
+
+    assert doc["provider_attribution_required"] is True
+    assert doc["provider_attribution_label"] == "H" * 200
+    assert len(doc["provider_attribution_url"]) == 2048
+    assert doc["provider_attribution_url"].startswith("https://himalayas.app/")
+    assert "provider_attribution" not in doc["retrieval_text"]
+    assert "Himalayas" not in doc["retrieval_text"]
+    assert doc["doc_id"] == job["url"]
+    assert doc["job_url"] == job["url"]
+
+
+def test_job_document_attribution_defaults_and_boolean_safety():
+    from src.rag.job_document_builder import build_job_document
+
+    defaults = build_job_document(_job("default"))
+    assert defaults["provider_attribution_required"] is False
+    assert defaults["provider_attribution_label"] == ""
+    assert defaults["provider_attribution_url"] == ""
+
+    for value in ("true", "false", "1", 1):
+        job = _job(f"value-{value}")
+        job["provider_attribution_required"] = value
+        assert build_job_document(job)["provider_attribution_required"] is False
+
+
+def test_exported_document_retains_provider_attribution():
+    job = _job("transport")
+    job.update(
+        {
+            "provider_attribution_required": True,
+            "provider_attribution_label": "Himalayas",
+            "provider_attribution_url": "https://himalayas.app",
+        }
+    )
+    original_upsert = exporter.upsert_rag_job_documents
+    original_count = exporter.count_rag_job_documents
+    exporter.upsert_rag_job_documents = lambda docs: {"upserted_count": len(list(docs))}
+    exporter.count_rag_job_documents = lambda: 999
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_path = Path(tmp_dir) / "corpus.jsonl"
+        try:
+            exporter.export_job_corpus([job], str(output_path), merge_existing=False)
+        finally:
+            exporter.upsert_rag_job_documents = original_upsert
+            exporter.count_rag_job_documents = original_count
+        row = _read_jsonl(output_path)[0]
+
+    assert row["provider_attribution_required"] is True
+    assert row["provider_attribution_label"] == "Himalayas"
+    assert row["provider_attribution_url"] == "https://himalayas.app"

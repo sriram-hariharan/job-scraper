@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import sys
 import types
 
@@ -62,20 +63,8 @@ def _fetch(payload):
     return asyncio.run(lever_scraper.fetch_company_jobs(_FakeSession(payload), "acme"))
 
 
-def test_default_lever_scraping_still_rejects_backend_title(monkeypatch):
-    monkeypatch.delenv("JOB_STACK_SELECTED_ROLE_FAMILIES", raising=False)
+def test_lever_acquisition_returns_backend_title_without_preferences(monkeypatch):
     monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: True)
-
-    jobs = _fetch([_lever_job("Backend Engineer")])
-
-    assert jobs == []
-
-
-def test_lever_early_filter_accepts_selected_backend_role(monkeypatch):
-    monkeypatch.setenv("JOB_STACK_SELECTED_ROLE_FAMILIES", '["backend_engineering"]')
-    monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: True)
 
     jobs = _fetch([_lever_job("Backend Engineer")])
 
@@ -84,51 +73,39 @@ def test_lever_early_filter_accepts_selected_backend_role(monkeypatch):
     assert jobs[0]["job_id"] == "lv_posting-123"
 
 
-def test_lever_early_filter_accepts_resolved_role_argument_without_env(monkeypatch):
-    monkeypatch.delenv("JOB_STACK_SELECTED_ROLE_FAMILIES", raising=False)
-    monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: True)
-
-    jobs = asyncio.run(
-        lever_scraper.fetch_company_jobs(
-            _FakeSession([_lever_job("Backend Engineer")]),
-            "acme",
-            selected_role_families=["backend_engineering"],
-        )
-    )
-
-    assert [job["title"] for job in jobs] == ["Backend Engineer"]
-
-
-def test_lever_early_filter_accepts_selected_software_role(monkeypatch):
-    monkeypatch.setenv("JOB_STACK_SELECTED_ROLE_FAMILIES", '["software_engineering"]')
-    monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: True)
-
-    jobs = _fetch([_lever_job("Software Engineer")])
-
-    assert [job["title"] for job in jobs] == ["Software Engineer"]
-
-
-def test_invalid_selected_role_family_json_falls_back_to_default(monkeypatch):
-    monkeypatch.setenv("JOB_STACK_SELECTED_ROLE_FAMILIES", "{")
-    monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: True)
-
-    jobs = _fetch([_lever_job("Backend Engineer")])
-
-    assert jobs == []
-
-
-def test_lever_location_and_freshness_filters_still_apply(monkeypatch):
+def test_lever_acquisition_ignores_role_preference_environment(monkeypatch):
     monkeypatch.setenv("JOB_STACK_SELECTED_ROLE_FAMILIES", '["backend_engineering"]')
     monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: True)
 
-    wrong_location_jobs = _fetch([_lever_job("Backend Engineer", location="London, UK")])
+    jobs = _fetch([_lever_job("Data Scientist")])
 
-    monkeypatch.setattr(lever_scraper, "posted_within_24h", lambda posted_at: False)
-    stale_jobs = _fetch([_lever_job("Backend Engineer", location="New York, NY")])
+    assert [job["title"] for job in jobs] == ["Data Scientist"]
 
-    assert wrong_location_jobs == []
-    assert stale_jobs == []
+
+def test_lever_public_acquisition_entrypoints_have_no_role_argument(monkeypatch):
+    monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
+
+    assert "selected_role_families" not in inspect.signature(
+        lever_scraper.fetch_company_jobs
+    ).parameters
+    assert "selected_role_families" not in inspect.signature(
+        lever_scraper.scrape_all_lever
+    ).parameters
+
+
+def test_lever_acquisition_retains_non_us_and_old_jobs(monkeypatch):
+    monkeypatch.setattr(lever_scraper, "learn_from_job_url", lambda url: None)
+
+    jobs = _fetch(
+        [
+            _lever_job(
+                "Backend Engineer",
+                location="London, UK",
+                created_at=946684800000,
+            )
+        ]
+    )
+
+    assert len(jobs) == 1
+    assert jobs[0]["location"] == "London, UK"
+    assert jobs[0]["posted_at"] == 946684800000

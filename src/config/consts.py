@@ -143,6 +143,11 @@ ATS_JOBVITE = "jobvite"
 GREENHOUSE_API = "https://boards-api.greenhouse.io/v1/boards/{}/jobs"
 ASHBY_URL = "https://jobs.ashbyhq.com/api/non-user-graphql"
 LEVER_API = "https://api.lever.co/v0/postings"
+RECRUITEE_API = "https://{tenant}.recruitee.com/api/offers/"
+PERSONIO_XML_URL = "https://{host}/xml?language=en"
+USAJOBS_SEARCH_API = "https://data.usajobs.gov/api/search"
+HIMALAYAS_SEARCH_API = "https://himalayas.app/jobs/api/search"
+WORKABLE_PUBLIC_ACCOUNT_API = "https://www.workable.com/api/accounts/{}"
 WORKABLE_V3_API = "https://apply.workable.com/api/v3/accounts/{}/jobs"
 WORKABLE_V1_API = "https://apply.workable.com/api/v1/widget/accounts/{}"
 WORKABLE_V2_DETAIL_API = "https://apply.workable.com/api/v2/accounts/{}/jobs/{}"
@@ -167,6 +172,21 @@ WORKDAY_PAGE_SIZE = 20
 WORKDAY_MAX_PAGES = 100
 WORKABLE_PAGE_SIZE = 50
 WORKABLE_MAX_PAGES = 100
+
+USAJOBS_QUERY_PROFILES_PATH = "src/config/usajobs_query_profiles.json"
+USAJOBS_MAX_QUERY_PROFILES = 4
+USAJOBS_RESULTS_PER_PAGE = 50
+USAJOBS_MAX_PAGES_PER_PROFILE = 20
+USAJOBS_DATE_POSTED_DAYS = 1
+USAJOBS_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+USAJOBS_MAX_DESCRIPTION_CHARS = 100_000
+
+HIMALAYAS_QUERY_PROFILES_PATH = "src/config/himalayas_query_profiles.json"
+HIMALAYAS_MAX_QUERY_PROFILES = 4
+HIMALAYAS_RESULTS_PER_PAGE = 20
+HIMALAYAS_MAX_PAGES_PER_PROFILE = 2
+HIMALAYAS_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+HIMALAYAS_MAX_DESCRIPTION_CHARS = 100_000
 
 BUILTIN_HTTP_TIMEOUT_SECONDS = 15
 

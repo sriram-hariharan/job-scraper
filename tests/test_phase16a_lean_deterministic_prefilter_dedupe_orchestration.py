@@ -57,11 +57,15 @@ def _direct(
     selected_role_families: list[str] | None = None,
     excluded_keywords: list[str] | None = None,
     audit_enabled: bool = False,
+    target_seniority: list[str] | None = None,
+    seniority_strict_match: bool = False,
 ) -> dict:
     audit_rows = [] if audit_enabled else None
     filtered_jobs, diagnostics = job_filter.filter_jobs(
         deepcopy(jobs),
         selected_role_families=selected_role_families,
+        target_seniority=target_seniority,
+        seniority_strict_match=seniority_strict_match,
         filter_mode="strict_live",
         return_diagnostics=True,
         role_title_audit_rows=audit_rows,
@@ -81,10 +85,14 @@ def _graph(
     selected_role_families: list[str] | None = None,
     excluded_keywords: list[str] | None = None,
     audit_enabled: bool = False,
+    target_seniority: list[str] | None = None,
+    seniority_strict_match: bool = False,
 ) -> dict:
     return graph_owner.execute_authoritative_prefilter_dedupe_graph(
         jobs=jobs,
         selected_role_families=selected_role_families,
+        target_seniority=target_seniority,
+        seniority_strict_match=seniority_strict_match,
         filter_mode="strict_live",
         role_title_audit_rows=[] if audit_enabled else None,
         excluded_keywords=list(excluded_keywords or []),
@@ -214,6 +222,8 @@ def test_gate_on_lazily_imports_graph_and_forwards_existing_context(
     assert captured["owner_user_id"] == "owner-16a"
     assert captured["context_id"] == "context-16a"
     assert captured["selected_role_families"] == ["data_science"]
+    assert captured["target_seniority"] == []
+    assert captured["seniority_strict_match"] is False
     assert captured["filter_mode"] == "user_pipeline"
     assert captured["excluded_keywords"] == ["intern"]
 
@@ -226,6 +236,43 @@ def test_production_path_direct_and_graph_outputs_are_identical():
     assert graph["filtered_jobs"] == direct["filtered_jobs"]
     assert graph["filter_diagnostics"] == direct["filter_diagnostics"]
     assert graph["deduplicated_jobs"] == direct["deduplicated_jobs"]
+
+
+def test_supplemental_replacement_has_direct_and_graph_parity():
+    supplemental = {
+        **_job("himalayas", source="himalayas"),
+        "provider_attribution_required": True,
+        "provider_attribution_label": "Himalayas",
+        "provider_attribution_url": "https://himalayas.app",
+    }
+    direct_job = _job("direct", source="greenhouse")
+
+    direct = _direct([supplemental, direct_job])
+    graph = _graph([supplemental, direct_job])
+
+    assert direct["deduplicated_jobs"] == [direct_job]
+    assert graph["deduplicated_jobs"] == direct["deduplicated_jobs"]
+    assert graph["execution_metadata"]["production_node_count"] == 2
+    assert graph["execution_metadata"]["dedupe_invocation_count"] == 1
+
+
+def test_strict_seniority_direct_and_graph_outputs_are_identical():
+    jobs = [
+        _job("senior", title="Senior Data Scientist"),
+        _job("staff", title="Staff Data Scientist"),
+        _job("unknown", title="Data Scientist"),
+    ]
+    kwargs = {
+        "selected_role_families": ["data_science"],
+        "target_seniority": ["senior"],
+        "seniority_strict_match": True,
+        "audit_enabled": True,
+    }
+    direct = _direct(jobs, **kwargs)
+    graph = _graph(jobs, **kwargs)
+    assert [job["job_id"] for job in direct["filtered_jobs"]] == ["senior"]
+    assert graph["filtered_jobs"] == direct["filtered_jobs"]
+    assert graph["role_title_audit_rows"] == direct["role_title_audit_rows"]
 
 
 def test_direct_and_graph_audit_rows_are_identical():

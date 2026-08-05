@@ -208,15 +208,31 @@ function markProfilePreferencesDirty() {
   setProfilePreferencesChangeState("Unsaved changes", "dirty");
 }
 
+function syncProfileSeniorityStrictToggle() {
+  const strictToggle = qs("profilePreferencesForm")?.querySelector(
+    'input[name="seniority_strict_match"]'
+  );
+  if (!strictToggle) return;
+  const hasSeniority = profilePreferenceCheckedValues("target_seniority").length > 0;
+  strictToggle.disabled = !hasSeniority;
+  if (!hasSeniority) strictToggle.checked = false;
+}
+
 function hydrateProfilePreferencesForm(preferences) {
   setProfilePreferenceCheckedValues("selected_role_families", preferences?.selected_role_families || []);
   setProfilePreferenceCheckedValues("target_seniority", preferences?.target_seniority || []);
+  const strictToggle = qs("profilePreferencesForm")?.querySelector(
+    'input[name="seniority_strict_match"]'
+  );
+  if (strictToggle) strictToggle.checked = preferences?.seniority_strict_match === true;
+  syncProfileSeniorityStrictToggle();
   profileLocationSelector?.setPreferences(preferences || {});
   setProfilePreferenceTextareaList("profilePreferredSkillsInput", preferences?.preferred_skills || []);
   setProfilePreferenceTextareaList("profileExcludedKeywordsInput", preferences?.excluded_keywords || []);
 }
 
 function collectProfilePreferences() {
+  syncProfileSeniorityStrictToggle();
   const current = profileState.onboardingPreferences || {};
   const locationPreferences = profileLocationSelector?.serialize() || {
     preferred_locations: [],
@@ -228,6 +244,9 @@ function collectProfilePreferences() {
     onboarding_completed: Boolean(current.onboarding_completed),
     selected_role_families: profilePreferenceCheckedValues("selected_role_families"),
     target_seniority: profilePreferenceCheckedValues("target_seniority"),
+    seniority_strict_match: Boolean(
+      qs("profilePreferencesForm")?.querySelector('input[name="seniority_strict_match"]')?.checked
+    ),
     ...locationPreferences,
     preferred_skills: splitProfilePreferenceList(qs("profilePreferredSkillsInput")?.value),
     excluded_keywords: splitProfilePreferenceList(qs("profileExcludedKeywordsInput")?.value),
@@ -1972,7 +1991,10 @@ function bindProfilePreferencesInteractions() {
   });
   form.querySelectorAll("input, textarea").forEach((field) => {
     if (field.closest("[data-location-selector]")) return;
-    field.addEventListener("change", markProfilePreferencesDirty);
+    field.addEventListener("change", () => {
+      syncProfileSeniorityStrictToggle();
+      markProfilePreferencesDirty();
+    });
   });
   form.querySelectorAll("textarea").forEach((field) => {
     field.addEventListener("input", markProfilePreferencesDirty);

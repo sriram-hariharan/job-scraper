@@ -529,6 +529,236 @@ SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "tests/test_scraper_source_health_metrics.py",
 }
 
+RECRUITEE_SOURCE_INTEGRATION_FILES = {
+    "src/config/consts.py",
+    "src/config/curated_ats_sources.json",
+    "src/discovery/curated_ats_sources.py",
+    "src/pipeline/collector.py",
+    "src/scrapers/recruitee_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_curated_ats_sources.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_recruitee_scraper.py",
+    "tests/test_scraper_acquisition_outcomes.py",
+    "tests/test_scraper_parallel_result_contract.py",
+    "tests/test_scraper_source_health_metrics.py",
+}
+
+PERSONIO_SOURCE_INTEGRATION_FILES = {
+    "src/config/consts.py",
+    "src/config/curated_ats_sources.json",
+    "src/discovery/curated_ats_sources.py",
+    "src/pipeline/collector.py",
+    "src/scrapers/personio_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_curated_ats_sources.py",
+    "tests/test_personio_scraper.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_scraper_prefilter_ownership_boundary.py",
+    "tests/test_scraper_source_health_metrics.py",
+    "tests/test_scraper_transport_pagination_hardening.py",
+}
+
+USAJOBS_SOURCE_INTEGRATION_FILES = {
+    "src/config/consts.py",
+    "src/config/usajobs_query_profiles.json",
+    "src/pipeline/collector.py",
+    "src/scrapers/usajobs_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_usajobs_scraper.py",
+}
+
+HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES = {
+    "src/app/services.py",
+    "src/app/static/app.js",
+    "src/pipeline/dedupe.py",
+    "src/rag/job_document_builder.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase16a_lean_deterministic_prefilter_dedupe_orchestration.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_provider_attribution_ui.py",
+    "tests/test_rag_export_job_corpus.py",
+    "tests/test_supplemental_source_dedupe.py",
+}
+
+HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES = {
+    "src/config/consts.py",
+    "src/config/himalayas_query_profiles.json",
+    "src/pipeline/collector.py",
+    "src/scrapers/himalayas_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_scraper.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES = {
+    "src/scrapers/himalayas_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_scraper.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES = {
+    "src/pipeline/himalayas_retention.py",
+    "src/rag/export_job_corpus.py",
+    "src/rag/job_document_builder.py",
+    "src/storage/rag_store.py",
+    "src/storage/user_pipeline/schema.sql",
+    "src/storage/user_pipeline/store.py",
+    "src/utils/job_cache.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_active_retention.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES = {
+    "src/app/services.py",
+    "src/pipeline/collector.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_active_retention.py",
+    "tests/test_himalayas_retention_integration.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES = {
+    "manage_himalayas_retention.py",
+    "src/app/services.py",
+    "src/pipeline/himalayas_retention.py",
+    "src/rag/export_job_corpus.py",
+    "src/storage/user_pipeline/store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_retention_integration.py",
+    "tests/test_himalayas_source_retirement.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES = {
+    "src/config/himalayas_query_profiles.json",
+    "src/pipeline/scheduler.py",
+    "src/rag/job_document_builder.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_activation.py",
+    "tests/test_himalayas_scraper.py",
+    "tests/test_himalayas_source_retirement.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_rag_export_job_corpus.py",
+}
+
+SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
+    "src/pipeline/collector.py",
+    "src/scrapers/greenhouse_scraper.py",
+    "src/scrapers/lever_scraper.py",
+    "src/scrapers/recruitee_scraper.py",
+    "src/scrapers/workday_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_lever_role_expansion_filtering.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_recruitee_scraper.py",
+    "tests/test_scraper_acquisition_outcomes.py",
+    "tests/test_scraper_prefilter_ownership_boundary.py",
+    "tests/test_scraper_transport_pagination_hardening.py",
+}
+
+BROAD_TECH_PREFILTER_TAXONOMY_FILES = {
+    "src/config/role_taxonomy.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_broad_tech_prefilter_taxonomy.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
+TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES = {
+    "src/app/onboarding_ui.py",
+    "src/config/role_scoring_profiles.py",
+    "src/config/role_taxonomy.py",
+    "src/intelligence/role_family_classifier.py",
+    "src/pipeline/job_filter.py",
+    "src/pipeline/job_ranker.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_broad_tech_prefilter_taxonomy.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_role_taxonomy.py",
+    "tests/test_role_title_filtering.py",
+    "tests/test_technical_product_program_role_families.py",
+}
+
+PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES = {
+    "src/config/seniority_policy.py",
+    "src/pipeline/collector.py",
+    "src/pipeline/job_ranker.py",
+    "src/storage/onboarding_preferences/store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_independent_seniority_policy.py",
+    "tests/test_onboarding_preferences_store.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
+PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES = {
+    "src/config/role_taxonomy.py",
+    "src/config/seniority_policy.py",
+    "src/pipeline/job_filter.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_independent_seniority_prefilter.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES = {
+    "src/agents/deterministic_prefilter_dedupe_authoritative_graph.py",
+    "src/app/onboarding_ui.py",
+    "src/app/services.py",
+    "src/app/static/onboarding.js",
+    "src/app/static/preferences_workflow.js",
+    "src/app/static/profile.js",
+    "src/config/seniority_policy.py",
+    "src/pipeline/collector.py",
+    "src/pipeline/job_filter.py",
+    "src/storage/onboarding_preferences/schema.sql",
+    "src/storage/onboarding_preferences/store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_independent_seniority_policy.py",
+    "tests/test_independent_seniority_prefilter.py",
+    "tests/test_onboarding_api.py",
+    "tests/test_onboarding_preferences_store.py",
+    "tests/test_onboarding_ui_contract.py",
+    "tests/test_phase132b2r3_guided_preferences_workflow.py",
+    "tests/test_phase16a_lean_deterministic_prefilter_dedupe_orchestration.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_role_title_filtering.py",
+    "tests/test_strict_seniority_filter.py",
+    "tests/test_technical_product_program_role_families.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -593,6 +823,16 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "himalayas_step6e_r1_location_activation": HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
+        "himalayas_step6d_c_source_retirement": HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
+        "himalayas_step6d_b2_retention_integration": HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
+        "himalayas_step6d_b1_retention_foundation": HIMALAYAS_STEP6D_B1_RETENTION_FOUNDATION_FILES,
+        "himalayas_step6c1_pagination_repair": HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
+        "himalayas_step6b2_source_integration": HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
+        "himalayas_step6b1_attribution_foundation": HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
+        "usajobs_source_integration": USAJOBS_SOURCE_INTEGRATION_FILES,
+        "personio_source_integration": PERSONIO_SOURCE_INTEGRATION_FILES,
+        "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -1229,6 +1469,15 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_queue_ui_metadata_contract.py",
             "tests/test_role_expansion_ui_contract.py",
         },
+        "phase2d_a_independent_seniority_policy": (
+            PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        ),
+        "phase2d_b1_default_eligibility_ownership": (
+            PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        ),
+        "phase2d_b2_strict_seniority_filter": (
+            PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
+        ),
         "phase133a_executive_kpi_react_island": {
             ".gitignore",
             "Dockerfile",
@@ -1769,10 +2018,16 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
-        legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
+        legacy_guard_allowlist("himalayas_step6c1_pagination_repair")
+        | legacy_guard_allowlist("himalayas_step6b2_source_integration")
+        | legacy_guard_allowlist("himalayas_step6b1_attribution_foundation")
+        | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
         | legacy_guard_allowlist("phase129b_auth_loader_ui")
         | legacy_guard_allowlist("phase129c_workflow_overlay_and_run_scoped_corpus")
         | legacy_guard_allowlist("phase132b_premium_preferences_ui")
+        | legacy_guard_allowlist("phase2d_a_independent_seniority_policy")
+        | legacy_guard_allowlist("phase2d_b1_default_eligibility_ownership")
+        | legacy_guard_allowlist("phase2d_b2_strict_seniority_filter")
         | legacy_guard_allowlist("phase133a_executive_kpi_react_island")
         | legacy_guard_allowlist("phase133b_executive_queue_react_island")
         | legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
@@ -1911,6 +2166,14 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        | PERSONIO_SOURCE_INTEGRATION_FILES
+        | RECRUITEE_SOURCE_INTEGRATION_FILES
+        | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
+        | BROAD_TECH_PREFILTER_TAXONOMY_FILES
+        | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
+        | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES
+        | PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES
+        | PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES
     )
 
 
@@ -2000,7 +2263,14 @@ def assert_protected_hashes(
         (
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
-        ): "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
+        ): frozenset({
+            "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
+            "b71cf683a281bfa07de70fe41a101975f066c35179e7607af6d078f10ee35835",
+            "4f9c9b7a8266d0017bdef62a1db3809fa7d9bd2b4d7d975e8f134e84fe00c386",
+            "11cbcf9097bfaa72f6695fc85afd432a6cae6c71efc78bb4ec1e694e037e21a6",
+            "0fbfc4ee3b57b29626cce7ffdbd9b1f9a8e1e3475f098371a398161dabfbe51e",
+            "e25bf271beb6da9bc27597d1c2a8b564b36970f4db31ce763f5d3a08523419fc",
+        }),
             (
                 "src/agents/jd_intelligence.py",
                 "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",
@@ -2028,7 +2298,22 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "261e2b0e40adf1e0e79842f281a06d61aad59f2432fbf8fd4fa8a3d5585b3f3e",
-        ): "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+        ): frozenset({
+            "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+            "33815928d0165154f6ec1f102a6c32b510acf167ac8bc83aa42837e4f310529b",
+            "83d14c9634cd22cdee8d31fe1be675aba23ab2b5ad333a56fbd6b23638a07dc1",
+            "8bc8673fcf3701f1ff232a760082dfe965c4477bb48dd9ee265a2f3ca4c9f282",
+                "f52fdf16c5dea4d4afbe0d36aad41a3b774f0aa91d129844138a895fffe88297",
+                "29f51fec60aceb8798cbcecda6dbe41f315e79557b193668d019de4e6f716929",
+                "c70367eb9a9cd1da5a2f2a4c5f37c4be3e96dbd0f29ec73bfa32bba5cc580ad4",
+                "4a9d20dbaf51da7695c0b5e63ac5b4f6b0e9bd4312ff444c7ce6ad3f4887b65e",
+                "daa47b63bbfa06d218b82f50a0ae46e536c9bd89e39543f386c1298008757032",
+                "c3d103420c5613c8717c64ec0a66d1636e00c721ec2a754c22978c9feaab85d4",
+            }),
+        (
+            "src/pipeline/job_ranker.py",
+            "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
+        ): "fd387af3c640674de4a998078bc3679747c84ee335d5c275008749f8433a09e5",
         (
             "src/pipeline/collector.py",
             "55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23",
@@ -2080,7 +2365,12 @@ def assert_protected_hashes(
         compatible_hash = phase88b_runtime_hash_compatibility.get(
             (normalized, expected_hash)
         )
-        if compatible_hash == actual_hash and (
+        compatible_hashes = (
+            compatible_hash
+            if isinstance(compatible_hash, (set, frozenset, tuple))
+            else (compatible_hash,)
+        )
+        if actual_hash in compatible_hashes and (
             compatible_paths is None or normalized in compatible_paths
         ):
             continue

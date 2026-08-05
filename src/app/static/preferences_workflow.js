@@ -72,6 +72,7 @@
           : payload.preferred_locations
       );
       const strict = payload.location_strict_match === true;
+      const seniorityStrict = payload.seniority_strict_match === true;
       const fallback = strict && payload.location_show_others_if_unmatched === true;
       const skills = uniqueStrings(payload.preferred_skills);
       const excluded = uniqueStrings(payload.excluded_keywords);
@@ -86,6 +87,7 @@
       return {
         roles: summaryText(roleNames, "None selected", 3),
         seniority: summaryText(seniorityNames, "Not selected", 4),
+        seniority_policy: seniorityStrict ? "Enabled" : "Disabled",
         locations: summaryText(locationNames, "No preferred locations", 3),
         policy: strict
           ? (fallback ? "Strict locations with US fallback" : "Strict preferred locations only")
@@ -116,7 +118,7 @@
 
     function update() {
       const model = summaryModel();
-      ["roles", "seniority", "locations", "policy", "skills", "excluded"].forEach((name) => {
+      ["roles", "seniority", "seniority_policy", "locations", "policy", "skills", "excluded"].forEach((name) => {
         setSummaryValue(name, model[name]);
       });
       root.querySelectorAll("[data-preferences-summary-completion]")

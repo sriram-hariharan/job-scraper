@@ -336,6 +336,60 @@ ROLE_SCORING_PROFILES: Dict[str, Dict[str, Any]] = {
             "tools": ("api", "sql", "python", "salesforce", "crm"),
         },
     ),
+    "technical_product_management": _profile(
+        "technical_product_management",
+        dimension_weights={
+            "title_alignment": 0.150000,
+            "required_skills_alignment": 0.150000,
+            "preferred_skills_alignment": 0.050000,
+            "workflow_alignment": 0.150000,
+            "business_context_alignment": 0.150000,
+            "stakeholder_translation_alignment": 0.150000,
+            "domain_relevance": 0.080000,
+            "analytics_ml_depth": 0.040000,
+            "experimentation_depth": 0.030000,
+            "tooling_alignment": 0.050000,
+        },
+        signal_families=(
+            "technical_product_strategy",
+            "platform_roadmaps",
+            "developer_experience",
+            "api_products",
+            "product_outcomes",
+        ),
+        skill_groups={
+            "product_strategy": ("technical product management", "platform product strategy", "technical product discovery"),
+            "technical_partnership": ("engineering partnership", "technical requirements", "platform prioritization"),
+            "product_tools": ("productboard", "pendo", "amplitude"),
+        },
+    ),
+    "technical_program_management": _profile(
+        "technical_program_management",
+        dimension_weights={
+            "title_alignment": 0.150000,
+            "required_skills_alignment": 0.150000,
+            "preferred_skills_alignment": 0.050000,
+            "workflow_alignment": 0.200000,
+            "business_context_alignment": 0.100000,
+            "stakeholder_translation_alignment": 0.150000,
+            "domain_relevance": 0.080000,
+            "analytics_ml_depth": 0.020000,
+            "experimentation_depth": 0.020000,
+            "tooling_alignment": 0.080000,
+        },
+        signal_families=(
+            "technical_program_delivery",
+            "dependency_management",
+            "milestone_governance",
+            "delivery_risk",
+            "cross_functional_execution",
+        ),
+        skill_groups={
+            "program_delivery": ("technical program management", "engineering program delivery", "milestone governance"),
+            "execution": ("technical dependency management", "delivery risk management", "cross-functional technical execution"),
+            "program_tools": ("planview", "smartsheet", "microsoft project"),
+        },
+    ),
 }
 
 

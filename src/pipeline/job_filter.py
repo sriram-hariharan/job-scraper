@@ -7,8 +7,6 @@ from pathlib import Path
 from src.utils.posted_at_utils import parse_posted_at
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.config.consts import (
-    TITLE_INCLUDE_REGEX,
-    TITLE_EXCLUDE_REGEX,
     US_STATES,
     US_STATE_NAMES,
     ALL_COUNTRIES,
@@ -27,7 +25,11 @@ from src.config.consts import (
 from src.config.role_taxonomy import (
     DEFAULT_ROLE_FAMILY_IDS,
     ROLE_TAXONOMY,
-    compile_role_title_regexes,
+)
+from src.config.seniority_policy import (
+    classify_title_seniority,
+    normalize_seniority_filter_preferences,
+    seniority_prefilter_decision,
 )
 from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp_result
@@ -66,6 +68,11 @@ ROLE_TITLE_FILTER_AUDIT_FIELDNAMES = [
     "matched_role_family",
     "matched_pattern",
     "suspected_role_family_hint",
+    "classified_seniority",
+    "seniority_strict_match",
+    "target_seniority",
+    "seniority_decision",
+    "seniority_reason",
     "location_filter_decision",
     "location_filter_reason",
     "freshness_filter_decision",
@@ -78,6 +85,8 @@ ROLE_TITLE_FILTER_AUDIT_FIELDNAMES = [
 ]
 
 ROLE_TITLE_HINT_PATTERNS = (
+    ("technical_product_management", re.compile(r"\b(?:technical product manager|product manager)\b", re.I)),
+    ("technical_program_management", re.compile(r"\b(?:technical program manager|program manager)\b", re.I)),
     ("ml_ai_engineering", re.compile(r"\b(?:ml|machine learning|ai|llm|computer vision|research engineer)\b", re.I)),
     ("data_engineering", re.compile(r"\b(?:data platform|data infra|data infrastructure|data engineer)\b", re.I)),
     ("analytics", re.compile(r"\b(?:analytics|data analyst|bi|business intelligence)\b", re.I)),
@@ -111,12 +120,6 @@ SOURCE_HEALTH_REPORT_FIELDNAMES = [
     "notes",
 ]
 
-
-def _role_title_regexes(selected_role_families=None):
-    if selected_role_families:
-        return compile_role_title_regexes(selected_role_families)
-
-    return TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
 
 def normalize_title(title):
     if not title:
@@ -171,24 +174,43 @@ def matched_excluded_keyword(job, excluded_keywords=None):
 
 def _selected_role_family_ids(selected_role_families=None):
     if selected_role_families:
-        return tuple(
+        selected = {
             role_family_id
             for role_family_id in (str(value or "").strip() for value in selected_role_families)
             if role_family_id in ROLE_TAXONOMY
-        )
+        }
+        return tuple(role_family_id for role_family_id in ROLE_TAXONOMY if role_family_id in selected)
 
     return DEFAULT_ROLE_FAMILY_IDS
 
 
-def _first_role_title_include_match(normalized_title, selected_role_families=None):
+def _matched_role_title_decision(normalized_title, selected_role_families=None):
+    first_excluded_match = None
     for role_family_id in _selected_role_family_ids(selected_role_families):
         role_family = ROLE_TAXONOMY.get(role_family_id, {})
         for pattern in role_family.get("title_include_patterns", ()) or ():
             regex = re.compile(pattern, re.I)
             if regex.search(normalized_title):
-                return role_family_id, pattern
+                excluded = any(
+                    re.search(exclude_pattern, normalized_title, re.I)
+                    for exclude_pattern in role_family.get("title_exclude_patterns", ()) or ()
+                )
+                if not excluded:
+                    return (
+                        True,
+                        "include_pattern_match",
+                        role_family_id,
+                        pattern,
+                        first_excluded_match,
+                    )
+                if first_excluded_match is None:
+                    first_excluded_match = (role_family_id, pattern)
 
-    return "", ""
+    if first_excluded_match is not None:
+        role_family_id, pattern = first_excluded_match
+        return False, "exclude_pattern_match", role_family_id, pattern, None
+
+    return False, "no_include_pattern_match", "", "", None
 
 
 def _suspected_role_family_hint(title, selected_role_families=None):
@@ -206,51 +228,134 @@ def _suspected_role_family_hint(title, selected_role_families=None):
     return ""
 
 
-def title_match_detail(title, selected_role_families=None):
+def _software_staff_title_hint(title, selected_role_families=None):
+    if "software_engineering" not in set(
+        _selected_role_family_ids(selected_role_families)
+    ):
+        return False
+    for role_family_id, regex in ROLE_TITLE_HINT_PATTERNS:
+        if role_family_id != "software_engineering":
+            continue
+        match = regex.search(str(title or ""))
+        return bool(
+            match
+            and str(match.group(0) or "").strip().lower()
+            in {"member of technical staff", "mts"}
+        )
+    return False
+
+
+def title_match_detail(
+    title,
+    selected_role_families=None,
+    target_seniority=None,
+    seniority_strict_match=False,
+):
+    canonical_targets, strict_match = normalize_seniority_filter_preferences(
+        target_seniority,
+        seniority_strict_match,
+    )
     detail = {
         "matched": False,
         "reason": "missing_title",
         "matched_role_family": "",
         "matched_pattern": "",
         "suspected_role_family_hint": "",
+        "classified_seniority": "",
+        "seniority_strict_match": strict_match,
+        "target_seniority": canonical_targets,
+        "seniority_decision": "not_evaluated",
+        "seniority_reason": "not_evaluated",
     }
 
     if not title:
         return detail
 
-    include_regexes, exclude_regexes = _role_title_regexes(selected_role_families)
     normalized = normalize_title(title)
-    matched_role_family, matched_pattern = _first_role_title_include_match(
+    (
+        matched,
+        reason,
+        matched_role_family,
+        matched_pattern,
+        prior_excluded_match,
+    ) = _matched_role_title_decision(
         normalized,
         selected_role_families=selected_role_families,
     )
-    detail["matched_role_family"] = matched_role_family
-    detail["matched_pattern"] = matched_pattern
-    detail["suspected_role_family_hint"] = _suspected_role_family_hint(
+    role_family_hint = _suspected_role_family_hint(
         title,
         selected_role_families=selected_role_families,
     )
+    if (
+        not matched
+        and reason == "no_include_pattern_match"
+        and role_family_hint == "software_engineering"
+        and _software_staff_title_hint(title, selected_role_families)
+    ):
+        matched = True
+        reason = "include_pattern_match"
+        matched_role_family = role_family_hint
+        matched_pattern = "role_title_hint"
+    if matched:
+        technical_management_role = matched_role_family in {
+            "technical_product_management",
+            "technical_program_management",
+        }
+        seniority = classify_title_seniority(
+            title,
+            technical_management_role=technical_management_role,
+        )
+        seniority_decision = seniority_prefilter_decision(
+            seniority,
+            target_seniority=canonical_targets,
+            seniority_strict_match=strict_match,
+        )
+        detail["classified_seniority"] = seniority
+        detail["seniority_decision"] = seniority_decision["decision"]
+        detail["seniority_reason"] = seniority_decision["reason"]
+        if not seniority_decision["eligible"]:
+            matched = False
+            reason = "exclude_pattern_match"
+            if prior_excluded_match is not None:
+                matched_role_family, matched_pattern = prior_excluded_match
+    detail["matched"] = matched
+    detail["reason"] = reason
+    detail["matched_role_family"] = matched_role_family
+    detail["matched_pattern"] = matched_pattern
+    detail["suspected_role_family_hint"] = role_family_hint
 
-    if not any(regex.search(normalized) for regex in include_regexes):
-        detail["reason"] = "no_include_pattern_match"
-        return detail
-
-    if any(regex.search(normalized) for regex in exclude_regexes):
-        detail["reason"] = "exclude_pattern_match"
-        return detail
-
-    detail["matched"] = True
-    detail["reason"] = "include_pattern_match"
     return detail
 
 
-def title_matches(title, selected_role_families=None):
-    return bool(title_match_detail(title, selected_role_families=selected_role_families)["matched"])
+def title_matches(
+    title,
+    selected_role_families=None,
+    target_seniority=None,
+    seniority_strict_match=False,
+):
+    return bool(
+        title_match_detail(
+            title,
+            selected_role_families=selected_role_families,
+            target_seniority=target_seniority,
+            seniority_strict_match=seniority_strict_match,
+        )["matched"]
+    )
 
 
-def build_role_title_filter_audit_row(job, selected_role_families=None):
+def build_role_title_filter_audit_row(
+    job,
+    selected_role_families=None,
+    target_seniority=None,
+    seniority_strict_match=False,
+):
     title = job.get("title")
-    detail = title_match_detail(title, selected_role_families=selected_role_families)
+    detail = title_match_detail(
+        title,
+        selected_role_families=selected_role_families,
+        target_seniority=target_seniority,
+        seniority_strict_match=seniority_strict_match,
+    )
     location = job.get("location")
     if isinstance(location, list):
         location = "; ".join(str(value or "").strip() for value in location if str(value or "").strip())
@@ -267,6 +372,11 @@ def build_role_title_filter_audit_row(job, selected_role_families=None):
         "matched_role_family": detail["matched_role_family"] if detail["matched"] else "",
         "matched_pattern": detail["matched_pattern"] if detail["matched"] else "",
         "suspected_role_family_hint": detail["suspected_role_family_hint"] if not detail["matched"] else "",
+        "classified_seniority": detail["classified_seniority"],
+        "seniority_strict_match": detail["seniority_strict_match"],
+        "target_seniority": "|".join(detail["target_seniority"]),
+        "seniority_decision": detail["seniority_decision"],
+        "seniority_reason": detail["seniority_reason"],
         "location_filter_decision": "",
         "location_filter_reason": "",
         "freshness_filter_decision": "",
@@ -569,12 +679,18 @@ def _filter_diagnostics(rejection_reasons, title_pass, location_pass):
 def filter_jobs(
     jobs,
     selected_role_families=None,
+    target_seniority=None,
+    seniority_strict_match=False,
     filter_mode="strict_live",
     return_diagnostics=False,
     role_title_audit_rows=None,
     excluded_keywords=None,
 ):
 
+    canonical_targets, strict_match = normalize_seniority_filter_preferences(
+        target_seniority,
+        seniority_strict_match,
+    )
     title_pass = 0
     location_pass = 0
     prefiltered = []
@@ -589,12 +705,19 @@ def filter_jobs(
 
         locations = location_field if isinstance(location_field, list) else [location_field]
 
-        title_detail = title_match_detail(title, selected_role_families=selected_role_families)
+        title_detail = title_match_detail(
+            title,
+            selected_role_families=selected_role_families,
+            target_seniority=canonical_targets,
+            seniority_strict_match=strict_match,
+        )
         audit_row = None
         if role_title_audit_rows is not None:
             audit_row = build_role_title_filter_audit_row(
                 job,
                 selected_role_families=selected_role_families,
+                target_seniority=canonical_targets,
+                seniority_strict_match=strict_match,
             )
             role_title_audit_rows.append(audit_row)
             audit_rows_by_job_id[id(job)] = audit_row

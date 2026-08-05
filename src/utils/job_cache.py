@@ -124,6 +124,88 @@ def _postgres_save_new_job_ids(owner_user_id: str, job_ids: Iterable[str]) -> No
         )
 
 
+def structured_seen_records_for_jobs(jobs: Iterable[Dict[str, Any]]) -> List[Dict[str, str]]:
+    records = []
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        seen_key = _job_cache_key(job)
+        if not seen_key or len(seen_key) > 4096:
+            continue
+        source = _clean_text(job.get("source"))[:64]
+        job_url = _clean_text(job.get("url"))[:2048]
+        job_doc_id = _clean_text(
+            job.get("job_doc_id") or job.get("url") or job.get("job_id")
+        )[:2048]
+        raw_expiry = job.get("expiry_date")
+        expiry_date = raw_expiry.strip()[:64] if isinstance(raw_expiry, str) else ""
+        records.append(
+            {
+                "seen_key": seen_key,
+                "source": source,
+                "job_url": job_url,
+                "job_doc_id": job_doc_id,
+                "expiry_date": expiry_date,
+            }
+        )
+    return records
+
+
+def save_new_job_records(records: Iterable[Dict[str, Any]]) -> None:
+    owner_user_id = _owner_user_id_from_env()
+    if not (_postgres_seen_jobs_enabled() and owner_user_id):
+        return
+
+    from src.storage.user_pipeline.store import (
+        upsert_user_seen_job_postgres_payload,
+        upsert_user_seen_job_staging_postgres_payload,
+    )
+
+    run_id = _run_id_from_env()
+    for value in records:
+        if not isinstance(value, dict):
+            continue
+        seen_key = _clean_text(value.get("seen_key"))
+        if not seen_key or len(seen_key) > 4096:
+            continue
+        source = _clean_text(value.get("source"))[:64]
+        job_url = _clean_text(value.get("job_url"))[:2048]
+        job_doc_id = _clean_text(value.get("job_doc_id"))[:2048]
+        raw_expiry = value.get("expiry_date")
+        expiry_date = raw_expiry.strip()[:64] if isinstance(raw_expiry, str) else ""
+        record = {
+            "owner_user_id": owner_user_id,
+            "seen_key": seen_key,
+            "source": source,
+            "job_url": job_url,
+            "job_doc_id": job_doc_id,
+            "metadata_json": {
+                "storage_backend": "postgres",
+                "seen_key_source": "collector_cache_filter",
+                "staged_seen_job": bool(run_id),
+                "expiry_date": expiry_date,
+            },
+        }
+        if run_id:
+            upsert_user_seen_job_staging_postgres_payload(
+                record={**record, "run_id": run_id},
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+        else:
+            upsert_user_seen_job_postgres_payload(
+                record={**record, "first_run_id": "", "last_run_id": ""},
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+
+
 def load_seen_job_ids():
     owner_user_id = _owner_user_id_from_env()
 

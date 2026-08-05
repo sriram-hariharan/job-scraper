@@ -1085,6 +1085,29 @@ function buildPostedAtCellHtml(row) {
   return "-";
 }
 
+function validHttpsAttributionUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:" || !parsed.hostname) return "";
+    return parsed.href;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function buildProviderAttributionHtml(row) {
+  if (row?.provider_attribution_required !== true) return "";
+
+  const label = String(row.provider_attribution_label || "").trim();
+  const url = validHttpsAttributionUrl(row.provider_attribution_url);
+  if (!label || !url) return "";
+
+  return `<div class="queue-simple-location">Source: <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a></div>`;
+}
+
 function buildJobTitleCellHtml(row, { simple = false, includeLocation = true } = {}) {
   const title = escapeHtml(row.job_title || "");
   const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
@@ -1095,8 +1118,9 @@ function buildJobTitleCellHtml(row, { simple = false, includeLocation = true } =
   const locationHtml = includeLocation && location
     ? `<div class="${simple ? "queue-simple-location" : "queue-job-location"}">${location}</div>`
     : "";
+  const attributionHtml = buildProviderAttributionHtml(row);
 
-  return `${titleHtml}${locationHtml}`;
+  return `${titleHtml}${locationHtml}${attributionHtml}`;
 }
 
 function formatAdvisoryPriorityLabel(value) {

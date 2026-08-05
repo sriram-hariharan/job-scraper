@@ -1,6 +1,8 @@
 import sys
 import types
 
+import pytest
+
 
 sys.modules.setdefault("pycountry", types.SimpleNamespace(countries=[]))
 
@@ -122,6 +124,32 @@ def test_onboarding_save_rejects_malformed_location_policy_before_storage():
             assert "location_strict_match must be a boolean" in str(exc)
         else:
             raise AssertionError("Expected malformed location policy to be rejected.")
+    finally:
+        _restore_onboarding_storage(originals)
+
+    assert captured == {}
+
+
+def test_onboarding_save_rejects_invalid_strict_seniority_before_storage():
+    captured, *originals = _patch_onboarding_storage(resume_count=1)
+    try:
+        with pytest.raises(ValueError, match="at least one value"):
+            services.save_onboarding_preferences_payload(
+                {
+                    "selected_role_families": ["backend_engineering"],
+                    "seniority_strict_match": True,
+                },
+                owner_user_id="user_123",
+            )
+        with pytest.raises(ValueError, match="must be a boolean"):
+            services.save_onboarding_preferences_payload(
+                {
+                    "selected_role_families": ["backend_engineering"],
+                    "target_seniority": ["senior"],
+                    "seniority_strict_match": "true",
+                },
+                owner_user_id="user_123",
+            )
     finally:
         _restore_onboarding_storage(originals)
 

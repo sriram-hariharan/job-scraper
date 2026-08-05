@@ -2,6 +2,10 @@ import hashlib
 from typing import Dict, Any, List
 
 
+_PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH = 200
+_PROVIDER_ATTRIBUTION_URL_MAX_LENGTH = 2048
+
+
 def _dedupe_keep_order(items: List[str]) -> List[str]:
     seen = set()
     result = []
@@ -16,6 +20,22 @@ def _dedupe_keep_order(items: List[str]) -> List[str]:
     return result
 
 
+def _normalize_location(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if not isinstance(value, list):
+        return ""
+
+    locations = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        location = item.strip()
+        if location:
+            locations.append(location)
+    return ", ".join(_dedupe_keep_order(locations))
+
+
 def build_job_doc_id(job: Dict[str, Any]) -> str:
     url = (job.get("url") or "").strip()
     if url:
@@ -23,7 +43,7 @@ def build_job_doc_id(job: Dict[str, Any]) -> str:
 
     company = (job.get("company") or "").strip().lower()
     title = (job.get("title") or "").strip().lower()
-    location = (job.get("location") or "").strip().lower()
+    location = _normalize_location(job.get("location")).lower()
     source = (job.get("source") or "").strip().lower()
     description = (
         (job.get("description_text") or job.get("description") or "")
@@ -67,6 +87,16 @@ def _clean_text_value(value: object) -> str:
         return ""
     return str(value).strip()
 
+
+def _bounded_text_value(value: object, maximum_length: int) -> str:
+    return _clean_text_value(value)[:maximum_length]
+
+
+def _bounded_optional_string(value: object, maximum_length: int) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()[:maximum_length]
+
 def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
     intelligence = job.get("intelligence", {}) or {}
     skills = intelligence.get("skills", {}) or {}
@@ -84,10 +114,11 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "doc_id": build_job_doc_id(job),
         "company": (job.get("company") or "").strip(),
         "title": (job.get("title") or "").strip(),
-        "location": (job.get("location") or "").strip(),
+        "location": _normalize_location(job.get("location")),
         "source": (job.get("source") or "").strip(),
         "job_url": (job.get("url") or "").strip(),
         "posted_at": _clean_text_value(job.get("posted_at")),
+        "expiry_date": _bounded_optional_string(job.get("expiry_date"), 64),
         "freshness_status": (job.get("_freshness_status") or job.get("freshness_status") or "").strip(),
         "ashby_timestamp_status": (
             job.get("_ashby_timestamp_status") or job.get("ashby_timestamp_status") or ""
@@ -103,6 +134,17 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "ai_fit_score": job.get("ai_fit_score"),
         "ai_fit_reason": job.get("ai_fit_reason", ""),
         "resume_matches": job.get("resume_matches", []),
+        "provider_attribution_required": (
+            job.get("provider_attribution_required") is True
+        ),
+        "provider_attribution_label": _bounded_text_value(
+            job.get("provider_attribution_label"),
+            _PROVIDER_ATTRIBUTION_LABEL_MAX_LENGTH,
+        ),
+        "provider_attribution_url": _bounded_text_value(
+            job.get("provider_attribution_url"),
+            _PROVIDER_ATTRIBUTION_URL_MAX_LENGTH,
+        ),
     }
 
     job_doc["retrieval_text"] = build_retrieval_text(job_doc)

@@ -13,8 +13,6 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
-from src.utils.workday_timestamp import fetch_workday_timestamp
-from src.pipeline.job_filter import title_matches, posted_within_24h
 from src.discovery.learned_companies import learn_from_job_url
 from src.utils.url_normalizer import normalize_workday_url
 from src.utils.pipeline_metrics import observe_acquisition
@@ -38,19 +36,6 @@ session.headers.update({
 @retry_request(retries=2)
 def workday_post(url, **kwargs):
     return session.post(url, **kwargs)
-
-
-def get_us_country_facet(data):
-    facets = data.get("facetMetadata", {}).get("facets", [])
-
-    for facet in facets:
-        for val in facet.get("values", []):
-            label = val.get("label", "").lower()
-
-            if "united states" in label or label == "us":
-                return facet.get("name"), val.get("id")
-
-    return None, None
 
 
 def _workday_completed_outcome(company, jobs, page_count, raw_job_count=None):
@@ -138,8 +123,6 @@ def _scrape_company_outcome(board_url):
     limit = WORKDAY_PAGE_SIZE
     total = None
 
-    facet_name = None
-    country_filter = None
     page_count = 0
     raw_job_count = 0
 
@@ -155,11 +138,6 @@ def _scrape_company_outcome(board_url):
             "offset": offset,
             "searchText": ""
         }
-
-        if facet_name and country_filter:
-            payload["appliedFacets"] = {
-                facet_name: [country_filter]
-            }
 
         try:
             r = workday_post(api_url, json=payload, headers=headers, timeout=10)
@@ -186,15 +164,6 @@ def _scrape_company_outcome(board_url):
             )
 
         page_count += 1
-
-        # detect US facet once
-        if facet_name is None:
-            try:
-                facet_name, country_filter = get_us_country_facet(data)
-            except Exception:
-                return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count, raw_job_count
-                )
 
         if total is None:
             total = data.get("total")
@@ -247,37 +216,6 @@ def _scrape_company_outcome(board_url):
         seen_page_signatures.add(page_signature)
         seen_provider_ids.update(new_provider_ids)
 
-        page_number = offset // limit
-
-        if page_number > 0:
-            first_job = postings[0]
-            job_id = first_job.get("externalPath")
-
-            if job_id and not isinstance(job_id, str):
-                return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count, raw_job_count
-                )
-
-            if job_id:
-                try:
-                    ts = fetch_workday_timestamp(board_url, job_id)
-                except Exception:
-                    return _workday_interrupted_outcome(
-                        board_url, jobs, "parse_error", page_count, raw_job_count
-                    )
-
-                try:
-                    is_stale = ts and not posted_within_24h(ts)
-                except Exception:
-                    return _workday_interrupted_outcome(
-                        board_url, jobs, "parse_error", page_count, raw_job_count
-                    )
-
-                if is_stale:
-                    return _workday_completed_outcome(
-                        board_url, jobs, page_count, raw_job_count
-                    )
-
         for job in postings:
 
             job_id = job.get("externalPath")
@@ -293,25 +231,7 @@ def _scrape_company_outcome(board_url):
             if job_id in seen_jobs:
                 continue
 
-            # # ---- EARLY STOP AFTER PAGE 1 ----
-            # if page_number > 0:
-            #     ts = fetch_workday_timestamp(board_url, job_id)
-
-            #     if ts and not posted_within_24h(ts):
-            #         return jobs
-
             title = job.get("title")
-
-            # ----- TITLE FILTER -----
-            try:
-                matches_title = title_matches(title)
-            except Exception:
-                return _workday_interrupted_outcome(
-                    board_url, jobs, "parse_error", page_count, raw_job_count
-                )
-
-            if not matches_title:
-                continue
 
             primary_location = (
                 job.get("location")

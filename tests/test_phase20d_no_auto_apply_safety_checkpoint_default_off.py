@@ -15,6 +15,7 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
     HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
     HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
+    JOBVITE_LOCATION_FRESHNESS_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -141,6 +142,7 @@ def test_protected_runtime_files_are_unchanged():
             "phase2d_a_independent_seniority_policy",
             "phase2d_b2_strict_seniority_filter",
             "source_yield_ui",
+            "jobvite_location_freshness",
         ),
     )
 
@@ -2191,6 +2193,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/app/static/app_redesign.css",
     }
     if set(changed_runtime_files) == source_yield_ui_runtime_files:
+        return
+    jobvite_location_freshness_runtime_files = {
+        ROOT / relative_path
+        for relative_path in JOBVITE_LOCATION_FRESHNESS_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == jobvite_location_freshness_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
         return
     phase133b_executive_dashboard_runtime_files = (
         phase133a_executive_kpi_runtime_files

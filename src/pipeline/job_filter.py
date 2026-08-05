@@ -4,6 +4,7 @@ import csv
 import re
 from collections import Counter
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 from src.utils.posted_at_utils import parse_posted_at
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.config.consts import (
@@ -35,6 +36,12 @@ from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp_result
 
 logger = get_logger(__name__)
+
+
+def fetch_jobvite_metadata_result(job_url):
+    from src.scrapers.jobvite_scraper import fetch_jobvite_metadata_result as fetch
+
+    return fetch(job_url)
 
 US_COUNTRY_REGEX = re.compile(
     r"(?:\bU\.?\s*S\.?\b|\bUSA\b|\bUNITED STATES(?: OF AMERICA)?\b)",
@@ -80,6 +87,9 @@ ROLE_TITLE_FILTER_AUDIT_FIELDNAMES = [
     "ashby_timestamp_status",
     "ashby_timestamp_status_code",
     "ashby_timestamp_fetch_decision",
+    "jobvite_timestamp_status",
+    "jobvite_timestamp_status_code",
+    "jobvite_timestamp_fetch_decision",
     "posted_at",
     "url",
 ]
@@ -384,6 +394,9 @@ def build_role_title_filter_audit_row(
         "ashby_timestamp_status": str(job.get("_ashby_timestamp_status") or ""),
         "ashby_timestamp_status_code": "",
         "ashby_timestamp_fetch_decision": "",
+        "jobvite_timestamp_status": str(job.get("_jobvite_timestamp_status") or ""),
+        "jobvite_timestamp_status_code": "",
+        "jobvite_timestamp_fetch_decision": "",
         "posted_at": str(job.get("posted_at") or ""),
         "url": str(job.get("url") or job.get("job_url") or ""),
     }
@@ -661,6 +674,36 @@ def _apply_ashby_timestamp_result(job, result):
     }
 
 
+def _jobvite_timestamp_cache_key(job):
+    raw_url = str(job.get("url") or job.get("job_url") or "").strip()
+    try:
+        parsed = urlsplit(raw_url)
+    except ValueError:
+        return ""
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or not parsed.path:
+        return ""
+    path = parsed.path.rstrip("/") or "/"
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, "", ""))
+
+
+def _apply_jobvite_timestamp_result(job, result):
+    metadata = result if isinstance(result, dict) else {}
+    posted_at = metadata.get("posted_at")
+    marker = str(metadata.get("marker") or "").strip()
+    status_code = metadata.get("status_code")
+
+    if posted_at and not job.get("posted_at"):
+        job["posted_at"] = posted_at
+    elif marker and not job.get("posted_at"):
+        job["_jobvite_timestamp_status"] = marker
+
+    return {
+        "posted_at": posted_at,
+        "marker": marker,
+        "status_code": status_code,
+    }
+
+
 def _audit_update(audit_row, **updates):
     if audit_row is not None:
         for key, value in updates.items():
@@ -696,6 +739,7 @@ def filter_jobs(
     prefiltered = []
     rejection_reasons = Counter()
     ashby_timestamp_stats = Counter()
+    jobvite_timestamp_stats = Counter()
     audit_rows_by_job_id = {}
 
     for job in jobs:
@@ -849,6 +893,73 @@ def filter_jobs(
                             ashby_timestamp_fetch_decision="failed" if index == 0 else "cache_hit",
                         )
 
+    jobvite_missing = [
+        job for job in prefiltered
+        if job.get("source") == "jobvite"
+        and not job.get("posted_at")
+        and _jobvite_timestamp_cache_key(job)
+    ]
+
+    if jobvite_missing:
+        jobs_by_cache_key = {}
+        for job in jobvite_missing:
+            cache_key = _jobvite_timestamp_cache_key(job)
+            if cache_key in jobs_by_cache_key:
+                jobs_by_cache_key[cache_key].append(job)
+                continue
+            jobs_by_cache_key[cache_key] = [job]
+            jobvite_timestamp_stats["jobvite_timestamp_cache_miss"] += 1
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                executor.submit(
+                    fetch_jobvite_metadata_result,
+                    jobs[0].get("url") or jobs[0].get("job_url"),
+                ): cache_key
+                for cache_key, jobs in jobs_by_cache_key.items()
+            }
+
+            for future in as_completed(futures):
+                cache_key = futures[future]
+                timestamp_jobs = jobs_by_cache_key.get(cache_key, [])
+                try:
+                    result = future.result()
+                except Exception:
+                    result = {
+                        "posted_at": None,
+                        "marker": "jobvite_metadata_request_failed",
+                        "status_code": None,
+                    }
+
+                applied = (
+                    _apply_jobvite_timestamp_result(timestamp_jobs[0], result)
+                    if timestamp_jobs
+                    else {}
+                )
+                fetch_decision = "failed"
+                if applied.get("posted_at"):
+                    jobvite_timestamp_stats["jobvite_timestamp_fetch_success"] += 1
+                    fetch_decision = "success"
+                elif applied.get("status_code") == 429:
+                    jobvite_timestamp_stats["jobvite_timestamp_fetch_429"] += 1
+                    fetch_decision = "429"
+                else:
+                    jobvite_timestamp_stats["jobvite_timestamp_fetch_failed"] += 1
+
+                for index, timestamp_job in enumerate(timestamp_jobs):
+                    if index > 0:
+                        jobvite_timestamp_stats["jobvite_timestamp_cache_hit"] += 1
+                        _apply_jobvite_timestamp_result(timestamp_job, result)
+                    _audit_update(
+                        audit_rows_by_job_id.get(id(timestamp_job)),
+                        posted_at=timestamp_job.get("posted_at") or "",
+                        jobvite_timestamp_status=timestamp_job.get("_jobvite_timestamp_status") or "",
+                        jobvite_timestamp_status_code=applied.get("status_code") or "",
+                        jobvite_timestamp_fetch_decision=(
+                            fetch_decision if index == 0 else "cache_hit"
+                        ),
+                    )
+
     # resolve missing Workday timestamps
     workday_missing = [
         job for job in prefiltered
@@ -892,9 +1003,12 @@ def filter_jobs(
             rejection_reasons["missing_timestamp"] += 1
             if job.get("source") == "ashby":
                 job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
+            if job.get("source") == "jobvite":
+                job.setdefault("_jobvite_timestamp_status", "jobvite_timestamp_missing")
             _audit_update(
                 audit_rows_by_job_id.get(id(job)),
                 ashby_timestamp_status=job.get("_ashby_timestamp_status") or "",
+                jobvite_timestamp_status=job.get("_jobvite_timestamp_status") or "",
                 freshness_filter_decision="reject",
                 freshness_filter_reason="missing_timestamp",
                 posted_at="",
@@ -940,6 +1054,7 @@ def filter_jobs(
 
     diagnostics = _filter_diagnostics(rejection_reasons, title_pass, location_pass)
     diagnostics.update(dict(ashby_timestamp_stats))
+    diagnostics.update(dict(jobvite_timestamp_stats))
     if return_diagnostics:
         return filtered, diagnostics
 

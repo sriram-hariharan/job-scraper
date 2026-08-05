@@ -779,6 +779,17 @@ SOURCE_YIELD_UI_FILES = {
     "tests/test_source_yield_ui_contract.py",
 }
 
+JOBVITE_LOCATION_FRESHNESS_FILES = {
+    "src/pipeline/job_filter.py",
+    "src/scrapers/jobvite_scraper.py",
+    "src/utils/html_timestamp_extractor.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_jobvite_location_freshness.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -854,6 +865,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "personio_source_integration": PERSONIO_SOURCE_INTEGRATION_FILES,
         "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
         "source_yield_ui": SOURCE_YIELD_UI_FILES,
+        "jobvite_location_freshness": JOBVITE_LOCATION_FRESHNESS_FILES,
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -2063,6 +2075,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item2_phase4_secondary_page_headers")
         | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
         | legacy_guard_allowlist("source_yield_ui")
+        | legacy_guard_allowlist("jobvite_location_freshness")
         | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
         | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
         | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")

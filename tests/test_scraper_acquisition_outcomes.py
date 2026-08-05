@@ -350,61 +350,84 @@ def _workable_posting(index):
     }
 
 
-def test_workable_outcomes_include_partial_pagination_and_verified_empty(monkeypatch):
-    monkeypatch.setattr(workable_scraper, "learn_from_job_url", lambda url: None)
-    responses = iter([
-        _SyncResponse({"results": [_workable_posting(i) for i in range(50)]}),
-        _SyncResponse(status_code=503),
-    ])
-    monkeypatch.setattr(workable_scraper, "workable_post", lambda *args, **kwargs: next(responses))
-    monkeypatch.setattr(workable_scraper, "workable_get", lambda *args, **kwargs: _SyncResponse({"jobs": []}))
-    partial = workable_scraper._fetch_company_outcome("acme")
+def test_workable_outcomes_include_success_empty_and_failures(monkeypatch):
+    monkeypatch.setattr(
+        workable_scraper,
+        "learn_from_job_url",
+        lambda url: None,
+    )
 
-    monkeypatch.setattr(workable_scraper, "workable_post", lambda *args, **kwargs: _SyncResponse({"results": []}))
-    monkeypatch.setattr(workable_scraper, "workable_get", lambda *args, **kwargs: _SyncResponse({"jobs": []}))
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            {
+                "jobs": [
+                    _workable_posting(index)
+                    for index in range(3)
+                ]
+            }
+        ),
+    )
+    success = workable_scraper._fetch_company_outcome("acme")
+
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            {"jobs": []}
+        ),
+    )
     empty = workable_scraper._fetch_company_outcome("empty")
 
     monkeypatch.setattr(
         workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline")),
-    )
-    monkeypatch.setattr(
-        workable_scraper,
         "workable_get",
-        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline")),
+        lambda *args, **kwargs: (
+            _ for _ in ()
+        ).throw(OSError("offline")),
     )
     failed = workable_scraper._fetch_company_outcome("failed")
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: _SyncResponse(status_code=503),
-    )
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_get",
-        lambda *args, **kwargs: _SyncResponse(status_code=503),
-    )
-    non_200 = workable_scraper._fetch_company_outcome("missing")
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_post",
-        lambda *args, **kwargs: _SyncResponse(payload=[]),
-    )
-    monkeypatch.setattr(
-        workable_scraper,
-        "workable_get",
-        lambda *args, **kwargs: _SyncResponse(payload=[]),
-    )
-    malformed = workable_scraper._fetch_company_outcome("malformed")
 
-    assert partial.status is AcquisitionStatus.PARTIAL
-    assert len(partial.jobs) == 50
-    assert partial.reason == "pagination_interrupted"
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            status_code=503
+        ),
+    )
+    non_200 = workable_scraper._fetch_company_outcome(
+        "missing"
+    )
+
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse(
+            payload=[]
+        ),
+    )
+    malformed = workable_scraper._fetch_company_outcome(
+        "malformed"
+    )
+
+    assert success.status is AcquisitionStatus.SUCCESS
+    assert len(success.jobs) == 3
+    assert success.page_count == 1
+    assert success.raw_job_count == 3
+
     assert empty.status is AcquisitionStatus.EMPTY
+    assert empty.page_count == 1
+    assert empty.should_mark_scraped is True
+
     assert failed.status is AcquisitionStatus.FAILED
     assert failed.reason == "transport_error"
+    assert failed.should_mark_scraped is False
+
+    assert non_200.status is AcquisitionStatus.FAILED
     assert non_200.reason == "non_200_response"
+
+    assert malformed.status is AcquisitionStatus.FAILED
     assert malformed.reason == "malformed_payload"
 
 

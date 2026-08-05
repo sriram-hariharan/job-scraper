@@ -148,3 +148,41 @@ def test_checked_in_personio_sources_are_empty_and_supported():
         "inserted_count": 0,
         "invalid": [],
     }
+
+def test_checked_in_workable_sources_are_validated_and_supported():
+    config = load_curated_ats_sources()
+    sources = config["workable"]
+
+    assert len(sources) == 189
+    assert sources == sorted(set(sources))
+    assert "huggingface" in sources
+    assert "tiger-analytics" in sources
+    assert "api" not in sources
+    assert "j" not in sources
+    assert "company" not in sources
+    assert "careers" not in sources
+
+    inserted = []
+
+    summary = seed_curated_ats_sources(
+        validators={
+            "workable": lambda slugs: set(slugs),
+        },
+        existing_func=lambda ats: set(),
+        upsert_func=lambda ats, companies: (
+            inserted.append((ats, list(companies)))
+            or len(list(companies))
+        ),
+    )
+
+    assert summary["workable"] == {
+        "status": "seeded",
+        "candidate_count": 189,
+        "valid_count": 189,
+        "existing_count": 0,
+        "inserted_count": 189,
+        "invalid": [],
+    }
+    assert inserted == [
+        ("workable", sources),
+    ]

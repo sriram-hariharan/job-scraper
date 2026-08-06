@@ -350,6 +350,115 @@ def _workable_posting(index):
     }
 
 
+def test_workable_stable_id_precedence_and_fallbacks():
+    assert workable_scraper._workable_stable_id(
+        {
+            "shortcode": "SHORTCODE",
+            "url": "https://apply.workable.com/acme/j/URL-TOKEN/",
+            "id": "PROVIDER-ID",
+            "code": "PROVIDER-CODE",
+        }
+    ) == "SHORTCODE"
+    assert workable_scraper._workable_stable_id(
+        {
+            "application_url": "https://apply.workable.com/acme/j/URL-TOKEN/?x=1",
+            "id": "PROVIDER-ID",
+            "code": "PROVIDER-CODE",
+        }
+    ) == "URL-TOKEN"
+    assert workable_scraper._workable_stable_id(
+        {"id": "PROVIDER-ID", "code": "PROVIDER-CODE"}
+    ) == "PROVIDER-ID"
+    assert workable_scraper._workable_stable_id(
+        {"code": "PROVIDER-CODE"}
+    ) == "PROVIDER-CODE"
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["shortcode", "url", "shortlink", "application_url", "id", "code"],
+)
+def test_workable_stable_id_rejects_unsupported_identifier_types(field_name):
+    with pytest.raises(ValueError, match="unsupported Workable stable identifier"):
+        workable_scraper._workable_stable_id({field_name: ["unsupported"]})
+
+
+def test_workable_outcome_uses_stable_identity_without_source_dedupe(monkeypatch):
+    rows = [
+        {
+            **_workable_posting(1),
+            "id": "REUSED-ID",
+            "shortcode": "FIRST-SHORTCODE",
+            "url": "https://apply.workable.com/acme/j/FIRST-SHORTCODE/",
+            "title": "First Posting",
+            "city": "New York",
+        },
+        {
+            **_workable_posting(2),
+            "id": "REUSED-ID",
+            "shortcode": "SECOND-SHORTCODE",
+            "url": "https://apply.workable.com/acme/j/SECOND-SHORTCODE/",
+            "title": "Second Posting",
+            "city": "Boston",
+        },
+        {
+            **_workable_posting(3),
+            "id": "ANOTHER-ID",
+            "shortcode": "FIRST-SHORTCODE",
+            "url": "https://apply.workable.com/acme/j/FIRST-SHORTCODE/",
+            "title": "First Posting",
+            "city": "Chicago",
+        },
+    ]
+    stable_id_calls = []
+    real_stable_id = workable_scraper._workable_stable_id
+
+    def stable_id(job):
+        stable_id_calls.append(job)
+        return real_stable_id(job)
+
+    monkeypatch.setattr(workable_scraper, "_workable_stable_id", stable_id)
+    monkeypatch.setattr(workable_scraper, "learn_from_job_url", lambda _url: None)
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse({"jobs": rows}),
+    )
+
+    outcome = workable_scraper._fetch_company_outcome("acme")
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert stable_id_calls == rows
+    assert [job["job_id"] for job in outcome.jobs] == [
+        "wb_FIRST-SHORTCODE",
+        "wb_SECOND-SHORTCODE",
+        "wb_FIRST-SHORTCODE",
+    ]
+    assert [job["url"] for job in outcome.jobs] == [row["url"] for row in rows]
+    assert len(outcome.jobs) == 3
+
+
+def test_workable_outcome_uses_url_token_when_shortcode_is_absent(monkeypatch):
+    row = {
+        **_workable_posting(1),
+        "id": "PROVIDER-ID",
+        "shortcode": "",
+        "url": "https://apply.workable.com/acme/j/URL-OWNS-IDENTITY/",
+    }
+    monkeypatch.setattr(workable_scraper, "learn_from_job_url", lambda _url: None)
+    monkeypatch.setattr(
+        workable_scraper,
+        "workable_get",
+        lambda *args, **kwargs: _SyncResponse({"jobs": [row]}),
+    )
+
+    outcome = workable_scraper._fetch_company_outcome("acme")
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.jobs[0]["job_id"] == "wb_URL-OWNS-IDENTITY"
+    assert outcome.jobs[0]["url"] == row["url"]
+
+
 def test_workable_outcomes_include_success_empty_and_failures(monkeypatch):
     monkeypatch.setattr(
         workable_scraper,

@@ -1299,6 +1299,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    workable_identity_runtime_files = {
+        ROOT / "src/scrapers/workable_scraper.py",
+    }
+    if set(changed_runtime_files) == workable_identity_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     if set(changed_runtime_files) == scraper_transport_pagination_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")

@@ -1,5 +1,8 @@
-import requests
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlsplit
+
+import requests
 
 from src.utils.http_retry import retry_request
 from src.utils.pipeline_metrics import observe_acquisition
@@ -72,13 +75,46 @@ def extract_v3_jobs(data):
     return values
 
 
-def _workable_stable_id(job):
-    value = job.get("id") or job.get("shortcode") or job.get("url")
+def _workable_identifier_text(value):
     if value is None:
         return ""
     if not isinstance(value, (str, int)):
         raise ValueError("unsupported Workable stable identifier")
     return str(value).strip()
+
+
+def _workable_posting_token(value):
+    url = _workable_identifier_text(value)
+    if not url or any(character.isspace() for character in url):
+        return ""
+
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return ""
+
+    if parsed.scheme and parsed.scheme.lower() not in {"http", "https"}:
+        return ""
+    match = re.search(r"(?:^|/)j/([^/]+)(?:/|$)", parsed.path)
+    return match.group(1).strip() if match else ""
+
+
+def _workable_stable_id(job):
+    shortcode = _workable_identifier_text(job.get("shortcode"))
+    if shortcode:
+        return shortcode
+
+    for field_name in ("url", "shortlink", "application_url"):
+        posting_token = _workable_posting_token(job.get(field_name))
+        if posting_token:
+            return posting_token
+
+    for field_name in ("id", "code"):
+        fallback = _workable_identifier_text(job.get(field_name))
+        if fallback:
+            return fallback
+
+    return ""
 
 
 def _fetch_company_outcome(company):
@@ -174,18 +210,7 @@ def _fetch_company_outcome(company):
 
             learn_from_job_url(url)
 
-            workable_id = (
-                job.get("id")
-                or job.get("code")
-                or shortcode
-            )
-
-            if not workable_id and url and "/j/" in str(url):
-                workable_id = (
-                    str(url)
-                    .split("/j/", 1)[-1]
-                    .split("/", 1)[0]
-                )
+            workable_id = _workable_stable_id(job)
 
             jobs.append(
                 Job(

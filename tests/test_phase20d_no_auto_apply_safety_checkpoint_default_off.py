@@ -1139,6 +1139,15 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     }
+    workable_identity_runtime_files = {
+        ROOT / "src/scrapers/workable_scraper.py",
+    }
+    if set(changed_runtime_files) == workable_identity_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     if set(changed_runtime_files) == source_health_runtime_files:
         diff = subprocess.check_output(
             [

@@ -50,6 +50,7 @@ from tests.support.phase_guard_registry import (
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
+    SMARTRECRUITERS_PAGINATION_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     SOURCE_YIELD_UI_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
@@ -504,6 +505,11 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    smartrecruiters_pagination_profile = legacy_guard_allowlist(
+        "smartrecruiters_pagination"
+    )
+    assert smartrecruiters_pagination_profile == SMARTRECRUITERS_PAGINATION_FILES
+    assert not any("*" in path for path in smartrecruiters_pagination_profile)
     himalayas_step2b_profile = legacy_guard_allowlist(
         "himalayas_step2b_location_coverage"
     )
@@ -1673,7 +1679,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }.isdisjoint(phase9_step12_compatibility_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
-        himalayas_step2b_profile
+        smartrecruiters_pagination_profile
+        | himalayas_step2b_profile
         | himalayas_step6c1_profile
         | himalayas_step6b2_profile
         | himalayas_step6b1_profile

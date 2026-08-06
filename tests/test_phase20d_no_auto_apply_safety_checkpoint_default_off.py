@@ -21,7 +21,7 @@ from tests.support.phase_guard_registry import (
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
-    PERSONIO_SOURCE_INTEGRATION_FILES,
+    PERSONIO_SOURCE_RETIREMENT_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SMARTRECRUITERS_PAGINATION_FILES,
@@ -144,7 +144,7 @@ def test_protected_runtime_files_are_unchanged():
             "himalayas_step6b1_attribution_foundation",
             "phase129c_workflow_overlay_and_run_scoped_corpus",
             "usajobs_source_integration",
-            "personio_source_integration",
+            "personio_source_retirement",
             "recruitee_source_integration",
             "phase2d_a_independent_seniority_policy",
             "phase2d_b2_strict_seniority_filter",
@@ -878,7 +878,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "phase133g_premium_planning_dashboard",
             "phase10_step8_shadow_observation_safety",
             "usajobs_source_integration",
-            "personio_source_integration",
+            "personio_source_retirement",
         ),
     )
 
@@ -1194,13 +1194,13 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         for marker in FORBIDDEN_RUNTIME_MARKERS:
             assert marker not in added_lines
         return
-    personio_runtime_files = {
+    personio_retirement_runtime_files = {
         ROOT / relative_path
-        for relative_path in PERSONIO_SOURCE_INTEGRATION_FILES
+        for relative_path in PERSONIO_SOURCE_RETIREMENT_FILES
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     }
-    if set(changed_runtime_files) == personio_runtime_files:
+    if set(changed_runtime_files) == personio_retirement_runtime_files:
         diff = subprocess.check_output(
             [
                 "git",

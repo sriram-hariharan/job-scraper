@@ -12,7 +12,6 @@ from src.scrapers import (
     builtin_scraper,
     greenhouse_scraper,
     lever_scraper,
-    personio_scraper,
     workable_scraper,
     workday_scraper,
 )
@@ -896,10 +895,6 @@ def test_source_retry_and_pagination_constants_are_bounded():
     assert consts.WORKDAY_PAGE_SIZE == 20
     assert consts.WORKABLE_PAGE_SIZE == 50
 
-    assert 0 < personio_scraper.PERSONIO_MAX_XML_BYTES <= 10 * 1024 * 1024
-    assert 0 < personio_scraper.PERSONIO_MAX_POSITIONS < 10_000
-    assert 0 < personio_scraper.PERSONIO_MAX_DESCRIPTION_CHARS <= 200_000
-
 
 def test_hardening_paths_add_no_persistence_or_application_authority():
     modules = (
@@ -909,7 +904,6 @@ def test_hardening_paths_add_no_persistence_or_application_authority():
         workday_scraper,
         workable_scraper,
         builtin_scraper,
-        personio_scraper,
     )
     forbidden = (
         "submit_application",

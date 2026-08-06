@@ -784,7 +784,6 @@ def _install_drop_pct_collector_fakes(
         "src.scrapers.ashby_scraper": "scrape_all_ashby",
         "src.scrapers.workable_scraper": "scrape_all_workable",
         "src.scrapers.jobvite_scraper": "scrape_all_jobvite",
-        "src.scrapers.personio_scraper": "scrape_all_personio",
         "src.scrapers.recruitee_scraper": "scrape_all_recruitee",
         "src.scrapers.smartrecruiters_scraper": "scrape_all_smartrecruiters",
         "src.scrapers.builtin_scraper": "scrape_all_builtin",

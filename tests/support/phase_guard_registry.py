@@ -580,7 +580,7 @@ RECRUITEE_SOURCE_INTEGRATION_FILES = {
     "tests/test_scraper_source_health_metrics.py",
 }
 
-PERSONIO_SOURCE_INTEGRATION_FILES = {
+PERSONIO_SOURCE_RETIREMENT_FILES = {
     "src/config/consts.py",
     "src/config/curated_ats_sources.json",
     "src/discovery/curated_ats_sources.py",
@@ -589,12 +589,14 @@ PERSONIO_SOURCE_INTEGRATION_FILES = {
     "tests/support/phase_guard_registry.py",
     "tests/test_curated_ats_sources.py",
     "tests/test_personio_scraper.py",
+    "tests/test_personio_source_retirement.py",
     "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
     "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
     "tests/test_scraper_prefilter_ownership_boundary.py",
     "tests/test_scraper_source_health_metrics.py",
     "tests/test_scraper_transport_pagination_hardening.py",
+    "tests/test_user_pipeline_role_preferences.py",
 }
 
 USAJOBS_SOURCE_INTEGRATION_FILES = {
@@ -911,7 +913,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "himalayas_step6b2_source_integration": HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
         "himalayas_step6b1_attribution_foundation": HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
         "usajobs_source_integration": USAJOBS_SOURCE_INTEGRATION_FILES,
-        "personio_source_integration": PERSONIO_SOURCE_INTEGRATION_FILES,
+        "personio_source_retirement": PERSONIO_SOURCE_RETIREMENT_FILES,
         "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
         "source_yield_ui": SOURCE_YIELD_UI_FILES,
         "jobvite_location_freshness": JOBVITE_LOCATION_FRESHNESS_FILES,
@@ -2254,7 +2256,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
         | DISCOVERY_ACQUISITION_LIFECYCLE_FILES
-        | PERSONIO_SOURCE_INTEGRATION_FILES
+        | PERSONIO_SOURCE_RETIREMENT_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
@@ -2401,9 +2403,10 @@ def assert_protected_hashes(
                 "c70367eb9a9cd1da5a2f2a4c5f37c4be3e96dbd0f29ec73bfa32bba5cc580ad4",
                 "4a9d20dbaf51da7695c0b5e63ac5b4f6b0e9bd4312ff444c7ce6ad3f4887b65e",
                 "daa47b63bbfa06d218b82f50a0ae46e536c9bd89e39543f386c1298008757032",
-                "c3d103420c5613c8717c64ec0a66d1636e00c721ec2a754c22978c9feaab85d4",
-                "02be627dd01e1593215a83fc28c1afe94ba9493dae25d4d4894b067acd1b0455",
-            }),
+                    "c3d103420c5613c8717c64ec0a66d1636e00c721ec2a754c22978c9feaab85d4",
+                    "02be627dd01e1593215a83fc28c1afe94ba9493dae25d4d4894b067acd1b0455",
+                    "153a2f59dd9b8efb8fa958751beb3ace7a933509e2abb61fe2054f0468922139",
+                }),
         (
             "src/pipeline/job_ranker.py",
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",

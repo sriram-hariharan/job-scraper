@@ -2618,7 +2618,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.scrapers.himalayas_scraper import scrape_all_himalayas
     from src.scrapers.jobvite_scraper import scrape_all_jobvite
     from src.scrapers.lever_scraper import scrape_all_lever
-    from src.scrapers.personio_scraper import scrape_all_personio
     from src.scrapers.recruitee_scraper import scrape_all_recruitee
     from src.scrapers.smartrecruiters_scraper import scrape_all_smartrecruiters
     from src.scrapers.usajobs_scraper import scrape_all_usajobs
@@ -2671,7 +2670,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         ("ashby", scrape_all_ashby),
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
-        ("personio", scrape_all_personio),
         ("recruitee", scrape_all_recruitee),
         ("smartrecruiters", scrape_all_smartrecruiters),
         ("builtin", scrape_all_builtin),

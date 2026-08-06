@@ -55,6 +55,7 @@ from tests.support.phase_guard_registry import (
     SOURCE_YIELD_UI_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
+    WORKDAY_PAGINATION_FRESHNESS_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -510,6 +511,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     )
     assert smartrecruiters_pagination_profile == SMARTRECRUITERS_PAGINATION_FILES
     assert not any("*" in path for path in smartrecruiters_pagination_profile)
+    workday_pagination_freshness_profile = legacy_guard_allowlist(
+        "workday_pagination_freshness"
+    )
+    assert (
+        workday_pagination_freshness_profile
+        == WORKDAY_PAGINATION_FRESHNESS_FILES
+    )
+    assert not any("*" in path for path in workday_pagination_freshness_profile)
     himalayas_step2b_profile = legacy_guard_allowlist(
         "himalayas_step2b_location_coverage"
     )
@@ -1765,6 +1774,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        | WORKDAY_PAGINATION_FRESHNESS_FILES
         | PERSONIO_SOURCE_INTEGRATION_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES

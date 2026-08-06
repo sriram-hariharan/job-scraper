@@ -2881,6 +2881,42 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
                         0,
                     )
                 ),
+                "workday_timestamp_listing_present": (
+                    completed_filter_diagnostics.get(
+                        "workday_timestamp_listing_present",
+                        0,
+                    )
+                ),
+                "workday_timestamp_cache_hit": (
+                    completed_filter_diagnostics.get(
+                        "workday_timestamp_cache_hit",
+                        0,
+                    )
+                ),
+                "workday_timestamp_cache_miss": (
+                    completed_filter_diagnostics.get(
+                        "workday_timestamp_cache_miss",
+                        0,
+                    )
+                ),
+                "workday_timestamp_fetch_success": (
+                    completed_filter_diagnostics.get(
+                        "workday_timestamp_fetch_success",
+                        0,
+                    )
+                ),
+                "workday_timestamp_fetch_429": (
+                    completed_filter_diagnostics.get(
+                        "workday_timestamp_fetch_429",
+                        0,
+                    )
+                ),
+                "workday_timestamp_fetch_failed": (
+                    completed_filter_diagnostics.get(
+                        "workday_timestamp_fetch_failed",
+                        0,
+                    )
+                ),
                 **role_title_audit_summary,
             },
         )

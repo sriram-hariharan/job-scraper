@@ -471,7 +471,7 @@ def test_workday_repeated_and_no_progress_pages_are_partial(monkeypatch, mode):
     outcome = workday_scraper._scrape_company_outcome(board)
 
     assert outcome.status is AcquisitionStatus.PARTIAL
-    assert outcome.reason == "pagination_interrupted"
+    assert outcome.reason == "pagination_no_progress"
     assert len(outcome.jobs) == 20
     assert outcome.should_mark_scraped is False
 
@@ -497,8 +497,246 @@ def test_workday_page_cap_is_finite_and_partial(monkeypatch):
 
     assert calls == [0]
     assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_limit_reached"
     assert outcome.page_count == 1
     assert outcome.should_mark_scraped is False
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"jobPostings": [_workday_posting(index) for index in range(3)]},
+        {
+            "total": 3,
+            "jobPostings": [_workday_posting(index) for index in range(3)],
+        },
+    ],
+)
+def test_workday_proven_completion_precedes_page_cap(monkeypatch, payload):
+    _prepare_workday(monkeypatch)
+    monkeypatch.setattr(workday_scraper, "WORKDAY_MAX_PAGES", 1)
+    monkeypatch.setattr(
+        workday_scraper,
+        "workday_post",
+        lambda *args, **kwargs: _Response(payload),
+    )
+
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.page_count == 1
+    assert outcome.raw_job_count == 3
+
+
+@pytest.mark.parametrize("total", [True, False, -1, "40", 40.0])
+def test_workday_rejects_malformed_total_metadata(monkeypatch, total):
+    _prepare_workday(monkeypatch)
+    monkeypatch.setattr(
+        workday_scraper,
+        "workday_post",
+        lambda *args, **kwargs: _Response(
+            {"total": total, "jobPostings": [_workday_posting(1)]}
+        ),
+    )
+
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert outcome.status is AcquisitionStatus.FAILED
+    assert outcome.reason == "malformed_payload"
+    assert outcome.page_count == 0
+
+
+def test_workday_advances_by_returned_rows_and_retains_first_total(monkeypatch):
+    _prepare_workday(monkeypatch)
+    calls = []
+
+    def post(*args, **kwargs):
+        offset = kwargs["json"]["offset"]
+        calls.append(offset)
+        if offset == 0:
+            return _Response(
+                {
+                    "total": 5,
+                    "jobPostings": [_workday_posting(index) for index in range(3)],
+                }
+            )
+        return _Response(
+            {
+                "total": 0,
+                "jobPostings": [_workday_posting(index) for index in range(3, 5)],
+            }
+        )
+
+    monkeypatch.setattr(workday_scraper, "workday_post", post)
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert calls == [0, 3]
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.page_count == 2
+    assert outcome.raw_job_count == 5
+    assert len(outcome.jobs) == 5
+
+
+def test_workday_empty_page_with_remaining_total_is_no_progress(monkeypatch):
+    _prepare_workday(monkeypatch)
+    responses = iter(
+        [
+            _Response(
+                {
+                    "total": 40,
+                    "jobPostings": [_workday_posting(index) for index in range(20)],
+                }
+            ),
+            _Response({"total": 40, "jobPostings": []}),
+        ]
+    )
+    monkeypatch.setattr(
+        workday_scraper,
+        "workday_post",
+        lambda *args, **kwargs: next(responses),
+    )
+
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_no_progress"
+    assert outcome.page_count == 2
+    assert outcome.raw_job_count == 20
+
+
+def test_workday_exact_provider_boundary_is_partial_without_offset_2000(monkeypatch):
+    _prepare_workday(monkeypatch)
+    calls = []
+
+    def post(*args, **kwargs):
+        offset = kwargs["json"]["offset"]
+        calls.append(offset)
+        return _Response(
+            {
+                "total": 2000 if offset != 1980 else 0,
+                "jobPostings": [
+                    _workday_posting(index)
+                    for index in range(offset, offset + consts.WORKDAY_PAGE_SIZE)
+                ],
+            }
+        )
+
+    monkeypatch.setattr(workday_scraper, "workday_post", post)
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert calls == list(range(0, 2000, 20))
+    assert 2000 not in calls
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_limit_reached"
+    assert outcome.page_count == 100
+    assert outcome.raw_job_count == 2000
+    assert len(outcome.jobs) == 2000
+
+
+def test_workday_larger_total_stops_at_page_cap(monkeypatch):
+    _prepare_workday(monkeypatch)
+    calls = []
+    monkeypatch.setattr(workday_scraper, "WORKDAY_MAX_PAGES", 2)
+
+    def post(*args, **kwargs):
+        offset = kwargs["json"]["offset"]
+        calls.append(offset)
+        return _Response(
+            {
+                "total": 3000,
+                "jobPostings": [
+                    _workday_posting(index) for index in range(offset, offset + 20)
+                ],
+            }
+        )
+
+    monkeypatch.setattr(workday_scraper, "workday_post", post)
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert calls == [0, 20]
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_limit_reached"
+    assert outcome.page_count == 2
+    assert outcome.raw_job_count == 40
+
+
+def test_workday_later_malformed_total_retains_safe_jobs(monkeypatch):
+    _prepare_workday(monkeypatch)
+    responses = iter(
+        [
+            _Response(
+                {
+                    "total": 40,
+                    "jobPostings": [_workday_posting(index) for index in range(20)],
+                }
+            ),
+            _Response(
+                {
+                    "total": "40",
+                    "jobPostings": [_workday_posting(index) for index in range(20, 40)],
+                }
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        workday_scraper,
+        "workday_post",
+        lambda *args, **kwargs: next(responses),
+    )
+
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_interrupted"
+    assert outcome.page_count == 1
+    assert outcome.raw_job_count == 20
+    assert len(outcome.jobs) == 20
+
+
+@pytest.mark.parametrize(
+    ("posting", "expected"),
+    [
+        ({"jobPostingInfo": {"startDate": "info-start"}}, "info-start"),
+        ({"startDate": "row-start"}, "row-start"),
+        ({"jobPostingInfo": {"postedOn": "info-posted"}}, "info-posted"),
+        ({"postedOn": "row-posted"}, "row-posted"),
+        ({"postedDate": "row-posted-date"}, "row-posted-date"),
+        ({"postedAt": "row-posted-at"}, "row-posted-at"),
+        ({"createdDate": "row-created-date"}, "row-created-date"),
+        ({"createdAt": "row-created-at"}, "row-created-at"),
+    ],
+)
+def test_workday_listing_timestamp_candidate_family(monkeypatch, posting, expected):
+    _prepare_workday(monkeypatch)
+    row = _workday_posting(1)
+    row.pop("postedDate")
+    row.update(posting)
+    monkeypatch.setattr(
+        workday_scraper,
+        "workday_post",
+        lambda *args, **kwargs: _Response({"total": 1, "jobPostings": [row]}),
+    )
+
+    outcome = workday_scraper._scrape_company_outcome(
+        "https://acme.myworkdayjobs.com/jobs"
+    )
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.jobs[0]["posted_at"] == expected
 
 
 def test_workday_later_page_failure_retains_earlier_jobs(monkeypatch):

@@ -7,6 +7,20 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from src.utils.posted_at_utils import parse_posted_at
 from src.utils.workday_timestamp import fetch_workday_timestamp
+try:
+    from src.utils.workday_timestamp import fetch_workday_timestamp_result
+except ImportError:
+    def fetch_workday_timestamp_result(board_url, external_path):
+        posted_at = fetch_workday_timestamp(board_url, external_path)
+        return {
+            "posted_at": posted_at,
+            "marker": (
+                "workday_timestamp_success"
+                if posted_at
+                else "workday_timestamp_missing"
+            ),
+            "status_code": None,
+        }
 from src.config.consts import (
     US_STATES,
     US_STATE_NAMES,
@@ -704,6 +718,45 @@ def _apply_jobvite_timestamp_result(job, result):
     }
 
 
+def _workday_timestamp_cache_key(job):
+    board_url = str(job.get("_board_url") or "").strip()
+    external_path = str(job.get("_externalPath") or "").strip()
+    if not board_url or not external_path:
+        return ""
+
+    try:
+        parsed = urlsplit(board_url)
+    except ValueError:
+        return ""
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return ""
+
+    board_path = parsed.path.rstrip("/") or "/"
+    normalized_board = urlunsplit(
+        (parsed.scheme.lower(), parsed.netloc.lower(), board_path, "", "")
+    )
+    normalized_external_path = "/" + external_path.lstrip("/")
+    return f"{normalized_board}:{normalized_external_path}"
+
+
+def _apply_workday_timestamp_result(job, result):
+    metadata = result if isinstance(result, dict) else {}
+    posted_at = metadata.get("posted_at")
+    marker = str(metadata.get("marker") or "").strip()
+    status_code = metadata.get("status_code")
+
+    if posted_at and not job.get("posted_at"):
+        job["posted_at"] = posted_at
+    elif marker and not job.get("posted_at"):
+        job["_workday_timestamp_status"] = marker
+
+    return {
+        "posted_at": posted_at,
+        "marker": marker,
+        "status_code": status_code,
+    }
+
+
 def _audit_update(audit_row, **updates):
     if audit_row is not None:
         for key, value in updates.items():
@@ -740,6 +793,7 @@ def filter_jobs(
     rejection_reasons = Counter()
     ashby_timestamp_stats = Counter()
     jobvite_timestamp_stats = Counter()
+    workday_timestamp_stats = Counter()
     audit_rows_by_job_id = {}
 
     for job in jobs:
@@ -960,6 +1014,21 @@ def filter_jobs(
                         ),
                     )
 
+    if any(job.get("source") == ATS_WORKDAY for job in prefiltered):
+        for counter_name in (
+            "workday_timestamp_listing_present",
+            "workday_timestamp_cache_hit",
+            "workday_timestamp_cache_miss",
+            "workday_timestamp_fetch_success",
+            "workday_timestamp_fetch_429",
+            "workday_timestamp_fetch_failed",
+        ):
+            workday_timestamp_stats[counter_name] = 0
+
+    for job in prefiltered:
+        if job.get("source") == ATS_WORKDAY and job.get("posted_at"):
+            workday_timestamp_stats["workday_timestamp_listing_present"] += 1
+
     # resolve missing Workday timestamps
     workday_missing = [
         job for job in prefiltered
@@ -970,28 +1039,55 @@ def filter_jobs(
     ]
 
     if workday_missing:
+        jobs_by_cache_key = {}
+        for job in workday_missing:
+            cache_key = _workday_timestamp_cache_key(job)
+            if not cache_key:
+                continue
+            if cache_key in jobs_by_cache_key:
+                jobs_by_cache_key[cache_key].append(job)
+                continue
+            jobs_by_cache_key[cache_key] = [job]
+            workday_timestamp_stats["workday_timestamp_cache_miss"] += 1
+
         with ThreadPoolExecutor(max_workers=TIMESTAMP_WORKERS) as executor:
             futures = {
                 executor.submit(
-                    fetch_workday_timestamp,
-                    job["_board_url"],
-                    job["_externalPath"]
-                ): job
-                for job in workday_missing
+                    fetch_workday_timestamp_result,
+                    jobs[0]["_board_url"],
+                    jobs[0]["_externalPath"],
+                ): cache_key
+                for cache_key, jobs in jobs_by_cache_key.items()
             }
 
-            resolved = 0
             for future in as_completed(futures):
-
-                job = futures[future]
-
+                cache_key = futures[future]
+                timestamp_jobs = jobs_by_cache_key.get(cache_key, [])
                 try:
-                    ts = future.result()
-                    if ts:
-                        job["posted_at"] = ts
-                        resolved += 1
+                    result = future.result()
                 except Exception:
-                    pass
+                    result = {
+                        "posted_at": None,
+                        "marker": "workday_timestamp_request_failed",
+                        "status_code": None,
+                    }
+
+                applied = (
+                    _apply_workday_timestamp_result(timestamp_jobs[0], result)
+                    if timestamp_jobs
+                    else {}
+                )
+                if applied.get("posted_at"):
+                    workday_timestamp_stats["workday_timestamp_fetch_success"] += 1
+                elif applied.get("status_code") == 429:
+                    workday_timestamp_stats["workday_timestamp_fetch_429"] += 1
+                else:
+                    workday_timestamp_stats["workday_timestamp_fetch_failed"] += 1
+
+                for index, timestamp_job in enumerate(timestamp_jobs):
+                    if index > 0:
+                        workday_timestamp_stats["workday_timestamp_cache_hit"] += 1
+                        _apply_workday_timestamp_result(timestamp_job, result)
 
     filtered = []
     freshness_pass = 0
@@ -1055,6 +1151,7 @@ def filter_jobs(
     diagnostics = _filter_diagnostics(rejection_reasons, title_pass, location_pass)
     diagnostics.update(dict(ashby_timestamp_stats))
     diagnostics.update(dict(jobvite_timestamp_stats))
+    diagnostics.update(dict(workday_timestamp_stats))
     if return_diagnostics:
         return filtered, diagnostics
 

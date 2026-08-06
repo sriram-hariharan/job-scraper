@@ -27,6 +27,7 @@ from tests.support.phase_guard_registry import (
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
+    WORKDAY_PAGINATION_FRESHNESS_FILES,
     assert_changed_files_allowed,
     assert_protected_hashes,
     get_changed_files,
@@ -141,6 +142,7 @@ def test_protected_runtime_files_are_unchanged():
         PROTECTED_HASHES,
         compatibility_profiles=(
             "smartrecruiters_pagination",
+            "workday_pagination_freshness",
             "himalayas_step2b_location_coverage",
             "himalayas_step6d_c_source_retirement",
             "himalayas_step6d_b2_retention_integration",
@@ -824,6 +826,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         allowed | legacy_guards,
         legacy_guard_profiles=(
             "smartrecruiters_pagination",
+            "workday_pagination_freshness",
             "himalayas_step2b_location_coverage",
             "himalayas_step6e_r1_location_activation",
             "himalayas_step6d_c_source_retirement",
@@ -863,6 +866,32 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == smartrecruiters_pagination_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    workday_pagination_freshness_runtime_files = {
+        ROOT / relative_path
+        for relative_path in WORKDAY_PAGINATION_FRESHNESS_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == workday_pagination_freshness_runtime_files:
         diff = subprocess.check_output(
             [
                 "git",

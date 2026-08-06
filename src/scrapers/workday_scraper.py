@@ -69,6 +69,36 @@ def _workday_interrupted_outcome(
     )
 
 
+def _workday_page(data):
+    if not isinstance(data, dict):
+        raise ValueError("malformed Workday payload")
+
+    total = None
+    if "total" in data:
+        total = data.get("total")
+        if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+            raise ValueError("malformed Workday total")
+
+    posting_values = [
+        data.get(key)
+        for key in ("jobPostings", "jobs", "items")
+        if key in data
+    ]
+    if not posting_values:
+        raise ValueError("missing Workday postings")
+
+    postings = next((value for value in posting_values if value), posting_values[0])
+    if isinstance(postings, dict):
+        postings = postings.get("postings")
+
+    if not isinstance(postings, list) or not all(
+        isinstance(job, dict) for job in postings
+    ):
+        raise ValueError("malformed Workday postings")
+
+    return total, postings
+
+
 def _scrape_company_outcome(board_url):
 
     if not isinstance(board_url, str) or not board_url.strip():
@@ -121,7 +151,7 @@ def _scrape_company_outcome(board_url):
     jobs = []
     offset = 0
     limit = WORKDAY_PAGE_SIZE
-    total = None
+    advisory_total = None
 
     page_count = 0
     raw_job_count = 0
@@ -130,7 +160,7 @@ def _scrape_company_outcome(board_url):
 
         if page_count >= WORKDAY_MAX_PAGES:
             return _workday_interrupted_outcome(
-                board_url, jobs, "pagination_interrupted", page_count, raw_job_count
+                board_url, jobs, "pagination_limit_reached", page_count, raw_job_count
             )
 
         payload = {
@@ -158,43 +188,28 @@ def _scrape_company_outcome(board_url):
                 board_url, jobs, "malformed_payload", page_count, raw_job_count
             )
 
-        if not isinstance(data, dict):
+        try:
+            page_total, postings = _workday_page(data)
+        except ValueError:
             return _workday_interrupted_outcome(
                 board_url, jobs, "malformed_payload", page_count, raw_job_count
             )
 
         page_count += 1
-
-        if total is None:
-            total = data.get("total")
-            if not isinstance(total, int):
-                total = None
-
-        if not any(key in data for key in ("jobPostings", "jobs", "items")):
-            return _workday_interrupted_outcome(
-                board_url, jobs, "malformed_payload", page_count, raw_job_count
-            )
-
-        postings = (
-            data.get("jobPostings")
-            or data.get("jobs")
-            or data.get("items")
-            or []
-        )
-
-        if isinstance(postings, dict):
-            postings = postings.get("postings", [])
-
-        if not isinstance(postings, list) or not all(
-            isinstance(job, dict) for job in postings
-        ):
-            return _workday_interrupted_outcome(
-                board_url, jobs, "malformed_payload", page_count, raw_job_count
-            )
-
         raw_job_count += len(postings)
 
+        if advisory_total is None and not (page_total == 0 and postings):
+            advisory_total = page_total
+
         if not postings:
+            if advisory_total is not None and offset < advisory_total:
+                return _workday_interrupted_outcome(
+                    board_url,
+                    jobs,
+                    "pagination_no_progress",
+                    page_count,
+                    raw_job_count,
+                )
             return _workday_completed_outcome(
                 board_url, jobs, page_count, raw_job_count
             )
@@ -210,7 +225,7 @@ def _scrape_company_outcome(board_url):
 
         if page_signature in seen_page_signatures or not new_provider_ids:
             return _workday_interrupted_outcome(
-                board_url, jobs, "pagination_interrupted", page_count, raw_job_count
+                board_url, jobs, "pagination_no_progress", page_count, raw_job_count
             )
 
         seen_page_signatures.add(page_signature)
@@ -263,6 +278,7 @@ def _scrape_company_outcome(board_url):
                 info.get("startDate")
                 or job.get("startDate")
                 or info.get("postedOn")
+                or job.get("postedOn")
                 or job.get("postedDate")
                 or job.get("postedAt")
                 or job.get("createdDate")
@@ -305,16 +321,29 @@ def _scrape_company_outcome(board_url):
                     board_url, jobs, "parse_error", page_count, raw_job_count
                 )
 
-        offset += limit
+        offset = offset + len(postings)
 
-        if total is not None and offset >= total:
+        if (
+            advisory_total is not None
+            and advisory_total < WORKDAY_PAGE_SIZE * WORKDAY_MAX_PAGES
+            and offset >= advisory_total
+        ):
             return _workday_completed_outcome(
                 board_url, jobs, page_count, raw_job_count
             )
 
-        if total is None and len(postings) < limit:
+        if advisory_total is None and len(postings) < limit:
             return _workday_completed_outcome(
                 board_url, jobs, page_count, raw_job_count
+            )
+
+        if page_count >= WORKDAY_MAX_PAGES:
+            return _workday_interrupted_outcome(
+                board_url,
+                jobs,
+                "pagination_limit_reached",
+                page_count,
+                raw_job_count,
             )
 
         time.sleep(0.01)

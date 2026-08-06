@@ -539,6 +539,20 @@ SMARTRECRUITERS_PAGINATION_FILES = {
     "tests/test_smartrecruiters_pagination.py",
 }
 
+WORKDAY_PAGINATION_FRESHNESS_FILES = {
+    "src/pipeline/collector.py",
+    "src/pipeline/job_filter.py",
+    "src/scrapers/workday_scraper.py",
+    "src/utils/posted_at_utils.py",
+    "src/utils/workday_timestamp.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_scraper_transport_pagination_hardening.py",
+    "tests/test_workday_timestamp_hydration.py",
+}
+
 RECRUITEE_SOURCE_INTEGRATION_FILES = {
     "src/config/consts.py",
     "src/config/curated_ats_sources.json",
@@ -877,6 +891,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
         "smartrecruiters_pagination": SMARTRECRUITERS_PAGINATION_FILES,
+        "workday_pagination_freshness": WORKDAY_PAGINATION_FRESHNESS_FILES,
         "himalayas_step2b_location_coverage": HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES,
         "himalayas_step6e_r1_location_activation": HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
         "himalayas_step6d_c_source_retirement": HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
@@ -2076,6 +2091,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
         legacy_guard_allowlist("smartrecruiters_pagination")
+        | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
         | legacy_guard_allowlist("himalayas_step6c1_pagination_repair")
         | legacy_guard_allowlist("himalayas_step6b2_source_integration")
@@ -2375,6 +2391,7 @@ def assert_protected_hashes(
                 "4a9d20dbaf51da7695c0b5e63ac5b4f6b0e9bd4312ff444c7ce6ad3f4887b65e",
                 "daa47b63bbfa06d218b82f50a0ae46e536c9bd89e39543f386c1298008757032",
                 "c3d103420c5613c8717c64ec0a66d1636e00c721ec2a754c22978c9feaab85d4",
+                "02be627dd01e1593215a83fc28c1afe94ba9493dae25d4d4894b067acd1b0455",
             }),
         (
             "src/pipeline/job_ranker.py",

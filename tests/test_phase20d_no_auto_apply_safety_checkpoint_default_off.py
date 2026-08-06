@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 
 from tests.support.phase_guard_registry import (
+    HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES,
     HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
     HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
     HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
@@ -130,6 +131,7 @@ def test_protected_runtime_files_are_unchanged():
         ROOT,
         PROTECTED_HASHES,
         compatibility_profiles=(
+            "himalayas_step2b_location_coverage",
             "himalayas_step6d_c_source_retirement",
             "himalayas_step6d_b2_retention_integration",
             "himalayas_step6c1_pagination_repair",
@@ -850,6 +852,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         changed,
         allowed | legacy_guards,
         legacy_guard_profiles=(
+            "himalayas_step2b_location_coverage",
             "himalayas_step6e_r1_location_activation",
             "himalayas_step6d_c_source_retirement",
             "himalayas_step6d_b2_retention_integration",
@@ -881,6 +884,32 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    himalayas_step2b_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step2b_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
     himalayas_step6e_r1_runtime_files = {
         ROOT / relative_path
         for relative_path in HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES

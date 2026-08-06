@@ -665,6 +665,18 @@ HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES = {
     "tests/test_rag_export_job_corpus.py",
 }
 
+HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES = {
+    "src/config/consts.py",
+    "src/config/himalayas_query_profiles.json",
+    "src/discovery/crawl_scheduler.py",
+    "src/scrapers/himalayas_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_himalayas_scraper.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES = {
     "src/pipeline/collector.py",
     "src/scrapers/greenhouse_scraper.py",
@@ -854,6 +866,7 @@ def merge_allowed(*groups: Iterable[str | Path]) -> set[str]:
 
 def legacy_guard_allowlist(profile: str) -> set[str]:
     profiles = {
+        "himalayas_step2b_location_coverage": HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES,
         "himalayas_step6e_r1_location_activation": HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
         "himalayas_step6d_c_source_retirement": HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
         "himalayas_step6d_b2_retention_integration": HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
@@ -2051,7 +2064,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
-        legacy_guard_allowlist("himalayas_step6c1_pagination_repair")
+        legacy_guard_allowlist("himalayas_step2b_location_coverage")
+        | legacy_guard_allowlist("himalayas_step6c1_pagination_repair")
         | legacy_guard_allowlist("himalayas_step6b2_source_integration")
         | legacy_guard_allowlist("himalayas_step6b1_attribution_foundation")
         | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")

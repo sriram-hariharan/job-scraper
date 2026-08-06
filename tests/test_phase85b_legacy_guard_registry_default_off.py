@@ -4,6 +4,7 @@ import pytest
 
 from tests.support.phase_guard_registry import (
     BROAD_TECH_PREFILTER_TAXONOMY_FILES,
+    HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES,
     HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
     HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
     HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
@@ -503,6 +504,11 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    himalayas_step2b_profile = legacy_guard_allowlist(
+        "himalayas_step2b_location_coverage"
+    )
+    assert himalayas_step2b_profile == HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES
+    assert not any("*" in path for path in himalayas_step2b_profile)
     himalayas_step6e_r1_profile = legacy_guard_allowlist(
         "himalayas_step6e_r1_location_activation"
     )
@@ -1667,7 +1673,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }.isdisjoint(phase9_step12_compatibility_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
-        himalayas_step6c1_profile
+        himalayas_step2b_profile
+        | himalayas_step6c1_profile
         | himalayas_step6b2_profile
         | himalayas_step6b1_profile
         | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")

@@ -5,5 +5,12 @@
     "country": "US",
     "exclude_worldwide": true,
     "sort": "recent"
+  },
+  {
+    "profile_id": "software-us",
+    "query": "software",
+    "country": "US",
+    "exclude_worldwide": true,
+    "sort": "recent"
   }
 ]

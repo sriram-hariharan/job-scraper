@@ -21,6 +21,8 @@ ACQUISITION_FAILURE_REASONS = frozenset({
     "malformed_payload",
     "parse_error",
     "pagination_interrupted",
+    "pagination_limit_reached",
+    "pagination_no_progress",
 })
 
 

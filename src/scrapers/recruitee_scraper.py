@@ -25,6 +25,7 @@ _TENANT_PATTERN = re.compile(
     r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
 )
 _HEADERS = {"User-Agent": "Mozilla/5.0"}
+_LOCATION_COMPONENT_FIELDS = ("name", "city", "state")
 
 
 def _normalize_tenant(value):
@@ -38,6 +39,57 @@ def _public_job_url(value):
     if parsed.scheme != "https" or not parsed.netloc:
         return ""
     return url
+
+
+def _location_component(value):
+    return str(value or "").strip() if isinstance(value, (str, int)) else ""
+
+
+def _structured_location(group):
+    if not isinstance(group, dict):
+        return ""
+
+    country = _location_component(group.get("country"))
+    country_code = _location_component(group.get("country_code")).upper()
+    if not country:
+        if country_code == "US":
+            country = "United States"
+        else:
+            return ""
+
+    components = [
+        _location_component(group.get(field_name))
+        for field_name in _LOCATION_COMPONENT_FIELDS
+    ]
+    components.append(country)
+
+    unique_components = []
+    seen = set()
+    for component in components:
+        if component and component not in seen:
+            seen.add(component)
+            unique_components.append(component)
+    return ", ".join(unique_components)
+
+
+def _offer_location(offer):
+    locations = []
+    primary = offer.get("location")
+    if isinstance(primary, str) and primary.strip():
+        locations.append(primary)
+
+    secondary_groups = offer.get("locations")
+    if isinstance(secondary_groups, list):
+        for group in secondary_groups:
+            location = _structured_location(group)
+            if location and location not in locations:
+                locations.append(location)
+
+    if not locations:
+        return ""
+    if len(locations) == 1:
+        return locations[0]
+    return locations
 
 
 def _request_offers(tenant):
@@ -150,7 +202,7 @@ def _fetch_company_outcome(company):
             continue
 
         valid_record_count += 1
-        location = offer.get("location") or ""
+        location = _offer_location(offer)
         posted_at = offer.get("published_at")
 
         try:

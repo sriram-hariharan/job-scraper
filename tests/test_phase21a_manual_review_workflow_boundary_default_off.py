@@ -1134,6 +1134,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     }
+    recruitee_location_runtime_files = {
+        ROOT / "src/scrapers/recruitee_scraper.py",
+    }
+    if set(changed_runtime_files) == recruitee_location_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     if set(changed_runtime_files) == recruitee_runtime_files:
         diff = subprocess.check_output(
             [

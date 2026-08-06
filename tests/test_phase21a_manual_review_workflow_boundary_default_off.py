@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 
 from tests.support.phase_guard_registry import (
+    DISCOVERY_ACQUISITION_LIFECYCLE_FILES,
     HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES,
     HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
     HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
@@ -859,6 +860,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    discovery_acquisition_lifecycle_runtime_files = {
+        ROOT / relative_path
+        for relative_path in DISCOVERY_ACQUISITION_LIFECYCLE_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == discovery_acquisition_lifecycle_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     smartrecruiters_pagination_runtime_files = {
         ROOT / relative_path
         for relative_path in SMARTRECRUITERS_PAGINATION_FILES

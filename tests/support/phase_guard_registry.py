@@ -529,6 +529,15 @@ SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "tests/test_scraper_source_health_metrics.py",
 }
 
+DISCOVERY_ACQUISITION_LIFECYCLE_FILES = {
+    "src/storage/discovery_store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_discovery_store_acquisition_lifecycle.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 SMARTRECRUITERS_PAGINATION_FILES = {
     "src/config/consts.py",
     "src/scrapers/smartrecruiters_scraper.py",
@@ -2243,6 +2252,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
+        | DISCOVERY_ACQUISITION_LIFECYCLE_FILES
         | PERSONIO_SOURCE_INTEGRATION_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES

@@ -501,6 +501,7 @@ SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES = {
     "src/utils/http_retry.py",
     "tests/support/phase_guard_registry.py",
     "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_builtin_scraper.py",
     "tests/test_scraper_acquisition_outcomes.py",
     "tests/test_scraper_transport_pagination_hardening.py",
 }

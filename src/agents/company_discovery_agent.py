@@ -4,6 +4,7 @@ import requests
 from tavily import TavilyClient
 from urllib.parse import urlparse
 from src.discovery.save_companies import append_new_companies
+from src.discovery.learned_companies import normalize_workable_slug
 from src.scrapers.jobvite_scraper import (
     _normalize_jobvite_company as normalize_jobvite_company,
     validate_jobvite_companies,
@@ -191,7 +192,7 @@ def extract_company_slug(url):
             return path[0]
 
         if "apply.workable.com" in domain:
-            return path[0]
+            return normalize_workable_slug(path[0])
 
         return None
 

@@ -2,7 +2,7 @@ import pytest
 
 from src.agents import company_discovery_agent as agent
 from src.discovery import career_ats_detector, learned_companies
-from src.scrapers import smartrecruiters_scraper
+from src.scrapers import smartrecruiters_scraper, workable_scraper
 
 
 class _Response:
@@ -248,6 +248,84 @@ def test_existing_provider_detection_contracts_are_unchanged(
 
     assert agent.detect_ats_from_page("https://example.com/careers") == expected
     assert calls == [("https://example.com/careers", 10)]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://apply.workable.com/acme/j/ABC", "acme"),
+        ("https://apply.workable.com/Acme-Co/j/ABC", "acme-co"),
+        ("https://apply.workable.com/company2/j/ABC", "company2"),
+        ("https://apply.workable.com/acme_co/j/ABC", "acme_co"),
+    ],
+)
+def test_extract_company_slug_uses_workable_normalization(url, expected):
+    assert agent.extract_company_slug(url) == expected
+
+
+@pytest.mark.parametrize(
+    "route",
+    sorted(learned_companies.WORKABLE_ROUTE_SLUGS),
+)
+def test_extract_company_slug_rejects_workable_route_tokens(route):
+    assert agent.extract_company_slug(
+        f"https://apply.workable.com/{route}/ABC"
+    ) is None
+
+
+@pytest.mark.parametrize(
+    "slug",
+    ["Acme-Co", "acme_co", "company2"]
+    + sorted(learned_companies.WORKABLE_ROUTE_SLUGS),
+)
+def test_standalone_workable_extraction_matches_shared_normalizer(slug):
+    assert agent.extract_company_slug(
+        f"https://apply.workable.com/{slug}/j/ABC"
+    ) == learned_companies.normalize_workable_slug(slug)
+
+
+def test_workable_discovery_persists_only_normalized_company(monkeypatch):
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response("apply.workable.com"),
+    )
+    monkeypatch.setattr(
+        agent,
+        "extract_urls",
+        lambda _results: ["https://apply.workable.com/acme/j/ABC"],
+    )
+    _, persisted = _run_agent(monkeypatch, [{}], lambda companies: companies)
+
+    assert persisted == [("discovery://ats/workable", ["acme"])]
+
+    monkeypatch.setattr(
+        agent,
+        "extract_urls",
+        lambda _results: ["https://apply.workable.com/j/ABC"],
+    )
+    _, persisted = _run_agent(monkeypatch, [{}], lambda companies: companies)
+
+    assert persisted == []
+
+
+def test_existing_workable_career_normalization_remains_unchanged():
+    assert career_ats_detector.detect_ats_from_url(
+        "https://apply.workable.com/acme/j/ABC"
+    ) == ("workable", "acme")
+    assert career_ats_detector.detect_ats_from_url(
+        "https://apply.workable.com/j/ABC"
+    ) == ("workable", None)
+
+
+def test_workable_identity_matches_existing_scraper_account_contract():
+    company = agent.extract_company_slug(
+        "https://apply.workable.com/acme/j/ABC"
+    )
+
+    assert workable_scraper.WORKABLE_PUBLIC_ACCOUNT_API.format(company) == (
+        "https://www.workable.com/api/accounts/acme"
+    )
 
 
 @pytest.mark.parametrize(

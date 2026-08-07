@@ -580,6 +580,15 @@ RECRUITEE_SOURCE_INTEGRATION_FILES = {
     "tests/test_scraper_source_health_metrics.py",
 }
 
+RECRUITEE_STANDALONE_DISCOVERY_FILES = {
+    "src/agents/company_discovery_agent.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_company_discovery_agent.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 PERSONIO_SOURCE_RETIREMENT_FILES = {
     "src/config/consts.py",
     "src/config/curated_ats_sources.json",
@@ -915,6 +924,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "usajobs_source_integration": USAJOBS_SOURCE_INTEGRATION_FILES,
         "personio_source_retirement": PERSONIO_SOURCE_RETIREMENT_FILES,
         "recruitee_source_integration": RECRUITEE_SOURCE_INTEGRATION_FILES,
+        "recruitee_standalone_discovery": RECRUITEE_STANDALONE_DISCOVERY_FILES,
         "source_yield_ui": SOURCE_YIELD_UI_FILES,
         "jobvite_location_freshness": JOBVITE_LOCATION_FRESHNESS_FILES,
         "config_vocabulary_scoring_change": {
@@ -2258,6 +2268,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | DISCOVERY_ACQUISITION_LIFECYCLE_FILES
         | PERSONIO_SOURCE_RETIREMENT_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
+        | RECRUITEE_STANDALONE_DISCOVERY_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES

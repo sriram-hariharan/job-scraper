@@ -3,12 +3,14 @@ import requests
 from tavily import TavilyClient
 from urllib.parse import urlparse
 from src.discovery.save_companies import append_new_companies
+from src.scrapers.recruitee_scraper import (
+    _normalize_tenant as normalize_recruitee_tenant,
+    validate_recruitee_companies,
+)
 from src.utils.logging import get_logger
 from tqdm import tqdm
 
 logger = get_logger("company_agent")
-
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 INVALID_COMPANIES = {"www", "jobs", "careers", "job", "apply"}
 
@@ -31,7 +33,33 @@ SEARCH_QUERIES = [
     'site:jobs.lever.co "data scientist"',
     'site:jobs.ashbyhq.com "machine learning"',
     'site:apply.workable.com "data scientist"',
+    'site:recruitee.com/o "machine learning"',
+    'site:recruitee.com/o "data scientist"',
+    'site:recruitee.com/o "software engineer"',
 ]
+
+
+def _recruitee_tenant_from_url(url):
+    try:
+        parsed = urlparse(str(url or "").strip())
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        if parsed.username or parsed.password:
+            return None
+
+        hostname = (parsed.hostname or "").strip().lower()
+        suffix = ".recruitee.com"
+        if not hostname.endswith(suffix):
+            return None
+
+        tenant = hostname[: -len(suffix)]
+        if not tenant or "." in tenant or tenant in INVALID_COMPANIES:
+            return None
+
+        normalized = normalize_recruitee_tenant(tenant)
+        return normalized or None
+    except (TypeError, ValueError):
+        return None
 
 
 def extract_urls(results):
@@ -41,7 +69,11 @@ def extract_urls(results):
     for r in results:
         url = r.get("url")
 
-        if url and ("career" in url.lower() or "job" in url.lower()):
+        if url and (
+            "career" in url.lower()
+            or "job" in url.lower()
+            or _recruitee_tenant_from_url(url)
+        ):
             urls.append(url)
 
     return urls
@@ -52,6 +84,10 @@ def extract_company_slug(url):
         parsed = urlparse(url)
         domain = parsed.netloc.lower()
         path = [p for p in parsed.path.split("/") if p]
+
+        recruitee_tenant = _recruitee_tenant_from_url(url)
+        if recruitee_tenant:
+            return recruitee_tenant
 
         if not path:
             return None
@@ -85,7 +121,12 @@ def run_company_discovery_agent():
     logger.info("AGENT COMPANY DISCOVERY")
     logger.info("----------------------")
 
-    client = TavilyClient(api_key=TAVILY_API_KEY)
+    api_key = str(os.getenv("TAVILY_API_KEY", "") or "").strip()
+    if not api_key:
+        logger.info("Company discovery skipped: TAVILY_API_KEY is not configured")
+        return
+
+    client = TavilyClient(api_key=api_key)
 
     discovered = {
         "greenhouse": [],
@@ -94,7 +135,8 @@ def run_company_discovery_agent():
         "ashby": [],
         "workable": [],
         "jobvite": [],
-        "smartrecruiters": []
+        "smartrecruiters": [],
+        "recruitee": [],
     }
 
     for query in tqdm(SEARCH_QUERIES, desc="Agent search queries"):
@@ -129,9 +171,33 @@ def run_company_discovery_agent():
     total = 0
 
     for ats, companies in discovered.items():
-        companies = list(set(companies))
+        if ats == "recruitee":
+            companies = sorted(set(companies))
+        else:
+            companies = list(set(companies))
         if not companies:
             continue
+
+        if ats == "recruitee":
+            try:
+                validated = validate_recruitee_companies(companies)
+            except Exception:
+                logger.warning(
+                    "Recruitee validation failed; no candidates persisted"
+                )
+                continue
+
+            candidate_set = set(companies)
+            companies = sorted(
+                {
+                    tenant
+                    for value in validated
+                    for tenant in [normalize_recruitee_tenant(value)]
+                    if tenant and tenant in candidate_set
+                }
+            )
+            if not companies:
+                continue
 
         append_new_companies(f"discovery://ats/{ats}", companies)
 
@@ -144,6 +210,9 @@ def run_company_discovery_agent():
 def detect_ats_from_page(url):
 
     try:
+
+        if _recruitee_tenant_from_url(url):
+            return "recruitee"
 
         r = requests.get(url, timeout=10)
         html = r.text.lower()

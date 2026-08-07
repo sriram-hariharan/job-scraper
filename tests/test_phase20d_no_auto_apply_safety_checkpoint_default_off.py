@@ -23,6 +23,7 @@ from tests.support.phase_guard_registry import (
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
     PERSONIO_SOURCE_RETIREMENT_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
+    RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SMARTRECRUITERS_PAGINATION_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
@@ -146,6 +147,7 @@ def test_protected_runtime_files_are_unchanged():
             "usajobs_source_integration",
             "personio_source_retirement",
             "recruitee_source_integration",
+            "recruitee_standalone_discovery",
             "phase2d_a_independent_seniority_policy",
             "phase2d_b2_strict_seniority_filter",
             "source_yield_ui",
@@ -879,6 +881,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "phase10_step8_shadow_observation_safety",
             "usajobs_source_integration",
             "personio_source_retirement",
+            "recruitee_standalone_discovery",
         ),
     )
 
@@ -1202,6 +1205,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         )
         for marker in FORBIDDEN_RUNTIME_MARKERS:
             assert marker not in added_lines
+        return
+    recruitee_standalone_runtime_files = {
+        ROOT / relative_path
+        for relative_path in RECRUITEE_STANDALONE_DISCOVERY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == recruitee_standalone_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
         return
     personio_retirement_runtime_files = {
         ROOT / relative_path

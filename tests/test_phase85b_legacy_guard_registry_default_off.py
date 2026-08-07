@@ -49,6 +49,7 @@ from tests.support.phase_guard_registry import (
     PHASE21R_HISTORICAL_GUARD_FILES,
     PERSONIO_SOURCE_RETIREMENT_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
+    RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SMARTRECRUITERS_PAGINATION_FILES,
@@ -368,6 +369,18 @@ def test_scraper_prefilter_ownership_boundary_surface_is_exact():
         "tests/test_scraper_transport_pagination_hardening.py",
     }
     assert not any("*" in path for path in SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES)
+
+
+def test_recruitee_standalone_discovery_surface_is_exact():
+    assert RECRUITEE_STANDALONE_DISCOVERY_FILES == {
+        "src/agents/company_discovery_agent.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_company_discovery_agent.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any("*" in path for path in RECRUITEE_STANDALONE_DISCOVERY_FILES)
 
 
 def test_personio_source_retirement_surface_is_exact():
@@ -1779,9 +1792,10 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
         | DISCOVERY_ACQUISITION_LIFECYCLE_FILES
         | WORKDAY_PAGINATION_FRESHNESS_FILES
-        | PERSONIO_SOURCE_RETIREMENT_FILES
-        | RECRUITEE_SOURCE_INTEGRATION_FILES
-        | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
+            | PERSONIO_SOURCE_RETIREMENT_FILES
+            | RECRUITEE_SOURCE_INTEGRATION_FILES
+            | RECRUITEE_STANDALONE_DISCOVERY_FILES
+            | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
         | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES

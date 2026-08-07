@@ -36,6 +36,10 @@ _AMBIGUOUS_LOCATION_PLACEHOLDERS = {
     "see job description",
     "various locations",
 }
+_JOBVITE_COMPANY_PATTERN = re.compile(
+    r"^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$"
+)
+_JOBVITE_RESERVED_COMPANIES = {"www", "jobs", "job", "careers", "apply"}
 
 session = requests.Session()
 session.headers.update({
@@ -45,6 +49,15 @@ session.headers.update({
 @retry_request(retries=2)
 def jobvite_get(url, **kwargs):
     return session.get(url, **kwargs)
+
+
+def _normalize_jobvite_company(value):
+    company = str(value or "").strip().lower()
+    if not company:
+        return None
+    if company in _JOBVITE_RESERVED_COMPANIES:
+        return None
+    return company if _JOBVITE_COMPANY_PATTERN.fullmatch(company) else None
 
 def fetch_jobvite_posted_date(job_url):
 
@@ -148,6 +161,43 @@ def parse_jobvite_listing(page_html):
         )
 
     return records
+
+
+def validate_jobvite_company(company):
+    company = _normalize_jobvite_company(company)
+    if not company:
+        return False
+
+    for pattern in JOBVITE_URL_PATTERNS:
+        try:
+            response = jobvite_get(pattern.format(company=company), timeout=10)
+            if response is None or response.status_code != 200:
+                continue
+            html = response.text
+            if not isinstance(html, str) or not html:
+                continue
+            if parse_jobvite_listing(html):
+                return True
+        except Exception:
+            continue
+
+    return False
+
+
+def validate_jobvite_companies(companies):
+    normalized = sorted(
+        {
+            company
+            for value in companies
+            for company in [_normalize_jobvite_company(value)]
+            if company
+        }
+    )
+    return [
+        company
+        for company in normalized
+        if validate_jobvite_company(company)
+    ]
 
 
 def fetch_jobvite_metadata_result(job_url):

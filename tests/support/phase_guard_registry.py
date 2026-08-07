@@ -847,6 +847,17 @@ JOBVITE_LOCATION_FRESHNESS_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+JOBVITE_STANDALONE_DISCOVERY_FILES = {
+    "src/agents/company_discovery_agent.py",
+    "src/scrapers/jobvite_scraper.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_company_discovery_agent.py",
+    "tests/test_jobvite_location_freshness.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 
 def normalize_changed_path(path: str | Path) -> str:
     """Return a normalized repo-relative path string for guard comparisons."""
@@ -927,6 +938,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "recruitee_standalone_discovery": RECRUITEE_STANDALONE_DISCOVERY_FILES,
         "source_yield_ui": SOURCE_YIELD_UI_FILES,
         "jobvite_location_freshness": JOBVITE_LOCATION_FRESHNESS_FILES,
+        "jobvite_standalone_discovery": JOBVITE_STANDALONE_DISCOVERY_FILES,
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -2269,6 +2281,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | PERSONIO_SOURCE_RETIREMENT_FILES
         | RECRUITEE_SOURCE_INTEGRATION_FILES
         | RECRUITEE_STANDALONE_DISCOVERY_FILES
+        | JOBVITE_STANDALONE_DISCOVERY_FILES
         | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES

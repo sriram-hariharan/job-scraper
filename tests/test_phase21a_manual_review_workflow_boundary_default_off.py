@@ -18,6 +18,7 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
     HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
+    JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -160,6 +161,7 @@ def test_protected_runtime_files_are_unchanged():
             "phase2d_b2_strict_seniority_filter",
             "source_yield_ui",
             "jobvite_location_freshness",
+            "jobvite_standalone_discovery",
         ),
     )
 
@@ -851,6 +853,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "usajobs_source_integration",
             "personio_source_retirement",
             "recruitee_standalone_discovery",
+            "jobvite_standalone_discovery",
         ),
     )
 
@@ -2273,6 +2276,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == jobvite_location_freshness_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    jobvite_standalone_runtime_files = {
+        ROOT / relative_path
+        for relative_path in JOBVITE_STANDALONE_DISCOVERY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == jobvite_standalone_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

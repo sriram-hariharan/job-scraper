@@ -140,6 +140,158 @@ def test_parse_jobvite_listing_handles_proven_layouts_and_deduplicates():
     assert records[0]["is_new"] is True
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("acme", "acme"),
+        ("Acme", "acme"),
+        ("acme-data", "acme-data"),
+        ("acme_data", "acme_data"),
+        ("company2", "company2"),
+        ("company-2026", "company-2026"),
+    ],
+)
+def test_jobvite_company_normalization_preserves_valid_identity(value, expected):
+    assert jobvite_scraper._normalize_jobvite_company(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "   ",
+        "jobs",
+        "job",
+        "careers",
+        "apply",
+        "www",
+        "acme corp",
+        "acme/jobs",
+        "acme?x=1",
+        "acme#section",
+        "-acme",
+        "acme-",
+        "_acme",
+        "acme_",
+    ],
+)
+def test_jobvite_company_normalization_rejects_invalid_identity(value):
+    assert jobvite_scraper._normalize_jobvite_company(value) is None
+
+
+def test_validate_jobvite_company_uses_existing_transport_and_listing_parser(
+    monkeypatch,
+):
+    calls = []
+    parser_calls = []
+    html = '<a href="/acme/job/abc123">Software Engineer</a>'
+
+    monkeypatch.setattr(
+        jobvite_scraper,
+        "jobvite_get",
+        lambda url, **kwargs: calls.append((url, kwargs)) or _Response(html),
+    )
+    monkeypatch.setattr(
+        jobvite_scraper,
+        "parse_jobvite_listing",
+        lambda value: parser_calls.append(value) or [{"jobvite_id": "abc123"}],
+    )
+
+    assert jobvite_scraper.validate_jobvite_company(" Acme ") is True
+    assert calls == [
+        (
+            jobvite_scraper.JOBVITE_URL_PATTERNS[0].format(company="acme"),
+            {"timeout": 10},
+        ),
+    ]
+    assert parser_calls == [html]
+
+
+def test_validate_jobvite_company_falls_back_in_pattern_order(monkeypatch):
+    calls = []
+    valid_html = '<a href="/acme/job/abc123">Software Engineer</a>'
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        if len(calls) == 1:
+            return _Response(status_code=404)
+        return _Response(valid_html)
+
+    monkeypatch.setattr(jobvite_scraper, "jobvite_get", get)
+
+    assert jobvite_scraper.validate_jobvite_company("acme") is True
+    assert calls == [
+        (pattern.format(company="acme"), {"timeout": 10})
+        for pattern in jobvite_scraper.JOBVITE_URL_PATTERNS
+    ]
+
+
+@pytest.mark.parametrize(
+    "responses",
+    [
+        [_Response(status_code=404), _Response(status_code=500)],
+        [OSError("offline"), OSError("offline")],
+        [_Response(""), _Response("")],
+        [_Response("<html>arbitrary</html>"), _Response("<html>no listings</html>")],
+        [_Response('<a href="/not-a-job">Malformed</a>')] * 2,
+    ],
+)
+def test_validate_jobvite_company_rejects_unproven_boards(monkeypatch, responses):
+    values = iter(responses)
+
+    def get(*_args, **_kwargs):
+        value = next(values)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    monkeypatch.setattr(jobvite_scraper, "jobvite_get", get)
+
+    assert jobvite_scraper.validate_jobvite_company("acme") is False
+
+
+def test_validate_jobvite_company_rejects_malformed_identity_without_request(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        jobvite_scraper,
+        "jobvite_get",
+        lambda *args, **kwargs: pytest.fail("malformed identity must not fetch"),
+    )
+
+    assert jobvite_scraper.validate_jobvite_company("bad/path") is False
+
+
+def test_validate_jobvite_company_contains_parser_failures(monkeypatch):
+    monkeypatch.setattr(
+        jobvite_scraper,
+        "jobvite_get",
+        lambda *args, **kwargs: _Response("<html>candidate board</html>"),
+    )
+    monkeypatch.setattr(
+        jobvite_scraper,
+        "parse_jobvite_listing",
+        lambda _html: (_ for _ in ()).throw(ValueError("bad fixture")),
+    )
+
+    assert jobvite_scraper.validate_jobvite_company("acme") is False
+
+
+def test_validate_jobvite_companies_is_deterministic(monkeypatch):
+    calls = []
+
+    def validate(company):
+        calls.append(company)
+        return company in {"alpha", "zulu2"}
+
+    monkeypatch.setattr(jobvite_scraper, "validate_jobvite_company", validate)
+
+    assert jobvite_scraper.validate_jobvite_companies(
+        ["Zulu2", "alpha", "zulu2", "Beta_Co", "bad/path"]
+    ) == ["alpha", "zulu2"]
+    assert calls == ["alpha", "beta_co", "zulu2"]
+
+
 def test_acquisition_fetches_detail_only_for_ambiguous_listing_locations(monkeypatch):
     page = """
     <div class="jv-job-list"><ul>

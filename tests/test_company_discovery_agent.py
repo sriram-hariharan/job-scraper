@@ -37,6 +37,11 @@ def test_missing_tavily_key_is_default_off(monkeypatch, key):
     )
     monkeypatch.setattr(
         agent,
+        "validate_jobvite_companies",
+        lambda values: pytest.fail("Jobvite validator must not be called"),
+    )
+    monkeypatch.setattr(
+        agent,
         "validate_recruitee_companies",
         lambda values: pytest.fail("validator must not be called"),
     )
@@ -108,12 +113,18 @@ def test_direct_recruitee_detection_does_not_fetch(monkeypatch):
     )
 
 
-def _run_agent(monkeypatch, results, validator):
+def _run_agent(
+    monkeypatch,
+    results,
+    validator,
+    jobvite_validator=lambda companies: companies,
+):
     client = _TavilyClient(results)
     persisted = []
     monkeypatch.setenv("TAVILY_API_KEY", "test-key")
     monkeypatch.setattr(agent, "TavilyClient", lambda **kwargs: client)
     monkeypatch.setattr(agent, "tqdm", lambda values, **kwargs: values)
+    monkeypatch.setattr(agent, "validate_jobvite_companies", jobvite_validator)
     monkeypatch.setattr(agent, "validate_recruitee_companies", validator)
     monkeypatch.setattr(
         agent,
@@ -202,7 +213,7 @@ def test_recruitee_validator_failure_is_bounded_and_isolated(
             "Capital_One",
         ),
         ("https://jobs.smartrecruiters.com/Nvidia/123-role", "123-role"),
-        ("https://jobs.jobvite.com/acme/job/role", None),
+        ("https://jobs.jobvite.com/acme/job/role", "acme"),
     ],
 )
 def test_existing_provider_extraction_contracts_are_unchanged(url, expected):
@@ -218,7 +229,7 @@ def test_existing_provider_extraction_contracts_are_unchanged(url, expected):
         ("apply.workable.com", "workable"),
         ("myworkdayjobs.com", "workday"),
         ("smartrecruiters.com", "smartrecruiters"),
-        ("jobs.jobvite.com", None),
+        ("jobs.jobvite.com", "jobvite"),
     ],
 )
 def test_existing_provider_detection_contracts_are_unchanged(
@@ -235,3 +246,116 @@ def test_existing_provider_detection_contracts_are_unchanged(
 
     assert agent.detect_ats_from_page("https://example.com/careers") == expected
     assert calls == [("https://example.com/careers", 10)]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://jobs.jobvite.com/Acme/jobs/alljobs", "acme"),
+        ("https://jobs.jobvite.com/acme/job/example-id", "acme"),
+        ("https://jobs.jobvite.com/Acme-Co2/job/example-id", "acme-co2"),
+        ("https://jobs.jobvite.com/", None),
+        ("https://jobs.jobvite.com.evil.example/acme/job/example-id", None),
+        ("https://example.com/?next=jobs.jobvite.com/acme", None),
+        ("ftp://jobs.jobvite.com/acme/job/example-id", None),
+        ("https://jobs.jobvite.com/jobs/job/example-id", None),
+        ("https://jobs.jobvite.com/bad.slug/job/example-id", None),
+    ],
+)
+def test_extract_company_slug_enforces_jobvite_company_contract(url, expected):
+    assert agent.extract_company_slug(url) == expected
+
+
+def test_direct_jobvite_detection_does_not_fetch(monkeypatch):
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("direct detection must not fetch"),
+    )
+
+    assert (
+        agent.detect_ats_from_page(
+            "https://jobs.jobvite.com/Acme-Co2/job/example-id"
+        )
+        == "jobvite"
+    )
+
+
+def test_jobvite_search_queries_are_bounded_deterministic_and_unique():
+    queries = [
+        query for query in agent.SEARCH_QUERIES
+        if "site:jobs.jobvite.com" in query
+    ]
+
+    assert queries == [
+        'site:jobs.jobvite.com "machine learning"',
+        'site:jobs.jobvite.com "data scientist"',
+        'site:jobs.jobvite.com "software engineer"',
+    ]
+    assert len(agent.SEARCH_QUERIES) == len(set(agent.SEARCH_QUERIES))
+
+
+def test_jobvite_candidates_are_validated_and_persisted_deterministically(
+    monkeypatch,
+):
+    validator_calls = []
+
+    def validate(companies):
+        validator_calls.append(list(companies))
+        return ["zulu2", "beta_co", "not-a-candidate"]
+
+    _, persisted = _run_agent(
+        monkeypatch,
+        [
+            {"url": "https://jobs.jobvite.com/Zulu2/job/data-scientist"},
+            {"url": "https://jobs.jobvite.com/alpha/jobs/alljobs"},
+            {"url": "https://jobs.jobvite.com/Beta_Co/job/ml-engineer"},
+            {"url": "https://jobs.jobvite.com/alpha/job/software-engineer"},
+        ],
+        lambda companies: companies,
+        jobvite_validator=validate,
+    )
+
+    assert validator_calls == [["alpha", "beta_co", "zulu2"]]
+    assert persisted == [
+        ("discovery://ats/jobvite", ["beta_co", "zulu2"]),
+    ]
+
+
+def test_empty_jobvite_validation_result_does_not_persist(monkeypatch):
+    _, persisted = _run_agent(
+        monkeypatch,
+        [{"url": "https://jobs.jobvite.com/alpha/job/data-scientist"}],
+        lambda companies: companies,
+        jobvite_validator=lambda companies: [],
+    )
+
+    assert persisted == []
+
+
+def test_jobvite_validator_failure_is_bounded_and_isolated(monkeypatch):
+    secret = "secret-jobvite-validator-token"
+    warnings = []
+
+    def validate(_companies):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *args, **kwargs: _Response("boards.greenhouse.io"),
+    )
+    monkeypatch.setattr(agent.logger, "warning", warnings.append)
+    _, persisted = _run_agent(
+        monkeypatch,
+        [
+            {"url": "https://boards.greenhouse.io/acme/jobs/1"},
+            {"url": "https://jobs.jobvite.com/alpha/job/data-scientist"},
+        ],
+        lambda companies: companies,
+        jobvite_validator=validate,
+    )
+
+    assert persisted == [("discovery://ats/greenhouse", ["acme"])]
+    assert warnings == ["Jobvite validation failed; no candidates persisted"]
+    assert secret not in warnings[0]

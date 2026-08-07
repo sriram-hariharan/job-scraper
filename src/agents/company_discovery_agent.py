@@ -3,6 +3,10 @@ import requests
 from tavily import TavilyClient
 from urllib.parse import urlparse
 from src.discovery.save_companies import append_new_companies
+from src.scrapers.jobvite_scraper import (
+    _normalize_jobvite_company as normalize_jobvite_company,
+    validate_jobvite_companies,
+)
 from src.scrapers.recruitee_scraper import (
     _normalize_tenant as normalize_recruitee_tenant,
     validate_recruitee_companies,
@@ -33,6 +37,9 @@ SEARCH_QUERIES = [
     'site:jobs.lever.co "data scientist"',
     'site:jobs.ashbyhq.com "machine learning"',
     'site:apply.workable.com "data scientist"',
+    'site:jobs.jobvite.com "machine learning"',
+    'site:jobs.jobvite.com "data scientist"',
+    'site:jobs.jobvite.com "software engineer"',
     'site:recruitee.com/o "machine learning"',
     'site:recruitee.com/o "data scientist"',
     'site:recruitee.com/o "software engineer"',
@@ -58,6 +65,25 @@ def _recruitee_tenant_from_url(url):
 
         normalized = normalize_recruitee_tenant(tenant)
         return normalized or None
+    except (TypeError, ValueError):
+        return None
+
+
+def _jobvite_company_from_url(url):
+    try:
+        parsed = urlparse(str(url or "").strip())
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        if parsed.username or parsed.password:
+            return None
+        if (parsed.hostname or "").strip().lower() != "jobs.jobvite.com":
+            return None
+
+        path = [part for part in parsed.path.split("/") if part]
+        if not path:
+            return None
+        company = normalize_jobvite_company(path[0])
+        return company or None
     except (TypeError, ValueError):
         return None
 
@@ -88,6 +114,10 @@ def extract_company_slug(url):
         recruitee_tenant = _recruitee_tenant_from_url(url)
         if recruitee_tenant:
             return recruitee_tenant
+
+        jobvite_company = _jobvite_company_from_url(url)
+        if jobvite_company:
+            return jobvite_company
 
         if not path:
             return None
@@ -171,12 +201,33 @@ def run_company_discovery_agent():
     total = 0
 
     for ats, companies in discovered.items():
-        if ats == "recruitee":
+        if ats in {"jobvite", "recruitee"}:
             companies = sorted(set(companies))
         else:
             companies = list(set(companies))
         if not companies:
             continue
+
+        if ats == "jobvite":
+            try:
+                validated = validate_jobvite_companies(companies)
+            except Exception:
+                logger.warning(
+                    "Jobvite validation failed; no candidates persisted"
+                )
+                continue
+
+            candidate_set = set(companies)
+            companies = sorted(
+                {
+                    company
+                    for value in validated
+                    for company in [normalize_jobvite_company(value)]
+                    if company and company in candidate_set
+                }
+            )
+            if not companies:
+                continue
 
         if ats == "recruitee":
             try:
@@ -214,6 +265,9 @@ def detect_ats_from_page(url):
         if _recruitee_tenant_from_url(url):
             return "recruitee"
 
+        if _jobvite_company_from_url(url):
+            return "jobvite"
+
         r = requests.get(url, timeout=10)
         html = r.text.lower()
 
@@ -231,6 +285,9 @@ def detect_ats_from_page(url):
 
         if "apply.workable.com" in html:
             return "workable"
+
+        if "jobs.jobvite.com" in html:
+            return "jobvite"
 
         if "myworkdayjobs.com" in html:
             return "workday"

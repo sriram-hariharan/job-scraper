@@ -210,7 +210,7 @@ def test_recruitee_validator_failure_is_bounded_and_isolated(
         ("https://apply.workable.com/acme/j/ABC", "acme"),
         (
             "https://capitalone.wd12.myworkdayjobs.com/Capital_One/job/Role",
-            "Capital_One",
+            "https://capitalone.wd12.myworkdayjobs.com/Capital_One",
         ),
         ("https://jobs.smartrecruiters.com/Nvidia/123-role", "123-role"),
         ("https://jobs.jobvite.com/acme/job/role", "acme"),
@@ -279,6 +279,66 @@ def test_direct_jobvite_detection_does_not_fetch(monkeypatch):
         )
         == "jobvite"
     )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://acme.wd1.myworkdayjobs.com/External",
+        "https://acme.wd1.myworkdayjobs.com/External/job/REQ123",
+        "https://acme.wd1.myworkdayjobs.com/External?source=test",
+    ],
+)
+def test_extract_company_slug_returns_canonical_workday_board_url(url):
+    assert agent.extract_company_slug(url) == (
+        "https://acme.wd1.myworkdayjobs.com/External"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://acme.wd1.myworkdayjobs.com",
+        "ftp://acme.wd1.myworkdayjobs.com/External",
+        "https://acme.wd1.myworkdayjobs.com.evil.example/External",
+        "https://example.com/?next=https://acme.wd1.myworkdayjobs.com/External",
+        "https://user@acme.wd1.myworkdayjobs.com/External",
+        "not a URL",
+    ],
+)
+def test_extract_company_slug_rejects_invalid_workday_identity(url):
+    assert agent.extract_company_slug(url) is None
+
+
+def test_direct_workday_detection_does_not_fetch(monkeypatch):
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("direct detection must not fetch"),
+    )
+
+    assert agent.detect_ats_from_page(
+        "https://acme.wd1.myworkdayjobs.com/External/job/REQ123"
+    ) == "workday"
+
+
+def test_workday_discovery_persists_canonical_board_url(monkeypatch):
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("direct detection must not fetch"),
+    )
+    _, persisted = _run_agent(
+        monkeypatch,
+        [{"url": "https://acme.wd1.myworkdayjobs.com/External/job/REQ123"}],
+        lambda companies: companies,
+    )
+
+    assert persisted == [
+        ("discovery://ats/workday", [
+            "https://acme.wd1.myworkdayjobs.com/External"
+        ]),
+    ]
 
 
 def test_jobvite_search_queries_are_bounded_deterministic_and_unique():

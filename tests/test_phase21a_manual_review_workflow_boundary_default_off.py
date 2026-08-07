@@ -30,6 +30,7 @@ from tests.support.phase_guard_registry import (
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
+    WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES,
     WORKDAY_PAGINATION_FRESHNESS_FILES,
     assert_changed_files_allowed,
     assert_protected_hashes,
@@ -2288,6 +2289,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == jobvite_standalone_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    workday_discovery_identity_runtime_files = {
+        ROOT / relative_path
+        for relative_path in WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == workday_discovery_identity_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

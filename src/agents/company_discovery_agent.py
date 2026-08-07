@@ -11,6 +11,7 @@ from src.scrapers.recruitee_scraper import (
     _normalize_tenant as normalize_recruitee_tenant,
     validate_recruitee_companies,
 )
+from src.utils.url_normalizer import normalize_workday_url
 from src.utils.logging import get_logger
 from tqdm import tqdm
 
@@ -88,6 +89,28 @@ def _jobvite_company_from_url(url):
         return None
 
 
+def _workday_board_from_url(url):
+    try:
+        parsed = urlparse(str(url or "").strip())
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        if parsed.username or parsed.password or parsed.port is not None:
+            return None
+
+        hostname = (parsed.hostname or "").strip().lower()
+        suffix = ".myworkdayjobs.com"
+        if not hostname.endswith(suffix) or not hostname[: -len(suffix)]:
+            return None
+
+        path = [part for part in parsed.path.split("/") if part]
+        if not path:
+            return None
+
+        return normalize_workday_url(f"https://{hostname}/{path[0]}")
+    except (TypeError, ValueError):
+        return None
+
+
 def extract_urls(results):
 
     urls = []
@@ -119,6 +142,10 @@ def extract_company_slug(url):
         if jobvite_company:
             return jobvite_company
 
+        workday_board = _workday_board_from_url(url)
+        if workday_board:
+            return workday_board
+
         if not path:
             return None
 
@@ -136,9 +163,6 @@ def extract_company_slug(url):
 
         if "smartrecruiters.com" in domain and len(path) > 1:
             return path[1]
-
-        if "myworkdayjobs.com" in domain:
-            return path[0]
 
         return None
 
@@ -187,7 +211,8 @@ def run_company_discovery_agent():
                     if not company:
                         continue
 
-                    company = company.lower()
+                    if ats != "workday":
+                        company = company.lower()
 
                     if company in INVALID_COMPANIES:
                         continue
@@ -267,6 +292,9 @@ def detect_ats_from_page(url):
 
         if _jobvite_company_from_url(url):
             return "jobvite"
+
+        if _workday_board_from_url(url):
+            return "workday"
 
         r = requests.get(url, timeout=10)
         html = r.text.lower()

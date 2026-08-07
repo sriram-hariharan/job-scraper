@@ -58,6 +58,7 @@ from tests.support.phase_guard_registry import (
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
+    WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES,
     WORKDAY_PAGINATION_FRESHNESS_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
@@ -396,6 +397,24 @@ def test_jobvite_standalone_discovery_surface_is_exact():
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
     }
     assert not any("*" in path for path in JOBVITE_STANDALONE_DISCOVERY_FILES)
+
+
+def test_workday_discovery_identity_contract_surface_is_exact():
+    assert WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES == {
+        "src/agents/company_discovery_agent.py",
+        "src/discovery/career_ats_detector.py",
+        "src/discovery/discovery.py",
+        "src/discovery/sitemap_fetcher.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_company_discovery_agent.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_workday_discovery_identity_contract.py",
+    }
+    assert not any(
+        "*" in path for path in WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES
+    )
 
 
 def test_personio_source_retirement_surface_is_exact():
@@ -1811,6 +1830,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
             | RECRUITEE_SOURCE_INTEGRATION_FILES
             | RECRUITEE_STANDALONE_DISCOVERY_FILES
             | JOBVITE_STANDALONE_DISCOVERY_FILES
+            | WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES
             | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES

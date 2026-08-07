@@ -137,6 +137,221 @@ def _run_agent(
     return client, persisted
 
 
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [
+        (
+            '<a href="https://boards.greenhouse.io/acme/jobs/123">Open</a>',
+            ("greenhouse", "acme"),
+        ),
+        (
+            '<script>const board="https://jobs.lever.co/acme/123";</script>',
+            ("lever", "acme"),
+        ),
+        (
+            '<a href="https://jobs.ashbyhq.com/acme/123">Open</a>',
+            ("ashby", "acme"),
+        ),
+        (
+            '<a href="https://apply.workable.com/acme/j/ABC">Open</a>',
+            ("workable", "acme"),
+        ),
+        (
+            '<a href="https://jobs.jobvite.com/Acme-Co2/job/ABC">Open</a>',
+            ("jobvite", "acme-co2"),
+        ),
+        (
+            '<a href="https://acme.wd1.myworkdayjobs.com/'
+            'External_Careers/job/REQ123">Open</a>',
+            (
+                "workday",
+                "https://acme.wd1.myworkdayjobs.com/External_Careers",
+            ),
+        ),
+        (
+            '<a href="https://jobs.smartrecruiters.com/Nvidia/123-role">'
+            "Open</a>",
+            ("smartrecruiters", "nvidia"),
+        ),
+    ],
+)
+def test_generic_page_resolves_concrete_ats_identity_once(
+    monkeypatch,
+    html,
+    expected,
+):
+    calls = []
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda url, timeout: calls.append((url, timeout)) or _Response(html),
+    )
+
+    assert agent._resolve_ats_identity_from_page(
+        "https://acme.example/careers"
+    ) == expected
+    assert calls == [("https://acme.example/careers", 10)]
+
+
+@pytest.mark.parametrize(
+    ("html", "ats", "identity"),
+    [
+        (
+            '<a href="https://boards.greenhouse.io/acme/jobs/123">Open</a>',
+            "greenhouse",
+            "acme",
+        ),
+        (
+            '<script>const board="https://jobs.lever.co/acme/123";</script>',
+            "lever",
+            "acme",
+        ),
+    ],
+)
+def test_generic_page_persists_resolved_identity_once(
+    monkeypatch,
+    html,
+    ats,
+    identity,
+):
+    calls = []
+    monkeypatch.setattr(agent, "SEARCH_QUERIES", ["fixed query"])
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda url, timeout: calls.append((url, timeout)) or _Response(html),
+    )
+
+    _, persisted = _run_agent(
+        monkeypatch,
+        [{"url": "https://acme.example/careers"}],
+        lambda companies: companies,
+    )
+
+    assert persisted == [(f"discovery://ats/{ats}", [identity])]
+    assert calls == [("https://acme.example/careers", 10)]
+
+
+def test_generic_workable_route_token_fails_closed(monkeypatch):
+    html = '<a href="https://apply.workable.com/j/ABC">Open</a>'
+    calls = []
+    monkeypatch.setattr(agent, "SEARCH_QUERIES", ["fixed query"])
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda url, timeout: calls.append((url, timeout)) or _Response(html),
+    )
+
+    assert agent._resolve_ats_identity_from_page(
+        "https://acme.example/careers"
+    ) == ("workable", None)
+    calls.clear()
+    _, persisted = _run_agent(
+        monkeypatch,
+        [{"url": "https://acme.example/careers"}],
+        lambda companies: companies,
+    )
+
+    assert persisted == []
+    assert calls == [("https://acme.example/careers", 10)]
+
+
+def test_marker_only_detection_preserves_public_contract_and_fails_closed(
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(agent, "SEARCH_QUERIES", ["fixed query"])
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda url, timeout: calls.append((url, timeout))
+        or _Response("powered by boards.greenhouse.io"),
+    )
+
+    assert agent._resolve_ats_identity_from_page(
+        "https://acme.example/careers"
+    ) == ("greenhouse", None)
+    assert calls == [("https://acme.example/careers", 10)]
+
+    calls.clear()
+    assert agent.detect_ats_from_page(
+        "https://acme.example/careers"
+    ) == "greenhouse"
+    assert calls == [("https://acme.example/careers", 10)]
+
+    calls.clear()
+    _, persisted = _run_agent(
+        monkeypatch,
+        [{"url": "https://acme.example/careers"}],
+        lambda companies: companies,
+    )
+    assert persisted == []
+    assert calls == [("https://acme.example/careers", 10)]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://Example-Tenant.recruitee.com/o/data-scientist",
+            ("recruitee", "example-tenant"),
+        ),
+        (
+            "https://jobs.jobvite.com/Acme-Co2/job/example-id",
+            ("jobvite", "acme-co2"),
+        ),
+        (
+            "https://acme.wd1.myworkdayjobs.com/External/job/REQ123",
+            ("workday", "https://acme.wd1.myworkdayjobs.com/External"),
+        ),
+    ],
+)
+def test_direct_resolver_identity_remains_network_free(monkeypatch, url, expected):
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("direct resolution must not fetch"),
+    )
+
+    assert agent._resolve_ats_identity_from_page(url) == expected
+
+
+def test_generic_recruitee_html_detection_is_not_added(monkeypatch):
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(
+            '<a href="https://acme.recruitee.com/o/role">Open</a>'
+        ),
+    )
+
+    assert agent._resolve_ats_identity_from_page(
+        "https://acme.example/careers"
+    ) == (None, None)
+
+
+def test_generic_page_failure_does_not_block_other_candidate(monkeypatch):
+    calls = []
+    monkeypatch.setattr(agent, "SEARCH_QUERIES", ["fixed query"])
+
+    def fail_generic(url, timeout):
+        calls.append((url, timeout))
+        raise OSError("offline")
+
+    monkeypatch.setattr(agent.requests, "get", fail_generic)
+    _, persisted = _run_agent(
+        monkeypatch,
+        [
+            {"url": "https://acme.example/careers"},
+            {"url": "https://jobs.jobvite.com/alpha/job/ABC"},
+        ],
+        lambda companies: companies,
+    )
+
+    assert persisted == [("discovery://ats/jobvite", ["alpha"])]
+    assert calls == [("https://acme.example/careers", 10)]
+
+
 def test_recruitee_candidates_are_validated_and_persisted_deterministically(
     monkeypatch,
 ):

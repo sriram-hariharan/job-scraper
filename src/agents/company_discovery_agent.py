@@ -5,6 +5,12 @@ from tavily import TavilyClient
 from urllib.parse import urlparse
 from src.discovery.save_companies import append_new_companies
 from src.discovery.learned_companies import normalize_workable_slug
+from src.discovery.ats_detector import (
+    detect_ats_from_embeds,
+    detect_ats_from_html,
+    detect_ats_from_links,
+    extract_links_from_html,
+)
 from src.scrapers.jobvite_scraper import (
     _normalize_jobvite_company as normalize_jobvite_company,
     validate_jobvite_companies,
@@ -233,11 +239,9 @@ def run_company_discovery_agent():
 
             for url in urls:
 
-                ats = detect_ats_from_page(url)
+                ats, company = _resolve_ats_identity_from_page(url)
 
                 if ats:
-                    company = extract_company_slug(url)
-
                     if not company:
                         continue
 
@@ -313,44 +317,72 @@ def run_company_discovery_agent():
 
     logger.info(f"Agent discovered {total} companies")
 
-def detect_ats_from_page(url):
+
+def _resolve_ats_identity_from_page(url):
 
     try:
 
-        if _recruitee_tenant_from_url(url):
-            return "recruitee"
+        recruitee_tenant = _recruitee_tenant_from_url(url)
+        if recruitee_tenant:
+            return "recruitee", recruitee_tenant
 
-        if _jobvite_company_from_url(url):
-            return "jobvite"
+        jobvite_company = _jobvite_company_from_url(url)
+        if jobvite_company:
+            return "jobvite", jobvite_company
 
-        if _workday_board_from_url(url):
-            return "workday"
+        workday_board = _workday_board_from_url(url)
+        if workday_board:
+            return "workday", workday_board
 
         r = requests.get(url, timeout=10)
-        html = r.text.lower()
+        html = r.text
+        html_lower = html.lower()
 
-        if "boards.greenhouse.io" in html:
-            return "greenhouse"
+        for link in extract_links_from_html(html):
+            ats, detected_link = detect_ats_from_links([link])
+            if ats:
+                if ats == "workday":
+                    identity = normalize_workday_url(html)
+                else:
+                    identity = extract_company_slug(detected_link)
+                if identity:
+                    return ats, identity
 
-        if "jobs.lever.co" in html:
-            return "lever"
+            smartrecruiters_company = _smartrecruiters_company_from_url(link)
+            if smartrecruiters_company:
+                return "smartrecruiters", smartrecruiters_company
 
-        if "jobs.ashbyhq.com" in html:
-            return "ashby"
+        ats, value = detect_ats_from_embeds(html)
+        if ats:
+            if ats == "workday":
+                identity = normalize_workday_url(html)
+            elif ats == "workable":
+                identity = normalize_workable_slug(value)
+            elif ats == "jobvite":
+                identity = normalize_jobvite_company(value)
+            else:
+                identity = value or None
+            if identity:
+                return ats, identity
 
-        if "smartrecruiters.com" in html:
-            return "smartrecruiters"
+        workday_board = normalize_workday_url(html)
+        if workday_board:
+            return "workday", workday_board
 
-        if "apply.workable.com" in html:
-            return "workable"
+        ats = detect_ats_from_html(html_lower)
+        if not ats and "smartrecruiters.com" in html_lower:
+            ats = "smartrecruiters"
 
-        if "jobs.jobvite.com" in html:
-            return "jobvite"
+        direct_identity = extract_company_slug(url)
+        if ats and direct_identity:
+            return ats, direct_identity
 
-        if "myworkdayjobs.com" in html:
-            return "workday"
-
-        return None
+        return ats, None
 
     except Exception:
-        return None
+        return None, None
+
+
+def detect_ats_from_page(url):
+    ats, _identity = _resolve_ats_identity_from_page(url)
+    return ats

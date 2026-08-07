@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from tavily import TavilyClient
 from urllib.parse import urlparse
@@ -18,6 +19,9 @@ from tqdm import tqdm
 logger = get_logger("company_agent")
 
 INVALID_COMPANIES = {"www", "jobs", "careers", "job", "apply"}
+_SMARTRECRUITERS_COMPANY_PATTERN = re.compile(
+    r"^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$"
+)
 
 SEARCH_QUERIES = [
     "AI company careers",
@@ -111,6 +115,30 @@ def _workday_board_from_url(url):
         return None
 
 
+def _smartrecruiters_company_from_url(url):
+    try:
+        parsed = urlparse(str(url or "").strip())
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        if parsed.username or parsed.password or parsed.port is not None:
+            return None
+        if (parsed.hostname or "").strip().lower() != "jobs.smartrecruiters.com":
+            return None
+
+        path = [part for part in parsed.path.split("/") if part]
+        if not path:
+            return None
+
+        company = path[0].strip().lower()
+        if company in INVALID_COMPANIES:
+            return None
+        if not _SMARTRECRUITERS_COMPANY_PATTERN.fullmatch(company):
+            return None
+        return company
+    except (TypeError, ValueError):
+        return None
+
+
 def extract_urls(results):
 
     urls = []
@@ -146,6 +174,10 @@ def extract_company_slug(url):
         if workday_board:
             return workday_board
 
+        smartrecruiters_company = _smartrecruiters_company_from_url(url)
+        if smartrecruiters_company:
+            return smartrecruiters_company
+
         if not path:
             return None
 
@@ -160,9 +192,6 @@ def extract_company_slug(url):
 
         if "apply.workable.com" in domain:
             return path[0]
-
-        if "smartrecruiters.com" in domain and len(path) > 1:
-            return path[1]
 
         return None
 

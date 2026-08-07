@@ -1,6 +1,8 @@
 import pytest
 
 from src.agents import company_discovery_agent as agent
+from src.discovery import career_ats_detector, learned_companies
+from src.scrapers import smartrecruiters_scraper
 
 
 class _Response:
@@ -212,7 +214,7 @@ def test_recruitee_validator_failure_is_bounded_and_isolated(
             "https://capitalone.wd12.myworkdayjobs.com/Capital_One/job/Role",
             "https://capitalone.wd12.myworkdayjobs.com/Capital_One",
         ),
-        ("https://jobs.smartrecruiters.com/Nvidia/123-role", "123-role"),
+        ("https://jobs.smartrecruiters.com/Nvidia/123-role", "nvidia"),
         ("https://jobs.jobvite.com/acme/job/role", "acme"),
     ],
 )
@@ -246,6 +248,95 @@ def test_existing_provider_detection_contracts_are_unchanged(
 
     assert agent.detect_ats_from_page("https://example.com/careers") == expected
     assert calls == [("https://example.com/careers", 10)]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://jobs.smartrecruiters.com/Nvidia/12345-ml-engineer",
+            "nvidia",
+        ),
+        ("https://jobs.smartrecruiters.com/Nvidia", "nvidia"),
+        ("http://jobs.smartrecruiters.com/Nvidia/123-role", "nvidia"),
+        ("https://jobs.smartrecruiters.com/Acme-Co/123-role", "acme-co"),
+        ("https://jobs.smartrecruiters.com/Acme_Co/123-role", "acme_co"),
+        ("https://jobs.smartrecruiters.com/Company2/123-role", "company2"),
+    ],
+)
+def test_extract_company_slug_uses_smartrecruiters_company_identity(url, expected):
+    assert agent.extract_company_slug(url) == expected
+
+
+def test_smartrecruiters_job_token_is_never_company_identity():
+    url = "https://jobs.smartrecruiters.com/Nvidia/123-role"
+
+    assert agent.extract_company_slug(url) == "nvidia"
+    assert agent.extract_company_slug(url) != "123-role"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://jobs.smartrecruiters.com/",
+        "https://jobs.smartrecruiters.com.evil.example/Nvidia/123-role",
+        "https://evil.smartrecruiters.com/Nvidia/123-role",
+        "https://smartrecruiters.com/Nvidia/123-role",
+        "https://example.com/?next=https://jobs.smartrecruiters.com/Nvidia",
+        "ftp://jobs.smartrecruiters.com/Nvidia/123-role",
+        "https://user@jobs.smartrecruiters.com/Nvidia/123-role",
+        "not a URL",
+        "https://jobs.smartrecruiters.com/jobs/123-role",
+        "https://jobs.smartrecruiters.com/job/123-role",
+        "https://jobs.smartrecruiters.com/careers/123-role",
+        "https://jobs.smartrecruiters.com/apply/123-role",
+        "https://jobs.smartrecruiters.com/www/123-role",
+    ],
+)
+def test_extract_company_slug_rejects_invalid_smartrecruiters_identity(url):
+    assert agent.extract_company_slug(url) is None
+
+
+def test_smartrecruiters_discovery_persists_company_not_job_token(monkeypatch):
+    monkeypatch.setattr(
+        agent.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response("smartrecruiters.com"),
+    )
+    _, persisted = _run_agent(
+        monkeypatch,
+        [{"url": "https://jobs.smartrecruiters.com/Nvidia/123-role"}],
+        lambda companies: companies,
+    )
+
+    assert persisted == [
+        ("discovery://ats/smartrecruiters", ["nvidia"]),
+    ]
+
+
+def test_smartrecruiters_company_identity_matches_scraper_company_api_contract():
+    company = agent.extract_company_slug(
+        "https://jobs.smartrecruiters.com/Nvidia/123-role"
+    )
+
+    assert smartrecruiters_scraper.COMPANY_API.format(company=company) == (
+        "https://api.smartrecruiters.com/v1/companies/nvidia/postings"
+    )
+
+
+def test_existing_smartrecruiters_learning_and_career_identity_remain_first_path(
+    monkeypatch,
+):
+    monkeypatch.setitem(learned_companies._DISCOVERED, "smartrecruiters", set())
+    url = "https://jobs.smartrecruiters.com/Nvidia/123-role"
+
+    learned_companies.learn_from_job_url(url)
+
+    assert learned_companies.get_learned()["smartrecruiters"] == {"Nvidia"}
+    assert career_ats_detector.detect_ats_from_url(url) == (
+        "smartrecruiters",
+        "Nvidia",
+    )
 
 
 @pytest.mark.parametrize(

@@ -128,7 +128,13 @@ const tailoringWorkspacePdfState = {
   fitScale: 1,
   isFitPage: false,
   resizeTimer: null,
+  resizeObserver: null,
+  observedScrollerWidth: 0,
   renderToken: 0,
+  documentId: 0,
+  previewModeRevision: 0,
+  pendingRenderSignature: "",
+  renderedSignature: "",
   pdfjsPromise: null,
   pageTextIndex: [],
   highlightedCandidateId: "",
@@ -1173,6 +1179,7 @@ function setTailoringWorkspacePreviewMode(mode) {
   if (tailoringWorkspaceState.previewMode === nextMode) return;
 
   tailoringWorkspaceState.previewMode = nextMode;
+  tailoringWorkspacePdfState.previewModeRevision += 1;
   syncTailoringWorkspaceModeToggleUi();
 
   const liveDraftRoot = qs("tailoringWorkspaceLiveDraftPreview");
@@ -1210,6 +1217,7 @@ function setTailoringWorkspacePreviewMode(mode) {
     }
     setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
     syncTailoringWorkspacePreviewHighlight();
+    void renderTailoringWorkspacePdfPages();
   }
 }
 
@@ -2611,7 +2619,29 @@ function clearTailoringWorkspacePdfHighlight({ restoreMeta = true } = {}) {
   }
 }
 
-function applyTailoringWorkspacePdfHighlight(match, candidateId = "") {
+function centerTailoringWorkspacePdfHighlightInScroller(highlight, { smooth = false } = {}) {
+  const scroller = qs("tailoringWorkspacePdfScroller");
+  if (!scroller || !highlight) return;
+
+  const scrollerRect = scroller.getBoundingClientRect();
+  const targetRect = highlight.getBoundingClientRect();
+  const targetCenterWithinViewport =
+    targetRect.top - scrollerRect.top + targetRect.height / 2;
+  const desiredScrollTop =
+    scroller.scrollTop + targetCenterWithinViewport - scroller.clientHeight / 2;
+  const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+
+  scroller.scrollTo({
+    top: Math.max(0, Math.min(maxScrollTop, desiredScrollTop)),
+    behavior: smooth ? "smooth" : "auto",
+  });
+}
+
+function applyTailoringWorkspacePdfHighlight(
+  match,
+  candidateId = "",
+  { centerInScroller = false, smooth = false } = {}
+) {
   clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
 
   if (!match) return;
@@ -2635,17 +2665,16 @@ function applyTailoringWorkspacePdfHighlight(match, candidateId = "") {
   tailoringWorkspacePdfState.highlightedCandidateId = String(candidateId || "").trim();
   syncTailoringWorkspaceFocusedCards();
 
-  pageShell.scrollIntoView({
-    behavior: "smooth",
-    block: "center",
-  });
+  if (centerInScroller) {
+    centerTailoringWorkspacePdfHighlightInScroller(highlight, { smooth });
+  }
 
   setTailoringWorkspacePreviewMeta(
     `Matched bullet on page ${match.pageNumber} • ${getTailoringWorkspaceDisplayZoomPercent()}%`
   );
 }
 
-function focusTailoringWorkspaceBulletKeyInPreview(bulletKey, candidateId = "") {
+function focusTailoringWorkspaceBulletKeyInPreview(bulletKey, candidateId = "", options = {}) {
   const safeBulletKey = String(bulletKey || "").trim();
   setTailoringWorkspaceFocusedBulletKey(safeBulletKey);
 
@@ -2703,18 +2732,19 @@ function focusTailoringWorkspaceBulletKeyInPreview(bulletKey, candidateId = "") 
 
   applyTailoringWorkspacePdfHighlight(
     match,
-    String(candidateId || row.candidateId || "").trim()
+    String(candidateId || row.candidateId || "").trim(),
+    options
   );
 }
 
-function focusTailoringWorkspaceCandidateInPreview(candidateId) {
+function focusTailoringWorkspaceCandidateInPreview(candidateId, options = {}) {
   const safeCandidateId = String(candidateId || "").trim();
   if (!safeCandidateId) return;
 
   const bulletKey = getTailoringWorkspaceBulletKeyForCandidate(safeCandidateId);
   if (!bulletKey) return;
 
-  focusTailoringWorkspaceBulletKeyInPreview(bulletKey, safeCandidateId);
+  focusTailoringWorkspaceBulletKeyInPreview(bulletKey, safeCandidateId, options);
 }
 
 function syncTailoringWorkspacePreviewHighlight() {
@@ -2888,6 +2918,44 @@ function scheduleTailoringWorkspaceFitPageRerender() {
   }, 80);
 }
 
+function buildTailoringWorkspacePdfRenderSignature({
+  documentId,
+  availableWidth,
+  scale,
+  previewMode,
+  previewModeRevision,
+  deviceScale,
+} = {}) {
+  return [
+    Number(documentId || 0),
+    Math.round(Number(availableWidth || 0)),
+    Number(scale || 1).toFixed(4),
+    String(previewMode || "pdf"),
+    Number(previewModeRevision || 0),
+    Number(deviceScale || 1).toFixed(2),
+  ].join("|");
+}
+
+function getTailoringWorkspacePdfRenderSignature() {
+  const metrics = getTailoringWorkspaceScrollerMetrics();
+  return buildTailoringWorkspacePdfRenderSignature({
+    documentId: tailoringWorkspacePdfState.documentId,
+    availableWidth: metrics?.availableWidth || 0,
+    scale: tailoringWorkspacePdfState.scale,
+    previewMode: getTailoringWorkspacePreviewMode(),
+    previewModeRevision: tailoringWorkspacePdfState.previewModeRevision,
+    deviceScale: window.devicePixelRatio || 1,
+  });
+}
+
+function shouldSkipTailoringWorkspacePdfRender(renderSignature) {
+  return Boolean(
+    renderSignature &&
+      (renderSignature === tailoringWorkspacePdfState.pendingRenderSignature ||
+        renderSignature === tailoringWorkspacePdfState.renderedSignature)
+  );
+}
+
 async function getTailoringWorkspacePdfJs() {
   if (!tailoringWorkspacePdfState.pdfjsPromise) {
     tailoringWorkspacePdfState.pdfjsPromise = import("/static/vendor/pdfjs/pdf.mjs").then((pdfjsLib) => {
@@ -2930,6 +2998,9 @@ async function clearTailoringWorkspacePdfView(emptyText = "Resume preview is not
   }
 
   tailoringWorkspacePdfState.pdfDoc = null;
+  tailoringWorkspacePdfState.renderToken += 1;
+  tailoringWorkspacePdfState.pendingRenderSignature = "";
+  tailoringWorkspacePdfState.renderedSignature = "";
   tailoringWorkspacePdfState.resumeName = "";
   tailoringWorkspacePdfState.pageTextIndex = [];
   tailoringWorkspacePdfState.highlightedCandidateId = "";
@@ -2952,100 +3023,112 @@ async function renderTailoringWorkspacePdfPages() {
 
   if (!pagesRoot || !empty || !pdfDoc) return;
 
+  const renderSignature = getTailoringWorkspacePdfRenderSignature();
+  if (shouldSkipTailoringWorkspacePdfRender(renderSignature)) return;
+
   const token = ++tailoringWorkspacePdfState.renderToken;
+  tailoringWorkspacePdfState.pendingRenderSignature = renderSignature;
   const scale = tailoringWorkspacePdfState.scale;
   const pageCount = pdfDoc.numPages;
   const deviceScale = window.devicePixelRatio || 1;
+  const hasRenderedPages = Boolean(pagesRoot.querySelector(".tailoring-workspace-pdf-page"));
 
-  pagesRoot.innerHTML = "";
-  pagesRoot.classList.add("hidden");
-  empty.classList.remove("hidden");
-  empty.textContent = `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"}...`;
+  if (!hasRenderedPages) {
+    pagesRoot.classList.add("hidden");
+    empty.classList.remove("hidden");
+    empty.textContent = `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"}...`;
+  }
   setTailoringWorkspacePreviewMeta(
     `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"} at ${getTailoringWorkspaceDisplayZoomPercent()}%...`
   );
   updateTailoringWorkspaceZoomLabel();
 
-  const fragment = document.createDocumentFragment();
-  const pageTextIndex = [];
+  try {
+    const fragment = document.createDocumentFragment();
+    const pageTextIndex = [];
 
-  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      if (token !== tailoringWorkspacePdfState.renderToken) return;
+
+      const page = await pdfDoc.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement("canvas");
+      canvas.className = "tailoring-workspace-pdf-canvas";
+
+      const context = canvas.getContext("2d", { alpha: false });
+
+      canvas.width = Math.floor(viewport.width * deviceScale);
+      canvas.height = Math.floor(viewport.height * deviceScale);
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+
+      const renderContext =
+        deviceScale === 1
+          ? {
+              canvasContext: context,
+              viewport,
+            }
+          : {
+              canvasContext: context,
+              viewport,
+              transform: [deviceScale, 0, 0, deviceScale, 0, 0],
+            };
+
+      await page.render(renderContext).promise;
+
+      const textContent = await page.getTextContent();
+      const lineIndex = buildTailoringWorkspacePdfLineIndex(textContent, viewport);
+      const blockIndex = buildTailoringWorkspacePdfBlockIndex(lineIndex);
+
+      if (token !== tailoringWorkspacePdfState.renderToken) return;
+
+      const pageShell = document.createElement("div");
+      pageShell.className = "tailoring-workspace-pdf-page";
+      pageShell.dataset.pageNumber = String(pageNumber);
+      pageShell.style.width = `${viewport.width}px`;
+      pageShell.style.height = `${viewport.height}px`;
+
+      const overlay = document.createElement("div");
+      overlay.className = "tailoring-workspace-pdf-overlay";
+
+      pageShell.appendChild(canvas);
+      pageShell.appendChild(overlay);
+      fragment.appendChild(pageShell);
+
+      pageTextIndex.push({
+        pageNumber,
+        width: viewport.width,
+        height: viewport.height,
+        lines: lineIndex,
+        blocks: blockIndex,
+      });
+    }
+
     if (token !== tailoringWorkspacePdfState.renderToken) return;
 
-    const page = await pdfDoc.getPage(pageNumber);
-    const viewport = page.getViewport({ scale });
+    tailoringWorkspacePdfState.pageTextIndex = pageTextIndex;
 
-    const canvas = document.createElement("canvas");
-    canvas.className = "tailoring-workspace-pdf-canvas";
+    pagesRoot.replaceChildren(fragment);
+    pagesRoot.classList.remove("hidden");
+    empty.classList.add("hidden");
+    tailoringWorkspacePdfState.renderedSignature = renderSignature;
 
-    const context = canvas.getContext("2d", { alpha: false });
+    syncTailoringWorkspaceLayoutToFirstPage();
 
-    canvas.width = Math.floor(viewport.width * deviceScale);
-    canvas.height = Math.floor(viewport.height * deviceScale);
-    canvas.style.width = `${viewport.width}px`;
-    canvas.style.height = `${viewport.height}px`;
+    if (getTailoringWorkspacePreviewMode() === "edit") {
+      scheduleTailoringWorkspaceDocumentPreview({ immediate: true });
+      setTailoringWorkspacePreviewMeta(getTailoringWorkspaceDocumentPreviewMeta());
+      return;
+    }
 
-    const renderContext =
-      deviceScale === 1
-        ? {
-            canvasContext: context,
-            viewport,
-          }
-        : {
-            canvasContext: context,
-            viewport,
-            transform: [deviceScale, 0, 0, deviceScale, 0, 0],
-          };
-
-    await page.render(renderContext).promise;
-
-    const textContent = await page.getTextContent();
-    const lineIndex = buildTailoringWorkspacePdfLineIndex(textContent, viewport);
-    const blockIndex = buildTailoringWorkspacePdfBlockIndex(lineIndex);
-
-    if (token !== tailoringWorkspacePdfState.renderToken) return;
-
-    const pageShell = document.createElement("div");
-    pageShell.className = "tailoring-workspace-pdf-page";
-    pageShell.dataset.pageNumber = String(pageNumber);
-    pageShell.style.width = `${viewport.width}px`;
-    pageShell.style.height = `${viewport.height}px`;
-
-    const overlay = document.createElement("div");
-    overlay.className = "tailoring-workspace-pdf-overlay";
-
-    pageShell.appendChild(canvas);
-    pageShell.appendChild(overlay);
-    fragment.appendChild(pageShell);
-
-    pageTextIndex.push({
-      pageNumber,
-      width: viewport.width,
-      height: viewport.height,
-      lines: lineIndex,
-      blocks: blockIndex,
-    });
+    setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
+    syncTailoringWorkspacePreviewHighlight();
+  } finally {
+    if (tailoringWorkspacePdfState.pendingRenderSignature === renderSignature) {
+      tailoringWorkspacePdfState.pendingRenderSignature = "";
+    }
   }
-
-  if (token !== tailoringWorkspacePdfState.renderToken) return;
-
-  tailoringWorkspacePdfState.pageTextIndex = pageTextIndex;
-
-  pagesRoot.innerHTML = "";
-  pagesRoot.appendChild(fragment);
-  pagesRoot.classList.remove("hidden");
-  empty.classList.add("hidden");
-
-  syncTailoringWorkspaceLayoutToFirstPage();
-
-  if (getTailoringWorkspacePreviewMode() === "edit") {
-    scheduleTailoringWorkspaceDocumentPreview({ immediate: true });
-    setTailoringWorkspacePreviewMeta(getTailoringWorkspaceDocumentPreviewMeta());
-    return;
-  }
-
-  setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
-  syncTailoringWorkspacePreviewHighlight();
 }
 
 async function setTailoringWorkspacePreview(resumeName) {
@@ -3101,6 +3184,9 @@ async function setTailoringWorkspacePreview(resumeName) {
     }
 
     tailoringWorkspacePdfState.pdfDoc = pdfDoc;
+    tailoringWorkspacePdfState.documentId += 1;
+    tailoringWorkspacePdfState.pendingRenderSignature = "";
+    tailoringWorkspacePdfState.renderedSignature = "";
     tailoringWorkspacePdfState.scale = 1;
     tailoringWorkspacePdfState.fitScale = 1;
     tailoringWorkspacePdfState.isFitPage = true;
@@ -3155,6 +3241,29 @@ function bindTailoringWorkspacePreviewControls() {
   }
 
   syncTailoringWorkspaceModeToggleUi();
+
+  const pdfScroller = qs("tailoringWorkspacePdfScroller");
+  if (
+    pdfScroller &&
+    typeof ResizeObserver !== "undefined" &&
+    !tailoringWorkspacePdfState.resizeObserver
+  ) {
+    tailoringWorkspacePdfState.observedScrollerWidth = Math.round(
+      pdfScroller.getBoundingClientRect().width
+    );
+    tailoringWorkspacePdfState.resizeObserver = new ResizeObserver((entries) => {
+      const nextWidth = Math.round(entries[0]?.contentRect?.width || 0);
+      if (!nextWidth || nextWidth === tailoringWorkspacePdfState.observedScrollerWidth) {
+        return;
+      }
+
+      tailoringWorkspacePdfState.observedScrollerWidth = nextWidth;
+      if (tailoringWorkspacePdfState.pdfDoc && tailoringWorkspacePdfState.isFitPage) {
+        scheduleTailoringWorkspaceFitPageRerender();
+      }
+    });
+    tailoringWorkspacePdfState.resizeObserver.observe(pdfScroller);
+  }
 
   window.addEventListener("resize", () => {
     if (!tailoringWorkspacePdfState.pdfDoc) return;
@@ -4100,6 +4209,24 @@ function getTailoringWorkspaceReviewFilterItems() {
   ];
 }
 
+function buildTailoringWorkspaceReviewFilterIcon(item) {
+  const key = String(item?.key || "").trim();
+
+  if (key === "accepted_as_is" || key === "selected") {
+    return `<path d="m5 12.5 4 4L19 6.5"></path>`;
+  }
+  if (key === "edited_after_accept" || key === "manual_edits") {
+    return `
+      <path d="m4.5 19.5 3.6-.8 10-10a1.75 1.75 0 0 0-2.5-2.5l-10 10z"></path>
+      <path d="m14.3 7.5 2.5 2.5"></path>
+    `;
+  }
+  if (key === "rejected") {
+    return `<path d="m7 7 10 10M17 7 7 17"></path>`;
+  }
+  return `<circle cx="12" cy="12" r="4.25"></circle>`;
+}
+
 function buildTailoringWorkspaceReviewFilterChip(item) {
   return `
     <button
@@ -4107,6 +4234,9 @@ function buildTailoringWorkspaceReviewFilterChip(item) {
       class="tailoring-review-filter-chip tailoring-review-filter-chip--${escapeHtml(item.tone || "muted")} ${item.active ? "is-active" : ""}"
       data-tailoring-review-filter="${escapeHtml(item.key || "")}"
     >
+      <svg class="tailoring-review-filter-chip-dot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        ${buildTailoringWorkspaceReviewFilterIcon(item)}
+      </svg>
       <span class="tailoring-review-filter-chip-label">${escapeHtml(item.label)}</span>
       <span class="tailoring-review-filter-chip-count">${escapeHtml(String(item.value ?? 0))}</span>
     </button>
@@ -4172,8 +4302,11 @@ function renderTailoringWorkspaceReviewTelemetryStrip() {
   }
 
   strip.innerHTML = `
-    <div class="tailoring-workspace-review-telemetry-row">
-      ${items.map(buildTailoringWorkspaceReviewFilterChip).join("")}
+    <div class="tailoring-workspace-review-progress">
+      <div class="tailoring-workspace-review-progress-label">Review progress</div>
+      <div class="tailoring-workspace-review-telemetry-row">
+        ${items.map(buildTailoringWorkspaceReviewFilterChip).join("")}
+      </div>
     </div>
   `;
   strip.classList.remove("hidden");
@@ -6447,7 +6580,7 @@ function getReplacementReviewState(item, reviewDecisionMap = {}) {
   return state || "pending";
 }
 
-function setTailoringWorkspaceReviewDecision(candidateId, state, note = "") {
+function setTailoringWorkspaceReviewDecision(candidateId, state, note = "", focusOptions = {}) {
   const safeCandidateId = String(candidateId || "").trim();
   const safeState = String(state || "").trim().toLowerCase();
   if (!safeCandidateId || !safeState) return;
@@ -6466,10 +6599,10 @@ function setTailoringWorkspaceReviewDecision(candidateId, state, note = "") {
   tailoringWorkspaceState.previewReadyKey = "";
   tailoringWorkspaceState.activeInlineScoreKey = "";
   rerenderTailoringWorkspaceSelectionView();
-  focusTailoringWorkspaceCandidateInPreview(safeCandidateId);
+  focusTailoringWorkspaceCandidateInPreview(safeCandidateId, focusOptions);
 }
 
-async function openTailoringWorkspaceManualEditForCandidate(candidateId) {
+async function openTailoringWorkspaceManualEditForCandidate(candidateId, focusOptions = {}) {
   const safeCandidateId = String(candidateId || "").trim();
   if (!safeCandidateId) return;
 
@@ -6481,7 +6614,7 @@ async function openTailoringWorkspaceManualEditForCandidate(candidateId) {
   tailoringWorkspaceState.reviewTelemetryFilter = "";
   rerenderTailoringWorkspaceSelectionView();
   scrollTailoringWorkspaceLeftPaneToTabs();
-  focusTailoringWorkspaceCandidateInPreview(safeCandidateId);
+  focusTailoringWorkspaceCandidateInPreview(safeCandidateId, focusOptions);
 
   window.requestAnimationFrame(() => {
     const textarea = document.querySelector(
@@ -6655,8 +6788,7 @@ function refreshTailoringWorkspaceInlineScoreControls() {
         : "";
     }
 
-    button.classList.toggle("ghost-btn", !showPreview);
-    button.classList.toggle("tailoring-inline-save-btn", showPreview);
+    button.classList.toggle("tailoring-workspace-free-edit-action--save", showPreview);
 
     if (tailoringWorkspaceState.isSaving) {
       button.textContent = showPreview ? "Saving..." : "Continue";
@@ -6682,7 +6814,7 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
 
   if (!rows.length) {
     return `
-      <section class="tailoring-section-block">
+      <section class="tailoring-section-block tailoring-workspace-free-edit-section">
         <div class="tailoring-section-title">Free edit</div>
         <div class="tailoring-card-copy">
           ${showingManualEditsOnly
@@ -6694,7 +6826,7 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
   }
 
   return `
-    <section class="tailoring-section-block">
+    <section class="tailoring-section-block tailoring-workspace-free-edit-section">
       <div class="tailoring-section-title">Free edit</div>
       <div class="tailoring-card-copy">
         ${showingManualEditsOnly
@@ -6723,10 +6855,10 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
 
           return `
             <article
-              class="tailoring-edit-card tailoring-edit-card--compact tailoring-edit-card--clickable"
+              class="tailoring-edit-card tailoring-edit-card--compact tailoring-edit-card--clickable tailoring-workspace-review-item tailoring-workspace-free-edit-item"
               data-tailoring-focus-bullet-key="${escapeHtml(row.bulletKey)}"
             >
-              <div class="tailoring-card-topline tailoring-card-topline--compact">
+              <header class="tailoring-card-topline tailoring-card-topline--compact tailoring-workspace-review-item-header">
                 <div class="tailoring-edit-card-label">Bullet ${index + 1}</div>
 
                 <div class="tailoring-chip-group tailoring-chip-group--compact">
@@ -6734,22 +6866,24 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
                   ${buildTailoringTonePill(sourceLabel, sourceTone)}
                   ${row.hasManualEdit ? buildTailoringTonePill("Manual edit", "neutral") : ""}
                 </div>
-              </div>
+              </header>
 
-              <div class="tailoring-info-block tailoring-info-block--compact">
-                <div class="tailoring-info-label">Original bullet</div>
+              <div class="tailoring-workspace-review-item-body">
+                <section class="tailoring-info-block tailoring-info-block--compact tailoring-workspace-review-content tailoring-workspace-review-content--current">
+                <div class="tailoring-info-label">Original</div>
                 <div class="tailoring-quote-block">${escapeHtml(row.originalText)}</div>
-              </div>
+                </section>
 
-              <div class="tailoring-info-block tailoring-info-block--compact">
-                <div class="tailoring-info-label">Editable draft text</div>
+                <section class="tailoring-info-block tailoring-info-block--compact tailoring-workspace-review-content tailoring-workspace-review-content--draft">
+                <div class="tailoring-info-label">Draft</div>
                 <textarea
                   class="tailoring-free-edit-textarea"
                   data-tailoring-free-edit-key="${escapeHtml(row.bulletKey)}"
                 >${escapeHtml(row.currentText)}</textarea>
+                </section>
               </div>
 
-              <div class="tailoring-edit-card-footer tailoring-edit-card-footer--inline">
+              <footer class="tailoring-edit-card-footer tailoring-edit-card-footer--inline tailoring-workspace-review-item-footer">
                 <div
                   class="tailoring-chip-group"
                   data-tailoring-free-edit-score="${escapeHtml(row.bulletKey)}"
@@ -6757,12 +6891,12 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
 
                 <button
                   type="button"
-                  class="ghost-btn"
+                  class="tailoring-workspace-free-edit-action"
                   data-tailoring-free-edit-action="${escapeHtml(row.bulletKey)}"
                 >
                   Continue
                 </button>
-              </div>
+              </footer>
             </article>
           `;
         }).join("")}
@@ -7369,38 +7503,40 @@ function renderTailoringWorkspaceSimpleSuggestionFallback(payload, error = null)
 
         return `
           <article
-            class="tailoring-edit-card tailoring-edit-card--compact ${candidateId ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
+            class="tailoring-edit-card tailoring-edit-card--compact tailoring-workspace-review-item tailoring-workspace-review-item--${activeTab === "review" ? "review" : "ready"} ${candidateId ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
             ${candidateId ? `data-tailoring-focus-candidate="${escapeHtml(candidateId)}"` : ""}
           >
-            <div class="tailoring-card-topline tailoring-card-topline--compact">
+            <header class="tailoring-card-topline tailoring-card-topline--compact tailoring-workspace-review-item-header">
               <div class="tailoring-edit-card-label">${escapeHtml(title)} ${index + 1}</div>
               <div class="tailoring-chip-group tailoring-chip-group--compact">
                 ${buildTailoringTonePill(activeTab === "review" ? "Review" : "Ready", activeTab === "review" ? "caution" : "safe")}
                 ${isSelected ? buildTailoringTonePill("Selected", "safe") : ""}
               </div>
-            </div>
+            </header>
+            <div class="tailoring-workspace-review-item-body">
             ${originalText ? `
-              <div class="tailoring-info-block tailoring-info-block--compact">
-                <div class="tailoring-info-label">Current bullet</div>
+              <section class="tailoring-info-block tailoring-info-block--compact tailoring-workspace-review-content tailoring-workspace-review-content--current">
+                <div class="tailoring-info-label">Current</div>
                 <div class="tailoring-quote-block">${escapeHtml(originalText)}</div>
-              </div>
+              </section>
             ` : ""}
             ${suggestionText ? `
-              <div class="tailoring-info-block tailoring-info-block--compact">
-                <div class="tailoring-info-label">${activeTab === "review" ? "Guidance" : "Suggested edit"}</div>
+              <section class="tailoring-info-block tailoring-info-block--compact tailoring-workspace-review-content tailoring-workspace-review-content--suggested">
+                <div class="tailoring-info-label">${activeTab === "review" ? "Suggested direction" : "Suggested edit"}</div>
                 <div class="tailoring-rewrite-callout">${escapeHtml(suggestionText)}</div>
-              </div>
+              </section>
             ` : ""}
+            </div>
             ${canSelect ? `
-              <div class="tailoring-card-actions tailoring-card-actions--compact">
+              <footer class="tailoring-card-actions tailoring-card-actions--compact tailoring-workspace-review-item-footer">
                 <button
                   type="button"
-                  class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
+                  class="tailoring-workspace-select-btn tailoring-select-btn ${isSelected ? "is-selected" : ""}"
                   data-tailoring-select-candidate="${escapeHtml(candidateId)}"
                 >
                   ${isSelected ? "Remove" : "Add"}
                 </button>
-              </div>
+              </footer>
             ` : ""}
           </article>
         `;
@@ -7612,13 +7748,14 @@ function bindTailoringWorkspaceSelectionHandlers() {
     root.dataset.selectionBound = "true";
 
     root.addEventListener("click", async (event) => {
+      const explicitFocusOptions = { centerInScroller: true, smooth: true };
       const reviewActionButton = event.target.closest("[data-tailoring-review-action]");
       if (reviewActionButton) {
         event.preventDefault();
         const candidateId = String(reviewActionButton.dataset.tailoringReviewCandidate || "").trim();
         const nextState = String(reviewActionButton.dataset.tailoringReviewAction || "").trim().toLowerCase();
         if (!candidateId || !nextState) return;
-        setTailoringWorkspaceReviewDecision(candidateId, nextState);
+        setTailoringWorkspaceReviewDecision(candidateId, nextState, "", explicitFocusOptions);
         return;
       }
 
@@ -7627,7 +7764,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
         event.preventDefault();
         const candidateId = String(reviewEditButton.dataset.tailoringReviewEdit || "").trim();
         if (!candidateId) return;
-        await openTailoringWorkspaceManualEditForCandidate(candidateId);
+        await openTailoringWorkspaceManualEditForCandidate(candidateId, explicitFocusOptions);
         return;
       }
 
@@ -7636,7 +7773,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
         event.preventDefault();
         const candidateId = selectButton.dataset.tailoringSelectCandidate || "";
         toggleTailoringWorkspaceCandidateSelection(candidateId);
-        focusTailoringWorkspaceCandidateInPreview(candidateId);
+        focusTailoringWorkspaceCandidateInPreview(candidateId, explicitFocusOptions);
         return;
       }
 
@@ -7646,7 +7783,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
 
         const bulletKey = String(actionButton.dataset.tailoringFreeEditAction || "").trim();
         if (!bulletKey) return;
-        focusTailoringWorkspaceBulletKeyInPreview(bulletKey);
+        focusTailoringWorkspaceBulletKeyInPreview(bulletKey, "", explicitFocusOptions);
 
         const payload = getTailoringWorkspacePayload();
         const manualEdits = normalizeTailoringWorkspaceManualBulletEdits(
@@ -7677,7 +7814,9 @@ function bindTailoringWorkspaceSelectionHandlers() {
       ) {
         event.preventDefault();
         focusTailoringWorkspaceBulletKeyInPreview(
-          focusBulletCard.dataset.tailoringFocusBulletKey || ""
+          focusBulletCard.dataset.tailoringFocusBulletKey || "",
+          "",
+          explicitFocusOptions
         );
         return;
       }
@@ -7687,7 +7826,8 @@ function bindTailoringWorkspaceSelectionHandlers() {
 
       event.preventDefault();
       focusTailoringWorkspaceCandidateInPreview(
-        focusCard.dataset.tailoringFocusCandidate || ""
+        focusCard.dataset.tailoringFocusCandidate || "",
+        explicitFocusOptions
       );
     });
 
@@ -8254,6 +8394,7 @@ function renderReplacementDecisionSection({
   reviewActionsEnabled = false,
   reviewDecisionMap = null,
   actionPrefix = "tailoring",
+  workspacePresentation = false,
 }) {
   const safeItems = Array.isArray(items) ? items : [];
   const selectedSet = new Set(
@@ -8287,7 +8428,7 @@ function renderReplacementDecisionSection({
 
   if (!safeItems.length) {
     return `
-      <section class="tailoring-section-block">
+      <section class="tailoring-section-block ${workspacePresentation ? "tailoring-workspace-suggestion-section" : ""}">
         <div class="tailoring-section-title">${escapeHtml(title)}</div>
         ${selectionEnabled ? `
           <div class="tailoring-section-meta">
@@ -8302,7 +8443,7 @@ function renderReplacementDecisionSection({
   }
 
   return `
-    <section class="tailoring-section-block">
+    <section class="tailoring-section-block ${workspacePresentation ? "tailoring-workspace-suggestion-section" : ""}">
       <div class="tailoring-section-title">${escapeHtml(title)}</div>
       ${subtitle ? `<div class="tailoring-card-copy">${escapeHtml(subtitle)}</div>` : ""}
 
@@ -8389,14 +8530,26 @@ function renderReplacementDecisionSection({
               : "";
 
           const compactImpactHtml = impactLabels.length
-            ? `
-              <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
-                ${impactLabels
-                  .slice(0, 3)
-                  .map((label) => buildTailoringTonePill(label, "neutral"))
-                  .join("")}
-              </div>
-            `
+            ? workspacePresentation
+              ? `
+                <div class="tailoring-workspace-review-signals">
+                  <div class="tailoring-info-label">Signals</div>
+                  <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
+                    ${impactLabels
+                      .slice(0, 3)
+                      .map((label) => buildTailoringTonePill(label, "neutral"))
+                      .join("")}
+                  </div>
+                </div>
+              `
+              : `
+                <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
+                  ${impactLabels
+                    .slice(0, 3)
+                    .map((label) => buildTailoringTonePill(label, "neutral"))
+                    .join("")}
+                </div>
+              `
             : "";
 
           const claimSafetyValue = String(item.claim_safety || "").trim();
@@ -8476,10 +8629,10 @@ function renderReplacementDecisionSection({
 
           return `
             <article
-              class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""} ${isScan ? "scan-workspace-inventory-card" : ""} ${isActiveScanCard ? "is-active" : ""}"
+              class="tailoring-edit-card tailoring-edit-card--compact ${workspacePresentation ? `tailoring-workspace-review-item tailoring-workspace-review-item--${mode === "direction_only" ? "review" : "ready"}` : ""} ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""} ${isScan ? "scan-workspace-inventory-card" : ""} ${isActiveScanCard ? "is-active" : ""}"
               ${focusAttr}
             >
-              <div class="tailoring-card-topline tailoring-card-topline--compact ${isScan ? "tailoring-card-topline--scan" : ""}">
+              <div class="tailoring-card-topline tailoring-card-topline--compact ${workspacePresentation ? "tailoring-workspace-review-item-header" : ""} ${isScan ? "tailoring-card-topline--scan" : ""}">
                 <div class="tailoring-edit-card-label">${isScan ? `Item ${index + 1}` : `Suggestion ${index + 1}`}</div>
 
                 <div class="tailoring-chip-group tailoring-chip-group--compact">
@@ -8503,9 +8656,11 @@ function renderReplacementDecisionSection({
               
               ${isScan ? `<div class="scan-workspace-inventory-details ${isActiveScanCard ? "is-open" : ""}">` : ""}
 
+              ${workspacePresentation ? `<div class="tailoring-workspace-review-item-body">` : ""}
+
               ${showCurrentBulletBlock ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">${currentBulletLabel}</div>
+                <div class="tailoring-info-block tailoring-info-block--compact ${workspacePresentation ? "tailoring-workspace-review-content tailoring-workspace-review-content--current" : ""}">
+                  <div class="tailoring-info-label">${workspacePresentation ? "Current" : currentBulletLabel}</div>
                   <div class="tailoring-quote-block">${escapeHtml(displayCurrentBullet)}</div>
                 </div>
               ` : ""}
@@ -8513,15 +8668,15 @@ function renderReplacementDecisionSection({
               ${compactTrustHtml}
 
               ${mode !== "direction_only" && item.final_replacement_text ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
+                <div class="tailoring-info-block tailoring-info-block--compact ${workspacePresentation ? "tailoring-workspace-review-content tailoring-workspace-review-content--suggested" : ""}">
                   <div class="tailoring-info-label">${replacementLabel}</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.final_replacement_text)}</div>
                 </div>
               ` : ""}
 
               ${mode === "direction_only" && item.rewrite_direction ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">${replacementLabel}</div>
+                <div class="tailoring-info-block tailoring-info-block--compact ${workspacePresentation ? "tailoring-workspace-review-content tailoring-workspace-review-content--suggested" : ""}">
+                  <div class="tailoring-info-label">${workspacePresentation ? "Suggested direction" : replacementLabel}</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.rewrite_direction)}</div>
                 </div>
               ` : ""}
@@ -8533,13 +8688,27 @@ function renderReplacementDecisionSection({
                 </div>
               ` : ""}
 
+              ${workspacePresentation ? `</div>` : ""}
+
               ${criticDetailsHtml}
 
               ${reviewActionsEnabled && mode === "direction_only" && candidateId ? `
-                <div class="tailoring-card-actions tailoring-card-actions--compact tailoring-card-actions--review">
+                <div class="tailoring-card-actions tailoring-card-actions--compact tailoring-card-actions--review ${workspacePresentation ? "tailoring-workspace-review-item-footer" : ""}">
+                  ${workspacePresentation ? `
+                    <button
+                      type="button"
+                      class="tailoring-workspace-review-action-btn tailoring-review-action-btn ${reviewState === "rejected" ? "is-active" : ""}"
+                      data-${actionPrefix}-review-state="rejected"
+                      data-${actionPrefix}-review-action="rejected"
+                      data-${actionPrefix}-review-candidate="${escapeHtml(candidateId)}"
+                    >
+                      Reject
+                    </button>
+                  ` : ""}
+
                   <button
                     type="button"
-                    class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "accepted" ? "is-active" : ""}"
+                    class="${workspacePresentation ? "tailoring-workspace-review-action-btn" : "ghost-btn btn-sm"} tailoring-review-action-btn ${reviewState === "accepted" ? "is-active" : ""}"
                     data-${actionPrefix}-review-state="accepted"
                     data-${actionPrefix}-review-action="accepted"
                     data-${actionPrefix}-review-candidate="${escapeHtml(candidateId)}"
@@ -8547,33 +8716,35 @@ function renderReplacementDecisionSection({
                     ${isScan ? "Accept" : "Accept as-is"}
                   </button>
 
-                  <button
-                    type="button"
-                    class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "rejected" ? "is-active" : ""}"
-                    data-${actionPrefix}-review-state="rejected"
-                    data-${actionPrefix}-review-action="rejected"
-                    data-${actionPrefix}-review-candidate="${escapeHtml(candidateId)}"
-                  >
-                    Reject
-                  </button>
+                  ${workspacePresentation ? "" : `
+                    <button
+                      type="button"
+                      class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "rejected" ? "is-active" : ""}"
+                      data-${actionPrefix}-review-state="rejected"
+                      data-${actionPrefix}-review-action="rejected"
+                      data-${actionPrefix}-review-candidate="${escapeHtml(candidateId)}"
+                    >
+                      Reject
+                    </button>
+                  `}
 
                   <button
                     type="button"
-                    class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "edited_after_accept" ? "is-active" : ""}"
+                    class="${workspacePresentation ? "tailoring-workspace-review-action-btn" : "ghost-btn btn-sm"} tailoring-review-action-btn ${reviewState === "edited_after_accept" ? "is-active" : ""}"
                     data-${actionPrefix}-review-edit="${escapeHtml(candidateId)}"
                   >
                     ${isScan ? "Edit" : "Edit manually"}
                   </button>
                 </div>
               ` : isSelectable ? `
-                <div class="tailoring-card-actions tailoring-card-actions--compact">
+                <div class="tailoring-card-actions tailoring-card-actions--compact ${workspacePresentation ? "tailoring-workspace-review-item-footer" : ""}">
                   <div class="tailoring-chip-group">
                     ${compactScoreHtml}
                   </div>
 
                   <button
                     type="button"
-                    class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
+                    class="${workspacePresentation ? "tailoring-workspace-select-btn" : "ghost-btn btn-sm"} tailoring-select-btn ${isSelected ? "is-selected" : ""}"
                     data-${actionPrefix}-select-candidate="${escapeHtml(candidateId)}"
                   >
                     ${isSelected ? "Remove" : "Add"}
@@ -8846,12 +9017,13 @@ function renderTailoringAnchorEvidenceSection({
   title = "Anchor evidence",
   items = [],
   emptyLabel = "No anchor evidence for this row.",
+  workspacePresentation = false,
 } = {}) {
   const safeItems = getRenderableTailoringAnchorCards(items, 3);
 
   if (!safeItems.length) {
     return `
-      <section class="tailoring-section-block">
+      <section class="tailoring-section-block ${workspacePresentation ? "tailoring-workspace-anchor-section" : ""}">
         <div class="tailoring-section-title">${escapeHtml(title)}</div>
         <div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>
       </section>
@@ -8859,7 +9031,7 @@ function renderTailoringAnchorEvidenceSection({
   }
 
   return `
-    <section class="tailoring-section-block">
+    <section class="tailoring-section-block ${workspacePresentation ? "tailoring-workspace-anchor-section" : ""}">
       <div class="tailoring-section-title">${escapeHtml(title)}</div>
 
       <div class="tailoring-edit-card-list">
@@ -8882,8 +9054,8 @@ function renderTailoringAnchorEvidenceSection({
                 : "tailoring-edit-card--review-preserve";
 
           return `
-            <article class="tailoring-edit-card tailoring-edit-card--compact ${reviewCaseClass}">
-              <div class="tailoring-card-topline tailoring-card-topline--compact">
+            <article class="tailoring-edit-card tailoring-edit-card--compact ${workspacePresentation ? "tailoring-workspace-review-item tailoring-workspace-review-item--anchor tailoring-workspace-anchor-item" : ""} ${reviewCaseClass}">
+              <div class="tailoring-card-topline tailoring-card-topline--compact ${workspacePresentation ? "tailoring-workspace-review-item-header tailoring-workspace-anchor-item-header" : ""}">
                 <div class="tailoring-edit-card-label">Anchor ${index + 1}</div>
 
                 <div class="tailoring-chip-group tailoring-chip-group--compact">
@@ -8892,23 +9064,27 @@ function renderTailoringAnchorEvidenceSection({
                 </div>
               </div>
 
+              ${workspacePresentation ? `<div class="tailoring-workspace-review-item-body tailoring-workspace-anchor-item-body">` : ""}
+
               ${source ? `
-                <div class="tailoring-card-copy">${escapeHtml(source)}</div>
+                <div class="tailoring-card-copy ${workspacePresentation ? "tailoring-workspace-anchor-source" : ""}">${escapeHtml(source)}</div>
               ` : ""}
 
               ${currentEvidence ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">Current bullet</div>
+                <div class="tailoring-info-block tailoring-info-block--compact ${workspacePresentation ? "tailoring-workspace-review-content tailoring-workspace-anchor-evidence" : ""}">
+                  <div class="tailoring-info-label">${workspacePresentation ? "Evidence" : "Current bullet"}</div>
                   <div class="tailoring-quote-block">${escapeHtml(currentEvidence)}</div>
                 </div>
               ` : ""}
 
               ${reviewNote ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
+                <div class="tailoring-info-block tailoring-info-block--compact ${workspacePresentation ? "tailoring-workspace-anchor-note" : ""}">
                   <div class="tailoring-info-label">Review note</div>
                   <div class="tailoring-card-copy">${escapeHtml(reviewNote)}</div>
                 </div>
               ` : ""}
+
+              ${workspacePresentation ? `</div>` : ""}
             </article>
           `;
         }).join("")}
@@ -8971,6 +9147,7 @@ function renderTailoringInteractiveSummaryInto(
   const payload = artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
     ? artifact.data
     : null;
+  const workspacePresentation = rootId === "tailoringWorkspaceInteractiveSummary";
 
   if (!payload) {
     root.innerHTML = `<div class="tailoring-empty-state">Suggested changes are not available for this row.</div>`;
@@ -9009,6 +9186,7 @@ function renderTailoringInteractiveSummaryInto(
         tone: "muted",
         mode: "direction_only",
         reviewActionsEnabled: selectionEnabled,
+        workspacePresentation,
       })
     : "";
 
@@ -9017,6 +9195,7 @@ function renderTailoringInteractiveSummaryInto(
         title: "Anchor evidence",
         items: anchorCards,
         emptyLabel: "No anchor evidence for this row.",
+        workspacePresentation,
       })
     : "";
 
@@ -9030,6 +9209,7 @@ function renderTailoringInteractiveSummaryInto(
         mode: "replacement",
         selectionEnabled,
         selectedCandidateIds,
+        workspacePresentation,
       })
     : "";
 
@@ -9043,6 +9223,7 @@ function renderTailoringInteractiveSummaryInto(
         mode: "replacement",
         selectionEnabled,
         selectedCandidateIds,
+        workspacePresentation,
       })
     : "";
 
@@ -9056,6 +9237,7 @@ function renderTailoringInteractiveSummaryInto(
         mode: "replacement",
         selectionEnabled,
         selectedCandidateIds,
+        workspacePresentation,
       })
     : "";
 

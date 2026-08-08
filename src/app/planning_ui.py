@@ -683,11 +683,12 @@ def tailoring_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
+  <link rel="stylesheet" href="/static/tailoring_workspace_premium.css?v=tailoring_workspace_finish_r3" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
   <div
+    id="tailoringWorkspacePage"
     class="page tailoring-workspace-page"
     data-job-doc-id="{job_doc_id_safe}"
     data-job-company="{company_safe}"
@@ -702,94 +703,89 @@ def tailoring_workspace(
     data-packet-json-key="{packet_json_key_safe}"
     data-planning-output-dir="{output_dir_safe}"
   >
-    <header class="page-header tailoring-workspace-header app-page-header">
-      <div class="app-page-header__main">
-        <div class="app-page-header__title-row">
-          <h1 class="app-page-header__title">Tailoring Workspace</h1>
+    <header class="tailoring-workspace-header">
+      <div class="tailoring-workspace-header-topline">
+        <div class="tailoring-workspace-header-main">
+          <div class="tailoring-workspace-eyebrow">AI tailoring workspace</div>
+          <div class="tailoring-workspace-title-row">
+            <h1 class="tailoring-workspace-title">Tailor resume</h1>
+
+            <div class="tailoring-workspace-status-badge" role="status">
+              <span class="tailoring-workspace-status-dot" aria-hidden="true"></span>
+              <span id="tailoringWorkspaceStatusValue">{status_safe}</span>
+            </div>
+          </div>
         </div>
-        <p class="subtext app-page-header__description">
-          Review suggested bullet replacements on the left and resume preview on the right.
-        </p>
       </div>
+
+      <section class="tailoring-workspace-hero tailoring-workspace-context" aria-label="Job and resume context">
+        <div class="tailoring-workspace-context-main">
+          <div class="tailoring-workspace-context-job">
+            <div class="tailoring-workspace-context-company">{company_safe}</div>
+            <div class="tailoring-workspace-context-role">{title_safe}</div>
+          </div>
+
+          <div class="tailoring-workspace-context-resume">
+            <span class="tailoring-workspace-context-resume-icon" aria-hidden="true"></span>
+            <span class="tailoring-workspace-context-resume-label">Resume variant</span>
+            <span class="tailoring-workspace-context-resume-name">{resume_display_safe}</span>
+          </div>
+        </div>
+
+        <div class="tailoring-workspace-context-actions" aria-label="Tailoring commands">
+          <a
+            id="tailoringWorkspaceOpenScanBtn"
+            class="tailoring-ai-optimize-btn"
+            href="{scan_href_safe}"
+          >
+            <span class="tailoring-ai-optimize-btn-icon-wrap" aria-hidden="true">
+              <img
+                class="tailoring-ai-optimize-btn-icon"
+                src="/static/media/ai-img.svg"
+                alt=""
+                aria-hidden="true"
+              />
+            </span>
+            <span class="tailoring-ai-optimize-btn-label">AI optimize</span>
+          </a>
+
+          <button
+            id="tailoringWorkspaceRegenerateBtn"
+            class="tailoring-regenerate-btn"
+            type="button"
+            title="Generate a fresh set of AI tailoring suggestions"
+            aria-label="Generate a fresh set of AI tailoring suggestions"
+          >
+            <span class="tailoring-regenerate-btn-icon" aria-hidden="true">&#8635;</span>
+            <span class="tailoring-regenerate-btn-label">Regenerate Suggestions</span>
+          </button>
+        </div>
+      </section>
     </header>
 
-    <section class="card tailoring-workspace-hero">
-      <div class="tailoring-workspace-hero-grid">
-        <div class="info-pair">
-          <span class="label">Company</span>
-          <span>{company_safe}</span>
-        </div>
-
-        <div class="info-pair">
-          <span class="label">Role</span>
-          <span>{title_safe}</span>
-        </div>
-
-        <div class="info-pair">
-          <span class="label">Resume Variant</span>
-          <span>{resume_display_safe}</span>
-        </div>
-
-        <div class="info-pair">
-          <span class="label">Status</span>
-          <span id="tailoringWorkspaceStatusValue">{status_safe}</span>
-        </div>
-      </div>
-    </section>
-
     <section class="tailoring-workspace-layout">
-      <section class="card tailoring-workspace-pane tailoring-workspace-pane--left">
-        <div class="section-header">
+      <section class="tailoring-workspace-pane tailoring-workspace-pane--left">
+        <div class="tailoring-workspace-rail-header">
           <div>
             <div class="tailoring-section-title-row">
               <h2>Suggested changes</h2>
-
-              <div class="tailoring-section-title-actions">
-                <a
-                  id="tailoringWorkspaceOpenScanBtn"
-                  class="ghost-btn tailoring-ai-optimize-btn"
-                  href="{scan_href_safe}"
-                >
-                  <span class="tailoring-ai-optimize-btn-icon-wrap" aria-hidden="true">
-                    <img
-                      class="tailoring-ai-optimize-btn-icon"
-                      src="/static/media/ai-img.svg"
-                      alt=""
-                      aria-hidden="true"
-                    />
-                  </span>
-
-                  <span class="tailoring-ai-optimize-btn-label">AI optimize</span>
-                </a>
-
-                <button
-                  id="tailoringWorkspaceRegenerateBtn"
-                  class="ghost-btn tailoring-regenerate-btn"
-                  type="button"
-                  title="Generate a fresh set of AI tailoring suggestions"
-                  aria-label="Generate a fresh set of AI tailoring suggestions"
-                >
-                  <span class="tailoring-regenerate-btn-icon" aria-hidden="true">&#8635;</span>
-                  <span class="tailoring-regenerate-btn-label">Regenerate Suggestions</span>
-                </button>
-              </div>
             </div>
 
-            <div class="subtext" id="tailoringWorkspaceMeta">
+            <div class="tailoring-workspace-meta" id="tailoringWorkspaceMeta">
               Loading suggestion set...
             </div>
           </div>
         </div>
 
         <section
-          class="card tailoring-workspace-subcard tailoring-workspace-selected-tabs hidden"
+          class="tailoring-workspace-selected-tabs hidden"
           id="tailoringWorkspaceSelectedTabsShell"
         >
-          <div class="scheduler-table-tabs tailoring-selected-tabs-shell">
-            <div class="scheduler-tab-row tailoring-selected-tab-row" id="tailoringWorkspaceSelectedTabRow">
+          <div class="tailoring-selected-tabs-shell">
+            <div class="tailoring-selected-tab-row" id="tailoringWorkspaceSelectedTabRow">
               <button
                 type="button"
-                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--ready active"
+                class="tailoring-selected-tab-btn tailoring-selected-tab-btn--ready active"
                 id="tailoringWorkspaceSelectedReadyTab"
                 data-tailoring-selected-tab="ready"
               >
@@ -798,7 +794,7 @@ def tailoring_workspace(
 
               <button
                 type="button"
-                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--review"
+                class="tailoring-selected-tab-btn tailoring-selected-tab-btn--review"
                 id="tailoringWorkspaceSelectedReviewTab"
                 data-tailoring-selected-tab="review"
               >
@@ -807,7 +803,7 @@ def tailoring_workspace(
 
               <button
                 type="button"
-                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--free-edit"
+                class="tailoring-selected-tab-btn tailoring-selected-tab-btn--free-edit"
                 id="tailoringWorkspaceSelectedFreeEditTab"
                 data-tailoring-selected-tab="free_edit"
               >
@@ -819,18 +815,18 @@ def tailoring_workspace(
 
         <div
           id="tailoringWorkspaceInteractiveSummary"
-          class="tailoring-interactive-shell tailoring-workspace-content"
+          class="tailoring-workspace-content"
         >
           <div class="tailoring-empty-state">
             Loading suggested changes...
           </div>
         </div>
 
-        <section id="tailoringWorkspaceSavedSelectionCard" class="card tailoring-workspace-subcard hidden">
-          <div class="section-header section-header--compact">
+        <section id="tailoringWorkspaceSavedSelectionCard" class="tailoring-workspace-saved-selection hidden">
+          <div class="tailoring-workspace-saved-selection-header">
             <div>
               <h3>Saved selection</h3>
-              <div class="subtext">
+              <div class="tailoring-workspace-saved-selection-copy">
                 Last persisted suggestion choice for this job/resume pair.
               </div>
             </div>
@@ -839,33 +835,31 @@ def tailoring_workspace(
           <div id="tailoringWorkspaceSavedSelectionShell"></div>
         </section>
       </section>
-      <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
-        <div class="section-header">
-          <div>
-            <h2>Resume preview</h2>
-            <div class="subtext">
-              Review the selected resume variant here while checking suggestion coverage on the left.
-            </div>
-          </div>
-        </div>
-        
+      <section class="tailoring-workspace-pane tailoring-workspace-pane--right">
         <div class="tailoring-preview-shell">
           <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
             <div class="tailoring-workspace-preview-header">
               <div class="tailoring-workspace-preview-header-main">
-                <div class="subtext">Current resume preview</div>
-
                 <div class="tailoring-workspace-preview-title-row">
-                  <div
-                    class="tailoring-workspace-preview-name"
-                    id="tailoringWorkspacePreviewName"
-                  >
-                    {resume_display_safe}
+                  <div class="tailoring-workspace-document-identity">
+                    <svg class="tailoring-workspace-toolbar-icon tailoring-workspace-document-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M6 3.75h8.5L19 8.25v12H6z"></path>
+                      <path d="M14.5 3.75v4.5H19M9 12h6M9 15.5h6"></path>
+                    </svg>
+                    <div>
+                      <div class="tailoring-workspace-document-label">Resume document</div>
+                      <div
+                        class="tailoring-workspace-preview-name"
+                        id="tailoringWorkspacePreviewName"
+                      >
+                        {resume_display_safe}
+                      </div>
+                    </div>
                   </div>
 
                   <button
                     type="button"
-                    class="ghost-btn tailoring-workspace-mode-toggle"
+                    class="tailoring-workspace-mode-toggle"
                     id="tailoringWorkspaceModeToggleBtn"
                     aria-label="Switch to edit mode"
                     aria-pressed="false"
@@ -876,7 +870,11 @@ def tailoring_workspace(
                       data-mode-segment="pdf"
                       aria-hidden="true"
                     >
-                      <span class="tailoring-workspace-icon tailoring-workspace-icon--preview"></span>
+                      <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 3.75h8.5L19 8.25v12H6z"></path>
+                        <path d="M14.5 3.75v4.5H19"></path>
+                      </svg>
+                      <span class="tailoring-workspace-mode-toggle-label">PDF</span>
                     </span>
 
                     <span
@@ -889,13 +887,17 @@ def tailoring_workspace(
                       data-mode-segment="edit"
                       aria-hidden="true"
                     >
-                      <span class="tailoring-workspace-mode-image-icon"></span>
+                      <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m4.5 19.5 3.6-.8 10-10a1.75 1.75 0 0 0-2.5-2.5l-10 10z"></path>
+                        <path d="m14.3 7.5 2.5 2.5"></path>
+                      </svg>
+                      <span class="tailoring-workspace-mode-toggle-label">Edit</span>
                     </span>
                   </button>
                 </div>
 
                 <div
-                  class="subtext tailoring-workspace-selection-status"
+                  class="tailoring-workspace-selection-status"
                   id="tailoringWorkspaceSelectionStatus"
                   aria-live="polite"
                 >
@@ -907,44 +909,44 @@ def tailoring_workspace(
                 <span class="tailoring-workspace-action-tooltip" data-tooltip="Discard selection">
                   <button
                     type="button"
-                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                    class="tailoring-workspace-icon-btn"
                     id="tailoringWorkspaceDiscardBtn"
                     aria-label="Discard selection"
                     disabled
                   >
-                    <span
-                      class="tailoring-workspace-icon tailoring-workspace-icon--discard"
-                      aria-hidden="true"
-                    ></span>
+                    <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4.5 7h15M9 3.75h6L16 7H8zM7 7l.75 13h8.5L17 7"></path>
+                      <path d="M10 10.5v6M14 10.5v6"></path>
+                    </svg>
                   </button>
                 </span>
 
                 <span class="tailoring-workspace-action-tooltip" data-tooltip="Export tailored draft">
                   <button
                     type="button"
-                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                    class="tailoring-workspace-icon-btn"
                     id="tailoringWorkspaceDownloadBtn"
                     aria-label="Export tailored draft"
                   >
-                    <span
-                      class="tailoring-workspace-icon tailoring-workspace-icon--download"
-                      aria-hidden="true"
-                    ></span>
+                    <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 3.75v11.5M7.75 11l4.25 4.25L16.25 11"></path>
+                      <path d="M5 19.5h14"></path>
+                    </svg>
                   </button>
                 </span>
 
                 <span class="tailoring-workspace-action-tooltip" data-tooltip="Save changes">
                   <button
                     type="button"
-                    class="btn-sm tailoring-workspace-icon-btn tailoring-workspace-icon-btn--save"
+                    class="tailoring-workspace-icon-btn tailoring-workspace-icon-btn--save"
                     id="tailoringWorkspaceSaveSelectionBtn"
                     aria-label="Save changes"
                     disabled
                   >
-                    <span
-                      class="tailoring-workspace-icon tailoring-workspace-icon--save"
-                      aria-hidden="true"
-                    ></span>
+                    <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M5 4h12l2 2v14H5z"></path>
+                      <path d="M8 4v6h8V4M8.5 20v-6h7v6"></path>
+                    </svg>
                   </button>
                 </span>
               </div>
@@ -953,7 +955,7 @@ def tailoring_workspace(
               <div class="tailoring-workspace-preview-toolbar-left">
                 <button
                   type="button"
-                  class="ghost-btn btn-sm"
+                  class="tailoring-workspace-zoom-btn"
                   id="tailoringWorkspaceZoomOutBtn"
                   aria-label="Zoom out"
                 >
@@ -962,7 +964,7 @@ def tailoring_workspace(
 
                 <button
                   type="button"
-                  class="ghost-btn btn-sm tailoring-workspace-zoom-value"
+                  class="tailoring-workspace-zoom-btn tailoring-workspace-zoom-value"
                   id="tailoringWorkspaceZoomResetBtn"
                   aria-label="Reset zoom"
                 >
@@ -971,7 +973,7 @@ def tailoring_workspace(
 
                 <button
                   type="button"
-                  class="ghost-btn btn-sm"
+                  class="tailoring-workspace-zoom-btn"
                   id="tailoringWorkspaceZoomInBtn"
                   aria-label="Zoom in"
                 >
@@ -979,7 +981,7 @@ def tailoring_workspace(
                 </button>
               </div>
 
-              <div class="subtext" id="tailoringWorkspacePreviewMeta">
+              <div class="tailoring-workspace-preview-meta" id="tailoringWorkspacePreviewMeta">
                 Loading PDF preview...
               </div>
             </div>
@@ -987,7 +989,7 @@ def tailoring_workspace(
             <div id="tailoringWorkspaceModeBody" class="tailoring-workspace-mode-body">
               <div
                 id="tailoringWorkspaceLiveDraftPreview"
-                class="tailoring-interactive-shell tailoring-workspace-mode-panel hidden"
+                class="tailoring-workspace-mode-panel hidden"
               >
                 <div class="tailoring-empty-state">
                   Loading working draft preview...
@@ -998,7 +1000,7 @@ def tailoring_workspace(
                 class="tailoring-workspace-pdf-scroller tailoring-workspace-mode-panel"
                 id="tailoringWorkspacePdfScroller"
               >
-                <div class="resume-choice-empty" id="tailoringWorkspacePreviewEmpty">
+                <div class="tailoring-workspace-preview-empty" id="tailoringWorkspacePreviewEmpty">
                   Loading PDF preview...
                 </div>
 
@@ -1016,33 +1018,34 @@ def tailoring_workspace(
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
-    <div class="modal-card tailoring-workspace-export-modal-card">
-      <div class="modal-header">
+  <section class="tailoring-workspace-export-modal hidden" id="tailoringWorkspaceExportModal">
+    <div class="tailoring-workspace-export-modal-card" role="dialog" aria-modal="true" aria-labelledby="tailoringWorkspaceExportTitle">
+      <div class="tailoring-workspace-export-header">
         <div>
-          <h3>Export tailored draft</h3>
-          <div class="subtext">
+          <h3 id="tailoringWorkspaceExportTitle">Export tailored draft</h3>
+          <div class="tailoring-workspace-export-header-copy">
             Export is only available from the saved workspace draft.
           </div>
         </div>
         <button
-          class="ghost-btn modal-close-btn"
+          class="tailoring-workspace-export-close-btn"
           id="closeTailoringWorkspaceExportModalBtn"
           type="button"
+          aria-label="Close export dialog"
         >
-          Close
+          <span aria-hidden="true">&#215;</span>
         </button>
       </div>
 
-      <div class="tailoring-workspace-export-shell">
+      <div class="tailoring-workspace-export-shell tailoring-workspace-export-inset">
         <div class="tailoring-workspace-export-summary">
-          <div class="info-pair">
-            <span class="label">Resume variant</span>
+          <div class="tailoring-workspace-export-summary-item">
+            <span class="tailoring-workspace-export-summary-label">Resume variant</span>
             <span id="tailoringWorkspaceExportResume">-</span>
           </div>
 
-          <div class="info-pair">
-            <span class="label">Export status</span>
+          <div class="tailoring-workspace-export-summary-item">
+            <span class="tailoring-workspace-export-summary-label">Export status</span>
             <span id="tailoringWorkspaceExportStatus">-</span>
           </div>
         </div>
@@ -1050,7 +1053,7 @@ def tailoring_workspace(
         <div class="tailoring-workspace-export-format-grid">
           <button
             type="button"
-            class="ghost-btn tailoring-workspace-export-format-btn planning-tailoring-btn--review"
+            class="tailoring-workspace-export-format-btn tailoring-workspace-export-format-btn--pdf"
             id="tailoringWorkspaceExportPdfBtn"
           >
             <span class="tailoring-workspace-export-format-title">
@@ -1059,7 +1062,6 @@ def tailoring_workspace(
                 alt=""
                 class="tailoring-workspace-action-icon"
                 aria-hidden="true"
-                style="width: 34px; height: 34px; min-width: 34px; min-height: 34px; flex: 0 0 34px;"
               />
               <span>PDF</span>
             </span>
@@ -1070,7 +1072,7 @@ def tailoring_workspace(
 
           <button
             type="button"
-            class="ghost-btn tailoring-workspace-export-format-btn planning-tailoring-btn--ready"
+            class="tailoring-workspace-export-format-btn tailoring-workspace-export-format-btn--word"
             id="tailoringWorkspaceExportWordBtn"
           >
             <span class="tailoring-workspace-export-format-title">
@@ -1087,7 +1089,7 @@ def tailoring_workspace(
             </span>
           </button>
         </div>
-        </div>
+      </div>
     </div>
   </section>
   <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
@@ -2012,7 +2014,7 @@ def scan_workspace(
 
                       <div class="scan-workspace-preview-meta-inline">
                         <span
-                          class="subtext tailoring-workspace-selection-status"
+                          class="tailoring-workspace-selection-status"
                           id="scanWorkspacePreviewStatus"
                           aria-live="polite"
                         >

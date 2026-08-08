@@ -784,7 +784,18 @@ button:hover {
   flex-wrap: wrap;
 }
 
-.tailoring-ai-optimize-btn {
+.tailoring-section-title-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tailoring-ai-optimize-btn,
+.tailoring-regenerate-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -798,6 +809,106 @@ button:hover {
   margin-top: 1px;
   text-decoration: none;
   position: relative;
+}
+
+.tailoring-regenerate-btn {
+  width: max-content !important;
+  min-width: 176px;
+  max-width: 100%;
+  min-height: 34px !important;
+  height: 34px;
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: 6px 10px !important;
+  border-radius: 11px !important;
+  border-color: color-mix(in srgb, var(--border-strong) 80%, transparent);
+  background: color-mix(in srgb, var(--surface-1) 78%, transparent);
+  color: var(--text-secondary);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+
+.tailoring-regenerate-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-solid) 42%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent-soft) 52%, var(--surface-1));
+  color: var(--text-primary);
+}
+
+.tailoring-regenerate-btn:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.tailoring-regenerate-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.tailoring-regenerate-btn[aria-busy="true"] {
+  cursor: wait;
+}
+
+.tailoring-regenerate-btn[aria-busy="true"] .tailoring-regenerate-btn-icon {
+  animation: tailoring-regenerate-spin 900ms linear infinite;
+}
+
+.tailoring-regenerate-btn-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  color: currentColor;
+}
+
+@keyframes tailoring-regenerate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tailoring-regenerate-btn[aria-busy="true"] .tailoring-regenerate-btn-icon {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  html[data-theme] .tailoring-workspace-page .tailoring-section-title-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .tailoring-section-title-actions {
+    justify-self: start;
+    flex-wrap: wrap;
+  }
+}
+
+html[data-theme="light"] .tailoring-workspace-page .tailoring-regenerate-btn {
+  border-color: var(--tw-border-strong, var(--border-strong));
+  background: color-mix(in srgb, var(--tw-surface, var(--surface-1)) 88%, transparent);
+  color: var(--tw-muted, var(--text-muted));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"] .tailoring-workspace-page .tailoring-regenerate-btn:hover:not(:disabled) {
+  border-color: var(--tw-primary, var(--accent-solid));
+  background: var(--tw-primary-soft, var(--accent-soft));
+  color: var(--tw-text, var(--text-primary));
+}
+
+html[data-theme="dark"] .tailoring-workspace-page .tailoring-regenerate-btn {
+  border-color: var(--tw-border-strong, var(--border-strong));
+  background: color-mix(in srgb, var(--tw-surface, var(--surface-1)) 82%, transparent);
+  color: var(--tw-muted, var(--text-muted));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme="dark"] .tailoring-workspace-page .tailoring-regenerate-btn:hover:not(:disabled) {
+  border-color: var(--tw-primary, var(--accent-solid));
+  background: var(--tw-primary-soft, var(--accent-soft));
+  color: var(--tw-ink, var(--text-primary));
 }
 
 .tailoring-ai-optimize-btn:hover {

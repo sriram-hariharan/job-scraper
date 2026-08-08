@@ -203,6 +203,7 @@ function setProfilePreferencesChangeState(label, state = "saved") {
 
 function markProfilePreferencesDirty() {
   if (profilePreferenceCheckedValues("selected_role_families").length) profilePreferencesWorkflow?.clearValidationError();
+  profilePreferencesWorkflow?.setCompleted(false);
   setProfilePreferencesStatus("");
   updateProfilePreferencesSummary();
   setProfilePreferencesChangeState("Unsaved changes", "dirty");
@@ -261,6 +262,7 @@ async function loadProfilePreferences() {
   profileState.onboardingRequirements = payload.requirements || {};
   hydrateProfilePreferencesForm(profileState.onboardingPreferences);
   profileState.preferencesLoaded = true;
+  profilePreferencesWorkflow?.setCompleted(true);
   updateProfilePreferencesSummary();
   setProfilePreferencesChangeState("All changes saved", "saved");
   setProfilePreferencesStatus("");
@@ -286,6 +288,7 @@ async function saveProfilePreferences() {
     profileState.onboardingPreferences = payload.preferences || preferences;
     profileState.onboardingRequirements = payload.requirements || profileState.onboardingRequirements || {};
     hydrateProfilePreferencesForm(profileState.onboardingPreferences);
+    profilePreferencesWorkflow?.setCompleted(true);
     updateProfilePreferencesSummary();
     setProfilePreferencesChangeState("All changes saved", "saved");
     setProfilePreferencesStatus("Preferences saved.", "success");

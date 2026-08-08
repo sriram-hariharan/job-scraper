@@ -92,6 +92,41 @@ def test_guided_workflow_has_five_state_preserving_steps_and_review_navigation()
     assert "buttonStep < maximumVisitedStep" not in WORKFLOW_JS
 
 
+def test_saved_profile_preferences_complete_review_and_reset_when_dirty():
+    assert "let savedComplete = false;" in WORKFLOW_JS
+    assert "const completionPercent = savedComplete ? 100 : configuredPercent;" in WORKFLOW_JS
+    assert "if (savedComplete && stepIndex === STEP_COUNT - 1) return \"is-complete\";" in WORKFLOW_JS
+    assert "setCompleted: (completed) => {" in WORKFLOW_JS
+
+    assert "profilePreferencesWorkflow?.setCompleted(false);" in PROFILE_JS
+    assert PROFILE_JS.count("profilePreferencesWorkflow?.setCompleted(true);") == 2
+
+    load_index = PROFILE_JS.index("profileState.preferencesLoaded = true;")
+    load_complete_index = PROFILE_JS.index(
+        "profilePreferencesWorkflow?.setCompleted(true);",
+        load_index,
+    )
+    load_summary_index = PROFILE_JS.index(
+        "updateProfilePreferencesSummary();",
+        load_index,
+    )
+    assert load_index < load_complete_index < load_summary_index
+
+    save_index = PROFILE_JS.index(
+        "hydrateProfilePreferencesForm(profileState.onboardingPreferences);",
+        load_complete_index,
+    )
+    save_complete_index = PROFILE_JS.index(
+        "profilePreferencesWorkflow?.setCompleted(true);",
+        save_index,
+    )
+    save_summary_index = PROFILE_JS.index(
+        "updateProfilePreferencesSummary();",
+        save_index,
+    )
+    assert save_index < save_complete_index < save_summary_index
+
+
 def test_visual_step_state_is_mutually_exclusive_for_forward_and_backward_navigation():
     assert _workflow_states(0) == ["is-active", "is-upcoming", "is-upcoming", "is-upcoming", "is-upcoming"]
     assert _workflow_states(2) == ["is-complete", "is-complete", "is-active", "is-upcoming", "is-upcoming"]

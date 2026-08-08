@@ -211,7 +211,7 @@ def test_provider_preflight_requires_supported_provider_model_and_key():
     ) is True
     assert llm_adjudicator_provider_configured(
         provider="gemini", model="model", environ={"GEMINI_API_KEY": "key"}
-    ) is True
+    ) is False
     assert llm_adjudicator_provider_configured(
         provider="groq", model="model", environ={}
     ) is False

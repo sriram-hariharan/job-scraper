@@ -54,7 +54,6 @@ def llm_adjudicator_provider_configured(
     credential_env = {
         "groq": "GROQ_API_KEY",
         "openai": "OPENAI_API_KEY",
-        "gemini": "GEMINI_API_KEY",
     }.get(safe_provider)
     if not credential_env or not safe_model:
         return False

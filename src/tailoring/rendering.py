@@ -44,6 +44,8 @@ from src.tailoring.selection import (
     _rewrite_direction_verifier_report,
 )
 
+from src.tailoring.score_utils import is_effectively_score_neutral
+
 from src.matching.signal_family_matcher import (
     expandable_aliases_for_supported_term,
     family_for_term,
@@ -6115,6 +6117,42 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
         "llm_substantive_multisignal_reframe",
     }
 
+
+def _live_concrete_neutral_evidence_diagnostics(
+    candidate: Dict[str, Any],
+    evidence_delta: Dict[str, Dict[str, List[str]]],
+) -> Tuple[List[str], List[str]]:
+    supported_by_normalized = {
+        _diagnosis_normalize_term(value): str(value).strip()
+        for value in list(candidate.get("supported_jd_signals", []) or [])
+        if _diagnosis_normalize_term(value)
+    }
+    added_values = _unique_preserve_order(
+        [
+            str(value).strip()
+            for delta in evidence_delta.values()
+            for value in list(delta.get("added", []) or [])
+            if str(value).strip()
+        ]
+    )
+    removed_values = _unique_preserve_order(
+        [
+            str(value).strip()
+            for delta in evidence_delta.values()
+            for value in list(delta.get("removed", []) or [])
+            if str(value).strip()
+        ]
+    )
+    supported_gains = _unique_preserve_order(
+        [
+            supported_by_normalized[normalized]
+            for value in added_values
+            if (normalized := _diagnosis_normalize_term(value))
+            in supported_by_normalized
+        ]
+    )
+    return supported_gains, removed_values
+
 def _materiality_validate_rewrite_candidate(
     payload: Dict[str, Any],
     candidate: Dict[str, Any],
@@ -6183,6 +6221,16 @@ def _materiality_validate_rewrite_candidate(
     patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
     patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
 
+    if patch_generation_method_base == "live_llm_concrete_patch_candidate":
+        (
+            supported_jd_signal_gains,
+            scorer_visible_evidence_regressions,
+        ) = _live_concrete_neutral_evidence_diagnostics(candidate, evidence_delta)
+        candidate["precheck_supported_jd_signal_gains"] = supported_jd_signal_gains
+        candidate["precheck_scorer_visible_evidence_regressions"] = (
+            scorer_visible_evidence_regressions
+        )
+
     cosmetic_non_export_methods = {
         "deterministic_clarity_preserving_compression",
         "deterministic_family_alias_expansion",
@@ -6231,6 +6279,43 @@ def _materiality_validate_rewrite_candidate(
         candidate["materiality_validation_note"] = (
             "Deterministic rewrite reduced the projected frozen score during counterfactual pre-validation, so it cannot remain patch-ready."
         )
+        return candidate
+
+    if (
+        is_effectively_score_neutral(overall_delta)
+        and patch_generation_method_base == "live_llm_concrete_patch_candidate"
+    ):
+        regressions = list(
+            candidate.get("precheck_scorer_visible_evidence_regressions", []) or []
+        )
+        supported_gains = list(
+            candidate.get("precheck_supported_jd_signal_gains", []) or []
+        )
+        if regressions:
+            reason = "scorer_neutral_evidence_regression"
+            note = (
+                "Live concrete rewrite removed scorer-visible evidence without a displayed score lift, so it remains directional."
+            )
+        elif supported_gains:
+            candidate["material_delta_found"] = True
+            candidate["materiality_validation_status"] = "material_candidate"
+            candidate["materiality_validation_note"] = (
+                "Live concrete rewrite added an authoritative supported JD signal without removing scorer-visible evidence."
+            )
+            return candidate
+        else:
+            reason = "scorer_neutral_no_supported_jd_signal_gain"
+            note = (
+                "Live concrete rewrite did not add an authoritative supported JD signal, so a rewrite with no displayed score lift remains directional."
+            )
+
+        candidate["proposal_status"] = "direction_only"
+        candidate["proposal_type"] = "directional_rewrite"
+        candidate["direction_only_reason"] = reason
+        candidate["patch_ready"] = False
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_status"] = reason
+        candidate["materiality_validation_note"] = note
         return candidate
 
     if overall_delta == 0.0 and not evidence_changed:

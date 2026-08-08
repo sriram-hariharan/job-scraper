@@ -139,12 +139,32 @@ def test_auth_workflow_uses_finished_designer_artwork_only():
         assert fake_social not in source
 
 
-def test_generate_suggestions_waits_for_explicit_workspace_action():
+def test_generate_suggestions_success_waits_for_acknowledgement_and_refreshes_planning():
     markup = PLANNING_UI.read_text(encoding="utf-8")
     script = PLANNING_JS.read_text(encoding="utf-8")
+    loader_start = script.index("function setGenerateSuggestionsLoaderState")
+    loader_end = script.index("function closeGenerateSuggestionsLoader", loader_start)
+    loader = script[loader_start:loader_end]
+    success_branch = loader.split('if (state === "success")', 1)[1].split(
+        "return;", 1
+    )[0]
+    acknowledge_start = script.index(
+        "async function acknowledgeGenerateSuggestionsLoader"
+    )
+    acknowledge_end = script.index(
+        "function getPlanningRowFromTailoringDataset", acknowledge_start
+    )
+    acknowledge = script[acknowledge_start:acknowledge_end]
     assert "Preparing tailoring workspace" in markup
     assert "Open Tailoring Workspace" in markup
     assert "Tailoring workspace is ready" in script
+    assert 'state === "success" ? "Okay" : "Cancel"' in loader
+    assert 'openBtn.classList.remove("hidden")' not in success_branch
+    assert 'workflowState === "success"' in acknowledge
+    assert acknowledge.index("closeGenerateSuggestionsLoader()") < acknowledge.index(
+        "await loadPlanningTable({ forceNetwork: true })"
+    )
+    assert "window.location" not in acknowledge
     assert 'window.location.href = generateSuggestionsState.lastWorkspaceUrl' in script
     assert "window.setTimeout(() =>" not in script[script.index("async function handleGenerateSuggestionsClick"):script.index("async function retryGenerateSuggestions")]
     assert "workflow-overlay__panel" in markup

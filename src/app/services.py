@@ -965,6 +965,9 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
             "target_seniority": [],
             "seniority_strict_match": False,
             "preferred_locations": [],
+            "preferred_location_specs": [],
+            "location_strict_match": False,
+            "location_show_others_if_unmatched": False,
             "preferred_skills": [],
             "excluded_keywords": [],
         }
@@ -990,6 +993,9 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
             "target_seniority": [],
             "seniority_strict_match": False,
             "preferred_locations": [],
+            "preferred_location_specs": [],
+            "location_strict_match": False,
+            "location_show_others_if_unmatched": False,
             "preferred_skills": [],
             "excluded_keywords": [],
         }
@@ -999,6 +1005,13 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
         "target_seniority": list(normalized.get("target_seniority", []) or []),
         "seniority_strict_match": bool(normalized.get("seniority_strict_match", False)),
         "preferred_locations": list(normalized.get("preferred_locations", []) or []),
+        "preferred_location_specs": deepcopy(
+            normalized.get("preferred_location_specs", []) or []
+        ),
+        "location_strict_match": bool(normalized.get("location_strict_match", False)),
+        "location_show_others_if_unmatched": bool(
+            normalized.get("location_show_others_if_unmatched", False)
+        ),
         "preferred_skills": list(normalized.get("preferred_skills", []) or []),
         "excluded_keywords": list(normalized.get("excluded_keywords", []) or []),
     }
@@ -8933,7 +8946,6 @@ _PIPELINE_CHILD_ENV_PREFIXES = (
     "TAILOR_",
     "PATCH_REFINEMENT_",
     "GROQ_",
-    "GEMINI_",
     "OPENAI_",
     "GOOGLE_",
     "HF_",
@@ -13749,7 +13761,7 @@ def regenerate_selected_resume_tailoring_payload(
         if (
             os.getenv(
                 "APPLYLENS_SAFE_APP_READY_REWRITE_PROMOTION_ENABLED",
-                "false",
+                "true",
             ).strip().lower()
             == "true"
         ):
@@ -31239,8 +31251,6 @@ def _scan_phrase_default_provider() -> str:
 def _scan_phrase_default_model(provider: str) -> str:
     if provider == "openai":
         return os.getenv("TAILORING_PHRASE_MODEL", "gpt-5-mini")
-    if provider == "gemini":
-        return "gemini-2.5-flash"
     return os.getenv(
         "TAILORING_PHRASE_MODEL",
         os.getenv(
@@ -31469,11 +31479,7 @@ def _generate_scan_phrase_options_with_llm(
     from src.tailoring import llm as tailoring_llm
 
     provider = SCAN_PHRASE_PROVIDER or tailoring_llm.PATCH_REFINEMENT_WRITER_PROVIDER
-    model = SCAN_PHRASE_MODEL or (
-        "gemini-2.5-flash"
-        if provider == "gemini"
-        else tailoring_llm.PATCH_REFINEMENT_WRITER_MODEL
-    )
+    model = SCAN_PHRASE_MODEL or tailoring_llm.PATCH_REFINEMENT_WRITER_MODEL
     fallback_provider = SCAN_PHRASE_FALLBACK_PROVIDER
     fallback_model = SCAN_PHRASE_FALLBACK_MODEL
     system_prompt = (

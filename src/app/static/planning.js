@@ -2255,12 +2255,37 @@ function extractTailoringWorkspaceAnchorText(value, maxWords = 12) {
   return normalized.split(" ").slice(0, maxWords).join(" ");
 }
 
+function getTailoringWorkspaceActionableLanes(payload) {
+  const laneDefinitions = [
+    ["appReady", payload?.app_ready_replacements],
+    ["directApplyOptional", payload?.direct_apply_optional_replacements],
+    ["aiOptimizeOptional", payload?.ai_optimize_optional_replacements],
+  ];
+  const lanes = {
+    appReady: [],
+    directApplyOptional: [],
+    aiOptimizeOptional: [],
+    all: [],
+  };
+  const seenCandidateIds = new Set();
+
+  laneDefinitions.forEach(([laneName, rawItems]) => {
+    (Array.isArray(rawItems) ? rawItems : []).forEach((item) => {
+      const candidateId = getTailoringReplacementCandidateId(item);
+      if (candidateId && seenCandidateIds.has(candidateId)) return;
+      if (candidateId) seenCandidateIds.add(candidateId);
+      lanes[laneName].push(item);
+      lanes.all.push(item);
+    });
+  });
+
+  return lanes;
+}
+
 function getTailoringWorkspaceSelectableItems(payload) {
+  const actionableLanes = getTailoringWorkspaceActionableLanes(payload);
   return [
-    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
-    ...(Array.isArray(payload?.direct_apply_optional_replacements)
-      ? payload.direct_apply_optional_replacements
-      : []),
+    ...actionableLanes.all,
     ...(Array.isArray(payload?.direction_only_replacements)
       ? payload.direction_only_replacements
       : []),
@@ -3236,14 +3261,87 @@ async function persistSelectedResumeChoice(row, selectedResume) {
 async function regenerateSelectedResumeChoice(row, selectedResume, {
   generateLlmTailoring = false,
   refreshLlmTailoring = false,
+  outputDir = "",
 } = {}) {
-  await postJson("/planning/regenerate-selected-resume", {
+  const endpoint = outputDir
+    ? buildGenerateSuggestionsEndpoint({ planning_output_dir: outputDir })
+    : "/planning/regenerate-selected-resume";
+  await postJson(endpoint, {
     queue_rank: row.queue_rank || "",
     job_doc_id: row.job_doc_id || "",
     selected_resume: selectedResume,
     generate_llm_tailoring: generateLlmTailoring,
     refresh_llm_tailoring: refreshLlmTailoring,
   });
+}
+
+function setTailoringWorkspaceRegenerateBusyState(isBusy) {
+  const button = qs("tailoringWorkspaceRegenerateBtn");
+  if (!button) return;
+
+  const busy = Boolean(isBusy);
+  button.disabled = busy;
+  button.dataset.busy = busy ? "true" : "false";
+  button.setAttribute("aria-busy", busy ? "true" : "false");
+
+  const label = button.querySelector(".tailoring-regenerate-btn-label");
+  if (label) {
+    label.textContent = busy ? "Regenerating…" : "Regenerate Suggestions";
+  }
+}
+
+async function regenerateTailoringWorkspaceSuggestions() {
+  const button = qs("tailoringWorkspaceRegenerateBtn");
+  if (!button || button.disabled || button.dataset.busy === "true") return;
+
+  const context = getTailoringWorkspaceContext();
+  const jobDocId = String(context?.jobDocId || "").trim();
+  const selectedResume = normalizeResumeName(context?.resumeName || "");
+  const meta = qs("tailoringWorkspaceMeta");
+
+  if (!jobDocId || !selectedResume) {
+    button.disabled = true;
+    if (meta) {
+      meta.textContent = "Suggestions cannot be regenerated without a job and selected resume.";
+    }
+    return;
+  }
+
+  setTailoringWorkspaceRegenerateBusyState(true);
+
+  try {
+    await regenerateSelectedResumeChoice(
+      { job_doc_id: jobDocId },
+      selectedResume,
+      {
+        generateLlmTailoring: true,
+        refreshLlmTailoring: true,
+        outputDir: context.planningOutputDir,
+      }
+    );
+    await initTailoringWorkspacePage();
+  } catch (err) {
+    if (meta) {
+      meta.textContent = "Could not regenerate suggestions. Your current suggestions are still available.";
+    }
+    showAppError("Failed to regenerate suggestions", err);
+  } finally {
+    setTailoringWorkspaceRegenerateBusyState(false);
+  }
+}
+
+function bindTailoringWorkspaceRegenerateAction() {
+  const button = qs("tailoringWorkspaceRegenerateBtn");
+  if (!button || button.dataset.bound === "true") return;
+
+  button.dataset.bound = "true";
+  const context = getTailoringWorkspaceContext();
+  const hasRequiredIdentity = Boolean(
+    String(context?.jobDocId || "").trim() && normalizeResumeName(context?.resumeName || "")
+  );
+  button.disabled = !hasRequiredIdentity;
+  button.setAttribute("aria-busy", "false");
+  button.addEventListener("click", regenerateTailoringWorkspaceSuggestions);
 }
 
 function setResumeChoiceBusyState(isBusy, statusText = "") {
@@ -3735,7 +3833,6 @@ function titleCase(value) {
 function getProviderLogoUrl(provider) {
   const normalized = String(provider || "").trim().toLowerCase();
   if (normalized === "groq") return "/static/provider_logos/groq_ai.png";
-  if (normalized === "gemini") return "/static/provider_logos/gemini.png";
   return "";
 }
 
@@ -3944,11 +4041,7 @@ function getTailoringWorkspaceReviewFilterItems() {
     return [];
   }
 
-  const appReady = Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : [];
-  const directApplyOptional = Array.isArray(payload?.direct_apply_optional_replacements)
-    ? payload.direct_apply_optional_replacements
-    : [];
-  const actionableCount = appReady.length + directApplyOptional.length;
+  const actionableCount = getTailoringWorkspaceActionableLanes(payload).all.length;
 
   if (activeTab === "free_edit") {
     return [
@@ -4715,12 +4808,7 @@ function collectTailoringWorkspaceSelectableCandidateIds(payload) {
   const ids = [];
   const seen = new Set();
 
-  [
-    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
-    ...(Array.isArray(payload?.direct_apply_optional_replacements)
-      ? payload.direct_apply_optional_replacements
-      : []),
-  ].forEach((item) => {
+  getTailoringWorkspaceActionableLanes(payload).all.forEach((item) => {
     const candidateId = getTailoringReplacementCandidateId(item);
     if (!candidateId || seen.has(candidateId)) return;
     seen.add(candidateId);
@@ -5018,12 +5106,7 @@ function buildTailoringWorkspaceEditableBulletKey(item) {
 }
 
 function collectTailoringWorkspaceEditableBullets(payload) {
-  const readyItems = [
-    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
-    ...(Array.isArray(payload?.direct_apply_optional_replacements)
-      ? payload.direct_apply_optional_replacements
-      : []),
-  ];
+  const readyItems = getTailoringWorkspaceActionableLanes(payload).all;
 
   const reviewItems = Array.isArray(payload?.direction_only_replacements)
     ? payload.direction_only_replacements
@@ -7011,13 +7094,7 @@ function getRenderableTailoringAnchorCards(items, limit = 3) {
 
 function getTailoringWorkspaceSuggestionBuckets() {
   const payload = getTailoringWorkspacePayload();
-
-  const ready = [
-    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
-    ...(Array.isArray(payload?.direct_apply_optional_replacements)
-      ? payload.direct_apply_optional_replacements
-      : []),
-  ];
+  const ready = getTailoringWorkspaceActionableLanes(payload).all;
 
   const reviewGuidance = Array.isArray(payload?.direction_only_replacements)
     ? payload.direction_only_replacements
@@ -7127,14 +7204,11 @@ function updateTailoringWorkspaceMetaSummary(payload) {
 
   const grouped = getTailoringWorkspaceSuggestionBuckets();
 
-  const appReady = Array.isArray(payload.app_ready_replacements) ? payload.app_ready_replacements : [];
-  const directApplyOptional = Array.isArray(payload.direct_apply_optional_replacements)
-    ? payload.direct_apply_optional_replacements
-    : [];
+  const actionableLanes = getTailoringWorkspaceActionableLanes(payload);
   const directionOnly = grouped.reviewGuidance;
   const anchorCards = grouped.anchorCards;
 
-  const actionableCount = appReady.length + directApplyOptional.length;
+  const actionableCount = actionableLanes.all.length;
   const reviewCount = directionOnly.length;
   const anchorCount = anchorCards.length;
   const editableCount = buildTailoringWorkspaceEditableBulletRows(payload).length;
@@ -8905,10 +8979,10 @@ function renderTailoringInteractiveSummaryInto(
   }
 
   const summary = payload.final_replacement_summary || {};
-  const appReady = Array.isArray(payload.app_ready_replacements) ? payload.app_ready_replacements : [];
-  const directApplyOptional = Array.isArray(payload.direct_apply_optional_replacements)
-    ? payload.direct_apply_optional_replacements
-    : [];
+  const actionableLanes = getTailoringWorkspaceActionableLanes(payload);
+  const appReady = actionableLanes.appReady;
+  const directApplyOptional = actionableLanes.directApplyOptional;
+  const aiOptimizeOptional = actionableLanes.aiOptimizeOptional;
   const directionOnly = Array.isArray(payload.direction_only_replacements) ? payload.direction_only_replacements : [];
   const anchorCards = Array.isArray(payload.anchor_cards) ? payload.anchor_cards : [];
   const decisions = Array.isArray(payload.final_replacement_decisions) ? payload.final_replacement_decisions : [];
@@ -8917,6 +8991,7 @@ function renderTailoringInteractiveSummaryInto(
     decisions.length ||
     appReady.length ||
     directApplyOptional.length ||
+    aiOptimizeOptional.length ||
     directionOnly.length ||
     anchorCards.length;
 
@@ -8971,11 +9046,24 @@ function renderTailoringInteractiveSummaryInto(
       })
     : "";
 
+  const aiOptimizeOptionalHtml = aiOptimizeOptional.length
+    ? renderReplacementDecisionSection({
+        title: "AI optimize optional",
+        subtitle: "AI-assisted rewrites available for human review and selection.",
+        items: aiOptimizeOptional,
+        emptyLabel: "No AI-assisted optional improvements.",
+        tone: "neutral",
+        mode: "replacement",
+        selectionEnabled,
+        selectedCandidateIds,
+      })
+    : "";
+
   const normalizedBucket = String(bucketFilter || "").trim().toLowerCase();
 
   let bucketHtml = "";
   if (normalizedBucket === "ready") {
-    bucketHtml = `${readyHtml}${optionalHtml}`;
+    bucketHtml = `${readyHtml}${optionalHtml}${aiOptimizeOptionalHtml}`;
     if (!bucketHtml.trim()) {
       bucketHtml = `
         <section class="tailoring-section-block">
@@ -8995,7 +9083,7 @@ function renderTailoringInteractiveSummaryInto(
       `;
     }
   } else {
-    bucketHtml = `${readyHtml}${optionalHtml}${recommendedHtml}${anchorHtml}`;
+    bucketHtml = `${readyHtml}${optionalHtml}${aiOptimizeOptionalHtml}${recommendedHtml}${anchorHtml}`;
   }
 
   const diagnosticsHtml =
@@ -12502,7 +12590,7 @@ function setGenerateSuggestionsLoaderState(state, {
   if (retryBtn) retryBtn.classList.add("hidden");
   if (openBtn) openBtn.classList.add("hidden");
   if (cancelBtn) {
-    cancelBtn.textContent = state === "success" ? "Close" : "Cancel";
+    cancelBtn.textContent = state === "success" ? "Okay" : "Cancel";
     cancelBtn.disabled = false;
   }
 
@@ -12526,7 +12614,6 @@ function setGenerateSuggestionsLoaderState(state, {
     if (titleEl) titleEl.textContent = "Tailoring workspace is ready";
     if (badgeEl) badgeEl.textContent = "Ready";
     if (textEl) textEl.textContent = "Your suggestions and review packet are ready for inspection.";
-    if (openBtn && workspaceUrl) openBtn.classList.remove("hidden");
     return;
   }
 
@@ -12555,6 +12642,13 @@ function closeGenerateSuggestionsLoader() {
   const returnFocus = generateSuggestionsState.returnFocus;
   generateSuggestionsState.returnFocus = null;
   if (returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus();
+}
+
+async function acknowledgeGenerateSuggestionsLoader() {
+  const wasSuccessful = getGenerateSuggestionsLoader()?.dataset.workflowState === "success";
+  closeGenerateSuggestionsLoader();
+  if (!wasSuccessful) return;
+  await loadPlanningTable({ forceNetwork: true });
 }
 
 function getPlanningRowFromTailoringDataset(button) {
@@ -13279,7 +13373,7 @@ function attachPlanningHandlers() {
 
   qs("closeResumeChoiceModalBtn").addEventListener("click", closeResumeChoiceModal);
   qs("resumeChoiceCancelBtn").addEventListener("click", closeResumeChoiceModal);
-  qs("generateSuggestionsCancelBtn").addEventListener("click", closeGenerateSuggestionsLoader);
+  qs("generateSuggestionsCancelBtn").addEventListener("click", acknowledgeGenerateSuggestionsLoader);
   qs("generateSuggestionsRetryBtn").addEventListener("click", async () => {
     try {
       await retryGenerateSuggestions();
@@ -13419,6 +13513,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     bindTailoringWorkspaceSelectionHandlers();
     bindTailoringWorkspaceActionBar();
     bindTailoringWorkspaceExportModal();
+    bindTailoringWorkspaceRegenerateAction();
     await initTailoringWorkspacePage();
     return;
   }

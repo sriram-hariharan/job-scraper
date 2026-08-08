@@ -45,6 +45,7 @@
     const roleError = form.querySelector("[data-preferences-role-error]");
     let currentStep = 0;
     let maximumVisitedStep = 0;
+    let savedComplete = false;
 
     function values() {
       if (typeof options.getValues !== "function") return {};
@@ -76,13 +77,14 @@
       const fallback = strict && payload.location_show_others_if_unmatched === true;
       const skills = uniqueStrings(payload.preferred_skills);
       const excluded = uniqueStrings(payload.excluded_keywords);
-      const completionPercent = (
+      const configuredPercent = (
         (roleNames.length ? 30 : 0)
         + (seniorityNames.length ? 20 : 0)
         + (locationNames.length ? 25 : 0)
         + (skills.length ? 15 : 0)
         + (excluded.length ? 10 : 0)
       );
+      const completionPercent = savedComplete ? 100 : configuredPercent;
 
       return {
         roles: summaryText(roleNames, "None selected", 3),
@@ -103,9 +105,29 @@
         .forEach((node) => { node.textContent = value; });
     }
 
+    function workflowStepVisualState(step) {
+      const stepIndex = Number(step);
+      if (savedComplete && stepIndex === STEP_COUNT - 1) return "is-complete";
+      return stepVisualState(stepIndex, currentStep);
+    }
+
+    function updateStepButtons(nextStep = currentStep) {
+      stepButtons.forEach((button) => {
+        const buttonStep = Number(button.dataset.preferencesStepTarget);
+        const state = stepVisualState(buttonStep, nextStep);
+        const visualState = savedComplete && buttonStep === STEP_COUNT - 1
+          ? "is-complete"
+          : state;
+        button.classList.toggle("is-active", visualState === "is-active");
+        button.classList.toggle("is-complete", visualState === "is-complete");
+        button.classList.toggle("is-upcoming", visualState === "is-upcoming");
+        button.setAttribute("aria-current", visualState === "is-active" ? "step" : "false");
+      });
+    }
+
     function updateStepSummaries() {
       const summaries = Array.from({ length: STEP_COUNT }, (_, index) => {
-        const state = stepVisualState(index, currentStep);
+        const state = workflowStepVisualState(index);
         if (state === "is-active") return "In progress";
         if (state === "is-complete") return "Complete";
         return "Not started";
@@ -139,14 +161,7 @@
         panel.classList.toggle("is-active", isActive);
       });
 
-      stepButtons.forEach((button) => {
-        const buttonStep = Number(button.dataset.preferencesStepTarget);
-        const state = stepVisualState(buttonStep, nextStep);
-        button.classList.toggle("is-active", state === "is-active");
-        button.classList.toggle("is-complete", state === "is-complete");
-        button.classList.toggle("is-upcoming", state === "is-upcoming");
-        button.setAttribute("aria-current", state === "is-active" ? "step" : "false");
-      });
+      updateStepButtons(nextStep);
 
       if (backButton) backButton.disabled = nextStep === 0;
       if (nextButton) nextButton.classList.toggle("hidden", nextStep === STEP_COUNT - 1);
@@ -199,6 +214,11 @@
       clearValidationError,
       getCurrentStep: () => currentStep,
       getMaximumVisitedStep: () => maximumVisitedStep,
+      setCompleted: (completed) => {
+        savedComplete = Boolean(completed);
+        updateStepButtons();
+        update();
+      },
     };
   }
 

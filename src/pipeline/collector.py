@@ -11,6 +11,7 @@ from uuid import uuid4
 from pathlib import Path
 
 from src.config.seniority_policy import normalize_target_seniority_ids
+from src.pipeline.location_preferences import apply_location_preference_policy
 from src.pipeline.runtime_status import (
     PREFERENCE_RUNTIME_SCHEMA_VERSION,
     complete_stage,
@@ -263,11 +264,26 @@ _PREFERENCE_ENV_NAMES = {
     "excluded_keywords": "JOB_STACK_EXCLUDED_KEYWORDS",
 }
 
+_LOCATION_PREFERENCE_FIELDS = (
+    "preferred_location_specs",
+    "location_strict_match",
+    "location_show_others_if_unmatched",
+)
+
+_PREFERENCE_SNAPSHOT_FIELDS = (
+    *PREFERENCE_LIST_FIELDS,
+    "seniority_strict_match",
+    *_LOCATION_PREFERENCE_FIELDS,
+)
+
 
 def _empty_pipeline_preferences() -> Dict[str, Any]:
     return {
         **{field_name: [] for field_name in PREFERENCE_LIST_FIELDS},
         "seniority_strict_match": False,
+        "preferred_location_specs": [],
+        "location_strict_match": False,
+        "location_show_others_if_unmatched": False,
     }
 
 
@@ -335,6 +351,16 @@ def _normalized_preference_snapshot(preferences: Any) -> Dict[str, Any]:
         preferences["seniority_strict_match"], bool
     ):
         raise ValueError("Preference field seniority_strict_match must be a boolean.")
+    if "preferred_location_specs" in preferences and not isinstance(
+        preferences["preferred_location_specs"], list
+    ):
+        raise ValueError("Preference field preferred_location_specs must be a list.")
+    for field_name in (
+        "location_strict_match",
+        "location_show_others_if_unmatched",
+    ):
+        if field_name in preferences and not isinstance(preferences[field_name], bool):
+            raise ValueError(f"Preference field {field_name} must be a boolean.")
 
     normalized = validate_onboarding_preferences_payload(
         {
@@ -346,12 +372,30 @@ def _normalized_preference_snapshot(preferences: Any) -> Dict[str, Any]:
             "seniority_strict_match": preferences.get(
                 "seniority_strict_match", False
             ),
+            "preferred_location_specs": preferences.get(
+                "preferred_location_specs"
+            ),
+            "location_strict_match": preferences.get(
+                "location_strict_match", False
+            ),
+            "location_show_others_if_unmatched": preferences.get(
+                "location_show_others_if_unmatched", False
+            ),
         }
     )
     return {
         field_name: list(normalized.get(field_name, []) or [])
         for field_name in PREFERENCE_LIST_FIELDS
-    } | {"seniority_strict_match": normalized["seniority_strict_match"]}
+    } | {
+        "seniority_strict_match": normalized["seniority_strict_match"],
+        "preferred_location_specs": deepcopy(
+            normalized["preferred_location_specs"]
+        ),
+        "location_strict_match": normalized["location_strict_match"],
+        "location_show_others_if_unmatched": normalized[
+            "location_show_others_if_unmatched"
+        ],
+    }
 
 
 def _preference_snapshot_sha256(preferences: Dict[str, Any]) -> str:
@@ -404,7 +448,7 @@ def _load_launch_config_preference_snapshot(
 
     present_fields = {
         field_name
-        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
+        for field_name in _PREFERENCE_SNAPSHOT_FIELDS
         if field_name in raw_preferences
     }
     item_counts = {
@@ -413,7 +457,7 @@ def _load_launch_config_preference_snapshot(
             if isinstance(normalized[field_name], list)
             else int(normalized[field_name])
         )
-        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
+        for field_name in _PREFERENCE_SNAPSHOT_FIELDS
     }
     logger.info(
         "Launch preference snapshot loaded fields=%s item_counts=%s",
@@ -451,6 +495,40 @@ def resolve_pipeline_preference_runtime(
     else:
         sources["seniority_strict_match"] = "defaults"
 
+    if "JOB_STACK_PREFERRED_LOCATIONS" in env_map:
+        normalized_locations = _normalized_preference_snapshot(
+            {"preferred_locations": effective["preferred_locations"]}
+        )
+        effective["preferred_locations"] = normalized_locations[
+            "preferred_locations"
+        ]
+        effective["preferred_location_specs"] = normalized_locations[
+            "preferred_location_specs"
+        ]
+        sources["preferred_location_specs"] = "explicit_override"
+    elif launch_status == "loaded" and (
+        "preferred_locations" in launch_fields
+        or "preferred_location_specs" in launch_fields
+    ):
+        effective["preferred_locations"] = requested["preferred_locations"]
+        effective["preferred_location_specs"] = deepcopy(
+            requested["preferred_location_specs"]
+        )
+        sources["preferred_locations"] = "launch_config"
+        sources["preferred_location_specs"] = "launch_config"
+    else:
+        sources["preferred_location_specs"] = "defaults"
+
+    for field_name in (
+        "location_strict_match",
+        "location_show_others_if_unmatched",
+    ):
+        if launch_status == "loaded" and field_name in launch_fields:
+            effective[field_name] = requested[field_name]
+            sources[field_name] = "launch_config"
+        else:
+            sources[field_name] = "defaults"
+
     effective_sha256 = _preference_snapshot_sha256(effective)
     item_counts = {
         field_name: (
@@ -458,7 +536,7 @@ def resolve_pipeline_preference_runtime(
             if isinstance(effective[field_name], list)
             else int(effective[field_name])
         )
-        for field_name in (*PREFERENCE_LIST_FIELDS, "seniority_strict_match")
+        for field_name in _PREFERENCE_SNAPSHOT_FIELDS
     }
     source_counts = dict(Counter(sources.values()))
     logger.info(
@@ -474,6 +552,37 @@ def resolve_pipeline_preference_runtime(
         "effective_sha256": effective_sha256,
         "sources": sources,
     }
+
+
+def _apply_pipeline_location_preference_policy(
+    jobs: List[Dict[str, Any]],
+    preferences: Dict[str, Any],
+) -> Dict[str, Any]:
+    location_specs = preferences.get("preferred_location_specs", []) or []
+    strict_match = bool(preferences.get("location_strict_match", False))
+    show_others = bool(
+        preferences.get("location_show_others_if_unmatched", False)
+    )
+    if not location_specs:
+        return {
+            "retained_jobs": list(jobs),
+            "rejected_jobs": [],
+            "diagnostics": {
+                "input_count": len(jobs),
+                "matched_count": 0,
+                "retained_count": len(jobs),
+                "rejected_count": 0,
+                "strict_match": strict_match,
+                "show_others_if_unmatched": show_others,
+                "fallback_activated": False,
+            },
+        }
+    return apply_location_preference_policy(
+        jobs,
+        location_specs,
+        strict_match,
+        show_others,
+    )
 
 
 def _truthy_env_value(value: Any) -> bool:
@@ -2761,6 +2870,32 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("FILTER PIPELINE", logger)
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
 
+    location_policy_result = _apply_pipeline_location_preference_policy(
+        all_jobs,
+        pipeline_preferences,
+    )
+    filtering_input_jobs = location_policy_result["retained_jobs"]
+    location_policy_diagnostics = location_policy_result["diagnostics"]
+    logger.info(
+        "Location preference policy: %s",
+        json.dumps(
+            {
+                field_name: location_policy_diagnostics[field_name]
+                for field_name in (
+                    "input_count",
+                    "matched_count",
+                    "retained_count",
+                    "rejected_count",
+                    "strict_match",
+                    "show_others_if_unmatched",
+                    "fallback_activated",
+                )
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+
     role_title_audit_rows = [] if _is_user_pipeline_mode() and selected_role_families else None
     deterministic_stage_results: Dict[str, Any] = {"drop_pct": 0}
 
@@ -2848,6 +2983,27 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
                 ),
                 "filter_excluded_keyword": (
                     completed_filter_diagnostics.get("excluded_keyword", 0)
+                ),
+                "location_preference_input_count": location_policy_diagnostics[
+                    "input_count"
+                ],
+                "location_preference_matched_count": location_policy_diagnostics[
+                    "matched_count"
+                ],
+                "location_preference_retained_count": location_policy_diagnostics[
+                    "retained_count"
+                ],
+                "location_preference_rejected_count": location_policy_diagnostics[
+                    "rejected_count"
+                ],
+                "location_preference_strict_match": location_policy_diagnostics[
+                    "strict_match"
+                ],
+                "location_preference_show_others_if_unmatched": (
+                    location_policy_diagnostics["show_others_if_unmatched"]
+                ),
+                "location_preference_fallback_activated": (
+                    location_policy_diagnostics["fallback_activated"]
                 ),
                 "ashby_timestamp_cache_hit": (
                     completed_filter_diagnostics.get(
@@ -2942,7 +3098,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     prefilter_dedupe_graph_result = (
         _maybe_execute_authoritative_prefilter_dedupe_graph(
-            jobs=all_jobs,
+            jobs=filtering_input_jobs,
             selected_role_families=selected_role_families or None,
             target_seniority=pipeline_preferences["target_seniority"],
             seniority_strict_match=bool(pipeline_preferences.get("seniority_strict_match", False)),
@@ -2957,7 +3113,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
     if prefilter_dedupe_graph_result is None:
         filter_result = filter_jobs(
-            all_jobs,
+            filtering_input_jobs,
             selected_role_families=selected_role_families or None,
             target_seniority=pipeline_preferences["target_seniority"],
             seniority_strict_match=bool(pipeline_preferences.get("seniority_strict_match", False)),
@@ -3245,11 +3401,11 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     provider_summary = get_provider_metrics()
     logger.info(
-        "LLM PROVIDER SUMMARY | primary_attempts=%s | fallback_attempts=%s | groq_calls=%s | gemini_calls=%s | fallback_successes=%s | provider_failures=%s",
+        "LLM PROVIDER SUMMARY | primary_attempts=%s | fallback_attempts=%s | groq_calls=%s | openai_calls=%s | fallback_successes=%s | provider_failures=%s",
         provider_summary["primary_attempts"],
         provider_summary["fallback_attempts"],
         provider_summary["groq_calls"],
-        provider_summary["gemini_calls"],
+        provider_summary["openai_calls"],
         provider_summary["fallback_successes"],
         provider_summary["provider_failures"],
     )

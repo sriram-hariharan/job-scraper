@@ -744,22 +744,35 @@ def tailoring_workspace(
             <div class="tailoring-section-title-row">
               <h2>Suggested changes</h2>
 
-              <a
-                id="tailoringWorkspaceOpenScanBtn"
-                class="ghost-btn tailoring-ai-optimize-btn"
-                href="{scan_href_safe}"
-              >
-                <span class="tailoring-ai-optimize-btn-icon-wrap" aria-hidden="true">
-                  <img
-                    class="tailoring-ai-optimize-btn-icon"
-                    src="/static/media/ai-img.svg"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                </span>
+              <div class="tailoring-section-title-actions">
+                <a
+                  id="tailoringWorkspaceOpenScanBtn"
+                  class="ghost-btn tailoring-ai-optimize-btn"
+                  href="{scan_href_safe}"
+                >
+                  <span class="tailoring-ai-optimize-btn-icon-wrap" aria-hidden="true">
+                    <img
+                      class="tailoring-ai-optimize-btn-icon"
+                      src="/static/media/ai-img.svg"
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </span>
 
-                <span class="tailoring-ai-optimize-btn-label">AI optimize</span>
-              </a>
+                  <span class="tailoring-ai-optimize-btn-label">AI optimize</span>
+                </a>
+
+                <button
+                  id="tailoringWorkspaceRegenerateBtn"
+                  class="ghost-btn tailoring-regenerate-btn"
+                  type="button"
+                  title="Generate a fresh set of AI tailoring suggestions"
+                  aria-label="Generate a fresh set of AI tailoring suggestions"
+                >
+                  <span class="tailoring-regenerate-btn-icon" aria-hidden="true">&#8635;</span>
+                  <span class="tailoring-regenerate-btn-label">Regenerate Suggestions</span>
+                </button>
+              </div>
             </div>
 
             <div class="subtext" id="tailoringWorkspaceMeta">

@@ -35,10 +35,14 @@ from src.tailoring.selection import (
 
 from src.config.consts import (
     ACTION_VERB_HINTS,
+    ANALYTICS_ML_SIGNAL_PATTERNS,
+    DOMAIN_SIGNAL_PATTERNS,
+    EXPERIMENTATION_SIGNAL_PATTERNS,
     TAILORING_ROLE_FAMILY_FALLBACK,
     TAILORING_ROLE_FRAMING_PROFILES,
     TAILORING_STYLE_ONLY_CHURN_HINTS,
     TAILORING_WRITER_STRONG_GAIN_TARGETS,
+    TOOLING_SIGNAL_PATTERNS,
     _SKILL_ALIASES,
 )
 
@@ -1694,6 +1698,7 @@ def _obvious_unbacked_patch_tokens(
     row: Dict[str, Any],
     payload: Dict[str, Any],
 ) -> List[str]:
+    del payload
     evidence_text = " ".join(
         str(value or "")
         for value in (
@@ -1702,27 +1707,225 @@ def _obvious_unbacked_patch_tokens(
             row.get("overlaps", ""),
             row.get("supported_terms", ""),
             row.get("semantic_terms", ""),
-            payload.get("job", {}).get("title", ""),
-            payload.get("job", {}).get("company", ""),
-            payload.get("summary", {}).get("matched_required", ""),
-            payload.get("summary", {}).get("matched_preferred", ""),
-            payload.get("summary", {}).get("matched_terms", ""),
         )
-    ).lower()
-    evidence_tokens = set(re.findall(r"[A-Za-z][A-Za-z0-9+#./-]{2,}", evidence_text))
-    patch_tokens = re.findall(r"\b[A-Z][A-Za-z0-9+#./-]{2,}\b|\b[A-Z]{2,}\b", patch_text)
-    allowed_common = {
-        "Built", "Led", "Managed", "Created", "Developed", "Delivered",
-        "Improved", "Supported", "Drove", "Designed", "Implemented",
-        "Analyzed", "Used", "Using", "Partnered", "Collaborated",
+    )
+    style_only_lead = _is_style_only_live_lead_substitution(patch_text, evidence_text)
+    patch_lead = _patch_refinement_lead_token(patch_text)
+    unbacked: List[str] = []
+    unbacked_keys = set()
+
+    def _append_unbacked(value: str) -> None:
+        text = _text(value)
+        key = text.lower()
+        if not text or not key or key in unbacked_keys:
+            return
+        unbacked_keys.add(key)
+        unbacked.append(text)
+
+    supported_values = (
+        list(row.get("supported_terms", []) or [])
+        + list(row.get("overlaps", []) or [])
+    )
+    grounded_alias_text = " ".join(
+        variant
+        for value in supported_values
+        for variant in _patch_refinement_term_variants(_text(value))
+    )
+    grounded_word_stems = {
+        _live_claim_word_stem(token)
+        for token in re.findall(
+            r"[A-Za-z][A-Za-z0-9+#./-]*",
+            f"{evidence_text} {grounded_alias_text}",
+        )
+        if _live_claim_word_stem(token)
     }
-    unbacked = []
-    for token in patch_tokens:
-        if token in allowed_common:
+    for term in _LIVE_CLAIM_BEARING_SIGNAL_TERMS:
+        if (
+            _live_text_contains_term(patch_text, term)
+            and not _live_text_contains_term(evidence_text, term)
+            and not _live_claim_term_is_grounded(term, grounded_word_stems)
+        ):
+            _append_unbacked(term)
+
+    action_stems = _live_action_word_stems()
+    patch_words = re.findall(r"[A-Za-z][A-Za-z0-9+#./-]*", patch_text)
+    for index, token in enumerate(patch_words):
+        token_lower = token.lower()
+        token_stem = _live_claim_word_stem(token)
+        token_action_stem = _live_action_word_stem(token)
+        if not token_stem or token_stem in grounded_word_stems:
             continue
-        if token.lower() not in evidence_tokens:
-            unbacked.append(token)
-    return _unique_preserve_order(unbacked)[:8]
+        if (
+            _is_live_style_connective_word(patch_words, index)
+            or token_action_stem in action_stems
+        ):
+            continue
+        if style_only_lead and token_lower == patch_lead:
+            continue
+        _append_unbacked(token)
+
+    evidence_numbers = {
+        token.lower() for token in _patch_refinement_numeric_tokens(evidence_text)
+    }
+    for token in _patch_refinement_numeric_tokens(patch_text):
+        if token.lower() not in evidence_numbers:
+            _append_unbacked(token)
+
+    return unbacked[:8]
+
+
+def _live_action_word_stem(value: str) -> str:
+    token = _patch_refinement_lead_token(value)
+    if token.endswith("ied") and len(token) > 4:
+        return token[:-3] + "y"
+    if token.endswith("ying") and len(token) > 5:
+        return token[:-4] + "y"
+    if token.endswith("ing") and len(token) > 5:
+        return token[:-3]
+    if token.endswith("ed") and len(token) > 4:
+        return token[:-2]
+    return token
+
+
+def _live_claim_word_stem(value: str) -> str:
+    token = _patch_refinement_lead_token(value)
+    if token.endswith("ication") and len(token) > 8:
+        return token[:-7]
+    if token.endswith("ied") and len(token) > 4:
+        token = token[:-3] + "y"
+    elif token.endswith("ying") and len(token) > 5:
+        token = token[:-4] + "y"
+    elif token.endswith("tion") and len(token) > 5:
+        token = token[:-3]
+    elif token.endswith("ysis") and len(token) > 6:
+        token = token[:-4] + "yz"
+    elif token.endswith("ment") and len(token) > 6:
+        token = token[:-4]
+    elif token.endswith("ing") and len(token) > 5:
+        token = token[:-3]
+    elif token.endswith("ed") and len(token) > 4:
+        token = token[:-2]
+    elif token.endswith("s") and len(token) > 4:
+        token = token[:-1]
+    if token.endswith("ify") and len(token) > 4:
+        token = token[:-1]
+    if token.endswith("e") and len(token) > 4:
+        token = token[:-1]
+    return token
+
+
+def _live_claim_term_is_grounded(term: str, grounded_word_stems: set) -> bool:
+    term_stems = {
+        _live_claim_word_stem(token)
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9+#./-]*", str(term or ""))
+        if token.lower() not in _LIVE_STYLE_CONNECTIVE_WORDS
+        and _live_claim_word_stem(token)
+    }
+    return bool(term_stems) and term_stems.issubset(grounded_word_stems)
+
+
+def _live_action_word_stems() -> set:
+    return {
+        _live_action_word_stem(value)
+        for value in (
+            list(ACTION_VERB_HINTS)
+            + list(TAILORING_STYLE_ONLY_CHURN_HINTS)
+        )
+        if _live_action_word_stem(value)
+    }
+
+
+def _is_style_only_live_lead_substitution(
+    patch_text: str,
+    evidence_text: str,
+) -> bool:
+    patch_lead = _patch_refinement_lead_token(patch_text)
+    evidence_lead = _patch_refinement_lead_token(evidence_text)
+    if not patch_lead or not evidence_lead or patch_lead == evidence_lead:
+        return False
+
+    action_stems = _live_action_word_stems()
+    evidence_stem = _live_action_word_stem(evidence_lead)
+    patch_stem = _live_action_word_stem(patch_lead)
+    if evidence_stem not in action_stems:
+        return False
+    if patch_stem in action_stems:
+        return True
+
+    patch_words = re.findall(r"[A-Za-z][A-Za-z-]+", str(patch_text or "").lower())
+    return bool(
+        patch_lead.endswith("ing")
+        and len(patch_words) > 1
+        and patch_words[1] in {"in", "through", "using", "while"}
+        and patch_lead not in _LIVE_CLAIM_BEARING_SIGNAL_TERMS
+    )
+
+
+def _live_text_contains_term(text: str, term: str) -> bool:
+    raw_term = _text(term).lower()
+    if len(raw_term) < 2:
+        return False
+    pattern = re.escape(raw_term).replace(r"\ ", r"\s+")
+    return bool(
+        re.search(
+            rf"(?<![A-Za-z0-9]){pattern}(?![A-Za-z0-9])",
+            str(text or "").lower(),
+        )
+    )
+
+
+_LIVE_CLAIM_BEARING_SIGNAL_TERMS = tuple(
+    sorted(
+        {
+            _text(value).lower()
+            for value in (
+                list(TOOLING_SIGNAL_PATTERNS)
+                + list(ANALYTICS_ML_SIGNAL_PATTERNS)
+                + list(EXPERIMENTATION_SIGNAL_PATTERNS)
+                + list(DOMAIN_SIGNAL_PATTERNS)
+            )
+            if len(_text(value)) >= 2
+        },
+        key=lambda value: (-len(value), value),
+    )
+)
+
+_LIVE_STYLE_CONNECTIVE_WORDS = {
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "into",
+    "of", "on", "the", "to", "using", "via", "with", "while", "through",
+}
+
+_LIVE_RESULT_CONNECTIVE_STEMS = {"lead", "result", "yield"}
+
+
+def _is_live_style_connective_word(words: List[str], index: int) -> bool:
+    token = str(words[index] or "").lower()
+    if token in _LIVE_STYLE_CONNECTIVE_WORDS:
+        return True
+    next_token = str(words[index + 1] or "").lower() if index + 1 < len(words) else ""
+    return bool(
+        token.endswith("ing")
+        and _live_claim_word_stem(token) in _LIVE_RESULT_CONNECTIVE_STEMS
+        and next_token in {"in", "to"}
+    )
+
+
+def _authoritative_live_supported_jd_signals(
+    row: Dict[str, Any],
+) -> List[str]:
+    signals: List[str] = []
+    seen = set()
+    for value in (
+        list(row.get("supported_terms", []) or [])
+        + list(row.get("overlaps", []) or [])
+    ):
+        text = _text(value)
+        normalized = normalize_signal_text(text)
+        if not text or not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        signals.append(text)
+    return _unique_preserve_order(signals)
 
 
 def _normalize_live_concrete_replacement_candidates(
@@ -1822,6 +2025,7 @@ def _normalize_live_concrete_replacement_candidates(
             or _text(item.get("original_text", ""))
         )
         source_label = _text(item.get("source", "")) or _display_row_source(row)
+        supported_jd_signals = _authoritative_live_supported_jd_signals(row)
 
         valid.append(
             {
@@ -1851,6 +2055,7 @@ def _normalize_live_concrete_replacement_candidates(
                     if _text(value)
                 ],
                 "unsupported_risk_signals": [],
+                "supported_jd_signals": supported_jd_signals,
                 "likely_impacted_dimensions": [],
                 "llm_refinement_used": True,
                 "live_concrete_candidate_validation_status": "accepted_for_materiality_gate",

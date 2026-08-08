@@ -537,7 +537,9 @@ html[data-theme="dark"] .executive-queue-table-card {
   --filter-menu-accent-soft: #eff6ff;
   position: fixed;
   z-index: 12000;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 6px;
   border: 1px solid var(--filter-menu-border);
   border-radius: 7px;
@@ -584,6 +586,7 @@ html[data-theme="dark"] .shared-filter-select__menu {
 
 .shared-filter-select__options {
   min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--filter-menu-border) transparent;

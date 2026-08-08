@@ -42,7 +42,7 @@ _FIXED_CONFIGURATION = {
     "LLM_PROVIDER": "groq",
     "LLM_MODEL": "offline-placeholder-model",
     "LLM_FALLBACK_ENABLED": "false",
-    "LLM_FALLBACK_PROVIDER": "gemini",
+    "LLM_FALLBACK_PROVIDER": "openai",
     "LLM_FALLBACK_MODEL": "offline-placeholder-fallback",
 }
 _MESSAGES = [{"role": "user", "content": "offline synthetic compatibility probe"}]

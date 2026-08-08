@@ -959,6 +959,10 @@ body .preferences-workflow .preferences-command-header .subtext {
   gap: 8px;
 }
 
+.preferences-workflow .preferences-seniority-group + .preference-location-policy {
+  margin-top: 12px;
+}
+
 .preferences-workflow .preference-policy-option {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) auto;

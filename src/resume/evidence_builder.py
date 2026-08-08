@@ -1023,6 +1023,7 @@ def rebuild_resume_evidence_from_structured_entries(
         structured_text_parts.append("Skills: " + ", ".join(preserved_skills))
 
     structured_text = "\n".join(part for part in structured_text_parts if part).strip()
+    document_text = str(getattr(document, "normalized_text", "") or "")
 
     (
         methods,
@@ -1048,10 +1049,10 @@ def rebuild_resume_evidence_from_structured_entries(
         education_entries=refreshed_education_entries,
         experience_entries=refreshed_experience_entries,
         project_entries=refreshed_project_entries,
-        domain_signals=_extract_pattern_hits(structured_text, DOMAIN_SIGNAL_PATTERNS),
-        analytics_ml_signals=_extract_pattern_hits(structured_text, ANALYTICS_ML_SIGNAL_PATTERNS),
-        experimentation_signals=_extract_pattern_hits(structured_text, EXPERIMENTATION_SIGNAL_PATTERNS),
-        tooling_signals=_extract_pattern_hits(structured_text, TOOLING_SIGNAL_PATTERNS),
+        domain_signals=_extract_pattern_hits(document_text, DOMAIN_SIGNAL_PATTERNS),
+        analytics_ml_signals=_extract_pattern_hits(document_text, ANALYTICS_ML_SIGNAL_PATTERNS),
+        experimentation_signals=_extract_pattern_hits(document_text, EXPERIMENTATION_SIGNAL_PATTERNS),
+        tooling_signals=_extract_pattern_hits(document_text, TOOLING_SIGNAL_PATTERNS),
         quantified_bullets=_unique_preserve_order(quantified_lines),
         notes={
             "builder_version": "v2_counterfactual_structured_refresh",
@@ -1160,6 +1161,7 @@ def build_counterfactual_resume_evidence_for_patches(
     patched_project_entries = copy.deepcopy(
         list(getattr(original_resume, "project_entries", []) or [])
     )
+    patched_document = copy.deepcopy(original_resume.document)
 
     for bullet_id, replacement in cleaned_patches:
         slot, status = _structured_bullet_slot(
@@ -1183,11 +1185,19 @@ def build_counterfactual_resume_evidence_for_patches(
         if bullet_index >= len(bullets):
             return None, "bullet_index_out_of_range"
 
+        patched_document, document_status = _patched_resume_document(
+            patched_document,
+            str(bullets[bullet_index] or "").strip(),
+            replacement,
+        )
+        if patched_document is None:
+            return None, document_status
+
         bullets[bullet_index] = replacement
         entry.bullets = bullets
 
     rebuilt_resume = rebuild_resume_evidence_from_structured_entries(
-        original_resume.document,
+        patched_document,
         experience_entries=patched_experience_entries,
         project_entries=patched_project_entries,
         education_entries=list(getattr(original_resume, "education_entries", []) or []),

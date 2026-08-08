@@ -3,8 +3,6 @@ import json
 from dotenv import load_dotenv
 from groq import Groq
 from openai import OpenAI
-from google import genai
-from google.genai import types
 from threading import Lock
 
 load_dotenv()
@@ -13,15 +11,15 @@ DEFAULT_PROVIDER = os.getenv("LLM_PROVIDER", "groq").strip().lower()
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant").strip()
 
 FALLBACK_ENABLED = os.getenv("LLM_FALLBACK_ENABLED", "false").strip().lower() == "true"
-FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "gemini").strip().lower()
-FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "gemini-2.5-flash").strip()
+FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "openai").strip().lower()
+FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "gpt-5-mini").strip()
 
 _GROQ_MODELS_WITHOUT_JSON_SCHEMA = {
     "llama-3.1-8b-instant",
     "llama-3.3-70b-versatile",
 }
 
-_SUPPORTED_PROVIDERS = {"groq", "openai", "gemini"}
+_SUPPORTED_PROVIDERS = {"groq", "openai"}
 _KNOWN_MODEL_PROVIDERS = {
     "llama-3.1-8b-instant": "groq",
     "llama-3.3-70b-versatile": "groq",
@@ -29,7 +27,6 @@ _KNOWN_MODEL_PROVIDERS = {
     "openai/gpt-oss-120b": "groq",
     "gpt-5-mini": "openai",
     "gpt-5.1": "openai",
-    "gemini-2.5-flash": "gemini",
 }
 _PROVIDER_ERROR_CATEGORIES = {
     "timeout",
@@ -241,7 +238,6 @@ def _raise_bounded_provider_failure(category, provider, model, stage):
 
 _groq_client = None
 _openai_client = None
-_gemini_client = None
 
 _provider_metrics_lock = Lock()
 
@@ -300,36 +296,6 @@ def get_openai_client():
         _openai_client = OpenAI(api_key=openai_api_key)
 
     return _openai_client
-
-def get_gemini_client():
-    global _gemini_client
-
-    if _gemini_client is None:
-        gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_api_key:
-            raise RuntimeError("GEMINI_API_KEY not found in environment")
-        _gemini_client = genai.Client(api_key=gemini_api_key)
-
-    return _gemini_client
-
-
-def _messages_to_gemini_prompt(messages):
-    parts = []
-
-    for message in messages:
-        role = (message.get("role") or "").strip().lower()
-        content = message.get("content") or ""
-
-        if role == "system":
-            parts.append(f"SYSTEM:\n{content}")
-        elif role == "user":
-            parts.append(f"USER:\n{content}")
-        elif role == "assistant":
-            parts.append(f"ASSISTANT:\n{content}")
-        else:
-            parts.append(str(content))
-
-    return "\n\n".join(parts)
 
 def _coerce_groq_message_content(content):
     if isinstance(content, str):
@@ -486,54 +452,6 @@ def _run_openai_chat_completion(
 
     return text
 
-def _run_gemini_chat_completion(
-    messages,
-    model,
-    temperature,
-    max_tokens,
-    response_mime_type=None,
-    response_schema=None,
-    return_parsed=False,
-    thinking_budget=None,
-):
-    increment_provider_metric("gemini_calls")
-    client = get_gemini_client()
-    prompt = _messages_to_gemini_prompt(messages)
-
-    config_kwargs = {
-        "temperature": temperature,
-        "max_output_tokens": max_tokens,
-    }
-
-    if response_mime_type:
-        config_kwargs["response_mime_type"] = response_mime_type
-
-    if response_schema is not None:
-        config_kwargs["response_schema"] = response_schema
-    
-    if thinking_budget is not None:
-        config_kwargs["thinking_config"] = types.ThinkingConfig(
-            thinking_budget=thinking_budget
-        )
-
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(**config_kwargs),
-    )
-
-    if return_parsed:
-        parsed = getattr(response, "parsed", None)
-        if parsed is not None:
-            return parsed
-
-    text = getattr(response, "text", None)
-    if text:
-        return text
-
-    raise RuntimeError("Gemini returned no parsed or text content")
-
-
 def _run_single_provider(
     provider_name,
     messages,
@@ -561,18 +479,6 @@ def _run_single_provider(
 
     if provider_name == "openai":
         return _run_openai_chat_completion(
-            messages=messages,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            response_mime_type=response_mime_type,
-            response_schema=response_schema,
-            return_parsed=return_parsed,
-            thinking_budget=thinking_budget,
-        )
-
-    if provider_name == "gemini":
-        return _run_gemini_chat_completion(
             messages=messages,
             model=model,
             temperature=temperature,

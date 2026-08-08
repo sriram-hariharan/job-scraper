@@ -187,6 +187,217 @@ console.log(JSON.stringify(rows));
     return json.loads(completed.stdout)
 
 
+def _evaluate_tailoring_workspace_regeneration_cases():
+    source = _source()
+    functions = "\n".join(
+        (
+            _function_source(source, "setTailoringWorkspaceRegenerateBusyState"),
+            _async_function_source(source, "regenerateTailoringWorkspaceSuggestions"),
+        )
+    )
+    script = f"""
+const label = {{ textContent: "Regenerate Suggestions" }};
+const button = {{
+  disabled: false,
+  dataset: {{ busy: "false" }},
+  attributes: {{}},
+  setAttribute(name, value) {{ this.attributes[name] = value; }},
+  querySelector() {{ return label; }},
+}};
+const meta = {{ textContent: "Existing suggestions" }};
+const qs = (id) => id === "tailoringWorkspaceRegenerateBtn" ? button : meta;
+const normalizeResumeName = (value) => String(value || "").trim();
+const getTailoringWorkspaceContext = () => ({{
+  jobDocId: "job-1",
+  resumeName: "resume.pdf",
+  planningOutputDir: "tmp/run-1/application_planning",
+}});
+let regenerationCalls = 0;
+let loaderCalls = 0;
+let errorCalls = 0;
+let resolveRegeneration;
+let mode = "pending";
+const regenerateSelectedResumeChoice = (...args) => {{
+  regenerationCalls += 1;
+  globalThis.lastArgs = args;
+  if (mode === "failure") return Promise.reject(new Error("failed"));
+  return new Promise((resolve) => {{ resolveRegeneration = resolve; }});
+}};
+const initTailoringWorkspacePage = async () => {{ loaderCalls += 1; }};
+const showAppError = () => {{ errorCalls += 1; }};
+{functions}
+(async () => {{
+  const first = regenerateTailoringWorkspaceSuggestions();
+  await regenerateTailoringWorkspaceSuggestions();
+  const busy = {{
+    regenerationCalls,
+    disabled: button.disabled,
+    ariaBusy: button.attributes["aria-busy"],
+    label: label.textContent,
+  }};
+  resolveRegeneration();
+  await first;
+  const success = {{
+    regenerationCalls,
+    loaderCalls,
+    disabled: button.disabled,
+    ariaBusy: button.attributes["aria-busy"],
+    label: label.textContent,
+    options: globalThis.lastArgs[2],
+  }};
+  mode = "failure";
+  meta.textContent = "Existing suggestions";
+  await regenerateTailoringWorkspaceSuggestions();
+  const failure = {{
+    loaderCalls,
+    errorCalls,
+    disabled: button.disabled,
+    label: label.textContent,
+    meta: meta.textContent,
+  }};
+  console.log(JSON.stringify({{ busy, success, failure }}));
+}})().catch((err) => {{ console.error(err); process.exit(1); }});
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def _evaluate_selected_resume_regeneration_endpoints():
+    source = _source()
+    functions = "\n".join(
+        (
+            _function_source(source, "resolvePlanningRowOutputDir"),
+            _function_source(source, "buildGenerateSuggestionsEndpoint"),
+            _async_function_source(source, "regenerateSelectedResumeChoice"),
+        )
+    )
+    script = f"""
+const requests = [];
+const postJson = async (endpoint, payload) => {{ requests.push({{ endpoint, payload }}); }};
+{functions}
+(async () => {{
+  await regenerateSelectedResumeChoice({{ job_doc_id: "job-unscoped" }}, "resume.pdf");
+  await regenerateSelectedResumeChoice(
+    {{ job_doc_id: "job-scoped" }},
+    "resume.pdf",
+    {{ outputDir: "tmp/run-1/application_planning" }}
+  );
+  console.log(JSON.stringify(requests));
+}})().catch((err) => {{ console.error(err); process.exit(1); }});
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def _evaluate_tailoring_workspace_ai_optional_lane_cases():
+    source = _source()
+    functions = "\n\n".join(
+        _function_source(source, name)
+        for name in [
+            "getTailoringReplacementCandidateId",
+            "getTailoringWorkspaceActionableLanes",
+            "getTailoringWorkspaceSelectableItems",
+            "buildTailoringWorkspaceCandidateLookup",
+            "collectTailoringWorkspaceSelectableCandidateIds",
+            "normalizeTailoringWorkspaceSelectedCandidateIds",
+            "getTailoringWorkspacePayload",
+            "getRenderableTailoringAnchorCards",
+            "getTailoringWorkspaceSuggestionBuckets",
+            "renderReplacementDecisionSection",
+        ]
+    )
+    script = f"""
+const tailoringWorkspaceState = {{ artifact: null }};
+const escapeHtml = (value) => String(value ?? "");
+const getTailoringWorkspaceDisplayBulletText = (item) => String(item?.original_text || "");
+const getTailoringWorkspaceCurrentReviewDecisionMap = () => ({{}});
+const getReplacementReviewState = () => "pending";
+const getTailoringWorkspaceReviewDecisionLabel = (value) => value;
+const getTailoringWorkspaceReviewDecisionTone = () => "muted";
+const buildTailoringTonePill = (label) => `<span>${{label}}</span>`;
+const humanizeUnderscoreLabel = (value) => String(value || "");
+const renderTailoringWorkspaceScorePills = () => "";
+const renderScanWorkspaceCriticAdvisoryDetails = () => "";
+{functions}
+const candidate = (id, status) => ({{
+  replacement_candidate_id: id,
+  replacement_status: status,
+  original_text: `Original ${{id}}`,
+  final_replacement_text: `Replacement ${{id}}`,
+}});
+const summarize = (payload) => {{
+  tailoringWorkspaceState.artifact = {{ kind: "json", data: payload }};
+  const buckets = getTailoringWorkspaceSuggestionBuckets();
+  const lookup = buildTailoringWorkspaceCandidateLookup(payload);
+  return {{
+    readyIds: buckets.ready.map(getTailoringReplacementCandidateId),
+    reviewIds: buckets.reviewGuidance.map(getTailoringReplacementCandidateId),
+    lookupIds: Array.from(lookup.keys()),
+    selectableIds: collectTailoringWorkspaceSelectableCandidateIds(payload),
+    normalizedAi: normalizeTailoringWorkspaceSelectedCandidateIds(payload, ["ai-1"]),
+    normalizedDirection: normalizeTailoringWorkspaceSelectedCandidateIds(payload, ["direction-1"]),
+    automaticSelection: normalizeTailoringWorkspaceSelectedCandidateIds(payload, []),
+  }};
+}};
+const aiOnlyPayload = {{
+  app_ready_replacements: [],
+  direct_apply_optional_replacements: [],
+  ai_optimize_optional_replacements: [candidate("ai-1", "ai_optimize_optional")],
+  direction_only_replacements: [candidate("direction-1", "direction_only")],
+  anchor_cards: [],
+}};
+const mixedPayload = {{
+  app_ready_replacements: [candidate("ready-1", "direct_apply_ready")],
+  direct_apply_optional_replacements: [candidate("direct-1", "direct_apply_optional")],
+  ai_optimize_optional_replacements: [candidate("ai-1", "ai_optimize_optional")],
+  direction_only_replacements: [candidate("direction-1", "direction_only")],
+  anchor_cards: [],
+}};
+const emptyAiPayload = {{
+  ...mixedPayload,
+  ai_optimize_optional_replacements: [],
+}};
+const duplicatePayload = {{
+  app_ready_replacements: [candidate("duplicate", "direct_apply_ready")],
+  direct_apply_optional_replacements: [candidate("duplicate", "direct_apply_optional")],
+  ai_optimize_optional_replacements: [candidate("duplicate", "ai_optimize_optional")],
+  direction_only_replacements: [],
+  anchor_cards: [],
+}};
+const renderedAiCard = renderReplacementDecisionSection({{
+  title: "AI optimize optional",
+  items: aiOnlyPayload.ai_optimize_optional_replacements,
+  mode: "replacement",
+  selectionEnabled: true,
+  selectedCandidateIds: [],
+}});
+console.log(JSON.stringify({{
+  aiOnly: summarize(aiOnlyPayload),
+  mixed: summarize(mixedPayload),
+  emptyAi: summarize(emptyAiPayload),
+  duplicate: summarize(duplicatePayload),
+  renderedAiCard,
+}}));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
 def test_generate_suggestions_button_uses_existing_workspace_when_artifacts_exist():
     source = _source()
     button_source = _function_source(source, "buildTailoringButtonHtml")
@@ -330,6 +541,146 @@ def test_generate_suggestions_payload_uses_existing_regenerate_endpoint_contract
     assert "postJson(buildGenerateSuggestionsEndpoint(row), payload)" in handler_source
 
 
+def test_tailoring_workspace_renders_secondary_regenerate_action_beside_ai_optimize():
+    markup = PLANNING_UI.read_text(encoding="utf-8")
+    actions_position = markup.index('class="tailoring-section-title-actions"')
+    optimize_position = markup.index('id="tailoringWorkspaceOpenScanBtn"')
+    regenerate_position = markup.index('id="tailoringWorkspaceRegenerateBtn"')
+    actions_end = markup.index("</div>", regenerate_position)
+
+    assert actions_position < optimize_position < regenerate_position < actions_end
+    assert 'class="ghost-btn tailoring-regenerate-btn"' in markup
+    assert 'type="button"' in markup[regenerate_position : regenerate_position + 400]
+    assert "Regenerate Suggestions" in markup[regenerate_position : regenerate_position + 600]
+    assert "Generate a fresh set of AI tailoring suggestions" in markup
+
+
+def test_tailoring_workspace_regeneration_reuses_scoped_endpoint_and_workspace_loader():
+    source = _source()
+    helper_source = _async_function_source(source, "regenerateSelectedResumeChoice")
+    handler_source = _async_function_source(source, "regenerateTailoringWorkspaceSuggestions")
+    binder_source = _function_source(source, "bindTailoringWorkspaceRegenerateAction")
+
+    assert 'outputDir = ""' in helper_source
+    assert 'buildGenerateSuggestionsEndpoint({ planning_output_dir: outputDir })' in helper_source
+    assert ': "/planning/regenerate-selected-resume"' in helper_source
+    assert "button.disabled || button.dataset.busy === \"true\"" in handler_source
+    assert 'jobDocId = String(context?.jobDocId || "").trim()' in handler_source
+    assert 'selectedResume = normalizeResumeName(context?.resumeName || "")' in handler_source
+    assert "generateLlmTailoring: true" in handler_source
+    assert "refreshLlmTailoring: true" in handler_source
+    assert "outputDir: context.planningOutputDir" in handler_source
+    assert "await initTailoringWorkspacePage()" in handler_source
+    assert handler_source.index("await regenerateSelectedResumeChoice") < handler_source.index(
+        "await initTailoringWorkspacePage()"
+    )
+    assert "setTailoringWorkspaceRegenerateBusyState(false)" in handler_source
+    assert "tailoringWorkspaceState.artifact = null" not in handler_source
+    assert 'button.disabled = !hasRequiredIdentity' in binder_source
+    assert 'button.addEventListener("click", regenerateTailoringWorkspaceSuggestions)' in binder_source
+
+
+def test_selected_resume_regeneration_forwards_run_scoped_corpus_and_keeps_unscoped_compatibility():
+    requests = _evaluate_selected_resume_regeneration_endpoints()
+
+    assert requests[0]["endpoint"] == "/planning/regenerate-selected-resume"
+    assert requests[1]["endpoint"].startswith("/planning/regenerate-selected-resume?")
+    assert "output_dir=tmp%2Frun-1%2Fapplication_planning" in requests[1]["endpoint"]
+    assert (
+        "job_corpus=tmp%2Frun-1%2Fapplication_planning%2Fcurrent_run_job_corpus.jsonl"
+        in requests[1]["endpoint"]
+    )
+
+
+def test_tailoring_workspace_regenerate_action_stays_compact_across_themes():
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    action_source = styles.split(".tailoring-section-title-actions", 1)[1].split("}", 1)[0]
+    button_source = styles.split(".tailoring-regenerate-btn {", 2)[2].split("}", 1)[0]
+
+    assert "display: inline-flex" in action_source
+    assert "width: max-content" in action_source
+    assert "width: max-content !important" in button_source
+    assert "min-height: 34px !important" in button_source
+    assert "height: 34px" in button_source
+    assert "flex: 0 0 auto" in button_source
+    assert 'html[data-theme="light"] .tailoring-workspace-page .tailoring-regenerate-btn' in styles
+    assert 'html[data-theme="dark"] .tailoring-workspace-page .tailoring-regenerate-btn' in styles
+
+
+def test_tailoring_workspace_regeneration_busy_success_and_failure_behavior():
+    cases = _evaluate_tailoring_workspace_regeneration_cases()
+
+    assert cases["busy"] == {
+        "regenerationCalls": 1,
+        "disabled": True,
+        "ariaBusy": "true",
+        "label": "Regenerating…",
+    }
+    assert cases["success"]["regenerationCalls"] == 1
+    assert cases["success"]["loaderCalls"] == 1
+    assert cases["success"]["disabled"] is False
+    assert cases["success"]["ariaBusy"] == "false"
+    assert cases["success"]["label"] == "Regenerate Suggestions"
+    assert cases["success"]["options"] == {
+        "generateLlmTailoring": True,
+        "refreshLlmTailoring": True,
+        "outputDir": "tmp/run-1/application_planning",
+    }
+    assert cases["failure"]["loaderCalls"] == 1
+    assert cases["failure"]["errorCalls"] == 1
+    assert cases["failure"]["disabled"] is False
+    assert cases["failure"]["label"] == "Regenerate Suggestions"
+    assert "current suggestions are still available" in cases["failure"]["meta"]
+
+
+def test_tailoring_workspace_consumes_ai_optimize_optional_as_ready_and_selectable():
+    cases = _evaluate_tailoring_workspace_ai_optional_lane_cases()
+
+    assert cases["aiOnly"]["readyIds"] == ["ai-1"]
+    assert cases["aiOnly"]["reviewIds"] == ["direction-1"]
+    assert "ai-1" in cases["aiOnly"]["lookupIds"]
+    assert cases["aiOnly"]["selectableIds"] == ["ai-1"]
+    assert cases["aiOnly"]["normalizedAi"] == ["ai-1"]
+    assert cases["aiOnly"]["normalizedDirection"] == []
+    assert cases["aiOnly"]["automaticSelection"] == []
+    assert cases["mixed"]["readyIds"] == ["ready-1", "direct-1", "ai-1"]
+    assert cases["emptyAi"]["readyIds"] == ["ready-1", "direct-1"]
+    assert cases["duplicate"]["readyIds"] == ["duplicate"]
+
+
+def test_tailoring_workspace_ai_optional_card_and_human_save_preview_contract():
+    cases = _evaluate_tailoring_workspace_ai_optional_lane_cases()
+    source = _source()
+    preview_source = _async_function_source(source, "previewTailoringWorkspaceSelection")
+    save_source = _async_function_source(source, "saveTailoringWorkspaceSelection")
+    summary_source = _function_source(source, "renderTailoringInteractiveSummaryInto")
+
+    assert "AI optimize optional" in cases["renderedAiCard"]
+    assert 'data-tailoring-focus-candidate="ai-1"' in cases["renderedAiCard"]
+    assert 'data-tailoring-select-candidate="ai-1"' in cases["renderedAiCard"]
+    assert "Add" in cases["renderedAiCard"]
+    assert "aiOptimizeOptionalHtml" in summary_source
+    assert "selected_patch_candidate_ids: selectedIds" in preview_source
+    assert "selected_patch_candidate_ids: selectedIds" in save_source
+    assert "getTailoringWorkspaceSelectedCandidateIds()" in preview_source
+    assert "getTailoringWorkspaceSelectedCandidateIds()" in save_source
+
+
+def test_tailoring_workspace_lane_fix_does_not_change_scan_workspace_consumers():
+    source = _source()
+
+    for function_name in [
+        "getScanWorkspaceTrustedSuggestions",
+        "getScanWorkspaceAiSuggestions",
+        "getScanWorkspaceGuidance",
+        "getScanWorkspaceReplacementSuggestions",
+    ]:
+        assert "getTailoringWorkspaceActionableLanes" not in _function_source(
+            source,
+            function_name,
+        )
+
+
 def test_selected_resume_resolution_matches_real_planning_row_fields():
     source = _source()
     display_resolver_source = _function_source(source, "resolvePlanningRowSelectedResume")
@@ -441,6 +792,9 @@ def test_generate_suggestions_error_state_keeps_fullpage_retry_cancel_controls()
     markup = PLANNING_UI.read_text(encoding="utf-8")
     loader_source = _function_source(source, "setGenerateSuggestionsLoaderState")
     close_source = _function_source(source, "closeGenerateSuggestionsLoader")
+    acknowledge_source = _async_function_source(
+        source, "acknowledgeGenerateSuggestionsLoader"
+    )
     handler_source = _async_function_source(source, "handleGenerateSuggestionsClick")
 
     assert "Could not generate suggestions" in loader_source
@@ -450,17 +804,46 @@ def test_generate_suggestions_error_state_keeps_fullpage_retry_cancel_controls()
     assert "cancelBtn.disabled = false" in loader_source
     assert "cancelledRequestSeq" in close_source
     assert "cancelledRequestSeq === requestSeq" in handler_source
+    assert 'workflowState === "success"' in acknowledge_source
+    assert acknowledge_source.index("closeGenerateSuggestionsLoader()") < (
+        acknowledge_source.index("if (!wasSuccessful) return")
+    )
+    assert acknowledge_source.index("if (!wasSuccessful) return") < (
+        acknowledge_source.index("loadPlanningTable({ forceNetwork: true })")
+    )
 
 
-def test_generate_suggestions_waits_for_workspace_action_after_success():
+def test_generate_suggestions_success_uses_acknowledgement_and_planning_refresh():
     source = _source()
+    loader_source = _function_source(source, "setGenerateSuggestionsLoaderState")
     handler_source = _async_function_source(source, "handleGenerateSuggestionsClick")
+    acknowledge_source = _async_function_source(
+        source, "acknowledgeGenerateSuggestionsLoader"
+    )
     open_source = _function_source(source, "openGenerateSuggestionsWorkspace")
+    success_branch = loader_source.split('if (state === "success")', 1)[1].split(
+        "return;", 1
+    )[0]
 
     assert "buildGenerateSuggestionsWorkspaceRow(row, response || {})" in handler_source
     assert "buildTailoringWorkspaceUrl(workspaceRow)" in handler_source
     assert "generateSuggestionsState.lastWorkspaceUrl = workspaceUrl" in handler_source
     assert "window.location.href" not in handler_source
+    assert 'state === "success" ? "Okay" : "Cancel"' in loader_source
+    assert 'openBtn.classList.remove("hidden")' not in success_branch
+    assert "closeGenerateSuggestionsLoader()" in acknowledge_source
+    assert "await loadPlanningTable({ forceNetwork: true })" in acknowledge_source
+    assert "window.location" not in acknowledge_source
+    assert (
+        'qs("generateSuggestionsCancelBtn").addEventListener("click", '
+        "acknowledgeGenerateSuggestionsLoader)"
+    ) in source
+    assert source.index("function resolvePlanningWorklistAction") < source.index(
+        "async function loadPlanningTable"
+    )
+    assert 'hasArtifacts ? "Open Workspace"' in _function_source(
+        source, "resolvePlanningWorklistAction"
+    )
     assert "window.location.href = generateSuggestionsState.lastWorkspaceUrl" in open_source
     assert "Open Tailoring Workspace" in PLANNING_UI.read_text(encoding="utf-8")
 

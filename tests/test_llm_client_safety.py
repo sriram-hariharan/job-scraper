@@ -15,6 +15,13 @@ from src.evaluation.provider_client_compatibility import (
 
 ROOT = Path(__file__).resolve().parents[1]
 CLIENT_PATH = ROOT / "src/ai/llm_client.py"
+RUNTIME_OWNER_PATHS = (
+    CLIENT_PATH,
+    ROOT / "src/app/services.py",
+    ROOT / "src/agents/llm_adjudicator_readback.py",
+    ROOT / "src/pipeline/collector.py",
+    ROOT / "src/app/static/planning.js",
+)
 
 KNOWN_PAIRS = (
     ("groq", "llama-3.1-8b-instant"),
@@ -23,7 +30,6 @@ KNOWN_PAIRS = (
     ("groq", "openai/gpt-oss-120b"),
     ("openai", "gpt-5-mini"),
     ("openai", "gpt-5.1"),
-    ("gemini", "gemini-2.5-flash"),
 )
 
 
@@ -113,8 +119,6 @@ def test_every_known_matching_pair_passes(client_module, provider, model):
         ("groq", "gpt-5.1"),
         ("openai", "openai/gpt-oss-20b"),
         ("openai", "openai/gpt-oss-120b"),
-        ("gemini", "openai/gpt-oss-20b"),
-        ("gemini", "gpt-5-mini"),
     ),
 )
 def test_known_provider_model_mismatches_fail_closed(
@@ -134,6 +138,7 @@ def test_known_provider_model_mismatches_fail_closed(
         ("", "gpt-5-mini", "unsupported_provider"),
         ("openai", "", "configuration"),
         ("unsupported", "custom-model", "unsupported_provider"),
+        ("gemini", "custom-model", "unsupported_provider"),
     ),
 )
 def test_missing_or_unsupported_identity_fails_closed(
@@ -148,7 +153,7 @@ def test_missing_or_unsupported_identity_fails_closed(
     assert getattr(exc_info.value, "error_category") == category
 
 
-@pytest.mark.parametrize("provider", ("groq", "openai", "gemini"))
+@pytest.mark.parametrize("provider", ("groq", "openai"))
 def test_unknown_custom_model_remains_supported(client_module, provider):
     module, _ = client_module
     assert module._normalize_and_validate_provider_model(
@@ -176,6 +181,26 @@ def test_rejected_primary_pair_prevents_metrics_clients_and_calls(client_module)
     assert sum(isolation["provider_client_constructions"].values()) == 0
 
 
+def test_gemini_primary_is_rejected_before_provider_invocation(client_module):
+    module, isolation = client_module
+    calls = []
+    module._run_single_provider = lambda **kwargs: calls.append(kwargs)
+    module.reset_provider_metrics()
+
+    with pytest.raises(ValueError) as exc_info:
+        module.run_chat_completion_with_metadata(
+            messages=[],
+            provider="gemini",
+            model="operator-model",
+            fallback_enabled=False,
+        )
+
+    assert getattr(exc_info.value, "error_category") == "unsupported_provider"
+    assert calls == []
+    assert all(value == 0 for value in module.get_provider_metrics().values())
+    assert sum(isolation["provider_client_constructions"].values()) == 0
+
+
 def test_rejected_fallback_pair_prevents_primary_and_fallback_calls(client_module):
     module, isolation = client_module
     calls = []
@@ -192,6 +217,28 @@ def test_rejected_fallback_pair_prevents_primary_and_fallback_calls(client_modul
             fallback_model="openai/gpt-oss-120b",
         )
 
+    assert calls == []
+    assert all(value == 0 for value in module.get_provider_metrics().values())
+    assert sum(isolation["provider_client_constructions"].values()) == 0
+
+
+def test_gemini_fallback_is_rejected_before_primary_invocation(client_module):
+    module, isolation = client_module
+    calls = []
+    module._run_single_provider = lambda **kwargs: calls.append(kwargs)
+    module.reset_provider_metrics()
+
+    with pytest.raises(ValueError) as exc_info:
+        module.run_chat_completion_with_metadata(
+            messages=[],
+            provider="groq",
+            model="openai/gpt-oss-20b",
+            fallback_enabled=True,
+            fallback_provider="gemini",
+            fallback_model="operator-model",
+        )
+
+    assert getattr(exc_info.value, "error_category") == "unsupported_provider"
     assert calls == []
     assert all(value == 0 for value in module.get_provider_metrics().values())
     assert sum(isolation["provider_client_constructions"].values()) == 0
@@ -456,8 +503,31 @@ def test_public_signatures_and_defaults_are_unchanged(client_module):
     assert module.DEFAULT_PROVIDER == "groq"
     assert module.DEFAULT_MODEL == "offline-placeholder-model"
     assert module.FALLBACK_ENABLED is False
-    assert module.FALLBACK_PROVIDER == "gemini"
+    assert module.FALLBACK_PROVIDER == "openai"
     assert module.FALLBACK_MODEL == "offline-placeholder-fallback"
+
+
+def test_production_runtime_has_no_callable_gemini_or_dependency():
+    client_source = CLIENT_PATH.read_text(encoding="utf-8")
+    runtime_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in RUNTIME_OWNER_PATHS
+    )
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+    assert '_SUPPORTED_PROVIDERS = {"groq", "openai"}' in client_source
+    assert 'os.getenv("LLM_PROVIDER", "groq")' in client_source
+    assert 'os.getenv("LLM_FALLBACK_PROVIDER", "openai")' in client_source
+    assert 'os.getenv("LLM_FALLBACK_MODEL", "gpt-5-mini")' in client_source
+    for forbidden in (
+        "from google import genai",
+        "from google.genai import",
+        "get_gemini_client",
+        "_run_gemini_chat_completion",
+        "GEMINI_API_KEY",
+        "gemini-2.5-flash",
+    ):
+        assert forbidden not in runtime_source
+    assert "google-genai" not in requirements
 
 
 def test_isolated_safety_tests_reach_no_external_boundary(client_module):

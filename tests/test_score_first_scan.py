@@ -33,7 +33,15 @@ from src.storage.saved_scans.store import (
 from src.tailoring.replacement_selector import build_final_replacement_plan
 from src.tailoring import rendering as tailoring_rendering
 from src.tailoring import llm as tailoring_llm
-from src.tailoring.score_utils import score_delta_to_points, score_to_points
+from src.tailoring.score_utils import (
+    is_effectively_score_neutral,
+    is_meaningful_positive_score_lift,
+    is_score_negative,
+    is_score_neutral,
+    is_score_positive,
+    score_delta_to_points,
+    score_to_points,
+)
 
 
 def _candidate(candidate_id, *, bullet_id="bullet_1", delta=0.0, llm=False, patch_text="patched bullet"):
@@ -81,6 +89,24 @@ def test_score_point_normalization_handles_normalized_and_point_values():
     assert score_to_points(42) == 42
     assert score_delta_to_points(0.03) == 3
     assert score_delta_to_points(-0.02) == -2
+
+
+def test_effective_score_lift_helpers_preserve_raw_sign_and_point_semantics():
+    assert is_score_positive(0.000031) is True
+    assert is_score_neutral(0) is True
+    assert is_score_negative(-0.000031) is True
+
+    assert score_delta_to_points(0.000031) == 0
+    assert score_delta_to_points(0.02) == 2
+
+    assert is_effectively_score_neutral(0.000031) is True
+    assert is_meaningful_positive_score_lift(0.000031) is False
+    assert is_effectively_score_neutral(0) is True
+    assert is_meaningful_positive_score_lift(0) is False
+    assert is_effectively_score_neutral(0.02) is False
+    assert is_meaningful_positive_score_lift(0.02) is True
+    assert is_effectively_score_neutral(-0.000031) is False
+    assert is_meaningful_positive_score_lift(-0.000031) is False
 
 
 def test_workspace_score_preview_contract_exposes_points_and_changed_bullets():
@@ -395,6 +421,242 @@ def test_selector_demotes_negative_or_neutral_candidates_from_direct_replacement
     assert {row["score_gate"] for row in plan["direction_only_replacements"]} == {
         "score_neutral_guidance"
     }
+
+
+def _qualified_neutral_live_candidate(
+    candidate_id="qualified_neutral_live",
+    *,
+    confidence="medium",
+    delta=0.0,
+):
+    candidate = _candidate(candidate_id, delta=delta, llm=True)
+    candidate.update(
+        {
+            "patch_generation_method": "live_llm_concrete_patch_candidate",
+            "material_delta_found": True,
+            "supported_jd_signals": ["numpy"],
+            "precheck_supported_jd_signal_gains": ["numpy"],
+            "precheck_scorer_visible_evidence_regressions": [],
+            "confidence": confidence,
+        }
+    )
+    return candidate
+
+
+@pytest.mark.parametrize("confidence", ["medium", "high"])
+def test_selector_allows_qualified_neutral_live_candidate_into_ai_optional(confidence):
+    candidate = _qualified_neutral_live_candidate(confidence=confidence)
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"][0]["replacement_candidate_id"] == (
+        "qualified_neutral_live"
+    )
+    assert plan["ai_optimize_optional_replacements"][0]["score_gate"] == (
+        "score_neutral_guidance"
+    )
+    assert plan["direction_only_replacements"] == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("precheck_supported_jd_signal_gains", []),
+        ("precheck_scorer_visible_evidence_regressions", ["statistics"]),
+        ("unsupported_risk_signals", ["unsupported_claim"]),
+        ("confidence", "low"),
+        ("llm_refinement_used", False),
+        ("patch_generation_method", "llm_directional_guidance"),
+        ("material_delta_found", False),
+        ("materiality_validation_status", "scorer_neutral_no_evidence_change"),
+        ("counterfactual_status", "missing_patch_inputs"),
+    ],
+)
+def test_selector_rejects_neutral_live_candidate_missing_qualification(field, value):
+    candidate = _qualified_neutral_live_candidate()
+    candidate[field] = value
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"][0]["replacement_candidate_id"] == (
+        "qualified_neutral_live"
+    )
+
+
+def test_selector_keeps_anduril_style_neutral_regression_direction_only():
+    candidate = _qualified_neutral_live_candidate("anduril_style")
+    candidate.update(
+        {
+            "proposal_status": "direction_only",
+            "patch_ready": False,
+            "materiality_validation_status": "scorer_neutral_evidence_regression",
+            "material_delta_found": False,
+            "supported_jd_signals": ["numpy"],
+            "precheck_supported_jd_signal_gains": [],
+            "precheck_scorer_visible_evidence_regressions": ["statistics"],
+        }
+    )
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"][0]["replacement_candidate_id"] == (
+        "anduril_style"
+    )
+
+
+def test_selector_never_allows_negative_live_candidate_into_actionable_lane():
+    candidate = _qualified_neutral_live_candidate("negative_live")
+    candidate["projected_overall_delta"] = -0.01
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"][0]["score_gate"] == (
+        "rejected_by_score_gate"
+    )
+
+
+def test_selector_preserves_positive_llm_ai_optional_behavior():
+    candidate = _candidate("positive_llm", delta=0.02, llm=True)
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["ai_optimize_optional_replacements"][0]["replacement_candidate_id"] == (
+        "positive_llm"
+    )
+    assert plan["ai_optimize_optional_replacements"][0]["score_gate"] == (
+        "direct_replacement"
+    )
+    assert plan["ai_optimize_optional_replacements"][0]["apply_priority"] == "high"
+
+
+def test_selector_rejects_cosmetic_tiny_positive_and_preserves_raw_score_gate():
+    candidate = _qualified_neutral_live_candidate(
+        "anduril_cosmetic_tiny_positive",
+        delta=0.000031,
+    )
+    candidate["precheck_supported_jd_signal_gains"] = []
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    guidance = plan["direction_only_replacements"][0]
+    assert guidance["replacement_candidate_id"] == "anduril_cosmetic_tiny_positive"
+    assert guidance["projected_score_delta_points"] == 0
+    assert guidance["score_gate"] == "direct_replacement"
+    assert guidance["apply_priority"] == "low"
+
+
+@pytest.mark.parametrize("confidence", ["medium", "high"])
+def test_selector_allows_qualified_tiny_positive_into_ai_optional(confidence):
+    candidate = _qualified_neutral_live_candidate(
+        "qualified_tiny_positive",
+        confidence=confidence,
+        delta=0.000031,
+    )
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    selected = plan["ai_optimize_optional_replacements"][0]
+    assert selected["replacement_candidate_id"] == "qualified_tiny_positive"
+    assert selected["projected_score_delta_points"] == 0
+    assert selected["score_gate"] == "direct_replacement"
+    assert selected["apply_priority"] == "medium"
+
+
+def test_selector_direct_lanes_require_meaningful_displayed_score_lift():
+    tiny_ready = _candidate("tiny_ready", delta=0.000031)
+    meaningful_ready = _candidate(
+        "meaningful_ready",
+        bullet_id="bullet_2",
+        delta=0.02,
+    )
+    tiny_optional = _candidate(
+        "tiny_optional",
+        bullet_id="bullet_3",
+        delta=0.000031,
+    )
+    tiny_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+
+    tiny_ready_plan = build_final_replacement_plan([tiny_ready], [])
+    meaningful_plan = build_final_replacement_plan([meaningful_ready], [])
+    tiny_optional_plan = build_final_replacement_plan([tiny_optional], [])
+
+    assert tiny_ready_plan["app_ready_replacements"] == []
+    assert tiny_optional_plan["direct_apply_optional_replacements"] == []
+    assert meaningful_plan["app_ready_replacements"][0][
+        "replacement_candidate_id"
+    ] == "meaningful_ready"
+
+
+def test_selector_keeps_tiny_negative_non_actionable_despite_zero_display_points():
+    candidate = _candidate("tiny_negative", delta=-0.000031, llm=True)
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    guidance = plan["direction_only_replacements"][0]
+    assert guidance["projected_score_delta_points"] == 0
+    assert guidance["score_gate"] == "rejected_by_score_gate"
+
+
+def test_selector_qualified_neutral_outweighs_unqualified_tiny_positive_noise():
+    cosmetic = _qualified_neutral_live_candidate(
+        "cosmetic_tiny_positive",
+        delta=0.000031,
+    )
+    cosmetic["precheck_supported_jd_signal_gains"] = []
+    qualified = _qualified_neutral_live_candidate("qualified_exact_neutral")
+
+    plan = build_final_replacement_plan([cosmetic, qualified], [])
+
+    assert plan["ai_optimize_optional_replacements"][0][
+        "replacement_candidate_id"
+    ] == "qualified_exact_neutral"
+    assert plan["direction_only_replacements"] == []
+
+
+def test_selector_keeps_direct_lanes_positive_score_only():
+    positive_ready = _candidate("positive_ready", delta=0.02)
+    neutral_ready = _candidate("neutral_ready", delta=0.0)
+    positive_optional = _candidate("positive_optional", bullet_id="bullet_2", delta=0.02)
+    neutral_optional = _candidate("neutral_optional", bullet_id="bullet_3", delta=0.0)
+    positive_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+    neutral_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+
+    positive_ready_plan = build_final_replacement_plan([positive_ready], [])
+    neutral_ready_plan = build_final_replacement_plan([neutral_ready], [])
+    optional_plan = build_final_replacement_plan(
+        [positive_optional, neutral_optional], []
+    )
+
+    assert positive_ready_plan["app_ready_replacements"][0][
+        "replacement_candidate_id"
+    ] == "positive_ready"
+    assert neutral_ready_plan["app_ready_replacements"] == []
+    assert optional_plan["direct_apply_optional_replacements"][0][
+        "replacement_candidate_id"
+    ] == "positive_optional"
+    assert all(
+        row["replacement_candidate_id"] != "neutral_optional"
+        for row in optional_plan["direct_apply_optional_replacements"]
+    )
 
 
 def _direction_only_diagnosis():
@@ -846,6 +1108,385 @@ def test_live_concrete_patch_contract_enabled_accepts_safe_patch_candidate():
     candidate = normalized["concrete_replacement_candidates"][0]
     assert candidate["proposal_status"] == "patch_ready"
     assert candidate["patch_text"] == "Built SQL reporting dashboards for weekly stakeholder reporting."
+
+
+def _validate_live_concrete_rewrite(
+    *,
+    original_text,
+    patch_text,
+    supported_terms,
+):
+    payload = _live_patch_payload()
+    anchor = payload["evidence_layers"]["anchors"][0]
+    anchor["text"] = original_text
+    anchor["parent_bullet"] = original_text
+    anchor["overlaps"] = list(supported_terms)
+    anchor["supported_terms"] = list(supported_terms)
+    response = _live_patch_response(patch_text=patch_text)
+    response["concrete_replacement_candidates"][0]["original_text"] = original_text
+    return tailoring_llm._validate_live_llm_parsed_contract(
+        response,
+        payload,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("original_text", "patch_text", "supported_terms"),
+    [
+        (
+            "Implemented Faster R-CNN in PyTorch to detect defects in railway "
+            "components, classifying 1,000+ defects from 7k undercarriage images",
+            "Utilized PyTorch to implement Faster R-CNN for defect detection in "
+            "railway components, achieving a classification of 1,000+ defects "
+            "from 7k undercarriage images",
+            ["PyTorch", "Faster R-CNN"],
+        ),
+        (
+            "Streamlined EDA using Pandas, NumPy, and Matplotlib to surface 50+ "
+            "anomalies across 30k+ records, increasing clustering performance by 40%",
+            "Leveraged NumPy and Pandas for EDA, identifying 50+ anomalies across "
+            "30k+ records and enhancing clustering performance by 40%",
+            ["Pandas", "NumPy", "EDA"],
+        ),
+    ],
+)
+def test_live_concrete_factual_normalization_allows_anduril_lead_substitutions(
+    original_text,
+    patch_text,
+    supported_terms,
+):
+    parsed = _validate_live_concrete_rewrite(
+        original_text=original_text,
+        patch_text=patch_text,
+        supported_terms=supported_terms,
+    )
+
+    assert parsed["invalid_concrete_replacement_candidates"] == []
+    assert parsed["concrete_replacement_candidates"][0]["patch_text"] == patch_text
+
+
+def test_live_concrete_factual_normalization_allows_exact_anduril_result_clause():
+    original_text = (
+        "Streamlined EDA using Pandas, NumPy, and Matplotlib to surface 50+ "
+        "anomalies across 30k+ records, increasing clustering performance by 40%"
+    )
+    patch_text = (
+        "Streamlined EDA using Pandas, NumPy, and Matplotlib to identify 50+ "
+        "anomalies across 30k+ records, resulting in a 40% increase in "
+        "clustering performance"
+    )
+
+    parsed = _validate_live_concrete_rewrite(
+        original_text=original_text,
+        patch_text=patch_text,
+        supported_terms=["Pandas", "NumPy", "Matplotlib", "EDA"],
+    )
+
+    assert parsed["invalid_concrete_replacement_candidates"] == []
+    assert parsed["concrete_replacement_candidates"][0]["patch_text"] == patch_text
+
+
+@pytest.mark.parametrize(
+    ("source_word", "rewrite_word"),
+    [
+        ("increasing", "increase"),
+        ("classification", "classifying"),
+        ("identified", "identifying"),
+        ("analyzed", "analysis"),
+        ("improved", "improvement"),
+    ],
+)
+def test_live_concrete_factual_normalization_accepts_grounded_word_families(
+    source_word,
+    rewrite_word,
+):
+    assert tailoring_llm._live_claim_word_stem(source_word) == (
+        tailoring_llm._live_claim_word_stem(rewrite_word)
+    )
+
+
+def test_live_concrete_factual_normalization_allows_reordered_connective_wording():
+    row = _live_patch_payload()["evidence_layers"]["anchors"][0]
+    row["text"] = "Built SQL dashboards with analysts through weekly reviews."
+    row["parent_bullet"] = row["text"]
+
+    unbacked = tailoring_llm._obvious_unbacked_patch_tokens(
+        "Built SQL dashboards through weekly reviews while using SQL with analysts.",
+        row,
+        _live_patch_payload(),
+    )
+
+    assert unbacked == []
+
+
+@pytest.mark.parametrize(
+    "patch_text",
+    [
+        "Enhanced SQL reporting dashboards for weekly stakeholder reporting.",
+        "Resulting in improved SQL reporting dashboards for weekly stakeholder reporting.",
+    ],
+)
+def test_live_concrete_style_only_lead_word_is_not_an_unbacked_fact(patch_text):
+    row = _live_patch_payload()["evidence_layers"]["anchors"][0]
+
+    unbacked = tailoring_llm._obvious_unbacked_patch_tokens(
+        patch_text,
+        row,
+        _live_patch_payload(),
+    )
+
+    assert unbacked == []
+
+
+@pytest.mark.parametrize(
+    ("patch_text", "unsupported_term"),
+    [
+        (
+            "Built SQL and TensorFlow reporting dashboards for weekly stakeholder reporting.",
+            "TensorFlow",
+        ),
+        (
+            "Snowflake pipelines improved SQL reporting dashboards for weekly stakeholders.",
+            "Snowflake",
+        ),
+        (
+            "Built SQL reporting dashboards on AWS for weekly stakeholder reporting.",
+            "AWS",
+        ),
+        (
+            "Built SQL and dbt reporting pipelines for weekly stakeholder reporting.",
+            "dbt",
+        ),
+    ],
+)
+def test_live_concrete_factual_normalization_rejects_unsupported_technology_anywhere(
+    patch_text,
+    unsupported_term,
+):
+    parsed = _validate_live_concrete_rewrite(
+        original_text="Built SQL reporting dashboards for weekly stakeholder reporting.",
+        patch_text=patch_text,
+        supported_terms=["SQL", "reporting"],
+    )
+
+    assert parsed["concrete_replacement_candidates"] == []
+    reason = parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"]
+    assert reason.startswith("obvious_unbacked_patch_tokens:")
+    assert unsupported_term.lower() in reason.lower()
+
+
+def test_live_concrete_factual_normalization_rejects_new_responsibility_claim():
+    parsed = _validate_live_concrete_rewrite(
+        original_text="Built SQL reporting dashboards.",
+        patch_text="Managed vendor contracts while building SQL reporting dashboards.",
+        supported_terms=["SQL", "reporting"],
+    )
+
+    assert parsed["concrete_replacement_candidates"] == []
+    reason = parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"]
+    assert reason.startswith("obvious_unbacked_patch_tokens:")
+    assert "vendor" in reason or "contracts" in reason
+
+
+def test_live_concrete_factual_normalization_allows_reordered_supported_terms_and_metrics():
+    original_text = (
+        "Improved SQL reporting on AWS across 30k+ records, surfacing 50+ anomalies "
+        "and increasing accuracy by 40%."
+    )
+    patch_text = (
+        "Leveraged AWS and SQL across 30k+ records to surface 50+ anomalies, "
+        "increasing reporting accuracy by 40%."
+    )
+
+    parsed = _validate_live_concrete_rewrite(
+        original_text=original_text,
+        patch_text=patch_text,
+        supported_terms=["SQL", "AWS", "reporting"],
+    )
+
+    assert parsed["invalid_concrete_replacement_candidates"] == []
+    assert parsed["concrete_replacement_candidates"][0]["patch_text"] == patch_text
+
+
+@pytest.mark.parametrize("invented_metric", ["65%", "100k+", "$2M"])
+def test_live_concrete_factual_normalization_rejects_invented_numeric_claim(
+    invented_metric,
+):
+    parsed = _validate_live_concrete_rewrite(
+        original_text="Built SQL reporting dashboards that improved accuracy by 40%.",
+        patch_text=(
+            "Leveraged SQL reporting dashboards to improve accuracy by "
+            f"{invented_metric}."
+        ),
+        supported_terms=["SQL", "reporting"],
+    )
+
+    assert parsed["concrete_replacement_candidates"] == []
+    reason = parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"]
+    assert reason.startswith("obvious_unbacked_patch_tokens:")
+
+
+def test_live_concrete_candidate_uses_authoritative_source_signals_not_llm_claims():
+    payload = _live_patch_payload()
+    anchor = payload["evidence_layers"]["anchors"][0]
+    anchor.pop("supported_terms")
+    anchor["overlaps"] = ["numpy", "numpy"]
+    anchor["text"] = "Used NumPy to analyze operational records."
+    anchor["parent_bullet"] = anchor["text"]
+    response = _live_patch_response(
+        patch_text="Analyzed operational records using NumPy."
+    )
+    response["concrete_replacement_candidates"][0]["supported_jd_signals"] = [
+        "untrusted-llm-signal"
+    ]
+
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        response,
+        payload,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+    candidate = parsed["concrete_replacement_candidates"][0]
+    assert candidate["supported_jd_signals"] == ["numpy"]
+    assert "untrusted-llm-signal" not in candidate["supported_jd_signals"]
+
+
+def _validate_live_concrete_materiality(
+    monkeypatch,
+    *,
+    original_snapshot,
+    patched_snapshot,
+    projected_delta=0.0,
+):
+    original_resume = object()
+    patched_resume = object()
+    original_score = SimpleNamespace(final_score=0.5, dimension_scores=[])
+    patched_score = SimpleNamespace(
+        final_score=0.5 + projected_delta,
+        dimension_scores=[],
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_patched_resume_evidence_for_candidate",
+        lambda original, candidate: (patched_resume, "ok"),
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_resume_counterfactual_snapshot",
+        lambda resume: (
+            original_snapshot if resume is original_resume else patched_snapshot
+        ),
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "score_resume_job_match",
+        lambda resume, job_evidence: patched_score,
+    )
+    candidate = {
+        "candidate_id": "live_concrete_candidate:2",
+        "operation_type": "rewrite",
+        "proposal_status": "patch_ready",
+        "proposal_type": "patch_ready_rewrite",
+        "patch_ready": True,
+        "patch_text": "Streamlined EDA with NumPy to identify anomalies.",
+        "patch_generation_method": "live_llm_concrete_patch_candidate",
+        "supported_jd_signals": ["numpy"],
+    }
+    context = {
+        "ok": True,
+        "original_resume": original_resume,
+        "original_result": original_score,
+        "job_evidence": object(),
+    }
+    return tailoring_rendering._materiality_validate_rewrite_candidate(
+        {}, candidate, context
+    )
+
+
+def test_neutral_live_concrete_evidence_removal_cannot_become_material(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"analytics_ml_signals": ["statistics"]},
+        patched_snapshot={"analytics_ml_signals": []},
+    )
+
+    assert candidate["proposal_status"] == "direction_only"
+    assert candidate["patch_ready"] is False
+    assert candidate["material_delta_found"] is False
+    assert candidate["materiality_validation_status"] == (
+        "scorer_neutral_evidence_regression"
+    )
+    assert candidate["precheck_supported_jd_signal_gains"] == []
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == [
+        "statistics"
+    ]
+
+
+def test_neutral_live_concrete_supported_signal_gain_can_remain_material(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"explicit_skills": []},
+        patched_snapshot={"explicit_skills": ["NumPy"]},
+    )
+
+    assert candidate["proposal_status"] == "patch_ready"
+    assert candidate["patch_ready"] is True
+    assert candidate["material_delta_found"] is True
+    assert candidate["materiality_validation_status"] == "material_candidate"
+    assert candidate["precheck_supported_jd_signal_gains"] == ["numpy"]
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == []
+
+
+def test_tiny_positive_live_concrete_without_supported_gain_is_directional(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"explicit_skills": []},
+        patched_snapshot={"explicit_skills": []},
+        projected_delta=0.000031,
+    )
+
+    assert candidate["proposal_status"] == "direction_only"
+    assert candidate["patch_ready"] is False
+    assert candidate["material_delta_found"] is False
+    assert candidate["materiality_validation_status"] == (
+        "scorer_neutral_no_supported_jd_signal_gain"
+    )
+
+
+def test_tiny_positive_live_concrete_supported_gain_can_remain_material(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"explicit_skills": []},
+        patched_snapshot={"explicit_skills": ["NumPy"]},
+        projected_delta=0.000031,
+    )
+
+    assert candidate["proposal_status"] == "patch_ready"
+    assert candidate["patch_ready"] is True
+    assert candidate["material_delta_found"] is True
+    assert candidate["materiality_validation_status"] == "material_candidate"
+    assert candidate["precheck_supported_jd_signal_gains"] == ["numpy"]
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == []
+
+
+def test_tiny_positive_live_concrete_regression_remains_directional(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"analytics_ml_signals": ["statistics"]},
+        patched_snapshot={"analytics_ml_signals": []},
+        projected_delta=0.000031,
+    )
+
+    assert candidate["proposal_status"] == "direction_only"
+    assert candidate["patch_ready"] is False
+    assert candidate["material_delta_found"] is False
+    assert candidate["materiality_validation_status"] == (
+        "scorer_neutral_evidence_regression"
+    )
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == [
+        "statistics"
+    ]
 
 
 def test_live_concrete_patch_contract_rejects_instruction_and_unsupported_patch_text():

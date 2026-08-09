@@ -844,6 +844,36 @@ html[data-theme="light"] .profile-dropdown-nav-btn:focus-visible {
   background: linear-gradient(135deg, #ede9fe, #cffafe) !important;
 }
 
+.profile-dropdown-nav-icon--ai-settings {
+  background: rgba(129, 140, 248, 0.2) !important;
+  color: #c7d2fe !important;
+}
+
+.profile-dropdown-nav-icon--diagnostics {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fde68a !important;
+}
+
+.profile-dropdown-nav-icon--scheduler {
+  background: rgba(34, 211, 238, 0.17) !important;
+  color: #a5f3fc !important;
+}
+
+html[data-theme="light"] .profile-dropdown-nav-icon--ai-settings {
+  background: #ede9fe !important;
+  color: #5b21b6 !important;
+}
+
+html[data-theme="light"] .profile-dropdown-nav-icon--diagnostics {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+}
+
+html[data-theme="light"] .profile-dropdown-nav-icon--scheduler {
+  background: #cffafe !important;
+  color: #0e7490 !important;
+}
+
 .profile-dropdown-nav-icon img {
   width: 22px !important;
   height: 22px !important;

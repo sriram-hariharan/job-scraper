@@ -108,7 +108,7 @@ def _icon_svg(name: str) -> str:
 
 def render_top_shell(active_href: str) -> str:
     toolbar_classes = "app-shell-top-right"
-    if active_href in {"/onboarding", "/profile/preferences", "/profile/ai-settings"}:
+    if active_href in {"/onboarding", "/profile/preferences"}:
         toolbar_classes += " app-shell-top-right--flow"
 
     groups_html = []

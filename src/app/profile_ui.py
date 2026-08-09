@@ -649,8 +649,8 @@ def profile_ai_settings_page() -> str:
   <title>AI Settings · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_r1" />
-  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_step7_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_step7b_r1" />
+  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_step7b_r1" />
 </head>
 <body class="profile-ai-settings-page-shell">
   {render_top_shell("/profile/ai-settings")}
@@ -694,7 +694,7 @@ def profile_ai_settings_page() -> str:
     </section>
 
     <div class="profile-ai-settings-content hidden" id="aiSettingsContent">
-      <section class="profile-ai-settings-card" aria-labelledby="providerConfigurationTitle">
+      <section class="profile-ai-settings-card profile-ai-settings-card--providers" aria-labelledby="providerConfigurationTitle">
         <div class="profile-ai-settings-section-heading">
           <div>
             <h2 id="providerConfigurationTitle">Provider configuration</h2>
@@ -705,7 +705,7 @@ def profile_ai_settings_page() -> str:
       </section>
 
       <div class="profile-ai-settings-two-column">
-        <section class="profile-ai-settings-card" aria-labelledby="preferredProviderTitle">
+        <section class="profile-ai-settings-card profile-ai-settings-card--preferred" aria-labelledby="preferredProviderTitle">
           <div class="profile-ai-settings-section-heading">
             <div>
               <h2 id="preferredProviderTitle">Preferred provider</h2>
@@ -723,7 +723,7 @@ def profile_ai_settings_page() -> str:
           <div class="profile-ai-settings-warning hidden" id="aiPreferredProviderWarning" role="status"></div>
         </section>
 
-        <section class="profile-ai-settings-card" aria-labelledby="connectionTestTitle">
+        <section class="profile-ai-settings-card profile-ai-settings-card--test" aria-labelledby="connectionTestTitle">
           <div class="profile-ai-settings-section-heading">
             <div>
               <h2 id="connectionTestTitle">Test connection</h2>
@@ -747,7 +747,7 @@ def profile_ai_settings_page() -> str:
         </section>
       </div>
 
-      <section class="profile-ai-settings-card" aria-labelledby="availableModelsTitle">
+      <section class="profile-ai-settings-card profile-ai-settings-card--models" aria-labelledby="availableModelsTitle">
         <div class="profile-ai-settings-section-heading">
           <div>
             <h2 id="availableModelsTitle">Available models</h2>
@@ -766,31 +766,75 @@ def profile_ai_settings_page() -> str:
           <span class="profile-ai-settings-readonly-badge">Not configured</span>
         </div>
       </section>
+
+      <p class="profile-ai-settings-provider-attribution">
+        OpenAI and its logo are trademarks of OpenAI. Groq is a trademark of Groq LLC and/or its affiliates. ApplyLens is not affiliated with or endorsed by either provider.
+      </p>
     </div>
   </main>
 
   <section class="modal-backdrop profile-ai-settings-modal hidden" id="aiCredentialModal" role="dialog" aria-modal="true" aria-labelledby="aiCredentialModalTitle">
-    <div class="modal-card profile-ai-settings-modal-card">
-      <div class="modal-header">
+    <div class="modal-card profile-ai-settings-modal-card profile-ai-settings-credential-card">
+      <div class="modal-header profile-ai-settings-modal-header">
         <div>
           <h3 id="aiCredentialModalTitle">Add API key</h3>
-          <p class="subtext" id="aiCredentialModalSubtitle"></p>
+          <p class="subtext profile-ai-settings-modal-provider" id="aiCredentialModalSubtitle"></p>
         </div>
-        <button type="button" class="ghost-btn modal-close-btn" id="aiCredentialModalCloseBtn" aria-label="Close API key dialog">Close</button>
       </div>
-      <form id="aiCredentialForm" autocomplete="off">
-        <div class="modal-body">
+      <form class="profile-ai-settings-modal-form" id="aiCredentialForm" autocomplete="off">
+        <div class="modal-body profile-ai-settings-modal-body">
           <div class="profile-ai-settings-field">
             <label for="aiCredentialInput">API key</label>
             <div class="profile-ai-settings-secret-control">
               <input id="aiCredentialInput" type="password" autocomplete="new-password" spellcheck="false" required />
-              <button type="button" class="ghost-btn" id="aiCredentialVisibilityBtn" aria-pressed="false">Show</button>
+              <button
+                type="button"
+                class="ghost-btn profile-ai-settings-secret-toggle"
+                id="aiCredentialVisibilityBtn"
+                aria-label="Show API key"
+                aria-pressed="false"
+                title="Show API key"
+              >
+                <svg
+                  class="profile-ai-settings-secret-toggle-icon"
+                  id="aiCredentialVisibilityShowIcon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12 18.25 18.75 12 18.75 2.25 12 2.25 12Z"></path>
+                  <circle cx="12" cy="12" r="3.25"></circle>
+                </svg>
+                <svg
+                  class="profile-ai-settings-secret-toggle-icon"
+                  id="aiCredentialVisibilityHideIcon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  focusable="false"
+                  hidden
+                >
+                  <path d="M3 3 21 21"></path>
+                  <path d="M10.73 5.08A9.65 9.65 0 0 1 12 5c6.25 0 9.75 7 9.75 7a17.5 17.5 0 0 1-3.18 3.96"></path>
+                  <path d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
+                  <path d="M6.36 6.36C3.7 8.16 2.25 12 2.25 12s3.5 7 9.75 7a9.4 9.4 0 0 0 4.64-1.22"></path>
+                </svg>
+              </button>
             </div>
           </div>
           <p class="profile-ai-settings-privacy-copy">The key is encrypted before storage. ApplyLens will not display it again after you save.</p>
           <div class="profile-ai-settings-inline-message hidden" id="aiCredentialModalStatus" role="alert"></div>
         </div>
-        <div class="modal-actions">
+        <div class="modal-actions profile-ai-settings-modal-footer">
           <button type="button" class="ghost-btn" id="aiCredentialCancelBtn">Cancel</button>
           <button type="submit" id="aiCredentialSaveBtn">Save key</button>
         </div>
@@ -820,7 +864,7 @@ def profile_ai_settings_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script src="/static/profile_ai_settings.js?v=phase1_step7_r1"></script>
+  <script src="/static/profile_ai_settings.js?v=phase1_step7b_r1"></script>
 </body>
 </html>
     """.strip()

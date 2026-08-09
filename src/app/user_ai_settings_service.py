@@ -25,7 +25,7 @@ from src.storage.user_ai_settings.store import (
 CONNECTION_TEST_MESSAGES = (
     {"role": "user", "content": "Reply with OK."},
 )
-CONNECTION_TEST_MAX_TOKENS = 16
+CONNECTION_TEST_MAX_TOKENS = 128
 
 
 class UserAiSettingsServiceError(RuntimeError):

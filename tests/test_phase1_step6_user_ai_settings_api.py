@@ -467,8 +467,12 @@ def test_connection_uses_stored_user_runtime_fixed_prompt_and_bounded_request(
     args, kwargs = calls[0]
     assert args[0:3] == (AUTHENTICATED_OWNER, "openai", "gpt-5-mini")
     assert args[3] == [{"role": "user", "content": "Reply with OK."}]
-    assert kwargs["max_tokens"] <= 32
+    assert service.CONNECTION_TEST_MAX_TOKENS == 128
+    assert kwargs["max_tokens"] == 128
+    assert kwargs["temperature"] == 0
+    assert kwargs["thinking_budget"] == 0
     assert kwargs["response_mime_type"] is None
+    assert kwargs["response_schema"] is None
     assert kwargs["return_parsed"] is False
     assert "fallback_enabled" not in kwargs
     assert "credential" not in kwargs

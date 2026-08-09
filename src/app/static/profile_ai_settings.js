@@ -38,11 +38,33 @@
   }
 
   function displayProviderName(provider) {
-    return String(provider || "")
+    const normalizedProvider = String(provider || "").trim().toLowerCase();
+    if (normalizedProvider === "openai") return "OpenAI";
+    if (normalizedProvider === "groq") return "Groq";
+    return normalizedProvider
       .split(/[-_]/)
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(" ");
+  }
+
+  function createProviderMark(provider) {
+    const normalizedProvider = String(provider || "").trim().toLowerCase();
+    const mark = makeElement("span", "profile-ai-settings-provider-mark");
+    mark.setAttribute("aria-hidden", "true");
+    if (normalizedProvider === "openai") {
+      const logo = makeElement("img", "profile-ai-settings-provider-logo");
+      logo.src = "/static/media/openai_provider_logo.svg";
+      logo.alt = "";
+      mark.appendChild(logo);
+      return mark;
+    }
+    if (normalizedProvider === "groq") {
+      mark.appendChild(makeElement("span", "profile-ai-settings-provider-wordmark", "Groq"));
+      return mark;
+    }
+    mark.appendChild(makeElement("span", "profile-ai-settings-provider-wordmark", displayProviderName(provider)));
+    return mark;
   }
 
   function extractErrorCategory(payload) {
@@ -144,12 +166,7 @@
 
       const heading = makeElement("div", "profile-ai-settings-provider-heading");
       const identity = makeElement("div", "profile-ai-settings-provider-identity");
-      const monogram = makeElement(
-        "span",
-        "profile-ai-settings-provider-monogram",
-        displayProviderName(provider).charAt(0)
-      );
-      monogram.setAttribute("aria-hidden", "true");
+      const providerMark = createProviderMark(provider);
       const identityCopy = makeElement("div");
       identityCopy.appendChild(makeElement("h3", "", displayProviderName(provider)));
       identityCopy.appendChild(
@@ -159,7 +176,7 @@
           `${catalogEntry.models.length} available ${catalogEntry.models.length === 1 ? "model" : "models"}`
         )
       );
-      identity.append(monogram, identityCopy);
+      identity.append(providerMark, identityCopy);
 
       const badges = makeElement("div", "profile-ai-settings-provider-badges");
       const statusBadge = makeElement(
@@ -374,6 +391,20 @@
     renderConnectionSelectors();
   }
 
+  function setCredentialVisibility(reveal) {
+    const input = byId("aiCredentialInput");
+    const button = byId("aiCredentialVisibilityBtn");
+    const showIcon = byId("aiCredentialVisibilityShowIcon");
+    const hideIcon = byId("aiCredentialVisibilityHideIcon");
+    const label = reveal ? "Hide API key" : "Show API key";
+    input.type = reveal ? "text" : "password";
+    showIcon.hidden = reveal;
+    hideIcon.hidden = !reveal;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+    button.setAttribute("aria-pressed", reveal ? "true" : "false");
+  }
+
   function openCredentialModal(provider, trigger) {
     const providerState = providerSettings(provider);
     state.credentialProvider = provider;
@@ -381,9 +412,7 @@
     byId("aiCredentialModalTitle").textContent = providerState.configured ? "Replace API key" : "Add API key";
     byId("aiCredentialModalSubtitle").textContent = displayProviderName(provider);
     byId("aiCredentialInput").value = "";
-    byId("aiCredentialInput").type = "password";
-    byId("aiCredentialVisibilityBtn").textContent = "Show";
-    byId("aiCredentialVisibilityBtn").setAttribute("aria-pressed", "false");
+    setCredentialVisibility(false);
     setMessage(byId("aiCredentialModalStatus"), "", "");
     setHidden(byId("aiCredentialModal"), false);
     byId("aiCredentialInput").focus();
@@ -392,7 +421,7 @@
   function closeCredentialModal(options) {
     const restoreFocus = !options || options.restoreFocus !== false;
     byId("aiCredentialInput").value = "";
-    byId("aiCredentialInput").type = "password";
+    setCredentialVisibility(false);
     setMessage(byId("aiCredentialModalStatus"), "", "");
     setHidden(byId("aiCredentialModal"), true);
     state.credentialProvider = null;
@@ -597,14 +626,10 @@
       if (trigger.dataset.credentialAction === "remove") openRemoveModal(provider, trigger);
     });
     byId("aiCredentialForm").addEventListener("submit", submitCredential);
-    byId("aiCredentialModalCloseBtn").addEventListener("click", () => closeCredentialModal());
     byId("aiCredentialCancelBtn").addEventListener("click", () => closeCredentialModal());
     byId("aiCredentialVisibilityBtn").addEventListener("click", () => {
       const input = byId("aiCredentialInput");
-      const reveal = input.type === "password";
-      input.type = reveal ? "text" : "password";
-      byId("aiCredentialVisibilityBtn").textContent = reveal ? "Hide" : "Show";
-      byId("aiCredentialVisibilityBtn").setAttribute("aria-pressed", reveal ? "true" : "false");
+      setCredentialVisibility(input.type === "password");
       input.focus();
     });
     byId("aiCredentialRemoveCloseBtn").addEventListener("click", () => closeRemoveModal());

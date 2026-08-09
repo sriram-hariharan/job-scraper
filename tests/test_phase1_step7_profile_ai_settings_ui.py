@@ -16,6 +16,10 @@ AI_SETTINGS_JS = (ROOT / "src/app/static/profile_ai_settings.js").read_text(
 AI_SETTINGS_CSS = (ROOT / "src/app/static/profile_ai_settings.css").read_text(
     encoding="utf-8"
 )
+APP_REDESIGN_CSS = (ROOT / "src/app/static/app_redesign.css").read_text(
+    encoding="utf-8"
+)
+OPENAI_PROVIDER_LOGO = ROOT / "src/app/static/media/openai_provider_logo.svg"
 SYNTHETIC_SECRET = "synthetic-step7-browser-secret-never-persist"
 
 
@@ -32,6 +36,13 @@ def test_profile_ai_settings_route_exists_and_uses_shared_shell():
     assert "render_top_shell(\"/profile/ai-settings\")" in PROFILE_UI
     assert "AI Settings" in html
     assert "Configure your AI providers and test model access." in html
+
+
+def test_profile_ai_settings_keeps_shared_toolbar_in_standard_top_right_mode():
+    shell = render_top_shell("/profile/ai-settings")
+    assert 'class="app-shell-top-right"' in shell
+    assert "app-shell-top-right--flow" not in shell
+    assert "app-shell-top-right--flow" in render_top_shell("/profile/preferences")
 
 
 def test_account_dropdown_adds_ai_settings_without_removing_existing_links():
@@ -83,8 +94,23 @@ def test_provider_cards_and_selectors_derive_from_validated_catalog_data():
     assert "appendProviderOptions(select, true)" in AI_SETTINGS_JS
     assert 'noPreference.value = ""' in AI_SETTINGS_JS
     assert 'state.settings.preferredProvider || ""' in AI_SETTINGS_JS
-    assert '"groq"' not in AI_SETTINGS_JS.lower()
-    assert '"openai"' not in AI_SETTINGS_JS.lower()
+    assert "state.catalog.providers" in AI_SETTINGS_JS
+
+
+def test_provider_identity_uses_correct_openai_label_and_permitted_assets():
+    assert 'normalizedProvider === "openai"' in AI_SETTINGS_JS
+    assert 'return "OpenAI"' in AI_SETTINGS_JS
+    assert "Openai" not in profile_ai_settings_page() + AI_SETTINGS_JS
+    assert 'logo.src = "/static/media/openai_provider_logo.svg"' in AI_SETTINGS_JS
+    assert OPENAI_PROVIDER_LOGO.is_file()
+    assert OPENAI_PROVIDER_LOGO.read_text(encoding="utf-8").lstrip().startswith("<svg")
+    assert "groq_provider_logo" not in AI_SETTINGS_JS.lower()
+    assert not any(
+        "groq" in asset.name.lower()
+        for asset in (ROOT / "src/app/static/media").iterdir()
+    )
+    assert '"profile-ai-settings-provider-wordmark", "Groq"' in AI_SETTINGS_JS
+    assert "Groq is a trademark of Groq LLC" in profile_ai_settings_page()
 
 
 def test_configured_provider_uses_only_backend_credential_hint():
@@ -108,6 +134,50 @@ def test_secure_add_replace_modal_is_accessible_and_write_only():
     assert 'method: "PUT"' in _function(
         AI_SETTINGS_JS, "submitCredential", "removeCredential"
     )
+
+
+def test_credential_modal_is_compact_aligned_and_has_one_footer_exit_path():
+    html = profile_ai_settings_page()
+    credential_modal = html.split('id="aiCredentialModal"', 1)[1].split(
+        'id="aiCredentialRemoveModal"', 1
+    )[0]
+    assert "aiCredentialModalCloseBtn" not in credential_modal
+    assert "aiCredentialModalCloseBtn" not in AI_SETTINGS_JS
+    assert 'id="aiCredentialCancelBtn"' in credential_modal
+    assert 'id="aiCredentialSaveBtn"' in credential_modal
+    assert "profile-ai-settings-modal-header" in credential_modal
+    assert "profile-ai-settings-modal-body" in credential_modal
+    assert "profile-ai-settings-modal-footer" in credential_modal
+    assert "profile-ai-settings-credential-card" in credential_modal
+
+
+def test_credential_visibility_uses_inline_icons_for_both_states():
+    html = profile_ai_settings_page()
+    toggle = html.split('id="aiCredentialVisibilityBtn"', 1)[1].split(
+        "</button>", 1
+    )[0]
+    assert 'class="ghost-btn profile-ai-settings-secret-toggle"' in html
+    assert 'aria-label="Show API key"' in toggle
+    assert 'title="Show API key"' in toggle
+    assert toggle.count("<svg") == 2
+    assert toggle.count('viewBox="0 0 24 24"') == 2
+    assert toggle.count('fill="none"') == 2
+    assert toggle.count('stroke="currentColor"') == 2
+    assert toggle.count('stroke-width="1.8"') == 2
+    assert 'id="aiCredentialVisibilityShowIcon"' in toggle
+    assert 'id="aiCredentialVisibilityHideIcon"' in toggle
+    assert "<img" not in toggle
+    assert "/static/media/" not in toggle
+    assert ">Show</button>" not in html
+    assert ">Hide</button>" not in html
+    visibility = _function(AI_SETTINGS_JS, "setCredentialVisibility", "openCredentialModal")
+    assert 'reveal ? "Hide API key" : "Show API key"' in visibility
+    assert "showIcon.hidden = reveal" in visibility
+    assert "hideIcon.hidden = !reveal" in visibility
+    assert "textContent" not in visibility
+    assert 'input.type = reveal ? "text" : "password"' in visibility
+    assert 'button.setAttribute("aria-label", label)' in visibility
+    assert 'button.setAttribute("aria-pressed", reveal ? "true" : "false")' in visibility
 
 
 def test_successful_save_clears_secret_before_refresh_and_does_not_chain_actions():
@@ -230,3 +300,104 @@ def test_page_css_has_light_dark_responsive_and_disabled_contracts():
     assert "cursor: not-allowed" in AI_SETTINGS_CSS
     assert "linear-gradient" not in AI_SETTINGS_CSS
     assert "backdrop-filter" not in AI_SETTINGS_CSS
+
+
+def test_page_css_stays_scoped_away_from_shared_shell_and_generic_chrome():
+    for forbidden in (
+        ".app-shell",
+        ".notification-shell",
+        ".theme-toggle",
+        "\nbutton {",
+        "\nheader {",
+        "\nsection {",
+        "\nselect {",
+        "\ninput {",
+        "\n.page {",
+    ):
+        assert forbidden not in AI_SETTINGS_CSS
+
+
+def test_secret_visibility_control_uses_stable_grid_overlay_geometry():
+    secret_section = AI_SETTINGS_CSS.split(
+        ".profile-ai-settings-secret-control {", 1
+    )[1].split(".profile-ai-settings-privacy-copy", 1)[0]
+    assert "display: grid" in secret_section
+    assert ".profile-ai-settings-secret-control > input" in secret_section
+    assert "grid-area: 1 / 1" in secret_section
+    assert "padding-right: 52px" in secret_section
+    secret_control_css = secret_section.split(
+        ".profile-ai-settings-secret-control button,", 1
+    )[1]
+    for state in ("button:hover", "button:focus", "button:focus-visible", "button:active"):
+        assert state in secret_control_css
+    assert "position: absolute" not in secret_control_css
+    assert "transform" not in secret_control_css
+    assert "translate" not in secret_control_css
+    assert "scale" not in secret_control_css
+    for dimension in (
+        "grid-area: 1 / 1 !important",
+        "justify-self: end !important",
+        "align-self: center !important",
+        "margin-right: 11px !important",
+        "width: 28px !important",
+        "height: 28px !important",
+        "border: 1px solid transparent !important",
+        "border-radius: 6px !important",
+        "background: transparent !important",
+        "box-shadow: none !important",
+    ):
+        assert dimension in secret_control_css
+
+    icon_rule = AI_SETTINGS_CSS.split(
+        ".profile-ai-settings-secret-toggle-icon {", 1
+    )[1].split("}", 1)[0]
+    assert "width: 17px" in icon_rule
+    assert "height: 17px" in icon_rule
+
+
+def test_all_profile_dropdown_icons_share_geometry_and_owned_soft_tints():
+    base_icon_rule = APP_REDESIGN_CSS.split(".profile-dropdown-nav-icon {", 1)[1].split(
+        "}", 1
+    )[0]
+    for geometry in (
+        "width: 44px !important",
+        "height: 44px !important",
+        "border-radius: 14px !important",
+        "align-items: center !important",
+        "justify-content: center !important",
+    ):
+        assert geometry in base_icon_rule
+
+    for preserved in ("scans", "profile", "preferences"):
+        assert f".profile-dropdown-nav-icon--{preserved}" in APP_REDESIGN_CSS
+    for corrected in ("ai-settings", "diagnostics", "scheduler"):
+        assert f".profile-dropdown-nav-icon--{corrected}" in APP_REDESIGN_CSS
+        assert f'profile-dropdown-nav-icon--{corrected}' in UI_SHELL
+        assert f'html[data-theme="light"] .profile-dropdown-nav-icon--{corrected}' in APP_REDESIGN_CSS
+
+
+def test_ai_settings_sections_have_restrained_semantic_accent_ownership():
+    html = profile_ai_settings_page()
+    for modifier in (
+        "profile-ai-settings-card--providers",
+        "profile-ai-settings-card--preferred",
+        "profile-ai-settings-card--test",
+        "profile-ai-settings-card--models",
+    ):
+        assert modifier in html
+    assert ".profile-ai-settings-card--preferred" in AI_SETTINGS_CSS
+    assert "var(--ai-settings-violet)" in AI_SETTINGS_CSS
+    assert ".profile-ai-settings-card--test" in AI_SETTINGS_CSS
+    assert "var(--ai-settings-blue)" in AI_SETTINGS_CSS
+    assert '.profile-ai-settings-provider-card[data-provider="groq"]' in AI_SETTINGS_CSS
+    assert '.profile-ai-settings-provider-card[data-provider="openai"]' in AI_SETTINGS_CSS
+    qualification = AI_SETTINGS_CSS.split(
+        ".profile-ai-settings-model-badge.is-muted {", 1
+    )[1].split("}", 1)[0]
+    assert "var(--ai-settings-amber-soft)" in qualification
+    assert "var(--ai-settings-amber)" in qualification
+    routing = AI_SETTINGS_CSS.split(".profile-ai-settings-routing {", 1)[1].split(
+        "}", 1
+    )[0]
+    assert "var(--ai-settings-violet)" in routing
+    assert "box-shadow: none" in routing

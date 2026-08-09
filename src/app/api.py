@@ -4,8 +4,10 @@ import binascii
 import json
 from typing import Any
 from fastapi import Body, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, Response
-from src.app import services
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, Response
+from src.app import services, user_ai_settings_service
 from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from fastapi.staticfiles import StaticFiles
@@ -233,6 +235,25 @@ class ProductionHumanReviewDecisionRequest(BaseModel):
     client_idempotency_key: str
     decision_reason: str = ""
     continuation_token: SecretStr | None = None
+
+
+class UserAiPreferredProviderRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+
+
+class UserAiCredentialRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: SecretStr
+
+
+class UserAiTestConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    model: str
 
 
 class CriticEvaluatorReadonlyRequest(BaseModel):
@@ -845,6 +866,25 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="src/app/static"), name="static")
 
 
+@app.exception_handler(RequestValidationError)
+async def sanitize_user_ai_settings_validation_error(
+    request: Request,
+    exc: RequestValidationError,
+):
+    path = request.url.path or ""
+    if path == "/ai/settings" or path.startswith("/ai/settings/"):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "ok": False,
+                    "error_category": "invalid_request",
+                }
+            },
+        )
+    return await request_validation_exception_handler(request, exc)
+
+
 @app.middleware("http")
 async def require_dashboard_auth(request: Request, call_next):
     guard_response = auth_guard_response(request)
@@ -868,6 +908,23 @@ def _require_auth_owner_user_id(request: Request) -> str:
     if not owner_user_id:
         raise HTTPException(status_code=401, detail="Authentication required.")
     return owner_user_id
+
+
+def _raise_user_ai_settings_http_error(
+    exc: user_ai_settings_service.UserAiSettingsServiceError,
+) -> None:
+    category = exc.category
+    status_code = {
+        "settings_unavailable": 503,
+        "settings_write_failed": 503,
+        "credential_write_failed": 503,
+        "credential_delete_failed": 503,
+        "connection_test_failed": 502,
+    }.get(category, 400)
+    raise HTTPException(
+        status_code=status_code,
+        detail={"ok": False, "error_category": category},
+    ) from None
 
 
 def _auth_owner_email(request: Request) -> str:
@@ -3794,6 +3851,94 @@ def delete_profile_resume_role_mapping(
         )
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/ai/settings")
+def user_ai_settings(http_request: Request):
+    try:
+        return user_ai_settings_service.user_ai_settings_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
+
+
+@app.get("/ai/settings/catalog")
+def user_ai_settings_catalog(http_request: Request):
+    try:
+        return user_ai_settings_service.user_ai_provider_catalog_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
+
+
+@app.post("/ai/settings/preferred-provider")
+def save_user_ai_preferred_provider(
+    request: UserAiPreferredProviderRequest,
+    http_request: Request,
+):
+    try:
+        return user_ai_settings_service.save_user_ai_preferred_provider_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            provider=request.provider,
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
+
+
+@app.delete("/ai/settings/preferred-provider")
+def clear_user_ai_preferred_provider(http_request: Request):
+    try:
+        return (
+            user_ai_settings_service.clear_user_ai_preferred_provider_service_payload(
+                owner_user_id=_require_auth_owner_user_id(http_request),
+            )
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
+
+
+@app.put("/ai/settings/credentials/{provider}")
+def save_user_ai_provider_credential(
+    provider: str,
+    request: UserAiCredentialRequest,
+    http_request: Request,
+):
+    try:
+        return user_ai_settings_service.save_user_ai_provider_credential_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            provider=provider,
+            credential=request.api_key.get_secret_value(),
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
+
+
+@app.delete("/ai/settings/credentials/{provider}")
+def delete_user_ai_provider_credential(provider: str, http_request: Request):
+    try:
+        return user_ai_settings_service.delete_user_ai_provider_credential_service_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            provider=provider,
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
+
+
+@app.post("/ai/settings/test-connection")
+def test_user_ai_provider_connection(
+    request: UserAiTestConnectionRequest,
+    http_request: Request,
+):
+    try:
+        return user_ai_settings_service.test_user_ai_provider_connection_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            provider=request.provider,
+            model=request.model,
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
 
 
 @app.get("/onboarding/preferences")

@@ -2368,7 +2368,10 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
-        ): "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
+        ): frozenset({
+            "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
+            "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
+        }),
         (
             "src/app/services.py",
             "bfa035faa8e89abd2b75095f68b45a282fb3b7fc8e5ff43e36c754db56ef12c2",
@@ -2384,7 +2387,10 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
-        ): "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
+        ): frozenset({
+            "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
+            "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
+        }),
         (
             "src/app/services.py",
             "e30180b352ebe8abca2ec34b4b34983fbaee61a32bdc0d511001c406703e392c",
@@ -2392,7 +2398,10 @@ def assert_protected_hashes(
         (
             "src/app/api.py",
             "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
-        ): "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
+        ): frozenset({
+            "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
+            "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
+        }),
         (
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",

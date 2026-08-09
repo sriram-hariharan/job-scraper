@@ -638,6 +638,194 @@ def profile_preferences_page() -> str:
     """.strip()
 
 
+@router.get("/profile/ai-settings", response_class=HTMLResponse)
+def profile_ai_settings_page() -> str:
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Settings · My Profile</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_r1" />
+  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_step7_r1" />
+</head>
+<body class="profile-ai-settings-page-shell">
+  {render_top_shell("/profile/ai-settings")}
+
+  <main class="page profile-ai-settings-page" id="profileAiSettingsPage">
+    <header class="page-header app-page-header profile-ai-settings-header">
+      <div class="app-page-header__main">
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">AI Settings</h1>
+        </div>
+        <p class="subtext app-page-header__description">Configure your AI providers and test model access.</p>
+      </div>
+    </header>
+
+    <section class="profile-ai-settings-security-note" aria-label="API key privacy">
+      <span class="profile-ai-settings-security-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </span>
+      <div>
+        <strong>Your API keys stay private.</strong>
+        <span>They are stored securely and are never shown again after saving.</span>
+      </div>
+    </section>
+
+    <div class="profile-ai-settings-page-status hidden" id="aiSettingsPageStatus" role="status" aria-live="polite"></div>
+
+    <section class="profile-ai-settings-loading" id="aiSettingsLoading" aria-live="polite">
+      <span class="profile-ai-settings-spinner" aria-hidden="true"></span>
+      <span>Loading AI settings…</span>
+    </section>
+
+    <section class="profile-ai-settings-error hidden" id="aiSettingsLoadError" role="alert">
+      <div>
+        <strong>AI settings could not be loaded.</strong>
+        <span>Try again to retrieve your provider and model configuration.</span>
+      </div>
+      <button type="button" class="ghost-btn" id="aiSettingsRetryBtn">Retry</button>
+    </section>
+
+    <div class="profile-ai-settings-content hidden" id="aiSettingsContent">
+      <section class="profile-ai-settings-card" aria-labelledby="providerConfigurationTitle">
+        <div class="profile-ai-settings-section-heading">
+          <div>
+            <h2 id="providerConfigurationTitle">Provider configuration</h2>
+            <p>Manage write-only credentials for each available AI provider.</p>
+          </div>
+        </div>
+        <div class="profile-ai-settings-provider-grid" id="aiSettingsProviderGrid"></div>
+      </section>
+
+      <div class="profile-ai-settings-two-column">
+        <section class="profile-ai-settings-card" aria-labelledby="preferredProviderTitle">
+          <div class="profile-ai-settings-section-heading">
+            <div>
+              <h2 id="preferredProviderTitle">Preferred provider</h2>
+              <p>Save a provider preference without selecting a model.</p>
+            </div>
+          </div>
+          <div class="profile-ai-settings-control-row">
+            <div class="profile-ai-settings-field">
+              <label for="aiPreferredProviderSelect">Provider</label>
+              <select id="aiPreferredProviderSelect"></select>
+            </div>
+            <button type="button" id="aiPreferredProviderSaveBtn">Save preference</button>
+          </div>
+          <div class="profile-ai-settings-inline-message hidden" id="aiPreferredProviderStatus" role="status" aria-live="polite"></div>
+          <div class="profile-ai-settings-warning hidden" id="aiPreferredProviderWarning" role="status"></div>
+        </section>
+
+        <section class="profile-ai-settings-card" aria-labelledby="connectionTestTitle">
+          <div class="profile-ai-settings-section-heading">
+            <div>
+              <h2 id="connectionTestTitle">Test connection</h2>
+              <p>Run a manual, bounded check with one available model.</p>
+            </div>
+          </div>
+          <div class="profile-ai-settings-test-fields">
+            <div class="profile-ai-settings-field">
+              <label for="aiTestProviderSelect">Provider</label>
+              <select id="aiTestProviderSelect"></select>
+            </div>
+            <div class="profile-ai-settings-field">
+              <label for="aiTestModelSelect">Model</label>
+              <select id="aiTestModelSelect"></select>
+            </div>
+          </div>
+          <div class="profile-ai-settings-test-actions">
+            <div class="profile-ai-settings-inline-message hidden" id="aiConnectionTestStatus" role="status" aria-live="polite"></div>
+            <button type="button" id="aiConnectionTestBtn" disabled>Test connection</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="profile-ai-settings-card" aria-labelledby="availableModelsTitle">
+        <div class="profile-ai-settings-section-heading">
+          <div>
+            <h2 id="availableModelsTitle">Available models</h2>
+            <p>Configuration candidates supplied by the provider catalog.</p>
+          </div>
+        </div>
+        <div class="profile-ai-settings-model-groups" id="aiSettingsModelGroups"></div>
+      </section>
+
+      <section class="profile-ai-settings-card profile-ai-settings-routing" aria-labelledby="aiTaskRoutingTitle">
+        <div class="profile-ai-settings-section-heading">
+          <div>
+            <h2 id="aiTaskRoutingTitle">AI task routing</h2>
+            <p>Task-specific model routing will appear here after model qualification and routing configuration are enabled.</p>
+          </div>
+          <span class="profile-ai-settings-readonly-badge">Not configured</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <section class="modal-backdrop profile-ai-settings-modal hidden" id="aiCredentialModal" role="dialog" aria-modal="true" aria-labelledby="aiCredentialModalTitle">
+    <div class="modal-card profile-ai-settings-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="aiCredentialModalTitle">Add API key</h3>
+          <p class="subtext" id="aiCredentialModalSubtitle"></p>
+        </div>
+        <button type="button" class="ghost-btn modal-close-btn" id="aiCredentialModalCloseBtn" aria-label="Close API key dialog">Close</button>
+      </div>
+      <form id="aiCredentialForm" autocomplete="off">
+        <div class="modal-body">
+          <div class="profile-ai-settings-field">
+            <label for="aiCredentialInput">API key</label>
+            <div class="profile-ai-settings-secret-control">
+              <input id="aiCredentialInput" type="password" autocomplete="new-password" spellcheck="false" required />
+              <button type="button" class="ghost-btn" id="aiCredentialVisibilityBtn" aria-pressed="false">Show</button>
+            </div>
+          </div>
+          <p class="profile-ai-settings-privacy-copy">The key is encrypted before storage. ApplyLens will not display it again after you save.</p>
+          <div class="profile-ai-settings-inline-message hidden" id="aiCredentialModalStatus" role="alert"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="ghost-btn" id="aiCredentialCancelBtn">Cancel</button>
+          <button type="submit" id="aiCredentialSaveBtn">Save key</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="modal-backdrop profile-ai-settings-modal hidden" id="aiCredentialRemoveModal" role="dialog" aria-modal="true" aria-labelledby="aiCredentialRemoveTitle">
+    <div class="modal-card profile-ai-settings-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="aiCredentialRemoveTitle">Remove API key?</h3>
+          <p class="subtext" id="aiCredentialRemoveSubtitle"></p>
+        </div>
+        <button type="button" class="ghost-btn modal-close-btn" id="aiCredentialRemoveCloseBtn" aria-label="Close remove API key dialog">Close</button>
+      </div>
+      <div class="modal-body">
+        <p>ApplyLens will no longer be able to use this provider through your configured credential until a new key is saved. This does not revoke the key in the provider’s own dashboard.</p>
+        <div class="profile-ai-settings-inline-message hidden" id="aiCredentialRemoveStatus" role="alert"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" id="aiCredentialRemoveCancelBtn">Cancel</button>
+        <button type="button" class="profile-ai-settings-danger-btn" id="aiCredentialRemoveConfirmBtn">Remove key</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/profile_ai_settings.js?v=phase1_step7_r1"></script>
+</body>
+</html>
+    """.strip()
+
+
 @router.get("/profile/saved-scans", response_class=HTMLResponse)
 def saved_scans_page() -> str:
     return f"""

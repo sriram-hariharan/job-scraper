@@ -15,6 +15,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
 from src.evaluation.provider_benchmark_contract import (
     CONTRACT_VERSION as STEP8L_CONTRACT_VERSION,
+    MODEL_CATALOG_SNAPSHOT_VERSION,
     MODEL_ORDER,
     WORKLOAD_ORDER,
     build_provider_benchmark_contract,
@@ -481,104 +482,67 @@ def _eligible_alias_to_case(
     return by_alias
 
 
-def _workload_definitions() -> Dict[str, Dict[str, Any]]:
-    benchmark = build_provider_benchmark_contract()
-    return {
-        row["workload_id"]: row
-        for row in benchmark["workloads"]
-    }
-
-
 def build_staged_benchmark_matrix(
     corpus: Dict[str, Any] | None = None,
 ) -> List[Dict[str, Any]]:
     """Build a serial, bounded proposal without authorizing execution."""
 
     reviews = build_transmission_review(corpus)
-    workloads = _workload_definitions()
+    return _build_staged_benchmark_matrix_from_reviews(reviews)
+
+
+def _build_staged_benchmark_matrix_from_reviews(
+    reviews: Sequence[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    benchmark = build_provider_benchmark_contract()
+    candidate_by_id = {
+        row["candidate_id"]: row
+        for row in benchmark["candidate_definitions"]
+    }
+    matrix_by_workload = {
+        row["workload_id"]: row
+        for row in benchmark["candidate_matrix"]
+    }
     workload_index = {
         workload_id: index
         for index, workload_id in enumerate(WORKLOAD_ORDER)
+    }
+    candidate_index = {
+        candidate["candidate_id"]: index
+        for index, candidate in enumerate(
+            benchmark["candidate_definitions"]
+        )
     }
     entries = []
     for review in reviews:
         if not review["eligible_for_later_controlled_transmission"]:
             continue
         workload_id = review["workload_id"]
-        workload = workloads[workload_id]
-        tier = workload["tier"]
+        workload_matrix = matrix_by_workload[workload_id]
+        tier = workload_matrix["tier"]
         alias = review["case_alias"]
-        stage_a_pairs: List[tuple[str, str, str]] = []
-        stage_b_pairs: List[tuple[str, str, str]] = []
-        if tier == "A":
-            stage_a_pairs.append(
-                ("groq", "openai/gpt-oss-20b", "tier_a_quality_floor")
-            )
-            stage_b_pairs.append(
-                ("openai", "gpt-5-mini", "tier_a_secondary_comparison")
-            )
-        elif tier == "B":
-            stage_a_pairs.extend(
-                [
-                    (
-                        "groq",
-                        "openai/gpt-oss-20b",
-                        "tier_b_quality_floor",
+        for candidate_id in workload_matrix["candidate_ids"]:
+            candidate = candidate_by_id[candidate_id]
+            provider = candidate["provider"]
+            entries.append(
+                {
+                    "stage": "A" if provider == "groq" else "B",
+                    "case_alias": alias,
+                    "workload_id": workload_id,
+                    "tier": tier,
+                    "provider": provider,
+                    "model": candidate["model"],
+                    "planning_reason": "catalog_tier_eligible",
+                    "fallback": False,
+                    "harness_retry_limit": 0,
+                    "live_execution_authorized": False,
+                    "_sort": (
+                        0 if provider == "groq" else 1,
+                        workload_index[workload_id],
+                        candidate_index[candidate_id],
                     ),
-                    (
-                        "groq",
-                        "openai/gpt-oss-120b",
-                        "tier_b_quality_ceiling",
-                    ),
-                ]
+                }
             )
-            if (
-                workload["quality_sensitivity"] == "critical"
-                or workload["hallucination_risk"] == "critical"
-            ):
-                stage_b_pairs.append(
-                    (
-                        "openai",
-                        "gpt-5-mini",
-                        "critical_tier_b_secondary_comparison",
-                    )
-                )
-        else:
-            stage_a_pairs.extend(
-                [
-                    (
-                        "groq",
-                        "openai/gpt-oss-120b",
-                        "tier_c_quality_floor",
-                    ),
-                    (
-                        "groq",
-                        "openai/gpt-oss-20b",
-                        "tier_c_explicit_cost_baseline",
-                    ),
-                ]
-            )
-        for stage, pairs in (("A", stage_a_pairs), ("B", stage_b_pairs)):
-            for local_order, (provider, model, reason) in enumerate(pairs):
-                entries.append(
-                    {
-                        "stage": stage,
-                        "case_alias": alias,
-                        "workload_id": workload_id,
-                        "tier": tier,
-                        "provider": provider,
-                        "model": model,
-                        "planning_reason": reason,
-                        "fallback": False,
-                        "harness_retry_limit": 0,
-                        "live_execution_authorized": False,
-                        "_sort": (
-                            0 if stage == "A" else 1,
-                            workload_index[workload_id],
-                            local_order,
-                        ),
-                    }
-                )
     entries.sort(key=lambda row: row["_sort"])
     for execution_order, row in enumerate(entries, start=1):
         row.pop("_sort")
@@ -676,6 +640,10 @@ def build_controlled_provider_benchmark_plan(
         "step8l_contract_sha256": provider_benchmark_contract_sha256(
             benchmark
         ),
+        "model_catalog_snapshot_version": MODEL_CATALOG_SNAPSHOT_VERSION,
+        "model_catalog_snapshot_sha256": benchmark[
+            "model_catalog_snapshot_sha256"
+        ],
         "step8o_engine_source": STEP8O_ENGINE_SOURCE,
         "step8o_case_source": STEP8O_CASE_SOURCE,
         "step8o_contract_version": FIXTURE_BENCHMARK_VERSION,
@@ -714,16 +682,6 @@ def build_controlled_provider_benchmark_plan(
             "live_execution_requested": False,
         },
         "staged_matrix": matrix,
-        "conditional_future_comparisons": {
-            "gpt_5_1_automatic_assignment": False,
-            "gpt_5_1_requires_revised_plan_and_authorization": True,
-            "allowed_conditions": [
-                "groq_quality_below_threshold",
-                "groq_models_disagree",
-                "critical_workload",
-                "explicit_quality_premium_comparison",
-            ],
-        },
         "request_counts": counts,
         "execution_policy": {
             "serial_ordering_required": True,
@@ -855,6 +813,19 @@ def validate_controlled_provider_benchmark_plan(
         plan.get("plan_version") == CONTROLLED_PLAN_VERSION,
         "controlled plan version mismatch",
     )
+    benchmark = build_provider_benchmark_contract()
+    _require(
+        plan.get("step8l_contract_sha256")
+        == provider_benchmark_contract_sha256(benchmark),
+        "controlled plan benchmark contract digest mismatch",
+    )
+    _require(
+        plan.get("model_catalog_snapshot_version")
+        == MODEL_CATALOG_SNAPSHOT_VERSION
+        and plan.get("model_catalog_snapshot_sha256")
+        == benchmark["model_catalog_snapshot_sha256"],
+        "controlled plan model catalog snapshot binding mismatch",
+    )
     _require(
         [
             (row.get("provider"), row.get("model"))
@@ -963,6 +934,11 @@ def validate_controlled_provider_benchmark_plan(
     )
     matrix = plan.get("staged_matrix")
     _require(isinstance(matrix, list) and bool(matrix), "staged matrix required")
+    expected_matrix = _build_staged_benchmark_matrix_from_reviews(review)
+    _require(
+        matrix == expected_matrix,
+        "staged matrix must contain every catalog-eligible case/model cell",
+    )
     _require(
         [row.get("execution_order") for row in matrix]
         == list(range(1, len(matrix) + 1)),
@@ -1009,14 +985,6 @@ def validate_controlled_provider_benchmark_plan(
             "maximum_requests_per_case"
         ],
         "per-case request bound exceeded",
-    )
-    _require(
-        plan.get("conditional_future_comparisons", {}).get(
-            "gpt_5_1_automatic_assignment"
-        )
-        is False
-        and counts["by_model"]["openai/gpt-5.1"] == 0,
-        "GPT-5.1 must not be automatically assigned",
     )
     _require(
         plan.get("fallback_policy", {}).get("fallback") is False,

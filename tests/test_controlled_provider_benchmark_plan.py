@@ -378,7 +378,7 @@ def test_execution_matrix_is_stable_and_serial():
     )
 
 
-def test_tier_a_starts_with_groq_20b():
+def test_tier_a_uses_only_20b_and_gpt_5_mini():
     plan = _plan()
 
     for alias in {row["case_alias"] for row in plan["staged_matrix"]}:
@@ -387,57 +387,92 @@ def test_tier_a_starts_with_groq_20b():
             if row["case_alias"] == alias and row["tier"] == "A"
         ]
         if rows:
-            assert rows[0]["provider"] == "groq"
-            assert rows[0]["model"] == "openai/gpt-oss-20b"
+            assert [
+                (row["provider"], row["model"])
+                for row in rows
+            ] == [
+                ("groq", "openai/gpt-oss-20b"),
+                ("openai", "gpt-5-mini"),
+            ]
+            assert all(
+                row["model"] != "openai/gpt-oss-120b"
+                for row in rows
+            )
 
 
-def test_tier_c_starts_with_groq_120b_and_has_20b_baseline():
+def test_tier_b_and_c_rows_include_all_catalog_eligible_models():
     plan = _plan()
 
     for alias in {row["case_alias"] for row in plan["staged_matrix"]}:
         rows = [
             row for row in plan["staged_matrix"]
-            if row["case_alias"] == alias and row["tier"] == "C"
+            if row["case_alias"] == alias and row["tier"] in {"B", "C"}
         ]
         if rows:
             assert [row["model"] for row in rows] == [
-                "openai/gpt-oss-120b",
                 "openai/gpt-oss-20b",
+                "openai/gpt-oss-120b",
+                "gpt-5-mini",
+                "gpt-5.1",
             ]
 
 
-def test_gpt_5_1_is_never_automatically_assigned():
+def test_gpt_5_1_is_in_every_currently_eligible_plan_cell():
     plan = _plan()
 
-    assert plan["request_counts"]["by_model"]["openai/gpt-5.1"] == 0
-    assert all(
-        row["model"] != "gpt-5.1" for row in plan["staged_matrix"]
-    )
-    assert plan["conditional_future_comparisons"][
-        "gpt_5_1_requires_revised_plan_and_authorization"
-    ] is True
+    rows = [row for row in plan["staged_matrix"] if row["model"] == "gpt-5.1"]
+    assert len(rows) == 10
+    assert {row["tier"] for row in rows} == {"B", "C"}
+    assert all(row["workload_id"] != "skill_extraction" for row in rows)
+
+
+def test_matrix_matches_contract_tier_eligibility_without_qualification_claim():
+    plan = _plan()
+    benchmark = build_provider_benchmark_contract()
+    candidates = {
+        row["candidate_id"]: (row["provider"], row["model"])
+        for row in benchmark["candidate_definitions"]
+    }
+    expected_by_workload = {
+        row["workload_id"]: [
+            candidates[value] for value in row["candidate_ids"]
+        ]
+        for row in benchmark["candidate_matrix"]
+    }
+
+    for workload_id, expected in expected_by_workload.items():
+        actual = [
+            (row["provider"], row["model"])
+            for row in plan["staged_matrix"]
+            if row["workload_id"] == workload_id
+        ]
+        assert actual == expected
+    assert "qualified" not in json.dumps(plan).lower()
 
 
 def test_proposed_request_counts_are_exact_and_bounded():
     counts = _plan()["request_counts"]
 
-    assert counts["by_provider"] == {"groq": 22, "openai": 6}
+    assert counts["by_provider"] == {"groq": 22, "openai": 22}
     assert counts["by_model"] == {
         "groq/openai/gpt-oss-20b": 12,
         "groq/openai/gpt-oss-120b": 10,
-        "openai/gpt-5-mini": 6,
-        "openai/gpt-5.1": 0,
+        "openai/gpt-5-mini": 12,
+        "openai/gpt-5.1": 10,
     }
-    assert counts["maximum_total_requests"] == 28
-    assert counts["maximum_requests_per_case"] == 3
-    assert all(value <= 28 for value in counts["maximum_requests_per_model"].values())
+    assert counts["maximum_total_requests"] == 44
+    assert counts["maximum_requests_per_case"] == 4
+    assert all(
+        value <= 44
+        for value in counts["maximum_requests_per_model"].values()
+    )
 
 
 def test_request_count_by_workload_is_complete():
     counts = _plan()["request_counts"]["by_workload"]
 
     assert list(counts) == list(WORKLOAD_ORDER)
-    assert sum(counts.values()) == 28
+    assert sum(counts.values()) == 44
 
 
 def test_duplicate_case_provider_model_combination_is_absent():

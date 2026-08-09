@@ -13,9 +13,17 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List
 
+from src.ai.provider_model_catalog import (
+    list_configurable_models,
+    list_configurable_providers,
+)
+
 
 CONTRACT_VERSION = "provider-benchmark-contract-v1"
 FIXTURE_MANIFEST_VERSION = "provider-benchmark-fixture-manifest-v1"
+MODEL_CATALOG_SNAPSHOT_VERSION = (
+    "provider-model-catalog-qualification-snapshot-v1"
+)
 DEFAULT_FIXTURE_MANIFEST_PATH = (
     Path(__file__).resolve().parents[2]
     / "tests"
@@ -24,12 +32,24 @@ DEFAULT_FIXTURE_MANIFEST_PATH = (
     / "manifest.json"
 )
 
-PROVIDER_ORDER = ("groq", "openai")
-MODEL_ORDER = (
-    ("groq", "openai/gpt-oss-20b"),
-    ("groq", "openai/gpt-oss-120b"),
-    ("openai", "gpt-5-mini"),
-    ("openai", "gpt-5.1"),
+_QUALIFICATION_CATALOG_ROWS = tuple(
+    row
+    for row in list_configurable_models()
+    if row.get("configuration_status") == "configuration_eligible"
+    and row.get("synthetic_compatibility_status")
+    == "synthetic_compatibility_expected"
+    and row.get("live_qualification_status")
+    == "live_qualification_required"
+    and row.get("eligible_benchmark_tiers")
+)
+PROVIDER_ORDER = tuple(
+    provider
+    for provider in list_configurable_providers()
+    if any(row["provider"] == provider for row in _QUALIFICATION_CATALOG_ROWS)
+)
+MODEL_ORDER = tuple(
+    (row["provider"], row["model_id"])
+    for row in _QUALIFICATION_CATALOG_ROWS
 )
 MODEL_PROVIDER = {model: provider for provider, model in MODEL_ORDER}
 
@@ -321,12 +341,23 @@ _WORKLOAD_DEFINITIONS = (
     },
 )
 
-_CANDIDATE_DEFINITIONS = (
+def _candidate_id(provider: str, model: str) -> str:
+    return "_".join(
+        part
+        for part in "".join(
+            character if character.isalnum() else "_"
+            for character in f"{provider}_{model}"
+        ).split("_")
+        if part
+    ).lower()
+
+
+_CANDIDATE_DEFINITIONS = tuple(
     {
-        "candidate_id": "groq_openai_gpt_oss_20b",
-        "provider": "groq",
-        "model": "openai/gpt-oss-20b",
-        "eligible_tiers": ["A", "B", "C"],
+        "candidate_id": _candidate_id(row["provider"], row["model_id"]),
+        "provider": row["provider"],
+        "model": row["model_id"],
+        "eligible_tiers": list(row["eligible_benchmark_tiers"]),
         "structured_output_required": True,
         "fallback_disabled": True,
         "explicit_provider_required": True,
@@ -335,65 +366,17 @@ _CANDIDATE_DEFINITIONS = (
         "maximum_request_budget": 0,
         "raw_response_persistence_prohibited": True,
         "authority_transfer": False,
-    },
-    {
-        "candidate_id": "groq_openai_gpt_oss_120b",
-        "provider": "groq",
-        "model": "openai/gpt-oss-120b",
-        "eligible_tiers": ["B", "C"],
-        "structured_output_required": True,
-        "fallback_disabled": True,
-        "explicit_provider_required": True,
-        "explicit_model_required": True,
-        "live_execution_default": False,
-        "maximum_request_budget": 0,
-        "raw_response_persistence_prohibited": True,
-        "authority_transfer": False,
-    },
-    {
-        "candidate_id": "openai_gpt_5_mini",
-        "provider": "openai",
-        "model": "gpt-5-mini",
-        "eligible_tiers": ["A", "B", "C"],
-        "structured_output_required": True,
-        "fallback_disabled": True,
-        "explicit_provider_required": True,
-        "explicit_model_required": True,
-        "live_execution_default": False,
-        "maximum_request_budget": 0,
-        "raw_response_persistence_prohibited": True,
-        "authority_transfer": False,
-    },
-    {
-        "candidate_id": "openai_gpt_5_1",
-        "provider": "openai",
-        "model": "gpt-5.1",
-        "eligible_tiers": ["B", "C"],
-        "structured_output_required": True,
-        "fallback_disabled": True,
-        "explicit_provider_required": True,
-        "explicit_model_required": True,
-        "live_execution_default": False,
-        "maximum_request_budget": 0,
-        "raw_response_persistence_prohibited": True,
-        "authority_transfer": False,
-    },
+    }
+    for row in _QUALIFICATION_CATALOG_ROWS
 )
 
 _TIER_CANDIDATES = {
-    "A": ["groq_openai_gpt_oss_20b", "openai_gpt_5_mini"],
-    "B": [
-        "groq_openai_gpt_oss_20b",
-        "groq_openai_gpt_oss_120b",
-        "openai_gpt_5_mini",
-        "openai_gpt_5_1",
-    ],
-    "C": [
-        "groq_openai_gpt_oss_120b",
-        "groq_openai_gpt_oss_20b",
-        "openai_gpt_5_1",
-        "openai_gpt_5_mini",
-    ],
+    tier: [
+        candidate["candidate_id"]
+        for candidate in _CANDIDATE_DEFINITIONS
+        if tier in candidate["eligible_tiers"]
+    ]
+    for tier in ("A", "B", "C")
 }
 
 _METRIC_DEFINITIONS = tuple(
@@ -637,6 +620,111 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def build_provider_model_catalog_snapshot() -> Dict[str, Any]:
+    """Return qualification-relevant catalog data in canonical catalog order."""
+
+    snapshot = {
+        "snapshot_version": MODEL_CATALOG_SNAPSHOT_VERSION,
+        "candidates": [
+            {
+                "provider": row["provider"],
+                "model": row["model_id"],
+                "eligible_tiers": list(row["eligible_benchmark_tiers"]),
+                "configuration_status": row["configuration_status"],
+                "synthetic_compatibility_status": row[
+                    "synthetic_compatibility_status"
+                ],
+                "live_qualification_status": row[
+                    "live_qualification_status"
+                ],
+            }
+            for row in _QUALIFICATION_CATALOG_ROWS
+        ],
+    }
+    validate_provider_model_catalog_snapshot(snapshot)
+    return deepcopy(snapshot)
+
+
+def validate_provider_model_catalog_snapshot(snapshot: Dict[str, Any]) -> bool:
+    _require(isinstance(snapshot, dict), "catalog snapshot must be an object")
+    _require(
+        set(snapshot) == {"snapshot_version", "candidates"},
+        "catalog snapshot fields are invalid",
+    )
+    _require(
+        snapshot.get("snapshot_version") == MODEL_CATALOG_SNAPSHOT_VERSION,
+        "catalog snapshot version mismatch",
+    )
+    candidates = snapshot.get("candidates")
+    _require(
+        isinstance(candidates, list) and bool(candidates),
+        "catalog snapshot candidates are required",
+    )
+    required_fields = {
+        "provider",
+        "model",
+        "eligible_tiers",
+        "configuration_status",
+        "synthetic_compatibility_status",
+        "live_qualification_status",
+    }
+    _require(
+        all(
+            isinstance(row, dict) and set(row) == required_fields
+            for row in candidates
+        ),
+        "catalog snapshot candidate fields are invalid",
+    )
+    _require(
+        [(row["provider"], row["model"]) for row in candidates]
+        == list(MODEL_ORDER),
+        "catalog snapshot order or candidate set mismatch",
+    )
+    for row in candidates:
+        tiers = row.get("eligible_tiers")
+        _require(
+            isinstance(tiers, list)
+            and bool(tiers)
+            and len(tiers) == len(set(tiers))
+            and all(tier in {"A", "B", "C"} for tier in tiers),
+            "catalog snapshot tier eligibility is invalid",
+        )
+        _require(
+            row.get("configuration_status") == "configuration_eligible"
+            and row.get("synthetic_compatibility_status")
+            == "synthetic_compatibility_expected"
+            and row.get("live_qualification_status")
+            == "live_qualification_required",
+            "catalog snapshot qualification status is invalid",
+        )
+    return True
+
+
+def serialize_provider_model_catalog_snapshot(
+    snapshot: Dict[str, Any] | None = None,
+) -> str:
+    payload = (
+        build_provider_model_catalog_snapshot()
+        if snapshot is None
+        else deepcopy(snapshot)
+    )
+    validate_provider_model_catalog_snapshot(payload)
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def provider_model_catalog_snapshot_sha256(
+    snapshot: Dict[str, Any] | None = None,
+) -> str:
+    return sha256(
+        serialize_provider_model_catalog_snapshot(snapshot).encode("utf-8")
+    ).hexdigest()
+
+
 def _has_forbidden_winner_field(value: Any) -> bool:
     if isinstance(value, dict):
         if _FORBIDDEN_WINNER_FIELDS.intersection(value):
@@ -753,9 +841,14 @@ def build_provider_benchmark_contract(
         else deepcopy(fixture_manifest)
     )
     validate_fixture_manifest(manifest)
+    catalog_snapshot = build_provider_model_catalog_snapshot()
     contract = {
         "contract_version": CONTRACT_VERSION,
         "contract_kind": "offline_provider_benchmark_definition",
+        "model_catalog_snapshot": catalog_snapshot,
+        "model_catalog_snapshot_sha256": (
+            provider_model_catalog_snapshot_sha256(catalog_snapshot)
+        ),
         "provider_order": list(PROVIDER_ORDER),
         "workload_order": list(WORKLOAD_ORDER),
         "workloads": deepcopy(list(_WORKLOAD_DEFINITIONS)),
@@ -778,6 +871,16 @@ def validate_provider_benchmark_contract(contract: Dict[str, Any]) -> bool:
 
     _require(isinstance(contract, dict), "benchmark contract must be an object")
     _require(contract.get("contract_version") == CONTRACT_VERSION, "contract version mismatch")
+    expected_catalog_snapshot = build_provider_model_catalog_snapshot()
+    _require(
+        contract.get("model_catalog_snapshot") == expected_catalog_snapshot,
+        "benchmark catalog snapshot differs from the canonical model catalog",
+    )
+    _require(
+        contract.get("model_catalog_snapshot_sha256")
+        == provider_model_catalog_snapshot_sha256(expected_catalog_snapshot),
+        "benchmark catalog snapshot digest mismatch",
+    )
     _require(
         contract.get("provider_order") == list(PROVIDER_ORDER),
         "benchmark providers must be exactly groq and openai",

@@ -1,7 +1,8 @@
-"""Dormant user-scoped provider credential and client boundary.
+"""Dormant user-scoped provider credential, client, and transport boundary.
 
-This module does not execute provider requests or participate in production
-LLM routing. Callers must supply an already-authenticated owner identifier.
+This module does not participate in production LLM routing. Callers must
+supply an already-authenticated owner identifier and an exact configurable
+provider/model pair.
 """
 
 from __future__ import annotations
@@ -11,7 +12,10 @@ from typing import Any, Dict, Optional
 from groq import Groq
 from openai import OpenAI
 
-from src.ai.provider_model_catalog import list_configurable_providers
+from src.ai.provider_model_catalog import (
+    is_configuration_eligible,
+    list_configurable_providers,
+)
 from src.storage.user_ai_settings.store import (
     _get_user_ai_provider_credential_for_server,
     get_user_ai_provider_credential_metadata_payload,
@@ -216,3 +220,59 @@ def build_user_provider_client(
         raise UserProviderRuntimeConfigurationError(
             "client_construction_failed", provider_name
         ) from None
+
+
+def _run_shared_chat_completion_with_metadata(**kwargs: Any) -> Dict[str, Any]:
+    from src.ai import llm_client
+
+    return llm_client.run_chat_completion_with_metadata(**kwargs)
+
+
+def run_user_chat_completion_with_metadata(
+    owner_user_id: str,
+    provider: str,
+    model: str,
+    messages: Any,
+    *,
+    temperature: float = 0,
+    max_tokens: int = 500,
+    response_mime_type: Optional[str] = None,
+    response_schema: Optional[Dict[str, Any]] = None,
+    return_parsed: bool = False,
+    thinking_budget: Optional[int] = None,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    """Execute one exact user-scoped request through the shared transport."""
+
+    owner = _require_owner_user_id(owner_user_id)
+    provider_name = _normalize_configurable_provider(provider)
+    model_name = str(model or "").strip()
+    if not is_configuration_eligible(provider_name, model_name):
+        raise UserProviderRuntimeConfigurationError(
+            "unsupported_provider_model", provider_name
+        )
+
+    provider_client = build_user_provider_client(
+        owner,
+        provider_name,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        ensure_schema=ensure_schema,
+    )
+    return _run_shared_chat_completion_with_metadata(
+        messages=messages,
+        model=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        provider=provider_name,
+        response_mime_type=response_mime_type,
+        response_schema=response_schema,
+        return_parsed=return_parsed,
+        thinking_budget=thinking_budget,
+        fallback_enabled=False,
+        provider_client=provider_client,
+    )

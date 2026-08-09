@@ -591,7 +591,9 @@ def test_successful_provider_parsing_and_metrics_remain_compatible(
     assert metrics["provider_failures"] == 0
 
 
-def test_public_signatures_and_defaults_are_unchanged(client_module):
+def test_public_signatures_remain_compatible_with_appended_provider_client(
+    client_module,
+):
     module, _ = client_module
     expected = [
         "messages",
@@ -606,6 +608,7 @@ def test_public_signatures_and_defaults_are_unchanged(client_module):
         "fallback_enabled",
         "fallback_provider",
         "fallback_model",
+        "provider_client",
     ]
     assert list(inspect.signature(module.run_chat_completion).parameters) == expected
     assert list(

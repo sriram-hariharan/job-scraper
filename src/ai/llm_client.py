@@ -350,9 +350,10 @@ def _run_groq_chat_completion(
     response_schema=None,
     return_parsed=False,
     thinking_budget=None,
+    provider_client=None,
 ):
     increment_provider_metric("groq_calls")
-    client = get_groq_client()
+    client = provider_client if provider_client is not None else get_groq_client()
 
     request_kwargs = {
         "model": model,
@@ -414,9 +415,10 @@ def _run_openai_chat_completion(
     response_schema=None,
     return_parsed=False,
     thinking_budget=None,
+    provider_client=None,
 ):
     increment_provider_metric("openai_calls")
-    client = get_openai_client()
+    client = provider_client if provider_client is not None else get_openai_client()
 
     request_kwargs = {
         "model": model,
@@ -480,6 +482,7 @@ def _run_single_provider(
     response_schema=None,
     return_parsed=False,
     thinking_budget=None,
+    provider_client=None,
 ):
     provider_name = provider_name.strip().lower()
 
@@ -493,6 +496,7 @@ def _run_single_provider(
             response_schema=response_schema,
             return_parsed=return_parsed,
             thinking_budget=thinking_budget,
+            provider_client=provider_client,
         )
 
     if provider_name == "openai":
@@ -505,6 +509,7 @@ def _run_single_provider(
             response_schema=response_schema,
             return_parsed=return_parsed,
             thinking_budget=thinking_budget,
+            provider_client=provider_client,
         )
 
     raise ValueError(f"Unsupported LLM provider: {provider_name}")
@@ -522,6 +527,7 @@ def run_chat_completion_with_metadata(
     fallback_enabled=None,
     fallback_provider=None,
     fallback_model=None,
+    provider_client=None,
 ):
     primary_provider, primary_model = _normalize_and_validate_provider_model(
         provider or DEFAULT_PROVIDER,
@@ -529,6 +535,12 @@ def run_chat_completion_with_metadata(
     )
 
     effective_fallback_enabled = FALLBACK_ENABLED if fallback_enabled is None else bool(fallback_enabled)
+    if provider_client is not None and effective_fallback_enabled:
+        raise _ProviderValidationError(
+            "configuration",
+            primary_provider,
+            primary_model,
+        )
     effective_fallback_provider = str(
         fallback_provider or FALLBACK_PROVIDER
     ).strip().lower()
@@ -564,6 +576,7 @@ def run_chat_completion_with_metadata(
             response_schema=response_schema,
             return_parsed=return_parsed,
             thinking_budget=thinking_budget,
+            provider_client=provider_client,
         )
         return {
             "content": content,
@@ -633,6 +646,7 @@ def run_chat_completion(
     fallback_enabled=None,
     fallback_provider=None,
     fallback_model=None,
+    provider_client=None,
 ):
     result = run_chat_completion_with_metadata(
         messages=messages,
@@ -647,5 +661,6 @@ def run_chat_completion(
         fallback_enabled=fallback_enabled,
         fallback_provider=fallback_provider,
         fallback_model=fallback_model,
+        provider_client=provider_client,
     )
     return result["content"]

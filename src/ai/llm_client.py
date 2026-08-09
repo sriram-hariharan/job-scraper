@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from dotenv import load_dotenv
 from groq import Groq
 from openai import OpenAI
@@ -18,6 +19,11 @@ _GROQ_MODELS_WITHOUT_JSON_SCHEMA = {
     "llama-3.1-8b-instant",
     "llama-3.3-70b-versatile",
 }
+
+_OPENAI_GPT_5_MINI_MODEL_PATTERN = re.compile(
+    r"^gpt-5-mini(?:-\d{4}-\d{2}-\d{2})?$",
+    re.IGNORECASE,
+)
 
 _SUPPORTED_PROVIDERS = {"groq", "openai"}
 _KNOWN_MODEL_PROVIDERS = {
@@ -330,6 +336,11 @@ def _coerce_groq_message_content(content):
     return str(content or "").strip()
 
 
+def _is_openai_gpt_5_mini_model(model):
+    model_name = str(model or "").strip()
+    return bool(_OPENAI_GPT_5_MINI_MODEL_PATTERN.fullmatch(model_name))
+
+
 def _run_groq_chat_completion(
     messages,
     model,
@@ -409,10 +420,17 @@ def _run_openai_chat_completion(
 
     request_kwargs = {
         "model": model,
-        "temperature": temperature,
         "max_completion_tokens": max_tokens,
         "messages": messages,
     }
+
+    is_gpt_5_mini = _is_openai_gpt_5_mini_model(model)
+
+    if not is_gpt_5_mini or temperature == 1:
+        request_kwargs["temperature"] = temperature
+
+    if is_gpt_5_mini and thinking_budget == 0:
+        request_kwargs["reasoning_effort"] = "minimal"
 
     if response_mime_type == "application/json":
         if response_schema is not None:

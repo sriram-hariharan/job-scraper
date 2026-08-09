@@ -248,13 +248,20 @@ def build_compatibility_scenarios() -> List[Dict[str, Any]]:
     scenarios: List[Dict[str, Any]] = []
     for candidate in benchmark["candidate_definitions"]:
         provider = candidate["provider"]
+        model = candidate["model"]
+        uses_openai_default_temperature = (
+            provider == "openai" and model == "gpt-5-mini"
+        )
         expected_fields = [
             "max_completion_tokens",
             "messages",
             "model",
-            "temperature",
         ]
         prohibited_fields = ["max_tokens"]
+        if uses_openai_default_temperature:
+            prohibited_fields.append("temperature")
+        else:
+            expected_fields.append("temperature")
         if provider == "groq":
             expected_fields.append("include_reasoning")
         else:
@@ -264,7 +271,7 @@ def build_compatibility_scenarios() -> List[Dict[str, Any]]:
                 "scenario_id": f"{candidate['candidate_id']}_chat_completions",
                 "candidate_id": candidate["candidate_id"],
                 "provider": provider,
-                "model": candidate["model"],
+                "model": model,
                 "request_mode": "chat_completions",
                 "structured_output_mode": "json_object_and_strict_json_schema",
                 "response_parsing_mode": "text_and_optional_json_decode",
@@ -322,6 +329,9 @@ def _evaluate_candidate(
     provider = scenario["provider"]
     model = scenario["model"]
     provider_metric = f"{provider}_calls"
+    uses_openai_default_temperature = (
+        provider == "openai" and model == "gpt-5-mini"
+    )
     checks: Dict[str, bool] = {}
 
     plain, plain_call, metrics = _invoke(
@@ -345,7 +355,11 @@ def _evaluate_candidate(
     )
     checks["max_completion_tokens"] = plain_call["max_completion_tokens_present"]
     checks["temperature"] = (
-        plain_call["temperature_classification"] == "explicit_numeric"
+        plain_call["temperature_classification"] == (
+            "missing_or_non_numeric"
+            if uses_openai_default_temperature
+            else "explicit_numeric"
+        )
     )
     checks["reasoning_control"] = (
         plain_call["include_reasoning"] is False
@@ -446,7 +460,11 @@ def _evaluate_candidate(
                 "present" if checks["max_completion_tokens"] else "missing"
             ),
             "temperature": (
-                "passed_explicitly" if checks["temperature"] else "not_explicit"
+                "omitted_for_default_only_model"
+                if checks["temperature"] and uses_openai_default_temperature
+                else "passed_explicitly"
+                if checks["temperature"]
+                else "incompatible_request_surface"
             ),
             "reasoning_control": (
                 "suppressed_for_gpt_oss"

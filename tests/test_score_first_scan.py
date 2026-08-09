@@ -19,6 +19,7 @@ from src.app.services import (
     create_saved_scan_payload,
     extract_scan_resume_upload_text_payload,
     scan_workspace_job_context_payload,
+    _scan_phrase_llm_prompt,
     _scan_phrase_parse_options_payload,
     _scan_phrase_signal_terms,
     _scan_phrase_structured_output_contract,
@@ -189,6 +190,180 @@ def test_scan_phrase_validate_llm_options_marks_manual_only():
     assert options[0]["requires_review"] is True
 
 
+def test_scan_phrase_prompt_requires_distinct_action_led_strategies():
+    prompt = _scan_phrase_llm_prompt(
+        current="Orchestrated automated ingestion using SQL and Python.",
+        guidance="Surface Python and SQL naturally.",
+        terms=["Python", "SQL"],
+    )
+
+    assert "first lexical word of every draft must match" not in prompt
+    assert "strong, capitalized action verb" in prompt
+    assert "normal resume sentence case" in prompt
+    assert "Never render the opening action verb in ALL CAPS" in prompt
+    assert "SQL, AWS, API, AI, LLM, and ETL" in prompt
+    assert "different truthful opening action verb for each draft" in prompt
+    assert "grammatical tense, factual meaning, and claim strength" in prompt
+    assert "Concise / direct accomplishment rewrite" in prompt
+    assert "Technical-signal-forward rewrite" in prompt
+    assert "Outcome / impact-forward rewrite" in prompt
+    assert "Incorporate supported terms naturally after the opening action verb" in prompt
+    assert "Never prefix the bullet with a keyword or tool list" in prompt
+    assert "Python, SQL —" in prompt
+    assert "Using, With, By, Through, or Via" in prompt
+    assert "not a keyword shuffle" in prompt
+
+
+def test_scan_phrase_validator_keeps_three_distinct_action_led_rewrites():
+    generated = [
+        "Orchestrated automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality.",
+        "Automated weekly ingestion and transformation of 250k+ customer records with Python and SQL while maintaining 98% data quality.",
+        "Engineered a Python and SQL workflow to ingest and transform 250k+ customer records each week, sustaining 98% data quality.",
+    ]
+    options = _scan_phrase_validate_llm_options(
+        [{"text": text} for text in generated],
+        current="Orchestrated automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == generated
+    assert [option["text"].split()[0] for option in options] == [
+        "Orchestrated",
+        "Automated",
+        "Engineered",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("generated", "expected", "terms"),
+    (
+        (
+            "ENGINEERED automated ingestion using SQL",
+            "Engineered automated ingestion using SQL",
+            ["SQL"],
+        ),
+        (
+            "IMPLEMENTED SQL and Python pipelines",
+            "Implemented SQL and Python pipelines",
+            ["SQL", "Python"],
+        ),
+        (
+            "DELIVERED weekly ingestion using AWS",
+            "Delivered weekly ingestion using AWS",
+            ["AWS"],
+        ),
+        (
+            "Engineered automated ingestion using SQL, AWS, LLM, and API",
+            "Engineered automated ingestion using SQL, AWS, LLM, and API",
+            ["SQL", "AWS", "LLM", "API"],
+        ),
+    ),
+)
+def test_scan_phrase_validator_sentence_cases_only_an_all_caps_opening_word(
+    generated,
+    expected,
+    terms,
+):
+    options = _scan_phrase_validate_llm_options(
+        [{"text": generated}],
+        current="Orchestrated automated ingestion using supported technical tools.",
+        terms=terms,
+    )
+
+    assert [option["text"] for option in options] == [expected]
+
+
+def test_scan_phrase_validator_keeps_only_one_duplicate_opening():
+    options = _scan_phrase_validate_llm_options(
+        [
+            {"text": "Orchestrated automated ingestion using Python and SQL."},
+            {"text": "ORCHESTRATED automated ingestion with Python and SQL."},
+            {"text": "Automated Python and SQL ingestion workflows."},
+        ],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == [
+        "Orchestrated automated ingestion using Python and SQL.",
+        "Automated Python and SQL ingestion workflows.",
+    ]
+
+
+@pytest.mark.parametrize(
+    "generated",
+    (
+        "Python, SQL — orchestrated automated ingestion.",
+        "SQL and Python: Orchestrated automated ingestion.",
+        "Using Python and SQL, orchestrated automated ingestion.",
+        "With Python and SQL, orchestrated automated ingestion.",
+    ),
+)
+def test_scan_phrase_validator_rejects_keyword_and_introductory_openings(generated):
+    options = _scan_phrase_validate_llm_options(
+        [{"text": generated}],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert options == []
+
+
+def test_scan_phrase_validator_rejects_near_duplicates_with_different_openings():
+    options = _scan_phrase_validate_llm_options(
+        [
+            {"text": "Orchestrated automated ingestion using Python and SQL."},
+            {"text": "Automated automated ingestion using Python and SQL."},
+            {"text": "Engineered Python and SQL workflows for automated ingestion."},
+        ],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == [
+        "Orchestrated automated ingestion using Python and SQL.",
+        "Engineered Python and SQL workflows for automated ingestion.",
+    ]
+
+
+def test_scan_phrase_validator_preserves_duplicate_and_length_protections():
+    valid = "Orchestrated automated ingestion using Python and SQL."
+    too_long = f"Engineered {('data ' * 80).strip()}"
+    options = _scan_phrase_validate_llm_options(
+        [
+            {"text": valid},
+            {"text": valid},
+            {"text": too_long},
+        ],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == [valid]
+
+
+def test_scan_phrase_validator_preserves_factual_safety_fields_and_review_contract():
+    options = _scan_phrase_validate_llm_options(
+        [{
+            "text": "Engineered ingestion workflows using Python and SQL.",
+            "reason": "Improves technical signal placement without changing the claim.",
+            "supported_terms": ["Python", "SQL"],
+            "risk_flags": ["manual_fact_review"],
+        }],
+        current="Orchestrated ingestion workflows using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert options[0]["reason"] == (
+        "Improves technical signal placement without changing the claim."
+    )
+    assert options[0]["supported_terms"] == ["Python", "SQL"]
+    assert options[0]["risk_flags"] == ["manual_fact_review"]
+    assert options[0]["requires_review"] is True
+    assert options[0]["can_accept_directly"] is False
+    assert options[0]["changed_from_current"] is True
+
+
 def test_scan_phrase_parse_options_payload_accepts_fenced_json_text():
     rows = _scan_phrase_parse_options_payload(
         '```json\n{"options":[{"text":"Draft","reason":"Clearer","supported_terms":["SQL"],"risk_flags":[]}]}\n```'
@@ -250,18 +425,11 @@ def test_scan_workspace_phrase_artifact_not_found_error_is_friendly():
 
 
 def test_scan_workspace_heading_uses_shared_page_heading_scale():
-    source = Path("src/app/static/scan_workspace_review.css").read_text(encoding="utf-8")
-    header_block = source.split("scan_review_v2_39", 1)[1].split(
-        ".scan-workspace-page .scan-workspace-header-actions .ghost-btn",
-        1,
-    )[0]
+    source = Path("src/app/static/scan_workspace_premium.css").read_text(encoding="utf-8")
+    header_block = source.split(".scan-workspace-header-copy h1 {", 1)[1].split("}", 1)[0]
 
     assert "font-size: clamp(26px, 2vw, 34px) !important;" in header_block
-    assert (
-        "body .scan-workspace-page.page > .scan-workspace-header-shell"
-        ".scan-workspace-header-shell--minimal .scan-workspace-header-copy h1"
-    ) in header_block
-    assert "font-size: clamp(28px, 4vw, 46px) !important;" not in header_block
+    assert "font-size: clamp(28px, 4vw, 46px)" not in header_block
 
 
 def test_saved_scan_contract_normalizes_pasted_text_record():

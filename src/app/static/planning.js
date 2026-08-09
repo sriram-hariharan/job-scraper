@@ -10754,7 +10754,7 @@ function renderScanWorkspaceTaxonomySummary(panel) {
   `;
 }
 
-function renderScanWorkspaceTaxonomyGroup(group) {
+function renderScanWorkspaceTaxonomyGroup(group, { panelKey = "" } = {}) {
   const items = Array.isArray(group.items) ? group.items : [];
   const weight = items.reduce((maxWeight, item) => {
     const value = Number(item?.score_priority_weight || 0);
@@ -10796,7 +10796,9 @@ function renderScanWorkspaceTaxonomyGroup(group) {
         </div>
       </div>
 
-      ${renderScanWorkspaceIssueInventory(items, group.bucket || "ai_optimize")}
+      ${renderScanWorkspaceIssueInventory(items, group.bucket || "ai_optimize", {
+        isSkillsPanel: panelKey === "skills",
+      })}
     </section>
   `;
 }
@@ -10854,7 +10856,9 @@ function renderScanWorkspaceTaxonomyPanel(panel) {
     <div class="scan-workspace-taxonomy-panel">
       ${renderScanWorkspaceTaxonomySummary(panel)}
 
-      ${panel.groups.map((group) => renderScanWorkspaceTaxonomyGroup(group)).join("")}
+      ${panel.groups.map((group) => renderScanWorkspaceTaxonomyGroup(group, {
+        panelKey: panel.key,
+      })).join("")}
     </div>
   `;
 }
@@ -11191,14 +11195,18 @@ function isScanWorkspaceIssueExcludable(item) {
   );
 }
 
-function renderScanWorkspaceIssueInventory(items, bucket) {
+function normalizeScanWorkspaceFindingDisplayText(value) {
+  return String(value || "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+function renderScanWorkspaceIssueInventory(items, bucket, { isSkillsPanel = false } = {}) {
   const safeItems = Array.isArray(items)
     ? items.slice().sort(compareScanWorkspaceIssuePriority)
     : [];
 
   if (!safeItems.length) {
     return `
-      <div class="tailoring-empty-state">
+      <div class="scan-workspace-empty-state">
         No scan items in this category.
       </div>
     `;
@@ -11219,7 +11227,16 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const isActive = isAnchorable && candidateId === activeCandidateId;
           const title = getScanWorkspaceIssueTitle(item, index);
           const signals = getScanWorkspaceIssueSignals(item);
-          const jdContext = getScanWorkspaceIssueJdContext(item);
+          const normalizedTitle = normalizeScanWorkspaceFindingDisplayText(title);
+          const visibleSignals = isSkillsPanel
+            ? signals.filter(
+                (signal) => normalizeScanWorkspaceFindingDisplayText(signal) !== normalizedTitle
+              )
+            : signals;
+          const jdEvidence = isSkillsPanel
+            ? getScanWorkspaceIssueJdContext(item, { full: true })
+            : "";
+          const jdContext = isSkillsPanel ? "" : getScanWorkspaceIssueJdContext(item);
           const meta = getScanWorkspaceIssueMetaForItem(item, bucket);
           const countLabel = getScanWorkspaceIssueRightLabel(item, bucket);
           const visibleCountLabel = meta && countLabel && meta.toLowerCase() === countLabel.toLowerCase()
@@ -11250,9 +11267,10 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           return `
             <button
               type="button"
-              class="scan-workspace-issue-row ${toneClass} ${isActive ? "is-active" : ""} ${isAnchorable ? "" : "is-static"}"
+              class="scan-workspace-issue-row ${toneClass} ${isSkillsPanel ? "scan-workspace-issue-row--skill" : ""} ${isActive ? "is-active" : ""} ${isAnchorable ? "" : "is-static"}"
               ${isAnchorable ? `data-scan-focus-candidate="${escapeHtml(candidateId)}"` : `data-scan-static-issue="${escapeHtml(rowId)}"`}
-              ${scoreTitle ? `title="${escapeHtml(scoreTitle)}"` : ""}
+              ${jdEvidence ? `data-scan-evidence-tooltip="${escapeHtml(jdEvidence)}" aria-describedby="scanWorkspaceEvidenceTooltip"` : ""}
+              ${scoreTitle && !isSkillsPanel ? `title="${escapeHtml(scoreTitle)}"` : ""}
             >
               <span class="scan-workspace-issue-status" aria-hidden="true"></span>
 
@@ -11262,10 +11280,10 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                 </span>
 
                 ${
-                  signals.length
+                  visibleSignals.length
                     ? `
                       <span class="scan-workspace-issue-signals">
-                        ${signals.map((signal) => escapeHtml(signal)).join(" · ")}
+                        ${visibleSignals.map((signal) => escapeHtml(signal)).join(" · ")}
                       </span>
                     `
                     : ""
@@ -11855,7 +11873,7 @@ function renderScanWorkspaceView() {
 
   if (!payload) {
     root.innerHTML = `
-      <div class="tailoring-empty-state">
+      <div class="scan-workspace-empty-state">
         No preloaded scan payload is available for this route.
       </div>
     `;
@@ -11981,6 +11999,50 @@ async function saveScanWorkspaceState() {
   }
 }
 
+function hideScanWorkspaceEvidenceTooltip() {
+  const tooltip = qs("scanWorkspaceEvidenceTooltip");
+  if (!tooltip) return;
+  tooltip.hidden = true;
+  tooltip.style.left = "";
+  tooltip.style.top = "";
+}
+
+function positionScanWorkspaceEvidenceTooltip(trigger, tooltip) {
+  const triggerRect = trigger.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const viewportWidth = document.documentElement?.clientWidth || window.innerWidth || 0;
+  const viewportHeight = document.documentElement?.clientHeight || window.innerHeight || 0;
+  const viewportGap = 12;
+  const triggerGap = 8;
+
+  let left = triggerRect.left;
+  let top = triggerRect.bottom + triggerGap;
+
+  if (left + tooltipRect.width > viewportWidth - viewportGap) {
+    left = viewportWidth - tooltipRect.width - viewportGap;
+  }
+  left = Math.max(viewportGap, left);
+
+  if (top + tooltipRect.height > viewportHeight - viewportGap) {
+    top = triggerRect.top - tooltipRect.height - triggerGap;
+  }
+  top = Math.max(viewportGap, top);
+
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
+function showScanWorkspaceEvidenceTooltip(trigger) {
+  const tooltip = qs("scanWorkspaceEvidenceTooltip");
+  const copy = qs("scanWorkspaceEvidenceTooltipCopy");
+  const evidence = String(trigger?.dataset?.scanEvidenceTooltip || "").trim();
+  if (!tooltip || !copy || !evidence) return;
+
+  copy.textContent = evidence;
+  tooltip.hidden = false;
+  positionScanWorkspaceEvidenceTooltip(trigger, tooltip);
+}
+
 function bindScanWorkspaceHandlers() {
   const root = qs("scanWorkspaceInteractiveSummary");
   if (root && root.dataset.bound !== "true") {
@@ -12055,6 +12117,32 @@ function bindScanWorkspaceHandlers() {
 
     root.addEventListener("input", handlePersonalDetailEdit);
     root.addEventListener("change", handlePersonalDetailEdit);
+
+    root.addEventListener("pointerover", (event) => {
+      const trigger = event.target.closest("[data-scan-evidence-tooltip]");
+      if (!trigger || (event.relatedTarget && trigger.contains(event.relatedTarget))) return;
+      showScanWorkspaceEvidenceTooltip(trigger);
+    });
+
+    root.addEventListener("pointerout", (event) => {
+      const trigger = event.target.closest("[data-scan-evidence-tooltip]");
+      if (!trigger || (event.relatedTarget && trigger.contains(event.relatedTarget))) return;
+      if (document.activeElement !== trigger) hideScanWorkspaceEvidenceTooltip();
+    });
+
+    root.addEventListener("focusin", (event) => {
+      const trigger = event.target.closest("[data-scan-evidence-tooltip]");
+      if (trigger) showScanWorkspaceEvidenceTooltip(trigger);
+    });
+
+    root.addEventListener("focusout", (event) => {
+      const trigger = event.target.closest("[data-scan-evidence-tooltip]");
+      if (!trigger || (event.relatedTarget && trigger.contains(event.relatedTarget))) return;
+      hideScanWorkspaceEvidenceTooltip();
+    });
+
+    window.addEventListener("resize", hideScanWorkspaceEvidenceTooltip);
+    window.addEventListener("scroll", hideScanWorkspaceEvidenceTooltip, true);
   }
 
   const tabRow = qs("scanWorkspaceTabRow");
@@ -12070,6 +12158,7 @@ function bindScanWorkspaceHandlers() {
 
       scanWorkspaceState.selectedTab = nextTab;
       scanWorkspaceState.activeCandidateId = "";
+      hideScanWorkspaceEvidenceTooltip();
       renderScanWorkspaceView();
       const reviewScroll = qs("scanWorkspaceInteractiveSummary")?.closest(".scan-review-left-scroll");
       if (reviewScroll) {
@@ -12129,7 +12218,7 @@ function applyScanWorkspaceSplitPercent(percent, { persist = true } = {}) {
   const layout = document.querySelector(".scan-workspace-review-shell");
   if (!layout || window.innerWidth <= 1180) return;
 
-  const safePercent = clampToRange(Number(percent) || 34, 28, 38);
+  const safePercent = clampToRange(Number(percent) || 40, 30, 52);
   layout.style.setProperty("--scan-workspace-left-width", `${safePercent}%`);
 
   if (persist) {
@@ -12151,7 +12240,7 @@ function bindScanWorkspaceDivider() {
     }
 
     const saved = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY));
-    applyScanWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 34, { persist: false });
+    applyScanWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 40, { persist: false });
   };
 
   const refreshAfterResize = () => {
@@ -12193,7 +12282,7 @@ function bindScanWorkspaceDivider() {
 
     event.preventDefault();
 
-    const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "34");
+    const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "40");
     const next = event.key === "ArrowLeft" ? current - 2 : current + 2;
 
     window.dispatchEvent(new CustomEvent("scan-workspace-split-resize-start"));
@@ -12226,7 +12315,7 @@ async function initScanWorkspacePage() {
     }
 
     root.innerHTML = `
-      <div class="tailoring-empty-state">
+      <div class="scan-workspace-empty-state">
         This scan page is ready, but no preloaded tailoring artifact was provided.
       </div>
     `;
@@ -12247,7 +12336,7 @@ async function initScanWorkspacePage() {
     }
 
     root.innerHTML = `
-      <div class="tailoring-empty-state">
+      <div class="scan-workspace-empty-state">
         Failed to load the scan preload payload for this job/resume pair.
       </div>
     `;
@@ -12303,7 +12392,7 @@ async function initScanWorkspacePage() {
     const errorStack = String(err?.stack || "");
 
     root.innerHTML = `
-      <div class="tailoring-empty-state">
+      <div class="scan-workspace-empty-state">
         <div>The scan preload loaded, but the scan workspace renderer failed.</div>
         <pre style="white-space:pre-wrap;text-align:left;margin-top:12px;font-size:12px;line-height:1.45;">${escapeHtml(errorMessage)}
 

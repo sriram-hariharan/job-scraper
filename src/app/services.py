@@ -2,6 +2,7 @@ from collections import Counter
 from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
@@ -31403,13 +31404,30 @@ def _scan_phrase_llm_prompt(
 ) -> str:
     term_line = ", ".join(terms) if terms else "none"
     return "\n".join([
-        "Create up to three high-quality resume bullet rewrite drafts for a manual editor.",
+        "Create three high-quality, materially distinct resume bullet rewrite drafts for a manual editor.",
         "",
         "Rewrite objective:",
         "- Apply the AI guidance as a concrete wording improvement, not a vague note.",
-        "- Put the strongest supported job signal earlier in the bullet when truthful.",
+        "- Begin every draft with a strong, capitalized action verb.",
+        "- Use normal resume sentence case and standard capitalization for the opening action verb.",
+        "- Never render the opening action verb in ALL CAPS.",
+        "- Preserve legitimate technical acronyms such as SQL, AWS, API, AI, LLM, and ETL.",
+        "- Use a different truthful opening action verb for each draft.",
+        "- Preserve the current bullet's grammatical tense, factual meaning, and claim strength.",
+        "- Do not force a synonym when it would change responsibility or claim strength.",
+        "- Incorporate supported terms naturally after the opening action verb.",
+        "- Never prefix the bullet with a keyword or tool list such as 'Python, SQL —' or 'AWS / Python —'.",
+        "- Never begin with Using, With, By, Through, or Via.",
+        "- Sound like a real resume bullet, not a keyword shuffle.",
         "- Preserve the original metric values, tools, employer context, and scope.",
         "- Do not invent tools, domains, ownership, impact, numbers, or responsibilities.",
+        "- Keep all three drafts factually equivalent; vary phrasing and structure, not substance.",
+        "",
+        "Distinct draft strategies:",
+        "1. Concise / direct accomplishment rewrite.",
+        "2. Technical-signal-forward rewrite.",
+        "3. Outcome / impact-forward rewrite.",
+        "- Avoid repetitive sentence structure and return fewer than three only when safety requires it.",
         "- Keep each option as one resume bullet without a leading bullet symbol.",
         "- Return only JSON in this exact shape:",
         '{"options":[{"text":"...","reason":"...","supported_terms":["..."],"risk_flags":[]}]}',
@@ -31420,6 +31438,41 @@ def _scan_phrase_llm_prompt(
         "Current bullet:",
         current,
     ])
+
+
+def _scan_phrase_first_lexical_word(value: Any) -> str:
+    match = re.search(
+        r"[^\W\d_]+(?:['’][^\W\d_]+)*",
+        str(value or ""),
+        flags=re.UNICODE,
+    )
+    return match.group(0) if match else ""
+
+
+def _scan_phrase_normalize_opening_sentence_case(value: Any) -> str:
+    text = _clean_text(value)
+    match = re.search(
+        r"[^\W\d_]+(?:['’][^\W\d_]+)*",
+        text,
+        flags=re.UNICODE,
+    )
+    if not match:
+        return text
+
+    opening = match.group(0)
+    if len(opening) <= 1 or not opening.isalpha() or not opening.isupper():
+        return text
+
+    sentence_case_opening = opening[:1].upper() + opening[1:].lower()
+    return f"{text[:match.start()]}{sentence_case_opening}{text[match.end():]}"
+
+
+def _scan_phrase_similarity_ratio(left: str, right: str) -> float:
+    left_norm = _normalize_tailoring_workspace_text_key(left)
+    right_norm = _normalize_tailoring_workspace_text_key(right)
+    if not left_norm or not right_norm:
+        return 0.0
+    return SequenceMatcher(None, left_norm, right_norm).ratio()
 
 
 def _scan_phrase_validate_llm_options(
@@ -31433,22 +31486,47 @@ def _scan_phrase_validate_llm_options(
         return []
 
     current_norm = _normalize_tailoring_workspace_text_key(current)
+    prohibited_openings = {"using", "with", "by", "through", "via"}
+    supported_term_openings = {
+        _scan_phrase_first_lexical_word(term).casefold()
+        for term in terms
+        if _scan_phrase_first_lexical_word(term)
+    }
     options: List[Dict[str, Any]] = []
     seen = set()
+    seen_openings = set()
 
     for index, row in enumerate(raw_option_rows, start=1):
         if not isinstance(row, dict):
             continue
 
-        text = _clean_text(row.get("text"))
+        text = _scan_phrase_normalize_opening_sentence_case(row.get("text"))
         normalized = _normalize_tailoring_workspace_text_key(text)
         if not text or not normalized or normalized in seen:
+            continue
+
+        generated_lead_word = _scan_phrase_first_lexical_word(text)
+        generated_lead_key = generated_lead_word.casefold()
+        if (
+            not generated_lead_word
+            or not generated_lead_word[:1].isupper()
+            or generated_lead_key in prohibited_openings
+            or generated_lead_key in supported_term_openings
+            or generated_lead_key in seen_openings
+        ):
             continue
 
         if len(text) > max(280, len(current) + 120):
             continue
 
+        if any(
+            _scan_phrase_similarity_ratio(text, option["text"]) >= 0.89
+            for option in options
+        ):
+            continue
+
         seen.add(normalized)
+        seen_openings.add(generated_lead_key)
         options.append({
             "option_id": f"phrase_llm_{index}",
             "text": text,

@@ -11,6 +11,7 @@ STYLES_CSS = Path("src/app/static/styles.css")
 TAILORING_PREMIUM_CSS = Path("src/app/static/tailoring_workspace_premium.css")
 SCAN_WORKSPACE_CSS = Path("src/app/static/scan_workspace.css")
 SCAN_WORKSPACE_REVIEW_CSS = Path("src/app/static/scan_workspace_review.css")
+SCAN_WORKSPACE_PREMIUM_CSS = Path("src/app/static/scan_workspace_premium.css")
 SCAN_WORKSPACE_JS = Path("src/app/static/scan_workspace.js")
 
 
@@ -927,9 +928,11 @@ def test_tailoring_workspace_ui_e_unlinks_scan_css_and_loads_premium_last():
 
     scan_route = source.split("def scan_workspace(", 1)[1]
     assert premium_css not in scan_route
-    assert "scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" in scan_route
+    assert "scan_workspace_review.css" not in scan_route
+    assert "scan_workspace_premium.css?v=scan_workspace_premium_r1" in scan_route
     assert SCAN_WORKSPACE_CSS.exists()
     assert SCAN_WORKSPACE_REVIEW_CSS.exists()
+    assert SCAN_WORKSPACE_PREMIUM_CSS.exists()
 
 
 def test_tailoring_workspace_ui_a_preserves_behavior_dom_contracts():

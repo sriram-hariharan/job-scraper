@@ -45,6 +45,19 @@ def _install_fake(module, provider, message):
     return fake
 
 
+def _install_capturing_fake(module, provider, message):
+    fake = _install_fake(module, provider, message)
+    captured = []
+    create = fake.chat.completions.create
+
+    def capture_create(**kwargs):
+        captured.append(kwargs)
+        return create(**kwargs)
+
+    fake.chat.completions.create = capture_create
+    return captured
+
+
 def _run_empty(module, provider, model, message):
     _install_fake(module, provider, message)
     runner = getattr(module, f"_run_{provider}_chat_completion")
@@ -57,6 +70,104 @@ def _run_empty(module, provider, model, message):
         response_schema={"type": "object"},
         return_parsed=True,
     )
+
+
+@pytest.mark.parametrize(
+    "model",
+    (
+        "gpt-5-mini",
+        "gpt-5-mini-2025-08-07",
+    ),
+)
+def test_gpt_5_mini_zero_budget_maps_to_minimal_reasoning_without_temperature(
+    client_module,
+    model,
+):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module,
+        "openai",
+        _FakeMessage('{"status":"ok"}'),
+    )
+    module.reset_provider_metrics()
+    messages = [{"role": "user", "content": "bounded"}]
+    schema = {
+        "type": "object",
+        "properties": {"status": {"type": "string"}},
+        "required": ["status"],
+        "additionalProperties": False,
+    }
+
+    result = module._run_openai_chat_completion(
+        messages=messages,
+        model=model,
+        temperature=0,
+        max_tokens=520,
+        response_mime_type="application/json",
+        response_schema=schema,
+        return_parsed=True,
+        thinking_budget=0,
+    )
+
+    assert result == {"status": "ok"}
+    assert len(captured) == 1
+    request = captured[0]
+    assert "temperature" not in request
+    assert request["reasoning_effort"] == "minimal"
+    assert request["model"] == model
+    assert request["messages"] == messages
+    assert request["max_completion_tokens"] == 520
+    assert request["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "structured_output",
+            "strict": True,
+            "schema": schema,
+        },
+    }
+    assert module.get_provider_metrics() == {
+        "primary_attempts": 0,
+        "fallback_attempts": 0,
+        "groq_calls": 0,
+        "openai_calls": 1,
+        "gemini_calls": 0,
+        "fallback_successes": 0,
+        "provider_failures": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    ("model", "temperature", "thinking_budget"),
+    (
+        ("gpt-5.1", 0.25, 0),
+        ("gpt-5-mini", 1, None),
+        ("gpt-5-mini", 1, 64),
+    ),
+)
+def test_other_openai_reasoning_intents_and_supported_temperatures_are_unchanged(
+    client_module,
+    model,
+    temperature,
+    thinking_budget,
+):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module,
+        "openai",
+        _FakeMessage("bounded success"),
+    )
+
+    result = module._run_openai_chat_completion(
+        messages=[{"role": "user", "content": "bounded"}],
+        model=model,
+        temperature=temperature,
+        max_tokens=32,
+        thinking_budget=thinking_budget,
+    )
+
+    assert result == "bounded success"
+    assert captured[0]["temperature"] == temperature
+    assert "reasoning_effort" not in captured[0]
 
 
 @pytest.mark.parametrize(

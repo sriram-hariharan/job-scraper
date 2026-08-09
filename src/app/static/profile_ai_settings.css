@@ -349,6 +349,95 @@ html[data-theme="light"] .profile-ai-settings-card {
   font-size: 12px;
 }
 
+.profile-ai-settings-page .provider-key-guidance {
+  border-top: 1px solid var(--ai-settings-border);
+  border-bottom: 1px solid var(--ai-settings-border);
+}
+
+.profile-ai-settings-page .provider-key-guidance summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 1px;
+  color: var(--ai-settings-text);
+  font-size: 11px;
+  font-weight: 760;
+  list-style: none;
+  cursor: pointer;
+}
+
+.profile-ai-settings-page .provider-key-guidance summary::-webkit-details-marker {
+  display: none;
+}
+
+.profile-ai-settings-page .provider-key-guidance summary:focus-visible {
+  outline: 2px solid var(--ai-settings-accent-strong);
+  outline-offset: 2px;
+}
+
+.profile-ai-settings-page .provider-key-guidance-chevron {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  transition: transform 120ms ease;
+}
+
+.profile-ai-settings-page .provider-key-guidance[open] .provider-key-guidance-chevron {
+  transform: rotate(90deg);
+}
+
+.profile-ai-settings-page .provider-key-guidance-content {
+  padding: 2px 1px 11px;
+  color: var(--ai-settings-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.profile-ai-settings-page .provider-key-guidance-content h4 {
+  margin: 0 0 6px;
+  color: var(--ai-settings-text);
+  font-size: 12px;
+}
+
+.profile-ai-settings-page .provider-key-guidance-content ol {
+  margin: 0 0 8px;
+  padding-left: 19px;
+}
+
+.profile-ai-settings-page .provider-key-guidance-note,
+.profile-ai-settings-page .provider-key-guidance-security {
+  margin: 7px 0 0;
+}
+
+.profile-ai-settings-page .provider-key-guidance-security {
+  color: var(--ai-settings-text);
+}
+
+.profile-ai-settings-page .provider-key-guidance-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+}
+
+.profile-ai-settings-page .provider-key-guidance-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ai-settings-accent);
+  font-weight: 740;
+  text-decoration: none;
+}
+
+.profile-ai-settings-page .provider-key-guidance-links a:hover {
+  text-decoration: underline;
+}
+
+.profile-ai-settings-page .provider-key-guidance-external-icon {
+  width: 12px;
+  height: 12px;
+}
+
 .profile-ai-settings-remove-btn,
 .profile-ai-settings-danger-btn {
   color: var(--ai-settings-danger) !important;
@@ -382,6 +471,17 @@ html[data-theme="light"] .profile-ai-settings-card {
 .profile-ai-settings-control-row {
   grid-template-columns: minmax(0, 1fr) auto;
   margin-top: auto;
+}
+
+.profile-ai-settings-preference-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.profile-ai-settings-preference-actions .hidden {
+  display: none;
 }
 
 .profile-ai-settings-test-fields {
@@ -788,6 +888,11 @@ html[data-theme="light"] .profile-ai-settings-card {
   .profile-ai-settings-control-row button,
   .profile-ai-settings-test-actions button {
     width: 100%;
+  }
+
+  .profile-ai-settings-preference-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .profile-ai-settings-test-actions,

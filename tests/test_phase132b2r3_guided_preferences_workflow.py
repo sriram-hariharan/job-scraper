@@ -71,10 +71,15 @@ def _relevant_selector_counts(css: str) -> dict[str, int]:
     return counts
 
 
-def test_guided_workflow_has_five_state_preserving_steps_and_review_navigation():
-    for index in range(5):
+def test_guided_workflow_has_onboarding_only_sixth_step_and_review_navigation():
+    for index in range(6):
         assert f'data-preferences-step="{index}"' in ONBOARDING_FORM
         assert f'data-preferences-step-target="{index}"' in ONBOARDING_FORM
+    for index in range(5):
+        assert f'data-preferences-step="{index}"' in PROFILE_FORM
+        assert f'data-preferences-step-target="{index}"' in PROFILE_FORM
+    assert 'data-preferences-step="5"' not in PROFILE_FORM
+    assert 'data-preferences-step-target="5"' not in PROFILE_FORM
 
     assert 'data-preferences-back' in ONBOARDING_FORM
     assert 'data-preferences-next' in ONBOARDING_FORM
@@ -87,7 +92,8 @@ def test_guided_workflow_has_five_state_preserving_steps_and_review_navigation()
     assert "form.addEventListener(\"change\", update)" in WORKFLOW_JS
     assert "form.reset" not in WORKFLOW_JS
     assert ONBOARDING_FORM.count("preferences-step-button is-active") == 1
-    assert ONBOARDING_FORM.count("preferences-step-button is-upcoming") == 4
+    assert ONBOARDING_FORM.count("preferences-step-button is-upcoming") == 5
+    assert PROFILE_FORM.count("preferences-step-button is-upcoming") == 4
     assert 'const state = stepVisualState(buttonStep, nextStep)' in WORKFLOW_JS
     assert "buttonStep < maximumVisitedStep" not in WORKFLOW_JS
 
@@ -95,7 +101,8 @@ def test_guided_workflow_has_five_state_preserving_steps_and_review_navigation()
 def test_saved_profile_preferences_complete_review_and_reset_when_dirty():
     assert "let savedComplete = false;" in WORKFLOW_JS
     assert "const completionPercent = savedComplete ? 100 : configuredPercent;" in WORKFLOW_JS
-    assert "if (savedComplete && stepIndex === STEP_COUNT - 1) return \"is-complete\";" in WORKFLOW_JS
+    assert "const stepCount = panels.length;" in WORKFLOW_JS
+    assert "if (savedComplete && stepIndex === stepCount - 1) return \"is-complete\";" in WORKFLOW_JS
     assert "setCompleted: (completed) => {" in WORKFLOW_JS
 
     assert "profilePreferencesWorkflow?.setCompleted(false);" in PROFILE_JS
@@ -405,20 +412,20 @@ def test_preferences_assets_are_scoped_ordered_and_cache_busted_consistently():
         # now recurs across routes, so anchor the preferences-page ordering check
         # to the app_redesign link that follows this page's styles.css link.
         redesign = source.index('/static/app_redesign.css?v=scheduler_health_polish_r1', styles)
-        preferences = source.index('/static/preferences.css?v=preferences_footer_compact_r15')
+        preferences = source.index('/static/preferences.css?v=phase1_step8b_r1')
         selector = source.index('/static/preference_location_selector.js?v=preferences_guided_parity_r9')
-        workflow = source.index('/static/preferences_workflow.js?v=preferences_guided_parity_r9')
+        workflow = source.index('/static/preferences_workflow.js?v=phase1_step8b_r1')
         assert styles < redesign
         assert redesign < preferences < selector < workflow
         assert source.count('/static/styles.css?v=preferences_toolbar_ownership_r11') == 1
-        assert source.count('/static/preferences.css?v=preferences_footer_compact_r15') == 1
-        for asset in ("preference_location_selector.js", "preferences_workflow.js"):
-            assert source.count(f'/static/{asset}?v=preferences_guided_parity_r9') == 1
+        assert source.count('/static/preferences.css?v=phase1_step8b_r1') == 1
+        assert source.count('/static/preference_location_selector.js?v=preferences_guided_parity_r9') == 1
+        assert source.count('/static/preferences_workflow.js?v=phase1_step8b_r1') == 1
         assert "preferences_toolbar_capsule_r10" not in source
         assert "preferences_spacing_local_r2" not in source
         assert '/static/preferences.css?v=preferences_guided_parity_r9' not in source
 
-    assert '/static/onboarding.js?v=preferences_guided_parity_r9' in ONBOARDING_UI
+    assert '/static/onboarding.js?v=phase1_step8b_r1' in ONBOARDING_UI
     assert '/static/profile.js?v=preferences_guided_parity_r9' in PROFILE_UI
     assert "preferences_guided_parity_r8" not in ONBOARDING_UI + PROFILE_UI
     assert "preferences_guided_parity_r7" not in ONBOARDING_UI + PROFILE_UI
@@ -514,7 +521,7 @@ def test_footer_actions_keep_status_and_primary_controls_on_stable_columns():
     assert CSS.count(".preferences-workflow .preferences-primary-action {") == 1
     assert "padding-bottom: 28px" not in CSS
     assert "is-review" not in CSS
-    assert 'finalActions?.classList.toggle("hidden", nextStep !== STEP_COUNT - 1)' in WORKFLOW_JS
+    assert 'finalActions?.classList.toggle("hidden", nextStep !== stepCount - 1)' in WORKFLOW_JS
     assert 'showStep(currentStep - 1)' in WORKFLOW_JS
     assert 'showStep(currentStep + 1)' in WORKFLOW_JS
 

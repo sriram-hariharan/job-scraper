@@ -3,12 +3,18 @@ from fastapi.responses import HTMLResponse
 from html import escape
 
 from src.app.onboarding_ui import _preferences_header_html, _preferences_workflow_form_html
+from src.app.provider_setup_guidance import render_provider_key_guidance_templates
 from src.app.ui_shell import render_top_shell
 from src.auth.runtime import current_user_from_request
 
 router = APIRouter()
 
 # UI contract marker: profile_preferences_menu_r1 role_profile_preferences_menu_r1
+
+
+def _is_resume_onboarding_query(value: str | None) -> bool:
+    normalized = str(value or "").strip().rstrip("/\\")
+    return normalized == "resume_upload"
 
 
 def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) -> str:
@@ -36,6 +42,7 @@ def _profile_navigation_icon_preloads_html() -> str:
 @router.get("/profile", response_class=HTMLResponse)
 def profile_page(request: Request) -> str:
     user = dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+    is_resume_onboarding = _is_resume_onboarding_query(request.query_params.get("onboarding"))
     access_level = str(user.get("access_level", "") or "").strip().lower()
     is_admin = bool(user.get("is_admin", False)) or access_level == "admin"
     admin_tab_html = (
@@ -198,37 +205,48 @@ def profile_page(request: Request) -> str:
         if is_admin
         else ""
     )
+    page_title = "Add your resume" if is_resume_onboarding else "My Profile"
+    page_description = (
+        "A profile resume is required before preference setup. Upload a PDF to continue onboarding."
+        if is_resume_onboarding
+        else "Manage resume files and persisted Live Pipeline runs."
+    )
+    body_class = ' class="profile-resume-onboarding-mode"' if is_resume_onboarding else ""
+    page_class = "page profile-resume-onboarding-page" if is_resume_onboarding else "page"
+    navigation_html = "" if is_resume_onboarding else _profile_navigation_icon_preloads_html()
+    tabs_html = "" if is_resume_onboarding else profile_tabs_html
+    secondary_sections_html = "" if is_resume_onboarding else admin_users_section_html + pipeline_runs_section_html
     return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Profile</title>
+  <title>{page_title}</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_pipeline_run_buttons_r1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
 </head>
-<body>
+<body{body_class}>
   {render_top_shell("/profile")}
-  {_profile_navigation_icon_preloads_html()}
+  {navigation_html}
 
-  <div class="page">
+  <div class="{page_class}" data-profile-resume-onboarding="{'true' if is_resume_onboarding else 'false'}">
     <header class="page-header app-page-header">
       <div class="app-page-header__main">
         <div class="app-page-header__title-row">
-          <h1 class="app-page-header__title">My Profile</h1>
+          <h1 class="app-page-header__title">{page_title}</h1>
         </div>
-        <p class="subtext app-page-header__description">Manage resume files and persisted Live Pipeline runs.</p>
+        <p class="subtext app-page-header__description">{page_description}</p>
       </div>
     </header>
 
-    {profile_tabs_html}
+    {tabs_html}
 
     <section class="card profile-section-card" id="resumeSection" data-profile-tab-panel>
       <div class="section-header">
         <div>
-          <h2>Resumes</h2>
+          <h2>{'Resume upload' if is_resume_onboarding else 'Resumes'}</h2>
           <div class="subtext" id="resumeListMeta">Loading resumes...</div>
         </div>
       </div>
@@ -283,8 +301,7 @@ def profile_page(request: Request) -> str:
       </div>
     </section>
 
-    {admin_users_section_html}
-    {pipeline_runs_section_html}
+    {secondary_sections_html}
   </div>
 
   <section class="modal-backdrop hidden" id="resumeDeleteModal">
@@ -619,7 +636,7 @@ def profile_preferences_page() -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
-  <link rel="stylesheet" href="/static/preferences.css?v=preferences_footer_compact_r15" />
+  <link rel="stylesheet" href="/static/preferences.css?v=phase1_step8b_r1" />
 </head>
 <body class="preferences-page-shell">
   {render_top_shell("/profile/preferences")}
@@ -631,7 +648,7 @@ def profile_preferences_page() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
-  <script src="/static/preferences_workflow.js?v=preferences_guided_parity_r9"></script>
+  <script src="/static/preferences_workflow.js?v=phase1_step8b_r1"></script>
   <script src="/static/profile.js?v=preferences_guided_parity_r9"></script>
 </body>
 </html>
@@ -650,7 +667,7 @@ def profile_ai_settings_page() -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_step7b_r1" />
-  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_step7b_r1" />
+  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_step8b_r1" />
 </head>
 <body class="profile-ai-settings-page-shell">
   {render_top_shell("/profile/ai-settings")}
@@ -717,7 +734,10 @@ def profile_ai_settings_page() -> str:
               <label for="aiPreferredProviderSelect">Provider</label>
               <select id="aiPreferredProviderSelect"></select>
             </div>
-            <button type="button" id="aiPreferredProviderSaveBtn">Save preference</button>
+            <div class="profile-ai-settings-preference-actions">
+              <button type="button" class="ghost-btn hidden" id="aiPreferredProviderClearBtn">Clear preference</button>
+              <button type="button" id="aiPreferredProviderSaveBtn">Save preference</button>
+            </div>
           </div>
           <div class="profile-ai-settings-inline-message hidden" id="aiPreferredProviderStatus" role="status" aria-live="polite"></div>
           <div class="profile-ai-settings-warning hidden" id="aiPreferredProviderWarning" role="status"></div>
@@ -862,9 +882,11 @@ def profile_ai_settings_page() -> str:
     </div>
   </section>
 
+  {render_provider_key_guidance_templates()}
+
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script src="/static/profile_ai_settings.js?v=phase1_step7b_r1"></script>
+  <script src="/static/profile_ai_settings.js?v=phase1_step8b_r1"></script>
 </body>
 </html>
     """.strip()

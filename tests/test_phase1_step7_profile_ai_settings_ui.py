@@ -227,13 +227,21 @@ def test_remove_key_requires_confirmation_and_preserves_preference():
 
 
 def test_preferred_provider_has_explicit_set_and_clear_actions_only():
+    html = profile_ai_settings_page()
     preferred = _function(AI_SETTINGS_JS, "savePreferredProvider", "testConnection")
+    clear = _function(AI_SETTINGS_JS, "clearPreferredProvider", "testConnection")
+    assert 'id="aiPreferredProviderClearBtn"' in html
+    assert "Clear preference" in html
     assert 'requestJson("/ai/settings/preferred-provider"' in preferred
     assert 'method: "POST"' in preferred
     assert "JSON.stringify({ provider: selectedProvider })" in preferred
     assert 'method: "DELETE"' in preferred
     assert "test-connection" not in preferred
     assert "model" not in preferred.lower()
+    assert 'requestJson("/ai/settings/preferred-provider", { method: "DELETE" })' in clear
+    assert "credentials/" not in clear
+    assert "test-connection" not in clear
+    assert "await refreshSettings()" in clear
 
 
 def test_models_render_exact_catalog_rows_without_unverified_claims_or_ids():

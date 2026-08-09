@@ -171,7 +171,7 @@ html[data-theme="light"] .table-card,
 html[data-theme="light"] .controls-card,
 html[data-theme="light"] .scheduler-ops-card,
 html[data-theme="light"] .scheduler-table-card,
-html[data-theme="light"] .profile-section-card,
+html[data-theme="light"] .profile-section-card:not(.profile-preferences-section),
 html[data-theme="light"] .saved-scans-card,
 html[data-theme="light"] .saved-scans-table-card,
 html[data-theme="light"] .application-view-card,
@@ -799,6 +799,10 @@ html[data-theme="light"] .profile-dropdown-email {
   color: var(--app-text) !important;
   text-decoration: none !important;
   box-shadow: none !important;
+}
+
+.profile-dropdown-nav-btn.hidden {
+  display: none !important;
 }
 
 html[data-theme="light"] .profile-dropdown-nav-btn {
@@ -5178,6 +5182,97 @@ html[data-theme="dark"] .first-run-prompt-secondary {
 html[data-theme="light"] .resume-upload-panel,
 html[data-theme="light"] .resume-list-panel {
   background: transparent !important;
+}
+
+/* phase1_step8c: server-marked resume prerequisite mode reuses the Profile uploader. */
+body.profile-resume-onboarding-mode .profile-resume-onboarding-page {
+  width: min(920px, calc(100% - 40px));
+  max-width: 920px;
+  margin-inline: auto;
+  padding-bottom: 56px;
+}
+
+body.profile-resume-onboarding-mode .profile-resume-onboarding-page > .app-page-header {
+  margin-bottom: 18px;
+}
+
+body.profile-resume-onboarding-mode #resumeSection {
+  padding: clamp(20px, 3vw, 30px);
+  border-color: color-mix(in srgb, var(--app-primary) 24%, var(--app-border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-primary) 6%);
+  box-shadow: 0 20px 55px rgba(2, 8, 23, 0.12);
+}
+
+body.profile-resume-onboarding-mode #resumeSection .section-header {
+  margin-bottom: 16px;
+}
+
+body.profile-resume-onboarding-mode .resume-manager-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 16px !important;
+}
+
+body.profile-resume-onboarding-mode .profile-planning-upload-callout,
+body.profile-resume-onboarding-mode .resume-role-mapping-panel,
+body.profile-resume-onboarding-mode .resume-row-actions {
+  display: none !important;
+}
+
+body.profile-resume-onboarding-mode #resumeOnboardingBanner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+body.profile-resume-onboarding-mode .profile-onboarding-continue-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  margin-left: auto;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 44%, var(--app-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--app-primary) 13%, var(--app-surface-2));
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+  transition: background-color var(--app-fast, 120ms) var(--app-ease, ease), border-color var(--app-fast, 120ms) var(--app-ease, ease);
+}
+
+body.profile-resume-onboarding-mode .profile-onboarding-continue-btn:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 64%, var(--app-border));
+  background: color-mix(in srgb, var(--app-primary) 20%, var(--app-surface-2));
+}
+
+body.profile-resume-onboarding-mode .profile-onboarding-continue-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--app-primary) 46%, transparent);
+  outline-offset: 2px;
+}
+
+body.profile-resume-onboarding-mode .profile-onboarding-resume-ready {
+  border-color: color-mix(in srgb, var(--app-success, #16a34a) 30%, var(--app-border));
+  background: color-mix(in srgb, var(--app-success, #16a34a) 7%, var(--app-surface-2));
+}
+
+@media (max-width: 640px) {
+  body.profile-resume-onboarding-mode .profile-resume-onboarding-page {
+    width: min(100% - 24px, 920px);
+  }
+
+  body.profile-resume-onboarding-mode #resumeOnboardingBanner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.profile-resume-onboarding-mode .profile-onboarding-continue-btn {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 .profile-planning-upload-callout {

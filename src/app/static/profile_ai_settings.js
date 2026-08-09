@@ -155,6 +155,13 @@
     return element;
   }
 
+  function providerGuidance(provider) {
+    const template = byId(`providerKeyGuidanceTemplate-${provider}`);
+    return template instanceof HTMLTemplateElement
+      ? template.content.cloneNode(true)
+      : document.createDocumentFragment();
+  }
+
   function renderProviderCards() {
     const providerGrid = byId("aiSettingsProviderGrid");
     providerGrid.replaceChildren();
@@ -219,7 +226,7 @@
         actions.appendChild(removeButton);
       }
 
-      card.append(heading, detail, actions);
+      card.append(heading, detail, providerGuidance(provider), actions);
       providerGrid.appendChild(card);
     });
   }
@@ -242,6 +249,7 @@
     const select = byId("aiPreferredProviderSelect");
     appendProviderOptions(select, true);
     select.value = state.settings.preferredProvider || "";
+    setHidden(byId("aiPreferredProviderClearBtn"), !state.settings.preferredProvider);
     renderPreferredWarning();
   }
 
@@ -576,6 +584,34 @@
     }
   }
 
+  async function clearPreferredProvider() {
+    if (state.preferenceSaving || !state.settings.preferredProvider) return;
+    state.preferenceSaving = true;
+    const button = byId("aiPreferredProviderClearBtn");
+    const saveButton = byId("aiPreferredProviderSaveBtn");
+    button.disabled = true;
+    saveButton.disabled = true;
+    button.textContent = "Clearing…";
+    setMessage(byId("aiPreferredProviderStatus"), "", "");
+    try {
+      await requestJson("/ai/settings/preferred-provider", { method: "DELETE" });
+      await refreshSettings();
+      setMessage(byId("aiPreferredProviderStatus"), "Provider preference cleared.", "success");
+    } catch (error) {
+      const category = error && error.category ? error.category : "request_failed";
+      setMessage(
+        byId("aiPreferredProviderStatus"),
+        safeFailureMessages[category] || "The provider preference could not be cleared. Try again.",
+        "error"
+      );
+    } finally {
+      state.preferenceSaving = false;
+      button.disabled = false;
+      saveButton.disabled = false;
+      button.textContent = "Clear preference";
+    }
+  }
+
   async function testConnection() {
     if (state.connectionTesting) return;
     const provider = byId("aiTestProviderSelect").value;
@@ -636,6 +672,7 @@
     byId("aiCredentialRemoveCancelBtn").addEventListener("click", () => closeRemoveModal());
     byId("aiCredentialRemoveConfirmBtn").addEventListener("click", removeCredential);
     byId("aiPreferredProviderSaveBtn").addEventListener("click", savePreferredProvider);
+    byId("aiPreferredProviderClearBtn").addEventListener("click", clearPreferredProvider);
     byId("aiTestProviderSelect").addEventListener("change", renderConnectionModels);
     byId("aiTestModelSelect").addEventListener("change", updateConnectionButton);
     byId("aiConnectionTestBtn").addEventListener("click", testConnection);

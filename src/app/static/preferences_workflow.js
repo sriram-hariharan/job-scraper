@@ -1,7 +1,6 @@
 (function initializePreferencesWorkflow(global) {
   "use strict";
 
-  const STEP_COUNT = 5;
   const SENIORITY_LABELS = {
     entry: "Entry",
     mid: "Mid",
@@ -37,9 +36,11 @@
     if (!form) return null;
 
     const panels = Array.from(form.querySelectorAll("[data-preferences-step]"));
+    const stepCount = panels.length;
     const stepButtons = Array.from(form.querySelectorAll("[data-preferences-step-target]"));
     const backButton = form.querySelector("[data-preferences-back]");
     const nextButton = form.querySelector("[data-preferences-next]");
+    const skipButton = form.querySelector("[data-preferences-skip]");
     const finalActions = form.querySelector("[data-preferences-final-actions]");
     const mobileCompletion = form.querySelector("[data-preferences-mobile-completion]");
     const roleError = form.querySelector("[data-preferences-role-error]");
@@ -107,7 +108,7 @@
 
     function workflowStepVisualState(step) {
       const stepIndex = Number(step);
-      if (savedComplete && stepIndex === STEP_COUNT - 1) return "is-complete";
+      if (savedComplete && stepIndex === stepCount - 1) return "is-complete";
       return stepVisualState(stepIndex, currentStep);
     }
 
@@ -115,7 +116,7 @@
       stepButtons.forEach((button) => {
         const buttonStep = Number(button.dataset.preferencesStepTarget);
         const state = stepVisualState(buttonStep, nextStep);
-        const visualState = savedComplete && buttonStep === STEP_COUNT - 1
+        const visualState = savedComplete && buttonStep === stepCount - 1
           ? "is-complete"
           : state;
         button.classList.toggle("is-active", visualState === "is-active");
@@ -126,7 +127,7 @@
     }
 
     function updateStepSummaries() {
-      const summaries = Array.from({ length: STEP_COUNT }, (_, index) => {
+      const summaries = Array.from({ length: stepCount }, (_, index) => {
         const state = workflowStepVisualState(index);
         if (state === "is-active") return "In progress";
         if (state === "is-complete") return "Complete";
@@ -151,7 +152,7 @@
     }
 
     function showStep(step, { focus = true } = {}) {
-      const nextStep = Math.max(0, Math.min(STEP_COUNT - 1, Number(step) || 0));
+      const nextStep = Math.max(0, Math.min(stepCount - 1, Number(step) || 0));
       currentStep = nextStep;
       maximumVisitedStep = Math.max(maximumVisitedStep, nextStep);
 
@@ -164,9 +165,13 @@
       updateStepButtons(nextStep);
 
       if (backButton) backButton.disabled = nextStep === 0;
-      if (nextButton) nextButton.classList.toggle("hidden", nextStep === STEP_COUNT - 1);
-      finalActions?.classList.toggle("hidden", nextStep !== STEP_COUNT - 1);
-      if (mobileCompletion) mobileCompletion.textContent = `Step ${nextStep + 1} of ${STEP_COUNT}`;
+      if (nextButton) nextButton.classList.toggle("hidden", nextStep === stepCount - 1);
+      skipButton?.classList.toggle(
+        "hidden",
+        root.dataset.preferencesMode !== "onboarding" || nextStep !== 4
+      );
+      finalActions?.classList.toggle("hidden", nextStep !== stepCount - 1);
+      if (mobileCompletion) mobileCompletion.textContent = `Step ${nextStep + 1} of ${stepCount}`;
       update();
 
       if (focus) {

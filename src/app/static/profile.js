@@ -1271,9 +1271,13 @@ async function confirmPipelineRunRerun() {
 }
 
 
+function normalizeResumeOnboardingQuery(value) {
+  return String(value || "").trim().replace(/[\\/]+$/, "");
+}
+
 function isResumeOnboardingMode() {
   const params = new URLSearchParams(window.location.search);
-  return params.get("onboarding") === "resume_upload";
+  return normalizeResumeOnboardingQuery(params.get("onboarding")) === "resume_upload";
 }
 
 function getProfileTabTargetFromUrl() {
@@ -1351,16 +1355,18 @@ function renderResumeOnboardingState(resumes) {
     banner.className = "profile-inline-status info";
     banner.innerHTML = `
       <strong>Resume required.</strong>
-      Upload at least one PDF resume to unlock Live Pipeline.
+      ${isOnboarding
+        ? "Upload at least one PDF resume to continue to preference setup."
+        : "Upload at least one PDF resume to unlock Live Pipeline."}
     `;
     return;
   }
 
   banner.className = "profile-inline-status success";
   banner.innerHTML = `
-    <strong>Resume uploaded.</strong>
-    Live Pipeline is now unlocked.
-    <a class="ghost-btn btn-sm" href="/">Continue to Live Pipeline</a>
+    <strong>Resume ready.</strong>
+    Your profile has ${resumeCount} resume${resumeCount === 1 ? "" : "s"} available.
+    <a class="profile-onboarding-continue-btn" href="/onboarding">Continue to onboarding</a>
   `;
 }
 
@@ -1470,6 +1476,22 @@ function renderResumeList(items) {
     return;
   }
 
+
+  if (isResumeOnboardingMode()) {
+    listEl.innerHTML = resumes.map((resume) => `
+      <article class="resume-row profile-onboarding-resume-ready">
+        <div class="resume-row-main">
+          <div class="resume-name">${escapeHtml(resume.resume_name || "")}</div>
+          <div class="resume-meta">
+            <span>Resume ready</span>
+            <span>${escapeHtml(formatBytes(resume.size_bytes || 0))}</span>
+          </div>
+        </div>
+      </article>
+    `).join("");
+    return;
+  }
+
   listEl.innerHTML = resumes.map((resume) => `
     <article class="resume-row">
       <div class="resume-row-main">
@@ -1510,7 +1532,7 @@ async function loadResumes() {
 
   const data = await fetchJson("/profile/resumes");
   const resumes = data.resumes || [];
-  await loadResumeRoleMappings();
+  if (!isResumeOnboardingMode()) await loadResumeRoleMappings();
   renderResumeList(resumes);
   renderResumeOnboardingState(resumes);
 }
@@ -1749,8 +1771,12 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"} successfully.`,
       "success"
     );
+    if (isResumeOnboardingMode()) {
+      window.location.href = "/onboarding";
+      return results;
+    }
     showProfilePlanningUploadCallout();
-    return;
+    return results;
   }
 
   if (results.uploaded.length && results.failed.length) {
@@ -1758,8 +1784,8 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"}, failed ${results.failed.length}.`,
       "error"
     );
-    showProfilePlanningUploadCallout();
-    return;
+    if (!isResumeOnboardingMode()) showProfilePlanningUploadCallout();
+    return results;
   }
 
   const firstError = results.failed[0]?.error || "Upload failed.";
@@ -2203,6 +2229,10 @@ async function initProfilePage() {
         profileState.currentUser = null;
       }
       bindUploadInteractions();
+      if (isResumeOnboardingMode()) {
+        await loadResumes();
+        return;
+      }
       bindDeleteInteractions();
       bindResumeRoleMappingInteractions();
       bindProfilePlanningOptionsInteractions();

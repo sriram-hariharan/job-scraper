@@ -32,7 +32,10 @@ def test_shell_redirects_incomplete_onboarding():
 
     assert 'fetch("/onboarding/status"' in source
     assert 'payload.onboarding_completed === false' in source
-    assert 'window.location.href = "/onboarding"' in source
+    assert 'payload.requirements?.has_profile_resume === true' in source
+    assert '"/profile?onboarding=resume_upload"' in source
+    assert '"/onboarding"' in source
+    assert "window.location.href = destination" in source
 
 
 def test_onboarding_client_saves_preferences():

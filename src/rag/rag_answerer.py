@@ -352,6 +352,56 @@ def _extract_inline_source_ids(answer: str, valid_source_ids: List[str]) -> List
 
     return ordered
 
+
+def normalize_grounded_rag_model_response(
+    parsed: Dict[str, Any],
+    prompt_sources: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Apply the production citation and source-allowlist contract without I/O."""
+
+    valid_source_ids = [source["source_id"] for source in prompt_sources]
+    answer = str(parsed.get("answer") or "").strip()
+    insufficient_evidence = bool(parsed.get("insufficient_evidence", False))
+    model_used_source_ids = _normalize_used_source_ids(
+        parsed.get("used_source_ids", []),
+        valid_source_ids,
+    )
+    normalized_job_evidence = _normalize_job_evidence(
+        parsed.get("job_evidence", []),
+        valid_source_ids,
+    )
+
+    answer = _ensure_inline_citations(answer, model_used_source_ids)
+    cited_source_ids = _extract_inline_source_ids(answer, valid_source_ids)
+    used_source_ids = cited_source_ids if cited_source_ids else []
+
+    if answer and not insufficient_evidence and not used_source_ids:
+        insufficient_evidence = True
+        answer = (
+            "I could not produce a grounded answer because the answer text "
+            "did not contain valid source citations."
+        )
+
+    if insufficient_evidence:
+        used_source_ids = []
+        answer = _strip_inline_citations(answer)
+        answer = _normalize_insufficient_answer(answer)
+        job_evidence_output = []
+    else:
+        job_evidence_output = _build_job_evidence_output(
+            prompt_sources=prompt_sources,
+            job_evidence=normalized_job_evidence,
+            allowed_source_ids=used_source_ids,
+        )
+
+    return {
+        "answer": answer,
+        "insufficient_evidence": insufficient_evidence,
+        "used_source_ids": used_source_ids,
+        "job_evidence": job_evidence_output,
+    }
+
+
 def _is_semantic_retrieval_unavailable_error(exc: Exception) -> bool:
     message = str(exc)
     return any(marker in message for marker in SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS)
@@ -444,7 +494,6 @@ def answer_job_query(
         }
 
     prompt_sources = _build_prompt_sources(results)
-    valid_source_ids = [source["source_id"] for source in prompt_sources]
 
     try:
         llm_result = _run_chat_completion_with_timeout(
@@ -486,42 +535,14 @@ def answer_job_query(
             "job_evidence": [],
         }
 
-    answer = str(parsed.get("answer") or "").strip()
-    insufficient_evidence = bool(parsed.get("insufficient_evidence", False))
-    model_used_source_ids = _normalize_used_source_ids(
-        parsed.get("used_source_ids", []),
-        valid_source_ids,
+    normalized_response = normalize_grounded_rag_model_response(
+        parsed,
+        prompt_sources,
     )
-    normalized_job_evidence = _normalize_job_evidence(
-        parsed.get("job_evidence", []),
-        valid_source_ids,
-    )
-
-    answer = _ensure_inline_citations(answer, model_used_source_ids)
-    cited_source_ids = _extract_inline_source_ids(answer, valid_source_ids)
-
-    if cited_source_ids:
-        used_source_ids = cited_source_ids
-    else:
-        used_source_ids = []
-
-    if answer and not insufficient_evidence and not used_source_ids:
-        insufficient_evidence = True
-        answer = "I could not produce a grounded answer because the answer text did not contain valid source citations."
-
-    if insufficient_evidence:
-        used_source_ids = []
-        answer = _strip_inline_citations(answer)
-        answer = _normalize_insufficient_answer(answer)
-
-    if insufficient_evidence:
-        job_evidence_output = []
-    else:
-        job_evidence_output = _build_job_evidence_output(
-            prompt_sources=prompt_sources,
-            job_evidence=normalized_job_evidence,
-            allowed_source_ids=used_source_ids,
-        )
+    answer = normalized_response["answer"]
+    insufficient_evidence = normalized_response["insufficient_evidence"]
+    used_source_ids = normalized_response["used_source_ids"]
+    job_evidence_output = normalized_response["job_evidence"]
 
     return {
         "question": question,

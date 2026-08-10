@@ -35,6 +35,7 @@ from src.evaluation.controlled_provider_benchmark_plan import (
 TRANSPORT_VERSION = "controlled-groq-canary-transport-v1"
 LOCAL_INPUT_SIZE_UNIT = "canonical_utf8_bytes"
 MAXIMUM_LOCAL_INPUT_SIZE_BYTES = 4096
+MAXIMUM_PRODUCTION_PARITY_LOCAL_INPUT_SIZE_BYTES = 16384
 SYSTEM_MESSAGE = "Return only JSON matching the supplied strict schema."
 
 _CHAT_ARGUMENT_FIELDS = {
@@ -439,6 +440,139 @@ def build_groq_chat_completion_arguments(
         plan=controlled_plan,
     )
     return deepcopy(arguments)
+
+
+def build_groq_production_parity_chat_completion_arguments(
+    *,
+    parity_request: Dict[str, Any],
+    scheduled: Mapping[str, Any],
+    plan: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Adapt a validated production-parity request without prompt ownership."""
+
+    from src.evaluation.controlled_production_parity_benchmark import (
+        validate_production_parity_request,
+    )
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan()
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(parity_request, plan=controlled_plan)
+    _require(
+        scheduled.get("provider") == parity_request.get("provider") == "groq"
+        and scheduled.get("model") == parity_request.get("model")
+        and scheduled.get("case_alias") == parity_request.get("case_alias")
+        and scheduled.get("workload_id") == parity_request.get("workload_id"),
+        "production-parity schedule binding mismatch",
+    )
+    _require(
+        scheduled.get("fallback") is False
+        and scheduled.get("harness_retry_limit") == 0
+        and scheduled.get("provider_sdk_retry_limit") == 0
+        and parity_request.get("fallback") is False
+        and parity_request.get("retry_limit") == 0,
+        "production-parity retries or fallback are prohibited",
+    )
+    arguments = {
+        "model": scheduled["model"],
+        "messages": deepcopy(parity_request["messages"]),
+        "temperature": parity_request["task_parameters"]["temperature"],
+        "max_completion_tokens": parity_request["task_parameters"]["max_tokens"],
+        "stream": False,
+        "n": 1,
+    }
+    response_contract = parity_request["response_contract"]
+    if response_contract["mode"] == "structured_json":
+        arguments["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": response_contract["schema_name"],
+                "strict": True,
+                "schema": deepcopy(response_contract["schema"]),
+            },
+        }
+    validate_groq_production_parity_chat_completion_arguments(
+        arguments,
+        parity_request=parity_request,
+        scheduled=scheduled,
+        plan=controlled_plan,
+    )
+    return deepcopy(arguments)
+
+
+def validate_groq_production_parity_chat_completion_arguments(
+    arguments: Dict[str, Any],
+    *,
+    parity_request: Dict[str, Any],
+    scheduled: Mapping[str, Any],
+    plan: Dict[str, Any] | None = None,
+) -> bool:
+    from src.evaluation.controlled_production_parity_benchmark import (
+        validate_production_parity_request,
+    )
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan()
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(parity_request, plan=controlled_plan)
+    response_contract = parity_request["response_contract"]
+    expected_fields = {
+        "model",
+        "messages",
+        "temperature",
+        "max_completion_tokens",
+        "stream",
+        "n",
+    }
+    if response_contract["mode"] == "structured_json":
+        expected_fields.add("response_format")
+    _require(
+        isinstance(arguments, dict) and set(arguments) == expected_fields,
+        "production-parity Groq arguments differ from the allowlist",
+    )
+    _require(
+        scheduled.get("provider") == "groq"
+        and arguments.get("model") == scheduled.get("model")
+        and parity_request.get("model") == scheduled.get("model"),
+        "production-parity Groq model mismatch",
+    )
+    _require(
+        arguments.get("messages") == parity_request.get("messages")
+        and arguments.get("temperature") == 0
+        and arguments.get("max_completion_tokens")
+        == parity_request["task_parameters"]["max_tokens"]
+        and arguments.get("stream") is False
+        and arguments.get("n") == 1,
+        "production-parity Groq request semantics changed",
+    )
+    if response_contract["mode"] == "structured_json":
+        _require(
+            arguments.get("response_format")
+            == {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_contract["schema_name"],
+                    "strict": True,
+                    "schema": response_contract["schema"],
+                },
+            },
+            "production-parity Groq structured schema mismatch",
+        )
+    else:
+        _require(
+            "response_format" not in arguments,
+            "plain or JSON-text production task was forced into a schema",
+        )
+    _require(
+        conservative_local_input_size_bytes(arguments)
+        <= MAXIMUM_PRODUCTION_PARITY_LOCAL_INPUT_SIZE_BYTES,
+        "production-parity Groq input-size bound exceeded",
+    )
+    return True
 
 
 def conservative_local_input_size_bytes(

@@ -1593,6 +1593,7 @@ def test_no_production_source_imports_or_calls_the_harness_owner():
 
     assert references == [
         "src/evaluation/controlled_groq_canary_run_003_transport.py",
+        "src/evaluation/controlled_openai_canary_transport.py",
         "src/evaluation/controlled_groq_canary_evidence_runtime.py",
         "src/evaluation/controlled_groq_tailoring_canary_transport.py",
         "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",

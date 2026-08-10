@@ -55,6 +55,9 @@ LIVE_QUALIFICATION_GATE_VERSION = "controlled-live-qualification-gate-v1"
 LIVE_AUTHORIZATION_VERSION = "controlled-live-qualification-authorization-v1"
 LIVE_PRICING_VERSION = "controlled-live-qualification-pricing-v1"
 LIVE_EVIDENCE_VERSION = "controlled-live-qualification-evidence-v1"
+LIVE_VALIDATION_CONTEXT_VERSION = (
+    "controlled-live-qualification-validation-context-v1"
+)
 LIVE_PRICING_SOURCE_CLASSIFICATION = "operator_current_live_qualification"
 APPROVED_EVIDENCE_DIRECTORY = Path("outputs/provider_qualification")
 
@@ -159,6 +162,14 @@ _EVIDENCE_FIELDS = {
     "retention_policy",
     "authority_invariants",
 }
+_VALIDATION_CONTEXT_FIELDS = {
+    "context_version",
+    "evidence_sha256",
+    "authorization_sha256",
+    "pricing_sha256",
+    "live_authorization",
+    "live_pricing",
+}
 _PROHIBITED_SERIALIZED_KEYS = {
     "api_key",
     "credential",
@@ -166,6 +177,9 @@ _PROHIBITED_SERIALIZED_KEYS = {
     "environment",
     "header",
     "headers",
+    "messages",
+    "normalized_output",
+    "operator_credentials",
     "prompt",
     "raw_exception",
     "raw_request",
@@ -200,6 +214,10 @@ class LiveQualificationDefinitiveFailure(RuntimeError):
 
 class LiveQualificationUnknownOutcome(RuntimeError):
     """The provider outcome cannot be safely classified."""
+
+
+class LiveQualificationPersistenceFailure(RuntimeError):
+    """Evidence persisted, but its requested validation context did not."""
 
 
 def _require(condition: bool, message: str) -> None:
@@ -258,6 +276,26 @@ def _iter_keys(value: Any) -> Iterable[str]:
 
 def _contains_prohibited_serialized_key(value: Any) -> bool:
     return any(key in _PROHIBITED_SERIALIZED_KEYS for key in _iter_keys(value))
+
+
+def _iter_strings(value: Any) -> Iterable[str]:
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from _iter_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _iter_strings(item)
+    elif isinstance(value, str):
+        yield value
+
+
+def _contains_secret_like_serialized_value(value: Any) -> bool:
+    markers = ("gsk_", "sk-", "bearer ")
+    return any(
+        marker in text.strip().lower()
+        for text in _iter_strings(value)
+        for marker in markers
+    )
 
 
 def _ordered_unique(values: Iterable[Any]) -> list[Any]:
@@ -955,12 +993,27 @@ def execute_controlled_live_qualification(
     transport_dispatchers: Mapping[str, Callable[..., Dict[str, Any]]] | None = None,
     monotonic_clock: Callable[[], float] = monotonic,
     evidence_target: str | Path | None = None,
+    validation_context_target: str | Path | None = None,
     repository_root: str | Path | None = None,
 ) -> Dict[str, Any]:
     """Execute an explicitly authorized serial subset; never update registry."""
 
     _require(callable(execution_time_source), "execution timestamp source is required")
     _require(callable(monotonic_clock), "monotonic clock is required")
+    _require(
+        validation_context_target is None or evidence_target is not None,
+        "live validation context persistence requires matching evidence persistence",
+    )
+    _require(
+        (evidence_target is None and validation_context_target is None)
+        or repository_root is not None,
+        "repository root is required for explicit persistence",
+    )
+    if validation_context_target is not None:
+        _require(
+            Path(validation_context_target) != Path(evidence_target),
+            "live evidence and validation context targets must be distinct",
+        )
     execution_at_utc = execution_time_source()
     controlled_plan = deepcopy(plan)
     authorization = deepcopy(live_authorization)
@@ -1164,8 +1217,15 @@ def execute_controlled_live_qualification(
         authorization=authorization,
         pricing=pricing_payload,
     )
+    validation_context = None
+    if validation_context_target is not None:
+        validation_context = build_live_qualification_validation_context(
+            evidence,
+            plan=controlled_plan,
+            authorization=authorization,
+            pricing=pricing_payload,
+        )
     if evidence_target is not None:
-        _require(repository_root is not None, "repository root is required for explicit persistence")
         write_live_qualification_evidence_exclusive(
             evidence_target,
             evidence,
@@ -1174,6 +1234,24 @@ def execute_controlled_live_qualification(
             authorization=authorization,
             pricing=pricing_payload,
         )
+    if validation_context_target is not None:
+        _require(
+            validation_context is not None,
+            "live validation context was not prepared",
+        )
+        try:
+            write_live_qualification_validation_context_exclusive(
+                validation_context_target,
+                validation_context,
+                evidence=evidence,
+                repository_root=repository_root,
+                plan=controlled_plan,
+            )
+        except (OSError, ValueError):
+            raise LiveQualificationPersistenceFailure(
+                "live validation context persistence failed after live evidence "
+                "persistence"
+            ) from None
     return deepcopy(evidence)
 
 
@@ -1211,6 +1289,140 @@ def live_qualification_evidence_sha256(
     ).hexdigest()
 
 
+def build_live_qualification_validation_context(
+    evidence: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Bind exact non-secret live validation inputs to one evidence digest."""
+
+    evidence_payload = deepcopy(evidence)
+    authorization_payload = deepcopy(authorization)
+    pricing_payload = deepcopy(pricing)
+    validate_live_qualification_evidence(
+        evidence_payload,
+        plan=plan,
+        authorization=authorization_payload,
+        pricing=pricing_payload,
+    )
+    context = {
+        "context_version": LIVE_VALIDATION_CONTEXT_VERSION,
+        "evidence_sha256": live_qualification_evidence_sha256(
+            evidence_payload,
+            plan=plan,
+            authorization=authorization_payload,
+            pricing=pricing_payload,
+        ),
+        "authorization_sha256": live_authorization_sha256(
+            authorization_payload
+        ),
+        "pricing_sha256": live_pricing_sha256(pricing_payload),
+        "live_authorization": authorization_payload,
+        "live_pricing": pricing_payload,
+    }
+    validate_live_qualification_validation_context(
+        context,
+        evidence=evidence_payload,
+        plan=plan,
+    )
+    return deepcopy(context)
+
+
+def validate_live_qualification_validation_context(
+    context: Dict[str, Any],
+    *,
+    evidence: Dict[str, Any],
+    plan: Dict[str, Any],
+) -> bool:
+    """Revalidate one durable context through the native live owners."""
+
+    _require(
+        isinstance(context, dict)
+        and set(context) == _VALIDATION_CONTEXT_FIELDS,
+        "live validation context fields must match the exact schema",
+    )
+    _require(
+        context.get("context_version") == LIVE_VALIDATION_CONTEXT_VERSION,
+        "live validation context version mismatch",
+    )
+    _require(
+        not _contains_prohibited_serialized_key(context)
+        and not _contains_secret_like_serialized_value(context),
+        "live validation context contains prohibited secret or provider material",
+    )
+    authorization = deepcopy(context["live_authorization"])
+    pricing = deepcopy(context["live_pricing"])
+    evidence_payload = deepcopy(evidence)
+    validate_live_qualification_evidence(
+        evidence_payload,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    evidence_digest = live_qualification_evidence_sha256(
+        evidence_payload,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    authorization_digest = live_authorization_sha256(authorization)
+    pricing_digest = live_pricing_sha256(pricing)
+    _require(
+        context["evidence_sha256"] == evidence_digest,
+        "live validation context evidence digest mismatch",
+    )
+    _require(
+        context["authorization_sha256"] == authorization_digest
+        and evidence_payload["authorization_sha256"] == authorization_digest,
+        "live validation context authorization digest mismatch",
+    )
+    _require(
+        context["pricing_sha256"] == pricing_digest
+        and evidence_payload["pricing_sha256"] == pricing_digest,
+        "live validation context pricing digest mismatch",
+    )
+    return True
+
+
+def serialize_live_qualification_validation_context(
+    context: Dict[str, Any],
+    *,
+    evidence: Dict[str, Any],
+    plan: Dict[str, Any],
+) -> str:
+    payload = deepcopy(context)
+    validate_live_qualification_validation_context(
+        payload,
+        evidence=evidence,
+        plan=plan,
+    )
+    return _canonical_json(payload)
+
+
+def load_live_qualification_validation_context(
+    context: Dict[str, Any],
+    *,
+    evidence: Dict[str, Any],
+    plan: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
+    """Return exact validated authorization/pricing inputs without side effects."""
+
+    payload = deepcopy(context)
+    evidence_payload = deepcopy(evidence)
+    plan_payload = deepcopy(plan)
+    validate_live_qualification_validation_context(
+        payload,
+        evidence=evidence_payload,
+        plan=plan_payload,
+    )
+    return {
+        "authorization": deepcopy(payload["live_authorization"]),
+        "pricing": deepcopy(payload["live_pricing"]),
+    }
+
+
 def _prepare_evidence_path(
     artifact_path: str | Path,
     *,
@@ -1245,6 +1457,23 @@ def _prepare_evidence_path(
         )
     _require(not candidate.exists() and not candidate.is_symlink(), "live evidence overwrite is prohibited")
     return candidate
+
+
+def _prepare_validation_context_path(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Path:
+    candidate = Path(artifact_path)
+    _require(
+        candidate.name.endswith(".validation-context.json")
+        and candidate.name != ".validation-context.json",
+        "live validation context filename is invalid",
+    )
+    return _prepare_evidence_path(
+        candidate,
+        repository_root=repository_root,
+    )
 
 
 def write_live_qualification_evidence_exclusive(
@@ -1287,4 +1516,64 @@ def write_live_qualification_evidence_exclusive(
     _require(stat.S_IMODE(path.stat().st_mode) == 0o600, "live evidence mode must be 0600")
     persisted = json.loads(path.read_text(encoding="utf-8"))
     _require(persisted == evidence, "persisted live evidence verification failed")
+    return path
+
+
+def write_live_qualification_validation_context_exclusive(
+    artifact_path: str | Path,
+    context: Dict[str, Any],
+    *,
+    evidence: Dict[str, Any],
+    repository_root: str | Path,
+    plan: Dict[str, Any],
+) -> Path:
+    """Persist explicitly requested validation context with mode 0600."""
+
+    encoded = serialize_live_qualification_validation_context(
+        context,
+        evidence=evidence,
+        plan=plan,
+    ).encode("utf-8")
+    path = _prepare_validation_context_path(
+        artifact_path,
+        repository_root=repository_root,
+    )
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    finally:
+        os.close(descriptor)
+    os.chmod(path, 0o600)
+    _require(
+        stat.S_IMODE(path.stat().st_mode) == 0o600,
+        "live validation context mode must be 0600",
+    )
+    persisted_bytes = path.read_bytes()
+    _require(
+        persisted_bytes == encoded,
+        "persisted live validation context bytes differ",
+    )
+    persisted = json.loads(persisted_bytes.decode("utf-8"))
+    _require(
+        persisted == context,
+        "persisted live validation context verification failed",
+    )
+    validate_live_qualification_validation_context(
+        persisted,
+        evidence=evidence,
+        plan=plan,
+    )
     return path

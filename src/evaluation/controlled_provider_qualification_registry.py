@@ -19,8 +19,6 @@ from typing import Any, Dict, Mapping
 
 from src.evaluation.controlled_provider_benchmark_evidence_runtime import (
     normalize_execution_timestamp,
-    provider_neutral_run_evidence_sha256,
-    validate_provider_neutral_run_evidence,
 )
 from src.evaluation.controlled_provider_benchmark_harness import (
     build_execution_schedule,
@@ -34,6 +32,10 @@ from src.evaluation.controlled_provider_benchmark_human_review import (
 from src.evaluation.controlled_provider_benchmark_plan import (
     controlled_provider_benchmark_plan_sha256,
     validate_controlled_provider_benchmark_plan,
+)
+from src.evaluation.controlled_provider_qualification_evidence_adapter import (
+    CONTROLLED_LIVE_EVIDENCE_KIND,
+    build_qualification_observation,
 )
 from src.evaluation.provider_benchmark_contract import (
     provider_benchmark_contract_sha256,
@@ -100,6 +102,7 @@ _QUALIFICATION_INPUT_FIELDS = {
 }
 _STATUS_REASON_ORDER = (
     "hard_failure",
+    "contract_invalid",
     "schema_invalid",
     "normalization_failed",
     "quality_gate_failed",
@@ -386,27 +389,6 @@ def _pending_cell(
     )
 
 
-def _summary_for_schedule(
-    evidence: Mapping[str, Any],
-    scheduled: Mapping[str, Any],
-) -> Dict[str, Any]:
-    summaries = [
-        row
-        for row in evidence["grading_summaries"]
-        if row["schedule_key"] == scheduled["schedule_key"]
-    ]
-    _require(len(summaries) == 1, "evidence is missing the exact schedule result")
-    summary = summaries[0]
-    _require(
-        all(
-            summary[field] == scheduled[field]
-            for field in ("case_alias", "workload_id", "provider", "model")
-        ),
-        "evidence workload/provider/model identity mismatch",
-    )
-    return deepcopy(summary)
-
-
 def _derive_cell_from_input(
     *,
     scheduled: Mapping[str, Any],
@@ -428,23 +410,34 @@ def _derive_cell_from_input(
     evidence = deepcopy(payload["evidence"])
     authorization = deepcopy(payload["authorization"])
     pricing = deepcopy(payload["pricing"])
-    validate_provider_neutral_run_evidence(
-        evidence,
+    observation = build_qualification_observation(
+        evidence=evidence,
+        schedule_key=scheduled["schedule_key"],
         plan=plan,
         authorization=authorization,
         pricing=pricing,
+        tested_task_contract_sha256=payload[
+            "tested_task_contract_sha256"
+        ],
     )
-    evidence_digest = provider_neutral_run_evidence_sha256(
-        evidence,
-        plan=plan,
-        authorization=authorization,
-        pricing=pricing,
-    )
+    evidence_digest = observation["evidence_sha256"]
     _require(
         payload["evidence_sha256"] == evidence_digest,
         "qualification evidence SHA-256 mismatch",
     )
-    summary = _summary_for_schedule(evidence, scheduled)
+    _require(
+        all(
+            observation[field] == scheduled[field]
+            for field in (
+                "schedule_key",
+                "case_alias",
+                "workload_id",
+                "provider",
+                "model",
+            )
+        ),
+        "qualification observation identity mismatch",
+    )
     review_record = deepcopy(payload["review_record"])
     assessment = assess_post_result_human_review(
         evidence=evidence,
@@ -482,39 +475,44 @@ def _derive_cell_from_input(
         )
         reviewed_at_utc = review_record["reviewed_at_utc"]
     tested_task = _optional_sha256(
-        payload["tested_task_contract_sha256"],
+        observation["tested_task_contract_sha256"],
         "tested task-contract fingerprint",
     )
     stale_reasons = set()
     if (
-        evidence["model_catalog_snapshot_sha256"]
+        observation["tested_model_catalog_snapshot_sha256"]
         != current_bindings["model_catalog_snapshot_sha256"]
     ):
         stale_reasons.add("catalog_binding_stale")
     if (
-        plan["step8l_contract_sha256"]
+        observation["tested_benchmark_contract_sha256"]
         != current_bindings["benchmark_contract_sha256"]
     ):
         stale_reasons.add("benchmark_contract_binding_stale")
-    if evidence["plan_sha256"] != current_bindings["controlled_plan_sha256"]:
+    if (
+        observation["tested_controlled_plan_sha256"]
+        != current_bindings["controlled_plan_sha256"]
+    ):
         stale_reasons.add("controlled_plan_binding_stale")
     failure_reasons = set()
-    if evidence["hard_failure_present"]:
+    if observation["hard_failure_present"]:
         failure_reasons.add("hard_failure")
-    if summary["schema_valid"] is not True:
-        failure_reasons.add("schema_invalid")
-    if summary["normalization_succeeded"] is not True:
+    if observation["contract_valid"] is not True:
+        failure_reasons.add(
+            "contract_invalid"
+            if observation["evidence_kind"] == CONTROLLED_LIVE_EVIDENCE_KIND
+            else "schema_invalid"
+        )
+    if observation["normalization_succeeded"] is False:
         failure_reasons.add("normalization_failed")
-    if (
-        summary["quality_gate_passed"] is not True
-        or any(summary["hard_failures"].values())
-    ):
+    if observation["quality_gate_passed"] is not True:
         failure_reasons.add("quality_gate_failed")
     if (
-        summary["provider_outcome_category"] != "success"
-        or summary["provider_call_count"] != 1
-        or summary["input_token_count"] <= 0
-        or summary["output_token_count"] <= 0
+        observation["schedule_completed"] is not True
+        or observation["provider_outcome_category"] != "success"
+        or observation["provider_call_count"] != 1
+        or observation["input_token_count"] <= 0
+        or observation["output_token_count"] <= 0
     ):
         failure_reasons.add("benchmark_failed")
     if stale_reasons:
@@ -556,15 +554,19 @@ def _derive_cell_from_input(
         review_required=review_required,
         current_bindings=current_bindings,
         current_task_contract_sha256=current_task_contract_sha256,
-        tested_model_catalog_snapshot_sha256=evidence[
-            "model_catalog_snapshot_sha256"
+        tested_model_catalog_snapshot_sha256=observation[
+            "tested_model_catalog_snapshot_sha256"
         ],
-        tested_benchmark_contract_sha256=plan["step8l_contract_sha256"],
-        tested_controlled_plan_sha256=evidence["plan_sha256"],
+        tested_benchmark_contract_sha256=observation[
+            "tested_benchmark_contract_sha256"
+        ],
+        tested_controlled_plan_sha256=observation[
+            "tested_controlled_plan_sha256"
+        ],
         tested_task_contract_sha256=tested_task,
         evidence_sha256=evidence_digest,
         review_sha256=review_digest,
-        evaluated_at_utc=evidence["execution_at_utc"],
+        evaluated_at_utc=observation["execution_at_utc"],
         reviewed_at_utc=reviewed_at_utc,
     )
 
@@ -935,6 +937,7 @@ def validate_provider_qualification_registry(
                     set(reasons)
                     & {
                         "hard_failure",
+                        "contract_invalid",
                         "schema_invalid",
                         "normalization_failed",
                         "quality_gate_failed",

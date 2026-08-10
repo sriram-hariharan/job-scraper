@@ -1,8 +1,9 @@
 """Immutable post-result human-review records for controlled benchmarks.
 
-This evaluation-only owner binds a bounded operator decision to one exact
-provider-neutral run-evidence digest and one executed schedule row.  It does
-not execute providers, grade output, select routes, or access application data.
+This evaluation-only owner binds a bounded operator decision to one exact,
+natively validated qualification-evidence digest and one executed schedule
+row.  It does not execute providers, grade output, select routes, or access
+application data.
 """
 
 from __future__ import annotations
@@ -17,12 +18,9 @@ import re
 import stat
 from typing import Any, Callable, Dict
 
-from src.evaluation.controlled_provider_benchmark_harness import (
-    build_execution_schedule,
-)
-from src.evaluation.controlled_provider_benchmark_evidence_runtime import (
-    provider_neutral_run_evidence_sha256,
-    validate_provider_neutral_run_evidence,
+from src.evaluation.controlled_provider_qualification_evidence_adapter import (
+    PROVIDER_NEUTRAL_EVIDENCE_KIND,
+    build_qualification_observation,
 )
 from src.evaluation.provider_benchmark_contract import (
     WORKLOAD_ORDER,
@@ -206,93 +204,51 @@ def _validated_evidence_row(
     plan: Dict[str, Any],
     authorization: Dict[str, Any],
     pricing: Dict[str, Any],
-) -> tuple[str, Dict[str, Any], Dict[str, Any]]:
-    payload = deepcopy(evidence)
-    validate_provider_neutral_run_evidence(
-        payload,
-        plan=plan,
-        authorization=authorization,
-        pricing=pricing,
+) -> tuple[str, Dict[str, Any]]:
+    observation = build_qualification_observation(
+        evidence=deepcopy(evidence),
+        schedule_key=schedule_key,
+        plan=deepcopy(plan),
+        authorization=deepcopy(authorization),
+        pricing=deepcopy(pricing),
     )
-    _require(isinstance(schedule_key, str), "schedule key must be text")
-    normalized_key = schedule_key.strip()
-    _require(bool(normalized_key), "schedule key is required")
-    matches = [
-        row
-        for row in payload["grading_summaries"]
-        if row["schedule_key"] == normalized_key
-    ]
-    _require(
-        len(matches) == 1,
-        "schedule key must identify one retained grading summary",
-    )
-    schedule_matches = [
-        row
-        for row in build_execution_schedule(
-            plan=deepcopy(plan),
-            authorization=deepcopy(authorization),
-        )
-        if row["schedule_key"] == normalized_key
-    ]
-    _require(len(schedule_matches) == 1, "unknown controlled schedule key")
-    scheduled = schedule_matches[0]
-    summary = matches[0]
-    _require(
-        all(
-            summary[field] == scheduled[field]
-            for field in ("case_alias", "workload_id", "provider", "model")
-        ),
-        "grading summary identity differs from controlled schedule",
-    )
-    digest = provider_neutral_run_evidence_sha256(
-        payload,
-        plan=plan,
-        authorization=authorization,
-        pricing=pricing,
-    )
-    return digest, deepcopy(summary), payload
+    return observation["evidence_sha256"], observation
 
 
 def _require_approval_safe(
-    evidence: Dict[str, Any],
-    summary: Dict[str, Any],
+    observation: Dict[str, Any],
 ) -> None:
-    checkpoint = evidence["checkpoint"]
-    authority = checkpoint["authority_invariants"]
     _require(
-        evidence["hard_failure_present"] is False,
+        observation["hard_failure_present"] is False,
         "approval cannot override benchmark hard failure",
     )
     _require(
-        summary["schedule_key"] in checkpoint["completed_schedule_keys"],
+        observation["schedule_completed"] is True,
         "reviewed schedule row did not complete successfully",
     )
-    _require(summary["schema_valid"] is True, "approval requires valid schema")
     _require(
-        summary["normalization_succeeded"] is True,
-        "approval requires successful normalization",
+        observation["contract_valid"] is True,
+        (
+            "approval requires valid schema"
+            if observation["evidence_kind"] == PROVIDER_NEUTRAL_EVIDENCE_KIND
+            else "approval requires a valid production contract"
+        ),
     )
     _require(
-        summary["quality_gate_passed"] is True,
+        observation["normalization_succeeded"] is not False,
+        "approval requires successful normalization when separately evidenced",
+    )
+    _require(
+        observation["quality_gate_passed"] is True,
         "approval requires passed deterministic quality gate",
     )
     _require(
-        not any(summary["hard_failures"].values()),
-        "approval cannot override deterministic safety failure",
-    )
-    _require(
-        summary["provider_outcome_category"] == "success",
+        observation["provider_outcome_category"] == "success"
+        and observation["provider_call_count"] == 1,
         "approval requires successful provider outcome",
     )
     _require(
-        authority["fallback_activation_count"] == 0
-        and authority["retry_count"] == 0
-        and authority["mutation_count"] == 0
-        and authority["application_action_count"] == 0
-        and authority["ats_action_count"] == 0
-        and authority["raw_response_persisted_count"] == 0
-        and authority["production_activation"] is False
-        and authority["winner_selected"] is False,
+        observation["authority_safety_valid"] is True,
         "approval cannot override deterministic authority invariant",
     )
 
@@ -308,7 +264,7 @@ def _expected_review_record(
     authorization: Dict[str, Any],
     pricing: Dict[str, Any],
 ) -> Dict[str, Any]:
-    evidence_digest, summary, validated_evidence = _validated_evidence_row(
+    evidence_digest, observation = _validated_evidence_row(
         evidence=evidence,
         schedule_key=schedule_key,
         plan=plan,
@@ -316,21 +272,21 @@ def _expected_review_record(
         pricing=pricing,
     )
     _require(
-        human_review_required_for_workload(summary["workload_id"]),
+        human_review_required_for_workload(observation["workload_id"]),
         "review record is prohibited for a workload that does not require review",
     )
     normalized_decision = _normalize_decision(decision)
     if normalized_decision == "approved":
-        _require_approval_safe(validated_evidence, summary)
+        _require_approval_safe(observation)
     return {
         "review_record_version": HUMAN_REVIEW_RECORD_VERSION,
         "review_contract_version": HUMAN_REVIEW_CONTRACT_VERSION,
         "decision_scope": DECISION_SCOPE,
         "evidence_sha256": evidence_digest,
-        "schedule_key": summary["schedule_key"],
-        "workload_id": summary["workload_id"],
-        "provider": summary["provider"],
-        "model": summary["model"],
+        "schedule_key": observation["schedule_key"],
+        "workload_id": observation["workload_id"],
+        "provider": observation["provider"],
+        "model": observation["model"],
         "human_review_required": True,
         "decision": normalized_decision,
         "reviewer_id": normalize_reviewer_id(reviewer_id),
@@ -411,14 +367,14 @@ def assess_post_result_human_review(
     authorization: Dict[str, Any],
     pricing: Dict[str, Any],
 ) -> Dict[str, Any]:
-    evidence_digest, summary, _validated_evidence = _validated_evidence_row(
+    evidence_digest, observation = _validated_evidence_row(
         evidence=evidence,
         schedule_key=schedule_key,
         plan=plan,
         authorization=authorization,
         pricing=pricing,
     )
-    required = human_review_required_for_workload(summary["workload_id"])
+    required = human_review_required_for_workload(observation["workload_id"])
     if not required:
         _require(
             review_record is None,
@@ -436,7 +392,7 @@ def assess_post_result_human_review(
             pricing=pricing,
         )
         _require(
-            review_record["schedule_key"] == summary["schedule_key"],
+            review_record["schedule_key"] == observation["schedule_key"],
             "review record schedule binding mismatch",
         )
         decision = review_record["decision"]
@@ -444,10 +400,10 @@ def assess_post_result_human_review(
         "review_contract_version": HUMAN_REVIEW_CONTRACT_VERSION,
         "decision_scope": DECISION_SCOPE,
         "evidence_sha256": evidence_digest,
-        "schedule_key": summary["schedule_key"],
-        "workload_id": summary["workload_id"],
-        "provider": summary["provider"],
-        "model": summary["model"],
+        "schedule_key": observation["schedule_key"],
+        "workload_id": observation["workload_id"],
+        "provider": observation["provider"],
+        "model": observation["model"],
         "human_review_required": required,
         "decision": decision,
         "review_requirement_satisfied": (

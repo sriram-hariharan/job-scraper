@@ -715,6 +715,6 @@ def test_no_production_source_imports_provider_neutral_evidence_runtime():
             references.append(path.relative_to(ROOT).as_posix())
 
     assert sorted(references) == [
-        "src/evaluation/controlled_provider_benchmark_human_review.py",
+        "src/evaluation/controlled_provider_qualification_evidence_adapter.py",
         "src/evaluation/controlled_provider_qualification_registry.py",
     ]

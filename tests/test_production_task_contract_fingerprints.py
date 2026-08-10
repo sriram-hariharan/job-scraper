@@ -26,6 +26,7 @@ FINGERPRINTED_WORKLOADS = (
     "jd_intelligence",
     "grounded_rag_answer",
     "resume_fallback_ranking",
+    "ambiguous_resume_adjudication",
     "critic_evaluation",
     "tailoring_generation",
     "tailoring_refinement",
@@ -33,7 +34,6 @@ FINGERPRINTED_WORKLOADS = (
     "manual_scan_phrase",
 )
 UNRESOLVED_WORKLOADS = (
-    "ambiguous_resume_adjudication",
     "manual_provider_preview",
 )
 
@@ -94,6 +94,21 @@ def test_unresolved_or_benchmark_only_workload_has_no_production_contract(worklo
 def test_unknown_workload_fails_closed():
     with pytest.raises(ValueError, match="unknown production workload"):
         fingerprints.production_task_contract_sha256("not_a_workload")
+
+
+def test_ambiguous_workload_is_owned_only_by_readback_adjudication():
+    assert fingerprints._OWNER_BUILDERS["ambiguous_resume_adjudication"] == (
+        "src.agents.llm_adjudicator_readback",
+        "build_llm_adjudicator_readback_production_task_contract_material",
+    )
+    contract = fingerprints.build_production_task_contract(
+        "ambiguous_resume_adjudication"
+    )
+    serialized = json.dumps(contract, sort_keys=True).lower()
+    assert contract["deterministic_transformation_contract"]["readback_only"] is True
+    assert contract["deterministic_transformation_contract"]["no_winner_override"] is True
+    assert "adjudicated_resume" not in serialized
+    assert "winner-resolving" not in serialized
 
 
 @pytest.mark.parametrize(
@@ -209,6 +224,15 @@ def test_provider_model_credentials_runtime_and_operational_state_are_excluded(
         ("grounded_rag_answer", {"temperature": 0, "max_tokens": 500}),
         ("resume_fallback_ranking", {"temperature": 0.0, "max_tokens": 900}),
         (
+            "ambiguous_resume_adjudication",
+            {
+                "temperature": 0,
+                "max_tokens": 500,
+                "response_mime_type": "application/json",
+                "fallback_enabled": False,
+            },
+        ),
+        (
             "critic_evaluation",
             {
                 "temperature": 0,
@@ -287,6 +311,12 @@ def test_production_call_sites_use_the_extracted_authoritative_material():
             "temperature=GROUNDED_RAG_TEMPERATURE",
             "max_tokens=GROUNDED_RAG_MAX_TOKENS",
         ),
+        "src/agents/llm_adjudicator_readback.py": (
+            '"content": LLM_ADJUDICATOR_READBACK_SYSTEM_PROMPT',
+            "max_tokens=int(",
+            "response_mime_type=\"application/json\"",
+            "fallback_enabled=False",
+        ),
         "batch_select_best_resume_variant.py": (
             "system_prompt = LLM_FALLBACK_SYSTEM_PROMPT",
             "max_tokens=LLM_FALLBACK_MAX_TOKENS",
@@ -313,6 +343,7 @@ def test_production_call_sites_use_the_extracted_authoritative_material():
 
 
 def test_extracted_prompt_constants_preserve_exact_runtime_text():
+    from src.agents import llm_adjudicator_readback
     from src.ai import skill_llm_enricher
     from src.app import services
     from src.tailoring import llm as tailoring_llm
@@ -320,6 +351,12 @@ def test_extracted_prompt_constants_preserve_exact_runtime_text():
 
     assert skill_llm_enricher._build_skill_extraction_retry_prompt("primary") == (
         "primary\n\nReturn ONLY valid JSON. No prose. No markdown. No explanation."
+    )
+    assert llm_adjudicator_readback._provider_prompt([])[0]["content"] == (
+        llm_adjudicator_readback
+        .build_llm_adjudicator_readback_production_task_contract_material()[
+            "prompt_contract"
+        ]["system"]
     )
     assert resume_selector.LLM_FALLBACK_SYSTEM_PROMPT.startswith(
         "You rank resume variants for fallback use"
@@ -345,6 +382,7 @@ def test_extracted_prompt_constants_preserve_exact_runtime_text():
 
 
 def test_existing_parser_and_normalizer_semantics_are_unchanged():
+    from src.agents import llm_adjudicator_readback
     from src.ai import job_fit_evaluator, skill_llm_enricher
     from src.rag import rag_answerer
     from src.tailoring import llm as tailoring_llm
@@ -359,6 +397,12 @@ def test_existing_parser_and_normalizer_semantics_are_unchanged():
     assert rag_answerer._extract_json_from_response(
         'prefix {"answer":"grounded"} suffix'
     ) == {"answer": "grounded"}
+    assert llm_adjudicator_readback._parse_provider_response(
+        '{"summary":"Close candidates"}'
+    ) == {"summary": "Close candidates"}
+    assert llm_adjudicator_readback._normalize_provider_response(
+        {"reason": "Close candidates", "recommendation": "Review alpha"}
+    ) == ("Close candidates", "Review alpha")
     assert resume_selector._normalize_llm_fallback_parsed(
         {
             "best_resume": "resume-a.pdf",

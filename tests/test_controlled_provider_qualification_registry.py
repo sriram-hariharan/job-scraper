@@ -17,6 +17,9 @@ from src.evaluation.controlled_provider_benchmark_plan import (
     build_controlled_provider_benchmark_plan,
 )
 from src.evaluation.provider_fixture_benchmark import load_fixture_case_corpus
+from src.evaluation.production_task_contract_fingerprints import (
+    build_all_production_task_contract_fingerprints,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -241,6 +244,37 @@ def test_empty_registry_derives_exact_44_pending_cells(controlled_inputs):
         and cell["model"] == "openai/gpt-oss-120b"
         for cell in payload["cells"]
     )
+
+
+def test_new_readback_fingerprint_alone_leaves_ambiguous_cells_pending(
+    controlled_inputs,
+):
+    fingerprints = build_all_production_task_contract_fingerprints()
+    payload = registry.build_provider_qualification_registry(
+        plan=controlled_inputs[0],
+        current_task_contract_sha256_by_workload=fingerprints,
+    )
+    ambiguous = [
+        cell
+        for cell in payload["cells"]
+        if cell["workload_id"] == "ambiguous_resume_adjudication"
+    ]
+    preview = [
+        cell
+        for cell in payload["cells"]
+        if cell["workload_id"] == "manual_provider_preview"
+    ]
+
+    assert len(ambiguous) == 4
+    assert all(cell["current_task_contract_sha256"] for cell in ambiguous)
+    assert all(cell["status"] == "pending" for cell in ambiguous)
+    assert all("evidence_missing" in cell["status_reasons"] for cell in ambiguous)
+    assert all(
+        "task_contract_missing" not in cell["status_reasons"]
+        for cell in ambiguous
+    )
+    assert all(cell["current_task_contract_sha256"] is None for cell in preview)
+    assert all("task_contract_missing" in cell["status_reasons"] for cell in preview)
 
 
 def test_registry_universe_matches_current_plan_order(controlled_inputs):

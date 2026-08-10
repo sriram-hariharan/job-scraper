@@ -449,17 +449,57 @@ def test_resume_candidate_and_ranking_agreement_are_deterministic():
     assert grade["deterministic_authority_preservation"] == 1.0
 
 
-def test_adjudication_is_advisory_and_preserves_deterministic_result():
+def test_adjudication_readback_quality_and_authority_are_independent():
     grade = engine.grade_normalized_candidate_result(
         _packet("ambiguous_resume_adjudication")
     )
 
-    assert grade["winner_agreement"] == 1.0
-    assert grade["workload_metrics"]["advisory_decision_agreement"] == 1.0
-    assert grade["workload_metrics"]["reason_code_agreement"] == 1.0
+    assert grade["quality_gate_passed"] is True
+    assert grade["workload_metrics"]["response_contract_completeness"] == 1.0
+    assert grade["workload_metrics"]["summary_grounding"] == 1.0
+    assert grade["workload_metrics"]["recommendation_label_grounding"] == 1.0
     assert (
         grade["workload_metrics"]["deterministic_result_preservation"] == 1.0
     )
+    assert grade["workload_metrics"]["no_authoritative_selection_mutation"] == 1.0
+
+
+def test_adjudication_readback_hallucination_is_a_hard_failure():
+    packet = _packet("ambiguous_resume_adjudication")
+    packet["normalized_output"]["adjudicator_summary"] += (
+        " Candidate gamma adds Kubernetes production ownership."
+    )
+
+    grade = engine.grade_normalized_candidate_result(packet)
+
+    assert grade["workload_metrics"]["unsupported_candidate_claim_count"] == 1
+    assert grade["hard_failures"]["unsupported_claim"] >= 1
+    assert grade["hard_failures"]["hallucination"] >= 1
+    assert grade["quality_gate_passed"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "hard_failure"),
+    [
+        ("winner_resume", "selected_resume_mutation"),
+        ("score_mutated", "deterministic_authority_mutation"),
+        ("queue_mutated", "queue_mutation"),
+    ],
+)
+def test_adjudication_readback_cannot_gain_selection_score_or_queue_authority(
+    field,
+    hard_failure,
+):
+    packet = _packet("ambiguous_resume_adjudication")
+    packet["normalized_output"][field] = (
+        "candidate_beta" if field == "winner_resume" else True
+    )
+
+    grade = engine.grade_normalized_candidate_result(packet)
+
+    assert grade["hard_failures"][hard_failure] == 1
+    assert grade["deterministic_authority_preservation"] == 0.0
+    assert grade["quality_gate_passed"] is False
 
 
 def test_critic_agreement_and_safe_suggestion_approval_are_exact():
@@ -628,10 +668,10 @@ def test_tailoring_diagnostic_refactor_preserves_grade_and_semantic_digests():
     }
     assert grade["quality_gate_passed"] is True
     assert engine.fixture_case_corpus_sha256() == (
-        "0ddc82e62745856c0d5d4d3f0efbe3fc86bd4e84e5da070f54f4ea635e74b05c"
+        "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
     )
     assert engine.provider_fixture_benchmark_sha256() == (
-        "7a6463fc465d963633f82a18de0b067daab31dc387680b1d004e706c61a55c15"
+        "bda29d76f679a60cc6650e485fb85b318665b6857f93ffd976160980ed6a95d1"
     )
 
 

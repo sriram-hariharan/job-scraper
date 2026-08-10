@@ -195,22 +195,54 @@
       "additional_redaction_required": false,
       "schema_id": "ambiguous_resume_adjudication_result_v1",
       "normalized_input_packet": {
-        "candidate_ids": ["candidate_alpha", "candidate_beta"],
-        "deterministic_candidate_id": "candidate_alpha",
-        "policy_reason": "close_score_gap"
+        "candidates": [
+          {
+            "resume_name": "candidate_alpha",
+            "final_score": 0.8,
+            "match_bucket": "solid",
+            "top_dimensions": "skills=0.90 | semantic_alignment=0.80",
+            "semantic_alignment": {
+              "score": 0.8,
+              "weight": 0.05,
+              "weighted_score": 0.04,
+              "reason": "Synthetic analytics alignment.",
+              "evidence": ["python", "sql"]
+            },
+            "hard_requirement_diagnostics": [],
+            "missing_requirements": [],
+            "matched_terms": ["python", "sql"],
+            "prefilter_passed": true
+          },
+          {
+            "resume_name": "candidate_beta",
+            "final_score": 0.76,
+            "match_bucket": "solid",
+            "top_dimensions": "skills=0.80 | semantic_alignment=0.70",
+            "semantic_alignment": {
+              "score": 0.7,
+              "weight": 0.05,
+              "weighted_score": 0.035,
+              "reason": "Synthetic reporting alignment.",
+              "evidence": ["sql", "reporting"]
+            },
+            "hard_requirement_diagnostics": [
+              {"code": "synthetic_requirement_gap"}
+            ],
+            "missing_requirements": ["synthetic_requirement_gap"],
+            "matched_terms": ["sql", "reporting"],
+            "prefilter_passed": true
+          }
+        ]
       },
       "expected_output": {
-        "advisory_candidate_id": "candidate_alpha",
-        "decision": "preserve_deterministic",
-        "reason_codes": ["close_score_gap"],
-        "authoritative_candidate_id": "candidate_alpha",
-        "authority_mutated": false
+        "adjudicator_summary": "Candidate alpha has stronger Python and SQL evidence; candidate beta has reporting evidence and a synthetic requirement gap.",
+        "adjudicator_recommendation_label": "Review candidate alpha first"
       },
       "expected_invariant": {},
-      "required_fields": ["advisory_candidate_id", "decision", "reason_codes", "authoritative_candidate_id", "authority_mutated"],
-      "supported_evidence_tokens": ["close_score_gap"],
+      "required_fields": ["adjudicator_summary", "adjudicator_recommendation_label"],
+      "supported_evidence_tokens": ["python", "sql", "reporting", "synthetic requirement gap"],
       "supported_evidence_ids": ["candidate_alpha", "candidate_beta"],
-      "prohibited_claims_or_terms": [],
+      "prohibited_claims_or_terms": ["kubernetes", "production ownership"],
       "comparison_type": "exact_golden",
       "human_review_required": true,
       "deterministic_authority_required": true

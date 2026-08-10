@@ -158,8 +158,10 @@ _WORKLOAD_GRADER_RESPONSIBILITIES = {
         "deterministic_authority_preservation",
     ],
     "ambiguous_resume_adjudication": [
-        "advisory_decision_agreement",
-        "reason_code_agreement",
+        "response_contract_completeness",
+        "summary_grounding",
+        "recommendation_label_grounding",
+        "unsupported_candidate_claim_count",
         "deterministic_result_preservation",
         "no_authoritative_selection_mutation",
     ],
@@ -897,9 +899,22 @@ def _authority_preserved(
         "mutation_authorized",
         "application_authorized",
         "ats_authorized",
+        "score_mutated",
+        "queue_mutated",
+        "selected_resume_mutated",
     ):
         if output.get(field) is True:
             return False
+    if case.get("workload_id") == "ambiguous_resume_adjudication":
+        for field in (
+            "adjudicated_resume",
+            "authoritative_candidate_id",
+            "resolved_resume",
+            "selected_resume",
+            "winner_resume",
+        ):
+            if output.get(field) not in {None, "", False}:
+                return False
     return True
 
 
@@ -1105,24 +1120,65 @@ def _grade_adjudication(
     case: Mapping[str, Any],
     output: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    expected = case["expected_output"]
-    decision = _agreement(output.get("decision"), expected.get("decision"))
-    reasons = _agreement(
-        _normalized_set(output.get("reason_codes")),
-        _normalized_set(expected.get("reason_codes")),
+    summary = _clean_text(output.get("adjudicator_summary"))
+    label = _clean_text(output.get("adjudicator_recommendation_label"))
+    combined = f"{summary} {label}".strip().casefold().replace("_", " ")
+    candidate_ids = {
+        _clean_text(value).casefold().replace("_", " ")
+        for value in case.get("supported_evidence_ids", [])
+        if _clean_text(value)
+    }
+    evidence_tokens = {
+        _clean_text(value).casefold().replace("_", " ")
+        for value in case.get("supported_evidence_tokens", [])
+        if _clean_text(value)
+    }
+    prohibited = {
+        _clean_text(value).casefold().replace("_", " ")
+        for value in case.get("prohibited_claims_or_terms", [])
+        if _clean_text(value)
+    }
+    mentioned_candidates = {
+        candidate_id for candidate_id in candidate_ids if candidate_id in combined
+    }
+    mentioned_evidence = {
+        token for token in evidence_tokens if token in combined
+    }
+    candidate_words = "".join(
+        character if character.isalnum() else " "
+        for character in combined
+    ).split()
+    observed_candidate_markers = {
+        f"candidate {candidate_words[index + 1]}"
+        for index, word in enumerate(candidate_words[:-1])
+        if word == "candidate"
+    }
+    unsupported_candidates = observed_candidate_markers - candidate_ids
+    unsupported_terms = {term for term in prohibited if term in combined}
+    unsupported_count = len(unsupported_candidates | unsupported_terms)
+    response_complete = bool(summary and label)
+    summary_grounded = bool(
+        summary and mentioned_candidates and mentioned_evidence
     )
-    advisory = _agreement(
-        output.get("advisory_candidate_id"),
-        expected.get("advisory_candidate_id"),
+    label_grounded = bool(
+        label
+        and any(candidate_id in label.casefold().replace("_", " ") for candidate_id in candidate_ids)
     )
     authority = _authority_preserved(case, output)
     return {
-        "advisory_decision_agreement": decision,
-        "reason_code_agreement": reasons,
-        "winner_agreement": advisory,
+        "response_contract_completeness": 1.0 if response_complete else 0.0,
+        "summary_grounding": 1.0 if summary_grounded else 0.0,
+        "recommendation_label_grounding": 1.0 if label_grounded else 0.0,
+        "unsupported_candidate_claim_count": len(unsupported_candidates),
+        "unsupported_claim_count": unsupported_count,
         "deterministic_result_preservation": 1.0 if authority else 0.0,
+        "no_authoritative_selection_mutation": 1.0 if authority else 0.0,
         "task_quality_passed": (
-            decision == reasons == advisory == 1.0 and authority
+            response_complete
+            and summary_grounded
+            and label_grounded
+            and unsupported_count == 0
+            and authority
         ),
     }
 
@@ -1428,6 +1484,10 @@ def grade_normalized_candidate_result(
     hard_failures["deterministic_authority_mutation"] = int(not authority)
     hard_failures["ranking_mutation"] = int(
         case["workload_id"] == "resume_fallback_ranking" and not authority
+    )
+    hard_failures["queue_mutation"] = int(
+        case["workload_id"] == "ambiguous_resume_adjudication"
+        and output.get("queue_mutated") is True
     )
     hard_failures["selected_resume_mutation"] = int(
         case["workload_id"]

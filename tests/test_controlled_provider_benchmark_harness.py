@@ -44,7 +44,7 @@ STEP8M_SHA256 = (
     "e798f7d10f67c65c5d02f7531b54c3ce1b18ad0a6db5ec98505b4f1847f23ddd"
 )
 STEP8PA_PLAN_SHA256 = (
-    "16c6d628b20f124322d7b06f45c2ac425f3dfca1b50b5df049a02a4d7b7e5675"
+    "f2dcf5345442009915819432a9c1fc9342de40561eb6824c1518dcd31e99d3bf"
 )
 
 
@@ -1541,18 +1541,18 @@ def test_fake_matrix_authority_counts_remain_bounded_and_non_authoritative():
     assert authority["raw_response_persisted_count"] == 0
 
 
-def test_steps_8l_through_8pa_digests_remain_stable():
+def test_current_contract_corpus_engine_and_plan_digests_are_bound():
     contract = harness.build_controlled_benchmark_harness_contract()
 
     assert provider_benchmark_contract_sha256() == (
-        "5e39da6e518a4870a37aba10b1bac162ddd7dbb0bf20bb5cef7171598a4e5a52"
+        "817e3620b9ceefce15cf6991617116c1d1ee0a585e4f1dd17a60f614f473fd25"
     )
     assert provider_client_compatibility_sha256() == STEP8M_SHA256
     assert step8o.provider_fixture_benchmark_sha256() == (
-        "7a6463fc465d963633f82a18de0b067daab31dc387680b1d004e706c61a55c15"
+        "bda29d76f679a60cc6650e485fb85b318665b6857f93ffd976160980ed6a95d1"
     )
     assert step8o.fixture_case_corpus_sha256() == (
-        "0ddc82e62745856c0d5d4d3f0efbe3fc86bd4e84e5da070f54f4ea635e74b05c"
+        "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
     )
     assert controlled_provider_benchmark_plan_sha256() == (
         STEP8PA_PLAN_SHA256
@@ -1595,7 +1595,9 @@ def test_no_production_source_imports_or_calls_the_harness_owner():
         "src/evaluation/controlled_groq_canary_run_003_transport.py",
         "src/evaluation/controlled_openai_canary_transport.py",
         "src/evaluation/controlled_groq_canary_evidence_runtime.py",
+        "src/evaluation/controlled_provider_qualification_registry.py",
         "src/evaluation/controlled_groq_tailoring_canary_transport.py",
+        "src/evaluation/controlled_provider_benchmark_human_review.py",
         "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",
         "src/evaluation/controlled_groq_canary_transport.py",
         "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",

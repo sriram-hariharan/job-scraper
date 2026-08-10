@@ -44,6 +44,7 @@ _RESPONSE_MODES = {
     "jd_intelligence": "structured_json",
     "grounded_rag_answer": "json_text",
     "resume_fallback_ranking": "json_text",
+    "ambiguous_resume_adjudication": "json_text",
     "critic_evaluation": "structured_json",
     "tailoring_generation": "structured_json",
     "tailoring_refinement": "plain_text",
@@ -322,6 +323,15 @@ def _synthetic_material(
             "deterministic_candidate_id": _clean(values.get("deterministic_candidate_id")) or candidate_ids[0],
             "missing_requirements": missing,
         }
+    elif workload_id == "ambiguous_resume_adjudication":
+        candidates = [
+            deepcopy(candidate)
+            for candidate in values.get("candidates", [])
+            if isinstance(candidate, dict)
+        ]
+        _require(bool(candidates), "synthetic readback candidates are required")
+        replacements = {}
+        context = {"candidates": candidates}
     elif workload_id == "critic_evaluation":
         replacements = {
             "<suggestion_field>": "suggested_text",
@@ -438,18 +448,24 @@ def build_production_parity_request(
         workload_id,
         packet["synthetic_input"],
     )
-    system_key, user_key = _PROMPT_KEYS[workload_id]
     prompt_contract = production_contract["prompt_contract"]
-    messages = [
-        {
-            "role": "system",
-            "content": _replace_text(prompt_contract[system_key], replacements),
-        },
-        {
-            "role": "user",
-            "content": _replace_text(prompt_contract[user_key], replacements),
-        },
-    ]
+    if workload_id == "ambiguous_resume_adjudication":
+        owner = import_module("src.agents.llm_adjudicator_readback")
+        messages = owner._provider_prompt(
+            deepcopy(local_context["candidates"])
+        )
+    else:
+        system_key, user_key = _PROMPT_KEYS[workload_id]
+        messages = [
+            {
+                "role": "system",
+                "content": _replace_text(prompt_contract[system_key], replacements),
+            },
+            {
+                "role": "user",
+                "content": _replace_text(prompt_contract[user_key], replacements),
+            },
+        ]
     task_parameters = deepcopy(production_contract["task_parameters"])
     maximum_tokens = task_parameters.get("max_tokens")
     _require(
@@ -529,24 +545,30 @@ def validate_production_parity_request(
         production_contract is not None,
         "production task contract is unavailable",
     )
-    system_key, user_key = _PROMPT_KEYS[workload_id]
     prompt_contract = production_contract["prompt_contract"]
-    expected_messages = [
-        {
-            "role": "system",
-            "content": _replace_text(
-                prompt_contract[system_key],
-                expected_replacements,
-            ),
-        },
-        {
-            "role": "user",
-            "content": _replace_text(
-                prompt_contract[user_key],
-                expected_replacements,
-            ),
-        },
-    ]
+    if workload_id == "ambiguous_resume_adjudication":
+        owner = import_module("src.agents.llm_adjudicator_readback")
+        expected_messages = owner._provider_prompt(
+            deepcopy(expected_context["candidates"])
+        )
+    else:
+        system_key, user_key = _PROMPT_KEYS[workload_id]
+        expected_messages = [
+            {
+                "role": "system",
+                "content": _replace_text(
+                    prompt_contract[system_key],
+                    expected_replacements,
+                ),
+            },
+            {
+                "role": "user",
+                "content": _replace_text(
+                    prompt_contract[user_key],
+                    expected_replacements,
+                ),
+            },
+        ]
     messages = request.get("messages")
     _require(
         isinstance(messages, list)
@@ -706,6 +728,15 @@ def _normalize_production_response(
         ]
         return owner._enforce_fallback_honesty(normalized, strict_results)
 
+    if workload_id == "ambiguous_resume_adjudication":
+        owner = import_module("src.agents.llm_adjudicator_readback")
+        parsed = owner._parse_provider_response(raw_response)
+        summary, label = owner._normalize_provider_response(parsed)
+        return {
+            "adjudicator_summary": summary,
+            "adjudicator_recommendation_label": label,
+        }
+
     if workload_id == "critic_evaluation":
         owner = import_module("src.app.services")
         parsed = raw_response if isinstance(raw_response, dict) else {"raw_response": raw_response}
@@ -841,6 +872,13 @@ def _benchmark_projection(
             "ranking": [item for item in (best, backup) if item],
             "authoritative_candidate_id": context["deterministic_candidate_id"],
             "authority_mutated": False,
+        }
+    if workload_id == "ambiguous_resume_adjudication":
+        return {
+            "adjudicator_summary": _clean(normalized.get("adjudicator_summary")),
+            "adjudicator_recommendation_label": _clean(
+                normalized.get("adjudicator_recommendation_label")
+            ),
         }
     if workload_id == "critic_evaluation":
         decisions = (

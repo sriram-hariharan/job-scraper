@@ -35,6 +35,7 @@ RUNNABLE = (
     "jd_intelligence",
     "grounded_rag_answer",
     "resume_fallback_ranking",
+    "ambiguous_resume_adjudication",
     "critic_evaluation",
     "tailoring_generation",
     "tailoring_refinement",
@@ -42,7 +43,6 @@ RUNNABLE = (
     "manual_scan_phrase",
 )
 BLOCKED = (
-    "ambiguous_resume_adjudication",
     "manual_provider_preview",
 )
 EXPECTED_MODES = {
@@ -51,6 +51,7 @@ EXPECTED_MODES = {
     "jd_intelligence": "structured_json",
     "grounded_rag_answer": "json_text",
     "resume_fallback_ranking": "json_text",
+    "ambiguous_resume_adjudication": "json_text",
     "critic_evaluation": "structured_json",
     "tailoring_generation": "structured_json",
     "tailoring_refinement": "plain_text",
@@ -154,6 +155,14 @@ def _valid_response(workload_id):
                 "synthetic_requirement_gap."
             ),
         },
+        "ambiguous_resume_adjudication": {
+            "adjudicator_summary": (
+                "Candidate alpha has stronger Python and SQL evidence; "
+                "candidate beta has reporting evidence and a synthetic "
+                "requirement gap."
+            ),
+            "adjudicator_recommendation_label": "Review candidate alpha first",
+        },
         "critic_evaluation": {
             "critic_status": "approved",
             "approved_suggestions": [
@@ -233,7 +242,7 @@ def _valid_response(workload_id):
     }[workload_id]
 
 
-def test_exact_ten_workloads_are_runnable_and_two_are_blocked():
+def test_exact_eleven_workloads_are_runnable_and_one_is_blocked():
     runnability = parity.build_production_parity_runnability()
 
     assert len(WORKLOAD_ORDER) == len(runnability) == 12
@@ -250,6 +259,55 @@ def test_exact_ten_workloads_are_runnable_and_two_are_blocked():
         for key, value in runnability.items()
         if value["status"] == "blocked_pending_contract_resolution"
     ) == BLOCKED
+
+
+def test_ambiguous_parity_uses_exact_readback_prompt_and_candidate_payload(plan):
+    from src.agents import llm_adjudicator_readback
+
+    request = _request(plan, "ambiguous_resume_adjudication")
+    contract = build_production_task_contract("ambiguous_resume_adjudication")
+    candidates = request["local_validation_context"]["candidates"]
+
+    assert request["messages"] == llm_adjudicator_readback._provider_prompt(
+        candidates
+    )
+    assert request["messages"][0]["content"] == contract["prompt_contract"]["system"]
+    assert request["response_contract"]["mode"] == "json_text"
+    assert request["task_parameters"]["fallback_enabled"] is False
+
+
+def test_ambiguous_production_validity_is_separate_from_readback_quality(plan):
+    request = _request(plan, "ambiguous_resume_adjudication")
+    result = parity.validate_and_grade_production_parity_response(
+        request,
+        {
+            "adjudicator_summary": (
+                "Candidate gamma adds Kubernetes production ownership."
+            ),
+            "adjudicator_recommendation_label": "Review candidate gamma first",
+        },
+        plan=plan,
+    )
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
+    assert result["benchmark_quality"]["hard_failures"]["unsupported_claim"] >= 1
+    assert result["benchmark_quality"]["hard_failures"]["hallucination"] >= 1
+
+
+@pytest.mark.parametrize("raw_response", [{}, "not-json", "{}"])
+def test_ambiguous_malformed_or_empty_readback_fails_production_contract(
+    plan,
+    raw_response,
+):
+    result = parity.validate_and_grade_production_parity_response(
+        _request(plan, "ambiguous_resume_adjudication"),
+        raw_response,
+        plan=plan,
+    )
+
+    assert result["production_contract_valid"] is False
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
 
 
 @pytest.mark.parametrize("workload_id", BLOCKED)
@@ -558,6 +616,8 @@ def test_evidence_binding_tampering_fails_closed(plan):
         ("groq", "tailoring_refinement", False),
         ("openai", "critic_evaluation", True),
         ("openai", "tailoring_judge", False),
+        ("groq", "ambiguous_resume_adjudication", False),
+        ("openai", "ambiguous_resume_adjudication", False),
     ],
 )
 def test_transports_support_structured_and_plain_text_without_fallback_or_retry(

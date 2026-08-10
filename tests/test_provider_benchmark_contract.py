@@ -114,6 +114,26 @@ def test_contract_version_provider_and_model_sets_are_exact():
     assert "winner" not in payload
 
 
+def test_ambiguous_resume_workload_is_readback_only_and_review_required():
+    workload = next(
+        row
+        for row in _contract()["workloads"]
+        if row["workload_id"] == "ambiguous_resume_adjudication"
+    )
+
+    assert workload["tier"] == "B"
+    assert workload["execution_responsibility"] == (
+        "read-only advisory review of ambiguous resume candidates"
+    )
+    assert workload["output_classification"] == (
+        "advisory_readback_summary_and_recommendation"
+    )
+    assert workload["current_authority_level"] == "advisory_only"
+    assert workload["failure_disposition"] == "preserve_deterministic_result"
+    assert workload["fallback_eligible"] is False
+    assert workload["human_review_required"] is True
+
+
 def test_qualification_candidates_and_tiers_derive_from_canonical_catalog():
     payload = _contract()
     catalog_rows = [

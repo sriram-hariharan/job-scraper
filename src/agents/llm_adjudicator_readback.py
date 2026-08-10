@@ -15,6 +15,77 @@ MODE_ENV = "APPLYLENS_LLM_ADJUDICATOR_READBACK_MODE"
 TRUE_VALUES = {"1", "true", "yes", "on"}
 VALID_MODES = {"off", "auto", "always"}
 MAX_PREVIEW_CHARS = 600
+LLM_ADJUDICATOR_READBACK_DEFAULT_MAX_TOKENS = 500
+LLM_ADJUDICATOR_READBACK_TASK_CONTRACT_VERSION = (
+    "llm-adjudicator-readback-task-contract-v1"
+)
+LLM_ADJUDICATOR_READBACK_SYSTEM_PROMPT = (
+    "You are a read-only resume selector reviewer. Summarize the "
+    "deterministic top candidates. Do not override winners or scores. "
+    "Return JSON with adjudicator_summary and "
+    "adjudicator_recommendation_label."
+)
+
+
+def build_llm_adjudicator_readback_production_task_contract_material(
+) -> dict[str, Any]:
+    """Return the current readback-only provider contract without runtime I/O."""
+
+    return {
+        "task_contract_version": LLM_ADJUDICATOR_READBACK_TASK_CONTRACT_VERSION,
+        "prompt_contract": {
+            "system": LLM_ADJUDICATOR_READBACK_SYSTEM_PROMPT,
+            "user_payload_template": {"candidates": "<ranked_candidates>"},
+            "user_payload_serialization": {
+                "format": "json",
+                "ensure_ascii": False,
+            },
+        },
+        "input_contract": {
+            "top_level_fields": ["candidates"],
+            "candidate_fields": [
+                "resume_name",
+                "final_score",
+                "match_bucket",
+                "top_dimensions",
+                "semantic_alignment",
+                "hard_requirement_diagnostics",
+                "missing_requirements",
+                "matched_terms",
+                "prefilter_passed",
+            ],
+            "provider_visible_shape": "ranked_candidate_summary_list",
+        },
+        "output_contract": {
+            "fields": [
+                "adjudicator_summary",
+                "adjudicator_recommendation_label",
+            ],
+            "accepted_aliases": {
+                "adjudicator_summary": ["summary", "reason"],
+                "adjudicator_recommendation_label": [
+                    "recommendation_label",
+                    "recommendation",
+                ],
+            },
+            "parser": "json_object_or_json_text_with_supported_envelopes",
+            "at_least_one_nonempty_field_required": True,
+        },
+        "deterministic_transformation_contract": {
+            "summary": "clean_text_then_truncate_to_600_chars",
+            "recommendation_label": "clean_text_then_truncate_to_160_chars",
+            "readback_only": True,
+            "no_winner_override": True,
+            "no_score_override": True,
+            "no_queue_mutation": True,
+        },
+        "task_parameters": {
+            "temperature": 0,
+            "max_tokens": LLM_ADJUDICATOR_READBACK_DEFAULT_MAX_TOKENS,
+            "response_mime_type": "application/json",
+            "fallback_enabled": False,
+        },
+    }
 
 
 def llm_adjudicator_readback_enabled(value: Any | None = None) -> bool:
@@ -283,12 +354,7 @@ def _provider_prompt(candidates: list[dict[str, Any]]) -> list[dict[str, str]]:
     return [
         {
             "role": "system",
-            "content": (
-                "You are a read-only resume selector reviewer. Summarize the "
-                "deterministic top candidates. Do not override winners or scores. "
-                "Return JSON with adjudicator_summary and "
-                "adjudicator_recommendation_label."
-            ),
+            "content": LLM_ADJUDICATOR_READBACK_SYSTEM_PROMPT,
         },
         {
             "role": "user",
@@ -319,7 +385,12 @@ def _call_provider(
         provider=_clean_text(provider) or None,
         model=_clean_text(model) or None,
         temperature=0,
-        max_tokens=int(os.getenv("LLM_ADJUDICATOR_READBACK_MAX_TOKENS", "500")),
+        max_tokens=int(
+            os.getenv(
+                "LLM_ADJUDICATOR_READBACK_MAX_TOKENS",
+                str(LLM_ADJUDICATOR_READBACK_DEFAULT_MAX_TOKENS),
+            )
+        ),
         response_mime_type="application/json",
         fallback_enabled=False,
     )

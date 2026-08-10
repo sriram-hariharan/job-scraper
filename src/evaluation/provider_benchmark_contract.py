@@ -216,9 +216,11 @@ _WORKLOAD_DEFINITIONS = (
     {
         "workload_id": "ambiguous_resume_adjudication",
         "tier": "B",
-        "execution_responsibility": "ambiguous resume adjudication",
+        "execution_responsibility": (
+            "read-only advisory review of ambiguous resume candidates"
+        ),
         "input_classification": "sanitized_ranked_resume_evidence",
-        "output_classification": "advisory_adjudication",
+        "output_classification": "advisory_readback_summary_and_recommendation",
         "schema_strictness": "strict_json_schema",
         "latency_sensitivity": "medium",
         "quality_sensitivity": "critical",

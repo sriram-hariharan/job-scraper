@@ -16,7 +16,6 @@ PRODUCTION_TASK_CONTRACT_FINGERPRINT_VERSION = (
     "production-task-contract-fingerprints-v1"
 )
 UNRESOLVED_PRODUCTION_WORKLOADS = (
-    "ambiguous_resume_adjudication",
     "manual_provider_preview",
 )
 FINGERPRINTED_PRODUCTION_WORKLOADS = tuple(
@@ -54,6 +53,10 @@ _OWNER_BUILDERS = {
     "resume_fallback_ranking": (
         "batch_select_best_resume_variant",
         "build_resume_fallback_ranking_production_task_contract_material",
+    ),
+    "ambiguous_resume_adjudication": (
+        "src.agents.llm_adjudicator_readback",
+        "build_llm_adjudicator_readback_production_task_contract_material",
     ),
     "critic_evaluation": (
         "src.app.services",

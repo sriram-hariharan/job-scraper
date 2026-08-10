@@ -642,4 +642,6 @@ def test_no_production_source_imports_openai_transport_owner():
         ):
             references.append(path.relative_to(ROOT).as_posix())
 
-    assert references == []
+    assert references == [
+        "src/evaluation/controlled_live_provider_qualification.py"
+    ]

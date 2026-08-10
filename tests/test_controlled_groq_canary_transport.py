@@ -49,19 +49,19 @@ CHECKPOINT_PATH = (
 EXECUTION_TIME = "2026-07-25T08:58:57.094442Z"
 FAKE_KEY = "synthetic-fake-key-test-memory-only"
 CANARY_SHA256 = (
-    "43241c341fe4d69c8cbeb2d6e95b6c56e68e67134b693c91396a932775a673bf"
+    "d8ac3d5852a1bfdecd5ad87bcca924dd4bc818af5fb33180b460f8bff2bd2326"
 )
 HARNESS_SHA256 = (
-    "eacf13521305689a0e7c7e3768c5e18c083308d30e6bb6b69f8d5cab1f125572"
+    "5b34fa84c18c673d08ec97d09a1ff88ba2df60afae06a5a8d508b34b99b7a034"
 )
 PRODUCTION_CLIENT_SHA256 = (
-    "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2"
+    "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1"
 )
 PRICING_FILE_SHA256 = (
     "b79b01ec855112358d8d3664e3620ebbf8d44117da39d663e5feaa89b423c7e1"
 )
 AUTHORIZATION_CANONICAL_SHA256 = (
-    "f2b11eb0fb7bb0736222fd976bf6430987aeb86d48d74eec7cf0bfc956904b84"
+    "d9be49c0788ae9ee4c52af689ec2398bfa5f45580ae33be169021c3eeaef1f64"
 )
 
 
@@ -1002,6 +1002,7 @@ def test_no_production_source_imports_the_transport_owner():
             references.append(path.relative_to(ROOT).as_posix())
 
     assert references == [
+        "src/evaluation/controlled_live_provider_qualification.py",
         "src/evaluation/controlled_groq_canary_run_identity.py",
         "src/evaluation/controlled_groq_canary_run_003_transport.py",
         "src/evaluation/controlled_groq_canary_evidence_runtime.py",

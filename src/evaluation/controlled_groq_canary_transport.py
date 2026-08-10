@@ -822,3 +822,70 @@ def execute_groq_chat_completion_once(
         latency_ms=latency_ms,
         plan=plan,
     )
+
+
+def execute_groq_production_parity_chat_completion_once(
+    *,
+    api_key: str,
+    parity_request: Dict[str, Any],
+    scheduled: Mapping[str, Any],
+    parity_response_consumer: Callable[[Any], Dict[str, Any]],
+    monotonic_clock: Callable[[], float],
+    sdk_module: Any | None = None,
+    plan: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Execute one explicit Groq parity call and discard its raw envelope."""
+
+    _require(callable(parity_response_consumer), "parity consumer is required")
+    _require(callable(monotonic_clock), "monotonic clock is required")
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan()
+        if plan is None
+        else deepcopy(plan)
+    )
+    arguments = build_groq_production_parity_chat_completion_arguments(
+        parity_request=parity_request,
+        scheduled=scheduled,
+        plan=controlled_plan,
+    )
+    client = create_live_groq_client(api_key=api_key, sdk_module=sdk_module)
+    try:
+        started = monotonic_clock()
+        response = client.chat.completions.create(**deepcopy(arguments))
+        finished = monotonic_clock()
+    except Exception as exc:
+        _raise_bounded_sdk_failure(exc)
+    try:
+        latency_ms = (float(finished) - float(started)) * 1000.0
+    except (TypeError, ValueError, OverflowError):
+        raise DefinitiveTransportFailure("invalid_latency_measurement") from None
+    choices = _read_attr(response, "choices")
+    if not isinstance(choices, (list, tuple)) or len(choices) != 1:
+        raise DefinitiveTransportFailure("malformed_choice_count")
+    if _read_attr(response, "model") != scheduled.get("model"):
+        raise DefinitiveTransportFailure("provider_model_mismatch")
+    content = _read_attr(_read_attr(choices[0], "message"), "content")
+    if not isinstance(content, str) or not content.strip():
+        raise DefinitiveTransportFailure("malformed_empty_content")
+    usage = _read_attr(response, "usage")
+    input_tokens = _read_attr(usage, "prompt_tokens")
+    output_tokens = _read_attr(usage, "completion_tokens")
+    for value, label, ceiling in (
+        (input_tokens, "input", 4096),
+        (output_tokens, "output", 1024),
+    ):
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise DefinitiveTransportFailure(f"missing_{label}_usage")
+        if value > ceiling:
+            raise DefinitiveTransportFailure(f"{label}_usage_ceiling_exceeded")
+    parity_result = parity_response_consumer(content)
+    _require(isinstance(parity_result, dict), "parity result is invalid")
+    return {
+        "parity_result": deepcopy(parity_result),
+        "provider": "groq",
+        "model": scheduled["model"],
+        "latency_ms": float(latency_ms),
+        "input_token_count": input_tokens,
+        "output_token_count": output_tokens,
+        "provider_outcome_category": "success",
+    }

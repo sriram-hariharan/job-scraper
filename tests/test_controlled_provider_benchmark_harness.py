@@ -1592,6 +1592,7 @@ def test_no_production_source_imports_or_calls_the_harness_owner():
                 references.append(path.relative_to(ROOT).as_posix())
 
     assert references == [
+        "src/evaluation/controlled_live_provider_qualification.py",
         "src/evaluation/controlled_groq_canary_run_003_transport.py",
         "src/evaluation/controlled_openai_canary_transport.py",
         "src/evaluation/controlled_groq_canary_evidence_runtime.py",

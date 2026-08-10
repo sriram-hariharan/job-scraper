@@ -17,6 +17,10 @@ from src.evaluation.controlled_provider_benchmark_plan import (
     build_controlled_provider_benchmark_plan,
     build_transmittable_request_packet,
 )
+from src.evaluation.controlled_production_parity_benchmark import (
+    build_production_parity_request,
+    validate_and_grade_production_parity_response,
+)
 from src.evaluation.provider_fixture_benchmark import load_fixture_case_corpus
 
 
@@ -152,6 +156,35 @@ def _execute(model="gpt-5-mini", *, response=None, api_key=FAKE_KEY):
         scheduled=_scheduled(model),
         monotonic_clock=_clock(),
         plan=_plan(),
+    )
+    return result, sdk
+
+
+def _execute_production_parity(*, response_model):
+    plan = _plan()
+    scheduled = _scheduled("gpt-5-mini")
+    scheduled["provider_sdk_retry_limit"] = 0
+    parity_request = build_production_parity_request(
+        _packet("gpt-5-mini"),
+        plan=plan,
+    )
+    response = _response("gpt-5-mini")
+    response.model = response_model
+    sdk = FakeSDK([response])
+    result = transport.execute_openai_production_parity_chat_completion_once(
+        api_key=FAKE_KEY,
+        parity_request=parity_request,
+        scheduled=scheduled,
+        parity_response_consumer=lambda content: (
+            validate_and_grade_production_parity_response(
+                parity_request,
+                content,
+                plan=plan,
+            )
+        ),
+        monotonic_clock=_clock(),
+        sdk_module=sdk,
+        plan=plan,
     )
     return result, sdk
 
@@ -369,6 +402,73 @@ def test_success_result_uses_exact_generic_contract_usage_and_local_latency():
     assert result["output_token_count"] == 8
     assert result["latency_ms"] == pytest.approx(75.0)
     assert result["provider_outcome_category"] == "success"
+
+
+@pytest.mark.parametrize(
+    ("scheduled_model", "response_model"),
+    [
+        ("gpt-5-mini", "gpt-5-mini"),
+        ("gpt-5-mini", "gpt-5-mini-2025-08-07"),
+        ("gpt-5.1", "gpt-5.1-2025-11-13"),
+    ],
+)
+def test_exact_and_approved_snapshot_response_models_are_accepted(
+    scheduled_model,
+    response_model,
+):
+    response = _response(scheduled_model)
+    response.model = response_model
+
+    result, _sdk = _execute(scheduled_model, response=response)
+
+    assert result["model"] == scheduled_model
+
+
+@pytest.mark.parametrize(
+    "response_model",
+    [
+        "gpt-5",
+        "gpt-5-mini-2025-08-08",
+        "gpt-5.1-2025-11-14",
+        "gpt-5-mini-evil",
+    ],
+)
+def test_unapproved_response_models_remain_rejected(response_model):
+    response = _response("gpt-5-mini")
+    response.model = response_model
+
+    with pytest.raises(
+        harness.DefinitiveTransportFailure,
+        match="provider_model_mismatch",
+    ):
+        _execute("gpt-5-mini", response=response)
+
+
+def test_production_parity_accepts_official_gpt_5_mini_snapshot():
+    result, sdk = _execute_production_parity(
+        response_model="gpt-5-mini-2025-08-07",
+    )
+
+    assert result["model"] == "gpt-5-mini"
+    assert result["provider_outcome_category"] == "success"
+    assert len(sdk.constructor_calls) == 1
+    assert sdk.constructor_calls[0]["max_retries"] == 0
+    assert len(sdk.clients[0].completions.calls) == 1
+    serialized = json.dumps(result, sort_keys=True)
+    for prohibited in (
+        "synthetic-request-id-not-returned",
+        "synthetic-reasoning-not-returned",
+        "headers",
+    ):
+        assert prohibited not in serialized
+
+
+def test_production_parity_rejects_unrelated_response_model():
+    with pytest.raises(
+        harness.DefinitiveTransportFailure,
+        match="provider_model_mismatch",
+    ):
+        _execute_production_parity(response_model="gpt-5-mini-evil")
 
 
 @pytest.mark.parametrize(

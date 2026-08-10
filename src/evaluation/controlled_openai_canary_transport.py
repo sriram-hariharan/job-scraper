@@ -34,6 +34,11 @@ MAXIMUM_LOCAL_INPUT_SIZE_BYTES = 4096
 MAXIMUM_PRODUCTION_PARITY_LOCAL_INPUT_SIZE_BYTES = 16384
 SYSTEM_MESSAGE = "Return only JSON matching the supplied strict schema."
 
+_APPROVED_RESPONSE_MODEL_SNAPSHOTS = {
+    "gpt-5-mini": frozenset({"gpt-5-mini-2025-08-07"}),
+    "gpt-5.1": frozenset({"gpt-5.1-2025-11-13"}),
+}
+
 _BASE_CHAT_ARGUMENT_FIELDS = {
     "model",
     "messages",
@@ -95,6 +100,18 @@ def _candidate_provider_models() -> list[Dict[str, str]]:
 
 def _is_gpt_5_mini(model: Any) -> bool:
     return str(model or "").strip() == "gpt-5-mini"
+
+
+def _response_model_matches_scheduled(
+    response_model: Any,
+    scheduled_model: Any,
+) -> bool:
+    if response_model == scheduled_model:
+        return True
+    return response_model in _APPROVED_RESPONSE_MODEL_SNAPSHOTS.get(
+        scheduled_model,
+        (),
+    )
 
 
 def _schema_name(workload_id: str) -> str:
@@ -736,7 +753,10 @@ def reduce_openai_sdk_response(
     choices = _read_attr(response, "choices")
     if not isinstance(choices, (list, tuple)) or len(choices) != 1:
         raise DefinitiveTransportFailure("malformed_choice_count")
-    if _read_attr(response, "model") != scheduled.get("model"):
+    if not _response_model_matches_scheduled(
+        _read_attr(response, "model"),
+        scheduled.get("model"),
+    ):
         raise DefinitiveTransportFailure("provider_model_mismatch")
     message = _read_attr(choices[0], "message")
     content = _read_attr(message, "content")
@@ -864,7 +884,10 @@ def execute_openai_production_parity_chat_completion_once(
     choices = _read_attr(response, "choices")
     if not isinstance(choices, (list, tuple)) or len(choices) != 1:
         raise DefinitiveTransportFailure("malformed_choice_count")
-    if _read_attr(response, "model") != scheduled.get("model"):
+    if not _response_model_matches_scheduled(
+        _read_attr(response, "model"),
+        scheduled.get("model"),
+    ):
         raise DefinitiveTransportFailure("provider_model_mismatch")
     content = _read_attr(_read_attr(choices[0], "message"), "content")
     if not isinstance(content, str) or not content.strip():

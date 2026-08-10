@@ -9,6 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 ANSWER_LLM_TIMEOUT_SECONDS = 25
 MODEL = get_default_model()
 MAX_SOURCE_CHARS = 2500
+GROUNDED_RAG_TASK_CONTRACT_VERSION = "v1"
+GROUNDED_RAG_TEMPERATURE = 0
+GROUNDED_RAG_MAX_TOKENS = 500
 SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS = (
     "Legacy filesystem RAG index is disabled",
 )
@@ -49,6 +52,58 @@ Return this exact JSON shape:
   ]
 }
 """.strip()
+
+
+def build_grounded_rag_production_task_contract_material() -> Dict[str, Any]:
+    representative_sources = [
+        {
+            "source_id": "S1",
+            "doc_id": "<doc_id>",
+            "company": "<company>",
+            "title": "<job_title>",
+            "location": "<location>",
+            "source": "<source>",
+            "job_url": "<job_url>",
+            "posted_at": "<posted_at>",
+            "score": "<retrieval_score>",
+            "preview": "<preview>",
+            "retrieval_text": "<retrieval_text>",
+        }
+    ]
+    return {
+        "task_contract_version": GROUNDED_RAG_TASK_CONTRACT_VERSION,
+        "prompt_contract": {
+            "system": SYSTEM_PROMPT,
+            "user_template": _build_user_prompt("<question>", representative_sources),
+        },
+        "input_contract": {
+            "question_fields": ["question", "top_k", "fetch_k", "filters"],
+            "prompt_source_fields": list(representative_sources[0]),
+            "retrieval_text_max_chars": MAX_SOURCE_CHARS,
+            "source_id_format": "S<one_based_index>",
+        },
+        "output_contract": {
+            "model_fields": [
+                "answer",
+                "insufficient_evidence",
+                "used_source_ids",
+                "job_evidence",
+            ],
+            "job_evidence_fields": ["source_id", "evidence_points"],
+            "parser": "first_json_object",
+        },
+        "deterministic_transformation_contract": {
+            "used_source_ids": "allowlist_deduplicate_in_model_order",
+            "evidence_points": "nonempty_unique_max_4",
+            "citations": "inline_source_ids_required_for_sufficient_answer",
+            "uncited_nonempty_answer": "force_insufficient_evidence",
+            "insufficient_answer": "strip_citations_clear_sources_and_evidence",
+        },
+        "task_parameters": {
+            "temperature": GROUNDED_RAG_TEMPERATURE,
+            "max_tokens": GROUNDED_RAG_MAX_TOKENS,
+        },
+    }
 
 
 
@@ -306,8 +361,8 @@ def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> Dict[st
     future = executor.submit(
         run_chat_completion_with_metadata,
         model=MODEL,
-        temperature=0,
-        max_tokens=500,
+        temperature=GROUNDED_RAG_TEMPERATURE,
+        max_tokens=GROUNDED_RAG_MAX_TOKENS,
         messages=messages,
     )
     try:

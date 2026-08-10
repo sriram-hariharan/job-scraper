@@ -4,6 +4,7 @@ import json
 import os
 import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from difflib import SequenceMatcher
 
@@ -43,8 +44,14 @@ LLM_FALLBACK_MODEL = os.getenv(
     "LLM_FALLBACK_MODEL",
     "llama-3.3-70b-versatile",
     ).strip()
-LLM_FALLBACK_MAX_TOKENS = int(os.getenv("LLM_FALLBACK_MAX_TOKENS", "900"))
-LLM_FALLBACK_TEMPERATURE = float(os.getenv("LLM_FALLBACK_TEMPERATURE", "0"))
+LLM_FALLBACK_DEFAULT_MAX_TOKENS = 900
+LLM_FALLBACK_DEFAULT_TEMPERATURE = 0.0
+LLM_FALLBACK_MAX_TOKENS = int(
+    os.getenv("LLM_FALLBACK_MAX_TOKENS", str(LLM_FALLBACK_DEFAULT_MAX_TOKENS))
+)
+LLM_FALLBACK_TEMPERATURE = float(
+    os.getenv("LLM_FALLBACK_TEMPERATURE", str(LLM_FALLBACK_DEFAULT_TEMPERATURE))
+)
 LLM_FALLBACK_PROMPT_VERSION = "v1"
 LLM_FALLBACK_CACHE_NAMESPACE = "selector:llm_fallback:v1"
 
@@ -67,6 +74,20 @@ LLM_FALLBACK_RESPONSE_SCHEMA = {
         "reason",
     ],
 }
+
+LLM_FALLBACK_SYSTEM_PROMPT = """
+You rank resume variants for fallback use when strict deterministic matching found no credible winner.
+
+Rules:
+1. Use ONLY the evidence provided.
+2. Do NOT invent skills, tools, experience, metrics, or domain exposure.
+3. This is a best-available imperfect-match fallback, not a true fit decision.
+4. Confidence must always be low.
+5. Explicitly acknowledge major missing requirements when they exist.
+6. Do NOT describe any option as a strong fit, strong alignment, or ideal fit.
+7. Use exact resume filenames from the provided list.
+8. Return ONLY valid JSON.
+""".strip()
 
 LLM_ADJUDICATION_PROVIDER = os.getenv(
     "LLM_ADJUDICATION_PROVIDER",
@@ -613,6 +634,75 @@ def _build_llm_fallback_prompt(
     lines.append("6. reason: short grounded explanation that explicitly frames the choice as best available but imperfect")
     return "\n".join(lines)
 
+
+def build_resume_fallback_ranking_production_task_contract_material() -> Dict[str, Any]:
+    strict_result = SimpleNamespace(
+        pair=SimpleNamespace(
+            resume_id="<resume_id>",
+            resume_name="<resume_name>",
+        ),
+        prefilter=SimpleNamespace(
+            matched_terms=["<matched_term>"],
+            missing_requirements=["<missing_requirement>"],
+        ),
+    )
+    resume_evidence = SimpleNamespace(
+        document=SimpleNamespace(resume_id="<resume_id>"),
+        titles=["<resume_title>"],
+        experience_entries=[SimpleNamespace(bullets=["<resume_bullet>"])],
+    )
+    representative_record = {
+        "company": "<company>",
+        "title": "<job_title>",
+        "role_family": "<role_family>",
+        "required_skills": ["<required_skill>"],
+        "preferred_skills": ["<preferred_skill>"],
+        "all_skills": ["<all_skill>"],
+        "description": "<job_description>",
+    }
+    return {
+        "task_contract_version": LLM_FALLBACK_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": LLM_FALLBACK_SYSTEM_PROMPT,
+            "user_template": _build_llm_fallback_prompt(
+                representative_record,
+                [strict_result],
+                [resume_evidence],
+            ),
+        },
+        "input_contract": {
+            "job_fields": list(representative_record),
+            "candidate_fields": [
+                "resume_name",
+                "extracted_titles",
+                "matched_terms",
+                "missing_requirements",
+                "resume_bullets",
+            ],
+            "job_description_preview_chars": 2500,
+            "resume_title_limit": 5,
+            "resume_bullet_limit": 4,
+            "resume_bullet_preview_chars": 220,
+        },
+        "output_contract": {
+            "schema": LLM_FALLBACK_RESPONSE_SCHEMA,
+            "parser": "json_object_or_json_string_with_optional_code_fence",
+        },
+        "deterministic_transformation_contract": {
+            "candidate_identity": "exact_resume_filename_allowlist",
+            "scores": "clamp_0_to_1",
+            "duplicate_backup": "clear_backup",
+            "confidence": "force_low",
+            "empty_reason": "best_available_imperfect_match_default",
+            "missing_requirements": "append_major_remaining_gaps_when_absent",
+            "resolution": "generated_or_cached_best_resume_resolves_fallback_selection",
+        },
+        "task_parameters": {
+            "temperature": LLM_FALLBACK_DEFAULT_TEMPERATURE,
+            "max_tokens": LLM_FALLBACK_DEFAULT_MAX_TOKENS,
+        },
+    }
+
 def _llm_fallback_cache_key(
     provider: str,
     model: str,
@@ -778,19 +868,7 @@ def _run_llm_fallback_ranking(
     model = str(LLM_FALLBACK_MODEL or "").strip()
     failover_kwargs = _selector_provider_failover_kwargs(provider)
 
-    system_prompt = """
-You rank resume variants for fallback use when strict deterministic matching found no credible winner.
-
-Rules:
-1. Use ONLY the evidence provided.
-2. Do NOT invent skills, tools, experience, metrics, or domain exposure.
-3. This is a best-available imperfect-match fallback, not a true fit decision.
-4. Confidence must always be low.
-5. Explicitly acknowledge major missing requirements when they exist.
-6. Do NOT describe any option as a strong fit, strong alignment, or ideal fit.
-7. Use exact resume filenames from the provided list.
-8. Return ONLY valid JSON.
-""".strip()
+    system_prompt = LLM_FALLBACK_SYSTEM_PROMPT
 
     cache_key = _llm_fallback_cache_key(
         provider=provider,

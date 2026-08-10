@@ -66,6 +66,7 @@ LLM_TAILOR_MODEL = os.getenv(
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
 LLM_TAILOR_PROMPT_VERSION = "v6"
+TAILORING_GENERATION_TRANSFORMATION_CONTRACT_VERSION = "tailoring-generation-validation-v1"
 
 TAILOR_LLM_FALLBACK_ENABLED = (
     os.getenv(
@@ -222,6 +223,7 @@ PATCH_REFINEMENT_WRITER_MODEL = os.getenv(
 PATCH_REFINEMENT_WRITER_MAX_TOKENS = 420
 PATCH_REFINEMENT_WRITER_TEMPERATURE = 0
 PATCH_REFINEMENT_WRITER_PROMPT_VERSION = "v2"
+PATCH_REFINEMENT_VALIDATION_CONTRACT_VERSION = "patch-refinement-validation-v1"
 
 PATCH_REFINEMENT_JUDGE_PROVIDER = os.getenv(
     "TAILORING_JUDGE_PROVIDER",
@@ -236,6 +238,7 @@ PATCH_REFINEMENT_JUDGE_MODEL = os.getenv(
 PATCH_REFINEMENT_JUDGE_MAX_TOKENS = 500
 PATCH_REFINEMENT_JUDGE_TEMPERATURE = 0
 PATCH_REFINEMENT_JUDGE_PROMPT_VERSION = "v1"
+PATCH_REFINEMENT_JUDGE_DECISION_CONTRACT_VERSION = "patch-refinement-judge-decision-v1"
 
 
 def tailoring_llm_model_config_payload() -> Dict[str, Any]:
@@ -312,6 +315,112 @@ PATCH_REFINEMENT_JUDGE_RESPONSE_SCHEMA = {
     },
     "required": ["winner", "reason", "rejected_options", "quality_flags"],
 }
+
+TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT = """
+You generate evidence-anchored resume rewrite directions.
+
+You MUST obey these rules:
+1. Return ONLY JSON with one top-level key: rewrite_directions.
+2. Use ONLY the supplied evidence.
+3. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
+4. Direct-overlap bullets are the only primary anchors.
+5. Semantic-similarity bullets are support only.
+6. Same-role or adjacent-context bullets are lowest-priority support only.
+7. If anchor bullets exist, return at least 3 rewrite_directions.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
+9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
+10. Every Lead with / Support with item must reference a specific source entry.
+11. Use only these prefixes: Lead with, Support with, Keep gap explicit, Do not add.
+12. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets exist.
+13. Prefer distinct source labels across Lead with / Support with items when multiple valid sources exist.
+14. Reuse the same source label at most once, and only when the second direction is materially different.
+15. Do not concentrate 3 or more Lead with / Support with items on the same source label.
+16. Lead with / Support with direction fragments must be at least 5 words and materially specific.
+17. Avoid ultra-short fragments like "excel reporting" or "sql visibility".
+"""
+
+TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT = """
+You generate evidence-anchored resume rewrite directions and optional concrete replacement bullets.
+
+You MUST obey these rules:
+1. Return ONLY JSON with top-level keys: rewrite_directions and concrete_replacement_candidates.
+2. Use ONLY the supplied evidence.
+3. Do NOT invent tools, methods, metrics, skills, domains, employers, responsibilities, credentials, or outcomes.
+4. Direct-overlap bullets are the only primary anchors.
+5. Semantic-similarity bullets are support only.
+6. Same-role or adjacent-context bullets are lowest-priority support only.
+7. If anchor bullets exist, return at least 3 rewrite_directions.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
+9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
+10. Every Lead with / Support with item must reference a specific source entry.
+11. concrete_replacement_candidates is optional evidence-backed patch text; return [] when no safe concrete patch exists.
+12. A concrete candidate patch_text must be a complete replacement bullet, not an instruction.
+13. Do not put rewrite directions, writing advice, or "Lead with..." text into patch_text.
+14. Preserve original factual claims unless a changed fact is present in source evidence.
+15. If unsupported_risk_signals would be non-empty, omit the concrete candidate and keep direction-only guidance.
+"""
+
+TAILORING_GENERATION_RETRY_SYSTEM_PROMPT = """
+You are returning JSON for a strict Python parser.
+
+You MUST obey these rules:
+1. Return ONLY valid JSON.
+2. Do NOT return markdown, code fences, commentary, or explanatory text.
+3. Keep the entire JSON on a single line.
+4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
+5. Use empty arrays instead of null.
+6. Output ONLY one top-level key: rewrite_directions.
+7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
+9. Do not return only gap-explicit rewrite directions when anchor bullets are present.
+10. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets are present.
+11. Lead with / Support with direction fragments must be at least 5 words.
+12. Do not concentrate 3 or more Lead with / Support with items on the same source label.
+13. Use ONLY the supplied evidence. Do NOT invent anything.
+"""
+
+TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT = """
+You are returning JSON for a strict Python parser.
+
+You MUST obey these rules:
+1. Return ONLY valid JSON.
+2. Do NOT return markdown, code fences, commentary, or explanatory text.
+3. Keep the entire JSON on a single line.
+4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
+5. Use empty arrays instead of null.
+6. Output ONLY top-level keys: rewrite_directions and concrete_replacement_candidates.
+7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
+8. concrete_replacement_candidates may be [].
+9. concrete patch_text must be a complete replacement bullet, not an instruction.
+10. Use ONLY the supplied evidence. Do NOT invent tools, metrics, domains, employers, responsibilities, outcomes, or unsupported claims.
+"""
+
+PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT = """
+You are the writer stage for one resume bullet under strict evidence constraints.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+Either return:
+ABSTAIN: <short reason>
+or up to two lines:
+OPTION_1: <single rewritten bullet>
+OPTION_2: <single rewritten bullet>
+"""
+
+PATCH_REFINEMENT_JUDGE_SYSTEM_PROMPT = """
+You are the judge stage for one resume bullet rewrite.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+Use exactly:
+WINNER: deterministic | writer_option_1 | writer_option_2 | abstain
+REASON: <one short sentence>
+REJECTED: <comma-separated option ids or none>
+QUALITY_FLAGS: <comma-separated tags or none>
+SCORE_INTENT: <short scorer-visible improvement intent or none>
+EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>
+RISK_FLAGS: <comma-separated risk tags or none>
+"""
 
 def _parse_patch_refinement_writer_text(raw_text: str) -> Dict[str, Any]:
     text = str(raw_text or "").strip()
@@ -3097,6 +3206,239 @@ def _build_patch_refinement_judge_prompt(
     return "\n".join(lines)
 
 
+def _production_task_contract_representative_tailoring_inputs() -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    evidence_row = {
+        "section": "<section>",
+        "source": "<source>",
+        "source_entry_id": "<source_entry_id>",
+        "source_bullet_id": "<source_bullet_id>",
+        "text": "<evidence_text>",
+        "parent_bullet": "<original_bullet>",
+        "overlaps": ["<supported_signal>"],
+        "evidence_type": "direct_overlap",
+        "semantic_score": 1.0,
+    }
+    packet = {
+        "job": {"company": "<company>", "title": "<job_title>"},
+        "job_snapshot": {"description": "<job_description>"},
+        "selection": {
+            "selected_resume": "<selected_resume>",
+            "selected_score": "<selected_score>",
+        },
+        "summary": {
+            "matched_required": ["<matched_required>"],
+            "missing_required": ["<missing_required>"],
+            "matched_preferred": ["<matched_preferred>"],
+            "missing_preferred": ["<missing_preferred>"],
+            "matched_terms": ["<matched_term>"],
+        },
+        "guardrail": "<guardrail>",
+    }
+    payload = {
+        "job": packet["job"],
+        "job_snapshot": packet["job_snapshot"],
+        "selection": packet["selection"],
+        "summary": packet["summary"],
+        "evidence_layers": {
+            "anchors": [evidence_row],
+            "supports": [],
+            "context": [],
+        },
+        "tailoring_plan": {"safe_to_tailor": [], "unsupported_gaps": []},
+        "rewrite_candidates": [],
+    }
+    candidate = {
+        "source_bullet_id": "<source_bullet_id>",
+        "source_entry_id": "<source_entry_id>",
+        "section": "<section>",
+        "source": "<source>",
+        "original_text": "Improved <original_claim> by 10% using <core_term>.",
+        "patch_text": "Improved <supported_signal> <original_claim> by 10% using <core_term>.",
+        "operation_type": "rewrite",
+        "proposal_status": "patch_ready",
+        "materiality_validation_status": "material_candidate",
+        "supported_jd_signals": ["<supported_signal>"],
+        "canonical_supported_signal": "<supported_signal>",
+        "unsupported_risk_signals": [],
+        "adjacent_risk_signals": [],
+    }
+    return packet, payload, candidate
+
+
+def build_tailoring_generation_production_task_contract_material() -> Dict[str, Any]:
+    from src.tailoring.rendering import (
+        TAILORING_GENERATION_PAYLOAD_CONTRACT_VERSION,
+        TAILORING_GENERATION_PAYLOAD_SEMANTIC_FIELDS,
+    )
+
+    packet, payload, _candidate = _production_task_contract_representative_tailoring_inputs()
+    return {
+        "task_contract_version": LLM_TAILOR_PROMPT_VERSION,
+        "prompt_contract": {
+            "primary_system": TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT,
+            "retry_system": TAILORING_GENERATION_RETRY_SYSTEM_PROMPT,
+            "promotion_system": TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT,
+            "promotion_retry_system": TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT,
+            "primary_user_template": _build_live_rewrite_prompt(packet, payload),
+            "promotion_user_template": _build_live_concrete_rewrite_prompt(packet, payload),
+            "retry_user_prefix": (
+                "Return EXACTLY one-line valid JSON only for the task below. "
+                "No markdown. No code fences. No commentary. "
+                "No literal newline characters inside string values. "
+                "Use empty arrays when needed.\n\n"
+            ),
+        },
+        "input_contract": {
+            "payload_contract_version": TAILORING_GENERATION_PAYLOAD_CONTRACT_VERSION,
+            "payload_semantic_fields": list(TAILORING_GENERATION_PAYLOAD_SEMANTIC_FIELDS),
+            "evidence_tiers": ["anchors", "supports", "context"],
+            "evidence_row_fields": list(payload["evidence_layers"]["anchors"][0]),
+        },
+        "output_contract": {
+            "default_schema": LIVE_REWRITE_RESPONSE_SCHEMA,
+            "promotion_schema": LIVE_REWRITE_WITH_CONCRETE_PATCH_RESPONSE_SCHEMA,
+            "parser": "structured_object_or_first_normalized_json_object",
+        },
+        "deterministic_transformation_contract": {
+            "version": TAILORING_GENERATION_TRANSFORMATION_CONTRACT_VERSION,
+            "steps": [
+                "validate_live_llm_parsed_contract",
+                "canonicalize_direction_objects",
+                "normalize_live_llm_parsed",
+                "canonicalize_direction_sources",
+                "build_shadow_replacement_plan",
+            ],
+            "source_grounding": "exact_available_source_labels",
+            "promotion_mode": "changes_prompt_schema_and_allows_validated_concrete_candidates",
+            "parse_failure": "one_retry_with_retry_prompt_then_empty_parsed_result",
+        },
+        "task_parameters": {
+            "temperature": LLM_TAILOR_TEMPERATURE,
+            "max_tokens": LLM_TAILOR_MAX_TOKENS,
+            "thinking_budget": 0,
+            "response_mime_type": "application/json",
+            "return_parsed": True,
+        },
+    }
+
+
+def build_tailoring_refinement_production_task_contract_material() -> Dict[str, Any]:
+    _packet, payload, candidate = _production_task_contract_representative_tailoring_inputs()
+    return {
+        "task_contract_version": PATCH_REFINEMENT_WRITER_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT,
+            "user_template": _build_patch_refinement_writer_prompt(payload, candidate),
+        },
+        "input_contract": {
+            "candidate_fields": list(candidate),
+            "context": [
+                "job",
+                "matched_jd_terms",
+                "matched_jd_snippets",
+                "role_profile",
+                "sibling_openings",
+                "protected_numbers",
+                "protected_core_terms",
+                "protected_phrases",
+            ],
+        },
+        "output_contract": {
+            "format": "plain_text",
+            "variants": [
+                "ABSTAIN: <short reason>",
+                "OPTION_1: <single rewritten bullet>",
+                "OPTION_2: <single rewritten bullet>",
+            ],
+            "parser": "patch_refinement_writer_plain_text_v1",
+            "maximum_options": 2,
+        },
+        "deterministic_transformation_contract": {
+            "version": PATCH_REFINEMENT_VALIDATION_CONTRACT_VERSION,
+            "steps": [
+                "deduplicate_writer_options",
+                "preserve_numbers_core_terms_and_phrases",
+                "preserve_original_lead_token",
+                "require_supported_signal",
+                "reject_near_duplicate_or_style_only_delta",
+                "keep_deterministic_on_abstain_error_or_no_valid_options",
+            ],
+        },
+        "task_parameters": {
+            "temperature": PATCH_REFINEMENT_WRITER_TEMPERATURE,
+            "max_tokens": PATCH_REFINEMENT_WRITER_MAX_TOKENS,
+            "thinking_budget": 0,
+            "response_mime_type": None,
+            "return_parsed": False,
+        },
+    }
+
+
+def build_tailoring_judge_production_task_contract_material() -> Dict[str, Any]:
+    _packet, payload, candidate = _production_task_contract_representative_tailoring_inputs()
+    writer_options = [
+        {
+            "option_id": "writer_option_1",
+            "patch_text": "<writer_option_1>",
+            "reason": "<writer_reason_1>",
+        },
+        {
+            "option_id": "writer_option_2",
+            "patch_text": "<writer_option_2>",
+            "reason": "<writer_reason_2>",
+        },
+    ]
+    return {
+        "task_contract_version": PATCH_REFINEMENT_JUDGE_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": PATCH_REFINEMENT_JUDGE_SYSTEM_PROMPT,
+            "user_template": _build_patch_refinement_judge_prompt(
+                payload,
+                candidate,
+                writer_options,
+            ),
+        },
+        "input_contract": {
+            "candidate_fields": list(candidate),
+            "writer_option_fields": list(writer_options[0]),
+            "allowed_option_ids": ["writer_option_1", "writer_option_2"],
+        },
+        "output_contract": {
+            "format": "plain_text",
+            "fields": [
+                "WINNER",
+                "REASON",
+                "REJECTED",
+                "QUALITY_FLAGS",
+                "SCORE_INTENT",
+                "EXPECTED_DIMENSIONS",
+                "RISK_FLAGS",
+            ],
+            "allowed_winners": [
+                "deterministic",
+                "writer_option_1",
+                "writer_option_2",
+                "abstain",
+            ],
+            "parser": "patch_refinement_judge_plain_text_v1",
+        },
+        "deterministic_transformation_contract": {
+            "version": PATCH_REFINEMENT_JUDGE_DECISION_CONTRACT_VERSION,
+            "invalid_winner": "abstain",
+            "deterministic_or_abstain": "keep_deterministic",
+            "unavailable_writer_option": "keep_deterministic",
+            "selected_writer_option": "pending_post_validation_export_gate",
+        },
+        "task_parameters": {
+            "temperature": PATCH_REFINEMENT_JUDGE_TEMPERATURE,
+            "max_tokens": PATCH_REFINEMENT_JUDGE_MAX_TOKENS,
+            "thinking_budget": 0,
+            "response_mime_type": None,
+            "return_parsed": False,
+        },
+    }
+
+
 def _keep_deterministic_with_status(
     candidate: Dict[str, Any],
     *,
@@ -3612,17 +3954,7 @@ def _maybe_promote_multisignal_directional_candidate(
         )
         return skipped
 
-    writer_system_prompt = """
-You are the writer stage for one resume bullet under strict evidence constraints.
-Return plain text only.
-Do not use markdown.
-Do not use code fences.
-Either return:
-ABSTAIN: <short reason>
-or up to two lines:
-OPTION_1: <single rewritten bullet>
-OPTION_2: <single rewritten bullet>
-"""
+    writer_system_prompt = PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT
 
     writer_prompt = _build_substantive_multisignal_writer_prompt(payload, candidate)
 
@@ -3832,17 +4164,7 @@ def _maybe_refine_patch_ready_rewrite_candidate(
             note=deterministic_sufficient_note,
         )
 
-    writer_system_prompt = """
-You are the writer stage for one resume bullet under strict evidence constraints.
-Return plain text only.
-Do not use markdown.
-Do not use code fences.
-Either return:
-ABSTAIN: <short reason>
-or up to two lines:
-OPTION_1: <single rewritten bullet>
-OPTION_2: <single rewritten bullet>
-"""
+    writer_system_prompt = PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT
     writer_prompt = _build_patch_refinement_writer_prompt(payload, candidate)
 
     writer_raw, writer_metadata, writer_error_type, writer_error_note = _run_patch_refinement_writer_plain_call(
@@ -3900,20 +4222,7 @@ OPTION_2: <single rewritten bullet>
             invalid_writer_options=invalid_writer_options,
         )
 
-    judge_system_prompt = """
-You are the judge stage for one resume bullet rewrite.
-Return plain text only.
-Do not use markdown.
-Do not use code fences.
-Use exactly:
-WINNER: deterministic | writer_option_1 | writer_option_2 | abstain
-REASON: <one short sentence>
-REJECTED: <comma-separated option ids or none>
-QUALITY_FLAGS: <comma-separated tags or none>
-SCORE_INTENT: <short scorer-visible improvement intent or none>
-EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>
-RISK_FLAGS: <comma-separated risk tags or none>
-"""
+    judge_system_prompt = PATCH_REFINEMENT_JUDGE_SYSTEM_PROMPT
     judge_prompt = _build_patch_refinement_judge_prompt(
         payload,
         candidate,
@@ -4209,49 +4518,9 @@ def _run_live_llm_tailoring(
 # 12. Keep lists concise, practical, and recruiter-usable.
 # """
 
-    primary_system_prompt = """
-You generate evidence-anchored resume rewrite directions.
-
-You MUST obey these rules:
-1. Return ONLY JSON with one top-level key: rewrite_directions.
-2. Use ONLY the supplied evidence.
-3. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
-4. Direct-overlap bullets are the only primary anchors.
-5. Semantic-similarity bullets are support only.
-6. Same-role or adjacent-context bullets are lowest-priority support only.
-7. If anchor bullets exist, return at least 3 rewrite_directions.
-8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
-9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
-10. Every Lead with / Support with item must reference a specific source entry.
-11. Use only these prefixes: Lead with, Support with, Keep gap explicit, Do not add.
-12. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets exist.
-13. Prefer distinct source labels across Lead with / Support with items when multiple valid sources exist.
-14. Reuse the same source label at most once, and only when the second direction is materially different.
-15. Do not concentrate 3 or more Lead with / Support with items on the same source label.
-16. Lead with / Support with direction fragments must be at least 5 words and materially specific.
-17. Avoid ultra-short fragments like "excel reporting" or "sql visibility".
-"""
+    primary_system_prompt = TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT
     if enable_safe_app_ready_rewrite_promotion:
-        primary_system_prompt = """
-You generate evidence-anchored resume rewrite directions and optional concrete replacement bullets.
-
-You MUST obey these rules:
-1. Return ONLY JSON with top-level keys: rewrite_directions and concrete_replacement_candidates.
-2. Use ONLY the supplied evidence.
-3. Do NOT invent tools, methods, metrics, skills, domains, employers, responsibilities, credentials, or outcomes.
-4. Direct-overlap bullets are the only primary anchors.
-5. Semantic-similarity bullets are support only.
-6. Same-role or adjacent-context bullets are lowest-priority support only.
-7. If anchor bullets exist, return at least 3 rewrite_directions.
-8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
-9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
-10. Every Lead with / Support with item must reference a specific source entry.
-11. concrete_replacement_candidates is optional evidence-backed patch text; return [] when no safe concrete patch exists.
-12. A concrete candidate patch_text must be a complete replacement bullet, not an instruction.
-13. Do not put rewrite directions, writing advice, or "Lead with..." text into patch_text.
-14. Preserve original factual claims unless a changed fact is present in source evidence.
-15. If unsupported_risk_signals would be non-empty, omit the concrete candidate and keep direction-only guidance.
-"""
+        primary_system_prompt = TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT
 
 #     retry_system_prompt = """
 # You are returning JSON for a strict Python parser.
@@ -4271,40 +4540,9 @@ You MUST obey these rules:
 # 12. Do not use generic action verbs like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.
 # """
 
-    retry_system_prompt = """
-You are returning JSON for a strict Python parser.
-
-You MUST obey these rules:
-1. Return ONLY valid JSON.
-2. Do NOT return markdown, code fences, commentary, or explanatory text.
-3. Keep the entire JSON on a single line.
-4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
-5. Use empty arrays instead of null.
-6. Output ONLY one top-level key: rewrite_directions.
-7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
-8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
-9. Do not return only gap-explicit rewrite directions when anchor bullets are present.
-10. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets are present.
-11. Lead with / Support with direction fragments must be at least 5 words.
-12. Do not concentrate 3 or more Lead with / Support with items on the same source label.
-13. Use ONLY the supplied evidence. Do NOT invent anything.
-"""
+    retry_system_prompt = TAILORING_GENERATION_RETRY_SYSTEM_PROMPT
     if enable_safe_app_ready_rewrite_promotion:
-        retry_system_prompt = """
-You are returning JSON for a strict Python parser.
-
-You MUST obey these rules:
-1. Return ONLY valid JSON.
-2. Do NOT return markdown, code fences, commentary, or explanatory text.
-3. Keep the entire JSON on a single line.
-4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
-5. Use empty arrays instead of null.
-6. Output ONLY top-level keys: rewrite_directions and concrete_replacement_candidates.
-7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
-8. concrete_replacement_candidates may be [].
-9. concrete patch_text must be a complete replacement bullet, not an instruction.
-10. Use ONLY the supplied evidence. Do NOT invent tools, metrics, domains, employers, responsibilities, outcomes, or unsupported claims.
-"""
+        retry_system_prompt = TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT
 
     fallback_attempted = bool(
         TAILOR_LLM_FALLBACK_ENABLED

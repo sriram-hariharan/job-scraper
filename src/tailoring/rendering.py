@@ -7016,6 +7016,23 @@ def _build_operator_markdown_payload(
 
     return operator_payload
 
+TAILORING_GENERATION_PAYLOAD_CONTRACT_VERSION = "tailoring-generation-payload-v1"
+TAILORING_GENERATION_PAYLOAD_SEMANTIC_FIELDS = (
+    "job",
+    "job_snapshot",
+    "selection",
+    "summary",
+    "tailoring_plan",
+    "rewrite_candidates",
+    "evidence_layers",
+    "planner_seed_rewrite_directions",
+    "do_not_claim",
+    "bullet_reuse_candidates",
+    "live_rewrite_prompt",
+    "guardrail",
+)
+
+
 def _build_payload(
     packet: Dict[str, Any],
     include_llm_prompts: bool = False,

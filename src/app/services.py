@@ -14385,6 +14385,13 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA = {
 }
 LIVE_JD_INTELLIGENCE_DRY_RUN_SCHEMA_NAME = "live_jd_intelligence_dry_run_v1"
 LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION = "v1"
+LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE = 0
+LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS = 700
+LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET = 0
+LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT = (
+    "You extract structured job-description intelligence for a manual dry-run. "
+    "Return only JSON and never recommend application actions."
+)
 LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED = (
     os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", "false").strip().lower()
     == "true"
@@ -14518,6 +14525,13 @@ LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA = {
 }
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_SCHEMA_NAME = "live_critic_guardrail_dry_run_v1"
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION = "v1"
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE = 0
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS = 900
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_THINKING_BUDGET = 0
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_SYSTEM_PROMPT = (
+    "You are a conservative critic guardrail for a manual dry-run. "
+    "Return only JSON and never apply changes."
+)
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED = (
     os.getenv("APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED", "false")
     .strip()
@@ -14579,20 +14593,17 @@ def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dic
     result = run_chat_completion_with_metadata(
         provider=provider,
         model=model,
-        temperature=0,
-        max_tokens=700,
+        temperature=LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
+        max_tokens=LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
         response_schema=_live_jd_intelligence_structured_output_contract()["schema"],
         return_parsed=True,
-        thinking_budget=0,
+        thinking_budget=LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET,
         fallback_enabled=LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED,
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You extract structured job-description intelligence for a manual dry-run. "
-                    "Return only JSON and never recommend application actions."
-                ),
+                "content": LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT,
             },
             {
                 "role": "user",
@@ -14731,6 +14742,54 @@ def _planning_scan_phase34a_provider_payload(
             "confidence",
             provider_payload.get("extraction_confidence"),
         ),
+    }
+
+
+def build_jd_intelligence_production_task_contract_material() -> Dict[str, Any]:
+    representative_input = {
+        "job_title": "<job_title>",
+        "company": "<company>",
+        "location": "<location>",
+        "job_description": "<job_description>",
+        "source_metadata": {"<metadata_key>": "<metadata_value>"},
+    }
+    return {
+        "task_contract_version": LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT,
+            "user_template": _live_jd_intelligence_prompt(**representative_input),
+        },
+        "input_contract": {
+            "provider_visible_fields": list(representative_input),
+            "source_metadata_serialization": "sorted_json",
+        },
+        "output_contract": {
+            "schema_name": LIVE_JD_INTELLIGENCE_DRY_RUN_SCHEMA_NAME,
+            "strict": True,
+            "schema": LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA,
+        },
+        "deterministic_transformation_contract": {
+            "normalization_version": (
+                jd_intelligence.LIVE_DRY_RUN_NORMALIZATION_CONTRACT_VERSION
+            ),
+            "list_fields": list(jd_intelligence.LIVE_DRY_RUN_LIST_FIELDS),
+            "seniority_alias": "seniority_indicators",
+            "planning_projection": {
+                "required_tools_and_preferred_tools": "tools",
+                "workflows_methods_ownership_stakeholders": "responsibilities",
+                "business_contexts": "domain",
+                "risk_flags": "red_flags",
+                "required_skills": "resume_evidence_needed_fallback",
+            },
+            "empty_signal_result": "invalid",
+        },
+        "task_parameters": {
+            "temperature": LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
+            "max_tokens": LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
+            "thinking_budget": LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET,
+            "response_mime_type": "application/json",
+            "return_parsed": True,
+        },
     }
 
 
@@ -20024,20 +20083,17 @@ def _live_critic_guardrail_provider_adapter(adapter_input: Dict[str, Any]) -> Di
     result = run_chat_completion_with_metadata(
         provider=LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER,
         model=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL,
-        temperature=0,
-        max_tokens=900,
+        temperature=LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE,
+        max_tokens=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
         response_schema=_live_critic_guardrail_structured_output_contract()["schema"],
         return_parsed=True,
-        thinking_budget=0,
+        thinking_budget=LIVE_CRITIC_GUARDRAIL_DRY_RUN_THINKING_BUDGET,
         fallback_enabled=LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED,
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are a conservative critic guardrail for a manual dry-run. "
-                    "Return only JSON and never apply changes."
-                ),
+                "content": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SYSTEM_PROMPT,
             },
             {"role": "user", "content": _live_critic_guardrail_prompt(adapter_input)},
         ],
@@ -20154,6 +20210,49 @@ def _normalise_live_critic_provider_payload(
         "confidence": _tailoring_live_float(parsed.get("confidence")),
         "rationale": _clean_text(parsed.get("rationale")) or "Live critic guardrail dry-run returned provider decisions.",
     }, []
+
+
+def build_critic_evaluation_production_task_contract_material() -> Dict[str, Any]:
+    representative_input = {
+        "tailoring_suggestion_payload": {"<suggestion_field>": "<suggestion_value>"},
+        "jd_intelligence": {"<jd_field>": "<jd_value>"},
+        "resume_evidence_rows": [{"<evidence_field>": "<evidence_value>"}],
+    }
+    return {
+        "task_contract_version": LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SYSTEM_PROMPT,
+            "user_template": _live_critic_guardrail_prompt(representative_input),
+        },
+        "input_contract": {
+            "provider_visible_fields": list(representative_input),
+            "serialization": "sorted_json",
+        },
+        "output_contract": {
+            "schema_name": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SCHEMA_NAME,
+            "strict": True,
+            "schema": LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA,
+        },
+        "deterministic_transformation_contract": {
+            "decision_buckets": ["approve", "downgrade_to_guidance", "reject"],
+            "decision_lists": [
+                "approved_suggestions",
+                "downgraded_suggestions",
+                "rejected_suggestions",
+            ],
+            "missing_decision_id": "deterministic_bucket_fallback_id",
+            "missing_critic_status": "derive_from_rejected_then_downgraded_then_approved",
+            "no_decisions": "provider_critic_decisions_missing",
+            "invalid_json": "invalid_json_response",
+        },
+        "task_parameters": {
+            "temperature": LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE,
+            "max_tokens": LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS,
+            "thinking_budget": LIVE_CRITIC_GUARDRAIL_DRY_RUN_THINKING_BUDGET,
+            "response_mime_type": "application/json",
+            "return_parsed": True,
+        },
+    }
 
 
 def build_manual_jd_intelligence_dry_run_payload(
@@ -31228,6 +31327,13 @@ SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA = {
 }
 SCAN_PHRASE_OPTIONS_SCHEMA_NAME = "scan_phrase_options_v1"
 SCAN_PHRASE_PROMPT_VERSION = "v1"
+SCAN_PHRASE_TEMPERATURE = 0
+SCAN_PHRASE_MAX_TOKENS = 520
+SCAN_PHRASE_THINKING_BUDGET = 0
+SCAN_PHRASE_SYSTEM_PROMPT = (
+    "You generate conservative, truthful resume bullet rewrite options for manual editing. "
+    "Return only JSON."
+)
 
 
 def _scan_phrase_structured_output_contract() -> Dict[str, Any]:
@@ -31547,6 +31653,53 @@ def _scan_phrase_validate_llm_options(
     return options
 
 
+def build_manual_scan_phrase_production_task_contract_material() -> Dict[str, Any]:
+    return {
+        "task_contract_version": SCAN_PHRASE_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": SCAN_PHRASE_SYSTEM_PROMPT,
+            "user_template": _scan_phrase_llm_prompt(
+                current="<current_bullet>",
+                guidance="<guidance>",
+                terms=["<supported_term>"],
+            ),
+        },
+        "input_contract": {
+            "fields": ["current_bullet", "guidance", "supported_terms"],
+            "supported_term_limit": 3,
+            "supported_term_max_chars": 48,
+            "guidance_extraction": "lead_with_phrase_then_supplied_terms",
+            "supported_term_deduplication": "case_insensitive_preserve_order",
+        },
+        "output_contract": {
+            "schema_name": SCAN_PHRASE_OPTIONS_SCHEMA_NAME,
+            "strict": True,
+            "schema": SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA,
+            "parsers": ["structured_object", "list", "first_balanced_json_value"],
+        },
+        "deterministic_transformation_contract": {
+            "opening_case": "normalize_all_caps_opening_to_sentence_case",
+            "opening_requirements": "capitalized_unique_action_word",
+            "prohibited_openings": ["using", "with", "by", "through", "via"],
+            "supported_term_opening": "reject",
+            "maximum_length": "max_280_or_current_plus_120",
+            "pairwise_similarity_reject_at_or_above": 0.89,
+            "maximum_options": 3,
+            "manual_review_required": True,
+            "can_accept_directly": False,
+            "plain_json_retry": "only_when_structured_response_has_no_valid_options",
+        },
+        "task_parameters": {
+            "temperature": SCAN_PHRASE_TEMPERATURE,
+            "max_tokens": SCAN_PHRASE_MAX_TOKENS,
+            "thinking_budget": SCAN_PHRASE_THINKING_BUDGET,
+            "structured_response_mime_type": "application/json",
+            "structured_return_parsed": True,
+            "plain_retry_return_parsed": False,
+        },
+    }
+
+
 def _generate_scan_phrase_options_with_llm(
     *,
     current: str,
@@ -31560,10 +31713,7 @@ def _generate_scan_phrase_options_with_llm(
     model = SCAN_PHRASE_MODEL or tailoring_llm.PATCH_REFINEMENT_WRITER_MODEL
     fallback_provider = SCAN_PHRASE_FALLBACK_PROVIDER
     fallback_model = SCAN_PHRASE_FALLBACK_MODEL
-    system_prompt = (
-        "You generate conservative, truthful resume bullet rewrite options for manual editing. "
-        "Return only JSON."
-    )
+    system_prompt = SCAN_PHRASE_SYSTEM_PROMPT
     user_prompt = _scan_phrase_llm_prompt(
         current=current,
         guidance=guidance,
@@ -31574,12 +31724,12 @@ def _generate_scan_phrase_options_with_llm(
     result = run_chat_completion_with_metadata(
         provider=provider,
         model=model,
-        temperature=0,
-        max_tokens=520,
+        temperature=SCAN_PHRASE_TEMPERATURE,
+        max_tokens=SCAN_PHRASE_MAX_TOKENS,
         response_mime_type="application/json",
         response_schema=_scan_phrase_structured_output_contract()["schema"],
         return_parsed=True,
-        thinking_budget=0,
+        thinking_budget=SCAN_PHRASE_THINKING_BUDGET,
         fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
         fallback_provider=fallback_provider,
         fallback_model=fallback_model,
@@ -31608,12 +31758,12 @@ def _generate_scan_phrase_options_with_llm(
         plain_result = run_chat_completion_with_metadata(
             provider=provider,
             model=model,
-            temperature=0,
-            max_tokens=520,
+            temperature=SCAN_PHRASE_TEMPERATURE,
+            max_tokens=SCAN_PHRASE_MAX_TOKENS,
             response_mime_type=None,
             response_schema=None,
             return_parsed=False,
-            thinking_budget=0,
+            thinking_budget=SCAN_PHRASE_THINKING_BUDGET,
             fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
             fallback_provider=fallback_provider,
             fallback_model=fallback_model,

@@ -23,6 +23,9 @@ load_dotenv()
 
 MODEL = get_default_model()
 BATCH_SIZE = 5
+JOB_FIT_TASK_CONTRACT_VERSION = "v1"
+JOB_FIT_TEMPERATURE = 0
+JOB_FIT_MAX_TOKENS = 600
 MIN_REQUEST_INTERVAL = 2.0
 GROQ_CONCURRENCY_LIMIT = 1
 
@@ -76,6 +79,71 @@ Example:
  ]
 }
 """
+
+
+def build_job_fit_production_task_contract_material():
+    representative_batch = [
+        {
+            "title": "<job_title>",
+            "company": "<company>",
+            "intelligence": {
+                "skills": {
+                    "required": ["<required_skill>"],
+                    "preferred": ["<preferred_skill>"],
+                },
+                "seniority": "<seniority>",
+                "ai_flags": {"<ai_signal>": True},
+            },
+        }
+    ]
+    return {
+        "task_contract_version": JOB_FIT_TASK_CONTRACT_VERSION,
+        "prompt_contract": {
+            "system": SYSTEM_PROMPT,
+            "batch_user_template": build_batch_prompt(representative_batch),
+        },
+        "input_contract": {
+            "batch_size": BATCH_SIZE,
+            "job_fields": [
+                "batch_index",
+                "title",
+                "company",
+                "required_skills",
+                "preferred_skills",
+                "seniority",
+                "enabled_ai_flags",
+            ],
+            "skill_merge": "required_then_unique_preferred",
+        },
+        "output_contract": {
+            "type": "object",
+            "required": ["results"],
+            "requested_score_range": "0_to_10",
+            "requested_overall_score": "average_of_four_scores",
+            "result_fields": [
+                "id",
+                "ai_relevance",
+                "skill_match",
+                "seniority_match",
+                "learning_opportunity",
+                "overall_score",
+                "visa_sponsorship_signal",
+                "reason",
+            ],
+            "parser": "json_object_with_results_or_first_embedded_object",
+        },
+        "deterministic_transformation_contract": {
+            "score_projection": "provider_values_projected_without_recalculation_or_clamping",
+            "missing_score_default": 0,
+            "visa_default": "unknown",
+            "reason_default": "No explanation",
+            "projection": "apply_evaluation_to_job_v1",
+        },
+        "task_parameters": {
+            "temperature": JOB_FIT_TEMPERATURE,
+            "max_tokens": JOB_FIT_MAX_TOKENS,
+        },
+    }
 
 
 def extract_json_from_response(response):
@@ -252,8 +320,8 @@ def evaluate_batch(batch):
 
                 response = run_chat_completion(
                     model=MODEL,
-                    temperature=0,
-                    max_tokens=600,
+                    temperature=JOB_FIT_TEMPERATURE,
+                    max_tokens=JOB_FIT_MAX_TOKENS,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": prompt}

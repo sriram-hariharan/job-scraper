@@ -3960,6 +3960,32 @@ def test_user_ai_provider_connection(
         _raise_user_ai_settings_http_error(exc)
 
 
+@app.get("/ai/settings/recommended-routes")
+def user_ai_recommended_provider_routes(
+    http_request: Request,
+):
+    _require_auth_owner_user_id(http_request)
+
+    try:
+        payload = (
+            provider_model_routing_service
+            .list_provider_model_routing_statuses()
+        )
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "error_category": "recommended_provider_policy_unavailable",
+            },
+        ) from None
+
+    return {
+        "ok": True,
+        "workloads": payload["workloads"],
+    }
+
+
 @app.get("/ai/settings/recommended-route/{workload_id}")
 def user_ai_recommended_provider_route(
     workload_id: str,

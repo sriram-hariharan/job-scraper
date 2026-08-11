@@ -34,6 +34,7 @@ from src.evaluation import (
     controlled_provider_qualification_registry as qualification_registry,
 )
 from src.evaluation.provider_model_recommendation_policy import (
+    build_provider_model_recommendation_policy,
     read_provider_model_recommendation,
 )
 
@@ -65,6 +66,53 @@ def _load_authoritative_qualification_registry() -> Dict[str, Any]:
         repository_root=_REPOSITORY_ROOT,
         plan=plan,
     )
+
+
+def list_provider_model_routing_statuses() -> Dict[str, Any]:
+    """Return all frozen routing statuses without granting execution authority."""
+
+    registry_payload = _load_authoritative_qualification_registry()
+
+    policy = build_provider_model_recommendation_policy(
+        registry_payload
+    )
+
+    workloads = []
+
+    for entry in policy["workloads"]:
+        recommendation_status = str(
+            entry.get("recommendation_status") or ""
+        ).strip()
+
+        provider = (
+            str(entry.get("provider") or "").strip()
+            if recommendation_status == "recommended"
+            else ""
+        )
+
+        model = (
+            str(entry.get("model") or "").strip()
+            if recommendation_status == "recommended"
+            else ""
+        )
+
+        workloads.append(
+            {
+                "workload_id": entry["workload_id"],
+                "recommendation_status": recommendation_status,
+                "provider": provider or None,
+                "model": model or None,
+                "selection_basis": (
+                    entry.get("selection_basis")
+                    if recommendation_status == "recommended"
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "workloads": workloads,
+    }
 
 
 def resolve_recommended_user_provider_route(

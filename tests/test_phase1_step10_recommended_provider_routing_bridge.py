@@ -38,6 +38,89 @@ def _recommendation(
     }
 
 
+def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        routing,
+        "_load_authoritative_qualification_registry",
+        lambda: {"registry": "sentinel"},
+    )
+
+    monkeypatch.setattr(
+        routing,
+        "build_provider_model_recommendation_policy",
+        lambda payload: {
+            "workloads": [
+                {
+                    "workload_id": "skill_extraction",
+                    "recommendation_status": "recommended",
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                    "selection_basis": "quality",
+                    "task_contract_sha256": "secret-task",
+                    "qualification_binding_sha256": "secret-binding",
+                    "evidence_sha256": "secret-evidence",
+                    "review_sha256": None,
+                },
+                {
+                    "workload_id": "job_fit_evaluation",
+                    "recommendation_status": (
+                        "fail_closed_zero_qualified"
+                    ),
+                    "provider": None,
+                    "model": None,
+                    "selection_basis": None,
+                    "task_contract_sha256": "secret-task-2",
+                },
+                {
+                    "workload_id": "manual_provider_preview",
+                    "recommendation_status": "blocked_non_live",
+                    "provider": None,
+                    "model": None,
+                    "selection_basis": None,
+                },
+            ]
+        },
+    )
+
+    payload = routing.list_provider_model_routing_statuses()
+
+    assert payload == {
+        "workloads": [
+            {
+                "workload_id": "skill_extraction",
+                "recommendation_status": "recommended",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "selection_basis": "quality",
+            },
+            {
+                "workload_id": "job_fit_evaluation",
+                "recommendation_status": (
+                    "fail_closed_zero_qualified"
+                ),
+                "provider": None,
+                "model": None,
+                "selection_basis": None,
+            },
+            {
+                "workload_id": "manual_provider_preview",
+                "recommendation_status": "blocked_non_live",
+                "provider": None,
+                "model": None,
+                "selection_basis": None,
+            },
+        ]
+    }
+
+    rendered = repr(payload)
+
+    assert "secret-task" not in rendered
+    assert "secret-binding" not in rendered
+    assert "secret-evidence" not in rendered
+
+
 def test_resolve_uses_authoritative_registry_and_exact_workload(
     monkeypatch,
 ):

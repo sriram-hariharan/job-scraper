@@ -52,6 +52,11 @@ def _unauthenticated_client(monkeypatch) -> TestClient:
             "/ai/settings/recommended-route/skill_extraction",
             None,
         ),
+        (
+            "get",
+            "/ai/settings/recommended-routes",
+            None,
+        ),
     ),
 )
 def test_every_ai_settings_route_requires_authenticated_request_owner(
@@ -77,6 +82,7 @@ def test_ai_routes_are_not_public_and_owner_can_only_come_from_request_state():
         "/ai/settings/credentials/groq",
         "/ai/settings/test-connection",
         "/ai/settings/recommended-route/skill_extraction",
+        "/ai/settings/recommended-routes",
     ):
         assert auth_runtime._is_public_auth_path(path) is False
 
@@ -84,7 +90,7 @@ def test_ai_routes_are_not_public_and_owner_can_only_come_from_request_state():
     routes = source.split('@app.get("/ai/settings")', 1)[1].split(
         '@app.get("/onboarding/preferences")', 1
     )[0]
-    assert routes.count("_require_auth_owner_user_id(http_request)") == 8
+    assert routes.count("_require_auth_owner_user_id(http_request)") == 9
     assert "owner_user_id=request." not in routes
     assert "owner_user_id=provider" not in routes
     assert "owner_user_id: str" not in routes
@@ -519,6 +525,71 @@ def test_connection_failure_is_bounded_in_service_and_http_response(monkeypatch)
     }
     assert SYNTHETIC_SECRET not in response.text
 
+
+
+def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "list_provider_model_routing_statuses",
+        lambda: {
+            "workloads": [
+                {
+                    "workload_id": "skill_extraction",
+                    "recommendation_status": "recommended",
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                    "selection_basis": "quality",
+                },
+                {
+                    "workload_id": "job_fit_evaluation",
+                    "recommendation_status": (
+                        "fail_closed_zero_qualified"
+                    ),
+                    "provider": None,
+                    "model": None,
+                    "selection_basis": None,
+                },
+            ]
+        },
+    )
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "aggregate route must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-routes"
+    )
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "ok": True,
+        "workloads": [
+            {
+                "workload_id": "skill_extraction",
+                "recommendation_status": "recommended",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "selection_basis": "quality",
+            },
+            {
+                "workload_id": "job_fit_evaluation",
+                "recommendation_status": (
+                    "fail_closed_zero_qualified"
+                ),
+                "provider": None,
+                "model": None,
+                "selection_basis": None,
+            },
+        ],
+    }
 
 
 def test_recommended_route_api_is_authenticated_read_only_and_bounded(

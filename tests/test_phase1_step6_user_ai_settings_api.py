@@ -47,6 +47,11 @@ def _unauthenticated_client(monkeypatch) -> TestClient:
             "/ai/settings/test-connection",
             {"provider": "groq", "model": "openai/gpt-oss-20b"},
         ),
+        (
+            "get",
+            "/ai/settings/recommended-route/skill_extraction",
+            None,
+        ),
     ),
 )
 def test_every_ai_settings_route_requires_authenticated_request_owner(
@@ -71,6 +76,7 @@ def test_ai_routes_are_not_public_and_owner_can_only_come_from_request_state():
         "/ai/settings/preferred-provider",
         "/ai/settings/credentials/groq",
         "/ai/settings/test-connection",
+        "/ai/settings/recommended-route/skill_extraction",
     ):
         assert auth_runtime._is_public_auth_path(path) is False
 
@@ -78,7 +84,7 @@ def test_ai_routes_are_not_public_and_owner_can_only_come_from_request_state():
     routes = source.split('@app.get("/ai/settings")', 1)[1].split(
         '@app.get("/onboarding/preferences")', 1
     )[0]
-    assert routes.count("_require_auth_owner_user_id(http_request)") == 7
+    assert routes.count("_require_auth_owner_user_id(http_request)") == 8
     assert "owner_user_id=request." not in routes
     assert "owner_user_id=provider" not in routes
     assert "owner_user_id: str" not in routes
@@ -512,6 +518,162 @@ def test_connection_failure_is_bounded_in_service_and_http_response(monkeypatch)
         "detail": {"ok": False, "error_category": "connection_test_failed"}
     }
     assert SYNTHETIC_SECRET not in response.text
+
+
+
+def test_recommended_route_api_is_authenticated_read_only_and_bounded(
+    monkeypatch,
+):
+    calls = []
+
+    def resolve(workload_id):
+        calls.append(workload_id)
+        return {
+            "workload_id": workload_id,
+            "recommendation_status": "recommended",
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+            "selection_basis": "durable_quality_tie_latency_tiebreak",
+            "task_contract_sha256": "internal-task-hash",
+            "qualification_binding_sha256": "internal-binding-hash",
+            "evidence_sha256": "internal-evidence-hash",
+            "review_sha256": None,
+        }
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "read-only recommendation route must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-route/skill_extraction"
+    )
+
+    assert response.status_code == 200
+    assert calls == ["skill_extraction"]
+    assert response.json() == {
+        "ok": True,
+        "workload_id": "skill_extraction",
+        "recommendation_status": "recommended",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "selection_basis": "durable_quality_tie_latency_tiebreak",
+    }
+
+    rendered = response.text
+    assert "internal-task-hash" not in rendered
+    assert "internal-binding-hash" not in rendered
+    assert "internal-evidence-hash" not in rendered
+
+
+@pytest.mark.parametrize(
+    "recommendation_status",
+    (
+        "fail_closed_zero_qualified",
+        "blocked_non_live",
+    ),
+)
+def test_recommended_route_api_preserves_fail_closed_status_without_execution(
+    monkeypatch,
+    recommendation_status,
+):
+    def resolve(workload_id):
+        raise (
+            api.provider_model_routing_service
+            .RecommendedProviderRoutingUnavailableError(
+                workload_id,
+                recommendation_status,
+            )
+        )
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "unavailable recommendation must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-route/job_fit_evaluation"
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "recommended_provider_route_unavailable",
+            "workload_id": "job_fit_evaluation",
+            "recommendation_status": recommendation_status,
+        }
+    }
+
+
+def test_recommended_route_policy_failure_is_bounded_and_leaks_no_detail(
+    monkeypatch,
+):
+    def fail(_workload_id):
+        raise ValueError(
+            f"raw recommendation failure credential={SYNTHETIC_SECRET}"
+        )
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "resolve_recommended_user_provider_route",
+        fail,
+    )
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "policy failure must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-route/skill_extraction"
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "recommended_provider_policy_unavailable",
+        }
+    }
+    assert SYNTHETIC_SECRET not in response.text
+
+
+def test_recommended_route_api_has_no_generic_execution_surface():
+    source = API_PATH.read_text(encoding="utf-8")
+
+    routes = source.split('@app.get("/ai/settings")', 1)[1].split(
+        '@app.get("/onboarding/preferences")', 1
+    )[0]
+
+    assert (
+        "run_recommended_user_chat_completion_with_metadata"
+        not in routes
+    )
+    assert "messages:" not in routes
+    assert "messages=" not in routes
+    assert "api_key" not in routes.split(
+        '@app.get("/ai/settings/recommended-route/{workload_id}")',
+        1,
+    )[1]
 
 
 def test_step6_sources_have_no_secret_environment_or_direct_sdk_ownership():

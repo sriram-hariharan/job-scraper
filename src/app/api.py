@@ -7,7 +7,11 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
-from src.app import services, user_ai_settings_service
+from src.app import (
+    provider_model_routing_service,
+    services,
+    user_ai_settings_service,
+)
 from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from fastapi.staticfiles import StaticFiles
@@ -924,6 +928,21 @@ def _raise_user_ai_settings_http_error(
     raise HTTPException(
         status_code=status_code,
         detail={"ok": False, "error_category": category},
+    ) from None
+
+
+def _raise_recommended_provider_routing_http_error(
+    workload_id: str,
+    exc: provider_model_routing_service.RecommendedProviderRoutingUnavailableError,
+) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "ok": False,
+            "error_category": "recommended_provider_route_unavailable",
+            "workload_id": workload_id,
+            "recommendation_status": exc.recommendation_status,
+        },
     ) from None
 
 
@@ -3939,6 +3958,45 @@ def test_user_ai_provider_connection(
         )
     except user_ai_settings_service.UserAiSettingsServiceError as exc:
         _raise_user_ai_settings_http_error(exc)
+
+
+@app.get("/ai/settings/recommended-route/{workload_id}")
+def user_ai_recommended_provider_route(
+    workload_id: str,
+    http_request: Request,
+):
+    _require_auth_owner_user_id(http_request)
+
+    try:
+        route = (
+            provider_model_routing_service.resolve_recommended_user_provider_route(
+                workload_id
+            )
+        )
+    except (
+        provider_model_routing_service.RecommendedProviderRoutingUnavailableError
+    ) as exc:
+        _raise_recommended_provider_routing_http_error(
+            workload_id,
+            exc,
+        )
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "error_category": "recommended_provider_policy_unavailable",
+            },
+        ) from None
+
+    return {
+        "ok": True,
+        "workload_id": route["workload_id"],
+        "recommendation_status": route["recommendation_status"],
+        "provider": route["provider"],
+        "model": route["model"],
+        "selection_basis": route.get("selection_basis"),
+    }
 
 
 @app.get("/onboarding/preferences")

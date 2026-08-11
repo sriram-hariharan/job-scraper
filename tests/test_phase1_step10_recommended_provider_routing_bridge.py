@@ -358,7 +358,7 @@ def test_bridge_import_boundary_has_no_provider_sdk_or_direct_transport():
     )
 
 
-def test_no_existing_source_consumes_bridge_yet():
+def test_only_approved_api_consumes_bridge():
     references = []
 
     for path in (ROOT / "src").rglob("*.py"):
@@ -373,4 +373,6 @@ def test_no_existing_source_consumes_bridge_yet():
                 path.relative_to(ROOT).as_posix()
             )
 
-    assert references == []
+    assert sorted(references) == [
+        "src/app/api.py"
+    ]

@@ -183,6 +183,78 @@ def _require_schedule_identity(
     )
 
 
+def _live_pregrading_failure_observation(
+    *,
+    evidence: Dict[str, Any],
+    schedule_key: str,
+    scheduled: Mapping[str, Any],
+    digest: str,
+    live: Any,
+) -> Dict[str, Any]:
+    _require(
+        schedule_key in evidence["attempted_schedule_keys"]
+        and schedule_key not in evidence["completed_schedule_keys"],
+        "live pre-grading failure schedule state is invalid",
+    )
+    stop_reason = evidence["stop_reason"]
+    _require(
+        stop_reason in live._BOUNDED_TRANSPORT_FAILURE_STOP_REASONS,
+        "live pre-grading outcome is not a definitive bounded failure",
+    )
+    _require(
+        schedule_key in evidence["blocked_schedule_keys"]
+        and schedule_key not in evidence["ambiguous_schedule_keys"],
+        "live pre-grading failure schedule state is invalid",
+    )
+    authority = evidence["authority_invariants"]
+    authority_safety_valid = (
+        authority["fallback_activation_count"] == 0
+        and authority["retry_count"] == 0
+        and authority["application_mutation_count"] == 0
+        and authority["ats_mutation_count"] == 0
+        and authority["raw_response_persisted_count"] == 0
+        and authority["qualification_promotion_count"] == 0
+        and authority["routing_change_count"] == 0
+    )
+    return {
+        "observation_version": QUALIFICATION_OBSERVATION_VERSION,
+        "evidence_kind": CONTROLLED_LIVE_EVIDENCE_KIND,
+        "evidence_schema_version": live.LIVE_EVIDENCE_VERSION,
+        "evidence_sha256": digest,
+        "schedule_key": scheduled["schedule_key"],
+        "case_alias": scheduled["case_alias"],
+        "workload_id": scheduled["workload_id"],
+        "provider": scheduled["provider"],
+        "model": scheduled["model"],
+        "execution_at_utc": normalize_execution_timestamp(
+            evidence["execution_at_utc"]
+        ),
+        "tested_model_catalog_snapshot_sha256": evidence[
+            "model_catalog_snapshot_sha256"
+        ],
+        "tested_benchmark_contract_sha256": evidence[
+            "benchmark_contract_sha256"
+        ],
+        "tested_controlled_plan_sha256": evidence["controlled_plan_sha256"],
+        "tested_task_contract_sha256": scheduled[
+            "production_task_contract_sha256"
+        ],
+        "schedule_completed": False,
+        "provider_outcome_category": stop_reason,
+        "provider_call_count": 1,
+        "contract_valid": False,
+        "normalization_succeeded": None,
+        "quality_gate_passed": False,
+        "hard_failure_present": False,
+        "input_token_count": 0,
+        "output_token_count": 0,
+        "human_review_required": _review_requirements()[
+            scheduled["workload_id"]
+        ],
+        "authority_safety_valid": authority_safety_valid,
+    }
+
+
 def _legacy_observation(
     *,
     evidence: Dict[str, Any],
@@ -293,17 +365,36 @@ def _live_observation(
         authorization=authorization,
         pricing=pricing,
     )
-    summary = _exact_summary(evidence, schedule_key=schedule_key)
     eligible = {
         row["schedule_key"]: row
         for row in live.build_live_qualification_universe(plan)
         if row["live_qualification_eligible"]
     }
     _require(
-        summary["schedule_key"] in eligible,
+        isinstance(schedule_key, str) and bool(schedule_key.strip()),
+        "qualification schedule key is required",
+    )
+    normalized_key = schedule_key.strip()
+    _require(
+        normalized_key in eligible,
         "schedule key is not live production-qualifiable",
     )
-    _require_schedule_identity(summary, eligible[summary["schedule_key"]])
+    scheduled = eligible[normalized_key]
+    matches = [
+        row
+        for row in evidence["grading_summaries"]
+        if row["schedule_key"] == normalized_key
+    ]
+    if not matches:
+        return _live_pregrading_failure_observation(
+            evidence=evidence,
+            schedule_key=normalized_key,
+            scheduled=scheduled,
+            digest=digest,
+            live=live,
+        )
+    summary = _exact_summary(evidence, schedule_key=normalized_key)
+    _require_schedule_identity(summary, scheduled)
     _require(
         summary["schedule_key"] in evidence["attempted_schedule_keys"],
         "live grading summary lacks one attempted provider call",
@@ -460,13 +551,34 @@ def validate_qualification_observation(observation: Dict[str, Any]) -> bool:
         and observation["provider_call_count"] >= 0,
         "provider call count is invalid",
     )
+    from src.evaluation import controlled_live_provider_qualification as live
+
+    pregrading_definitive_failure = (
+        observation["evidence_kind"] == CONTROLLED_LIVE_EVIDENCE_KIND
+        and observation["schedule_completed"] is False
+        and observation["provider_outcome_category"]
+        in live._BOUNDED_TRANSPORT_FAILURE_STOP_REASONS
+        and observation["provider_call_count"] == 1
+        and observation["contract_valid"] is False
+        and observation["normalization_succeeded"] is None
+        and observation["quality_gate_passed"] is False
+        and observation["hard_failure_present"] is False
+        and observation["input_token_count"] == 0
+        and observation["output_token_count"] == 0
+    )
     for field in ("input_token_count", "output_token_count"):
         _require(
             isinstance(observation[field], int)
             and not isinstance(observation[field], bool)
-            and observation[field] > 0,
+            and observation[field] >= 0,
             f"qualification observation {field} is invalid",
         )
+    if not pregrading_definitive_failure:
+        for field in ("input_token_count", "output_token_count"):
+            _require(
+                observation[field] > 0,
+                f"qualification observation {field} is invalid",
+            )
     _require(
         observation["authority_safety_valid"] is True,
         "qualification evidence authority or safety invariants are invalid",

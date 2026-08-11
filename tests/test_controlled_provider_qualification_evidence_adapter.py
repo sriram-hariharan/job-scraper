@@ -29,6 +29,7 @@ from src.evaluation.provider_fixture_benchmark import load_fixture_case_corpus
 EXECUTION_TIME = "2026-08-10T12:00:00Z"
 REVIEW_TIME = "2026-08-10T13:00:00Z"
 TEST_SECRET = "in-memory-test-credential-only"
+RAW_PROVIDER_DETAIL = "raw provider body must never survive"
 ADAPTER_PATH = Path(adapter.__file__)
 
 
@@ -97,6 +98,32 @@ class LiveDispatcher:
             "output_token_count": 20,
             "provider_outcome_category": "success",
         }
+
+
+class LivePregradingFailureDispatcher:
+    def __init__(self, mode):
+        self.mode = mode
+        self.calls = []
+
+    def __call__(
+        self,
+        *,
+        provider,
+        api_key,
+        parity_request,
+        scheduled,
+        plan,
+        monotonic_clock,
+    ):
+        self.calls.append(scheduled["schedule_key"])
+        assert api_key == TEST_SECRET
+        if self.mode == "ambiguous_timeout":
+            raise live.LiveQualificationAmbiguousTimeout("bounded")
+        if self.mode == "unknown_provider_outcome":
+            raise RuntimeError(RAW_PROVIDER_DETAIL)
+        failure = live.LiveQualificationDefinitiveFailure(self.mode)
+        failure.raw_provider_detail = RAW_PROVIDER_DETAIL
+        raise failure
 
 
 def _live_inputs(plan, row):
@@ -178,6 +205,24 @@ def _live_evidence(plan, workload_id, *, invalid_contract=False):
         outputs,
         invalid_contract=invalid_contract,
     )
+    evidence = live.execute_controlled_live_qualification(
+        plan=plan,
+        live_authorization=authorization,
+        pricing=pricing,
+        requested_schedule_keys=[row["schedule_key"]],
+        operator_credentials={"groq": TEST_SECRET},
+        execution_time_source=lambda: EXECUTION_TIME,
+        transport_dispatchers={"groq": dispatcher, "openai": dispatcher},
+        monotonic_clock=lambda: 1.0,
+    )
+    assert dispatcher.calls == [row["schedule_key"]]
+    return row, authorization, pricing, evidence
+
+
+def _live_pregrading_failure_evidence(plan, workload_id, stop_reason):
+    row = _row(plan, workload_id)
+    authorization, pricing = _live_inputs(plan, row)
+    dispatcher = LivePregradingFailureDispatcher(stop_reason)
     evidence = live.execute_controlled_live_qualification(
         plan=plan,
         live_authorization=authorization,
@@ -627,6 +672,92 @@ def test_failed_live_contract_quality_and_hard_failure_cannot_qualify(plan):
     assert cell["status"] == "rejected"
     assert "contract_invalid" in cell["status_reasons"]
     assert "quality_gate_failed" in cell["status_reasons"]
+
+
+def test_definitive_pregrading_live_failure_is_rejected_without_review(plan):
+    context = _live_pregrading_failure_evidence(
+        plan,
+        "tailoring_generation",
+        "definitive_invalid_request",
+    )
+    row, _authorization, _pricing, evidence = context
+
+    assert evidence["attempted_schedule_keys"] == [row["schedule_key"]]
+    assert evidence["blocked_schedule_keys"] == [row["schedule_key"]]
+    assert evidence["completed_schedule_keys"] == []
+    assert evidence["grading_summaries"] == []
+    assert evidence["aggregate_usage"]["provider_call_count"] == 1
+
+    observation = _observation(plan, context)
+    assert observation["provider_outcome_category"] == (
+        "definitive_invalid_request"
+    )
+    assert observation["schedule_completed"] is False
+    assert observation["provider_call_count"] == 1
+    assert observation["contract_valid"] is False
+    assert observation["quality_gate_passed"] is False
+    assert observation["input_token_count"] == 0
+    assert observation["output_token_count"] == 0
+    assert observation["tested_task_contract_sha256"] == row[
+        "production_task_contract_sha256"
+    ]
+
+    payload = _registry_with_live(plan, context)
+    cell = _cell(payload, row)
+    assert cell["status"] == "rejected"
+    assert cell["current_task_contract_sha256"] == row[
+        "production_task_contract_sha256"
+    ]
+    assert cell["tested_task_contract_sha256"] == row[
+        "production_task_contract_sha256"
+    ]
+    assert cell["review_sha256"] is None
+    assert cell["reviewed_at_utc"] is None
+    assert "review_missing" not in cell["status_reasons"]
+
+    serialized_evidence = json.dumps(evidence, sort_keys=True)
+    serialized_observation = adapter.serialize_qualification_observation(
+        observation
+    )
+    serialized_registry = registry.serialize_provider_qualification_registry(
+        payload,
+        plan=plan,
+    )
+    for serialized in (
+        serialized_evidence,
+        serialized_observation,
+        serialized_registry,
+    ):
+        assert RAW_PROVIDER_DETAIL not in serialized
+        assert TEST_SECRET not in serialized
+
+
+@pytest.mark.parametrize(
+    "stop_reason",
+    ["ambiguous_timeout", "unknown_provider_outcome"],
+)
+def test_nondefinitive_pregrading_live_outcome_is_not_adapted_as_rejection(
+    plan,
+    stop_reason,
+):
+    context = _live_pregrading_failure_evidence(
+        plan,
+        "tailoring_generation",
+        stop_reason,
+    )
+    row, authorization, pricing, evidence = context
+    assert RAW_PROVIDER_DETAIL not in json.dumps(evidence, sort_keys=True)
+
+    with pytest.raises(ValueError, match="not a definitive bounded failure"):
+        adapter.build_qualification_observation(
+            evidence=evidence,
+            schedule_key=row["schedule_key"],
+            plan=plan,
+            authorization=authorization,
+            pricing=pricing,
+        )
+    with pytest.raises(ValueError, match="not a definitive bounded failure"):
+        _registry_with_live(plan, context)
 
 
 def test_live_authority_tampering_fails_native_validation(plan, live_skill):

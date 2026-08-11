@@ -33,7 +33,9 @@ from src.evaluation.controlled_provider_benchmark_harness import (
     _schedule_from_plan,
 )
 from src.evaluation.controlled_provider_benchmark_human_review import (
+    build_subjective_qualification_review_packet,
     canonical_human_review_requirements,
+    write_subjective_qualification_review_packet_exclusive,
 )
 from src.evaluation.controlled_provider_benchmark_plan import (
     build_controlled_provider_benchmark_plan,
@@ -994,6 +996,7 @@ def execute_controlled_live_qualification(
     monotonic_clock: Callable[[], float] = monotonic,
     evidence_target: str | Path | None = None,
     validation_context_target: str | Path | None = None,
+    review_packet_target: str | Path | None = None,
     repository_root: str | Path | None = None,
 ) -> Dict[str, Any]:
     """Execute an explicitly authorized serial subset; never update registry."""
@@ -1005,7 +1008,16 @@ def execute_controlled_live_qualification(
         "live validation context persistence requires matching evidence persistence",
     )
     _require(
-        (evidence_target is None and validation_context_target is None)
+        review_packet_target is None
+        or (evidence_target is not None and validation_context_target is not None),
+        "review packet persistence requires evidence and validation context persistence",
+    )
+    _require(
+        (
+            evidence_target is None
+            and validation_context_target is None
+            and review_packet_target is None
+        )
         or repository_root is not None,
         "repository root is required for explicit persistence",
     )
@@ -1013,6 +1025,12 @@ def execute_controlled_live_qualification(
         _require(
             Path(validation_context_target) != Path(evidence_target),
             "live evidence and validation context targets must be distinct",
+        )
+    if review_packet_target is not None:
+        _require(
+            Path(review_packet_target)
+            not in {Path(evidence_target), Path(validation_context_target)},
+            "review packet target must be distinct from live evidence artifacts",
         )
     execution_at_utc = execution_time_source()
     controlled_plan = deepcopy(plan)
@@ -1031,6 +1049,13 @@ def execute_controlled_live_qualification(
     expected_requested_order = [key for key in authorization["approved_schedule_keys"] if key in requested]
     _require(requested == expected_requested_order, "requested schedule subset must remain serial")
     rows = [eligible[key] for key in requested]
+    review_requirements = canonical_human_review_requirements()
+    if review_packet_target is not None:
+        _require(
+            len(rows) == 1
+            and review_requirements[rows[0]["workload_id"]] is True,
+            "review packet persistence requires exactly one subjective workload",
+        )
     required_providers = {row["provider"] for row in rows}
     _require(
         isinstance(operator_credentials, Mapping)
@@ -1052,7 +1077,7 @@ def execute_controlled_live_qualification(
         requested_schedule_keys=requested,
     )
     prices = _pricing_map(pricing_payload)
-    review_requirements = canonical_human_review_requirements()
+    review_parity_result = None
     ceilings = authorization["token_ceilings"]
     fingerprints = authorization["production_task_contract_fingerprints"]
     for scheduled in rows:
@@ -1206,6 +1231,8 @@ def execute_controlled_live_qualification(
             evidence["stop_reason"] = "hard_safety_failure"
             break
         evidence["completed_schedule_keys"].append(key)
+        if review_packet_target is not None:
+            review_parity_result = deepcopy(parity_result)
     if (
         evidence["stop_reason"] is None
         and evidence["completed_schedule_keys"] == requested
@@ -1250,6 +1277,34 @@ def execute_controlled_live_qualification(
         except (OSError, ValueError):
             raise LiveQualificationPersistenceFailure(
                 "live validation context persistence failed after live evidence "
+                "persistence"
+            ) from None
+    if review_packet_target is not None and evidence["completed_schedule_keys"]:
+        _require(
+            review_parity_result is not None,
+            "review packet production result was not retained",
+        )
+        review_packet = build_subjective_qualification_review_packet(
+            evidence=evidence,
+            schedule_key=requested[0],
+            production_parity_result=review_parity_result,
+            plan=controlled_plan,
+            authorization=authorization,
+            pricing=pricing_payload,
+        )
+        try:
+            write_subjective_qualification_review_packet_exclusive(
+                review_packet_target,
+                review_packet,
+                repository_root=repository_root,
+                evidence=evidence,
+                plan=controlled_plan,
+                authorization=authorization,
+                pricing=pricing_payload,
+            )
+        except (OSError, ValueError):
+            raise LiveQualificationPersistenceFailure(
+                "subjective review packet persistence failed after live evidence "
                 "persistence"
             ) from None
     return deepcopy(evidence)

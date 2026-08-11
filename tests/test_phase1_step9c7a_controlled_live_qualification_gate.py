@@ -12,6 +12,7 @@ import pytest
 
 from src.evaluation import controlled_live_provider_qualification as live
 from src.evaluation import controlled_provider_benchmark_harness as harness
+from src.evaluation import controlled_provider_benchmark_human_review as review
 from src.evaluation.controlled_production_parity_benchmark import (
     validate_and_grade_production_parity_response,
 )
@@ -718,6 +719,144 @@ def test_explicit_persistence_is_exclusive_symlink_safe_and_0600(
             authorization=authorization,
             pricing=pricing,
         )
+
+
+def test_successful_subjective_cell_persists_bounded_review_packet(
+    tmp_path,
+    plan,
+    universe,
+):
+    row = _eligible(universe, provider="groq", workload="jd_intelligence")
+    authorization, pricing = _valid_inputs(plan, [row])
+    authorization_before = deepcopy(authorization)
+    pricing_before = deepcopy(pricing)
+    plan_before = deepcopy(plan)
+    dispatcher = RecordingDispatcher(plan)
+    dispatcher.outputs[row["case_alias"]] = {
+        "required_skills": ["python", "sql"],
+        "preferred_skills": ["dbt"],
+        "required_tools": [],
+        "preferred_tools": [],
+        "workflows": ["analytics"],
+        "methods": [],
+        "business_contexts": [],
+        "stakeholder_contexts": [],
+        "ownership_signals": [],
+        "seniority_signals": [],
+        "risk_flags": [],
+        "extraction_confidence": 0.9,
+    }
+    evidence_target = (
+        tmp_path / live.APPROVED_EVIDENCE_DIRECTORY / "subjective-cell.json"
+    )
+    context_target = (
+        tmp_path
+        / live.APPROVED_EVIDENCE_DIRECTORY
+        / "subjective-cell.validation-context.json"
+    )
+    packet_target = (
+        tmp_path
+        / review.APPROVED_REVIEW_DIRECTORY
+        / "subjective-review-packet-jd-intelligence.json"
+    )
+
+    evidence = _execute(
+        plan,
+        [row],
+        dispatcher=dispatcher,
+        evidence_target=evidence_target,
+        validation_context_target=context_target,
+        review_packet_target=packet_target,
+        repository_root=tmp_path,
+    )
+    packet = json.loads(packet_target.read_text(encoding="utf-8"))
+    serialized = json.dumps(packet, sort_keys=True).lower()
+
+    assert stat.S_IMODE(packet_target.stat().st_mode) == 0o600
+    assert packet["schedule_key"] == row["schedule_key"]
+    assert packet["workload_id"] == "jd_intelligence"
+    assert packet["synthetic_task_material"]
+    assert packet["validated_production_parity_result"][
+        "production_normalized_output"
+    ]
+    assert packet["validated_production_parity_result"][
+        "benchmark_quality"
+    ]["quality_gate_passed"] is True
+    assert review.validate_subjective_qualification_review_packet(
+        packet,
+        evidence=evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    assert set(json.loads(evidence_target.read_text(encoding="utf-8"))) == set(
+        evidence
+    )
+    assert OPERATOR_SECRET.lower() not in serialized
+    for prohibited in (
+        '"api_key"',
+        '"credential"',
+        '"headers"',
+        '"messages"',
+        '"prompt"',
+        '"raw_request"',
+        '"raw_response"',
+        '"reasoning"',
+        '"request_id"',
+    ):
+        assert prohibited not in serialized
+    assert plan == plan_before
+    assert authorization == authorization_before
+    assert pricing == pricing_before
+
+    for field, replacement in (
+        ("evidence_sha256", "0" * 64),
+        ("model", "wrong-model"),
+        ("production_task_contract_sha256", "0" * 64),
+    ):
+        altered = deepcopy(packet)
+        altered[field] = replacement
+        with pytest.raises(ValueError):
+            review.validate_subjective_qualification_review_packet(
+                altered,
+                evidence=evidence,
+                plan=plan,
+                authorization=authorization,
+                pricing=pricing,
+            )
+
+
+def test_review_packet_rejects_no_review_workload_before_dispatch(
+    tmp_path,
+    plan,
+    universe,
+):
+    row = _eligible(universe, workload="skill_extraction")
+    dispatcher = RecordingDispatcher(plan)
+
+    with pytest.raises(ValueError, match="exactly one subjective workload"):
+        _execute(
+            plan,
+            [row],
+            dispatcher=dispatcher,
+            evidence_target=(
+                tmp_path / live.APPROVED_EVIDENCE_DIRECTORY / "objective.json"
+            ),
+            validation_context_target=(
+                tmp_path
+                / live.APPROVED_EVIDENCE_DIRECTORY
+                / "objective.validation-context.json"
+            ),
+            review_packet_target=(
+                tmp_path
+                / review.APPROVED_REVIEW_DIRECTORY
+                / "subjective-review-packet-objective.json"
+            ),
+            repository_root=tmp_path,
+        )
+
+    assert dispatcher.calls == []
+    assert list(tmp_path.rglob("*.json")) == []
 
 
 def _fake_sdk_response(row, output):

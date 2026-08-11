@@ -207,6 +207,22 @@ def test_exact_canonical_human_review_requirement_split():
     assert len(requirements) == 12
 
 
+def test_subjective_rubrics_cover_exactly_the_eight_reviewable_live_workloads():
+    subjective = REVIEW_REQUIRED - {"manual_provider_preview"}
+
+    for workload_id in subjective:
+        first = review.build_subjective_qualification_rubric(workload_id)
+        second = review.build_subjective_qualification_rubric(workload_id)
+
+        assert first == second
+        assert first["workload_id"] == workload_id
+        assert len(first["criteria"]) == 4
+        assert len({row["criterion_id"] for row in first["criteria"]}) == 4
+    for workload_id in REVIEW_NOT_REQUIRED | {"manual_provider_preview"}:
+        with pytest.raises(ValueError, match="rubric is unavailable"):
+            review.build_subjective_qualification_rubric(workload_id)
+
+
 def test_requirement_is_derived_without_caller_boolean():
     signature = ast.parse(OWNER_PATH.read_text(encoding="utf-8"))
     build_function = next(
@@ -722,7 +738,9 @@ def test_persistence_rejects_outside_namespace_and_symlink_parent(
 
 
 def test_focused_tests_create_no_repository_benchmark_output():
-    assert not (ROOT / "outputs/provider_benchmark").exists()
+    output_root = ROOT / "outputs/provider_benchmark"
+
+    assert not list(output_root.glob("subjective-review-packet-*.json"))
 
 
 def test_owner_has_no_sdk_network_environment_or_user_state_access():

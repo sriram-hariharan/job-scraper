@@ -38,6 +38,13 @@ HUMAN_REVIEW_RECORD_VERSION = (
 DECISION_SCOPE = "post_result_human_review_requirement_only"
 APPROVED_REVIEW_DIRECTORY = Path("outputs/provider_benchmark")
 MAXIMUM_REVIEWER_ID_LENGTH = 64
+SUBJECTIVE_REVIEW_PACKET_VERSION = (
+    "controlled-subjective-qualification-review-packet-v1"
+)
+SUBJECTIVE_REVIEW_RUBRIC_VERSION = (
+    "controlled-subjective-qualification-rubric-v1"
+)
+MAXIMUM_REVIEW_PACKET_BYTES = 65536
 
 _RECORDED_DECISIONS = frozenset({"approved", "rejected"})
 _REVIEW_RECORD_FIELDS = {
@@ -89,6 +96,80 @@ _PROHIBITED_REVIEW_KEY_PARTS = {
     "synthetic_input",
 }
 _REVIEWER_ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9._:-]*\Z")
+
+_SUBJECTIVE_RUBRIC_CRITERIA = {
+    "jd_intelligence": (
+        ("factual_grounding", "Signals remain grounded in the supplied job description."),
+        ("semantic_correctness", "Extracted signals preserve the source meaning."),
+        ("completeness", "Material job requirements and context are represented."),
+        ("instruction_adherence", "The result follows the requested structured task."),
+    ),
+    "resume_fallback_ranking": (
+        ("ranking_consistency", "The ranking is consistent with the supplied resume and job evidence."),
+        ("relevance", "The selected ordering reflects job-relevant evidence."),
+        ("factual_grounding", "No ranking justification relies on unsupported facts."),
+        ("usefulness", "The advisory ranking is clear enough for manual use."),
+    ),
+    "ambiguous_resume_adjudication": (
+        ("evidence_preservation", "The adjudication preserves the supplied candidate evidence."),
+        ("recommendation_consistency", "The recommendation follows from the bounded evidence."),
+        ("uncertainty_handling", "Ambiguity is represented rather than concealed."),
+        ("factual_grounding", "No unsupported candidate claims are introduced."),
+    ),
+    "critic_evaluation": (
+        ("evidence_support", "The critic decision accurately reflects evidentiary support."),
+        ("decision_correctness", "Approve, reject, or downgrade semantics match the evidence."),
+        ("reason_relevance", "Reason codes and evidence spans are relevant to the decision."),
+        ("factual_grounding", "The critique introduces no unsupported facts."),
+    ),
+    "tailoring_generation": (
+        ("source_fact_preservation", "Suggestions preserve facts present in the supplied resume and job evidence."),
+        ("relevance", "Suggestions address the bounded job requirements."),
+        ("semantic_correctness", "Suggested changes preserve the candidate's meaning and claims."),
+        ("usefulness", "Suggestions are specific enough for manual review."),
+    ),
+    "tailoring_refinement": (
+        ("meaning_preservation", "The refined patch preserves the original supported meaning."),
+        ("factual_grounding", "The refinement adds no unsupported facts."),
+        ("instruction_adherence", "The refinement follows the bounded patch instructions."),
+        ("usefulness", "The result is clear and usable in manual review."),
+    ),
+    "tailoring_judge": (
+        ("winner_consistency", "The selected winner is consistent with the supplied candidate patches."),
+        ("evidence_based_judgment", "The judgment relies on the bounded evidence and directions."),
+        ("semantic_correctness", "The judgment preserves supported meaning."),
+        ("factual_grounding", "No unsupported rationale or claim is introduced."),
+    ),
+    "manual_scan_phrase": (
+        ("phrase_relevance", "Phrase options are relevant to the supplied bullet and supported terms."),
+        ("source_fact_preservation", "Options preserve the source facts and meaning."),
+        ("scan_usefulness", "Options are concise and useful for manual scanning."),
+        ("factual_grounding", "Options introduce no unsupported claims."),
+    ),
+}
+
+_REVIEW_INSTRUCTIONS = (
+    "Evaluate only the bounded synthetic task material and validated normalized "
+    "result against every rubric criterion. Record the final approved or rejected "
+    "decision separately through the immutable post-result human-review record."
+)
+
+_REVIEW_PACKET_FIELDS = {
+    "review_packet_version",
+    "review_contract_version",
+    "decision_scope",
+    "evidence_sha256",
+    "schedule_key",
+    "case_alias",
+    "workload_id",
+    "provider",
+    "model",
+    "production_task_contract_sha256",
+    "synthetic_task_material",
+    "validated_production_parity_result",
+    "rubric",
+    "review_instructions",
+}
 
 
 def _require(condition: bool, message: str) -> None:
@@ -150,6 +231,230 @@ def human_review_required_for_workload(workload_id: Any) -> bool:
     requirements = canonical_human_review_requirements()
     _require(normalized in requirements, "unknown benchmark workload")
     return requirements[normalized]
+
+
+def build_subjective_qualification_rubric(workload_id: Any) -> Dict[str, Any]:
+    """Return the fixed reviewer rubric for one live subjective workload."""
+
+    _require(isinstance(workload_id, str), "workload ID must be text")
+    normalized = workload_id.strip()
+    _require(
+        normalized in _SUBJECTIVE_RUBRIC_CRITERIA,
+        "subjective qualification rubric is unavailable for this workload",
+    )
+    rubric = {
+        "rubric_version": SUBJECTIVE_REVIEW_RUBRIC_VERSION,
+        "workload_id": normalized,
+        "criteria": [
+            {"criterion_id": criterion_id, "instruction": instruction}
+            for criterion_id, instruction in _SUBJECTIVE_RUBRIC_CRITERIA[normalized]
+        ],
+    }
+    _require(
+        len(rubric["criteria"]) == len(
+            {row["criterion_id"] for row in rubric["criteria"]}
+        ),
+        "subjective rubric criteria must be unique",
+    )
+    return deepcopy(rubric)
+
+
+def _review_packet_sources(
+    *,
+    evidence: Dict[str, Any],
+    schedule_key: str,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+) -> tuple[str, Dict[str, Any], Dict[str, Any]]:
+    evidence_digest, observation = _validated_evidence_row(
+        evidence=evidence,
+        schedule_key=schedule_key,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    _require(
+        observation["human_review_required"] is True,
+        "review packet is prohibited for a no-review workload",
+    )
+    _require_approval_safe(observation)
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        build_transmittable_request_packet,
+    )
+    from src.evaluation.controlled_production_parity_benchmark import (
+        build_production_parity_request,
+    )
+
+    transmittable = build_transmittable_request_packet(
+        case_alias=observation["case_alias"],
+        provider=observation["provider"],
+        model=observation["model"],
+        plan=plan,
+        live_execution_requested=False,
+    )
+    parity_request = build_production_parity_request(
+        transmittable,
+        plan=plan,
+        expected_task_contract_sha256=observation[
+            "tested_task_contract_sha256"
+        ],
+    )
+    return evidence_digest, observation, parity_request
+
+
+def build_subjective_qualification_review_packet(
+    *,
+    evidence: Dict[str, Any],
+    schedule_key: str,
+    production_parity_result: Dict[str, Any],
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build bounded review material without changing qualification truth."""
+
+    evidence_digest, observation, parity_request = _review_packet_sources(
+        evidence=deepcopy(evidence),
+        schedule_key=schedule_key,
+        plan=deepcopy(plan),
+        authorization=deepcopy(authorization),
+        pricing=deepcopy(pricing),
+    )
+    from src.evaluation.controlled_production_parity_benchmark import (
+        validate_production_parity_result,
+    )
+
+    parity_result = deepcopy(production_parity_result)
+    validate_production_parity_result(
+        parity_result,
+        request=parity_request,
+        plan=plan,
+    )
+    packet = {
+        "review_packet_version": SUBJECTIVE_REVIEW_PACKET_VERSION,
+        "review_contract_version": HUMAN_REVIEW_CONTRACT_VERSION,
+        "decision_scope": DECISION_SCOPE,
+        "evidence_sha256": evidence_digest,
+        "schedule_key": observation["schedule_key"],
+        "case_alias": observation["case_alias"],
+        "workload_id": observation["workload_id"],
+        "provider": observation["provider"],
+        "model": observation["model"],
+        "production_task_contract_sha256": observation[
+            "tested_task_contract_sha256"
+        ],
+        "synthetic_task_material": deepcopy(
+            parity_request["local_validation_context"]
+        ),
+        "validated_production_parity_result": parity_result,
+        "rubric": build_subjective_qualification_rubric(
+            observation["workload_id"]
+        ),
+        "review_instructions": _REVIEW_INSTRUCTIONS,
+    }
+    validate_subjective_qualification_review_packet(
+        packet,
+        evidence=evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    return deepcopy(packet)
+
+
+def validate_subjective_qualification_review_packet(
+    packet: Dict[str, Any],
+    *,
+    evidence: Dict[str, Any],
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+) -> bool:
+    _require(
+        isinstance(packet, dict) and set(packet) == _REVIEW_PACKET_FIELDS,
+        "subjective review packet fields must match the exact schema",
+    )
+    evidence_digest, observation, parity_request = _review_packet_sources(
+        evidence=deepcopy(evidence),
+        schedule_key=packet.get("schedule_key"),
+        plan=deepcopy(plan),
+        authorization=deepcopy(authorization),
+        pricing=deepcopy(pricing),
+    )
+    from src.evaluation.controlled_production_parity_benchmark import (
+        validate_production_parity_result,
+    )
+
+    parity_result = deepcopy(packet["validated_production_parity_result"])
+    validate_production_parity_result(
+        parity_result,
+        request=parity_request,
+        plan=plan,
+    )
+    expected_identity = {
+        "review_packet_version": SUBJECTIVE_REVIEW_PACKET_VERSION,
+        "review_contract_version": HUMAN_REVIEW_CONTRACT_VERSION,
+        "decision_scope": DECISION_SCOPE,
+        "evidence_sha256": evidence_digest,
+        "schedule_key": observation["schedule_key"],
+        "case_alias": observation["case_alias"],
+        "workload_id": observation["workload_id"],
+        "provider": observation["provider"],
+        "model": observation["model"],
+        "production_task_contract_sha256": observation[
+            "tested_task_contract_sha256"
+        ],
+    }
+    _require(
+        all(packet[field] == value for field, value in expected_identity.items()),
+        "subjective review packet identity or evidence binding mismatch",
+    )
+    _require(
+        packet["synthetic_task_material"]
+        == parity_request["local_validation_context"],
+        "subjective review packet task material mismatch",
+    )
+    _require(
+        packet["rubric"]
+        == build_subjective_qualification_rubric(observation["workload_id"])
+        and packet["review_instructions"] == _REVIEW_INSTRUCTIONS,
+        "subjective review packet rubric or instructions changed",
+    )
+    _require(
+        parity_result["production_contract_valid"]
+        is observation["contract_valid"]
+        and parity_result["benchmark_quality"]["quality_gate_passed"]
+        is observation["quality_gate_passed"]
+        and any(parity_result["benchmark_quality"]["hard_failures"].values())
+        is observation["hard_failure_present"],
+        "subjective review packet automatic checks mismatch",
+    )
+    _require(
+        len(_canonical_json(packet).encode("utf-8"))
+        <= MAXIMUM_REVIEW_PACKET_BYTES,
+        "subjective review packet exceeds the bounded size",
+    )
+    return True
+
+
+def serialize_subjective_qualification_review_packet(
+    packet: Dict[str, Any],
+    *,
+    evidence: Dict[str, Any],
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+) -> str:
+    payload = deepcopy(packet)
+    validate_subjective_qualification_review_packet(
+        payload,
+        evidence=evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    return _canonical_json(payload)
 
 
 def normalize_reviewer_id(value: Any) -> str:
@@ -490,6 +795,97 @@ def _prepare_review_path(
         "review overwrite is prohibited",
     )
     return candidate
+
+
+def _prepare_review_packet_path(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Path:
+    root = Path(repository_root).resolve()
+    _require(root.is_dir() and not root.is_symlink(), "repository root is unsafe")
+    candidate = Path(artifact_path)
+    _require(candidate.is_absolute(), "review packet path must be absolute")
+    _require(".." not in candidate.parts, "review packet path traversal is prohibited")
+    approved = root / APPROVED_REVIEW_DIRECTORY
+    _require(
+        candidate.parent == approved
+        and candidate.name.startswith("subjective-review-packet-")
+        and candidate.suffix == ".json"
+        and candidate.name != "subjective-review-packet-.json",
+        "review packet path is outside the approved benchmark namespace",
+    )
+    current = root
+    for part in APPROVED_REVIEW_DIRECTORY.parts:
+        current = current / part
+        if current.exists() or current.is_symlink():
+            _require(
+                current.is_dir() and not current.is_symlink(),
+                "review packet parent path is unsafe",
+            )
+        else:
+            current.mkdir(mode=0o700)
+        _require(
+            not stat.S_IMODE(current.stat().st_mode)
+            & (stat.S_IWGRP | stat.S_IWOTH),
+            "review packet parent permissions are unsafe",
+        )
+    _require(
+        not candidate.exists() and not candidate.is_symlink(),
+        "review packet overwrite is prohibited",
+    )
+    return candidate
+
+
+def write_subjective_qualification_review_packet_exclusive(
+    artifact_path: str | Path,
+    packet: Dict[str, Any],
+    *,
+    repository_root: str | Path,
+    evidence: Dict[str, Any],
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+) -> Path:
+    """Persist one evidence-bound reviewer packet with mode 0600."""
+
+    encoded = serialize_subjective_qualification_review_packet(
+        packet,
+        evidence=evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    ).encode("utf-8")
+    path = _prepare_review_packet_path(
+        artifact_path,
+        repository_root=repository_root,
+    )
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    finally:
+        os.close(descriptor)
+    os.chmod(path, 0o600)
+    _require(stat.S_IMODE(path.stat().st_mode) == 0o600, "mode must be 0600")
+    try:
+        persisted = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError("persisted review packet is malformed") from None
+    _require(persisted == packet, "persisted review packet verification failed")
+    return path
 
 
 def write_post_result_human_review_record_exclusive(

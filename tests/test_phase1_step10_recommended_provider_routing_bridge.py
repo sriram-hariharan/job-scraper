@@ -41,10 +41,59 @@ def _recommendation(
 def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
     monkeypatch,
 ):
+    registry_payload = {
+        "cells": [
+            {
+                "execution_order": 1,
+                "workload_id": "skill_extraction",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "status": "qualified",
+                "cost": 99,
+            },
+            {
+                "execution_order": 2,
+                "workload_id": "skill_extraction",
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "status": "qualified",
+                "cost": 1,
+            },
+            {
+                "execution_order": 3,
+                "workload_id": "skill_extraction",
+                "provider": "openai",
+                "model": "rejected-model",
+                "status": "rejected",
+            },
+            {
+                "execution_order": 4,
+                "workload_id": "job_fit_evaluation",
+                "provider": "groq",
+                "model": "pending-model",
+                "status": "pending",
+            },
+            {
+                "execution_order": 5,
+                "workload_id": "job_fit_evaluation",
+                "provider": "openai",
+                "model": "stale-model",
+                "status": "stale",
+            },
+            {
+                "execution_order": 6,
+                "workload_id": "manual_provider_preview",
+                "provider": "openai",
+                "model": "pending-preview-model",
+                "status": "pending",
+            },
+        ],
+        "preferred_provider": "openai",
+    }
     monkeypatch.setattr(
         routing,
         "_load_authoritative_qualification_registry",
-        lambda: {"registry": "sentinel"},
+        lambda: registry_payload,
     )
 
     monkeypatch.setattr(
@@ -94,6 +143,21 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
                 "provider": "groq",
                 "model": "openai/gpt-oss-20b",
                 "selection_basis": "quality",
+                "execution_mode": "qualified_provider_model",
+                "recommended_option": {
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                },
+                "qualified_options": [
+                    {
+                        "provider": "groq",
+                        "model": "openai/gpt-oss-20b",
+                    },
+                    {
+                        "provider": "openai",
+                        "model": "gpt-5-mini",
+                    },
+                ],
             },
             {
                 "workload_id": "job_fit_evaluation",
@@ -103,6 +167,9 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
                 "provider": None,
                 "model": None,
                 "selection_basis": None,
+                "execution_mode": "deterministic",
+                "recommended_option": None,
+                "qualified_options": [],
             },
             {
                 "workload_id": "manual_provider_preview",
@@ -110,6 +177,9 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
                 "provider": None,
                 "model": None,
                 "selection_basis": None,
+                "execution_mode": "blocked_non_live",
+                "recommended_option": None,
+                "qualified_options": [],
             },
         ]
     }
@@ -119,6 +189,108 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
     assert "secret-task" not in rendered
     assert "secret-binding" not in rendered
     assert "secret-evidence" not in rendered
+    assert "rejected-model" not in rendered
+    assert "pending-model" not in rendered
+    assert "stale-model" not in rendered
+    assert "pending-preview-model" not in rendered
+    assert "execution_order" not in rendered
+    assert "cost" not in rendered
+    assert "preferred_provider" not in rendered
+
+
+def test_real_registry_routing_contract_matches_current_qualified_universe(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "read-only routing inventory must not execute provider runtime"
+        ),
+    )
+
+    payload = routing.list_provider_model_routing_statuses()
+    workloads = payload["workloads"]
+    by_workload = {row["workload_id"]: row for row in workloads}
+
+    expected_pairs = {
+        "skill_extraction": [
+            ("groq", "openai/gpt-oss-20b"),
+            ("openai", "gpt-5-mini"),
+        ],
+        "job_fit_evaluation": [],
+        "jd_intelligence": [("openai", "gpt-5-mini")],
+        "grounded_rag_answer": [
+            ("groq", "openai/gpt-oss-20b"),
+            ("groq", "openai/gpt-oss-120b"),
+            ("openai", "gpt-5-mini"),
+            ("openai", "gpt-5.1"),
+        ],
+        "resume_fallback_ranking": [],
+        "ambiguous_resume_adjudication": [
+            ("groq", "openai/gpt-oss-120b"),
+            ("openai", "gpt-5-mini"),
+        ],
+        "critic_evaluation": [],
+        "tailoring_generation": [],
+        "tailoring_refinement": [
+            ("groq", "openai/gpt-oss-20b"),
+            ("groq", "openai/gpt-oss-120b"),
+        ],
+        "tailoring_judge": [
+            ("groq", "openai/gpt-oss-120b"),
+            ("openai", "gpt-5-mini"),
+            ("openai", "gpt-5.1"),
+        ],
+        "manual_scan_phrase": [],
+        "manual_provider_preview": [],
+    }
+
+    assert len(workloads) == 12
+    assert set(by_workload) == set(expected_pairs)
+
+    actual_total = 0
+    for workload_id, expected in expected_pairs.items():
+        row = by_workload[workload_id]
+        actual = [
+            (option["provider"], option["model"])
+            for option in row["qualified_options"]
+        ]
+        assert actual == expected
+        actual_total += len(actual)
+
+        if row["recommendation_status"] == "recommended":
+            assert row["recommended_option"] in row["qualified_options"]
+        else:
+            assert row["recommended_option"] is None
+            assert row["qualified_options"] == []
+
+    assert actual_total == 14
+    assert {
+        mode: sum(row["execution_mode"] == mode for row in workloads)
+        for mode in (
+            "qualified_provider_model",
+            "deterministic",
+            "blocked_non_live",
+        )
+    } == {
+        "qualified_provider_model": 6,
+        "deterministic": 5,
+        "blocked_non_live": 1,
+    }
+
+    rendered = repr(payload)
+    for prohibited in (
+        "execution_order",
+        "task_contract_sha256",
+        "qualification_binding_sha256",
+        "evidence_sha256",
+        "review_sha256",
+        "registry_sha",
+        "credential",
+        "raw_response",
+    ):
+        assert prohibited not in rendered
 
 
 def test_resolve_uses_authoritative_registry_and_exact_workload(

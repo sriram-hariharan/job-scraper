@@ -541,6 +541,21 @@ def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
                     "provider": "groq",
                     "model": "openai/gpt-oss-20b",
                     "selection_basis": "quality",
+                    "execution_mode": "qualified_provider_model",
+                    "recommended_option": {
+                        "provider": "groq",
+                        "model": "openai/gpt-oss-20b",
+                    },
+                    "qualified_options": [
+                        {
+                            "provider": "groq",
+                            "model": "openai/gpt-oss-20b",
+                        },
+                        {
+                            "provider": "openai",
+                            "model": "gpt-5-mini",
+                        },
+                    ],
                 },
                 {
                     "workload_id": "job_fit_evaluation",
@@ -550,6 +565,9 @@ def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
                     "provider": None,
                     "model": None,
                     "selection_basis": None,
+                    "execution_mode": "deterministic",
+                    "recommended_option": None,
+                    "qualified_options": [],
                 },
             ]
         },
@@ -578,6 +596,21 @@ def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
                 "provider": "groq",
                 "model": "openai/gpt-oss-20b",
                 "selection_basis": "quality",
+                "execution_mode": "qualified_provider_model",
+                "recommended_option": {
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                },
+                "qualified_options": [
+                    {
+                        "provider": "groq",
+                        "model": "openai/gpt-oss-20b",
+                    },
+                    {
+                        "provider": "openai",
+                        "model": "gpt-5-mini",
+                    },
+                ],
             },
             {
                 "workload_id": "job_fit_evaluation",
@@ -587,9 +620,25 @@ def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
                 "provider": None,
                 "model": None,
                 "selection_basis": None,
+                "execution_mode": "deterministic",
+                "recommended_option": None,
+                "qualified_options": [],
             },
         ],
     }
+
+    rendered = response.text
+    assert "execution_mode" in rendered
+    assert "recommended_option" in rendered
+    assert "qualified_options" in rendered
+    for prohibited in (
+        "task_contract_sha256",
+        "qualification_binding_sha256",
+        "evidence_sha256",
+        "review_sha256",
+        "registry_sha",
+    ):
+        assert prohibited not in rendered
 
 
 def test_recommended_route_api_is_authenticated_read_only_and_bounded(

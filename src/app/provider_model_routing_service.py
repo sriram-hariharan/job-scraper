@@ -41,6 +41,12 @@ from src.evaluation.provider_model_recommendation_policy import (
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
+_EXECUTION_MODE_BY_RECOMMENDATION_STATUS = {
+    "recommended": "qualified_provider_model",
+    "fail_closed_zero_qualified": "deterministic",
+    "blocked_non_live": "blocked_non_live",
+}
+
 
 class RecommendedProviderRoutingUnavailableError(RuntimeError):
     """Raised when a workload has no authorized recommended route."""
@@ -77,6 +83,25 @@ def list_provider_model_routing_statuses() -> Dict[str, Any]:
         registry_payload
     )
 
+    qualified_options_by_workload: Dict[str, list[Dict[str, str]]] = {}
+
+    for cell in sorted(
+        registry_payload["cells"],
+        key=lambda item: item["execution_order"],
+    ):
+        if cell["status"] != "qualified":
+            continue
+
+        qualified_options_by_workload.setdefault(
+            cell["workload_id"],
+            [],
+        ).append(
+            {
+                "provider": cell["provider"],
+                "model": cell["model"],
+            }
+        )
+
     workloads = []
 
     for entry in policy["workloads"]:
@@ -96,6 +121,41 @@ def list_provider_model_routing_statuses() -> Dict[str, Any]:
             else ""
         )
 
+        try:
+            execution_mode = _EXECUTION_MODE_BY_RECOMMENDATION_STATUS[
+                recommendation_status
+            ]
+        except KeyError as exc:
+            raise ValueError(
+                "unsupported provider recommendation status:"
+                f"{recommendation_status}"
+            ) from exc
+
+        qualified_options = qualified_options_by_workload.get(
+            entry["workload_id"],
+            [],
+        )
+        recommended_option = (
+            {
+                "provider": provider,
+                "model": model,
+            }
+            if recommendation_status == "recommended"
+            else None
+        )
+
+        if recommendation_status == "recommended":
+            if recommended_option not in qualified_options:
+                raise ValueError(
+                    "recommended provider/model is not currently qualified:"
+                    f"{entry['workload_id']}"
+                )
+        elif qualified_options:
+            raise ValueError(
+                "non-recommended workload unexpectedly has qualified options:"
+                f"{entry['workload_id']}"
+            )
+
         workloads.append(
             {
                 "workload_id": entry["workload_id"],
@@ -107,6 +167,9 @@ def list_provider_model_routing_statuses() -> Dict[str, Any]:
                     if recommendation_status == "recommended"
                     else None
                 ),
+                "execution_mode": execution_mode,
+                "recommended_option": recommended_option,
+                "qualified_options": qualified_options,
             }
         )
 

@@ -36,6 +36,9 @@ FINGERPRINTED_WORKLOADS = (
 UNRESOLVED_WORKLOADS = (
     "manual_provider_preview",
 )
+PRE_FIX_CRITIC_FINGERPRINT = (
+    "7bd17e2bbc832e665f3e2d29a872059104b9aa170ec0fa778b37b6cf8c14b5cf"
+)
 
 
 def _iter_keys(value):
@@ -83,6 +86,35 @@ def test_exact_workload_universe_and_fingerprint_coverage_are_deterministic():
     assert tuple(key for key, value in first.items() if value is None) == UNRESOLVED_WORKLOADS
     assert first == second
     assert all(re.fullmatch(r"[0-9a-f]{64}", value) for value in first.values() if value)
+
+
+def test_critic_schema_fix_changes_the_production_task_fingerprint():
+    assert (
+        fingerprints.production_task_contract_sha256("critic_evaluation")
+        != PRE_FIX_CRITIC_FINGERPRINT
+    )
+
+
+def test_critic_schema_changes_only_the_critic_workload_fingerprint(monkeypatch):
+    from src.app import services
+
+    baseline = fingerprints.build_all_production_task_contract_fingerprints()
+    changed_schema = deepcopy(
+        services.LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA
+    )
+    changed_schema["properties"]["rationale"]["minLength"] = 1
+    monkeypatch.setattr(
+        services,
+        "LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA",
+        changed_schema,
+    )
+    changed = fingerprints.build_all_production_task_contract_fingerprints()
+
+    assert {
+        workload_id
+        for workload_id in baseline
+        if baseline[workload_id] != changed[workload_id]
+    } == {"critic_evaluation"}
 
 
 @pytest.mark.parametrize("workload_id", UNRESOLVED_WORKLOADS)

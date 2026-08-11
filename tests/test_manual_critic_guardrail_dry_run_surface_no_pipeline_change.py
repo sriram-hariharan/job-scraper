@@ -263,6 +263,59 @@ def test_live_critic_provider_adapter_reuses_existing_llm_client_with_schema(mon
     assert result["latency_ms"] == 99
 
 
+def test_live_critic_structured_output_schema_closes_every_object_node():
+    contract = services._live_critic_guardrail_structured_output_contract()
+    schema = contract["schema"]
+    expected_top_level_fields = {
+        "critic_status",
+        "approved_suggestions",
+        "downgraded_suggestions",
+        "rejected_suggestions",
+        "reason_codes",
+        "unsupported_claim_risks",
+        "ats_risks",
+        "readability_risks",
+        "evidence_gaps",
+        "confidence",
+        "rationale",
+    }
+    expected_decision_fields = {
+        "suggestion_id",
+        "decision",
+        "confidence",
+        "reason_codes",
+        "evidence_spans",
+        "notes",
+        "original_patch_ready",
+        "final_patch_ready",
+    }
+
+    def object_nodes(value):
+        if isinstance(value, dict):
+            if value.get("type") == "object":
+                yield value
+            for child in value.values():
+                yield from object_nodes(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from object_nodes(child)
+
+    assert contract["strict"] is True
+    assert set(schema["properties"]) == expected_top_level_fields
+    assert set(schema["required"]) == expected_top_level_fields
+    for bucket in (
+        "approved_suggestions",
+        "downgraded_suggestions",
+        "rejected_suggestions",
+    ):
+        item_schema = schema["properties"][bucket]["items"]
+        assert set(item_schema["properties"]) == expected_decision_fields
+        assert set(item_schema["required"]) == expected_decision_fields
+    for node in object_nodes(schema):
+        assert node["additionalProperties"] is False
+        assert set(node["required"]) == set(node["properties"])
+
+
 def test_api_route_exists_as_post_only():
     routes = {getattr(route, "path", ""): route for route in api.app.routes}
 

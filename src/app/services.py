@@ -14493,14 +14493,47 @@ LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "suggestion_id": {"type": "string"},
+        "decision": {"type": "string"},
+        "confidence": {"type": "number"},
+        "reason_codes": {"type": "array", "items": {"type": "string"}},
+        "evidence_spans": {"type": "array", "items": {"type": "string"}},
+        "notes": {"type": "string"},
+        "original_patch_ready": {"type": "boolean"},
+        "final_patch_ready": {"type": "boolean"},
+    },
+    "required": [
+        "suggestion_id",
+        "decision",
+        "confidence",
+        "reason_codes",
+        "evidence_spans",
+        "notes",
+        "original_patch_ready",
+        "final_patch_ready",
+    ],
+}
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
         "critic_status": {"type": "string"},
-        "approved_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-        "downgraded_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-        "rejected_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "approved_suggestions": {
+            "type": "array",
+            "items": LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA,
+        },
+        "downgraded_suggestions": {
+            "type": "array",
+            "items": LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA,
+        },
+        "rejected_suggestions": {
+            "type": "array",
+            "items": LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA,
+        },
         "reason_codes": {"type": "array", "items": {"type": "string"}},
         "unsupported_claim_risks": {"type": "array", "items": {"type": "string"}},
         "ats_risks": {"type": "array", "items": {"type": "string"}},

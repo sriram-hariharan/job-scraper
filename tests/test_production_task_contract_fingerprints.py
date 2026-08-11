@@ -39,6 +39,9 @@ UNRESOLVED_WORKLOADS = (
 PRE_FIX_CRITIC_FINGERPRINT = (
     "7bd17e2bbc832e665f3e2d29a872059104b9aa170ec0fa778b37b6cf8c14b5cf"
 )
+PRE_FIX_TAILORING_GENERATION_FINGERPRINT = (
+    "25e75242a18a3ede35ec0118492f618c3ce55745fb7c3a51ee7c42b9a09b01fc"
+)
 
 
 def _iter_keys(value):
@@ -115,6 +118,35 @@ def test_critic_schema_changes_only_the_critic_workload_fingerprint(monkeypatch)
         for workload_id in baseline
         if baseline[workload_id] != changed[workload_id]
     } == {"critic_evaluation"}
+
+
+def test_tailoring_schema_fix_changes_the_production_task_fingerprint():
+    assert (
+        fingerprints.production_task_contract_sha256("tailoring_generation")
+        != PRE_FIX_TAILORING_GENERATION_FINGERPRINT
+    )
+
+
+def test_tailoring_schema_changes_only_tailoring_generation_fingerprint(
+    monkeypatch,
+):
+    from src.tailoring import llm as tailoring_llm
+
+    baseline = fingerprints.build_all_production_task_contract_fingerprints()
+    changed_schema = deepcopy(tailoring_llm.LIVE_REWRITE_RESPONSE_SCHEMA)
+    changed_schema["properties"]["rewrite_directions"]["maxItems"] = 99
+    monkeypatch.setattr(
+        tailoring_llm,
+        "LIVE_REWRITE_RESPONSE_SCHEMA",
+        changed_schema,
+    )
+    changed = fingerprints.build_all_production_task_contract_fingerprints()
+
+    assert {
+        workload_id
+        for workload_id in baseline
+        if baseline[workload_id] != changed[workload_id]
+    } == {"tailoring_generation"}
 
 
 @pytest.mark.parametrize("workload_id", UNRESOLVED_WORKLOADS)

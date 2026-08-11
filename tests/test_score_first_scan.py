@@ -1108,6 +1108,54 @@ def test_live_rewrite_prompt_default_stays_direction_only_contract():
     assert "source_entry_id:" not in prompt
 
 
+def test_live_rewrite_schema_omits_provider_minimum_but_remains_strict():
+    default_schema = tailoring_llm.LIVE_REWRITE_RESPONSE_SCHEMA
+    promotion_schema = (
+        tailoring_llm.LIVE_REWRITE_WITH_CONCRETE_PATCH_RESPONSE_SCHEMA
+    )
+    directions = default_schema["properties"]["rewrite_directions"]
+
+    assert "minItems" not in directions
+    assert promotion_schema["properties"]["rewrite_directions"] == directions
+    assert directions["items"]["properties"]["prefix"]["enum"] == [
+        "Lead with",
+        "Support with",
+        "Keep gap explicit",
+        "Do not add",
+    ]
+    for schema in (default_schema, promotion_schema):
+        assert schema["additionalProperties"] is False
+        assert set(schema["required"]) == set(schema["properties"])
+        item_schema = schema["properties"]["rewrite_directions"]["items"]
+        assert item_schema["additionalProperties"] is False
+        assert set(item_schema["required"]) == set(item_schema["properties"])
+
+
+def test_live_rewrite_deterministic_validation_still_rejects_empty_directions():
+    with pytest.raises(
+        ValueError,
+        match="live_llm_contract_empty_rewrite_directions",
+    ):
+        tailoring_llm._validate_live_llm_parsed_contract(
+            {"rewrite_directions": []},
+            _live_patch_payload(),
+        )
+
+
+def test_live_rewrite_anchor_case_still_requires_three_valid_directions():
+    response = _live_patch_response()
+    response["rewrite_directions"] = response["rewrite_directions"][:2]
+
+    with pytest.raises(
+        ValueError,
+        match="live_llm_contract_anchor_case_requires_3_directions",
+    ):
+        tailoring_llm._validate_live_llm_parsed_contract(
+            response,
+            _live_patch_payload(),
+        )
+
+
 def test_enabled_live_rewrite_prompt_is_concrete_candidate_aware():
     packet, payload = _live_patch_prompt_payload()
     prompt = tailoring_llm._build_live_concrete_rewrite_prompt(packet, payload)

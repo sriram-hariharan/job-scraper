@@ -90,7 +90,6 @@ LIVE_REWRITE_RESPONSE_SCHEMA = {
     "properties": {
         "rewrite_directions": {
             "type": "array",
-            "minItems": 1,
             "items": {
                 "type": "object",
                 "additionalProperties": False,

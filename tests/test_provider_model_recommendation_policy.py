@@ -354,7 +354,7 @@ def test_owner_has_no_provider_sdk_network_environment_or_write_imports():
     )
 
 
-def test_no_production_source_imports_recommendation_policy_yet():
+def test_only_approved_app_bridge_imports_recommendation_policy():
     references = []
 
     for path in (ROOT / "src").rglob("*.py"):
@@ -369,4 +369,6 @@ def test_no_production_source_imports_recommendation_policy_yet():
         ):
             references.append(relative.as_posix())
 
-    assert references == []
+    assert references == [
+        "app/provider_model_routing_service.py"
+    ]

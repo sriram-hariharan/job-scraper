@@ -137,6 +137,12 @@ class RecordingDispatcher:
         )
         if self.mode == "ambiguous_timeout":
             raise live.LiveQualificationAmbiguousTimeout("bounded")
+        if self.mode.startswith("definitive_"):
+            raise live.LiveQualificationDefinitiveFailure(self.mode)
+        if self.mode == "unrecognized_failure":
+            raise live.LiveQualificationDefinitiveFailure(
+                "raw provider rejection detail must never be persisted"
+            )
         if self.mode == "unknown":
             raise RuntimeError("raw provider detail must be discarded")
         raw = (
@@ -573,6 +579,125 @@ def test_first_failure_stops_serial_subset_without_retry(
     assert len(dispatcher.calls) == 1
     assert evidence["authority_invariants"]["retry_count"] == 0
     assert evidence["authority_invariants"]["fallback_activation_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "category",
+    [
+        "definitive_invalid_request",
+        "definitive_authentication_failure",
+        "definitive_provider_rejection",
+        "definitive_connection_failure",
+        "definitive_transport_failure",
+    ],
+)
+def test_bounded_definitive_transport_category_is_persisted_without_raw_detail(
+    plan,
+    universe,
+    category,
+):
+    row = _eligible(universe, provider="groq")
+    dispatcher = RecordingDispatcher(plan, mode=category)
+    evidence = _execute(plan, [row], dispatcher=dispatcher)
+    serialized = json.dumps(evidence, sort_keys=True)
+
+    assert evidence["stop_reason"] == category
+    assert evidence["blocked_schedule_keys"] == [row["schedule_key"]]
+    assert evidence["aggregate_usage"]["provider_call_count"] == 1
+    assert evidence["authority_invariants"]["retry_count"] == 0
+    assert evidence["authority_invariants"]["fallback_activation_count"] == 0
+    assert evidence["authority_invariants"]["registry_mutation_count"] == 0
+    assert "raw provider" not in serialized
+    for prohibited in (
+        '"api_key"',
+        '"credential"',
+        '"raw_request"',
+        '"raw_response"',
+        '"request_id"',
+        '"response_envelope"',
+    ):
+        assert prohibited not in serialized
+
+
+def test_unrecognized_definitive_failure_text_fails_closed_without_persistence(
+    plan,
+    universe,
+):
+    row = _eligible(universe, provider="groq")
+    dispatcher = RecordingDispatcher(plan, mode="unrecognized_failure")
+    evidence = _execute(plan, [row], dispatcher=dispatcher)
+    serialized = json.dumps(evidence, sort_keys=True)
+
+    assert evidence["stop_reason"] == "unknown_provider_outcome"
+    assert "raw provider rejection detail" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("provider", "category"),
+    [
+        ("groq", "definitive_invalid_request"),
+        ("openai", "definitive_authentication_failure"),
+    ],
+)
+def test_default_dispatch_preserves_transport_owned_bounded_category(
+    monkeypatch,
+    provider,
+    category,
+):
+    if provider == "groq":
+        from src.evaluation import controlled_groq_canary_transport as transport
+
+        function_name = "execute_groq_production_parity_chat_completion_once"
+    else:
+        from src.evaluation import controlled_openai_canary_transport as transport
+
+        function_name = "execute_openai_production_parity_chat_completion_once"
+
+    def fail_once(**_kwargs):
+        raise transport.DefinitiveTransportFailure(category)
+
+    monkeypatch.setattr(transport, function_name, fail_once)
+
+    with pytest.raises(live.LiveQualificationDefinitiveFailure, match=category):
+        live._default_dispatch(
+            provider=provider,
+            api_key="fixture-secret",
+            parity_request={},
+            scheduled={},
+            plan={},
+            monotonic_clock=lambda: 0.0,
+        )
+
+
+def test_default_dispatch_discards_unrecognized_transport_exception_text(
+    monkeypatch,
+):
+    from src.evaluation import controlled_groq_canary_transport as transport
+
+    raw_detail = "arbitrary provider response body"
+
+    def fail_once(**_kwargs):
+        raise transport.DefinitiveTransportFailure(raw_detail)
+
+    monkeypatch.setattr(
+        transport,
+        "execute_groq_production_parity_chat_completion_once",
+        fail_once,
+    )
+
+    with pytest.raises(
+        live.LiveQualificationUnknownOutcome,
+        match="unknown_provider_outcome",
+    ) as caught:
+        live._default_dispatch(
+            provider="groq",
+            api_key="fixture-secret",
+            parity_request={},
+            scheduled={},
+            plan={},
+            monotonic_clock=lambda: 0.0,
+        )
+    assert raw_detail not in str(caught.value)
 
 
 def test_cost_ceiling_blocks_before_any_call(plan, universe):

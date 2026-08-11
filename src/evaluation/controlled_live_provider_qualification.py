@@ -193,17 +193,36 @@ _PROHIBITED_SERIALIZED_KEYS = {
     "sdk_object",
     "synthetic_input",
 }
+_BOUNDED_TRANSPORT_FAILURE_STOP_REASONS = frozenset(
+    {
+        "definitive_authentication_failure",
+        "definitive_configuration_failure",
+        "definitive_connection_failure",
+        "definitive_invalid_request",
+        "definitive_provider_rejection",
+        "definitive_transport_failure",
+        "input_usage_ceiling_exceeded",
+        "invalid_latency_measurement",
+        "malformed_choice_count",
+        "malformed_empty_content",
+        "malformed_json_content",
+        "missing_input_usage",
+        "missing_output_usage",
+        "output_usage_ceiling_exceeded",
+        "provider_model_mismatch",
+        "schema_incompatible_content",
+    }
+)
 _STOP_REASONS = {
     None,
     "ambiguous_timeout",
     "cost_ceiling_exceeded",
-    "definitive_transport_failure",
     "hard_safety_failure",
     "missing_usage_metadata",
     "request_budget_exceeded",
     "token_budget_exceeded",
     "unknown_provider_outcome",
-}
+} | _BOUNDED_TRANSPORT_FAILURE_STOP_REASONS
 
 
 class LiveQualificationAmbiguousTimeout(RuntimeError):
@@ -220,6 +239,13 @@ class LiveQualificationUnknownOutcome(RuntimeError):
 
 class LiveQualificationPersistenceFailure(RuntimeError):
     """Evidence persisted, but its requested validation context did not."""
+
+
+def _bounded_transport_failure_stop_reason(value: Any) -> str:
+    category = str(value).strip()
+    if category in _BOUNDED_TRANSPORT_FAILURE_STOP_REASONS:
+        return category
+    return "unknown_provider_outcome"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -703,7 +729,10 @@ def _default_dispatch(
         if name == "AmbiguousTransportTimeout":
             raise LiveQualificationAmbiguousTimeout("ambiguous_timeout") from None
         if name == "DefinitiveTransportFailure":
-            raise LiveQualificationDefinitiveFailure("definitive_transport_failure") from None
+            category = _bounded_transport_failure_stop_reason(exc)
+            if category == "unknown_provider_outcome":
+                raise LiveQualificationUnknownOutcome(category) from None
+            raise LiveQualificationDefinitiveFailure(category) from None
         if name == "UnknownProviderOutcome":
             raise LiveQualificationUnknownOutcome("unknown_provider_outcome") from None
         raise
@@ -1144,9 +1173,9 @@ def execute_controlled_live_qualification(
             evidence["ambiguous_schedule_keys"].append(key)
             evidence["stop_reason"] = "ambiguous_timeout"
             break
-        except LiveQualificationDefinitiveFailure:
+        except LiveQualificationDefinitiveFailure as exc:
             evidence["blocked_schedule_keys"].append(key)
-            evidence["stop_reason"] = "definitive_transport_failure"
+            evidence["stop_reason"] = _bounded_transport_failure_stop_reason(exc)
             break
         except Exception:
             evidence["blocked_schedule_keys"].append(key)

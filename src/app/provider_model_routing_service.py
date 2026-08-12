@@ -37,6 +37,9 @@ from src.evaluation.provider_model_recommendation_policy import (
     build_provider_model_recommendation_policy,
     read_provider_model_recommendation,
 )
+from src.storage.user_ai_settings.store import (
+    list_user_ai_task_model_selections_payload,
+)
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +67,10 @@ class RecommendedProviderRoutingUnavailableError(RuntimeError):
         )
 
 
+class ProviderModelSelectionNotQualifiedError(ValueError):
+    """Raised when an exact requested task route is not currently selectable."""
+
+
 def _load_authoritative_qualification_registry() -> Dict[str, Any]:
     plan = build_controlled_provider_benchmark_plan()
 
@@ -74,7 +81,46 @@ def _load_authoritative_qualification_registry() -> Dict[str, Any]:
     )
 
 
-def list_provider_model_routing_statuses() -> Dict[str, Any]:
+def _owner_requested_selections(
+    owner_user_id: Optional[str],
+) -> Dict[str, Dict[str, str]]:
+    if owner_user_id is None:
+        return {}
+
+    owner = str(owner_user_id or "").strip()
+    if not owner:
+        raise ValueError("owner_user_id is required")
+
+    try:
+        payload = list_user_ai_task_model_selections_payload(owner)
+    except (Exception, SystemExit):
+        raise ValueError("owner task selections are unavailable") from None
+
+    data = dict(payload.get("data", {}) or {})
+    if str(data.get("owner_user_id") or "").strip() != owner:
+        raise ValueError("owner task selection boundary mismatch")
+
+    selections: Dict[str, Dict[str, str]] = {}
+    for row in list(data.get("selections") or []):
+        if not isinstance(row, dict):
+            raise ValueError("owner task selections are malformed")
+        workload_id = str(row.get("workload_id") or "").strip()
+        provider = str(row.get("provider") or "").strip().lower()
+        model = str(row.get("model") or "").strip()
+        if not workload_id or not provider or not model:
+            raise ValueError("owner task selection is malformed")
+        if workload_id in selections:
+            raise ValueError("owner task selection is duplicated")
+        selections[workload_id] = {
+            "provider": provider,
+            "model": model,
+        }
+    return selections
+
+
+def list_provider_model_routing_statuses(
+    owner_user_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Return all frozen routing statuses without granting execution authority."""
 
     registry_payload = _load_authoritative_qualification_registry()
@@ -82,6 +128,7 @@ def list_provider_model_routing_statuses() -> Dict[str, Any]:
     policy = build_provider_model_recommendation_policy(
         registry_payload
     )
+    requested_selections = _owner_requested_selections(owner_user_id)
 
     qualified_options_by_workload: Dict[str, list[Dict[str, str]]] = {}
 
@@ -156,6 +203,31 @@ def list_provider_model_routing_statuses() -> Dict[str, Any]:
                 f"{entry['workload_id']}"
             )
 
+        requested_selection = requested_selections.get(
+            entry["workload_id"]
+        )
+        requested_selection_status = "none"
+        if requested_selection is not None:
+            requested_selection_status = (
+                "qualified"
+                if requested_selection in qualified_options
+                else "no_longer_qualified"
+            )
+
+        if execution_mode == "qualified_provider_model":
+            if requested_selection_status == "qualified":
+                effective_selection = dict(requested_selection or {})
+                effective_selection_source = "user_override"
+            else:
+                effective_selection = dict(recommended_option or {})
+                effective_selection_source = "applylens_recommended"
+        elif execution_mode == "deterministic":
+            effective_selection = None
+            effective_selection_source = "deterministic"
+        else:
+            effective_selection = None
+            effective_selection_source = "blocked_non_live"
+
         workloads.append(
             {
                 "workload_id": entry["workload_id"],
@@ -170,12 +242,71 @@ def list_provider_model_routing_statuses() -> Dict[str, Any]:
                 "execution_mode": execution_mode,
                 "recommended_option": recommended_option,
                 "qualified_options": qualified_options,
+                "requested_selection": requested_selection,
+                "requested_selection_status": requested_selection_status,
+                "effective_selection": effective_selection,
+                "effective_selection_source": effective_selection_source,
             }
         )
 
     return {
         "workloads": workloads,
     }
+
+
+def read_provider_model_routing_status(
+    workload_id: str,
+    *,
+    owner_user_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    workload = str(workload_id or "").strip()
+    if not workload:
+        raise ValueError("workload_id is required")
+    matches = [
+        row
+        for row in list_provider_model_routing_statuses(
+            owner_user_id=owner_user_id
+        )["workloads"]
+        if row["workload_id"] == workload
+    ]
+    if len(matches) != 1:
+        raise ValueError("workload is not part of the routing contract")
+    return matches[0]
+
+
+def validate_current_qualified_provider_model_selection(
+    workload_id: str,
+    provider: str,
+    model: str,
+) -> Dict[str, str]:
+    workload = str(workload_id or "").strip()
+    provider_name = str(provider or "").strip().lower()
+    model_name = str(model or "").strip()
+    if not workload or not provider_name or not model_name:
+        raise ValueError("task route selection is incomplete")
+
+    matches = [
+        row
+        for row in list_provider_model_routing_statuses()["workloads"]
+        if row["workload_id"] == workload
+    ]
+    if len(matches) != 1:
+        raise ProviderModelSelectionNotQualifiedError(
+            "task route workload is not currently selectable"
+        )
+    route = matches[0]
+    candidate = {
+        "provider": provider_name,
+        "model": model_name,
+    }
+    if (
+        route["execution_mode"] != "qualified_provider_model"
+        or candidate not in route["qualified_options"]
+    ):
+        raise ProviderModelSelectionNotQualifiedError(
+            "task route selection is not currently qualified"
+        )
+    return candidate
 
 
 def resolve_recommended_user_provider_route(

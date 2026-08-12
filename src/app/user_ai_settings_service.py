@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from src.app import provider_model_routing_service
 from src.ai.provider_model_catalog import (
     is_configuration_eligible,
     list_configurable_models,
@@ -15,9 +16,11 @@ from src.ai.user_provider_runtime import (
 )
 from src.storage.user_ai_settings.store import (
     clear_user_ai_preferred_provider_payload as clear_preferred_provider_store_payload,
+    delete_user_ai_task_model_selection_payload as delete_task_model_selection_store_payload,
     delete_user_ai_provider_credential_payload as delete_provider_credential_store_payload,
     get_user_ai_settings_payload as get_user_ai_settings_store_payload,
     set_user_ai_preferred_provider_payload as set_preferred_provider_store_payload,
+    upsert_user_ai_task_model_selection_payload as upsert_task_model_selection_store_payload,
     upsert_user_ai_provider_credential_payload as upsert_provider_credential_store_payload,
 )
 
@@ -51,6 +54,13 @@ def _normalize_configurable_provider(provider: Any) -> str:
     if provider_name not in list_configurable_providers():
         raise UserAiSettingsServiceError("unsupported_provider")
     return provider_name
+
+
+def _normalize_task_route_text(value: Any, category: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise UserAiSettingsServiceError(category)
+    return normalized
 
 
 def _storage_kwargs() -> Dict[str, Any]:
@@ -263,3 +273,94 @@ def test_user_ai_provider_connection_payload(
         "model": model_name,
         "status": "connected",
     }
+
+
+def save_user_ai_task_model_selection_payload(
+    *,
+    owner_user_id: str,
+    workload_id: str,
+    provider: str,
+    model: str,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    workload = _normalize_task_route_text(workload_id, "invalid_workload")
+    provider_name = _normalize_configurable_provider(provider)
+    model_name = _normalize_task_route_text(model, "invalid_model")
+
+    try:
+        selection = (
+            provider_model_routing_service
+            .validate_current_qualified_provider_model_selection(
+                workload,
+                provider_name,
+                model_name,
+            )
+        )
+    except (
+        provider_model_routing_service.ProviderModelSelectionNotQualifiedError
+    ):
+        raise UserAiSettingsServiceError("task_route_not_qualified") from None
+    except (ValueError, FileNotFoundError, SystemExit):
+        raise UserAiSettingsServiceError("task_route_state_unavailable") from None
+
+    try:
+        payload = upsert_task_model_selection_store_payload(
+            owner,
+            workload,
+            selection["provider"],
+            selection["model"],
+            **_storage_kwargs(),
+        )
+    except (Exception, SystemExit):
+        raise UserAiSettingsServiceError("task_route_write_failed") from None
+
+    data = dict(payload.get("data", {}) or {})
+    if (
+        str(data.get("owner_user_id") or "").strip() != owner
+        or str(data.get("workload_id") or "").strip() != workload
+        or str(data.get("provider") or "").strip().lower()
+        != selection["provider"]
+        or str(data.get("model") or "").strip() != selection["model"]
+    ):
+        raise UserAiSettingsServiceError("task_route_write_failed")
+
+    try:
+        route = provider_model_routing_service.read_provider_model_routing_status(
+            workload,
+            owner_user_id=owner,
+        )
+    except (ValueError, FileNotFoundError, SystemExit):
+        raise UserAiSettingsServiceError("task_route_state_unavailable") from None
+    return {"ok": True, **route}
+
+
+def clear_user_ai_task_model_selection_payload(
+    *,
+    owner_user_id: str,
+    workload_id: str,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    workload = _normalize_task_route_text(workload_id, "invalid_workload")
+
+    try:
+        provider_model_routing_service.read_provider_model_routing_status(workload)
+    except (ValueError, FileNotFoundError, SystemExit):
+        raise UserAiSettingsServiceError("invalid_workload") from None
+
+    try:
+        delete_task_model_selection_store_payload(
+            owner,
+            workload,
+            **_storage_kwargs(),
+        )
+    except (Exception, SystemExit):
+        raise UserAiSettingsServiceError("task_route_delete_failed") from None
+
+    try:
+        route = provider_model_routing_service.read_provider_model_routing_status(
+            workload,
+            owner_user_id=owner,
+        )
+    except (ValueError, FileNotFoundError, SystemExit):
+        raise UserAiSettingsServiceError("task_route_state_unavailable") from None
+    return {"ok": True, **route}

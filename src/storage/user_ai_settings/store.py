@@ -285,6 +285,27 @@ def _safe_credential_metadata(
     }
 
 
+def _require_task_selection_text(value: Any, label: str) -> str:
+    normalized = _clean_text(value)
+    if not normalized:
+        raise ValueError(f"{label} is required.")
+    return normalized
+
+
+def _safe_task_model_selection_metadata(
+    owner_user_id: str,
+    row: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "owner_user_id": owner_user_id,
+        "workload_id": _clean_text(row.get("workload_id")),
+        "provider": _clean_text(row.get("provider")).lower(),
+        "model": _clean_text(row.get("model")),
+        "created_at": _clean_text(row.get("created_at")),
+        "updated_at": _clean_text(row.get("updated_at")),
+    }
+
+
 def ensure_user_ai_settings_schema(
     *,
     database_url: str = "",
@@ -611,6 +632,173 @@ SELECT json_build_object(
         "deleted": deleted,
         "configured": False,
         "credential_hint": "",
+    }
+    return payload
+
+
+def list_user_ai_task_model_selections_payload(
+    owner_user_id: str,
+    *,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    sql = _schema_prefix(ensure_schema) + f"""
+SELECT json_build_object(
+    'owner_user_id', {_sql_quote_text(owner)},
+    'selections', COALESCE(
+        (
+            SELECT json_agg(
+                json_build_object(
+                    'owner_user_id', owner_user_id,
+                    'workload_id', workload_id,
+                    'provider', provider,
+                    'model', model,
+                    'created_at', created_at,
+                    'updated_at', updated_at
+                ) ORDER BY workload_id
+            )
+            FROM user_ai_task_model_selections
+            WHERE owner_user_id = {_sql_quote_text(owner)}
+        ),
+        '[]'::json
+    )
+)::text;
+""".strip()
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    row = dict(payload.get("data", {}) or {})
+    rows = row.get("selections")
+    if not isinstance(rows, list):
+        rows = []
+    selections = []
+    for candidate in rows:
+        if not isinstance(candidate, dict):
+            continue
+        if _clean_text(candidate.get("owner_user_id")) != owner:
+            raise ValueError("Stored AI task selection ownership is invalid.")
+        selections.append(
+            _safe_task_model_selection_metadata(owner, candidate)
+        )
+    payload["data"] = {
+        "owner_user_id": owner,
+        "selections": selections,
+    }
+    return payload
+
+
+def upsert_user_ai_task_model_selection_payload(
+    owner_user_id: str,
+    workload_id: str,
+    provider: str,
+    model: str,
+    *,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    workload = _require_task_selection_text(workload_id, "workload_id")
+    provider_name = _normalize_configurable_provider(provider)
+    model_name = _require_task_selection_text(model, "model")
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH upserted AS (
+    INSERT INTO user_ai_task_model_selections (
+        owner_user_id,
+        workload_id,
+        provider,
+        model
+    )
+    VALUES (
+        {_sql_quote_text(owner)},
+        {_sql_quote_text(workload)},
+        {_sql_quote_text(provider_name)},
+        {_sql_quote_text(model_name)}
+    )
+    ON CONFLICT (owner_user_id, workload_id) DO UPDATE SET
+        provider = EXCLUDED.provider,
+        model = EXCLUDED.model,
+        updated_at = NOW()
+    RETURNING owner_user_id, workload_id, provider, model,
+              created_at, updated_at
+)
+SELECT json_build_object(
+    'owner_user_id', owner_user_id,
+    'workload_id', workload_id,
+    'provider', provider,
+    'model', model,
+    'created_at', created_at,
+    'updated_at', updated_at
+)::text FROM upserted;
+""".strip()
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    row = dict(payload.get("data", {}) or {})
+    returned_owner = _clean_text(row.get("owner_user_id"))
+    if returned_owner and returned_owner != owner:
+        raise ValueError("Stored AI task selection ownership is invalid.")
+    row.update(
+        {
+            "workload_id": workload,
+            "provider": provider_name,
+            "model": model_name,
+        }
+    )
+    payload["data"] = _safe_task_model_selection_metadata(owner, row)
+    return payload
+
+
+def delete_user_ai_task_model_selection_payload(
+    owner_user_id: str,
+    workload_id: str,
+    *,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    workload = _require_task_selection_text(workload_id, "workload_id")
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH deleted AS (
+    DELETE FROM user_ai_task_model_selections
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND workload_id = {_sql_quote_text(workload)}
+    RETURNING owner_user_id
+)
+SELECT json_build_object(
+    'deleted', EXISTS(SELECT 1 FROM deleted),
+    'owner_user_id', {_sql_quote_text(owner)},
+    'workload_id', {_sql_quote_text(workload)}
+)::text;
+""".strip()
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    payload["data"] = {
+        "owner_user_id": owner,
+        "workload_id": workload,
+        "deleted": bool((payload.get("data") or {}).get("deleted", False)),
     }
     return payload
 

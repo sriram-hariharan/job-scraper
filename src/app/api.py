@@ -260,6 +260,13 @@ class UserAiTestConnectionRequest(BaseModel):
     model: str
 
 
+class UserAiTaskRouteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    model: str
+
+
 class CriticEvaluatorReadonlyRequest(BaseModel):
     trace_payload: dict[str, Any] | list[dict[str, Any]] = Field(default_factory=dict)
     trace_payload_source: str = "request_body"
@@ -924,6 +931,10 @@ def _raise_user_ai_settings_http_error(
         "credential_write_failed": 503,
         "credential_delete_failed": 503,
         "connection_test_failed": 502,
+        "task_route_not_qualified": 409,
+        "task_route_write_failed": 503,
+        "task_route_delete_failed": 503,
+        "task_route_state_unavailable": 503,
     }.get(category, 400)
     raise HTTPException(
         status_code=status_code,
@@ -3964,12 +3975,14 @@ def test_user_ai_provider_connection(
 def user_ai_recommended_provider_routes(
     http_request: Request,
 ):
-    _require_auth_owner_user_id(http_request)
+    owner_user_id = _require_auth_owner_user_id(http_request)
 
     try:
         payload = (
             provider_model_routing_service
-            .list_provider_model_routing_statuses()
+            .list_provider_model_routing_statuses(
+                owner_user_id=owner_user_id,
+            )
         )
     except (ValueError, FileNotFoundError):
         raise HTTPException(
@@ -3984,6 +3997,37 @@ def user_ai_recommended_provider_routes(
         "ok": True,
         "workloads": payload["workloads"],
     }
+
+
+@app.put("/ai/settings/task-routes/{workload_id}")
+def save_user_ai_task_route(
+    workload_id: str,
+    request: UserAiTaskRouteRequest,
+    http_request: Request,
+):
+    try:
+        return user_ai_settings_service.save_user_ai_task_model_selection_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            workload_id=workload_id,
+            provider=request.provider,
+            model=request.model,
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
+
+
+@app.delete("/ai/settings/task-routes/{workload_id}")
+def clear_user_ai_task_route(
+    workload_id: str,
+    http_request: Request,
+):
+    try:
+        return user_ai_settings_service.clear_user_ai_task_model_selection_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            workload_id=workload_id,
+        )
+    except user_ai_settings_service.UserAiSettingsServiceError as exc:
+        _raise_user_ai_settings_http_error(exc)
 
 
 @app.get("/ai/settings/recommended-route/{workload_id}")

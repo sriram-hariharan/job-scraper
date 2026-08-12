@@ -38,6 +38,94 @@ def _recommendation(
     }
 
 
+def _install_synthetic_routing_sources(monkeypatch):
+    registry_payload = {
+        "cells": [
+            {
+                "execution_order": 1,
+                "workload_id": "skill_extraction",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "status": "qualified",
+                "cost": 99,
+            },
+            {
+                "execution_order": 2,
+                "workload_id": "skill_extraction",
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "status": "qualified",
+                "cost": 1,
+            },
+            {
+                "execution_order": 3,
+                "workload_id": "skill_extraction",
+                "provider": "openai",
+                "model": "rejected-model",
+                "status": "rejected",
+            },
+            {
+                "execution_order": 4,
+                "workload_id": "job_fit_evaluation",
+                "provider": "groq",
+                "model": "pending-model",
+                "status": "pending",
+            },
+            {
+                "execution_order": 5,
+                "workload_id": "job_fit_evaluation",
+                "provider": "openai",
+                "model": "stale-model",
+                "status": "stale",
+            },
+            {
+                "execution_order": 6,
+                "workload_id": "manual_provider_preview",
+                "provider": "openai",
+                "model": "pending-preview-model",
+                "status": "pending",
+            },
+        ],
+        "preferred_provider": "openai",
+    }
+    policy = {
+        "workloads": [
+            {
+                "workload_id": "skill_extraction",
+                "recommendation_status": "recommended",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "selection_basis": "quality",
+            },
+            {
+                "workload_id": "job_fit_evaluation",
+                "recommendation_status": "fail_closed_zero_qualified",
+                "provider": None,
+                "model": None,
+                "selection_basis": None,
+            },
+            {
+                "workload_id": "manual_provider_preview",
+                "recommendation_status": "blocked_non_live",
+                "provider": None,
+                "model": None,
+                "selection_basis": None,
+            },
+        ]
+    }
+    monkeypatch.setattr(
+        routing,
+        "_load_authoritative_qualification_registry",
+        lambda: registry_payload,
+    )
+    monkeypatch.setattr(
+        routing,
+        "build_provider_model_recommendation_policy",
+        lambda _payload: policy,
+    )
+    return registry_payload
+
+
 def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
     monkeypatch,
 ):
@@ -158,6 +246,13 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
                         "model": "gpt-5-mini",
                     },
                 ],
+                "requested_selection": None,
+                "requested_selection_status": "none",
+                "effective_selection": {
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                },
+                "effective_selection_source": "applylens_recommended",
             },
             {
                 "workload_id": "job_fit_evaluation",
@@ -170,6 +265,10 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
                 "execution_mode": "deterministic",
                 "recommended_option": None,
                 "qualified_options": [],
+                "requested_selection": None,
+                "requested_selection_status": "none",
+                "effective_selection": None,
+                "effective_selection_source": "deterministic",
             },
             {
                 "workload_id": "manual_provider_preview",
@@ -180,6 +279,10 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
                 "execution_mode": "blocked_non_live",
                 "recommended_option": None,
                 "qualified_options": [],
+                "requested_selection": None,
+                "requested_selection_status": "none",
+                "effective_selection": None,
+                "effective_selection_source": "blocked_non_live",
             },
         ]
     }
@@ -291,6 +394,249 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
         "raw_response",
     ):
         assert prohibited not in rendered
+
+
+def test_owner_selection_effective_state_is_scoped_validated_and_read_only(
+    monkeypatch,
+):
+    _install_synthetic_routing_sources(monkeypatch)
+    calls = []
+
+    def list_selections(owner_user_id):
+        calls.append(owner_user_id)
+        selections = (
+            [
+                {
+                    "owner_user_id": owner_user_id,
+                    "workload_id": "skill_extraction",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                }
+            ]
+            if owner_user_id == "owner-a"
+            else []
+        )
+        return {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": selections,
+            }
+        }
+
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        list_selections,
+    )
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "routing read must not execute provider or read credentials"
+        ),
+    )
+
+    owner_a = routing.read_provider_model_routing_status(
+        "skill_extraction",
+        owner_user_id="owner-a",
+    )
+    owner_b = routing.read_provider_model_routing_status(
+        "skill_extraction",
+        owner_user_id="owner-b",
+    )
+
+    assert owner_a["requested_selection"] == {
+        "provider": "openai",
+        "model": "gpt-5-mini",
+    }
+    assert owner_a["requested_selection_status"] == "qualified"
+    assert owner_a["effective_selection"] == owner_a["requested_selection"]
+    assert owner_a["effective_selection_source"] == "user_override"
+    assert owner_b["requested_selection"] is None
+    assert owner_b["requested_selection_status"] == "none"
+    assert owner_b["effective_selection"] == owner_b["recommended_option"]
+    assert owner_b["effective_selection_source"] == "applylens_recommended"
+    assert calls == ["owner-a", "owner-b"]
+
+
+def test_explicit_recommended_pair_remains_an_unambiguous_user_override(
+    monkeypatch,
+):
+    _install_synthetic_routing_sources(monkeypatch)
+    recommended = {
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+    }
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        lambda owner_user_id: {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": [
+                    {
+                        "owner_user_id": owner_user_id,
+                        "workload_id": "skill_extraction",
+                        **recommended,
+                    }
+                ],
+            }
+        },
+    )
+
+    route = routing.read_provider_model_routing_status(
+        "skill_extraction",
+        owner_user_id="owner-a",
+    )
+
+    assert route["recommended_option"] == recommended
+    assert route["requested_selection"] == recommended
+    assert route["requested_selection_status"] == "qualified"
+    assert route["effective_selection"] == recommended
+    assert route["effective_selection_source"] == "user_override"
+
+
+def test_stale_requested_selection_is_retained_but_never_effective(
+    monkeypatch,
+):
+    _install_synthetic_routing_sources(monkeypatch)
+    reads = []
+    stale = {"provider": "openai", "model": "retired-model"}
+
+    def list_selections(owner_user_id):
+        reads.append(owner_user_id)
+        return {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": [
+                    {
+                        "owner_user_id": owner_user_id,
+                        "workload_id": "skill_extraction",
+                        **stale,
+                    }
+                ],
+            }
+        }
+
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        list_selections,
+    )
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "stale routing read must not execute provider"
+        ),
+    )
+
+    route = routing.read_provider_model_routing_status(
+        "skill_extraction",
+        owner_user_id="owner-a",
+    )
+
+    assert route["requested_selection"] == stale
+    assert route["requested_selection_status"] == "no_longer_qualified"
+    assert route["effective_selection"] == route["recommended_option"]
+    assert route["effective_selection"] != stale
+    assert route["effective_selection_source"] == "applylens_recommended"
+    assert reads == ["owner-a"]
+
+
+@pytest.mark.parametrize(
+    ("workload_id", "source"),
+    (
+        ("job_fit_evaluation", "deterministic"),
+        ("manual_provider_preview", "blocked_non_live"),
+    ),
+)
+def test_non_llm_modes_never_make_persisted_selection_effective(
+    monkeypatch,
+    workload_id,
+    source,
+):
+    _install_synthetic_routing_sources(monkeypatch)
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        lambda owner_user_id: {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": [
+                    {
+                        "owner_user_id": owner_user_id,
+                        "workload_id": workload_id,
+                        "provider": "groq",
+                        "model": "previous-model",
+                    }
+                ],
+            }
+        },
+    )
+
+    route = routing.read_provider_model_routing_status(
+        workload_id,
+        owner_user_id="owner-a",
+    )
+
+    assert route["requested_selection_status"] == "no_longer_qualified"
+    assert route["effective_selection"] is None
+    assert route["effective_selection_source"] == source
+
+
+def test_current_selection_validation_uses_only_exact_qualified_pairs(
+    monkeypatch,
+):
+    _install_synthetic_routing_sources(monkeypatch)
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "selection validation must not execute provider"
+        ),
+    )
+
+    assert routing.validate_current_qualified_provider_model_selection(
+        "skill_extraction",
+        "openai",
+        "gpt-5-mini",
+    ) == {"provider": "openai", "model": "gpt-5-mini"}
+    assert routing.validate_current_qualified_provider_model_selection(
+        "skill_extraction",
+        "groq",
+        "openai/gpt-oss-20b",
+    ) == {"provider": "groq", "model": "openai/gpt-oss-20b"}
+
+    rejected = (
+        ("skill_extraction", "openai", "rejected-model"),
+        ("job_fit_evaluation", "groq", "pending-model"),
+        ("job_fit_evaluation", "openai", "stale-model"),
+        ("job_fit_evaluation", "groq", "openai/gpt-oss-20b"),
+        ("manual_provider_preview", "openai", "pending-preview-model"),
+        ("unknown_workload", "openai", "gpt-5-mini"),
+        ("skill_extraction", "groq", "gpt-5-mini"),
+        ("skill_extraction", "openai", "catalog-only-model"),
+    )
+    for workload_id, provider, model in rejected:
+        with pytest.raises(ValueError):
+            routing.validate_current_qualified_provider_model_selection(
+                workload_id,
+                provider,
+                model,
+            )
+
+
+def test_real_registry_validation_accepts_every_current_qualified_option():
+    payload = routing.list_provider_model_routing_statuses()
+
+    for route in payload["workloads"]:
+        for option in route["qualified_options"]:
+            assert routing.validate_current_qualified_provider_model_selection(
+                route["workload_id"],
+                option["provider"],
+                option["model"],
+            ) == option
 
 
 def test_resolve_uses_authoritative_registry_and_exact_workload(
@@ -629,5 +975,6 @@ def test_only_approved_api_consumes_bridge():
             )
 
     assert sorted(references) == [
-        "src/app/api.py"
+        "src/app/api.py",
+        "src/app/user_ai_settings_service.py",
     ]

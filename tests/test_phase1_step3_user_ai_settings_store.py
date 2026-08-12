@@ -38,13 +38,42 @@ def test_schema_defines_exact_owner_scoped_settings_and_credential_tables():
     sql = SCHEMA_PATH.read_text(encoding="utf-8")
     assert sql.count("CREATE TABLE IF NOT EXISTS user_ai_settings") == 1
     assert sql.count("CREATE TABLE IF NOT EXISTS user_ai_provider_credentials") == 1
+    assert sql.count("CREATE TABLE IF NOT EXISTS user_ai_task_model_selections") == 1
     assert "owner_user_id TEXT PRIMARY KEY REFERENCES auth_users(user_id) ON DELETE CASCADE" in sql
     assert "owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE" in sql
     assert "PRIMARY KEY (owner_user_id, provider)" in sql
+    assert "PRIMARY KEY (owner_user_id, workload_id)" in sql
     assert "CHECK (preferred_provider IS NULL OR preferred_provider IN ('groq', 'openai'))" in sql
     assert "CHECK (provider IN ('groq', 'openai'))" in sql
     assert "CHECK (encryption_scheme = 'fernet-v1')" in sql
     assert "api_key" not in sql
+
+
+def test_task_selection_schema_has_owner_cascade_and_derived_state_is_not_stored():
+    sql = SCHEMA_PATH.read_text(encoding="utf-8")
+    task_table = sql.split(
+        "CREATE TABLE IF NOT EXISTS user_ai_task_model_selections",
+        1,
+    )[1]
+    assert (
+        "owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) "
+        "ON DELETE CASCADE"
+    ) in task_table
+    assert "workload_id TEXT NOT NULL" in task_table
+    assert "provider TEXT NOT NULL" in task_table
+    assert "model TEXT NOT NULL" in task_table
+    assert "PRIMARY KEY (owner_user_id, workload_id)" in task_table
+    for prohibited in (
+        "qualification_status",
+        "recommendation_status",
+        "execution_mode",
+        "effective_selection",
+        "evidence_sha256",
+        "registry_sha",
+        "credential_ciphertext",
+        "preferred_provider",
+    ):
+        assert prohibited not in task_table
 
 
 @pytest.mark.parametrize("provider", ("groq", "openai", " GROQ ", "OpenAI"))
@@ -230,6 +259,106 @@ def test_owner_scoped_metadata_decryption_and_delete_sql_paths():
         assert "owner_user_id = 'synthetic-user-a'" in sql
         assert "provider = 'groq'" in sql
         assert "synthetic-user-b" not in sql
+
+
+def test_task_selection_list_is_owner_scoped_safe_and_deterministic():
+    first = store.list_user_ai_task_model_selections_payload(
+        "synthetic-user-a",
+        **_print_kwargs(),
+    )
+    second = store.list_user_ai_task_model_selections_payload(
+        "synthetic-user-b",
+        **_print_kwargs(),
+    )
+
+    assert "owner_user_id = 'synthetic-user-a'" in first["sql"]
+    assert "synthetic-user-b" not in first["sql"]
+    assert "owner_user_id = 'synthetic-user-b'" in second["sql"]
+    assert "synthetic-user-a" not in second["sql"]
+    assert "ORDER BY workload_id" in first["sql"]
+    assert first["data"] == {
+        "owner_user_id": "synthetic-user-a",
+        "selections": [],
+    }
+    assert "credential_ciphertext" not in first["sql"]
+
+
+def test_task_selection_upsert_is_exact_owner_workload_pair_and_updates_route():
+    payload = store.upsert_user_ai_task_model_selection_payload(
+        "synthetic-user-a",
+        "skill_extraction",
+        " OpenAI ",
+        "gpt-5-mini",
+        **_print_kwargs(),
+    )
+    sql = payload["sql"]
+
+    assert "'synthetic-user-a'" in sql
+    assert "'skill_extraction'" in sql
+    assert "'openai'" in sql
+    assert "'gpt-5-mini'" in sql
+    assert "ON CONFLICT (owner_user_id, workload_id) DO UPDATE SET" in sql
+    assert "provider = EXCLUDED.provider" in sql
+    assert "model = EXCLUDED.model" in sql
+    assert "updated_at = NOW()" in sql
+    assert "synthetic-user-b" not in sql
+    assert "credential_ciphertext" not in sql
+    assert payload["data"] == {
+        "owner_user_id": "synthetic-user-a",
+        "workload_id": "skill_extraction",
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "created_at": "",
+        "updated_at": "",
+    }
+
+
+def test_task_selection_delete_targets_only_exact_owner_and_workload():
+    payload = store.delete_user_ai_task_model_selection_payload(
+        "synthetic-user-a",
+        "skill_extraction",
+        **_print_kwargs(),
+    )
+    sql = payload["sql"]
+
+    assert "DELETE FROM user_ai_task_model_selections" in sql
+    assert "owner_user_id = 'synthetic-user-a'" in sql
+    assert "workload_id = 'skill_extraction'" in sql
+    assert "synthetic-user-b" not in sql
+    assert "credential_ciphertext" not in sql
+    assert payload["data"] == {
+        "owner_user_id": "synthetic-user-a",
+        "workload_id": "skill_extraction",
+        "deleted": False,
+    }
+
+
+def test_task_selection_list_rejects_cross_owner_database_row(monkeypatch):
+    monkeypatch.setattr(
+        store,
+        "_run_psql_json_stdin_query",
+        lambda **_kwargs: {
+            "command": [],
+            "command_text": "",
+            "data": {
+                "owner_user_id": "synthetic-user-a",
+                "selections": [
+                    {
+                        "owner_user_id": "synthetic-user-b",
+                        "workload_id": "skill_extraction",
+                        "provider": "openai",
+                        "model": "gpt-5-mini",
+                    }
+                ],
+            },
+        },
+    )
+
+    with pytest.raises(ValueError, match="ownership is invalid"):
+        store.list_user_ai_task_model_selections_payload(
+            "synthetic-user-a",
+            ensure_schema=False,
+        )
 
 
 def test_server_decryption_lookup_rejects_cross_owner_result(monkeypatch, fernet_key):

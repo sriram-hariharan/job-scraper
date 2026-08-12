@@ -24,3 +24,15 @@ CREATE TABLE IF NOT EXISTS user_ai_provider_credentials (
 
 CREATE INDEX IF NOT EXISTS idx_user_ai_provider_credentials_updated
 ON user_ai_provider_credentials (owner_user_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_ai_task_model_selections (
+    owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,
+    workload_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (owner_user_id, workload_id),
+    CONSTRAINT user_ai_task_model_selections_provider_check
+        CHECK (provider IN ('groq', 'openai'))
+);

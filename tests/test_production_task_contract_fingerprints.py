@@ -390,8 +390,10 @@ def test_production_call_sites_use_the_extracted_authoritative_material():
             '"content": LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT',
             '"content": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SYSTEM_PROMPT',
             "system_prompt = SCAN_PHRASE_SYSTEM_PROMPT",
-            "temperature=SCAN_PHRASE_TEMPERATURE",
-            "max_tokens=SCAN_PHRASE_MAX_TOKENS",
+            '"temperature": SCAN_PHRASE_TEMPERATURE',
+            '"max_tokens": SCAN_PHRASE_MAX_TOKENS',
+            "return run_user_chat_completion_with_metadata(",
+            "return run_chat_completion_with_metadata(",
         ),
         "src/tailoring/llm.py": (
             "primary_system_prompt = TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT",

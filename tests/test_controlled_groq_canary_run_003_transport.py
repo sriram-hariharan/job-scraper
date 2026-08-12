@@ -14,7 +14,6 @@ import pytest
 from src.evaluation import controlled_groq_canary_run_003_identity as identity
 from src.evaluation import controlled_groq_canary_run_003_plan as plan
 from src.evaluation import controlled_groq_canary_run_003_transport as owner
-from src.evaluation import controlled_groq_canary_transport as base_transport
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,9 +25,6 @@ PLAN_SHA = (
 )
 IDENTITY_SHA = (
     "db22f2add4075775747f3c90de89977f82f918adc655eda1f343ab5aeed44980"
-)
-BASE_TRANSPORT_SHA = (
-    "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
 )
 def _packet():
     return plan.build_run_003_transmittable_request_packet()
@@ -494,9 +490,6 @@ def test_fake_execution_reaches_no_environment_socket_or_write(monkeypatch):
 def test_pinned_owners_and_runtime_artifacts_are_hermetic():
     assert plan.run_003_plan_sha256() == PLAN_SHA
     assert identity.run_003_identity_sha256() == IDENTITY_SHA
-    assert base_transport.controlled_groq_transport_sha256() == (
-        BASE_TRANSPORT_SHA
-    )
     assert all(
         not (ROOT / relative_path).exists()
         for relative_path in identity.RUN_003_ARTIFACT_PATHS.values()

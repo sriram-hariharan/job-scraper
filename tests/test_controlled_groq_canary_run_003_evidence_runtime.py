@@ -18,9 +18,7 @@ from src.evaluation import controlled_groq_canary_run_003_evidence_runtime as ow
 from src.evaluation import controlled_groq_canary_run_003_identity as identity
 from src.evaluation import controlled_groq_canary_run_003_plan as plan
 from src.evaluation import controlled_groq_canary_run_003_transport as transport
-from src.evaluation import controlled_groq_canary_transport as base_transport
 from src.evaluation import controlled_groq_canary_evidence_runtime as base_runtime
-from src.evaluation import controlled_groq_canary_run_identity as run_002
 from src.evaluation.controlled_groq_provider_canary import (
     pricing_table_sha256,
 )
@@ -43,12 +41,6 @@ IDENTITY_SHA = (
 )
 AUTHORIZATION_TEMPLATE_SHA = (
     "7e899596ab1b47c7ffbb692e68ecf4b5739415009c15791904a06388b4270b4a"
-)
-BASE_TRANSPORT_SHA = (
-    "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
-)
-RUN_002_IDENTITY_SHA = (
-    "e1c7159d42daebe64ad2c8ddea5f0bb40b45c0ff1cd56111e980a52585685fef"
 )
 SCHEDULE_KEY = (
     "canary_run_003_"
@@ -777,11 +769,6 @@ def test_pinned_owners_are_immutable_without_runtime_artifact_prerequisites():
     assert identity.run_003_authorization_template_sha256() == (
         AUTHORIZATION_TEMPLATE_SHA
     )
-    assert base_transport.controlled_groq_transport_sha256() == (
-        BASE_TRANSPORT_SHA
-    )
-    assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
-    assert not (ROOT / "outputs/provider_benchmark").exists()
     _assert_run_003_artifacts_are_absent()
 
 

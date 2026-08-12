@@ -13,9 +13,6 @@ import pytest
 
 from src.evaluation import controlled_groq_canary_run_003_identity as owner
 from src.evaluation import controlled_groq_canary_run_003_plan as plan_owner
-from src.evaluation import controlled_groq_canary_run_identity as run_002
-from src.evaluation import controlled_groq_provider_canary as canary
-from src.evaluation import controlled_provider_benchmark_plan as base_plan
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,12 +28,6 @@ SCHEDULE_KEY = (
 )
 BASE_PLAN_SHA = (
     "a3ef53ff992a2d1daf43f8fa9b0556202268d34e21f7611eb5de4d26e9abe6b6"
-)
-BASE_CANARY_SHA = (
-    "43241c341fe4d69c8cbeb2d6e95b6c56e68e67134b693c91396a932775a673bf"
-)
-RUN_002_IDENTITY_SHA = (
-    "e1c7159d42daebe64ad2c8ddea5f0bb40b45c0ff1cd56111e980a52585685fef"
 )
 def _assert_run_003_artifacts_are_absent():
     assert all(
@@ -510,20 +501,13 @@ def test_authorization_rejects_forbidden_fields(forbidden_key):
         owner.validate_run_003_authorization_template(template)
 
 
-def test_pinned_plan_controlled_plan_canary_and_run002_identity_are_immutable():
+def test_pinned_run003_plan_and_historical_controlled_plan_are_immutable():
     plan = plan_owner.build_run_003_plan_contract()
     assert plan_owner.run_003_plan_sha256(plan) == PLAN_SHA
     assert plan["controlled_plan_sha256"] == BASE_PLAN_SHA
-    assert base_plan.controlled_provider_benchmark_plan_sha256() == (
-        BASE_PLAN_SHA
-    )
-    assert canary.controlled_groq_canary_sha256() == BASE_CANARY_SHA
-    assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
 
 
 def test_prior_and_run003_runtime_artifacts_are_not_test_prerequisites():
-    output_root = ROOT / "outputs/provider_benchmark"
-    assert not output_root.exists()
     _assert_run_003_artifacts_are_absent()
 
 

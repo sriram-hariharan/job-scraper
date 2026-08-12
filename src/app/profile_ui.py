@@ -667,7 +667,7 @@ def profile_ai_settings_page() -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_step7b_r1" />
-  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_task_routing_r2" />
+  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_task_routing_ux_r3" />
 </head>
 <body class="profile-ai-settings-page-shell">
   {render_top_shell("/profile/ai-settings")}
@@ -888,7 +888,7 @@ def profile_ai_settings_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script src="/static/profile_ai_settings.js?v=phase1_task_routing_r2"></script>
+  <script src="/static/profile_ai_settings.js?v=phase1_task_routing_ux_r3"></script>
 </body>
 </html>
     """.strip()

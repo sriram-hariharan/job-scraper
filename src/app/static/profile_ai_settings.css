@@ -1023,6 +1023,52 @@ html[data-theme="light"] .profile-ai-settings-card {
   opacity: 0.72 !important;
 }
 
+.profile-ai-settings-routing .profile-ai-settings-routing-field-label,
+.profile-ai-settings-routing .profile-ai-settings-routing-note {
+  color: color-mix(in srgb, var(--ai-settings-text) 68%, var(--ai-settings-muted));
+  font-size: 10px;
+}
+
+.profile-ai-settings-routing .profile-ai-settings-routing-value {
+  color: color-mix(in srgb, var(--ai-settings-text) 94%, var(--ai-settings-muted));
+  font-size: 12px;
+}
+
+.profile-ai-settings-routing .profile-ai-settings-routing-source,
+.profile-ai-settings-routing .profile-ai-settings-routing-help,
+.profile-ai-settings-routing .profile-ai-settings-routing-static-note,
+.profile-ai-settings-routing .profile-ai-settings-routing-stale-note,
+.profile-ai-settings-routing .profile-ai-settings-routing-description {
+  color: color-mix(in srgb, var(--ai-settings-text) 70%, var(--ai-settings-muted));
+  font-size: 10px;
+}
+
+.profile-ai-settings-routing .profile-ai-settings-routing-source {
+  color: color-mix(in srgb, var(--ai-settings-accent) 76%, var(--ai-settings-text));
+}
+
+.profile-ai-settings-routing .profile-ai-settings-routing-stale-note {
+  color: color-mix(in srgb, var(--ai-settings-warning) 76%, var(--ai-settings-text));
+}
+
+.profile-ai-settings-routing .profile-ai-settings-routing-status {
+  font-size: 10px;
+}
+
+.profile-ai-settings-routing .profile-ai-settings-routing-controls > button.is-saving:disabled {
+  border-color: color-mix(in srgb, var(--ai-settings-accent) 52%, var(--ai-settings-border)) !important;
+  background: var(--ai-settings-accent-soft) !important;
+  color: color-mix(in srgb, var(--ai-settings-accent) 78%, var(--ai-settings-text)) !important;
+  opacity: 1 !important;
+}
+
+.profile-ai-settings-routing .profile-ai-settings-routing-controls > button.is-saved {
+  border-color: var(--ai-settings-success);
+  background: var(--ai-settings-success);
+  color: var(--ai-settings-surface);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ai-settings-success) 24%, transparent);
+}
+
 @keyframes ai-settings-spin {
   to { transform: rotate(360deg); }
 }

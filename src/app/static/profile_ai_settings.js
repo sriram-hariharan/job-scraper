@@ -12,6 +12,8 @@
     preferenceSaving: false,
     connectionTesting: false,
     routeSavingWorkload: null,
+    routeSavedWorkload: null,
+    routeSavePresentationVersion: 0,
     routeMessages: new Map(),
   };
 
@@ -706,6 +708,11 @@
         saveButton.disabled = routeSaving;
         if (state.routeSavingWorkload === route.workloadId) {
           saveButton.textContent = "Saving…";
+          saveButton.classList.add("is-saving");
+          saveButton.setAttribute("aria-busy", "true");
+        } else if (state.routeSavedWorkload === route.workloadId) {
+          saveButton.textContent = "✓ Saved";
+          saveButton.classList.add("is-saved");
         }
         controls.append(selectLabel, saveButton);
 
@@ -1077,6 +1084,9 @@
       }
     }
 
+    state.routeSavePresentationVersion += 1;
+    const presentationVersion = state.routeSavePresentationVersion;
+    state.routeSavedWorkload = null;
     state.routeSavingWorkload = workloadId;
     state.routeMessages.delete(workloadId);
     renderRouting();
@@ -1104,7 +1114,15 @@
           : "Explicit qualified route saved.",
         tone: "success",
       });
+      state.routeSavedWorkload = workloadId;
+      window.setTimeout(() => {
+        if (state.routeSavePresentationVersion !== presentationVersion
+          || state.routeSavedWorkload !== workloadId) return;
+        state.routeSavedWorkload = null;
+        renderRouting();
+      }, 1800);
     } catch (error) {
+      state.routeSavedWorkload = null;
       const category = error && error.category ? error.category : "request_failed";
       state.routeMessages.set(workloadId, {
         message: safeFailureMessages[category] || "The task route could not be saved. Try again.",
@@ -1144,7 +1162,9 @@
     byId("aiTaskRoutingList").addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-route-save]");
       if (!trigger) return;
-      const row = trigger.closest("[data-workload-id]");
+      const row = trigger.closest(
+        ".profile-ai-settings-routing-row[data-workload-id]"
+      );
       const select = row ? row.querySelector("[data-route-select]") : null;
       const workloadId = trigger.dataset.workloadId;
       if (!row || !select || row.dataset.workloadId !== workloadId) return;

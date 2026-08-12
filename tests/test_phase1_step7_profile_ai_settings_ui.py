@@ -296,7 +296,10 @@ def test_task_routing_card_is_existing_editable_dom_owner():
     assert ">Qualified choices<" in html
     assert 'id="aiTaskRoutingSummary"' in html
     assert 'id="aiTaskRoutingList"' in html
-    assert "phase1_task_routing_r2" in html
+    assert html.count("phase1_task_routing_ux_r3") == 2
+    assert "profile_ai_settings.css?v=phase1_task_routing_ux_r3" in html
+    assert "profile_ai_settings.js?v=phase1_task_routing_ux_r3" in html
+    assert "phase1_task_routing_r2" not in html
     assert "preferred_model" not in html + AI_SETTINGS_JS
     assert "Resume scoring" not in html + AI_SETTINGS_JS
     assert "Tailoring →" not in html + AI_SETTINGS_JS
@@ -468,6 +471,82 @@ def test_task_route_write_uses_safe_index_resolution_and_exact_methods():
         assert forbidden not in saving
 
 
+def test_task_route_button_has_race_safe_saving_saved_and_reset_lifecycle():
+    rendering = _function(AI_SETTINGS_JS, "renderRouting", "renderAll")
+    saving = _function(AI_SETTINGS_JS, "saveTaskRoute", "bindEvents")
+
+    assert 'makeElement("button", "", "Save route")' in rendering
+    assert 'saveButton.textContent = "Saving…"' in rendering
+    assert 'saveButton.classList.add("is-saving")' in rendering
+    assert 'saveButton.setAttribute("aria-busy", "true")' in rendering
+    assert 'saveButton.textContent = "✓ Saved"' in rendering
+    assert 'saveButton.classList.add("is-saved")' in rendering
+    assert "saveButton.disabled = routeSaving" in rendering
+    assert "if (state.routeSavingWorkload) return" in saving
+
+    validated = saving.index("validateTaskRouteWriteResponse(result, workloadId)")
+    saved = saving.index("state.routeSavedWorkload = workloadId")
+    assert validated < saved
+    assert "state.routeSavePresentationVersion += 1" in saving
+    assert "const presentationVersion = state.routeSavePresentationVersion" in saving
+    assert "window.setTimeout(() =>" in saving
+    assert "state.routeSavePresentationVersion !== presentationVersion" in saving
+    assert "state.routeSavedWorkload !== workloadId" in saving
+    assert "state.routeSavedWorkload = null" in saving
+    assert "}, 1800)" in saving
+
+    timeout = saving.split("window.setTimeout(() => {", 1)[1].split("}, 1800)", 1)[0]
+    assert "requestJson(" not in timeout
+    assert "state.routing" not in timeout
+    assert "qualifiedOptions" not in timeout
+    assert "renderRouting()" in timeout
+
+    failure = saving.split("} catch (error) {", 1)[1].split("} finally {", 1)[0]
+    assert "state.routeSavedWorkload = null" in failure
+    assert "✓ Saved" not in failure
+    assert "routeSavingWorkload = null" in saving
+
+
+def test_routing_readability_and_button_states_are_narrowly_scoped():
+    assert AI_SETTINGS_CSS.count("--ai-settings-muted:") == 2
+    assert "--ai-settings-muted: #94a3b8" in AI_SETTINGS_CSS
+    assert "--ai-settings-muted: #627087" in AI_SETTINGS_CSS
+
+    readability = AI_SETTINGS_CSS.split(
+        ".profile-ai-settings-routing .profile-ai-settings-routing-field-label,", 1
+    )[1].split("@keyframes ai-settings-spin", 1)[0]
+    for selector in (
+        ".profile-ai-settings-routing-note",
+        ".profile-ai-settings-routing-value",
+        ".profile-ai-settings-routing-source",
+        ".profile-ai-settings-routing-help",
+        ".profile-ai-settings-routing-static-note",
+        ".profile-ai-settings-routing-stale-note",
+        ".profile-ai-settings-routing-description",
+        ".profile-ai-settings-routing-status",
+    ):
+        assert selector in readability
+    assert "font-size: 10px" in readability
+    assert "font-size: 12px" in readability
+    assert "color-mix(in srgb, var(--ai-settings-text)" in readability
+    assert "> button.is-saving:disabled" in readability
+    assert "opacity: 1 !important" in readability
+    assert "> button.is-saved" in readability
+    assert "var(--ai-settings-accent-soft)" in readability
+    assert "var(--ai-settings-success)" in readability
+    assert readability.count(".profile-ai-settings-routing") >= 10
+
+    saved_rule = readability.split(
+        ".profile-ai-settings-routing .profile-ai-settings-routing-controls > button.is-saved {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "border-color: var(--ai-settings-success)" in saved_rule
+    assert "background: var(--ai-settings-success)" in saved_rule
+    assert "color: var(--ai-settings-surface)" in saved_rule
+    assert "box-shadow:" in saved_rule
+    assert "var(--ai-settings-success-soft)" not in saved_rule
+
+
 def test_route_failures_are_bounded_and_dynamic_events_use_existing_list_owner():
     saving = _function(AI_SETTINGS_JS, "saveTaskRoute", "bindEvents")
     binding = _function(AI_SETTINGS_JS, "bindEvents", "init")
@@ -482,7 +561,13 @@ def test_route_failures_are_bounded_and_dynamic_events_use_existing_list_owner()
     assert "error.stack" not in saving
     assert 'byId("aiTaskRoutingList").addEventListener("click"' in binding
     assert 'event.target.closest("[data-route-save]")' in binding
+    assert 'trigger.closest(\n        ".profile-ai-settings-routing-row[data-workload-id]"' in binding
+    assert 'trigger.closest("[data-workload-id]")' not in binding
     assert 'row.querySelector("[data-route-select]")' in binding
+    assert "row.dataset.workloadId !== workloadId" in binding
+    guard = binding.index("row.dataset.workloadId !== workloadId")
+    save = binding.index("saveTaskRoute(workloadId, select.value)")
+    assert guard < save
     assert "saveTaskRoute(workloadId, select.value)" in binding
 
 

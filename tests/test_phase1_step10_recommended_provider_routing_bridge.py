@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import ast
+from copy import deepcopy
 import inspect
 from pathlib import Path
 
 import pytest
 
 from src.app import provider_model_routing_service as routing
+from src.evaluation import (
+    job_fit_provider_model_qualification_overlay as job_fit_overlay,
+)
+from src.evaluation.provider_model_recommendation_policy import (
+    SOURCE_QUALIFICATION_REGISTRY_SHA256,
+    build_provider_model_recommendation_policy,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +23,26 @@ OWNER = (
     ROOT
     / "src/app/provider_model_routing_service.py"
 )
+
+JOB_FIT_OPTIONS = [
+    {"provider": "groq", "model": "openai/gpt-oss-20b"},
+    {"provider": "groq", "model": "openai/gpt-oss-120b"},
+    {"provider": "openai", "model": "gpt-5-mini"},
+    {"provider": "openai", "model": "gpt-5.1"},
+]
+
+
+def _job_fit_overlay():
+    return {
+        "workload_id": "job_fit_evaluation",
+        "recommendation_status": "recommended",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "selection_basis": (
+            "reviewed_production_aligned_quality_tie_latency_tiebreak"
+        ),
+        "qualified_options": deepcopy(JOB_FIT_OPTIONS),
+    }
 
 
 def _recommendation(
@@ -123,6 +151,11 @@ def _install_synthetic_routing_sources(monkeypatch):
         "build_provider_model_recommendation_policy",
         lambda _payload: policy,
     )
+    monkeypatch.setattr(
+        routing,
+        "build_job_fit_provider_model_qualification_overlay",
+        lambda _payload: _job_fit_overlay(),
+    )
     return registry_payload
 
 
@@ -220,6 +253,11 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
             ]
         },
     )
+    monkeypatch.setattr(
+        routing,
+        "build_job_fit_provider_model_qualification_overlay",
+        lambda _payload: _job_fit_overlay(),
+    )
 
     payload = routing.list_provider_model_routing_statuses()
 
@@ -256,19 +294,19 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
             },
             {
                 "workload_id": "job_fit_evaluation",
-                "recommendation_status": (
-                    "fail_closed_zero_qualified"
+                "recommendation_status": "recommended",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "selection_basis": (
+                    "reviewed_production_aligned_quality_tie_latency_tiebreak"
                 ),
-                "provider": None,
-                "model": None,
-                "selection_basis": None,
-                "execution_mode": "deterministic",
-                "recommended_option": None,
-                "qualified_options": [],
+                "execution_mode": "qualified_provider_model",
+                "recommended_option": JOB_FIT_OPTIONS[0],
+                "qualified_options": JOB_FIT_OPTIONS,
                 "requested_selection": None,
                 "requested_selection_status": "none",
-                "effective_selection": None,
-                "effective_selection_source": "deterministic",
+                "effective_selection": JOB_FIT_OPTIONS[0],
+                "effective_selection_source": "applylens_recommended",
             },
             {
                 "workload_id": "manual_provider_preview",
@@ -301,6 +339,141 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
     assert "preferred_provider" not in rendered
 
 
+def test_real_frozen_policy_remains_fail_closed_before_overlay_application():
+    registry_payload = routing._load_authoritative_qualification_registry()
+    policy = build_provider_model_recommendation_policy(registry_payload)
+    job_fit = next(
+        row
+        for row in policy["workloads"]
+        if row["workload_id"] == "job_fit_evaluation"
+    )
+
+    assert job_fit["recommendation_status"] == (
+        "fail_closed_zero_qualified"
+    )
+    assert job_fit["provider"] is None
+    assert job_fit["model"] is None
+
+
+def test_real_job_fit_overlay_is_exact_and_returns_fresh_safe_payloads():
+    registry_payload = routing._load_authoritative_qualification_registry()
+
+    first = (
+        job_fit_overlay.build_job_fit_provider_model_qualification_overlay(
+            registry_payload
+        )
+    )
+    first["qualified_options"].clear()
+    second = (
+        job_fit_overlay.build_job_fit_provider_model_qualification_overlay(
+            registry_payload
+        )
+    )
+
+    assert second == _job_fit_overlay()
+    rendered = repr(second)
+    for private_field in (
+        "latency_ms",
+        "estimated_cost",
+        "input_tokens",
+        "output_tokens",
+        "historical_missing_requirement_accuracy",
+        "registry_sha",
+        "task_contract_sha",
+        "raw_response",
+        "credential",
+    ):
+        assert private_field not in rendered
+
+
+def test_job_fit_overlay_fails_closed_when_registry_digest_changes(
+    monkeypatch,
+):
+    registry_payload = routing._load_authoritative_qualification_registry()
+    monkeypatch.setattr(
+        job_fit_overlay.qualification_registry,
+        "provider_qualification_registry_sha256",
+        lambda _payload: "0" * 64,
+    )
+
+    with pytest.raises(ValueError, match="registry base changed"):
+        job_fit_overlay.build_job_fit_provider_model_qualification_overlay(
+            registry_payload
+        )
+
+
+def test_job_fit_overlay_fails_closed_when_base_universe_changes(
+    monkeypatch,
+):
+    registry_payload = routing._load_authoritative_qualification_registry()
+    changed = deepcopy(registry_payload)
+    job_fit_cell = next(
+        cell
+        for cell in changed["cells"]
+        if cell["workload_id"] == "job_fit_evaluation"
+    )
+    job_fit_cell["model"] = "unexpected-model"
+    monkeypatch.setattr(
+        job_fit_overlay.qualification_registry,
+        "validate_provider_qualification_registry",
+        lambda _payload: True,
+    )
+    monkeypatch.setattr(
+        job_fit_overlay.qualification_registry,
+        "provider_qualification_registry_sha256",
+        lambda _payload: SOURCE_QUALIFICATION_REGISTRY_SHA256,
+    )
+
+    with pytest.raises(ValueError, match="base universe changed"):
+        job_fit_overlay.build_job_fit_provider_model_qualification_overlay(
+            changed
+        )
+
+
+def test_job_fit_overlay_fails_closed_when_base_cell_becomes_qualified(
+    monkeypatch,
+):
+    registry_payload = routing._load_authoritative_qualification_registry()
+    changed = deepcopy(registry_payload)
+    job_fit_cell = next(
+        cell
+        for cell in changed["cells"]
+        if cell["workload_id"] == "job_fit_evaluation"
+    )
+    job_fit_cell["status"] = "qualified"
+    monkeypatch.setattr(
+        job_fit_overlay.qualification_registry,
+        "validate_provider_qualification_registry",
+        lambda _payload: True,
+    )
+    monkeypatch.setattr(
+        job_fit_overlay.qualification_registry,
+        "provider_qualification_registry_sha256",
+        lambda _payload: SOURCE_QUALIFICATION_REGISTRY_SHA256,
+    )
+
+    with pytest.raises(ValueError, match="unexpectedly contains"):
+        job_fit_overlay.build_job_fit_provider_model_qualification_overlay(
+            changed
+        )
+
+
+def test_job_fit_overlay_fails_closed_when_task_fingerprint_changes(
+    monkeypatch,
+):
+    registry_payload = routing._load_authoritative_qualification_registry()
+    monkeypatch.setattr(
+        job_fit_overlay,
+        "production_task_contract_sha256",
+        lambda _workload_id: "0" * 64,
+    )
+
+    with pytest.raises(ValueError, match="production task contract changed"):
+        job_fit_overlay.build_job_fit_provider_model_qualification_overlay(
+            registry_payload
+        )
+
+
 def test_real_registry_routing_contract_matches_current_qualified_universe(
     monkeypatch,
 ):
@@ -321,7 +494,12 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             ("groq", "openai/gpt-oss-20b"),
             ("openai", "gpt-5-mini"),
         ],
-        "job_fit_evaluation": [],
+        "job_fit_evaluation": [
+            ("groq", "openai/gpt-oss-20b"),
+            ("groq", "openai/gpt-oss-120b"),
+            ("openai", "gpt-5-mini"),
+            ("openai", "gpt-5.1"),
+        ],
         "jd_intelligence": [("openai", "gpt-5-mini")],
         "grounded_rag_answer": [
             ("groq", "openai/gpt-oss-20b"),
@@ -368,7 +546,7 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             assert row["recommended_option"] is None
             assert row["qualified_options"] == []
 
-    assert actual_total == 14
+    assert actual_total == 18
     assert {
         mode: sum(row["execution_mode"] == mode for row in workloads)
         for mode in (
@@ -377,10 +555,20 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             "blocked_non_live",
         )
     } == {
-        "qualified_provider_model": 6,
-        "deterministic": 5,
+        "qualified_provider_model": 7,
+        "deterministic": 4,
         "blocked_non_live": 1,
     }
+
+    job_fit = by_workload["job_fit_evaluation"]
+    assert job_fit["recommendation_status"] == "recommended"
+    assert job_fit["execution_mode"] == "qualified_provider_model"
+    assert job_fit["recommended_option"] == JOB_FIT_OPTIONS[0]
+    assert job_fit["qualified_options"] == JOB_FIT_OPTIONS
+    assert job_fit["effective_selection"] == JOB_FIT_OPTIONS[0]
+    assert job_fit["effective_selection_source"] == (
+        "applylens_recommended"
+    )
 
     rendered = repr(payload)
     for prohibited in (
@@ -390,10 +578,94 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
         "evidence_sha256",
         "review_sha256",
         "registry_sha",
+        "latency_ms",
+        "estimated_cost",
+        "input_tokens",
+        "output_tokens",
+        "historical_missing_requirement_accuracy",
         "credential",
         "raw_response",
     ):
         assert prohibited not in rendered
+
+
+@pytest.mark.parametrize("selection", JOB_FIT_OPTIONS)
+def test_job_fit_qualified_owner_overrides_become_effective(
+    monkeypatch,
+    selection,
+):
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        lambda owner_user_id: {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": [
+                    {
+                        "owner_user_id": owner_user_id,
+                        "workload_id": "job_fit_evaluation",
+                        **selection,
+                    }
+                ],
+            }
+        },
+    )
+
+    route = routing.read_provider_model_routing_status(
+        "job_fit_evaluation",
+        owner_user_id="owner-a",
+    )
+
+    assert route["requested_selection"] == selection
+    assert route["requested_selection_status"] == "qualified"
+    assert route["effective_selection"] == selection
+    assert route["effective_selection_source"] == "user_override"
+
+
+def test_stale_job_fit_owner_selection_is_retained_but_not_effective(
+    monkeypatch,
+):
+    stale = {"provider": "openai", "model": "retired-job-fit-model"}
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        lambda owner_user_id: {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": [
+                    {
+                        "owner_user_id": owner_user_id,
+                        "workload_id": "job_fit_evaluation",
+                        **stale,
+                    }
+                ],
+            }
+        },
+    )
+
+    route = routing.read_provider_model_routing_status(
+        "job_fit_evaluation",
+        owner_user_id="owner-a",
+    )
+
+    assert route["requested_selection"] == stale
+    assert route["requested_selection_status"] == "no_longer_qualified"
+    assert route["effective_selection"] == JOB_FIT_OPTIONS[0]
+    assert route["effective_selection"] != stale
+    assert route["effective_selection_source"] == (
+        "applylens_recommended"
+    )
+
+
+def test_non_overlay_job_fit_model_is_not_currently_qualified():
+    with pytest.raises(
+        routing.ProviderModelSelectionNotQualifiedError
+    ):
+        routing.validate_current_qualified_provider_model_selection(
+            "job_fit_evaluation",
+            "openai",
+            "gpt-4.1",
+        )
 
 
 def test_owner_selection_effective_state_is_scoped_validated_and_read_only(
@@ -544,19 +816,11 @@ def test_stale_requested_selection_is_retained_but_never_effective(
     assert reads == ["owner-a"]
 
 
-@pytest.mark.parametrize(
-    ("workload_id", "source"),
-    (
-        ("job_fit_evaluation", "deterministic"),
-        ("manual_provider_preview", "blocked_non_live"),
-    ),
-)
-def test_non_llm_modes_never_make_persisted_selection_effective(
+def test_blocked_non_live_mode_never_makes_persisted_selection_effective(
     monkeypatch,
-    workload_id,
-    source,
 ):
     _install_synthetic_routing_sources(monkeypatch)
+    workload_id = "manual_provider_preview"
     monkeypatch.setattr(
         routing,
         "list_user_ai_task_model_selections_payload",
@@ -582,7 +846,7 @@ def test_non_llm_modes_never_make_persisted_selection_effective(
 
     assert route["requested_selection_status"] == "no_longer_qualified"
     assert route["effective_selection"] is None
-    assert route["effective_selection_source"] == source
+    assert route["effective_selection_source"] == "blocked_non_live"
 
 
 def test_current_selection_validation_uses_only_exact_qualified_pairs(
@@ -607,12 +871,17 @@ def test_current_selection_validation_uses_only_exact_qualified_pairs(
         "groq",
         "openai/gpt-oss-20b",
     ) == {"provider": "groq", "model": "openai/gpt-oss-20b"}
+    for option in JOB_FIT_OPTIONS:
+        assert routing.validate_current_qualified_provider_model_selection(
+            "job_fit_evaluation",
+            option["provider"],
+            option["model"],
+        ) == option
 
     rejected = (
         ("skill_extraction", "openai", "rejected-model"),
         ("job_fit_evaluation", "groq", "pending-model"),
         ("job_fit_evaluation", "openai", "stale-model"),
-        ("job_fit_evaluation", "groq", "openai/gpt-oss-20b"),
         ("manual_provider_preview", "openai", "pending-preview-model"),
         ("unknown_workload", "openai", "gpt-5-mini"),
         ("skill_extraction", "groq", "gpt-5-mini"),

@@ -21,6 +21,7 @@ Non-responsibilities:
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -36,6 +37,9 @@ from src.evaluation import (
 from src.evaluation.provider_model_recommendation_policy import (
     build_provider_model_recommendation_policy,
     read_provider_model_recommendation,
+)
+from src.evaluation.job_fit_provider_model_qualification_overlay import (
+    build_job_fit_provider_model_qualification_overlay,
 )
 from src.storage.user_ai_settings.store import (
     list_user_ai_task_model_selections_payload,
@@ -140,6 +144,11 @@ def list_provider_model_routing_statuses(
     policy = build_provider_model_recommendation_policy(
         registry_payload
     )
+    job_fit_overlay = build_job_fit_provider_model_qualification_overlay(
+        registry_payload
+    )
+    if job_fit_overlay.get("workload_id") != "job_fit_evaluation":
+        raise ValueError("Job Fit qualification overlay workload mismatch")
     requested_selections = _owner_requested_selections(owner_user_id)
 
     qualified_options_by_workload: Dict[str, list[Dict[str, str]]] = {}
@@ -164,18 +173,24 @@ def list_provider_model_routing_statuses(
     workloads = []
 
     for entry in policy["workloads"]:
+        is_job_fit = entry["workload_id"] == "job_fit_evaluation"
+        effective_entry = (
+            job_fit_overlay
+            if is_job_fit
+            else entry
+        )
         recommendation_status = str(
-            entry.get("recommendation_status") or ""
+            effective_entry.get("recommendation_status") or ""
         ).strip()
 
         provider = (
-            str(entry.get("provider") or "").strip()
+            str(effective_entry.get("provider") or "").strip()
             if recommendation_status == "recommended"
             else ""
         )
 
         model = (
-            str(entry.get("model") or "").strip()
+            str(effective_entry.get("model") or "").strip()
             if recommendation_status == "recommended"
             else ""
         )
@@ -190,9 +205,13 @@ def list_provider_model_routing_statuses(
                 f"{recommendation_status}"
             ) from exc
 
-        qualified_options = qualified_options_by_workload.get(
-            entry["workload_id"],
-            [],
+        qualified_options = deepcopy(
+            effective_entry.get("qualified_options")
+            if is_job_fit
+            else qualified_options_by_workload.get(
+                entry["workload_id"],
+                [],
+            )
         )
         recommended_option = (
             {
@@ -247,7 +266,7 @@ def list_provider_model_routing_statuses(
                 "provider": provider or None,
                 "model": model or None,
                 "selection_basis": (
-                    entry.get("selection_basis")
+                    effective_entry.get("selection_basis")
                     if recommendation_status == "recommended"
                     else None
                 ),

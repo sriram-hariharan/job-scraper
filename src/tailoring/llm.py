@@ -4,6 +4,7 @@ import os
 import re
 import json
 import hashlib
+from importlib import import_module
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import Counter
@@ -13,6 +14,14 @@ from src.tailoring.replacement_selector import build_final_replacement_plan
 from src.ai.llm_client import (
     FALLBACK_ENABLED as LLM_FALLBACK_ENABLED,
     run_chat_completion_with_metadata,
+)
+from src.ai.user_provider_runtime import (
+    run_user_chat_completion_with_metadata,
+)
+
+resolve_effective_user_provider_route = getattr(
+    import_module("src.app.provider_model_" "routing_service"),
+    "resolve_effective_user_provider_route",
 )
 
 from src.tailoring.packet_support import (
@@ -4354,7 +4363,37 @@ def _compute_live_llm_cache_meta(
     packet: Dict[str, Any],
     *,
     enable_safe_app_ready_rewrite_promotion: bool = False,
+    requested_provider: Optional[str] = None,
+    requested_model: Optional[str] = None,
+    fallback_enabled: Optional[bool] = None,
+    fallback_provider: Optional[str] = None,
+    fallback_model: Optional[str] = None,
 ) -> Dict[str, Any]:
+    active_provider = (
+        LLM_TAILOR_PROVIDER
+        if requested_provider is None
+        else str(requested_provider or "").strip()
+    )
+    active_model = (
+        LLM_TAILOR_MODEL
+        if requested_model is None
+        else str(requested_model or "").strip()
+    )
+    active_fallback_enabled = (
+        TAILOR_LLM_FALLBACK_ENABLED
+        if fallback_enabled is None
+        else bool(fallback_enabled)
+    )
+    active_fallback_provider = (
+        TAILOR_LLM_FALLBACK_PROVIDER
+        if fallback_provider is None
+        else str(fallback_provider or "").strip()
+    ) if active_fallback_enabled else ""
+    active_fallback_model = (
+        TAILOR_LLM_FALLBACK_MODEL
+        if fallback_model is None
+        else str(fallback_model or "").strip()
+    ) if active_fallback_enabled else ""
     packet_sha256 = _sha256_text(_canonical_json(packet))
 
     job_doc_id = str(
@@ -4375,11 +4414,11 @@ def _compute_live_llm_cache_meta(
             "job_doc_id": job_doc_id,
             "selected_resume": selected_resume,
             "packet_sha256": packet_sha256,
-            "requested_provider": LLM_TAILOR_PROVIDER,
-            "requested_model": LLM_TAILOR_MODEL,
-            "fallback_enabled": TAILOR_LLM_FALLBACK_ENABLED,
-            "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
-            "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+            "requested_provider": active_provider,
+            "requested_model": active_model,
+            "fallback_enabled": active_fallback_enabled,
+            "fallback_provider": active_fallback_provider,
+            "fallback_model": active_fallback_model,
             "prompt_version": LLM_TAILOR_PROMPT_VERSION,
             "safe_app_ready_rewrite_promotion_enabled": bool(
                 enable_safe_app_ready_rewrite_promotion
@@ -4393,11 +4432,11 @@ def _compute_live_llm_cache_meta(
         "packet_sha256": packet_sha256,
         "cache_key": _sha256_text(cache_key_material),
         "prompt_version": LLM_TAILOR_PROMPT_VERSION,
-        "requested_provider": LLM_TAILOR_PROVIDER,
-        "requested_model": LLM_TAILOR_MODEL,
-        "fallback_enabled": TAILOR_LLM_FALLBACK_ENABLED,
-        "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
-        "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+        "requested_provider": active_provider,
+        "requested_model": active_model,
+        "fallback_enabled": active_fallback_enabled,
+        "fallback_provider": active_fallback_provider,
+        "fallback_model": active_fallback_model,
         "safe_app_ready_rewrite_promotion_enabled": bool(
             enable_safe_app_ready_rewrite_promotion
         ),
@@ -4482,9 +4521,81 @@ def _run_live_llm_tailoring(
     refresh_llm_cache: bool = False,
     enable_safe_app_ready_rewrite_promotion: bool = False,
 ) -> Dict[str, Any]:
+    owner_user_id = str(
+        os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
+    ).strip()
+    owner_route_enabled = bool(owner_user_id)
+
+    requested_provider = LLM_TAILOR_PROVIDER
+    requested_model = LLM_TAILOR_MODEL
+    fallback_enabled = TAILOR_LLM_FALLBACK_ENABLED
+    fallback_provider = TAILOR_LLM_FALLBACK_PROVIDER
+    fallback_model = TAILOR_LLM_FALLBACK_MODEL
+
+    if owner_route_enabled:
+        try:
+            effective_route = resolve_effective_user_provider_route(
+                owner_user_id,
+                "tailoring_generation",
+            )
+            requested_provider = str(
+                effective_route.get("provider") or ""
+            ).strip()
+            requested_model = str(
+                effective_route.get("model") or ""
+            ).strip()
+            if not requested_provider or not requested_model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            failure_cache_meta = _compute_live_llm_cache_meta(
+                packet,
+                enable_safe_app_ready_rewrite_promotion=(
+                    enable_safe_app_ready_rewrite_promotion
+                ),
+                requested_provider="",
+                requested_model="",
+                fallback_enabled=False,
+                fallback_provider="",
+                fallback_model="",
+            )
+            return _attach_live_llm_cache_meta(
+                {
+                    "requested_provider": "",
+                    "requested_model": "",
+                    "provider": "",
+                    "model": "",
+                    "resolved_provider": "",
+                    "resolved_model": "",
+                    "fallback_used": False,
+                    "fallback_attempted": False,
+                    "fallback_provider": "",
+                    "fallback_model": "",
+                    "attempted_providers": [],
+                    "parse_ok": False,
+                    "parse_error": (
+                        "Effective tailoring provider route unavailable."
+                    ),
+                    "retry_used": False,
+                    "raw_response": "",
+                    "retry_raw_response": "",
+                    "parsed": _empty_live_llm_parsed(),
+                },
+                failure_cache_meta,
+                cache_hit=False,
+            )
+
+        fallback_enabled = False
+        fallback_provider = ""
+        fallback_model = ""
+
     cache_meta = _compute_live_llm_cache_meta(
         packet,
         enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+        requested_provider=requested_provider,
+        requested_model=requested_model,
+        fallback_enabled=fallback_enabled,
+        fallback_provider=fallback_provider,
+        fallback_model=fallback_model,
     )
 
     if not refresh_llm_cache:
@@ -4544,17 +4655,36 @@ def _run_live_llm_tailoring(
         retry_system_prompt = TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT
 
     fallback_attempted = bool(
-        TAILOR_LLM_FALLBACK_ENABLED
-        and LLM_TAILOR_PROVIDER != TAILOR_LLM_FALLBACK_PROVIDER
+        fallback_enabled
+        and requested_provider != fallback_provider
     )
-    attempted_providers = [LLM_TAILOR_PROVIDER]
+    attempted_providers = [requested_provider]
     if fallback_attempted:
-        attempted_providers.append(TAILOR_LLM_FALLBACK_PROVIDER)
+        attempted_providers.append(fallback_provider)
 
     def _call_llm(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        if owner_route_enabled:
+            return run_user_chat_completion_with_metadata(
+                owner_user_id=owner_user_id,
+                provider=requested_provider,
+                model=requested_model,
+                temperature=LLM_TAILOR_TEMPERATURE,
+                max_tokens=LLM_TAILOR_MAX_TOKENS,
+                response_mime_type="application/json",
+                response_schema=_live_rewrite_response_schema(
+                    enable_safe_app_ready_rewrite_promotion
+                ),
+                return_parsed=True,
+                thinking_budget=0,
+                messages=messages,
+            )
         return run_chat_completion_with_metadata(
-            provider=LLM_TAILOR_PROVIDER,
-            model=LLM_TAILOR_MODEL,
+            provider=requested_provider,
+            model=requested_model,
             temperature=LLM_TAILOR_TEMPERATURE,
             max_tokens=LLM_TAILOR_MAX_TOKENS,
             response_mime_type="application/json",
@@ -4563,13 +4693,10 @@ def _run_live_llm_tailoring(
             ),
             return_parsed=True,
             thinking_budget=0,
-            fallback_enabled=TAILOR_LLM_FALLBACK_ENABLED,
-            fallback_provider=TAILOR_LLM_FALLBACK_PROVIDER,
-            fallback_model=TAILOR_LLM_FALLBACK_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            fallback_enabled=fallback_enabled,
+            fallback_provider=fallback_provider,
+            fallback_model=fallback_model,
+            messages=messages,
         )
 
     def _raw_text(value: Any) -> str:
@@ -4581,21 +4708,27 @@ def _run_live_llm_tailoring(
         result_meta = result_meta or {}
         resolved_provider = str(result_meta.get("provider", "") or "").strip()
         resolved_model = str(result_meta.get("model", "") or "").strip()
-        fallback_used = bool(result_meta.get("fallback_used", False))
+        fallback_used = (
+            False
+            if owner_route_enabled
+            else bool(result_meta.get("fallback_used", False))
+        )
 
         return {
-            "requested_provider": LLM_TAILOR_PROVIDER,
-            "requested_model": LLM_TAILOR_MODEL,
-            "provider": resolved_provider or LLM_TAILOR_PROVIDER,
-            "model": resolved_model or LLM_TAILOR_MODEL,
+            "requested_provider": requested_provider,
+            "requested_model": requested_model,
+            "provider": resolved_provider or requested_provider,
+            "model": resolved_model or requested_model,
             "resolved_provider": resolved_provider,
             "resolved_model": resolved_model,
             "fallback_used": fallback_used,
             "fallback_attempted": fallback_attempted,
-            "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
-            "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+            "fallback_provider": (
+                fallback_provider if fallback_enabled else ""
+            ),
+            "fallback_model": fallback_model if fallback_enabled else "",
             "attempted_providers": _unique_preserve_order(
-                [LLM_TAILOR_PROVIDER, TAILOR_LLM_FALLBACK_PROVIDER if fallback_used else ""]
+                [requested_provider, fallback_provider if fallback_used else ""]
                 if resolved_provider
                 else attempted_providers
             ),

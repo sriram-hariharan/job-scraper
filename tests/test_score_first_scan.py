@@ -1290,6 +1290,430 @@ def test_enabled_live_llm_tailoring_short_directions_without_valid_concrete_stil
     assert result["parsed"]["concrete_replacement_candidates"] == []
 
 
+def _live_direction_response():
+    return {
+        "rewrite_directions": _live_patch_response()["rewrite_directions"],
+    }
+
+
+def _owner_route(provider="openai", model="gpt-5-mini"):
+    return {
+        "workload_id": "tailoring_generation",
+        "provider": provider,
+        "model": model,
+        "effective_selection_source": "user_override",
+    }
+
+
+def _successful_tailoring_runtime(provider, model):
+    return {
+        "content": _live_direction_response(),
+        "provider": provider,
+        "model": model,
+        "fallback_used": False,
+    }
+
+
+@pytest.mark.parametrize("owner_value", (None, "   "))
+def test_live_tailoring_without_owner_preserves_legacy_provider_path(
+    monkeypatch,
+    tmp_path,
+    owner_value,
+):
+    packet, payload = _live_patch_prompt_payload()
+    if owner_value is None:
+        monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
+    else:
+        monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", owner_value)
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("resolver must not run"),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not run"),
+    )
+    legacy_calls = []
+
+    def fake_legacy(**kwargs):
+        legacy_calls.append(kwargs)
+        return _successful_tailoring_runtime(
+            tailoring_llm.LLM_TAILOR_PROVIDER,
+            tailoring_llm.LLM_TAILOR_MODEL,
+        )
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        fake_legacy,
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(tmp_path / "legacy.json"),
+        refresh_llm_cache=True,
+    )
+
+    assert result["parse_ok"] is True
+    assert len(legacy_calls) == 1
+    assert legacy_calls[0]["provider"] == tailoring_llm.LLM_TAILOR_PROVIDER
+    assert legacy_calls[0]["model"] == tailoring_llm.LLM_TAILOR_MODEL
+    assert (
+        legacy_calls[0]["fallback_enabled"]
+        == tailoring_llm.TAILOR_LLM_FALLBACK_ENABLED
+    )
+    assert (
+        legacy_calls[0]["fallback_provider"]
+        == tailoring_llm.TAILOR_LLM_FALLBACK_PROVIDER
+    )
+    assert (
+        legacy_calls[0]["fallback_model"]
+        == tailoring_llm.TAILOR_LLM_FALLBACK_MODEL
+    )
+
+
+def test_owner_tailoring_cache_miss_freezes_route_and_disables_fallback(
+    monkeypatch,
+    tmp_path,
+):
+    packet, payload = _live_patch_prompt_payload()
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", " owner-a ")
+    resolver_calls = []
+    runtime_calls = []
+
+    def fake_resolver(owner_user_id, workload_id):
+        resolver_calls.append((owner_user_id, workload_id))
+        return _owner_route()
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        return _successful_tailoring_runtime("openai", "gpt-5-mini")
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        fake_resolver,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not run"),
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(tmp_path / "owner.json"),
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert len(runtime_calls) == 1
+    call = runtime_calls[0]
+    assert call["owner_user_id"] == "owner-a"
+    assert call["provider"] == "openai"
+    assert call["model"] == "gpt-5-mini"
+    assert "fallback_enabled" not in call
+    assert "fallback_provider" not in call
+    assert "fallback_model" not in call
+    assert call["temperature"] == tailoring_llm.LLM_TAILOR_TEMPERATURE
+    assert call["max_tokens"] == tailoring_llm.LLM_TAILOR_MAX_TOKENS
+    assert call["response_mime_type"] == "application/json"
+    assert call["return_parsed"] is True
+    assert call["thinking_budget"] == 0
+    assert result["requested_provider"] == "openai"
+    assert result["requested_model"] == "gpt-5-mini"
+    assert result["provider"] == "openai"
+    assert result["model"] == "gpt-5-mini"
+    assert result["fallback_enabled"] is False
+    assert result["fallback_attempted"] is False
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] == ""
+    assert result["fallback_model"] == ""
+    assert result["attempted_providers"] == ["openai"]
+
+
+def test_owner_tailoring_cache_hit_resolves_once_and_calls_no_runtime(
+    monkeypatch,
+    tmp_path,
+):
+    packet, payload = _live_patch_prompt_payload()
+    cache_path = tmp_path / "owner-cache.json"
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: _owner_route(),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: _successful_tailoring_runtime(
+            "openai", "gpt-5-mini"
+        ),
+    )
+    first = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+    cache_path.write_text(
+        tailoring_llm.json.dumps(first),
+        encoding="utf-8",
+    )
+
+    resolver_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or _owner_route(),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("cache hit must not read credentials"),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("cache hit must not call legacy runtime"),
+    )
+
+    cached = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert cached["cache_hit"] is True
+    assert cached["requested_provider"] == "openai"
+    assert cached["requested_model"] == "gpt-5-mini"
+
+
+def test_owner_tailoring_cache_rejects_changed_effective_route(
+    monkeypatch,
+    tmp_path,
+):
+    packet, payload = _live_patch_prompt_payload()
+    cache_path = tmp_path / "route-sensitive.json"
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    active_route = [_owner_route()]
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or dict(active_route[0]),
+    )
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append((kwargs["provider"], kwargs["model"]))
+        return _successful_tailoring_runtime(
+            kwargs["provider"],
+            kwargs["model"],
+        )
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    first = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+    cache_path.write_text(
+        tailoring_llm.json.dumps(first),
+        encoding="utf-8",
+    )
+    first_cache_key = first["cache_key"]
+    resolver_calls.clear()
+    runtime_calls.clear()
+    active_route[0] = _owner_route("groq", "openai/gpt-oss-120b")
+
+    second = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert runtime_calls == [("groq", "openai/gpt-oss-120b")]
+    assert second["cache_hit"] is False
+    assert second["cache_key"] != first_cache_key
+    assert second["requested_provider"] == "groq"
+    assert second["requested_model"] == "openai/gpt-oss-120b"
+
+
+def test_owner_tailoring_parser_retry_reuses_one_frozen_route(monkeypatch):
+    packet, payload = _live_patch_prompt_payload()
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or _owner_route("groq", "openai/gpt-oss-120b"),
+    )
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        content = (
+            "not-json"
+            if len(runtime_calls) == 1
+            else _live_direction_response()
+        )
+        return {
+            "content": content,
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not run"),
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert len(runtime_calls) == 2
+    assert {
+        (
+            call["owner_user_id"],
+            call["provider"],
+            call["model"],
+        )
+        for call in runtime_calls
+    } == {("owner-a", "groq", "openai/gpt-oss-120b")}
+    assert all("fallback_enabled" not in call for call in runtime_calls)
+    assert result["parse_ok"] is True
+    assert result["retry_used"] is True
+    assert result["fallback_attempted"] is False
+    assert result["attempted_providers"] == ["groq"]
+
+
+def test_owner_tailoring_route_failure_is_bounded_and_fail_closed(
+    monkeypatch,
+):
+    packet, payload = _live_patch_prompt_payload()
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    resolver_calls = []
+
+    def fail_route(owner, workload):
+        resolver_calls.append((owner, workload))
+        raise RuntimeError("secret registry and database detail")
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        fail_route,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not run"),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not run"),
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert result["parse_ok"] is False
+    assert result["parse_error"] == (
+        "Effective tailoring provider route unavailable."
+    )
+    assert "secret" not in repr(result)
+    assert result["retry_used"] is False
+    assert result["fallback_enabled"] is False
+    assert result["fallback_attempted"] is False
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] == ""
+    assert result["fallback_model"] == ""
+    assert result["attempted_providers"] == []
+
+
+def test_owner_tailoring_refresh_bypasses_matching_cache(monkeypatch, tmp_path):
+    packet, payload = _live_patch_prompt_payload()
+    cache_path = tmp_path / "refresh.json"
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or _owner_route(),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: runtime_calls.append(kwargs)
+        or _successful_tailoring_runtime("openai", "gpt-5-mini"),
+    )
+    first = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+    cache_path.write_text(
+        tailoring_llm.json.dumps(first),
+        encoding="utf-8",
+    )
+    resolver_calls.clear()
+    runtime_calls.clear()
+
+    refreshed = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert len(runtime_calls) == 1
+    assert refreshed["cache_hit"] is False
+
+
 def test_live_concrete_patch_contract_default_off_still_rejects_short_direction():
     with pytest.raises(ValueError, match="live_llm_contract_direction_1_too_short"):
         tailoring_llm._validate_live_llm_parsed_contract(

@@ -67,6 +67,18 @@ class RecommendedProviderRoutingUnavailableError(RuntimeError):
         )
 
 
+class EffectiveProviderRoutingUnavailableError(RuntimeError):
+    """Raised when an owner has no authorized effective route."""
+
+    def __init__(self, workload_id: str, routing_status: str) -> None:
+        self.workload_id = workload_id
+        self.routing_status = routing_status
+        super().__init__(
+            "effective_provider_route_unavailable:"
+            f"{workload_id}:{routing_status}"
+        )
+
+
 class ProviderModelSelectionNotQualifiedError(ValueError):
     """Raised when an exact requested task route is not currently selectable."""
 
@@ -309,6 +321,96 @@ def validate_current_qualified_provider_model_selection(
     return candidate
 
 
+def resolve_effective_user_provider_route(
+    owner_user_id: str,
+    workload_id: str,
+) -> Dict[str, Any]:
+    """Resolve one owner's current effective route without credentials."""
+
+    owner = str(owner_user_id or "").strip()
+    workload = str(workload_id or "").strip()
+    if not owner:
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            "invalid_owner",
+        )
+    if not workload:
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            "invalid_workload",
+        )
+
+    try:
+        route = read_provider_model_routing_status(
+            workload,
+            owner_user_id=owner,
+        )
+    except ValueError:
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            "routing_status_unavailable",
+        ) from None
+
+    if not isinstance(route, dict) or route.get("workload_id") != workload:
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            "invalid_routing_status",
+        )
+
+    execution_mode = route.get("execution_mode")
+    if execution_mode != "qualified_provider_model":
+        routing_status = (
+            execution_mode
+            if execution_mode in {"deterministic", "blocked_non_live"}
+            else "invalid_execution_mode"
+        )
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            routing_status,
+        )
+
+    effective_selection = route.get("effective_selection")
+    if (
+        type(effective_selection) is not dict
+        or set(effective_selection) != {"provider", "model"}
+        or not isinstance(effective_selection.get("provider"), str)
+        or not effective_selection["provider"].strip()
+        or not isinstance(effective_selection.get("model"), str)
+        or not effective_selection["model"].strip()
+    ):
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            "invalid_effective_selection",
+        )
+
+    source = route.get("effective_selection_source")
+    if source not in {"user_override", "applylens_recommended"}:
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            "invalid_effective_selection_source",
+        )
+
+    selection = {
+        "provider": effective_selection["provider"].strip(),
+        "model": effective_selection["model"].strip(),
+    }
+    qualified_options = route.get("qualified_options")
+    if (
+        not isinstance(qualified_options, list)
+        or selection not in qualified_options
+    ):
+        raise EffectiveProviderRoutingUnavailableError(
+            workload,
+            "effective_selection_not_qualified",
+        )
+
+    return {
+        "workload_id": workload,
+        **selection,
+        "effective_selection_source": source,
+    }
+
+
 def resolve_recommended_user_provider_route(
     workload_id: str,
 ) -> Dict[str, Any]:
@@ -376,6 +478,47 @@ def run_recommended_user_chat_completion_with_metadata(
     """Run one exact frozen recommendation through user-scoped runtime."""
 
     route = resolve_recommended_user_provider_route(workload_id)
+
+    return run_user_chat_completion_with_metadata(
+        owner_user_id=owner_user_id,
+        provider=route["provider"],
+        model=route["model"],
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        response_mime_type=response_mime_type,
+        response_schema=response_schema,
+        return_parsed=return_parsed,
+        thinking_budget=thinking_budget,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        ensure_schema=ensure_schema,
+    )
+
+
+def run_effective_user_chat_completion_with_metadata(
+    owner_user_id: str,
+    workload_id: str,
+    messages: Any,
+    *,
+    temperature: float = 0,
+    max_tokens: int = 500,
+    response_mime_type: Optional[str] = None,
+    response_schema: Optional[Dict[str, Any]] = None,
+    return_parsed: bool = False,
+    thinking_budget: Optional[int] = None,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    """Run one owner's current effective route through user runtime."""
+
+    route = resolve_effective_user_provider_route(
+        owner_user_id,
+        workload_id,
+    )
 
     return run_user_chat_completion_with_metadata(
         owner_user_id=owner_user_id,

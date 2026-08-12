@@ -910,15 +910,462 @@ def test_policy_error_propagates_before_runtime(
     assert runtime_called is False
 
 
-def test_public_execution_bridge_exposes_no_provider_model_or_fallback_override():
-    parameters = inspect.signature(
-        routing.run_recommended_user_chat_completion_with_metadata
-    ).parameters
+def _effective_status(
+    *,
+    selection=None,
+    source="applylens_recommended",
+    execution_mode="qualified_provider_model",
+    qualified_options=None,
+):
+    selected = (
+        {"provider": "groq", "model": "openai/gpt-oss-20b"}
+        if selection is None
+        else selection
+    )
+    options = [selected] if qualified_options is None else qualified_options
+    return {
+        "workload_id": "skill_extraction",
+        "execution_mode": execution_mode,
+        "effective_selection": selected,
+        "effective_selection_source": source,
+        "qualified_options": options,
+    }
 
-    assert "provider" not in parameters
-    assert "model" not in parameters
-    assert "fallback_enabled" not in parameters
-    assert "preferred_provider" not in parameters
+
+def test_effective_resolver_reads_exact_owner_route_and_returns_safe_metadata(
+    monkeypatch,
+):
+    observed = []
+    effective = {"provider": "openai", "model": "gpt-5-mini"}
+
+    def fake_read(workload_id, *, owner_user_id=None):
+        observed.append((workload_id, owner_user_id))
+        return _effective_status(
+            selection=effective,
+            source="user_override",
+        )
+
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        fake_read,
+    )
+
+    route = routing.resolve_effective_user_provider_route(
+        " owner-a ",
+        " skill_extraction ",
+    )
+
+    assert observed == [("skill_extraction", "owner-a")]
+    assert route == {
+        "workload_id": "skill_extraction",
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "effective_selection_source": "user_override",
+    }
+
+
+@pytest.mark.parametrize(
+    ("source", "selection"),
+    (
+        (
+            "applylens_recommended",
+            {"provider": "groq", "model": "openai/gpt-oss-20b"},
+        ),
+        (
+            "user_override",
+            {"provider": "groq", "model": "openai/gpt-oss-20b"},
+        ),
+    ),
+)
+def test_effective_resolver_preserves_recommended_and_explicit_sources(
+    monkeypatch,
+    source,
+    selection,
+):
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda workload_id, *, owner_user_id=None: _effective_status(
+            selection=selection,
+            source=source,
+        ),
+    )
+
+    route = routing.resolve_effective_user_provider_route(
+        "owner-a",
+        "skill_extraction",
+    )
+
+    assert (route["provider"], route["model"]) == (
+        selection["provider"],
+        selection["model"],
+    )
+    assert route["effective_selection_source"] == source
+
+
+def test_stale_override_executes_current_effective_recommendation(
+    monkeypatch,
+):
+    _install_synthetic_routing_sources(monkeypatch)
+    stale = {"provider": "openai", "model": "retired-model"}
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        lambda owner_user_id: {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": [
+                    {
+                        "owner_user_id": owner_user_id,
+                        "workload_id": "skill_extraction",
+                        **stale,
+                    }
+                ],
+            }
+        },
+    )
+    executed = []
+
+    def fake_runtime(**kwargs):
+        executed.append((kwargs["provider"], kwargs["model"]))
+        return {"content": "ok"}
+
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+
+    route = routing.resolve_effective_user_provider_route(
+        "owner-a",
+        "skill_extraction",
+    )
+    result = routing.run_effective_user_chat_completion_with_metadata(
+        "owner-a",
+        "skill_extraction",
+        [],
+    )
+
+    assert route == {
+        "workload_id": "skill_extraction",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "effective_selection_source": "applylens_recommended",
+    }
+    assert executed == [("groq", "openai/gpt-oss-20b")]
+    assert stale not in [
+        {"provider": provider, "model": model}
+        for provider, model in executed
+    ]
+    assert result == {"content": "ok"}
+
+
+@pytest.mark.parametrize("execution_mode", ("deterministic", "blocked_non_live"))
+def test_non_llm_effective_routes_fail_before_runtime(
+    monkeypatch,
+    execution_mode,
+):
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda workload_id, *, owner_user_id=None: _effective_status(
+            selection=None,
+            source=execution_mode,
+            execution_mode=execution_mode,
+            qualified_options=[],
+        ),
+    )
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: pytest.fail("runtime must not execute"),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.run_effective_user_chat_completion_with_metadata(
+            "owner-a",
+            "skill_extraction",
+            [],
+        )
+
+    assert exc_info.value.routing_status == execution_mode
+
+
+@pytest.mark.parametrize(
+    "selection",
+    (
+        None,
+        {},
+        {"provider": "", "model": "gpt-5-mini"},
+        {"provider": "openai", "model": ""},
+        {"provider": "openai", "model": "gpt-5-mini", "extra": "x"},
+    ),
+)
+def test_malformed_effective_selection_fails_before_runtime(
+    monkeypatch,
+    selection,
+):
+    status = _effective_status()
+    status["effective_selection"] = selection
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda workload_id, *, owner_user_id=None: status,
+    )
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: pytest.fail("runtime must not execute"),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.run_effective_user_chat_completion_with_metadata(
+            "owner-a",
+            "skill_extraction",
+            [],
+        )
+
+    assert exc_info.value.routing_status == "invalid_effective_selection"
+
+
+def test_blank_owner_fails_before_routing_read_or_runtime(monkeypatch):
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda *_args, **_kwargs: pytest.fail("route must not be read"),
+    )
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: pytest.fail("runtime must not execute"),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.run_effective_user_chat_completion_with_metadata(
+            " ",
+            "skill_extraction",
+            [],
+        )
+
+    assert exc_info.value.routing_status == "invalid_owner"
+
+
+def test_blank_workload_fails_before_routing_read_or_runtime(monkeypatch):
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda *_args, **_kwargs: pytest.fail("route must not be read"),
+    )
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: pytest.fail("runtime must not execute"),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.run_effective_user_chat_completion_with_metadata(
+            "owner-a",
+            " ",
+            [],
+        )
+
+    assert exc_info.value.routing_status == "invalid_workload"
+
+
+def test_unknown_workload_is_a_bounded_effective_route_failure(monkeypatch):
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda workload_id, *, owner_user_id=None: (_ for _ in ()).throw(
+            ValueError("raw registry evidence must stay private")
+        ),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.resolve_effective_user_provider_route(
+            "owner-a",
+            "unknown",
+        )
+
+    assert exc_info.value.routing_status == "routing_status_unavailable"
+    assert "raw registry evidence" not in str(exc_info.value)
+
+
+def test_effective_source_must_be_authorized(monkeypatch):
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda workload_id, *, owner_user_id=None: _effective_status(
+            source="provider_preference",
+        ),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.resolve_effective_user_provider_route(
+            "owner-a",
+            "skill_extraction",
+        )
+
+    assert (
+        exc_info.value.routing_status
+        == "invalid_effective_selection_source"
+    )
+
+
+def test_effective_pair_must_remain_currently_qualified(monkeypatch):
+    monkeypatch.setattr(
+        routing,
+        "read_provider_model_routing_status",
+        lambda workload_id, *, owner_user_id=None: _effective_status(
+            qualified_options=[
+                {"provider": "openai", "model": "gpt-5-mini"}
+            ],
+        ),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.resolve_effective_user_provider_route(
+            "owner-a",
+            "skill_extraction",
+        )
+
+    assert (
+        exc_info.value.routing_status
+        == "effective_selection_not_qualified"
+    )
+
+
+def test_effective_execution_resolves_once_and_forwards_every_parameter(
+    monkeypatch,
+):
+    resolve_calls = []
+    runtime_calls = []
+
+    def fake_resolve(owner_user_id, workload_id):
+        resolve_calls.append((owner_user_id, workload_id))
+        return {
+            "workload_id": workload_id,
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "effective_selection_source": "user_override",
+        }
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        return {"content": "ok"}
+
+    monkeypatch.setattr(
+        routing,
+        "resolve_effective_user_provider_route",
+        fake_resolve,
+    )
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    messages = [{"role": "user", "content": "hello"}]
+    schema = {"type": "object"}
+
+    result = routing.run_effective_user_chat_completion_with_metadata(
+        "owner-a",
+        "skill_extraction",
+        messages,
+        temperature=0.3,
+        max_tokens=321,
+        response_mime_type="application/json",
+        response_schema=schema,
+        return_parsed=True,
+        thinking_budget=123,
+        database_url="postgresql://sentinel",
+        database_url_env="SENTINEL_DATABASE_URL",
+        psql_bin="/sentinel/psql",
+        ensure_schema=False,
+    )
+
+    assert resolve_calls == [("owner-a", "skill_extraction")]
+    assert runtime_calls == [
+        {
+            "owner_user_id": "owner-a",
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 321,
+            "response_mime_type": "application/json",
+            "response_schema": schema,
+            "return_parsed": True,
+            "thinking_budget": 123,
+            "database_url": "postgresql://sentinel",
+            "database_url_env": "SENTINEL_DATABASE_URL",
+            "psql_bin": "/sentinel/psql",
+            "ensure_schema": False,
+        }
+    ]
+    assert result == {"content": "ok"}
+
+
+def test_recommended_execution_does_not_consume_effective_resolver(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        routing,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "recommended-only behavior must remain independent"
+        ),
+    )
+    monkeypatch.setattr(
+        routing,
+        "resolve_recommended_user_provider_route",
+        lambda workload_id: {
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+        },
+    )
+    observed = []
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: observed.append(kwargs) or {"content": "ok"},
+    )
+
+    routing.run_recommended_user_chat_completion_with_metadata(
+        "owner-a",
+        "skill_extraction",
+        [],
+    )
+
+    assert observed[0]["provider"] == "groq"
+    assert observed[0]["model"] == "openai/gpt-oss-20b"
+
+
+def test_public_execution_bridge_exposes_no_provider_model_or_fallback_override():
+    for bridge in (
+        routing.run_recommended_user_chat_completion_with_metadata,
+        routing.run_effective_user_chat_completion_with_metadata,
+    ):
+        parameters = inspect.signature(bridge).parameters
+
+        assert "provider" not in parameters
+        assert "model" not in parameters
+        assert "fallback_enabled" not in parameters
+        assert "preferred_provider" not in parameters
 
 
 def test_bridge_does_not_own_model_ranking_or_preferred_provider_logic():
@@ -957,6 +1404,23 @@ def test_bridge_import_boundary_has_no_provider_sdk_or_direct_transport():
             "src.ai.llm_client",
         )
     )
+
+    assert "get_user_provider_credential" not in source
+    assert "decrypt_user_provider" not in source
+    assert "os.environ" not in source
+
+
+def test_effective_bridge_has_zero_production_task_owner_callsites():
+    references = []
+    symbol = "run_effective_user_chat_completion_with_metadata"
+
+    for path in (ROOT / "src").rglob("*.py"):
+        if path.resolve() == OWNER.resolve():
+            continue
+        if symbol in path.read_text(encoding="utf-8"):
+            references.append(path.relative_to(ROOT).as_posix())
+
+    assert references == []
 
 
 def test_only_approved_api_consumes_bridge():

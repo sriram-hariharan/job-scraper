@@ -2371,6 +2371,7 @@ def assert_protected_hashes(
         ): frozenset({
             "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
+            "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
         }),
         (
             "src/app/services.py",
@@ -2401,6 +2402,7 @@ def assert_protected_hashes(
         ): frozenset({
             "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
+            "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
         }),
         (
             "src/app/services.py",
@@ -2509,6 +2511,7 @@ def assert_protected_hashes(
             legacy_guard_allowlist(
                 "phase17c_tailoring_generation_llm_closure"
             ),
+            legacy_guard_allowlist("workday_pagination_freshness"),
         )
         if profiles
         else None

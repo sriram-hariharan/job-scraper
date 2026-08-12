@@ -2430,6 +2430,10 @@ def assert_protected_hashes(
                 "c72224bbc8e64b13c725f9180d227c413fb2fd9a65a97e2e72954f61a8f32b45",
             ): "b52439495d4de5c513bede1008347d0d00791b1a20f6b8bdd3eae1f726f8cd7b",
         (
+            "src/pipeline/job_filter.py",
+            "6931bbb67ec7a5aa68c9ddaf52bb28c56cd007f4ca30de18245fabdc959689b4",
+        ): "220bd60e1a8650e24c9b35b426f5b16eadeb0a46cbb30295a710af78d0161901",
+        (
             "src/pipeline/collector.py",
             "71b2ca0b50320688c2ed10396dfbffe952e7ed326fc745955eb1fb8010850a50",
         ): "29b74e6807b7942b0f35c67b1ed724262a9a8ce1488b7df669faf456a5cfea3f",

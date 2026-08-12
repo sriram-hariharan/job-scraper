@@ -406,15 +406,70 @@ def _is_semantic_retrieval_unavailable_error(exc: Exception) -> bool:
     message = str(exc)
     return any(marker in message for marker in SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS)
 
-def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(
-        run_chat_completion_with_metadata,
-        model=MODEL,
-        temperature=GROUNDED_RAG_TEMPERATURE,
-        max_tokens=GROUNDED_RAG_MAX_TOKENS,
-        messages=messages,
+def resolve_effective_user_provider_route(
+    owner_user_id: str,
+    workload_id: str,
+) -> Dict[str, Any]:
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
     )
+    return routing_service.resolve_effective_user_provider_route(
+        owner_user_id,
+        workload_id,
+    )
+
+
+def run_user_chat_completion_with_metadata(**kwargs: Any) -> Dict[str, Any]:
+    from src.ai.user_provider_runtime import (
+        run_user_chat_completion_with_metadata as execute,
+    )
+
+    return execute(**kwargs)
+
+
+def _run_chat_completion_with_timeout(
+    messages: List[Dict[str, str]],
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = str(owner_user_id or "").strip()
+    provider = ""
+    model = MODEL
+    if owner:
+        try:
+            route = resolve_effective_user_provider_route(
+                owner,
+                "grounded_rag_answer",
+            )
+            provider = str(route.get("provider") or "").strip()
+            model = str(route.get("model") or "").strip()
+            if not provider or not model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            raise RuntimeError(
+                "grounded_rag_owner_route_unavailable"
+            ) from None
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    if owner:
+        future = executor.submit(
+            run_user_chat_completion_with_metadata,
+            owner_user_id=owner,
+            provider=provider,
+            model=model,
+            temperature=GROUNDED_RAG_TEMPERATURE,
+            max_tokens=GROUNDED_RAG_MAX_TOKENS,
+            messages=messages,
+        )
+    else:
+        future = executor.submit(
+            run_chat_completion_with_metadata,
+            model=MODEL,
+            temperature=GROUNDED_RAG_TEMPERATURE,
+            max_tokens=GROUNDED_RAG_MAX_TOKENS,
+            messages=messages,
+        )
     try:
         return future.result(timeout=ANSWER_LLM_TIMEOUT_SECONDS)
     except FuturesTimeoutError as exc:
@@ -437,6 +492,7 @@ def answer_job_query(
     top_k: int = 5,
     fetch_k: int = 15,
     filters: Optional[Dict[str, Any]] = None,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     try:
         results = search_jobs(
@@ -496,12 +552,16 @@ def answer_job_query(
     prompt_sources = _build_prompt_sources(results)
 
     try:
-        llm_result = _run_chat_completion_with_timeout(
-            messages=[
+        timeout_kwargs = {
+            "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": _build_user_prompt(question, prompt_sources)},
             ]
-        )
+        }
+        owner = str(owner_user_id or "").strip()
+        if owner:
+            timeout_kwargs["owner_user_id"] = owner
+        llm_result = _run_chat_completion_with_timeout(**timeout_kwargs)
         parsed = _extract_json_from_response(llm_result["content"])
         llm_provider = llm_result.get("provider", "")
         llm_model = llm_result.get("model", "")
@@ -521,9 +581,16 @@ def answer_job_query(
             "job_evidence": [],
         }
     except Exception as exc:
+        owner = str(owner_user_id or "").strip()
+        failure_detail = str(exc)
+        if owner and failure_detail != "grounded_rag_owner_route_unavailable":
+            failure_detail = "grounded_rag_owner_execution_unavailable"
         return {
             "question": question,
-            "answer": f"I could not answer this because grounded answer generation failed: {exc}",
+            "answer": (
+                "I could not answer this because grounded answer generation "
+                f"failed: {failure_detail}"
+            ),
             "insufficient_evidence": True,
             "used_source_ids": [],
             "sources": [],

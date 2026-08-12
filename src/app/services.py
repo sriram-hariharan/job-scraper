@@ -36156,6 +36156,7 @@ def assistant_query_payload(
     top_k: int = 5,
     fetch_k: int = 10,
     include_diagnostics: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     router = route_assistant_intent(request)
     intent = router["intent"]
@@ -36178,12 +36179,18 @@ def assistant_query_payload(
         }
 
     try:
+        answer_kwargs = {
+            "request": request,
+            "top_k": top_k,
+            "fetch_k": fetch_k,
+            "output_mode": "compact",
+            "include_diagnostics": include_diagnostics,
+        }
+        owner = _clean_text(owner_user_id)
+        if owner:
+            answer_kwargs["owner_user_id"] = owner
         answer_payload = rag_answer_payload(
-            request=request,
-            top_k=top_k,
-            fetch_k=fetch_k,
-            output_mode="compact",
-            include_diagnostics=include_diagnostics,
+            **answer_kwargs,
         )
     except Exception as exc:
         if not _is_assistant_internal_retrieval_error(exc):
@@ -36256,17 +36263,24 @@ def rag_answer_payload(
     fetch_k: int = 15,
     output_mode: str = "compact",
     include_diagnostics: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     from src.rag.rag_executor import execute_rag_request
 
+    execute_kwargs = {
+        "request": request,
+        "top_k": top_k,
+        "fetch_k": fetch_k,
+        "filters": None,
+        "output_mode": output_mode,
+        "include_diagnostics": include_diagnostics,
+        "intent_override": "answer_job_query",
+    }
+    owner = _clean_text(owner_user_id)
+    if owner:
+        execute_kwargs["owner_user_id"] = owner
     payload = execute_rag_request(
-        request=request,
-        top_k=top_k,
-        fetch_k=fetch_k,
-        filters=None,
-        output_mode=output_mode,
-        include_diagnostics=include_diagnostics,
-        intent_override="answer_job_query",
+        **execute_kwargs,
     )
 
     if payload.get("ok") and isinstance(payload.get("response"), dict):

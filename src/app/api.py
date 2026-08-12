@@ -3806,12 +3806,15 @@ def jobs_search_lite(
 @app.get("/assistant/query")
 def assistant_query(
     request: str,
+    http_request: Request,
     top_k: int = 5,
     fetch_k: int = 10,
     include_diagnostics: bool = False,
 ):
+    owner_user_id = _require_auth_owner_user_id(http_request)
     return services.assistant_query_payload(
         request=request,
+        owner_user_id=owner_user_id,
         top_k=top_k,
         fetch_k=fetch_k,
         include_diagnostics=include_diagnostics,
@@ -3820,13 +3823,16 @@ def assistant_query(
 @app.get("/rag/answer")
 def rag_answer(
     request: str,
+    http_request: Request,
     top_k: int = 5,
     fetch_k: int = 15,
     output_mode: str = "compact",
     include_diagnostics: bool = False,
 ):
+    owner_user_id = _require_auth_owner_user_id(http_request)
     return services.rag_answer_payload(
         request=request,
+        owner_user_id=owner_user_id,
         top_k=top_k,
         fetch_k=fetch_k,
         output_mode=output_mode,

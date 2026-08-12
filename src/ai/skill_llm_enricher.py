@@ -182,6 +182,26 @@ def _build_skill_extraction_retry_prompt(primary_prompt: str) -> str:
     return primary_prompt + "\n\nReturn ONLY valid JSON. No prose. No markdown. No explanation."
 
 
+def resolve_effective_user_provider_route(owner_user_id: str, workload_id: str):
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
+    )
+    return routing_service.resolve_effective_user_provider_route(
+        owner_user_id,
+        workload_id,
+    )
+
+
+def run_user_chat_completion_with_metadata(**kwargs):
+    from src.ai.user_provider_runtime import (
+        run_user_chat_completion_with_metadata as execute,
+    )
+
+    return execute(**kwargs)
+
+
 def build_skill_extraction_production_task_contract_material():
     primary_prompt = _build_skill_extraction_user_prompt("<job_description>")
     return {
@@ -712,7 +732,7 @@ def _build_skill_extraction_text(
     return "\n\n".join(parts)
 
 
-def enrich_skills_with_llm(job_text):
+def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
 
     if SKILL_EXTRACTION_MODE not in VALID_EXTRACTION_MODES:
         logger.warning(
@@ -749,20 +769,64 @@ def enrich_skills_with_llm(job_text):
 
     prompt = _build_skill_extraction_user_prompt(extraction_text)
 
-    try:
-        response = run_chat_completion(
+    explicit_owner = str(owner_user_id or "").strip()
+    owner = explicit_owner or str(
+        os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
+    ).strip()
+    active_provider = ""
+    active_model = MODEL
+    if owner:
+        try:
+            route = resolve_effective_user_provider_route(
+                owner,
+                "skill_extraction",
+            )
+            active_provider = str(route.get("provider") or "").strip()
+            active_model = str(route.get("model") or "").strip()
+            if not active_provider or not active_model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            increment_skill_cache_metric("live_failures")
+            logger.warning("LLM skill extraction owner route unavailable")
+            return get_empty_skill_result()
+
+    def _call_live_llm(user_prompt: str):
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        if owner:
+            result = run_user_chat_completion_with_metadata(
+                owner_user_id=owner,
+                provider=active_provider,
+                model=active_model,
+                temperature=SKILL_EXTRACTION_TEMPERATURE,
+                max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
+                messages=messages,
+            )
+            return result.get("content", "")
+        return run_chat_completion(
             model=MODEL,
             temperature=SKILL_EXTRACTION_TEMPERATURE,
             max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
         )
 
-    except Exception as e:
+    try:
+        response = _call_live_llm(prompt)
+
+    except Exception as exc:
         increment_skill_cache_metric("live_failures")
-        logger.warning(f"LLM skill extraction failed: {e}")
+        if owner:
+            logger.warning("LLM skill extraction owner execution failed")
+        else:
+            logger.warning(f"LLM skill extraction failed: {exc}")
+        return get_empty_skill_result()
+    except SystemExit:
+        if not owner:
+            raise
+        increment_skill_cache_metric("live_failures")
+        logger.warning("LLM skill extraction owner execution failed")
         return get_empty_skill_result()
 
     def _finalize_skill_result(parsed_obj):
@@ -781,7 +845,7 @@ def enrich_skills_with_llm(job_text):
         if mode != "live_only":
             store_cached_llm_skills(
                 cache_key=cache_key,
-                model=MODEL,
+                model=active_model,
                 required_skills=required,
                 preferred_skills=preferred,
             )
@@ -816,24 +880,19 @@ def enrich_skills_with_llm(job_text):
     retry_prompt = _build_skill_extraction_retry_prompt(prompt)
 
     try:
-        retry_response = run_chat_completion(
-            model=MODEL,
-            temperature=SKILL_EXTRACTION_TEMPERATURE,
-            max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": retry_prompt}
-            ],
-        )
+        retry_response = _call_live_llm(retry_prompt)
 
         parsed_retry = extract_json_from_response(retry_response)
         logger.info("LLM skill extraction parse retry succeeded")
         return _finalize_skill_result(parsed_retry)
 
     except Exception as retry_error:
-        logger.warning(
-            "Failed to parse LLM skill output after retry: %s | retry_response_preview=%s",
-            retry_error,
-            _response_preview(retry_response if 'retry_response' in locals() else ""),
-        )
+        if owner:
+            logger.warning("Failed to parse owner LLM skill output after retry")
+        else:
+            logger.warning(
+                "Failed to parse LLM skill output after retry: %s | retry_response_preview=%s",
+                retry_error,
+                _response_preview(retry_response if 'retry_response' in locals() else ""),
+            )
         return get_empty_skill_result()

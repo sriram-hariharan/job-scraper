@@ -294,7 +294,37 @@ Evaluate the following jobs and return STRICT JSON.
 """
 
 
-def evaluate_batch(batch):
+def resolve_effective_user_provider_route(owner_user_id, workload_id):
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
+    )
+    return routing_service.resolve_effective_user_provider_route(
+        owner_user_id,
+        workload_id,
+    )
+
+
+def run_user_chat_completion_with_metadata(**kwargs):
+    from src.ai.user_provider_runtime import (
+        run_user_chat_completion_with_metadata as execute,
+    )
+
+    return execute(**kwargs)
+
+
+def _is_rate_limit_error(error):
+    message = str(error).lower()
+    return "429" in message or "category=rate_limit" in message
+
+
+def evaluate_batch(
+    batch,
+    owner_user_id="",
+    routed_provider="",
+    routed_model="",
+):
 
     prompt = build_batch_prompt(batch)
 
@@ -318,25 +348,40 @@ def evaluate_batch(batch):
 
                     last_request_time = time.time()
 
-                response = run_chat_completion(
-                    model=MODEL,
-                    temperature=JOB_FIT_TEMPERATURE,
-                    max_tokens=JOB_FIT_MAX_TOKENS,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt}
-                    ],
-                )
+                messages = [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ]
+                if owner_user_id:
+                    result = run_user_chat_completion_with_metadata(
+                        owner_user_id=owner_user_id,
+                        provider=routed_provider,
+                        model=routed_model,
+                        temperature=JOB_FIT_TEMPERATURE,
+                        max_tokens=JOB_FIT_MAX_TOKENS,
+                        messages=messages,
+                    )
+                    response = result["content"]
+                else:
+                    response = run_chat_completion(
+                        model=MODEL,
+                        temperature=JOB_FIT_TEMPERATURE,
+                        max_tokens=JOB_FIT_MAX_TOKENS,
+                        messages=messages,
+                    )
 
         except Exception as e:
 
-            if "429" in str(e):
+            if _is_rate_limit_error(e):
                 wait = retry_delay * (2 ** attempt)
                 print(f"Rate limited. Waiting {wait}s")
                 time.sleep(wait)
                 continue
 
-            print(f"AI evaluation failed: {e}")
+            if owner_user_id:
+                print("AI evaluation failed for owner route")
+            else:
+                print(f"AI evaluation failed: {e}")
             increment_eval_cache_metric("eval_live_failures")
 
             for job in batch:
@@ -387,7 +432,7 @@ def evaluate_batch(batch):
             if cache_key and eval_mode != "live_only":
                 store_cached_job_evaluation(
                     cache_key=cache_key,
-                    model=MODEL,
+                    model=routed_model if owner_user_id else MODEL,
                     evaluation=evaluation_data,
                 )
                 increment_eval_cache_metric("eval_cache_stores")
@@ -407,7 +452,7 @@ def chunk_jobs(jobs, size):
         yield jobs[i:i + size]
 
 
-def evaluate_jobs(jobs):
+def evaluate_jobs(jobs, owner_user_id=""):
 
     reset_eval_cache_metrics()
 
@@ -448,6 +493,29 @@ def evaluate_jobs(jobs):
 
     live_results = []
 
+    explicit_owner = str(owner_user_id or "").strip()
+    owner = explicit_owner or str(
+        os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
+    ).strip()
+    routed_provider = ""
+    routed_model = MODEL
+
+    if uncached_jobs and owner:
+        try:
+            route = resolve_effective_user_provider_route(
+                owner,
+                "job_fit_evaluation",
+            )
+            routed_provider = str(route.get("provider") or "").strip()
+            routed_model = str(route.get("model") or "").strip()
+            if not routed_provider or not routed_model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            increment_eval_cache_metric("eval_live_failures")
+            for job in uncached_jobs:
+                job["ai_fit"] = "LLM_CALL_FAIL"
+            uncached_jobs = []
+
     if uncached_jobs:
         batches = list(chunk_jobs(uncached_jobs, BATCH_SIZE))
         random.shuffle(batches)
@@ -455,7 +523,13 @@ def evaluate_jobs(jobs):
         with ThreadPoolExecutor(max_workers=1) as executor:
 
             futures = {
-                executor.submit(evaluate_batch, batch): i
+                executor.submit(
+                    evaluate_batch,
+                    batch,
+                    owner,
+                    routed_provider,
+                    routed_model,
+                ): i
                 for i, batch in enumerate(batches)
             }
 

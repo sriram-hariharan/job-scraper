@@ -88,6 +88,7 @@ def _graph(
 def _evaluator(monkeypatch):
     import dotenv
 
+    monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
     monkeypatch.setattr(
         dotenv,
         "load_dotenv",
@@ -101,6 +102,46 @@ def _evaluator(monkeypatch):
     monkeypatch.setattr(evaluator.random, "shuffle", lambda _items: None)
     evaluator.reset_eval_cache_metrics()
     return evaluator
+
+
+def _install_owner_route(
+    evaluator,
+    monkeypatch,
+    *,
+    provider="groq",
+    model="openai/gpt-oss-20b",
+    route_calls=None,
+):
+    calls = [] if route_calls is None else route_calls
+
+    def resolve(owner_user_id, workload_id):
+        calls.append((owner_user_id, workload_id))
+        return {
+            "workload_id": workload_id,
+            "provider": provider,
+            "model": model,
+            "effective_selection_source": "applylens_recommended",
+        }
+
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_effective_user_provider_route",
+        resolve,
+    )
+    return calls
+
+
+def _install_cache_miss(evaluator, monkeypatch):
+    monkeypatch.setattr(
+        evaluator,
+        "get_cached_job_evaluation",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "store_cached_job_evaluation",
+        lambda **_kwargs: None,
+    )
 
 
 def test_exact_graph_and_state_versions():
@@ -324,6 +365,189 @@ def test_graph_does_not_recompute_upstream_or_downstream_stages():
         assert token not in source
 
 
+def test_no_owner_preserves_exact_legacy_live_runtime(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    _install_cache_miss(evaluator, monkeypatch)
+    legacy_calls = []
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_effective_user_provider_route",
+        lambda *_args: pytest.fail("legacy mode must not resolve owner route"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy mode must not use user runtime"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **kwargs: (
+            legacy_calls.append(kwargs) or _response_for(_jobs(1))
+        ),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(1))
+
+    assert result[0]["ai_fit_score"] == 8
+    assert len(legacy_calls) == 1
+    assert legacy_calls[0]["model"] == evaluator.MODEL
+    assert legacy_calls[0]["temperature"] == evaluator.JOB_FIT_TEMPERATURE
+    assert legacy_calls[0]["max_tokens"] == evaluator.JOB_FIT_MAX_TOKENS
+
+
+@pytest.mark.parametrize(
+    ("explicit_owner", "environment_owner", "expected_owner"),
+    (
+        ("explicit-owner", "environment-owner", "explicit-owner"),
+        (" ", "environment-owner", "environment-owner"),
+    ),
+)
+def test_owner_resolution_precedence_is_explicit_then_environment(
+    monkeypatch,
+    explicit_owner,
+    environment_owner,
+    expected_owner,
+):
+    evaluator = _evaluator(monkeypatch)
+    _install_cache_miss(evaluator, monkeypatch)
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", environment_owner)
+    route_calls = _install_owner_route(evaluator, monkeypatch)
+    runtime_calls = []
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: (
+            runtime_calls.append(kwargs)
+            or {"content": _response_for(_jobs(1))}
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("owner mode must not use legacy runtime"),
+    )
+
+    evaluator.evaluate_jobs(_jobs(1), owner_user_id=explicit_owner)
+
+    assert route_calls == [(expected_owner, "job_fit_evaluation")]
+    assert runtime_calls[0]["owner_user_id"] == expected_owner
+
+
+def test_owner_all_cache_hits_do_not_resolve_or_execute(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-cache-hit")
+    lookups = []
+    monkeypatch.setattr(
+        evaluator,
+        "get_cached_job_evaluation",
+        lambda key: (lookups.append(key) or _evaluation()),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_effective_user_provider_route",
+        lambda *_args: pytest.fail("cache hits must not resolve owner route"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("cache hits must not use user runtime"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("cache hits must not use legacy runtime"),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(2))
+
+    assert len(lookups) == 2
+    assert [job["ai_fit_score"] for job in result] == [8, 8]
+
+
+def test_owner_cache_only_miss_does_not_resolve_or_execute(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    monkeypatch.setattr(evaluator, "EVAL_MODE", "cache_only")
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-cache-only")
+    monkeypatch.setattr(
+        evaluator,
+        "get_cached_job_evaluation",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_effective_user_provider_route",
+        lambda *_args: pytest.fail("cache_only must not resolve owner route"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("cache_only must not use user runtime"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("cache_only must not use legacy runtime"),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(1))
+
+    assert result[0]["ai_fit"] == "EVAL_SKIPPED_CACHE_ONLY"
+    assert evaluator.get_eval_cache_metrics()["eval_cache_only_skips"] == 1
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    (
+        ("groq", "openai/gpt-oss-20b"),
+        ("openai", "gpt-5-mini"),
+    ),
+)
+def test_owner_cache_miss_executes_exact_effective_route(
+    monkeypatch,
+    provider,
+    model,
+):
+    evaluator = _evaluator(monkeypatch)
+    _install_cache_miss(evaluator, monkeypatch)
+    route_calls = _install_owner_route(
+        evaluator,
+        monkeypatch,
+        provider=provider,
+        model=model,
+    )
+    runtime_calls = []
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: (
+            runtime_calls.append(kwargs)
+            or {"content": _response_for(_jobs(1))}
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("owner mode must not use legacy runtime"),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(1), owner_user_id="owner-live")
+
+    assert route_calls == [("owner-live", "job_fit_evaluation")]
+    assert len(runtime_calls) == 1
+    assert {
+        key: runtime_calls[0][key]
+        for key in ("owner_user_id", "provider", "model")
+    } == {
+        "owner_user_id": "owner-live",
+        "provider": provider,
+        "model": model,
+    }
+    assert runtime_calls[0]["temperature"] == evaluator.JOB_FIT_TEMPERATURE
+    assert runtime_calls[0]["max_tokens"] == evaluator.JOB_FIT_MAX_TOKENS
+    assert result[0]["ai_fit_score"] == 8
+
+
 def test_all_cache_hits_make_zero_provider_calls_and_preserve_parity(
     monkeypatch,
 ):
@@ -537,6 +761,269 @@ def test_rate_limit_failure_preserves_existing_retry_and_marker(monkeypatch):
     assert result[0]["ai_fit"] == "RATE_LIMIT_FAIL"
 
 
+def test_owner_route_is_frozen_once_across_multiple_batches(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    monkeypatch.setattr(evaluator, "BATCH_SIZE", 2)
+    _install_cache_miss(evaluator, monkeypatch)
+    route_calls = _install_owner_route(
+        evaluator,
+        monkeypatch,
+        provider="openai",
+        model="gpt-5-mini",
+    )
+    runtime_calls = []
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: (
+            runtime_calls.append(kwargs)
+            or {"content": _response_for(_jobs(2))}
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("owner mode must not use legacy runtime"),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(6), owner_user_id="owner-batches")
+
+    assert route_calls == [("owner-batches", "job_fit_evaluation")]
+    assert len(runtime_calls) == 3
+    assert {
+        (call["owner_user_id"], call["provider"], call["model"])
+        for call in runtime_calls
+    } == {("owner-batches", "openai", "gpt-5-mini")}
+    assert [job["job_id"] for job in result] == [
+        f"job-{index}" for index in range(6)
+    ]
+
+
+def test_owner_route_is_frozen_across_parse_retries(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    _install_cache_miss(evaluator, monkeypatch)
+    route_calls = _install_owner_route(evaluator, monkeypatch)
+    runtime_calls = []
+    sleeps = []
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: (
+            runtime_calls.append(kwargs) or {"content": "invalid"}
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("owner retries must not use legacy runtime"),
+    )
+    monkeypatch.setattr(
+        evaluator.time,
+        "sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(1), owner_user_id="owner-parse")
+
+    assert route_calls == [("owner-parse", "job_fit_evaluation")]
+    assert len(runtime_calls) == 5
+    assert {
+        (call["provider"], call["model"])
+        for call in runtime_calls
+    } == {("groq", "openai/gpt-oss-20b")}
+    assert sleeps == [10, 20, 40, 80]
+    assert result[0]["ai_fit"] == "PARSE_ERROR"
+
+
+def test_owner_bounded_rate_limit_preserves_retries_and_frozen_route(
+    monkeypatch,
+):
+    evaluator = _evaluator(monkeypatch)
+    _install_cache_miss(evaluator, monkeypatch)
+    route_calls = _install_owner_route(
+        evaluator,
+        monkeypatch,
+        provider="openai",
+        model="gpt-5-mini",
+    )
+    runtime_calls = []
+    sleeps = []
+
+    def rate_limited(**kwargs):
+        runtime_calls.append(kwargs)
+        raise RuntimeError("provider_execution_failed:category=rate_limit")
+
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        rate_limited,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("owner retries must not use legacy runtime"),
+    )
+    monkeypatch.setattr(
+        evaluator.time,
+        "sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(1), owner_user_id="owner-rate")
+
+    assert route_calls == [("owner-rate", "job_fit_evaluation")]
+    assert len(runtime_calls) == 5
+    assert {
+        (call["provider"], call["model"])
+        for call in runtime_calls
+    } == {("openai", "gpt-5-mini")}
+    assert sleeps == [10, 20, 40, 80, 160]
+    assert result[0]["ai_fit"] == "RATE_LIMIT_FAIL"
+    assert evaluator.get_eval_cache_metrics()["eval_live_failures"] == 1
+
+
+def test_owner_route_failure_preserves_hits_and_fails_misses_closed(
+    monkeypatch,
+):
+    evaluator = _evaluator(monkeypatch)
+    cached = iter((_evaluation(), None))
+    monkeypatch.setattr(
+        evaluator,
+        "get_cached_job_evaluation",
+        lambda _key: next(cached),
+    )
+    route_calls = []
+
+    def fail_route(owner_user_id, workload_id):
+        route_calls.append((owner_user_id, workload_id))
+        raise ValueError("private routing detail")
+
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_effective_user_provider_route",
+        fail_route,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("failed route must not execute owner runtime"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("failed route must not use legacy runtime"),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(2), owner_user_id="owner-route-fail")
+
+    assert route_calls == [("owner-route-fail", "job_fit_evaluation")]
+    assert result[0]["ai_fit_score"] == 8
+    assert result[1]["ai_fit"] == "LLM_CALL_FAIL"
+    assert evaluator.get_eval_cache_metrics() == {
+        "eval_cache_hits": 1,
+        "eval_cache_misses": 1,
+        "eval_cache_stores": 0,
+        "eval_cache_only_skips": 0,
+        "eval_live_failures": 1,
+    }
+    assert all(
+        not any(key.startswith("_eval_") for key in job)
+        for job in result
+    )
+
+
+def test_owner_runtime_failure_has_no_legacy_or_provider_fallback(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    _install_cache_miss(evaluator, monkeypatch)
+    _install_owner_route(evaluator, monkeypatch)
+    runtime_calls = []
+
+    def fail(**kwargs):
+        runtime_calls.append(kwargs)
+        raise RuntimeError("bounded owner runtime failure")
+
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        fail,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("owner failure must not use legacy runtime"),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(1), owner_user_id="owner-fail")
+
+    assert len(runtime_calls) == 1
+    assert result[0]["ai_fit"] == "LLM_CALL_FAIL"
+    assert evaluator.get_eval_cache_metrics()["eval_live_failures"] == 1
+
+
+def test_owner_success_stores_frozen_routed_model(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    monkeypatch.setattr(evaluator, "MODEL", "legacy-default-model")
+    monkeypatch.setattr(
+        evaluator,
+        "get_cached_job_evaluation",
+        lambda _key: None,
+    )
+    stores = []
+    monkeypatch.setattr(
+        evaluator,
+        "store_cached_job_evaluation",
+        lambda **kwargs: stores.append(kwargs),
+    )
+    _install_owner_route(
+        evaluator,
+        monkeypatch,
+        provider="openai",
+        model="gpt-5-mini",
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: {"content": _response_for(_jobs(1))},
+    )
+
+    evaluator.evaluate_jobs(_jobs(1), owner_user_id="owner-store")
+
+    assert len(stores) == 1
+    assert stores[0]["model"] == "gpt-5-mini"
+    assert stores[0]["model"] != evaluator.MODEL
+
+
+def test_live_only_owner_bypasses_cache_and_resolves_once(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    monkeypatch.setattr(evaluator, "EVAL_MODE", "live_only")
+    route_calls = _install_owner_route(evaluator, monkeypatch)
+    runtime_calls = []
+    monkeypatch.setattr(
+        evaluator,
+        "get_cached_job_evaluation",
+        lambda _key: pytest.fail("live_only must not read cache"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "store_cached_job_evaluation",
+        lambda **_kwargs: pytest.fail("live_only must not write cache"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: (
+            runtime_calls.append(kwargs)
+            or {"content": _response_for(_jobs(1))}
+        ),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(1), owner_user_id="owner-live-only")
+
+    assert route_calls == [("owner-live-only", "job_fit_evaluation")]
+    assert len(runtime_calls) == 1
+    assert result[0]["ai_fit_score"] == 8
+
+
 def test_output_order_restored_after_existing_batch_shuffle(monkeypatch):
     evaluator = _evaluator(monkeypatch)
     monkeypatch.setattr(evaluator, "BATCH_SIZE", 1)
@@ -624,6 +1111,35 @@ def test_final_scoring_receives_identical_direct_and_graph_outputs():
     assert scoring_input_signature(graph_output) == scoring_input_signature(
         direct_output
     )
+
+
+def test_job_fit_task_contract_fingerprint_is_unchanged():
+    from src.evaluation.production_task_contract_fingerprints import (
+        production_task_contract_sha256,
+    )
+
+    assert production_task_contract_sha256("job_fit_evaluation") == (
+        "e9568a48240886579814a557b414461510f86485e3bb7a50efc3e7ab8e319480"
+    )
+
+
+def test_job_fit_owner_routing_has_no_direct_sdk_or_credential_boundary():
+    source = Path("src/ai/job_fit_evaluator.py").read_text(encoding="utf-8")
+
+    for forbidden in (
+        "from groq import Groq",
+        "from openai import OpenAI",
+        "Groq(",
+        "OpenAI(",
+        "api_key",
+        "get_user_provider_credential",
+        "decrypt_user_provider",
+    ):
+        assert forbidden not in source
+
+    assert "src.ai.user_provider_runtime" in source
+    assert "resolve_effective_user_provider_route" in source
+    assert "run_chat_completion(" in source
 
 
 def test_run006_remains_absent():

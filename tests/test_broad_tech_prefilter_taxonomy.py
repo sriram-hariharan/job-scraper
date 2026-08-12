@@ -100,11 +100,22 @@ def test_required_business_and_nonengineering_negatives_remain_rejected():
         ) is False
 
 
-def test_existing_seniority_exclusions_remain_unchanged_for_aliases():
+def test_flexible_seniority_allows_staff_principal_and_lead_aliases():
     titles = (
         "Staff Mobile Engineer",
         "Principal Database Engineer",
         "Lead Implementation Engineer",
+    )
+
+    for title in titles:
+        assert title_matches(
+            title,
+            selected_role_families=EXPECTED_ROLE_FAMILY_IDS,
+        ) is True
+
+
+def test_fixed_rejected_seniority_remains_rejected_for_aliases():
+    titles = (
         "Manager, Technical Support Engineer",
         "Director, Mobile Engineer",
         "VP, Database Engineer",

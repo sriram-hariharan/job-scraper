@@ -3670,11 +3670,14 @@ def render_workspace_draft_preview(
 @app.post("/planning/generate-scan-phrases")
 def generate_scan_phrases(
     request: PlanningScanPhraseRequest,
+    http_request: Request,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
+    owner_user_id = _require_auth_owner_user_id(http_request)
     try:
         return services.generate_tailoring_scan_phrase_payload(
             output_dir=Path(output_dir),
+            owner_user_id=owner_user_id,
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
             bullet_key=request.bullet_key,

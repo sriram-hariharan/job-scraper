@@ -2,6 +2,8 @@ import sys
 import tempfile
 import types
 import os
+import inspect
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -392,6 +394,414 @@ def test_scan_workspace_phrase_request_uses_planning_output_dir_endpoint():
     assert "context?.planningOutputDir" in phrase_handler
     assert "postJsonWithTimeout(phraseUrl, requestBody, 20000)" in phrase_handler
     assert "fetch(phraseUrl" in phrase_handler
+
+
+def _valid_scan_phrase_llm_content():
+    return {
+        "options": [
+            {
+                "text": (
+                    "Engineered reporting dashboards using SQL for weekly "
+                    "stakeholder updates."
+                ),
+                "reason": "Keeps the supported SQL reporting claim clear.",
+                "supported_terms": ["SQL"],
+                "risk_flags": [],
+            }
+        ]
+    }
+
+
+def test_scan_phrase_api_requires_request_context_and_passes_exact_owner(
+    monkeypatch,
+    tmp_path,
+):
+    from src.app import api as app_api
+
+    parameters = inspect.signature(app_api.generate_scan_phrases).parameters
+    assert parameters["http_request"].annotation is app_api.Request
+
+    auth_calls = []
+    service_calls = []
+    monkeypatch.setattr(
+        app_api,
+        "_require_auth_owner_user_id",
+        lambda request: auth_calls.append(request) or "owner-a",
+    )
+    monkeypatch.setattr(
+        app_api.services,
+        "generate_tailoring_scan_phrase_payload",
+        lambda **kwargs: service_calls.append(kwargs) or {"ok": True},
+    )
+    http_request = SimpleNamespace(state=SimpleNamespace(auth_user={}))
+    request = app_api.PlanningScanPhraseRequest(
+        tailoring_json_path="artifact.json",
+        selected_resume="resume.pdf",
+        bullet_key="experience:1",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+        supported_terms=["SQL"],
+    )
+
+    result = app_api.generate_scan_phrases(
+        request,
+        http_request,
+        output_dir=str(tmp_path),
+    )
+
+    assert result == {"ok": True}
+    assert auth_calls == [http_request]
+    assert service_calls == [
+        {
+            "output_dir": tmp_path,
+            "owner_user_id": "owner-a",
+            "tailoring_json_path": "artifact.json",
+            "selected_resume": "resume.pdf",
+            "bullet_key": "experience:1",
+            "current_text": "Built dashboards using SQL.",
+            "guidance_text": "Lead with SQL reporting.",
+            "supported_terms": ["SQL"],
+        }
+    ]
+
+
+def test_scan_phrase_api_missing_owner_fails_before_service(monkeypatch):
+    from src.app import api as app_api
+
+    monkeypatch.setattr(
+        app_api.services,
+        "generate_tailoring_scan_phrase_payload",
+        lambda **_kwargs: pytest.fail("service must not execute"),
+    )
+    request = app_api.PlanningScanPhraseRequest(
+        tailoring_json_path="artifact.json",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+    )
+    http_request = SimpleNamespace(
+        state=SimpleNamespace(auth_user={}),
+    )
+
+    with pytest.raises(app_api.HTTPException) as exc_info:
+        app_api.generate_scan_phrases(request, http_request)
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Authentication required."
+
+
+def test_scan_phrase_service_passes_normalized_owner_to_llm_helper(
+    monkeypatch,
+    tmp_path,
+):
+    from src.app import services as app_services
+
+    helper_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "_resolve_planning_artifact_path",
+        lambda *_args, **_kwargs: tmp_path / "artifact.json",
+    )
+    monkeypatch.setattr(
+        app_services,
+        "_generate_scan_phrase_options_with_llm",
+        lambda **kwargs: helper_calls.append(kwargs) or ([], {}),
+    )
+
+    result = app_services.generate_tailoring_scan_phrase_payload(
+        output_dir=tmp_path,
+        tailoring_json_path="artifact.json",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+        supported_terms=["SQL"],
+        owner_user_id=" owner-a ",
+    )
+
+    assert helper_calls == [
+        {
+            "current": "Built dashboards using SQL.",
+            "guidance": "Lead with SQL reporting.",
+            "terms": ["SQL"],
+            "owner_user_id": "owner-a",
+        }
+    ]
+    assert result["source"] == "llm_unavailable"
+
+
+def test_owner_scan_phrase_structured_success_uses_effective_user_runtime(
+    monkeypatch,
+):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "effective_selection_source": "user_override",
+        },
+    )
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: runtime_calls.append(kwargs) or {
+            "content": _valid_scan_phrase_llm_content(),
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "fallback_used": False,
+        },
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    options, metadata = app_services._generate_scan_phrase_options_with_llm(
+        current="Built dashboards using SQL.",
+        guidance="Lead with SQL reporting.",
+        terms=["SQL"],
+        owner_user_id=" owner-a ",
+    )
+
+    assert resolver_calls == [("owner-a", "manual_scan_phrase")]
+    assert len(runtime_calls) == 1
+    call = runtime_calls[0]
+    assert call["owner_user_id"] == "owner-a"
+    assert call["provider"] == "openai"
+    assert call["model"] == "gpt-5-mini"
+    assert call["response_mime_type"] == "application/json"
+    assert call["response_schema"] == (
+        app_services.SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA
+    )
+    assert call["return_parsed"] is True
+    assert call["thinking_budget"] == 0
+    assert "fallback_enabled" not in call
+    assert "fallback_provider" not in call
+    assert "fallback_model" not in call
+    assert len(options) == 1
+    assert metadata["provider"] == "openai"
+    assert metadata["model"] == "gpt-5-mini"
+    assert metadata["fallback_used"] is False
+    assert metadata["requested_provider"] == "openai"
+    assert metadata["requested_model"] == "gpt-5-mini"
+    assert metadata["effective_selection_source"] == "user_override"
+    assert metadata["plain_retry_used"] is False
+
+
+def test_owner_scan_phrase_plain_retry_reuses_one_frozen_route(monkeypatch):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+            "effective_selection_source": "applylens_recommended",
+        },
+    )
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        return {
+            "content": (
+                {"options": []}
+                if len(runtime_calls) == 1
+                else json.dumps(_valid_scan_phrase_llm_content())
+            ),
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    options, metadata = app_services._generate_scan_phrase_options_with_llm(
+        current="Built dashboards using SQL.",
+        guidance="Lead with SQL reporting.",
+        terms=["SQL"],
+        owner_user_id="owner-a",
+    )
+
+    assert resolver_calls == [("owner-a", "manual_scan_phrase")]
+    assert len(runtime_calls) == 2
+    assert {
+        (call["owner_user_id"], call["provider"], call["model"])
+        for call in runtime_calls
+    } == {("owner-a", "groq", "openai/gpt-oss-120b")}
+    assert runtime_calls[0]["response_mime_type"] == "application/json"
+    assert runtime_calls[0]["response_schema"] == (
+        app_services.SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA
+    )
+    assert runtime_calls[0]["return_parsed"] is True
+    assert runtime_calls[1]["response_mime_type"] is None
+    assert runtime_calls[1]["response_schema"] is None
+    assert runtime_calls[1]["return_parsed"] is False
+    assert all("fallback_enabled" not in call for call in runtime_calls)
+    assert len(options) == 1
+    assert metadata["requested_provider"] == "groq"
+    assert metadata["requested_model"] == "openai/gpt-oss-120b"
+    assert metadata["fallback_used"] is False
+    assert metadata["plain_retry_used"] is True
+
+
+def test_owner_scan_phrase_route_failure_is_fail_closed_but_deterministic_fallback_remains(
+    monkeypatch,
+    tmp_path,
+):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    resolver_calls = []
+
+    def fail_route(owner, workload):
+        resolver_calls.append((owner, workload))
+        raise RuntimeError("secret registry and database detail")
+
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        fail_route,
+    )
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Effective scan phrase provider route unavailable",
+    ):
+        app_services._generate_scan_phrase_options_with_llm(
+            current="Built dashboards using SQL.",
+            guidance="Lead with SQL reporting.",
+            terms=["SQL"],
+            owner_user_id="owner-a",
+        )
+
+    monkeypatch.setattr(
+        app_services,
+        "_resolve_planning_artifact_path",
+        lambda *_args, **_kwargs: tmp_path / "artifact.json",
+    )
+    monkeypatch.setattr(
+        app_services,
+        "SCAN_PHRASE_DETERMINISTIC_FALLBACK_ENABLED",
+        True,
+    )
+    result = app_services.generate_tailoring_scan_phrase_payload(
+        output_dir=tmp_path,
+        tailoring_json_path="artifact.json",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+        supported_terms=["SQL"],
+        owner_user_id="owner-a",
+    )
+
+    assert resolver_calls == [
+        ("owner-a", "manual_scan_phrase"),
+        ("owner-a", "manual_scan_phrase"),
+    ]
+    assert result["source"] == "deterministic_fallback"
+    assert result["fallback_used"] is True
+    assert result["options"]
+    assert result["llm_error"] == (
+        "Effective scan phrase provider route unavailable."
+    )
+    assert "secret" not in repr(result)
+
+
+def test_blank_owner_scan_phrase_helper_preserves_legacy_fallback_path(
+    monkeypatch,
+):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    legacy_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("resolver must not execute"),
+    )
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **kwargs: legacy_calls.append(kwargs) or {
+            "content": _valid_scan_phrase_llm_content(),
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "fallback_used": False,
+        },
+    )
+
+    options, metadata = app_services._generate_scan_phrase_options_with_llm(
+        current="Built dashboards using SQL.",
+        guidance="Lead with SQL reporting.",
+        terms=["SQL"],
+        owner_user_id="   ",
+    )
+
+    assert len(options) == 1
+    assert len(legacy_calls) == 1
+    assert legacy_calls[0]["provider"] == app_services.SCAN_PHRASE_PROVIDER
+    assert legacy_calls[0]["model"] == app_services.SCAN_PHRASE_MODEL
+    assert legacy_calls[0]["fallback_enabled"] == (
+        app_services.SCAN_PHRASE_LLM_FALLBACK_ENABLED
+    )
+    assert legacy_calls[0]["fallback_provider"] == (
+        app_services.SCAN_PHRASE_FALLBACK_PROVIDER
+    )
+    assert legacy_calls[0]["fallback_model"] == (
+        app_services.SCAN_PHRASE_FALLBACK_MODEL
+    )
+    assert metadata["requested_provider"] == (
+        app_services.SCAN_PHRASE_PROVIDER
+    )
+    assert metadata["requested_model"] == app_services.SCAN_PHRASE_MODEL
+
+
+def test_scan_workspace_phrase_request_body_does_not_contain_owner_identity():
+    source = Path("src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    request_block = source.split(
+        "function buildScanWorkspacePhraseRequest",
+        1,
+    )[1].split(
+        "function renderScanWorkspacePhraseOptionsHtml",
+        1,
+    )[0]
+
+    assert "owner_user_id" not in request_block
 
 
 def test_scan_workspace_phrase_request_rewrites_optional_tailoring_artifact_key():

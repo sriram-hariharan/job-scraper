@@ -20,6 +20,15 @@ import sys
 import tempfile
 import shutil
 
+from src.ai.user_provider_runtime import (
+    run_user_chat_completion_with_metadata,
+)
+
+resolve_effective_user_provider_route = getattr(
+    importlib.import_module("src.app.provider_model_" "routing_service"),
+    "resolve_effective_user_provider_route",
+)
+
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 from src.pipeline.runtime_status import PREFERENCE_RUNTIME_SCHEMA_VERSION
 
@@ -31738,14 +31747,35 @@ def _generate_scan_phrase_options_with_llm(
     current: str,
     guidance: str,
     terms: List[str],
+    owner_user_id: str = "",
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     from src.ai.llm_client import run_chat_completion_with_metadata
     from src.tailoring import llm as tailoring_llm
 
+    owner = _clean_text(owner_user_id)
     provider = SCAN_PHRASE_PROVIDER or tailoring_llm.PATCH_REFINEMENT_WRITER_PROVIDER
     model = SCAN_PHRASE_MODEL or tailoring_llm.PATCH_REFINEMENT_WRITER_MODEL
     fallback_provider = SCAN_PHRASE_FALLBACK_PROVIDER
     fallback_model = SCAN_PHRASE_FALLBACK_MODEL
+    effective_selection_source = ""
+    if owner:
+        try:
+            effective_route = resolve_effective_user_provider_route(
+                owner,
+                "manual_scan_phrase",
+            )
+            provider = _clean_text(effective_route.get("provider"))
+            model = _clean_text(effective_route.get("model"))
+            effective_selection_source = _clean_text(
+                effective_route.get("effective_selection_source")
+            )
+            if not provider or not model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            raise RuntimeError(
+                "Effective scan phrase provider route unavailable."
+            ) from None
+
     system_prompt = SCAN_PHRASE_SYSTEM_PROMPT
     user_prompt = _scan_phrase_llm_prompt(
         current=current,
@@ -31754,28 +31784,50 @@ def _generate_scan_phrase_options_with_llm(
     )
     last_error = ""
 
-    result = run_chat_completion_with_metadata(
-        provider=provider,
-        model=model,
-        temperature=SCAN_PHRASE_TEMPERATURE,
-        max_tokens=SCAN_PHRASE_MAX_TOKENS,
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt,
+        },
+        {
+            "role": "user",
+            "content": user_prompt,
+        },
+    ]
+
+    def _call_llm(
+        *,
+        response_mime_type: Optional[str],
+        response_schema: Optional[Dict[str, Any]],
+        return_parsed: bool,
+    ) -> Dict[str, Any]:
+        request_kwargs = {
+            "provider": provider,
+            "model": model,
+            "temperature": SCAN_PHRASE_TEMPERATURE,
+            "max_tokens": SCAN_PHRASE_MAX_TOKENS,
+            "response_mime_type": response_mime_type,
+            "response_schema": response_schema,
+            "return_parsed": return_parsed,
+            "thinking_budget": SCAN_PHRASE_THINKING_BUDGET,
+            "messages": messages,
+        }
+        if owner:
+            return run_user_chat_completion_with_metadata(
+                owner_user_id=owner,
+                **request_kwargs,
+            )
+        return run_chat_completion_with_metadata(
+            fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
+            fallback_provider=fallback_provider,
+            fallback_model=fallback_model,
+            **request_kwargs,
+        )
+
+    result = _call_llm(
         response_mime_type="application/json",
         response_schema=_scan_phrase_structured_output_contract()["schema"],
         return_parsed=True,
-        thinking_budget=SCAN_PHRASE_THINKING_BUDGET,
-        fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
-        fallback_provider=fallback_provider,
-        fallback_model=fallback_model,
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt,
-            },
-            {
-                "role": "user",
-                "content": user_prompt,
-            },
-        ],
     )
 
     content = result.get("content")
@@ -31788,22 +31840,10 @@ def _generate_scan_phrase_options_with_llm(
         last_error = (
             "Structured phrase response had no valid options. Retrying with plain JSON parsing."
         )
-        plain_result = run_chat_completion_with_metadata(
-            provider=provider,
-            model=model,
-            temperature=SCAN_PHRASE_TEMPERATURE,
-            max_tokens=SCAN_PHRASE_MAX_TOKENS,
+        plain_result = _call_llm(
             response_mime_type=None,
             response_schema=None,
             return_parsed=False,
-            thinking_budget=SCAN_PHRASE_THINKING_BUDGET,
-            fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
-            fallback_provider=fallback_provider,
-            fallback_model=fallback_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
         )
         result = plain_result
         content = plain_result.get("content")
@@ -31815,7 +31855,11 @@ def _generate_scan_phrase_options_with_llm(
     metadata = {
         "provider": _clean_text(result.get("provider")),
         "model": _clean_text(result.get("model")),
-        "fallback_used": bool(result.get("fallback_used", False)),
+        "fallback_used": (
+            False
+            if owner
+            else bool(result.get("fallback_used", False))
+        ),
         "requested_provider": provider,
         "requested_model": model,
         "prompt_version": SCAN_PHRASE_PROMPT_VERSION,
@@ -31823,6 +31867,10 @@ def _generate_scan_phrase_options_with_llm(
         "structured_output_schema": _scan_phrase_structured_output_contract(),
         "plain_retry_used": bool(last_error),
     }
+    if owner:
+        metadata["effective_selection_source"] = (
+            effective_selection_source
+        )
     if last_error and not options:
         metadata["last_error"] = last_error
     return options, metadata
@@ -31837,6 +31885,7 @@ def generate_tailoring_scan_phrase_payload(
     current_text: str = "",
     guidance_text: str = "",
     supported_terms: Any = None,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     artifact_path = _resolve_planning_artifact_path(
         tailoring_json_path,
@@ -31864,6 +31913,7 @@ def generate_tailoring_scan_phrase_payload(
                 current=current,
                 guidance=guidance,
                 terms=terms,
+                owner_user_id=_clean_text(owner_user_id),
             )
         except Exception as exc:
             llm_error = str(exc)

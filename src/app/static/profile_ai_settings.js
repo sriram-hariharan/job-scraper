@@ -5,12 +5,17 @@
   const state = {
     settings: null,
     catalog: null,
+    routing: null,
     credentialProvider: null,
     removeProvider: null,
     activeModalTrigger: null,
     preferenceSaving: false,
     connectionTesting: false,
+    routeSavingWorkload: null,
+    routeMessages: new Map(),
   };
+
+  const applyLensRecommendedRouteValue = "applylens-recommended";
 
   const safeFailureMessages = {
     credential_not_configured: "No API key is configured for this provider.",
@@ -21,6 +26,10 @@
     credential_delete_failed: "The API key could not be removed. Try again.",
     settings_write_failed: "The provider preference could not be saved. Try again.",
     connection_test_failed: "Connection test failed. Check the key and provider access.",
+    task_route_not_qualified: "That route is no longer currently qualified. Choose from the current routing options and try again.",
+    task_route_write_failed: "The task route could not be saved. Try again.",
+    task_route_delete_failed: "The task route could not be returned to ApplyLens Recommended. Try again.",
+    task_route_state_unavailable: "Current task routing is unavailable. Retry the page before saving.",
   };
 
   function setHidden(element, hidden) {
@@ -46,6 +55,34 @@
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(" ");
+  }
+
+  function displayTaskName(workloadId) {
+    return String(workloadId || "")
+      .trim()
+      .split(/[_-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  function displayTaskDescription(workloadId) {
+    const descriptions = {
+      skill_extraction: "Finds the important skills and requirements mentioned in a job posting.",
+      job_fit_evaluation: "Compares your profile with a job and explains how well they match.",
+      jd_intelligence: "Breaks a job description into structured requirements and useful signals.",
+      grounded_rag_answer: "Answers questions using only the relevant evidence available to ApplyLens.",
+      resume_fallback_ranking: "Ranks resume options when ApplyLens needs a fallback comparison.",
+      ambiguous_resume_adjudication: "Reviews closely matched resume choices and recommends the best-supported option.",
+      critic_evaluation: "Checks whether an AI suggestion is actually supported by the available evidence.",
+      tailoring_generation: "Creates evidence-based resume tailoring suggestions for your review.",
+      tailoring_refinement: "Improves a proposed resume edit while keeping it grounded in your evidence.",
+      tailoring_judge: "Compares tailoring options and identifies the strongest supported version.",
+      manual_scan_phrase: "Suggests phrases you can manually review and use while improving a resume.",
+      manual_provider_preview: "Generates a manual AI preview for review before anything is applied.",
+    };
+    return descriptions[String(workloadId || "").trim()]
+      || "Controls how ApplyLens handles this task.";
   }
 
   function createProviderMark(provider) {
@@ -138,6 +175,178 @@
     });
     if (!providers.length) throw new Error("Empty AI provider catalog response");
     return { providers };
+  }
+
+  function validateProviderModelPair(value, label) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`Invalid ${label}`);
+    }
+    const keys = Object.keys(value).sort();
+    if (keys.length !== 2 || keys[0] !== "model" || keys[1] !== "provider") {
+      throw new Error(`Invalid ${label}`);
+    }
+    const provider = typeof value.provider === "string" ? value.provider.trim() : "";
+    const model = typeof value.model === "string" ? value.model.trim() : "";
+    if (!provider || !model) throw new Error(`Invalid ${label}`);
+    return { provider, model };
+  }
+
+  function sameProviderModelPair(left, right) {
+    return Boolean(left && right && left.provider === right.provider && left.model === right.model);
+  }
+
+  function validateRoutingRow(row) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      throw new Error("Invalid AI task routing row");
+    }
+    const allowedRecommendationStatuses = new Set([
+      "recommended",
+      "fail_closed_zero_qualified",
+      "blocked_non_live",
+    ]);
+    const allowedExecutionModes = new Set([
+      "qualified_provider_model",
+      "deterministic",
+      "blocked_non_live",
+    ]);
+    const allowedRequestedStatuses = new Set([
+      "none",
+      "qualified",
+      "no_longer_qualified",
+    ]);
+    const allowedEffectiveSources = new Set([
+      "user_override",
+      "applylens_recommended",
+      "deterministic",
+      "blocked_non_live",
+    ]);
+    const workloadId = typeof row.workload_id === "string" ? row.workload_id.trim() : "";
+    if (!workloadId) throw new Error("Invalid AI task routing workload");
+    if (!allowedRecommendationStatuses.has(row.recommendation_status)) {
+      throw new Error("Invalid AI task routing status");
+    }
+    if (!allowedExecutionModes.has(row.execution_mode)) {
+      throw new Error("Invalid AI task execution mode");
+    }
+    if (!allowedRequestedStatuses.has(row.requested_selection_status)) {
+      throw new Error("Invalid requested task route status");
+    }
+    if (!allowedEffectiveSources.has(row.effective_selection_source)) {
+      throw new Error("Invalid effective task route source");
+    }
+    if (!Array.isArray(row.qualified_options)) {
+      throw new Error("Invalid qualified task route options");
+    }
+    const qualifiedOptions = row.qualified_options.map((option) => (
+      validateProviderModelPair(option, "qualified task route option")
+    ));
+    const optionKeys = qualifiedOptions.map((option) => JSON.stringify([option.provider, option.model]));
+    if (new Set(optionKeys).size !== optionKeys.length) {
+      throw new Error("Duplicate qualified task route option");
+    }
+    const requestedSelection = row.requested_selection === null
+      ? null
+      : validateProviderModelPair(row.requested_selection, "requested task route");
+    const effectiveSelection = row.effective_selection === null
+      ? null
+      : validateProviderModelPair(row.effective_selection, "effective task route");
+    const recommendedOption = row.recommended_option === null
+      ? null
+      : validateProviderModelPair(row.recommended_option, "recommended task route");
+    const provider = typeof row.provider === "string" ? row.provider.trim() : "";
+    const model = typeof row.model === "string" ? row.model.trim() : "";
+
+    if (row.requested_selection_status === "none" && requestedSelection !== null) {
+      throw new Error("Unrequested task route contains a saved selection");
+    }
+    if (row.requested_selection_status !== "none" && requestedSelection === null) {
+      throw new Error("Requested task route lacks a saved selection");
+    }
+
+    if (row.execution_mode === "qualified_provider_model") {
+      if (row.recommendation_status !== "recommended"
+        || typeof row.provider !== "string" || typeof row.model !== "string"
+        || !provider || !model) {
+        throw new Error("Qualified task route lacks its recommendation");
+      }
+      if (!recommendedOption || !qualifiedOptions.some((option) => sameProviderModelPair(option, recommendedOption))) {
+        throw new Error("Recommended task route is not currently qualified");
+      }
+      if (!sameProviderModelPair({ provider, model }, recommendedOption) || !effectiveSelection) {
+        throw new Error("Qualified task route recommendation is inconsistent");
+      }
+      if (row.requested_selection_status === "qualified") {
+        if (!qualifiedOptions.some((option) => sameProviderModelPair(option, requestedSelection))) {
+          throw new Error("Saved task route is not currently qualified");
+        }
+        if (!sameProviderModelPair(effectiveSelection, requestedSelection)
+          || row.effective_selection_source !== "user_override") {
+          throw new Error("Saved task route is not effective");
+        }
+      } else if (row.requested_selection_status === "none") {
+        if (!sameProviderModelPair(effectiveSelection, recommendedOption)
+          || row.effective_selection_source !== "applylens_recommended") {
+          throw new Error("Default task route is inconsistent");
+        }
+      } else {
+        if (qualifiedOptions.some((option) => sameProviderModelPair(option, requestedSelection))) {
+          throw new Error("Stale task route remains selectable");
+        }
+        if (!sameProviderModelPair(effectiveSelection, recommendedOption)
+          || row.effective_selection_source !== "applylens_recommended") {
+          throw new Error("Stale task route fallback is inconsistent");
+        }
+      }
+    } else {
+      const expectedStatus = row.execution_mode === "deterministic"
+        ? "fail_closed_zero_qualified"
+        : "blocked_non_live";
+      if (row.recommendation_status !== expectedStatus
+        || row.provider !== null || row.model !== null || provider || model
+        || recommendedOption !== null || qualifiedOptions.length !== 0
+        || effectiveSelection !== null
+        || row.effective_selection_source !== row.execution_mode
+        || row.requested_selection_status === "qualified") {
+        throw new Error("Non-selectable task route is inconsistent");
+      }
+    }
+
+    return {
+      workloadId,
+      recommendationStatus: row.recommendation_status,
+      executionMode: row.execution_mode,
+      provider: provider || null,
+      model: model || null,
+      recommendedOption,
+      qualifiedOptions,
+      requestedSelection,
+      requestedSelectionStatus: row.requested_selection_status,
+      effectiveSelection,
+      effectiveSelectionSource: row.effective_selection_source,
+    };
+  }
+
+  function validateRecommendedRoutes(payload) {
+    if (!payload || payload.ok !== true || !Array.isArray(payload.workloads)) {
+      throw new Error("Invalid AI task routing response");
+    }
+    const seenWorkloads = new Set();
+    const workloads = payload.workloads.map((row) => {
+      const route = validateRoutingRow(row);
+      if (seenWorkloads.has(route.workloadId)) {
+        throw new Error("Duplicate AI task routing workload");
+      }
+      seenWorkloads.add(route.workloadId);
+      return route;
+    });
+    return { workloads };
+  }
+
+  function validateTaskRouteWriteResponse(payload, workloadId) {
+    if (!payload || payload.ok !== true) throw new Error("Invalid task route write response");
+    const route = validateRoutingRow(payload);
+    if (route.workloadId !== workloadId) throw new Error("Task route write response mismatch");
+    return route;
   }
 
   function catalogProvider(provider) {
@@ -358,11 +567,196 @@
     });
   }
 
+  function renderRouting() {
+    const summary = byId("aiTaskRoutingSummary");
+    const list = byId("aiTaskRoutingList");
+    summary.replaceChildren();
+    list.replaceChildren();
+
+    const counts = state.routing.workloads.reduce(
+      (result, row) => {
+        result.total += 1;
+        if (row.executionMode === "qualified_provider_model") result.qualified += 1;
+        if (row.executionMode === "deterministic") result.deterministic += 1;
+        if (row.executionMode === "blocked_non_live") result.notLive += 1;
+        return result;
+      },
+      { total: 0, qualified: 0, deterministic: 0, notLive: 0 }
+    );
+    [
+      ["Total tasks", counts.total],
+      ["Model-routed", counts.qualified],
+      ["Deterministic", counts.deterministic],
+      ["Not live", counts.notLive],
+    ].forEach(([label, value]) => {
+      const item = makeElement("div", "profile-ai-settings-routing-summary-item");
+      item.append(
+        makeElement("span", "profile-ai-settings-routing-summary-label", label),
+        makeElement("strong", "profile-ai-settings-routing-summary-value", String(value))
+      );
+      summary.appendChild(item);
+    });
+
+    state.routing.workloads.forEach((route) => {
+      const statusDetails = route.executionMode === "qualified_provider_model"
+        ? { label: "Qualified choices", className: "is-recommended", note: "" }
+        : route.executionMode === "deterministic"
+          ? { label: "Deterministic", className: "is-deterministic", note: "No provider call is used" }
+          : { label: "Not live", className: "is-not-live", note: "" };
+      const row = makeElement(
+        "article",
+        `profile-ai-settings-routing-row ${statusDetails.className}`
+      );
+      row.dataset.workloadId = route.workloadId;
+
+      const taskField = makeElement("div", "profile-ai-settings-routing-field is-task");
+      taskField.append(
+        makeElement("span", "profile-ai-settings-routing-field-label", "Task"),
+        makeElement("strong", "profile-ai-settings-routing-task", displayTaskName(route.workloadId)),
+        makeElement(
+          "span",
+          "profile-ai-settings-routing-description",
+          displayTaskDescription(route.workloadId)
+        )
+      );
+
+      const statusField = makeElement("div", "profile-ai-settings-routing-field is-status");
+      statusField.append(
+        makeElement("span", "profile-ai-settings-routing-field-label", "Routing status"),
+        makeElement(
+          "span",
+          `profile-ai-settings-routing-status ${statusDetails.className}`,
+          statusDetails.label
+        )
+      );
+      if (statusDetails.note) {
+        statusField.appendChild(
+          makeElement("span", "profile-ai-settings-routing-note", statusDetails.note)
+        );
+      }
+
+      const effectiveField = makeElement("div", "profile-ai-settings-routing-field is-effective");
+      effectiveField.appendChild(
+        makeElement("span", "profile-ai-settings-routing-field-label", "Effective route")
+      );
+      if (route.effectiveSelection) {
+        effectiveField.append(
+          makeElement(
+            "span",
+            "profile-ai-settings-routing-value",
+            `${displayProviderName(route.effectiveSelection.provider)} · ${route.effectiveSelection.model}`
+          ),
+          makeElement(
+            "span",
+            "profile-ai-settings-routing-source",
+            route.effectiveSelectionSource === "user_override"
+              ? "Explicit override"
+              : "ApplyLens Recommended"
+          )
+        );
+      } else {
+        effectiveField.appendChild(
+          makeElement(
+            "span",
+            "profile-ai-settings-routing-value",
+            route.executionMode === "deterministic" ? "No provider/model route" : "Unavailable"
+          )
+        );
+      }
+
+      const controls = makeElement("div", "profile-ai-settings-routing-controls");
+      if (route.executionMode === "qualified_provider_model") {
+        const selectLabel = makeElement(
+          "label",
+          "profile-ai-settings-routing-field-label",
+          "Routing preference"
+        );
+        const select = makeElement("select", "profile-ai-settings-routing-select");
+        select.dataset.routeSelect = "true";
+        selectLabel.appendChild(select);
+
+        const recommendedChoice = makeElement("option", "", "ApplyLens Recommended");
+        recommendedChoice.value = applyLensRecommendedRouteValue;
+        select.appendChild(recommendedChoice);
+        route.qualifiedOptions.forEach((option, index) => {
+          const explicitChoice = makeElement(
+            "option",
+            "",
+            `${displayProviderName(option.provider)} · ${option.model}`
+          );
+          explicitChoice.value = `qualified:${index}`;
+          select.appendChild(explicitChoice);
+        });
+
+        if (route.requestedSelectionStatus === "qualified") {
+          const requestedIndex = route.qualifiedOptions.findIndex((option) => (
+            sameProviderModelPair(option, route.requestedSelection)
+          ));
+          select.value = `qualified:${requestedIndex}`;
+        } else {
+          select.value = applyLensRecommendedRouteValue;
+        }
+
+        const saveButton = makeElement("button", "", "Save route");
+        saveButton.type = "button";
+        saveButton.dataset.routeSave = "true";
+        saveButton.dataset.workloadId = route.workloadId;
+        const routeSaving = Boolean(state.routeSavingWorkload);
+        select.disabled = routeSaving;
+        saveButton.disabled = routeSaving;
+        if (state.routeSavingWorkload === route.workloadId) {
+          saveButton.textContent = "Saving…";
+        }
+        controls.append(selectLabel, saveButton);
+
+        if (route.requestedSelectionStatus === "no_longer_qualified") {
+          controls.appendChild(
+            makeElement(
+              "p",
+              "profile-ai-settings-routing-stale-note",
+              `Previously saved ${displayProviderName(route.requestedSelection.provider)} · ${route.requestedSelection.model} is no longer qualified. ApplyLens Recommended is currently effective.`
+            )
+          );
+        } else {
+          controls.appendChild(
+            makeElement(
+              "p",
+              "profile-ai-settings-routing-help",
+              "ApplyLens Recommended stores no explicit override. Alternatives shown here are currently qualified."
+            )
+          );
+        }
+      } else {
+        controls.appendChild(
+          makeElement(
+            "p",
+            "profile-ai-settings-routing-static-note",
+            route.executionMode === "deterministic"
+              ? "This task runs without a provider/model route and cannot be configured here."
+              : "This task is not live and cannot be configured."
+          )
+        );
+      }
+
+      const routeMessage = makeElement("div", "profile-ai-settings-inline-message hidden");
+      routeMessage.dataset.routeMessage = route.workloadId;
+      routeMessage.setAttribute("role", "status");
+      routeMessage.setAttribute("aria-live", "polite");
+      const messageState = state.routeMessages.get(route.workloadId);
+      if (messageState) setMessage(routeMessage, messageState.message, messageState.tone);
+      controls.appendChild(routeMessage);
+
+      row.append(taskField, statusField, effectiveField, controls);
+      list.appendChild(row);
+    });
+  }
+
   function renderAll() {
     renderProviderCards();
     renderPreferredProvider();
     renderConnectionSelectors();
     renderModels();
+    renderRouting();
   }
 
   async function loadPage() {
@@ -370,12 +764,14 @@
     setHidden(byId("aiSettingsLoadError"), true);
     setHidden(byId("aiSettingsContent"), true);
     try {
-      const [settingsPayload, catalogPayload] = await Promise.all([
+      const [settingsPayload, catalogPayload, routingPayload] = await Promise.all([
         requestJson("/ai/settings"),
         requestJson("/ai/settings/catalog"),
+        requestJson("/ai/settings/recommended-routes"),
       ]);
       const settings = validateSettings(settingsPayload);
       const catalog = validateCatalog(catalogPayload);
+      const routing = validateRecommendedRoutes(routingPayload);
       catalog.providers.forEach((entry) => {
         if (!Object.prototype.hasOwnProperty.call(settings.providers, entry.provider)) {
           throw new Error("Provider settings do not match catalog");
@@ -383,6 +779,7 @@
       });
       state.settings = settings;
       state.catalog = catalog;
+      state.routing = routing;
       renderAll();
       setHidden(byId("aiSettingsContent"), false);
     } catch (_error) {
@@ -651,6 +1048,74 @@
     }
   }
 
+  async function saveTaskRoute(workloadId, selectedValue) {
+    if (state.routeSavingWorkload) return;
+    const routeIndex = state.routing.workloads.findIndex((route) => (
+      route.workloadId === workloadId
+    ));
+    if (routeIndex < 0) return;
+    const route = state.routing.workloads[routeIndex];
+    if (route.executionMode !== "qualified_provider_model") return;
+
+    let selectedOption = null;
+    let useRecommended = false;
+    if (selectedValue === applyLensRecommendedRouteValue) {
+      useRecommended = true;
+    } else {
+      const match = /^qualified:(0|[1-9]\d*)$/.exec(String(selectedValue || ""));
+      const selectedIndex = match ? Number(match[1]) : -1;
+      selectedOption = Number.isSafeInteger(selectedIndex)
+        ? route.qualifiedOptions[selectedIndex]
+        : null;
+      if (!selectedOption) {
+        state.routeMessages.set(workloadId, {
+          message: "Choose a current qualified route and try again.",
+          tone: "error",
+        });
+        renderRouting();
+        return;
+      }
+    }
+
+    state.routeSavingWorkload = workloadId;
+    state.routeMessages.delete(workloadId);
+    renderRouting();
+    try {
+      const path = `/ai/settings/task-routes/${encodeURIComponent(workloadId)}`;
+      const result = useRecommended
+        ? await requestJson(path, { method: "DELETE" })
+        : await requestJson(path, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: selectedOption.provider,
+            model: selectedOption.model,
+          }),
+        });
+      const updatedRoute = validateTaskRouteWriteResponse(result, workloadId);
+      state.routing = {
+        workloads: state.routing.workloads.map((existingRoute, index) => (
+          index === routeIndex ? updatedRoute : existingRoute
+        )),
+      };
+      state.routeMessages.set(workloadId, {
+        message: useRecommended
+          ? "ApplyLens Recommended is now effective."
+          : "Explicit qualified route saved.",
+        tone: "success",
+      });
+    } catch (error) {
+      const category = error && error.category ? error.category : "request_failed";
+      state.routeMessages.set(workloadId, {
+        message: safeFailureMessages[category] || "The task route could not be saved. Try again.",
+        tone: "error",
+      });
+    } finally {
+      state.routeSavingWorkload = null;
+      renderRouting();
+    }
+  }
+
   function bindEvents() {
     byId("aiSettingsRetryBtn").addEventListener("click", loadPage);
     byId("aiSettingsProviderGrid").addEventListener("click", (event) => {
@@ -676,6 +1141,15 @@
     byId("aiTestProviderSelect").addEventListener("change", renderConnectionModels);
     byId("aiTestModelSelect").addEventListener("change", updateConnectionButton);
     byId("aiConnectionTestBtn").addEventListener("click", testConnection);
+    byId("aiTaskRoutingList").addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-route-save]");
+      if (!trigger) return;
+      const row = trigger.closest("[data-workload-id]");
+      const select = row ? row.querySelector("[data-route-select]") : null;
+      const workloadId = trigger.dataset.workloadId;
+      if (!row || !select || row.dataset.workloadId !== workloadId) return;
+      saveTaskRoute(workloadId, select.value);
+    });
     byId("aiCredentialModal").addEventListener("click", (event) => {
       if (event.target === byId("aiCredentialModal")) closeCredentialModal();
     });

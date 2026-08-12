@@ -281,7 +281,7 @@ html[data-theme="light"] .profile-ai-settings-card {
 .profile-ai-settings-status-badge,
 .profile-ai-settings-preferred-badge,
 .profile-ai-settings-model-badge,
-.profile-ai-settings-readonly-badge {
+.profile-ai-settings-routing-badge {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
@@ -301,7 +301,7 @@ html[data-theme="light"] .profile-ai-settings-card {
 }
 
 .profile-ai-settings-status-badge.is-unconfigured,
-.profile-ai-settings-readonly-badge {
+.profile-ai-settings-routing-badge {
   background: var(--ai-settings-surface-subtle);
   color: var(--ai-settings-muted);
 }
@@ -643,7 +643,190 @@ html[data-theme="light"] .profile-ai-settings-card {
 
 .profile-ai-settings-routing .profile-ai-settings-section-heading {
   align-items: center;
-  margin-bottom: 0;
+  margin-bottom: 12px;
+}
+
+.profile-ai-settings-routing-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.profile-ai-settings-routing-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--ai-settings-border);
+  border-radius: 7px;
+  background: var(--ai-settings-surface-raised);
+}
+
+.profile-ai-settings-routing-summary-label,
+.profile-ai-settings-routing-field-label,
+.profile-ai-settings-routing-note {
+  color: var(--ai-settings-muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.profile-ai-settings-routing-summary-value {
+  color: var(--ai-settings-text);
+  font-size: 12px;
+}
+
+.profile-ai-settings-routing-list {
+  overflow: hidden;
+  border: 1px solid var(--ai-settings-border);
+  border-radius: 8px;
+  background: var(--ai-settings-surface-subtle);
+}
+
+.profile-ai-settings-routing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(130px, 0.8fr) minmax(0, 1.5fr) minmax(230px, 2fr);
+  gap: 12px;
+  align-items: start;
+  padding: 9px 11px;
+  border-left: 3px solid transparent;
+}
+
+.profile-ai-settings-routing-row + .profile-ai-settings-routing-row {
+  border-top: 1px solid var(--ai-settings-border);
+}
+
+.profile-ai-settings-routing-row.is-recommended {
+  border-left-color: color-mix(in srgb, var(--ai-settings-success) 62%, transparent);
+}
+
+.profile-ai-settings-routing-row.is-deterministic {
+  border-left-color: color-mix(in srgb, var(--ai-settings-blue) 52%, transparent);
+  background: color-mix(in srgb, var(--ai-settings-blue-soft) 24%, transparent);
+}
+
+.profile-ai-settings-routing-row.is-not-live {
+  border-left-color: color-mix(in srgb, var(--ai-settings-muted) 48%, transparent);
+}
+
+.profile-ai-settings-routing-field {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.profile-ai-settings-routing-task,
+.profile-ai-settings-routing-value {
+  overflow-wrap: anywhere;
+  color: var(--ai-settings-text);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.profile-ai-settings-routing-task {
+  font-weight: 740;
+}
+
+.profile-ai-settings-routing-description {
+  max-width: 34rem;
+  color: var(--ai-settings-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.profile-ai-settings-routing-value.is-model {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+}
+
+.profile-ai-settings-routing-source,
+.profile-ai-settings-routing-help,
+.profile-ai-settings-routing-static-note,
+.profile-ai-settings-routing-stale-note {
+  margin: 0;
+  color: var(--ai-settings-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.profile-ai-settings-routing-source {
+  color: var(--ai-settings-accent);
+  font-weight: 720;
+}
+
+.profile-ai-settings-routing-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  align-items: end;
+  min-width: 0;
+}
+
+.profile-ai-settings-routing-controls > label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.profile-ai-settings-routing-select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--ai-settings-border-strong);
+  border-radius: 7px;
+  background: var(--ai-settings-surface-raised);
+  color: var(--ai-settings-text);
+  font-size: 10px;
+}
+
+.profile-ai-settings-routing-controls > button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.profile-ai-settings-routing-controls > p,
+.profile-ai-settings-routing-controls > .profile-ai-settings-inline-message {
+  grid-column: 1 / -1;
+}
+
+.profile-ai-settings-routing-stale-note {
+  padding: 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--ai-settings-warning) 30%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ai-settings-warning-soft) 54%, transparent);
+  color: var(--ai-settings-warning);
+}
+
+.profile-ai-settings-routing-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 6px;
+  border: 1px solid var(--ai-settings-border);
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 740;
+  line-height: 1.2;
+}
+
+.profile-ai-settings-routing-status.is-recommended {
+  border-color: color-mix(in srgb, var(--ai-settings-success) 30%, var(--ai-settings-border));
+  background: var(--ai-settings-success-soft);
+  color: var(--ai-settings-success);
+}
+
+.profile-ai-settings-routing-status.is-deterministic {
+  border-color: color-mix(in srgb, var(--ai-settings-blue) 28%, var(--ai-settings-border));
+  background: var(--ai-settings-blue-soft);
+  color: var(--ai-settings-blue);
+}
+
+.profile-ai-settings-routing-status.is-not-live {
+  background: var(--ai-settings-surface-raised);
+  color: var(--ai-settings-muted);
 }
 
 .profile-ai-settings-provider-attribution {
@@ -856,6 +1039,10 @@ html[data-theme="light"] .profile-ai-settings-card {
   .profile-ai-settings-model-groups {
     grid-template-columns: 1fr;
   }
+
+  .profile-ai-settings-routing-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -903,6 +1090,24 @@ html[data-theme="light"] .profile-ai-settings-card {
 
   .profile-ai-settings-model-statuses {
     flex-basis: auto;
+  }
+
+  .profile-ai-settings-routing-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-ai-settings-routing-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding-block: 11px;
+  }
+
+  .profile-ai-settings-routing-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-ai-settings-routing-controls > button {
+    width: 100%;
   }
 
   .profile-ai-settings-modal {

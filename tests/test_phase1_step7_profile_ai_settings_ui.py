@@ -74,11 +74,14 @@ def test_page_has_dedicated_static_owners_and_no_browser_owner_control():
         assert forbidden not in html
 
 
-def test_initial_load_fetches_both_read_apis_in_parallel_and_does_not_mutate():
+def test_initial_load_fetches_three_read_apis_in_parallel_and_does_not_mutate():
     load_page = _function(AI_SETTINGS_JS, "loadPage", "refreshSettings")
     assert "Promise.all([" in load_page
     assert 'requestJson("/ai/settings")' in load_page
     assert 'requestJson("/ai/settings/catalog")' in load_page
+    assert 'requestJson("/ai/settings/recommended-routes")' in load_page
+    assert load_page.count("requestJson(") == 3
+    assert AI_SETTINGS_JS.count('requestJson("/ai/settings/recommended-routes")') == 1
     assert "test-connection" not in load_page
     assert "preferred-provider" not in load_page
     assert "credentials/" not in load_page
@@ -245,7 +248,7 @@ def test_preferred_provider_has_explicit_set_and_clear_actions_only():
 
 
 def test_models_render_exact_catalog_rows_without_unverified_claims_or_ids():
-    render_models = _function(AI_SETTINGS_JS, "renderModels", "renderAll")
+    render_models = _function(AI_SETTINGS_JS, "renderModels", "renderRouting")
     assert "entry.models.forEach((model)" in render_models
     assert "model.modelId" in render_models
     assert "model.provider" in render_models
@@ -262,7 +265,7 @@ def test_models_render_exact_catalog_rows_without_unverified_claims_or_ids():
         "production-qualified",
         "recommended",
     ):
-        assert forbidden not in AI_SETTINGS_JS.lower()
+        assert forbidden not in render_models.lower()
 
 
 def test_connection_test_posts_only_provider_and_model_and_never_renders_content():
@@ -283,13 +286,286 @@ def test_connection_test_posts_only_provider_and_model_and_never_renders_content
         assert category in AI_SETTINGS_JS
 
 
-def test_task_routing_is_read_only_and_does_not_invent_mappings():
+def test_task_routing_card_is_existing_editable_dom_owner():
     html = profile_ai_settings_page()
-    assert "Task-specific model routing will appear here" in html
+    assert "Task-specific model routing will appear here" not in html
+    assert "ApplyLens Recommended by default" in html
+    assert "currently qualified provider/model choice" in html
+    assert ">Read only<" not in html
+    assert "profile-ai-settings-readonly-badge" not in html
+    assert ">Qualified choices<" in html
+    assert 'id="aiTaskRoutingSummary"' in html
+    assert 'id="aiTaskRoutingList"' in html
+    assert "phase1_task_routing_r2" in html
     assert "preferred_model" not in html + AI_SETTINGS_JS
     assert "Resume scoring" not in html + AI_SETTINGS_JS
     assert "Tailoring →" not in html + AI_SETTINGS_JS
     assert "Scan →" not in html + AI_SETTINGS_JS
+
+
+def test_routing_validator_is_structural_bounded_and_backend_catalog_agnostic():
+    row_validator = _function(
+        AI_SETTINGS_JS,
+        "validateRoutingRow",
+        "validateRecommendedRoutes",
+    )
+    aggregate_validator = _function(
+        AI_SETTINGS_JS,
+        "validateRecommendedRoutes",
+        "validateTaskRouteWriteResponse",
+    )
+    assert "payload.ok !== true" in aggregate_validator
+    assert "!Array.isArray(payload.workloads)" in aggregate_validator
+    assert "validateRoutingRow(row)" in aggregate_validator
+    assert "seenWorkloads.has(route.workloadId)" in aggregate_validator
+    assert "seenWorkloads.add(route.workloadId)" in aggregate_validator
+    assert "typeof row.workload_id" in row_validator
+    assert "row.workload_id.trim()" in row_validator
+    for status in (
+        "recommended",
+        "fail_closed_zero_qualified",
+        "blocked_non_live",
+    ):
+        assert f'"{status}"' in row_validator
+    for mode in (
+        "qualified_provider_model",
+        "deterministic",
+        "blocked_non_live",
+    ):
+        assert f'"{mode}"' in row_validator
+    for status in ("none", "qualified", "no_longer_qualified"):
+        assert f'"{status}"' in row_validator
+    for source in (
+        "user_override",
+        "applylens_recommended",
+        "deterministic",
+        "blocked_non_live",
+    ):
+        assert f'"{source}"' in row_validator
+    for field in (
+        "row.execution_mode",
+        "row.recommended_option",
+        "row.qualified_options",
+        "row.requested_selection",
+        "row.requested_selection_status",
+        "row.effective_selection",
+        "row.effective_selection_source",
+    ):
+        assert field in row_validator
+    assert "validateProviderModelPair" in row_validator
+    assert "sameProviderModelPair" in row_validator
+    assert "new Set(optionKeys).size !== optionKeys.length" in row_validator
+    assert "state.catalog" not in row_validator + aggregate_validator
+    assert "catalogProvider(" not in row_validator + aggregate_validator
+    assert "providerSettings(" not in row_validator + aggregate_validator
+    assert "selection_basis" not in row_validator + aggregate_validator
+
+
+def test_routing_rendering_preserves_backend_order_and_uses_generic_fields():
+    display_task = _function(AI_SETTINGS_JS, "displayTaskName", "displayTaskDescription")
+    rendering = _function(AI_SETTINGS_JS, "renderRouting", "renderAll")
+    assert '.split(/[_-]+/)' in display_task
+    assert "state.routing.workloads.forEach((route)" in rendering
+    assert "displayTaskName(route.workloadId)" in rendering
+    assert "displayTaskDescription(route.workloadId)" in rendering
+    assert '"profile-ai-settings-routing-description"' in rendering
+    assert rendering.index("displayTaskName(route.workloadId)") < rendering.index(
+        "displayTaskDescription(route.workloadId)"
+    )
+    assert "route.qualifiedOptions.forEach((option, index)" in rendering
+    assert "displayProviderName(route.effectiveSelection.provider)" in rendering
+    assert "route.effectiveSelection.model" in rendering
+    for label in (
+        "Task",
+        "Routing status",
+        "Effective route",
+        "Routing preference",
+        "Qualified choices",
+        "Deterministic",
+        "Not live",
+        "ApplyLens Recommended",
+        "Save route",
+    ):
+        assert f'"{label}"' in rendering
+    assert "state.routing.workloads.reduce(" in rendering
+    assert "requestJson(" not in rendering
+    for forbidden in (
+        "test-connection",
+        "preferred-provider",
+        "credentials/",
+        'method: "POST"',
+        'method: "PUT"',
+        'method: "DELETE"',
+    ):
+        assert forbidden not in rendering
+
+
+def test_qualified_route_selector_uses_only_indexed_backend_options():
+    rendering = _function(AI_SETTINGS_JS, "renderRouting", "renderAll")
+    assert 'recommendedChoice.value = applyLensRecommendedRouteValue' in rendering
+    assert 'explicitChoice.value = `qualified:${index}`' in rendering
+    assert "route.qualifiedOptions.forEach((option, index)" in rendering
+    assert "route.qualifiedOptions.findIndex((option)" in rendering
+    assert "sameProviderModelPair(option, route.requestedSelection)" in rendering
+    assert 'select.value = `qualified:${requestedIndex}`' in rendering
+    assert "select.value = applyLensRecommendedRouteValue" in rendering
+    assert "appendProviderOptions" not in rendering
+    assert "state.catalog" not in rendering
+    assert "providerSettings(" not in rendering
+    assert "preferredProvider" not in rendering
+    assert "sort(" not in rendering
+
+
+def test_stale_and_nonselectable_routes_are_visible_but_never_editable():
+    rendering = _function(AI_SETTINGS_JS, "renderRouting", "renderAll")
+    assert 'route.requestedSelectionStatus === "no_longer_qualified"' in rendering
+    assert "is no longer qualified. ApplyLens Recommended is currently effective." in rendering
+    assert "route.requestedSelection.provider" in rendering
+    assert "route.requestedSelection.model" in rendering
+    assert 'route.executionMode === "qualified_provider_model"' in rendering
+    assert 'route.executionMode === "deterministic"' in rendering
+    assert "No provider call is used" in rendering
+    assert "This task is not live and cannot be configured." in rendering
+    assert rendering.count('makeElement("select"') == 1
+    assert rendering.count("saveButton.dataset.routeSave") == 1
+    qualified_branch = rendering.split(
+        'if (route.executionMode === "qualified_provider_model") {', 1
+    )[1].split("} else {", 1)[0]
+    assert 'makeElement("select"' in qualified_branch
+
+
+def test_task_route_write_uses_safe_index_resolution_and_exact_methods():
+    saving = _function(AI_SETTINGS_JS, "saveTaskRoute", "bindEvents")
+    assert "if (state.routeSavingWorkload) return" in saving
+    assert '/^qualified:(0|[1-9]\\d*)$/' in saving
+    assert "route.qualifiedOptions[selectedIndex]" in saving
+    assert "Number.isSafeInteger(selectedIndex)" in saving
+    assert "encodeURIComponent(workloadId)" in saving
+    assert '`/ai/settings/task-routes/${encodeURIComponent(workloadId)}`' in saving
+    assert 'method: "DELETE"' in saving
+    assert 'method: "PUT"' in saving
+    assert "provider: selectedOption.provider" in saving
+    assert "model: selectedOption.model" in saving
+    assert "validateTaskRouteWriteResponse(result, workloadId)" in saving
+    assert "state.routing.workloads.map((existingRoute, index)" in saving
+    delete_branch = saving.split("const result = useRecommended", 1)[1].split(
+        ": await requestJson", 1
+    )[0]
+    assert 'method: "DELETE"' in delete_branch
+    assert 'method: "PUT"' not in delete_branch
+    for forbidden in (
+        "owner_user_id",
+        "execution_mode",
+        "recommendation_status",
+        "preferred_provider",
+        "credential",
+        "api_key",
+        "evidence_sha256",
+        "registry_sha",
+        "test-connection",
+        "credentials/",
+    ):
+        assert forbidden not in saving
+
+
+def test_route_failures_are_bounded_and_dynamic_events_use_existing_list_owner():
+    saving = _function(AI_SETTINGS_JS, "saveTaskRoute", "bindEvents")
+    binding = _function(AI_SETTINGS_JS, "bindEvents", "init")
+    for category in (
+        "task_route_not_qualified",
+        "task_route_write_failed",
+        "task_route_delete_failed",
+        "task_route_state_unavailable",
+    ):
+        assert category in AI_SETTINGS_JS
+    assert "error.message" not in saving
+    assert "error.stack" not in saving
+    assert 'byId("aiTaskRoutingList").addEventListener("click"' in binding
+    assert 'event.target.closest("[data-route-save]")' in binding
+    assert 'row.querySelector("[data-route-select]")' in binding
+    assert "saveTaskRoute(workloadId, select.value)" in binding
+
+
+def test_task_descriptions_cover_current_workloads_and_are_presentation_only():
+    descriptions = _function(
+        AI_SETTINGS_JS,
+        "displayTaskDescription",
+        "createProviderMark",
+    )
+    expected = {
+        "skill_extraction": "Finds the important skills and requirements mentioned in a job posting.",
+        "job_fit_evaluation": "Compares your profile with a job and explains how well they match.",
+        "jd_intelligence": "Breaks a job description into structured requirements and useful signals.",
+        "grounded_rag_answer": "Answers questions using only the relevant evidence available to ApplyLens.",
+        "resume_fallback_ranking": "Ranks resume options when ApplyLens needs a fallback comparison.",
+        "ambiguous_resume_adjudication": "Reviews closely matched resume choices and recommends the best-supported option.",
+        "critic_evaluation": "Checks whether an AI suggestion is actually supported by the available evidence.",
+        "tailoring_generation": "Creates evidence-based resume tailoring suggestions for your review.",
+        "tailoring_refinement": "Improves a proposed resume edit while keeping it grounded in your evidence.",
+        "tailoring_judge": "Compares tailoring options and identifies the strongest supported version.",
+        "manual_scan_phrase": "Suggests phrases you can manually review and use while improving a resume.",
+        "manual_provider_preview": "Generates a manual AI preview for review before anything is applied.",
+    }
+    for workload_id, description in expected.items():
+        assert f'{workload_id}: "{description}"' in descriptions
+    assert '|| "Controls how ApplyLens handles this task."' in descriptions
+    for forbidden in (
+        "qualifiedOptions",
+        "preferredProvider",
+        "providerSettings",
+        "credential",
+        "task-routes",
+        "requestJson",
+        "effectiveSelection",
+    ):
+        assert forbidden not in descriptions
+
+    description_css = AI_SETTINGS_CSS.split(
+        ".profile-ai-settings-routing-description {", 1
+    )[1].split("}", 1)[0]
+    assert "max-width: 34rem" in description_css
+    assert "color: var(--ai-settings-muted)" in description_css
+    assert "font-size: 9px" in description_css
+    assert "line-height: 1.4" in description_css
+    assert "white-space: nowrap" not in description_css
+
+
+def test_task_descriptions_do_not_become_a_routing_catalog_or_internal_evidence():
+    static_ui = profile_ai_settings_page() + AI_SETTINGS_JS
+    descriptions = _function(
+        AI_SETTINGS_JS,
+        "displayTaskDescription",
+        "createProviderMark",
+    )
+    routing_logic = _function(
+        AI_SETTINGS_JS,
+        "validateRoutingRow",
+        "validateRecommendedRoutes",
+    ) + _function(AI_SETTINGS_JS, "saveTaskRoute", "bindEvents")
+    assert "displayTaskDescription" not in routing_logic
+    for workload_id in (
+        "skill_extraction",
+        "jd_intelligence",
+        "grounded_rag_answer",
+        "ambiguous_resume_adjudication",
+        "tailoring_refinement",
+        "tailoring_judge",
+        "job_fit_evaluation",
+        "resume_fallback_ranking",
+        "critic_evaluation",
+        "tailoring_generation",
+        "manual_scan_phrase",
+        "manual_provider_preview",
+    ):
+        assert descriptions.count(f"{workload_id}:") == 1
+        assert workload_id not in routing_logic
+    for internal_field in (
+        "task_contract_sha256",
+        "qualification_binding_sha256",
+        "evidence_sha256",
+        "review_sha256",
+    ):
+        assert internal_field not in static_ui
 
 
 def test_modal_keyboard_background_and_focus_return_behaviors_exist():

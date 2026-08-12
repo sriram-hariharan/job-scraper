@@ -667,7 +667,7 @@ def profile_ai_settings_page() -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_step7b_r1" />
-  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_step8b_r1" />
+  <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_task_routing_r2" />
 </head>
 <body class="profile-ai-settings-page-shell">
   {render_top_shell("/profile/ai-settings")}
@@ -781,10 +781,12 @@ def profile_ai_settings_page() -> str:
         <div class="profile-ai-settings-section-heading">
           <div>
             <h2 id="aiTaskRoutingTitle">AI task routing</h2>
-            <p>Task-specific model routing will appear here after model qualification and routing configuration are enabled.</p>
+            <p>Use ApplyLens Recommended by default, or save an explicit currently qualified provider/model choice for a task.</p>
           </div>
-          <span class="profile-ai-settings-readonly-badge">Not configured</span>
+          <span class="profile-ai-settings-routing-badge">Qualified choices</span>
         </div>
+        <div class="profile-ai-settings-routing-summary" id="aiTaskRoutingSummary" aria-label="Task routing summary"></div>
+        <div class="profile-ai-settings-routing-list" id="aiTaskRoutingList" aria-label="AI task routes"></div>
       </section>
 
       <p class="profile-ai-settings-provider-attribution">
@@ -886,7 +888,7 @@ def profile_ai_settings_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script src="/static/profile_ai_settings.js?v=phase1_step8b_r1"></script>
+  <script src="/static/profile_ai_settings.js?v=phase1_task_routing_r2"></script>
 </body>
 </html>
     """.strip()

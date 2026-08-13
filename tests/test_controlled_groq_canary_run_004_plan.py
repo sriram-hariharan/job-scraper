@@ -3,6 +3,9 @@ from copy import deepcopy
 import pytest
 
 from src.evaluation import controlled_groq_canary_run_004_plan as owner
+from src.evaluation.controlled_provider_benchmark_plan import (
+    build_transmittable_request_packet,
+)
 from src.evaluation.controlled_groq_canary_transport import (
     build_groq_chat_completion_arguments,
     conservative_local_input_size_bytes,
@@ -65,24 +68,42 @@ def test_fresh_keys_are_unique_and_do_not_collide_with_prior_or_base_keys():
     assert all(k.startswith("canary_run_004_") and k not in prohibited for k in keys)
 
 
-def test_mapping_and_base_transport_compatibility_are_exact():
+def test_historical_mapping_is_exact():
     plan = owner.build_run_004_plan_contract()
     assert [m["base_schedule_key"] for m in plan["base_transport_mapping"]] == EXPECTED_BASE_KEYS
-    for row, size in zip(plan["schedule"], EXPECTED_SIZES):
+    for row in plan["schedule"]:
         fresh, base, packet = owner.resolve_run_004_transport_inputs(
             row["schedule_key"]
         )
         assert fresh == row
+        assert packet["case_alias"] == row["case_alias"]
+        assert base["case_alias"] == row["case_alias"]
+
+
+def test_current_semantic_transport_compatibility_is_exact():
+    _corpus, _benchmark, current_plan, _engine, _fixture, rows, _canary = (
+        owner._committed_ownership()
+    )
+    for owned, size in zip(rows, EXPECTED_SIZES):
+        review = owned["review"]
+        base = owned["base_transport_row"]
+        packet = build_transmittable_request_packet(
+            case_alias=review["case_alias"],
+            provider=base["provider"],
+            model=base["model"],
+            plan=current_plan,
+            live_execution_requested=False,
+        )
         args = build_groq_chat_completion_arguments(
             packet=packet,
             scheduled=base,
-            plan=owner._committed_ownership()[2],
+            plan=current_plan,
         )
         assert validate_groq_chat_completion_arguments(
             args,
             packet=packet,
             scheduled=base,
-            plan=owner._committed_ownership()[2],
+            plan=current_plan,
         )
         assert conservative_local_input_size_bytes(args) == size
 

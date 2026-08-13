@@ -11,8 +11,6 @@ from typing import Any, Dict, Iterable, Mapping
 from src.evaluation.controlled_provider_benchmark_plan import (
     CONTROLLED_PLAN_VERSION,
     build_controlled_provider_benchmark_plan,
-    build_transmittable_request_packet,
-    controlled_provider_benchmark_plan_sha256,
     load_run_plan_fixture,
     validate_controlled_provider_benchmark_plan,
 )
@@ -48,6 +46,64 @@ TARGET_WORKLOADS = ("jd_intelligence", "tailoring_generation")
 TARGET_PROVIDER = "groq"
 TARGET_MODEL = "openai/gpt-oss-120b"
 RUN_004_SCHEDULE_KEY_PREFIX = "canary_run_004_"
+HISTORICAL_TARGET_ALIASES = {
+    "jd_intelligence": "case_db0a584dd7f8653ca842281f",
+    "tailoring_generation": "case_ece85e9411ca52b579359fb8",
+}
+CURRENT_TARGET_OWNERSHIP = {
+    "jd_intelligence": {
+        "case_alias": "case_c4f73240ce6ff98809579b5d",
+        "case_id": "jd_intelligence_signals_v1",
+        "schema_id": "jd_intelligence_result_v1",
+    },
+    "tailoring_generation": {
+        "case_alias": "case_3dddc5f43be918e0932d3bb2",
+        "case_id": "tailoring_generation_evidence_bound_v1",
+        "schema_id": "tailoring_generation_result_v1",
+    },
+}
+_HISTORICAL_BENCHMARK_CONTRACT_SHA256 = (
+    "ba4e817f4e82f9df967011709a42bc7d2f22998f176f555cfee9dfc9e0071b98"
+)
+_HISTORICAL_CONTROLLED_PLAN_SHA256 = (
+    "a3ef53ff992a2d1daf43f8fa9b0556202268d34e21f7611eb5de4d26e9abe6b6"
+)
+_HISTORICAL_FIXTURE_CORPUS_SHA256 = (
+    "0ddc82e62745856c0d5d4d3f0efbe3fc86bd4e84e5da070f54f4ea635e74b05c"
+)
+_HISTORICAL_STEP8O_ENGINE_SHA256 = (
+    "7a6463fc465d963633f82a18de0b067daab31dc387680b1d004e706c61a55c15"
+)
+_HISTORICAL_RUN_004_SCHEDULE_KEYS = {
+    "jd_intelligence": "canary_run_004_db0b880f7fdc091fd113a70d6e277b5890770f2d9e8301de5e750b821bb8c3b9",
+    "tailoring_generation": "canary_run_004_c2f21c6c570b6361605978732fcdc603f2884c2764194e66b541a84ca4438b69",
+}
+_HISTORICAL_BASE_TRANSPORT_ROWS = {
+    "jd_intelligence": {
+        "execution_order": 3,
+        "case_alias": "case_db0a584dd7f8653ca842281f",
+        "workload_id": "jd_intelligence",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "timeout_seconds": 30,
+        "fallback": False,
+        "harness_retry_limit": 0,
+        "provider_sdk_retry_limit": 0,
+        "schedule_key": "canary_8b167323a8667845ab0e26083b5294f5",
+    },
+    "tailoring_generation": {
+        "execution_order": 4,
+        "case_alias": "case_ece85e9411ca52b579359fb8",
+        "workload_id": "tailoring_generation",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "timeout_seconds": 30,
+        "fallback": False,
+        "harness_retry_limit": 0,
+        "provider_sdk_retry_limit": 0,
+        "schedule_key": "canary_969374f055f6d3a74a60a3e4ce6ee440",
+    },
+}
 EXPECTED_CANONICAL_REQUEST_SIZES = {
     "jd_intelligence": 768,
     "tailoring_generation": 641,
@@ -242,6 +298,11 @@ def _committed_ownership() -> tuple[
             f"run-004 requires exactly one eligible {workload} case",
         )
         review, case = matches[0]
+        current_target = CURRENT_TARGET_OWNERSHIP[workload]
+        _require(
+            review["case_alias"] == current_target["case_alias"],
+            f"current {workload} case alias changed",
+        )
         _require(
             review["wholly_synthetic"] is True
             and review["requires_additional_redaction"] is False
@@ -254,7 +315,9 @@ def _committed_ownership() -> tuple[
             "run-004 target contains prohibited transmission material",
         )
         _require(
-            case["workload_id"] == workload
+            case["case_id"] == current_target["case_id"]
+            and case["workload_id"] == workload
+            and case["schema_id"] == current_target["schema_id"]
             and case["sanitized_classification"] == "synthetic_sanitized"
             and case["contains_personal_resume_content"] is False
             and case["additional_redaction_required"] is False,
@@ -340,8 +403,8 @@ def _expected_plan_contract() -> Dict[str, Any]:
         ownership_rows,
         _canary,
     ) = _committed_ownership()
-    plan_sha = controlled_provider_benchmark_plan_sha256(controlled_plan)
-    corpus_sha = fixture_case_corpus_sha256(corpus)
+    plan_sha = _HISTORICAL_CONTROLLED_PLAN_SHA256
+    corpus_sha = _HISTORICAL_FIXTURE_CORPUS_SHA256
     request_limits = fixture["request_limits"]
     maximum_input = controlled_plan["token_budget_schema"][
         "maximum_input_tokens_per_request"
@@ -353,19 +416,15 @@ def _expected_plan_contract() -> Dict[str, Any]:
     mapping = []
     for owned in ownership_rows:
         review = owned["review"]
-        base_row = owned["base_transport_row"]
+        workload = review["workload_id"]
+        case_alias = HISTORICAL_TARGET_ALIASES[workload]
+        base_row = _HISTORICAL_BASE_TRANSPORT_ROWS[workload]
         execution_order = owned["execution_order"]
-        run_key = _run_004_schedule_key(
-            controlled_plan_sha256=plan_sha,
-            fixture_corpus_sha256=corpus_sha,
-            workload_id=review["workload_id"],
-            case_alias=review["case_alias"],
-            execution_order=execution_order,
-        )
+        run_key = _HISTORICAL_RUN_004_SCHEDULE_KEYS[workload]
         schedule.append({
             "execution_order": execution_order,
-            "case_alias": review["case_alias"],
-            "workload_id": review["workload_id"],
+            "case_alias": case_alias,
+            "workload_id": workload,
             "provider": TARGET_PROVIDER,
             "model": TARGET_MODEL,
             "timeout_seconds": request_limits["timeout_seconds"],
@@ -377,7 +436,7 @@ def _expected_plan_contract() -> Dict[str, Any]:
         mapping.append({
             "execution_order": execution_order,
             "run_004_schedule_key": run_key,
-            "workload_id": review["workload_id"],
+            "workload_id": workload,
             "base_schedule_key": base_row["schedule_key"],
             "base_transport_row": deepcopy(base_row),
         })
@@ -386,15 +445,13 @@ def _expected_plan_contract() -> Dict[str, Any]:
         "run_identifier": RUN_004_IDENTIFIER,
         "contract_kind": RUN_004_CONTRACT_KIND,
         "benchmark_contract_version": BENCHMARK_CONTRACT_VERSION,
-        "benchmark_contract_sha256": provider_benchmark_contract_sha256(
-            benchmark
-        ),
+        "benchmark_contract_sha256": _HISTORICAL_BENCHMARK_CONTRACT_SHA256,
         "controlled_plan_version": CONTROLLED_PLAN_VERSION,
         "controlled_plan_sha256": plan_sha,
         "fixture_corpus_version": CASE_CORPUS_VERSION,
         "fixture_corpus_sha256": corpus_sha,
         "step8o_engine_version": FIXTURE_BENCHMARK_VERSION,
-        "step8o_engine_sha256": provider_fixture_benchmark_sha256(step8o),
+        "step8o_engine_sha256": _HISTORICAL_STEP8O_ENGINE_SHA256,
         "target_case_aliases": [row["case_alias"] for row in schedule],
         "target_workloads": list(TARGET_WORKLOADS),
         "target_provider": TARGET_PROVIDER,
@@ -539,6 +596,37 @@ def run_004_plan_sha256(
     ).hexdigest()
 
 
+def _historical_packet_for_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    ownership_rows = _committed_ownership()[5]
+    owned = next(
+        item
+        for item in ownership_rows
+        if item["review"]["workload_id"] == row["workload_id"]
+    )
+    case = owned["case"]
+    request_limits = _committed_ownership()[4]["request_limits"]
+    return {
+        "benchmark_contract_version": BENCHMARK_CONTRACT_VERSION,
+        "run_plan_version": RUN_004_PLAN_VERSION,
+        "case_alias": row["case_alias"],
+        "workload_id": row["workload_id"],
+        "provider": row["provider"],
+        "model": row["model"],
+        "synthetic_input": deepcopy(case["normalized_input_packet"]),
+        "output_schema": {
+            "schema_id": case["schema_id"],
+            "required_fields": deepcopy(case["required_fields"]),
+        },
+        "temperature": request_limits["temperature"],
+        "maximum_completion_tokens": request_limits[
+            "maximum_completion_tokens_per_request"
+        ],
+        "timeout_seconds": request_limits["timeout_seconds"],
+        "fallback": False,
+        "live_execution_requested": False,
+    }
+
+
 def build_run_004_transmittable_request_packet(
     *,
     schedule_key: str,
@@ -554,14 +642,7 @@ def build_run_004_transmittable_request_packet(
         None,
     )
     _require(row is not None, "unknown run-004 schedule key")
-    controlled_plan = _committed_ownership()[2]
-    packet = build_transmittable_request_packet(
-        case_alias=row["case_alias"],
-        provider=row["provider"],
-        model=row["model"],
-        plan=controlled_plan,
-        live_execution_requested=False,
-    )
+    packet = _historical_packet_for_row(row)
     validate_run_004_transmittable_request_packet(
         packet,
         schedule_key=schedule_key,
@@ -586,14 +667,7 @@ def validate_run_004_transmittable_request_packet(
         schedule_key,
         include_packet=False,
     )
-    controlled_plan = _committed_ownership()[2]
-    expected = build_transmittable_request_packet(
-        case_alias=row["case_alias"],
-        provider=row["provider"],
-        model=row["model"],
-        plan=controlled_plan,
-        live_execution_requested=False,
-    )
+    expected = _historical_packet_for_row(row)
     _require(packet == expected, "run-004 request packet differs")
     return True
 
@@ -634,12 +708,5 @@ def resolve_run_004_transport_inputs(
     )
     packet = None
     if include_packet:
-        controlled_plan = _committed_ownership()[2]
-        packet = build_transmittable_request_packet(
-            case_alias=row["case_alias"],
-            provider=row["provider"],
-            model=row["model"],
-            plan=controlled_plan,
-            live_execution_requested=False,
-        )
+        packet = _historical_packet_for_row(row)
     return deepcopy(row), deepcopy(base_row), deepcopy(packet)

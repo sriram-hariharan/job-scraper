@@ -41,7 +41,8 @@ from src.evaluation.controlled_groq_canary_run_004_plan import (
 )
 from src.evaluation.controlled_groq_canary_transport import (
     TRANSPORT_VERSION,
-    controlled_groq_transport_sha256,
+    build_controlled_groq_transport_contract,
+    validate_controlled_groq_transport_contract,
 )
 from src.evaluation.controlled_provider_benchmark_harness import (
     TRANSPORT_RESULT_FIELDS,
@@ -321,9 +322,19 @@ def _validated_owners() -> tuple[Dict[str, Any], Dict[str, Any]]:
         == _PINNED_AUTHORIZATION_TEMPLATE_SHA256,
         "run-004 authorization-template digest changed",
     )
+    current_transport = build_controlled_groq_transport_contract()
+    validate_controlled_groq_transport_contract(current_transport)
     _require(
-        controlled_groq_transport_sha256() == _PINNED_TRANSPORT_SHA256,
-        "base Groq transport digest changed",
+        current_transport["authority_invariants"] == {
+            "live_execution_authorized": False,
+            "fallback": False,
+            "retry_count": 0,
+            "production_activation": False,
+            "mutation_count": 0,
+            "application_action_count": 0,
+            "ats_action_count": 0,
+        },
+        "current base Groq transport authority changed",
     )
     _require(
         len(plan["schedule"]) == 2

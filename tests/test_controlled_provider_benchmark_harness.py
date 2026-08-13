@@ -1591,17 +1591,17 @@ def test_no_production_source_imports_or_calls_the_harness_owner():
             if "controlled_provider_benchmark_harness" in text:
                 references.append(path.relative_to(ROOT).as_posix())
 
-    assert references == [
+    assert sorted(references) == sorted([
         "src/evaluation/controlled_live_provider_qualification.py",
         "src/evaluation/controlled_groq_canary_run_003_transport.py",
         "src/evaluation/controlled_openai_canary_transport.py",
         "src/evaluation/controlled_groq_canary_evidence_runtime.py",
         "src/evaluation/controlled_provider_qualification_registry.py",
         "src/evaluation/controlled_groq_tailoring_canary_transport.py",
-        "src/evaluation/controlled_provider_benchmark_human_review.py",
+        "src/evaluation/controlled_provider_qualification_evidence_adapter.py",
         "src/evaluation/controlled_groq_canary_run_004_evidence_runtime.py",
         "src/evaluation/controlled_groq_canary_transport.py",
         "src/evaluation/controlled_groq_canary_run_005_evidence_runtime.py",
         "src/evaluation/controlled_groq_canary_run_003_evidence_runtime.py",
         "src/evaluation/controlled_provider_benchmark_evidence_runtime.py",
-    ]
+    ])

@@ -166,10 +166,20 @@ def test_max_completion_tokens_is_recorded(result):
     )
 
 
-def test_current_temperature_behavior_is_recorded(result):
+def test_model_compatible_temperature_behavior_is_recorded(result):
+    gpt_5_mini = _candidate(result, "openai", "gpt-5-mini")
+    assert gpt_5_mini["request_field_classifications"]["temperature"] == (
+        "omitted_for_default_only_model"
+    )
+
+    other_rows = [
+        row
+        for row in result["candidate_results"]
+        if (row["provider"], row["model"]) != ("openai", "gpt-5-mini")
+    ]
     assert all(
         row["request_field_classifications"]["temperature"] == "passed_explicitly"
-        for row in result["candidate_results"]
+        for row in other_rows
     )
 
 

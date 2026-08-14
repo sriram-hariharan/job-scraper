@@ -109,11 +109,13 @@ def test_title_pattern_helpers_dedupe_and_compile_regexes():
     )
 
     assert include_patterns.count(r"analytics engineer") == 1
-    assert exclude_patterns.count(r"\bdirector\b") == 1
+    assert exclude_patterns.count(r"\brecruiter\b") == 1
+    assert r"\bdirector\b" not in exclude_patterns
 
     include_regexes, exclude_regexes = compile_role_title_regexes(["analytics"])
 
     assert all(isinstance(regex, re.Pattern) for regex in include_regexes)
     assert all(isinstance(regex, re.Pattern) for regex in exclude_regexes)
     assert any(regex.search("Senior Data Analyst") for regex in include_regexes)
-    assert any(regex.search("Director of Analytics") for regex in exclude_regexes)
+    assert any(regex.search("Technical Recruiter") for regex in exclude_regexes)
+    assert not any(regex.search("Director of Analytics") for regex in exclude_regexes)

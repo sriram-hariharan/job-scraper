@@ -2,6 +2,7 @@ from xml.etree import ElementTree
 from src.config.consts import ATS_REGEX, CAREER_PATHS, CAREER_SUBDOMAINS, SITEMAP_PATHS
 from src.utils.http_retry import http_get
 from src.discovery.learned_companies import learn_company
+from src.utils.url_normalizer import normalize_workday_url
 
 
 def extract_sitemap_urls(xml):
@@ -73,7 +74,12 @@ def detect_ats_from_urls(urls):
                 m = pattern.search(url)
 
                 if m:
-                    slug = m.group(1)
+                    if ats == "workday":
+                        slug = normalize_workday_url(url)
+                        if not slug:
+                            continue
+                    else:
+                        slug = m.group(1)
                     found[ats].add(slug)
                     learn_company(ats, slug)
 

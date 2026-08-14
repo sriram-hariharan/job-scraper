@@ -147,12 +147,9 @@ def test_central_llm_client_owns_direct_provider_sdk_boundaries():
     direct_provider_tokens = [
         "from groq import Groq",
         "from openai import OpenAI",
-        "from google import genai",
         "Groq(api_key=groq_api_key)",
         "OpenAI(api_key=openai_api_key)",
-        "genai.Client(api_key=gemini_api_key)",
         "client.chat.completions.create(",
-        "client.models.generate_content(",
         "def run_chat_completion_with_metadata(",
         "def run_chat_completion(",
     ]
@@ -188,8 +185,11 @@ def test_collector_automatic_llm_capable_paths_are_cache_first_contracts():
     assert "from src.ai.skill_llm_enricher import enrich_skills_with_llm" in job_intelligence
     assert "llm_result = enrich_skills_with_llm(description)" in job_intelligence
     assert "from src.ai.llm_client import run_chat_completion" in skill_enricher
-    assert "response = run_chat_completion(" in skill_enricher
-    assert "retry_response = run_chat_completion(" in skill_enricher
+    assert "def resolve_effective_user_provider_route(" in skill_enricher
+    assert "result = run_user_chat_completion_with_metadata(" in skill_enricher
+    assert "return run_chat_completion(" in skill_enricher
+    assert "response = _call_live_llm(prompt)" in skill_enricher
+    assert "retry_response = _call_live_llm(retry_prompt)" in skill_enricher
     assert 'SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live")' in skill_enricher
     assert 'VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}' in skill_enricher
 

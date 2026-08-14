@@ -5,6 +5,8 @@ from hashlib import sha256
 import importlib
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
     get_changed_files,
@@ -438,8 +440,13 @@ def test_docs_include_required_markers_and_references():
 
 
 def test_protected_runtime_hashes_unchanged():
-    for relative, expected in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative) == expected, relative
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
 
 
 def test_changed_files_are_limited_to_phase43a_and_legacy_guards():

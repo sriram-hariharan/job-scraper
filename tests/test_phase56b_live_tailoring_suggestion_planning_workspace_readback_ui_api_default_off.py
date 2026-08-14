@@ -3,6 +3,8 @@ from __future__ import annotations
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from fastapi.testclient import TestClient
 
 from src.app import api, services
@@ -260,5 +262,10 @@ def test_docs_capture_phase56b_readback_and_safety():
 
 
 def test_protected_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )

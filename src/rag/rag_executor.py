@@ -169,6 +169,7 @@ def execute_rag_request(
     output_mode: str = "compact",
     include_diagnostics: bool = False,
     intent_override: Optional[str] = None,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     request_norm = str(request or "").strip()
     if not request_norm:
@@ -223,13 +224,19 @@ def execute_rag_request(
             "response": response,
         }
     else:
+        answer_kwargs = {
+            "question": request_norm,
+            "top_k": top_k,
+            "fetch_k": fetch_k,
+            "filters": filters,
+            "include_diagnostics": include_diagnostics,
+            "output_mode": output_mode,
+        }
+        owner = str(owner_user_id or "").strip()
+        if owner:
+            answer_kwargs["owner_user_id"] = owner
         response = answer_job_query_tool(
-            question=request_norm,
-            top_k=top_k,
-            fetch_k=fetch_k,
-            filters=filters,
-            include_diagnostics=include_diagnostics,
-            output_mode=output_mode,
+            **answer_kwargs,
         )
         payload = {
             "ok": response.get("ok", False),

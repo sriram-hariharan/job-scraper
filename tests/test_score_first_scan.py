@@ -2,6 +2,8 @@ import sys
 import tempfile
 import types
 import os
+import inspect
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +21,7 @@ from src.app.services import (
     create_saved_scan_payload,
     extract_scan_resume_upload_text_payload,
     scan_workspace_job_context_payload,
+    _scan_phrase_llm_prompt,
     _scan_phrase_parse_options_payload,
     _scan_phrase_signal_terms,
     _scan_phrase_structured_output_contract,
@@ -33,7 +36,15 @@ from src.storage.saved_scans.store import (
 from src.tailoring.replacement_selector import build_final_replacement_plan
 from src.tailoring import rendering as tailoring_rendering
 from src.tailoring import llm as tailoring_llm
-from src.tailoring.score_utils import score_delta_to_points, score_to_points
+from src.tailoring.score_utils import (
+    is_effectively_score_neutral,
+    is_meaningful_positive_score_lift,
+    is_score_negative,
+    is_score_neutral,
+    is_score_positive,
+    score_delta_to_points,
+    score_to_points,
+)
 
 
 def _candidate(candidate_id, *, bullet_id="bullet_1", delta=0.0, llm=False, patch_text="patched bullet"):
@@ -81,6 +92,24 @@ def test_score_point_normalization_handles_normalized_and_point_values():
     assert score_to_points(42) == 42
     assert score_delta_to_points(0.03) == 3
     assert score_delta_to_points(-0.02) == -2
+
+
+def test_effective_score_lift_helpers_preserve_raw_sign_and_point_semantics():
+    assert is_score_positive(0.000031) is True
+    assert is_score_neutral(0) is True
+    assert is_score_negative(-0.000031) is True
+
+    assert score_delta_to_points(0.000031) == 0
+    assert score_delta_to_points(0.02) == 2
+
+    assert is_effectively_score_neutral(0.000031) is True
+    assert is_meaningful_positive_score_lift(0.000031) is False
+    assert is_effectively_score_neutral(0) is True
+    assert is_meaningful_positive_score_lift(0) is False
+    assert is_effectively_score_neutral(0.02) is False
+    assert is_meaningful_positive_score_lift(0.02) is True
+    assert is_effectively_score_neutral(-0.000031) is False
+    assert is_meaningful_positive_score_lift(-0.000031) is False
 
 
 def test_workspace_score_preview_contract_exposes_points_and_changed_bullets():
@@ -163,6 +192,180 @@ def test_scan_phrase_validate_llm_options_marks_manual_only():
     assert options[0]["requires_review"] is True
 
 
+def test_scan_phrase_prompt_requires_distinct_action_led_strategies():
+    prompt = _scan_phrase_llm_prompt(
+        current="Orchestrated automated ingestion using SQL and Python.",
+        guidance="Surface Python and SQL naturally.",
+        terms=["Python", "SQL"],
+    )
+
+    assert "first lexical word of every draft must match" not in prompt
+    assert "strong, capitalized action verb" in prompt
+    assert "normal resume sentence case" in prompt
+    assert "Never render the opening action verb in ALL CAPS" in prompt
+    assert "SQL, AWS, API, AI, LLM, and ETL" in prompt
+    assert "different truthful opening action verb for each draft" in prompt
+    assert "grammatical tense, factual meaning, and claim strength" in prompt
+    assert "Concise / direct accomplishment rewrite" in prompt
+    assert "Technical-signal-forward rewrite" in prompt
+    assert "Outcome / impact-forward rewrite" in prompt
+    assert "Incorporate supported terms naturally after the opening action verb" in prompt
+    assert "Never prefix the bullet with a keyword or tool list" in prompt
+    assert "Python, SQL —" in prompt
+    assert "Using, With, By, Through, or Via" in prompt
+    assert "not a keyword shuffle" in prompt
+
+
+def test_scan_phrase_validator_keeps_three_distinct_action_led_rewrites():
+    generated = [
+        "Orchestrated automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality.",
+        "Automated weekly ingestion and transformation of 250k+ customer records with Python and SQL while maintaining 98% data quality.",
+        "Engineered a Python and SQL workflow to ingest and transform 250k+ customer records each week, sustaining 98% data quality.",
+    ]
+    options = _scan_phrase_validate_llm_options(
+        [{"text": text} for text in generated],
+        current="Orchestrated automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == generated
+    assert [option["text"].split()[0] for option in options] == [
+        "Orchestrated",
+        "Automated",
+        "Engineered",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("generated", "expected", "terms"),
+    (
+        (
+            "ENGINEERED automated ingestion using SQL",
+            "Engineered automated ingestion using SQL",
+            ["SQL"],
+        ),
+        (
+            "IMPLEMENTED SQL and Python pipelines",
+            "Implemented SQL and Python pipelines",
+            ["SQL", "Python"],
+        ),
+        (
+            "DELIVERED weekly ingestion using AWS",
+            "Delivered weekly ingestion using AWS",
+            ["AWS"],
+        ),
+        (
+            "Engineered automated ingestion using SQL, AWS, LLM, and API",
+            "Engineered automated ingestion using SQL, AWS, LLM, and API",
+            ["SQL", "AWS", "LLM", "API"],
+        ),
+    ),
+)
+def test_scan_phrase_validator_sentence_cases_only_an_all_caps_opening_word(
+    generated,
+    expected,
+    terms,
+):
+    options = _scan_phrase_validate_llm_options(
+        [{"text": generated}],
+        current="Orchestrated automated ingestion using supported technical tools.",
+        terms=terms,
+    )
+
+    assert [option["text"] for option in options] == [expected]
+
+
+def test_scan_phrase_validator_keeps_only_one_duplicate_opening():
+    options = _scan_phrase_validate_llm_options(
+        [
+            {"text": "Orchestrated automated ingestion using Python and SQL."},
+            {"text": "ORCHESTRATED automated ingestion with Python and SQL."},
+            {"text": "Automated Python and SQL ingestion workflows."},
+        ],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == [
+        "Orchestrated automated ingestion using Python and SQL.",
+        "Automated Python and SQL ingestion workflows.",
+    ]
+
+
+@pytest.mark.parametrize(
+    "generated",
+    (
+        "Python, SQL — orchestrated automated ingestion.",
+        "SQL and Python: Orchestrated automated ingestion.",
+        "Using Python and SQL, orchestrated automated ingestion.",
+        "With Python and SQL, orchestrated automated ingestion.",
+    ),
+)
+def test_scan_phrase_validator_rejects_keyword_and_introductory_openings(generated):
+    options = _scan_phrase_validate_llm_options(
+        [{"text": generated}],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert options == []
+
+
+def test_scan_phrase_validator_rejects_near_duplicates_with_different_openings():
+    options = _scan_phrase_validate_llm_options(
+        [
+            {"text": "Orchestrated automated ingestion using Python and SQL."},
+            {"text": "Automated automated ingestion using Python and SQL."},
+            {"text": "Engineered Python and SQL workflows for automated ingestion."},
+        ],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == [
+        "Orchestrated automated ingestion using Python and SQL.",
+        "Engineered Python and SQL workflows for automated ingestion.",
+    ]
+
+
+def test_scan_phrase_validator_preserves_duplicate_and_length_protections():
+    valid = "Orchestrated automated ingestion using Python and SQL."
+    too_long = f"Engineered {('data ' * 80).strip()}"
+    options = _scan_phrase_validate_llm_options(
+        [
+            {"text": valid},
+            {"text": valid},
+            {"text": too_long},
+        ],
+        current="Orchestrated automated ingestion using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert [option["text"] for option in options] == [valid]
+
+
+def test_scan_phrase_validator_preserves_factual_safety_fields_and_review_contract():
+    options = _scan_phrase_validate_llm_options(
+        [{
+            "text": "Engineered ingestion workflows using Python and SQL.",
+            "reason": "Improves technical signal placement without changing the claim.",
+            "supported_terms": ["Python", "SQL"],
+            "risk_flags": ["manual_fact_review"],
+        }],
+        current="Orchestrated ingestion workflows using SQL and Python.",
+        terms=["Python", "SQL"],
+    )
+
+    assert options[0]["reason"] == (
+        "Improves technical signal placement without changing the claim."
+    )
+    assert options[0]["supported_terms"] == ["Python", "SQL"]
+    assert options[0]["risk_flags"] == ["manual_fact_review"]
+    assert options[0]["requires_review"] is True
+    assert options[0]["can_accept_directly"] is False
+    assert options[0]["changed_from_current"] is True
+
+
 def test_scan_phrase_parse_options_payload_accepts_fenced_json_text():
     rows = _scan_phrase_parse_options_payload(
         '```json\n{"options":[{"text":"Draft","reason":"Clearer","supported_terms":["SQL"],"risk_flags":[]}]}\n```'
@@ -191,6 +394,414 @@ def test_scan_workspace_phrase_request_uses_planning_output_dir_endpoint():
     assert "context?.planningOutputDir" in phrase_handler
     assert "postJsonWithTimeout(phraseUrl, requestBody, 20000)" in phrase_handler
     assert "fetch(phraseUrl" in phrase_handler
+
+
+def _valid_scan_phrase_llm_content():
+    return {
+        "options": [
+            {
+                "text": (
+                    "Engineered reporting dashboards using SQL for weekly "
+                    "stakeholder updates."
+                ),
+                "reason": "Keeps the supported SQL reporting claim clear.",
+                "supported_terms": ["SQL"],
+                "risk_flags": [],
+            }
+        ]
+    }
+
+
+def test_scan_phrase_api_requires_request_context_and_passes_exact_owner(
+    monkeypatch,
+    tmp_path,
+):
+    from src.app import api as app_api
+
+    parameters = inspect.signature(app_api.generate_scan_phrases).parameters
+    assert parameters["http_request"].annotation is app_api.Request
+
+    auth_calls = []
+    service_calls = []
+    monkeypatch.setattr(
+        app_api,
+        "_require_auth_owner_user_id",
+        lambda request: auth_calls.append(request) or "owner-a",
+    )
+    monkeypatch.setattr(
+        app_api.services,
+        "generate_tailoring_scan_phrase_payload",
+        lambda **kwargs: service_calls.append(kwargs) or {"ok": True},
+    )
+    http_request = SimpleNamespace(state=SimpleNamespace(auth_user={}))
+    request = app_api.PlanningScanPhraseRequest(
+        tailoring_json_path="artifact.json",
+        selected_resume="resume.pdf",
+        bullet_key="experience:1",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+        supported_terms=["SQL"],
+    )
+
+    result = app_api.generate_scan_phrases(
+        request,
+        http_request,
+        output_dir=str(tmp_path),
+    )
+
+    assert result == {"ok": True}
+    assert auth_calls == [http_request]
+    assert service_calls == [
+        {
+            "output_dir": tmp_path,
+            "owner_user_id": "owner-a",
+            "tailoring_json_path": "artifact.json",
+            "selected_resume": "resume.pdf",
+            "bullet_key": "experience:1",
+            "current_text": "Built dashboards using SQL.",
+            "guidance_text": "Lead with SQL reporting.",
+            "supported_terms": ["SQL"],
+        }
+    ]
+
+
+def test_scan_phrase_api_missing_owner_fails_before_service(monkeypatch):
+    from src.app import api as app_api
+
+    monkeypatch.setattr(
+        app_api.services,
+        "generate_tailoring_scan_phrase_payload",
+        lambda **_kwargs: pytest.fail("service must not execute"),
+    )
+    request = app_api.PlanningScanPhraseRequest(
+        tailoring_json_path="artifact.json",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+    )
+    http_request = SimpleNamespace(
+        state=SimpleNamespace(auth_user={}),
+    )
+
+    with pytest.raises(app_api.HTTPException) as exc_info:
+        app_api.generate_scan_phrases(request, http_request)
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Authentication required."
+
+
+def test_scan_phrase_service_passes_normalized_owner_to_llm_helper(
+    monkeypatch,
+    tmp_path,
+):
+    from src.app import services as app_services
+
+    helper_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "_resolve_planning_artifact_path",
+        lambda *_args, **_kwargs: tmp_path / "artifact.json",
+    )
+    monkeypatch.setattr(
+        app_services,
+        "_generate_scan_phrase_options_with_llm",
+        lambda **kwargs: helper_calls.append(kwargs) or ([], {}),
+    )
+
+    result = app_services.generate_tailoring_scan_phrase_payload(
+        output_dir=tmp_path,
+        tailoring_json_path="artifact.json",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+        supported_terms=["SQL"],
+        owner_user_id=" owner-a ",
+    )
+
+    assert helper_calls == [
+        {
+            "current": "Built dashboards using SQL.",
+            "guidance": "Lead with SQL reporting.",
+            "terms": ["SQL"],
+            "owner_user_id": "owner-a",
+        }
+    ]
+    assert result["source"] == "llm_unavailable"
+
+
+def test_owner_scan_phrase_structured_success_uses_effective_user_runtime(
+    monkeypatch,
+):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "effective_selection_source": "user_override",
+        },
+    )
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: runtime_calls.append(kwargs) or {
+            "content": _valid_scan_phrase_llm_content(),
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "fallback_used": False,
+        },
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    options, metadata = app_services._generate_scan_phrase_options_with_llm(
+        current="Built dashboards using SQL.",
+        guidance="Lead with SQL reporting.",
+        terms=["SQL"],
+        owner_user_id=" owner-a ",
+    )
+
+    assert resolver_calls == [("owner-a", "manual_scan_phrase")]
+    assert len(runtime_calls) == 1
+    call = runtime_calls[0]
+    assert call["owner_user_id"] == "owner-a"
+    assert call["provider"] == "openai"
+    assert call["model"] == "gpt-5-mini"
+    assert call["response_mime_type"] == "application/json"
+    assert call["response_schema"] == (
+        app_services.SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA
+    )
+    assert call["return_parsed"] is True
+    assert call["thinking_budget"] == 0
+    assert "fallback_enabled" not in call
+    assert "fallback_provider" not in call
+    assert "fallback_model" not in call
+    assert len(options) == 1
+    assert metadata["provider"] == "openai"
+    assert metadata["model"] == "gpt-5-mini"
+    assert metadata["fallback_used"] is False
+    assert metadata["requested_provider"] == "openai"
+    assert metadata["requested_model"] == "gpt-5-mini"
+    assert metadata["effective_selection_source"] == "user_override"
+    assert metadata["plain_retry_used"] is False
+
+
+def test_owner_scan_phrase_plain_retry_reuses_one_frozen_route(monkeypatch):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+            "effective_selection_source": "applylens_recommended",
+        },
+    )
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        return {
+            "content": (
+                {"options": []}
+                if len(runtime_calls) == 1
+                else json.dumps(_valid_scan_phrase_llm_content())
+            ),
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    options, metadata = app_services._generate_scan_phrase_options_with_llm(
+        current="Built dashboards using SQL.",
+        guidance="Lead with SQL reporting.",
+        terms=["SQL"],
+        owner_user_id="owner-a",
+    )
+
+    assert resolver_calls == [("owner-a", "manual_scan_phrase")]
+    assert len(runtime_calls) == 2
+    assert {
+        (call["owner_user_id"], call["provider"], call["model"])
+        for call in runtime_calls
+    } == {("owner-a", "groq", "openai/gpt-oss-120b")}
+    assert runtime_calls[0]["response_mime_type"] == "application/json"
+    assert runtime_calls[0]["response_schema"] == (
+        app_services.SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA
+    )
+    assert runtime_calls[0]["return_parsed"] is True
+    assert runtime_calls[1]["response_mime_type"] is None
+    assert runtime_calls[1]["response_schema"] is None
+    assert runtime_calls[1]["return_parsed"] is False
+    assert all("fallback_enabled" not in call for call in runtime_calls)
+    assert len(options) == 1
+    assert metadata["requested_provider"] == "groq"
+    assert metadata["requested_model"] == "openai/gpt-oss-120b"
+    assert metadata["fallback_used"] is False
+    assert metadata["plain_retry_used"] is True
+
+
+def test_owner_scan_phrase_route_failure_is_fail_closed_but_deterministic_fallback_remains(
+    monkeypatch,
+    tmp_path,
+):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    resolver_calls = []
+
+    def fail_route(owner, workload):
+        resolver_calls.append((owner, workload))
+        raise RuntimeError("secret registry and database detail")
+
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        fail_route,
+    )
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Effective scan phrase provider route unavailable",
+    ):
+        app_services._generate_scan_phrase_options_with_llm(
+            current="Built dashboards using SQL.",
+            guidance="Lead with SQL reporting.",
+            terms=["SQL"],
+            owner_user_id="owner-a",
+        )
+
+    monkeypatch.setattr(
+        app_services,
+        "_resolve_planning_artifact_path",
+        lambda *_args, **_kwargs: tmp_path / "artifact.json",
+    )
+    monkeypatch.setattr(
+        app_services,
+        "SCAN_PHRASE_DETERMINISTIC_FALLBACK_ENABLED",
+        True,
+    )
+    result = app_services.generate_tailoring_scan_phrase_payload(
+        output_dir=tmp_path,
+        tailoring_json_path="artifact.json",
+        current_text="Built dashboards using SQL.",
+        guidance_text="Lead with SQL reporting.",
+        supported_terms=["SQL"],
+        owner_user_id="owner-a",
+    )
+
+    assert resolver_calls == [
+        ("owner-a", "manual_scan_phrase"),
+        ("owner-a", "manual_scan_phrase"),
+    ]
+    assert result["source"] == "deterministic_fallback"
+    assert result["fallback_used"] is True
+    assert result["options"]
+    assert result["llm_error"] == (
+        "Effective scan phrase provider route unavailable."
+    )
+    assert "secret" not in repr(result)
+
+
+def test_blank_owner_scan_phrase_helper_preserves_legacy_fallback_path(
+    monkeypatch,
+):
+    from src.ai import llm_client
+    from src.app import services as app_services
+
+    legacy_calls = []
+    monkeypatch.setattr(
+        app_services,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("resolver must not execute"),
+    )
+    monkeypatch.setattr(
+        app_services,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **kwargs: legacy_calls.append(kwargs) or {
+            "content": _valid_scan_phrase_llm_content(),
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "fallback_used": False,
+        },
+    )
+
+    options, metadata = app_services._generate_scan_phrase_options_with_llm(
+        current="Built dashboards using SQL.",
+        guidance="Lead with SQL reporting.",
+        terms=["SQL"],
+        owner_user_id="   ",
+    )
+
+    assert len(options) == 1
+    assert len(legacy_calls) == 1
+    assert legacy_calls[0]["provider"] == app_services.SCAN_PHRASE_PROVIDER
+    assert legacy_calls[0]["model"] == app_services.SCAN_PHRASE_MODEL
+    assert legacy_calls[0]["fallback_enabled"] == (
+        app_services.SCAN_PHRASE_LLM_FALLBACK_ENABLED
+    )
+    assert legacy_calls[0]["fallback_provider"] == (
+        app_services.SCAN_PHRASE_FALLBACK_PROVIDER
+    )
+    assert legacy_calls[0]["fallback_model"] == (
+        app_services.SCAN_PHRASE_FALLBACK_MODEL
+    )
+    assert metadata["requested_provider"] == (
+        app_services.SCAN_PHRASE_PROVIDER
+    )
+    assert metadata["requested_model"] == app_services.SCAN_PHRASE_MODEL
+
+
+def test_scan_workspace_phrase_request_body_does_not_contain_owner_identity():
+    source = Path("src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    request_block = source.split(
+        "function buildScanWorkspacePhraseRequest",
+        1,
+    )[1].split(
+        "function renderScanWorkspacePhraseOptionsHtml",
+        1,
+    )[0]
+
+    assert "owner_user_id" not in request_block
 
 
 def test_scan_workspace_phrase_request_rewrites_optional_tailoring_artifact_key():
@@ -224,18 +835,11 @@ def test_scan_workspace_phrase_artifact_not_found_error_is_friendly():
 
 
 def test_scan_workspace_heading_uses_shared_page_heading_scale():
-    source = Path("src/app/static/scan_workspace_review.css").read_text(encoding="utf-8")
-    header_block = source.split("scan_review_v2_39", 1)[1].split(
-        ".scan-workspace-page .scan-workspace-header-actions .ghost-btn",
-        1,
-    )[0]
+    source = Path("src/app/static/scan_workspace_premium.css").read_text(encoding="utf-8")
+    header_block = source.split(".scan-workspace-header-copy h1 {", 1)[1].split("}", 1)[0]
 
     assert "font-size: clamp(26px, 2vw, 34px) !important;" in header_block
-    assert (
-        "body .scan-workspace-page.page > .scan-workspace-header-shell"
-        ".scan-workspace-header-shell--minimal .scan-workspace-header-copy h1"
-    ) in header_block
-    assert "font-size: clamp(28px, 4vw, 46px) !important;" not in header_block
+    assert "font-size: clamp(28px, 4vw, 46px)" not in header_block
 
 
 def test_saved_scan_contract_normalizes_pasted_text_record():
@@ -395,6 +999,242 @@ def test_selector_demotes_negative_or_neutral_candidates_from_direct_replacement
     assert {row["score_gate"] for row in plan["direction_only_replacements"]} == {
         "score_neutral_guidance"
     }
+
+
+def _qualified_neutral_live_candidate(
+    candidate_id="qualified_neutral_live",
+    *,
+    confidence="medium",
+    delta=0.0,
+):
+    candidate = _candidate(candidate_id, delta=delta, llm=True)
+    candidate.update(
+        {
+            "patch_generation_method": "live_llm_concrete_patch_candidate",
+            "material_delta_found": True,
+            "supported_jd_signals": ["numpy"],
+            "precheck_supported_jd_signal_gains": ["numpy"],
+            "precheck_scorer_visible_evidence_regressions": [],
+            "confidence": confidence,
+        }
+    )
+    return candidate
+
+
+@pytest.mark.parametrize("confidence", ["medium", "high"])
+def test_selector_allows_qualified_neutral_live_candidate_into_ai_optional(confidence):
+    candidate = _qualified_neutral_live_candidate(confidence=confidence)
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"][0]["replacement_candidate_id"] == (
+        "qualified_neutral_live"
+    )
+    assert plan["ai_optimize_optional_replacements"][0]["score_gate"] == (
+        "score_neutral_guidance"
+    )
+    assert plan["direction_only_replacements"] == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("precheck_supported_jd_signal_gains", []),
+        ("precheck_scorer_visible_evidence_regressions", ["statistics"]),
+        ("unsupported_risk_signals", ["unsupported_claim"]),
+        ("confidence", "low"),
+        ("llm_refinement_used", False),
+        ("patch_generation_method", "llm_directional_guidance"),
+        ("material_delta_found", False),
+        ("materiality_validation_status", "scorer_neutral_no_evidence_change"),
+        ("counterfactual_status", "missing_patch_inputs"),
+    ],
+)
+def test_selector_rejects_neutral_live_candidate_missing_qualification(field, value):
+    candidate = _qualified_neutral_live_candidate()
+    candidate[field] = value
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"][0]["replacement_candidate_id"] == (
+        "qualified_neutral_live"
+    )
+
+
+def test_selector_keeps_anduril_style_neutral_regression_direction_only():
+    candidate = _qualified_neutral_live_candidate("anduril_style")
+    candidate.update(
+        {
+            "proposal_status": "direction_only",
+            "patch_ready": False,
+            "materiality_validation_status": "scorer_neutral_evidence_regression",
+            "material_delta_found": False,
+            "supported_jd_signals": ["numpy"],
+            "precheck_supported_jd_signal_gains": [],
+            "precheck_scorer_visible_evidence_regressions": ["statistics"],
+        }
+    )
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"][0]["replacement_candidate_id"] == (
+        "anduril_style"
+    )
+
+
+def test_selector_never_allows_negative_live_candidate_into_actionable_lane():
+    candidate = _qualified_neutral_live_candidate("negative_live")
+    candidate["projected_overall_delta"] = -0.01
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    assert plan["direction_only_replacements"][0]["score_gate"] == (
+        "rejected_by_score_gate"
+    )
+
+
+def test_selector_preserves_positive_llm_ai_optional_behavior():
+    candidate = _candidate("positive_llm", delta=0.02, llm=True)
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["ai_optimize_optional_replacements"][0]["replacement_candidate_id"] == (
+        "positive_llm"
+    )
+    assert plan["ai_optimize_optional_replacements"][0]["score_gate"] == (
+        "direct_replacement"
+    )
+    assert plan["ai_optimize_optional_replacements"][0]["apply_priority"] == "high"
+
+
+def test_selector_rejects_cosmetic_tiny_positive_and_preserves_raw_score_gate():
+    candidate = _qualified_neutral_live_candidate(
+        "anduril_cosmetic_tiny_positive",
+        delta=0.000031,
+    )
+    candidate["precheck_supported_jd_signal_gains"] = []
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    guidance = plan["direction_only_replacements"][0]
+    assert guidance["replacement_candidate_id"] == "anduril_cosmetic_tiny_positive"
+    assert guidance["projected_score_delta_points"] == 0
+    assert guidance["score_gate"] == "direct_replacement"
+    assert guidance["apply_priority"] == "low"
+
+
+@pytest.mark.parametrize("confidence", ["medium", "high"])
+def test_selector_allows_qualified_tiny_positive_into_ai_optional(confidence):
+    candidate = _qualified_neutral_live_candidate(
+        "qualified_tiny_positive",
+        confidence=confidence,
+        delta=0.000031,
+    )
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    selected = plan["ai_optimize_optional_replacements"][0]
+    assert selected["replacement_candidate_id"] == "qualified_tiny_positive"
+    assert selected["projected_score_delta_points"] == 0
+    assert selected["score_gate"] == "direct_replacement"
+    assert selected["apply_priority"] == "medium"
+
+
+def test_selector_direct_lanes_require_meaningful_displayed_score_lift():
+    tiny_ready = _candidate("tiny_ready", delta=0.000031)
+    meaningful_ready = _candidate(
+        "meaningful_ready",
+        bullet_id="bullet_2",
+        delta=0.02,
+    )
+    tiny_optional = _candidate(
+        "tiny_optional",
+        bullet_id="bullet_3",
+        delta=0.000031,
+    )
+    tiny_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+
+    tiny_ready_plan = build_final_replacement_plan([tiny_ready], [])
+    meaningful_plan = build_final_replacement_plan([meaningful_ready], [])
+    tiny_optional_plan = build_final_replacement_plan([tiny_optional], [])
+
+    assert tiny_ready_plan["app_ready_replacements"] == []
+    assert tiny_optional_plan["direct_apply_optional_replacements"] == []
+    assert meaningful_plan["app_ready_replacements"][0][
+        "replacement_candidate_id"
+    ] == "meaningful_ready"
+
+
+def test_selector_keeps_tiny_negative_non_actionable_despite_zero_display_points():
+    candidate = _candidate("tiny_negative", delta=-0.000031, llm=True)
+
+    plan = build_final_replacement_plan([candidate], [])
+
+    assert plan["app_ready_replacements"] == []
+    assert plan["direct_apply_optional_replacements"] == []
+    assert plan["ai_optimize_optional_replacements"] == []
+    guidance = plan["direction_only_replacements"][0]
+    assert guidance["projected_score_delta_points"] == 0
+    assert guidance["score_gate"] == "rejected_by_score_gate"
+
+
+def test_selector_qualified_neutral_outweighs_unqualified_tiny_positive_noise():
+    cosmetic = _qualified_neutral_live_candidate(
+        "cosmetic_tiny_positive",
+        delta=0.000031,
+    )
+    cosmetic["precheck_supported_jd_signal_gains"] = []
+    qualified = _qualified_neutral_live_candidate("qualified_exact_neutral")
+
+    plan = build_final_replacement_plan([cosmetic, qualified], [])
+
+    assert plan["ai_optimize_optional_replacements"][0][
+        "replacement_candidate_id"
+    ] == "qualified_exact_neutral"
+    assert plan["direction_only_replacements"] == []
+
+
+def test_selector_keeps_direct_lanes_positive_score_only():
+    positive_ready = _candidate("positive_ready", delta=0.02)
+    neutral_ready = _candidate("neutral_ready", delta=0.0)
+    positive_optional = _candidate("positive_optional", bullet_id="bullet_2", delta=0.02)
+    neutral_optional = _candidate("neutral_optional", bullet_id="bullet_3", delta=0.0)
+    positive_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+    neutral_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+
+    positive_ready_plan = build_final_replacement_plan([positive_ready], [])
+    neutral_ready_plan = build_final_replacement_plan([neutral_ready], [])
+    optional_plan = build_final_replacement_plan(
+        [positive_optional, neutral_optional], []
+    )
+
+    assert positive_ready_plan["app_ready_replacements"][0][
+        "replacement_candidate_id"
+    ] == "positive_ready"
+    assert neutral_ready_plan["app_ready_replacements"] == []
+    assert optional_plan["direct_apply_optional_replacements"][0][
+        "replacement_candidate_id"
+    ] == "positive_optional"
+    assert all(
+        row["replacement_candidate_id"] != "neutral_optional"
+        for row in optional_plan["direct_apply_optional_replacements"]
+    )
 
 
 def _direction_only_diagnosis():
@@ -678,6 +1518,54 @@ def test_live_rewrite_prompt_default_stays_direction_only_contract():
     assert "source_entry_id:" not in prompt
 
 
+def test_live_rewrite_schema_omits_provider_minimum_but_remains_strict():
+    default_schema = tailoring_llm.LIVE_REWRITE_RESPONSE_SCHEMA
+    promotion_schema = (
+        tailoring_llm.LIVE_REWRITE_WITH_CONCRETE_PATCH_RESPONSE_SCHEMA
+    )
+    directions = default_schema["properties"]["rewrite_directions"]
+
+    assert "minItems" not in directions
+    assert promotion_schema["properties"]["rewrite_directions"] == directions
+    assert directions["items"]["properties"]["prefix"]["enum"] == [
+        "Lead with",
+        "Support with",
+        "Keep gap explicit",
+        "Do not add",
+    ]
+    for schema in (default_schema, promotion_schema):
+        assert schema["additionalProperties"] is False
+        assert set(schema["required"]) == set(schema["properties"])
+        item_schema = schema["properties"]["rewrite_directions"]["items"]
+        assert item_schema["additionalProperties"] is False
+        assert set(item_schema["required"]) == set(item_schema["properties"])
+
+
+def test_live_rewrite_deterministic_validation_still_rejects_empty_directions():
+    with pytest.raises(
+        ValueError,
+        match="live_llm_contract_empty_rewrite_directions",
+    ):
+        tailoring_llm._validate_live_llm_parsed_contract(
+            {"rewrite_directions": []},
+            _live_patch_payload(),
+        )
+
+
+def test_live_rewrite_anchor_case_still_requires_three_valid_directions():
+    response = _live_patch_response()
+    response["rewrite_directions"] = response["rewrite_directions"][:2]
+
+    with pytest.raises(
+        ValueError,
+        match="live_llm_contract_anchor_case_requires_3_directions",
+    ):
+        tailoring_llm._validate_live_llm_parsed_contract(
+            response,
+            _live_patch_payload(),
+        )
+
+
 def test_enabled_live_rewrite_prompt_is_concrete_candidate_aware():
     packet, payload = _live_patch_prompt_payload()
     prompt = tailoring_llm._build_live_concrete_rewrite_prompt(packet, payload)
@@ -812,6 +1700,430 @@ def test_enabled_live_llm_tailoring_short_directions_without_valid_concrete_stil
     assert result["parsed"]["concrete_replacement_candidates"] == []
 
 
+def _live_direction_response():
+    return {
+        "rewrite_directions": _live_patch_response()["rewrite_directions"],
+    }
+
+
+def _owner_route(provider="openai", model="gpt-5-mini"):
+    return {
+        "workload_id": "tailoring_generation",
+        "provider": provider,
+        "model": model,
+        "effective_selection_source": "user_override",
+    }
+
+
+def _successful_tailoring_runtime(provider, model):
+    return {
+        "content": _live_direction_response(),
+        "provider": provider,
+        "model": model,
+        "fallback_used": False,
+    }
+
+
+@pytest.mark.parametrize("owner_value", (None, "   "))
+def test_live_tailoring_without_owner_preserves_legacy_provider_path(
+    monkeypatch,
+    tmp_path,
+    owner_value,
+):
+    packet, payload = _live_patch_prompt_payload()
+    if owner_value is None:
+        monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
+    else:
+        monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", owner_value)
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("resolver must not run"),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not run"),
+    )
+    legacy_calls = []
+
+    def fake_legacy(**kwargs):
+        legacy_calls.append(kwargs)
+        return _successful_tailoring_runtime(
+            tailoring_llm.LLM_TAILOR_PROVIDER,
+            tailoring_llm.LLM_TAILOR_MODEL,
+        )
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        fake_legacy,
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(tmp_path / "legacy.json"),
+        refresh_llm_cache=True,
+    )
+
+    assert result["parse_ok"] is True
+    assert len(legacy_calls) == 1
+    assert legacy_calls[0]["provider"] == tailoring_llm.LLM_TAILOR_PROVIDER
+    assert legacy_calls[0]["model"] == tailoring_llm.LLM_TAILOR_MODEL
+    assert (
+        legacy_calls[0]["fallback_enabled"]
+        == tailoring_llm.TAILOR_LLM_FALLBACK_ENABLED
+    )
+    assert (
+        legacy_calls[0]["fallback_provider"]
+        == tailoring_llm.TAILOR_LLM_FALLBACK_PROVIDER
+    )
+    assert (
+        legacy_calls[0]["fallback_model"]
+        == tailoring_llm.TAILOR_LLM_FALLBACK_MODEL
+    )
+
+
+def test_owner_tailoring_cache_miss_freezes_route_and_disables_fallback(
+    monkeypatch,
+    tmp_path,
+):
+    packet, payload = _live_patch_prompt_payload()
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", " owner-a ")
+    resolver_calls = []
+    runtime_calls = []
+
+    def fake_resolver(owner_user_id, workload_id):
+        resolver_calls.append((owner_user_id, workload_id))
+        return _owner_route()
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        return _successful_tailoring_runtime("openai", "gpt-5-mini")
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        fake_resolver,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not run"),
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(tmp_path / "owner.json"),
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert len(runtime_calls) == 1
+    call = runtime_calls[0]
+    assert call["owner_user_id"] == "owner-a"
+    assert call["provider"] == "openai"
+    assert call["model"] == "gpt-5-mini"
+    assert "fallback_enabled" not in call
+    assert "fallback_provider" not in call
+    assert "fallback_model" not in call
+    assert call["temperature"] == tailoring_llm.LLM_TAILOR_TEMPERATURE
+    assert call["max_tokens"] == tailoring_llm.LLM_TAILOR_MAX_TOKENS
+    assert call["response_mime_type"] == "application/json"
+    assert call["return_parsed"] is True
+    assert call["thinking_budget"] == 0
+    assert result["requested_provider"] == "openai"
+    assert result["requested_model"] == "gpt-5-mini"
+    assert result["provider"] == "openai"
+    assert result["model"] == "gpt-5-mini"
+    assert result["fallback_enabled"] is False
+    assert result["fallback_attempted"] is False
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] == ""
+    assert result["fallback_model"] == ""
+    assert result["attempted_providers"] == ["openai"]
+
+
+def test_owner_tailoring_cache_hit_resolves_once_and_calls_no_runtime(
+    monkeypatch,
+    tmp_path,
+):
+    packet, payload = _live_patch_prompt_payload()
+    cache_path = tmp_path / "owner-cache.json"
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: _owner_route(),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: _successful_tailoring_runtime(
+            "openai", "gpt-5-mini"
+        ),
+    )
+    first = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+    cache_path.write_text(
+        tailoring_llm.json.dumps(first),
+        encoding="utf-8",
+    )
+
+    resolver_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or _owner_route(),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("cache hit must not read credentials"),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("cache hit must not call legacy runtime"),
+    )
+
+    cached = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert cached["cache_hit"] is True
+    assert cached["requested_provider"] == "openai"
+    assert cached["requested_model"] == "gpt-5-mini"
+
+
+def test_owner_tailoring_cache_rejects_changed_effective_route(
+    monkeypatch,
+    tmp_path,
+):
+    packet, payload = _live_patch_prompt_payload()
+    cache_path = tmp_path / "route-sensitive.json"
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    active_route = [_owner_route()]
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or dict(active_route[0]),
+    )
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append((kwargs["provider"], kwargs["model"]))
+        return _successful_tailoring_runtime(
+            kwargs["provider"],
+            kwargs["model"],
+        )
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    first = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+    cache_path.write_text(
+        tailoring_llm.json.dumps(first),
+        encoding="utf-8",
+    )
+    first_cache_key = first["cache_key"]
+    resolver_calls.clear()
+    runtime_calls.clear()
+    active_route[0] = _owner_route("groq", "openai/gpt-oss-120b")
+
+    second = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert runtime_calls == [("groq", "openai/gpt-oss-120b")]
+    assert second["cache_hit"] is False
+    assert second["cache_key"] != first_cache_key
+    assert second["requested_provider"] == "groq"
+    assert second["requested_model"] == "openai/gpt-oss-120b"
+
+
+def test_owner_tailoring_parser_retry_reuses_one_frozen_route(monkeypatch):
+    packet, payload = _live_patch_prompt_payload()
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or _owner_route("groq", "openai/gpt-oss-120b"),
+    )
+
+    def fake_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        content = (
+            "not-json"
+            if len(runtime_calls) == 1
+            else _live_direction_response()
+        )
+        return {
+            "content": content,
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not run"),
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert len(runtime_calls) == 2
+    assert {
+        (
+            call["owner_user_id"],
+            call["provider"],
+            call["model"],
+        )
+        for call in runtime_calls
+    } == {("owner-a", "groq", "openai/gpt-oss-120b")}
+    assert all("fallback_enabled" not in call for call in runtime_calls)
+    assert result["parse_ok"] is True
+    assert result["retry_used"] is True
+    assert result["fallback_attempted"] is False
+    assert result["attempted_providers"] == ["groq"]
+
+
+def test_owner_tailoring_route_failure_is_bounded_and_fail_closed(
+    monkeypatch,
+):
+    packet, payload = _live_patch_prompt_payload()
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    resolver_calls = []
+
+    def fail_route(owner, workload):
+        resolver_calls.append((owner, workload))
+        raise RuntimeError("secret registry and database detail")
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        fail_route,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not run"),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not run"),
+    )
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert result["parse_ok"] is False
+    assert result["parse_error"] == (
+        "Effective tailoring provider route unavailable."
+    )
+    assert "secret" not in repr(result)
+    assert result["retry_used"] is False
+    assert result["fallback_enabled"] is False
+    assert result["fallback_attempted"] is False
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] == ""
+    assert result["fallback_model"] == ""
+    assert result["attempted_providers"] == []
+
+
+def test_owner_tailoring_refresh_bypasses_matching_cache(monkeypatch, tmp_path):
+    packet, payload = _live_patch_prompt_payload()
+    cache_path = tmp_path / "refresh.json"
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or _owner_route(),
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: runtime_calls.append(kwargs)
+        or _successful_tailoring_runtime("openai", "gpt-5-mini"),
+    )
+    first = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+    cache_path.write_text(
+        tailoring_llm.json.dumps(first),
+        encoding="utf-8",
+    )
+    resolver_calls.clear()
+    runtime_calls.clear()
+
+    refreshed = tailoring_llm._run_live_llm_tailoring(
+        packet,
+        payload,
+        output_llm_json=str(cache_path),
+        refresh_llm_cache=True,
+    )
+
+    assert resolver_calls == [("owner-a", "tailoring_generation")]
+    assert len(runtime_calls) == 1
+    assert refreshed["cache_hit"] is False
+
+
 def test_live_concrete_patch_contract_default_off_still_rejects_short_direction():
     with pytest.raises(ValueError, match="live_llm_contract_direction_1_too_short"):
         tailoring_llm._validate_live_llm_parsed_contract(
@@ -846,6 +2158,385 @@ def test_live_concrete_patch_contract_enabled_accepts_safe_patch_candidate():
     candidate = normalized["concrete_replacement_candidates"][0]
     assert candidate["proposal_status"] == "patch_ready"
     assert candidate["patch_text"] == "Built SQL reporting dashboards for weekly stakeholder reporting."
+
+
+def _validate_live_concrete_rewrite(
+    *,
+    original_text,
+    patch_text,
+    supported_terms,
+):
+    payload = _live_patch_payload()
+    anchor = payload["evidence_layers"]["anchors"][0]
+    anchor["text"] = original_text
+    anchor["parent_bullet"] = original_text
+    anchor["overlaps"] = list(supported_terms)
+    anchor["supported_terms"] = list(supported_terms)
+    response = _live_patch_response(patch_text=patch_text)
+    response["concrete_replacement_candidates"][0]["original_text"] = original_text
+    return tailoring_llm._validate_live_llm_parsed_contract(
+        response,
+        payload,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("original_text", "patch_text", "supported_terms"),
+    [
+        (
+            "Implemented Faster R-CNN in PyTorch to detect defects in railway "
+            "components, classifying 1,000+ defects from 7k undercarriage images",
+            "Utilized PyTorch to implement Faster R-CNN for defect detection in "
+            "railway components, achieving a classification of 1,000+ defects "
+            "from 7k undercarriage images",
+            ["PyTorch", "Faster R-CNN"],
+        ),
+        (
+            "Streamlined EDA using Pandas, NumPy, and Matplotlib to surface 50+ "
+            "anomalies across 30k+ records, increasing clustering performance by 40%",
+            "Leveraged NumPy and Pandas for EDA, identifying 50+ anomalies across "
+            "30k+ records and enhancing clustering performance by 40%",
+            ["Pandas", "NumPy", "EDA"],
+        ),
+    ],
+)
+def test_live_concrete_factual_normalization_allows_anduril_lead_substitutions(
+    original_text,
+    patch_text,
+    supported_terms,
+):
+    parsed = _validate_live_concrete_rewrite(
+        original_text=original_text,
+        patch_text=patch_text,
+        supported_terms=supported_terms,
+    )
+
+    assert parsed["invalid_concrete_replacement_candidates"] == []
+    assert parsed["concrete_replacement_candidates"][0]["patch_text"] == patch_text
+
+
+def test_live_concrete_factual_normalization_allows_exact_anduril_result_clause():
+    original_text = (
+        "Streamlined EDA using Pandas, NumPy, and Matplotlib to surface 50+ "
+        "anomalies across 30k+ records, increasing clustering performance by 40%"
+    )
+    patch_text = (
+        "Streamlined EDA using Pandas, NumPy, and Matplotlib to identify 50+ "
+        "anomalies across 30k+ records, resulting in a 40% increase in "
+        "clustering performance"
+    )
+
+    parsed = _validate_live_concrete_rewrite(
+        original_text=original_text,
+        patch_text=patch_text,
+        supported_terms=["Pandas", "NumPy", "Matplotlib", "EDA"],
+    )
+
+    assert parsed["invalid_concrete_replacement_candidates"] == []
+    assert parsed["concrete_replacement_candidates"][0]["patch_text"] == patch_text
+
+
+@pytest.mark.parametrize(
+    ("source_word", "rewrite_word"),
+    [
+        ("increasing", "increase"),
+        ("classification", "classifying"),
+        ("identified", "identifying"),
+        ("analyzed", "analysis"),
+        ("improved", "improvement"),
+    ],
+)
+def test_live_concrete_factual_normalization_accepts_grounded_word_families(
+    source_word,
+    rewrite_word,
+):
+    assert tailoring_llm._live_claim_word_stem(source_word) == (
+        tailoring_llm._live_claim_word_stem(rewrite_word)
+    )
+
+
+def test_live_concrete_factual_normalization_allows_reordered_connective_wording():
+    row = _live_patch_payload()["evidence_layers"]["anchors"][0]
+    row["text"] = "Built SQL dashboards with analysts through weekly reviews."
+    row["parent_bullet"] = row["text"]
+
+    unbacked = tailoring_llm._obvious_unbacked_patch_tokens(
+        "Built SQL dashboards through weekly reviews while using SQL with analysts.",
+        row,
+        _live_patch_payload(),
+    )
+
+    assert unbacked == []
+
+
+@pytest.mark.parametrize(
+    "patch_text",
+    [
+        "Enhanced SQL reporting dashboards for weekly stakeholder reporting.",
+        "Resulting in improved SQL reporting dashboards for weekly stakeholder reporting.",
+    ],
+)
+def test_live_concrete_style_only_lead_word_is_not_an_unbacked_fact(patch_text):
+    row = _live_patch_payload()["evidence_layers"]["anchors"][0]
+
+    unbacked = tailoring_llm._obvious_unbacked_patch_tokens(
+        patch_text,
+        row,
+        _live_patch_payload(),
+    )
+
+    assert unbacked == []
+
+
+@pytest.mark.parametrize(
+    ("patch_text", "unsupported_term"),
+    [
+        (
+            "Built SQL and TensorFlow reporting dashboards for weekly stakeholder reporting.",
+            "TensorFlow",
+        ),
+        (
+            "Snowflake pipelines improved SQL reporting dashboards for weekly stakeholders.",
+            "Snowflake",
+        ),
+        (
+            "Built SQL reporting dashboards on AWS for weekly stakeholder reporting.",
+            "AWS",
+        ),
+        (
+            "Built SQL and dbt reporting pipelines for weekly stakeholder reporting.",
+            "dbt",
+        ),
+    ],
+)
+def test_live_concrete_factual_normalization_rejects_unsupported_technology_anywhere(
+    patch_text,
+    unsupported_term,
+):
+    parsed = _validate_live_concrete_rewrite(
+        original_text="Built SQL reporting dashboards for weekly stakeholder reporting.",
+        patch_text=patch_text,
+        supported_terms=["SQL", "reporting"],
+    )
+
+    assert parsed["concrete_replacement_candidates"] == []
+    reason = parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"]
+    assert reason.startswith("obvious_unbacked_patch_tokens:")
+    assert unsupported_term.lower() in reason.lower()
+
+
+def test_live_concrete_factual_normalization_rejects_new_responsibility_claim():
+    parsed = _validate_live_concrete_rewrite(
+        original_text="Built SQL reporting dashboards.",
+        patch_text="Managed vendor contracts while building SQL reporting dashboards.",
+        supported_terms=["SQL", "reporting"],
+    )
+
+    assert parsed["concrete_replacement_candidates"] == []
+    reason = parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"]
+    assert reason.startswith("obvious_unbacked_patch_tokens:")
+    assert "vendor" in reason or "contracts" in reason
+
+
+def test_live_concrete_factual_normalization_allows_reordered_supported_terms_and_metrics():
+    original_text = (
+        "Improved SQL reporting on AWS across 30k+ records, surfacing 50+ anomalies "
+        "and increasing accuracy by 40%."
+    )
+    patch_text = (
+        "Leveraged AWS and SQL across 30k+ records to surface 50+ anomalies, "
+        "increasing reporting accuracy by 40%."
+    )
+
+    parsed = _validate_live_concrete_rewrite(
+        original_text=original_text,
+        patch_text=patch_text,
+        supported_terms=["SQL", "AWS", "reporting"],
+    )
+
+    assert parsed["invalid_concrete_replacement_candidates"] == []
+    assert parsed["concrete_replacement_candidates"][0]["patch_text"] == patch_text
+
+
+@pytest.mark.parametrize("invented_metric", ["65%", "100k+", "$2M"])
+def test_live_concrete_factual_normalization_rejects_invented_numeric_claim(
+    invented_metric,
+):
+    parsed = _validate_live_concrete_rewrite(
+        original_text="Built SQL reporting dashboards that improved accuracy by 40%.",
+        patch_text=(
+            "Leveraged SQL reporting dashboards to improve accuracy by "
+            f"{invented_metric}."
+        ),
+        supported_terms=["SQL", "reporting"],
+    )
+
+    assert parsed["concrete_replacement_candidates"] == []
+    reason = parsed["invalid_concrete_replacement_candidates"][0]["validation_reason"]
+    assert reason.startswith("obvious_unbacked_patch_tokens:")
+
+
+def test_live_concrete_candidate_uses_authoritative_source_signals_not_llm_claims():
+    payload = _live_patch_payload()
+    anchor = payload["evidence_layers"]["anchors"][0]
+    anchor.pop("supported_terms")
+    anchor["overlaps"] = ["numpy", "numpy"]
+    anchor["text"] = "Used NumPy to analyze operational records."
+    anchor["parent_bullet"] = anchor["text"]
+    response = _live_patch_response(
+        patch_text="Analyzed operational records using NumPy."
+    )
+    response["concrete_replacement_candidates"][0]["supported_jd_signals"] = [
+        "untrusted-llm-signal"
+    ]
+
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        response,
+        payload,
+        enable_safe_app_ready_rewrite_promotion=True,
+    )
+
+    candidate = parsed["concrete_replacement_candidates"][0]
+    assert candidate["supported_jd_signals"] == ["numpy"]
+    assert "untrusted-llm-signal" not in candidate["supported_jd_signals"]
+
+
+def _validate_live_concrete_materiality(
+    monkeypatch,
+    *,
+    original_snapshot,
+    patched_snapshot,
+    projected_delta=0.0,
+):
+    original_resume = object()
+    patched_resume = object()
+    original_score = SimpleNamespace(final_score=0.5, dimension_scores=[])
+    patched_score = SimpleNamespace(
+        final_score=0.5 + projected_delta,
+        dimension_scores=[],
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_patched_resume_evidence_for_candidate",
+        lambda original, candidate: (patched_resume, "ok"),
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "_resume_counterfactual_snapshot",
+        lambda resume: (
+            original_snapshot if resume is original_resume else patched_snapshot
+        ),
+    )
+    monkeypatch.setattr(
+        tailoring_rendering,
+        "score_resume_job_match",
+        lambda resume, job_evidence: patched_score,
+    )
+    candidate = {
+        "candidate_id": "live_concrete_candidate:2",
+        "operation_type": "rewrite",
+        "proposal_status": "patch_ready",
+        "proposal_type": "patch_ready_rewrite",
+        "patch_ready": True,
+        "patch_text": "Streamlined EDA with NumPy to identify anomalies.",
+        "patch_generation_method": "live_llm_concrete_patch_candidate",
+        "supported_jd_signals": ["numpy"],
+    }
+    context = {
+        "ok": True,
+        "original_resume": original_resume,
+        "original_result": original_score,
+        "job_evidence": object(),
+    }
+    return tailoring_rendering._materiality_validate_rewrite_candidate(
+        {}, candidate, context
+    )
+
+
+def test_neutral_live_concrete_evidence_removal_cannot_become_material(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"analytics_ml_signals": ["statistics"]},
+        patched_snapshot={"analytics_ml_signals": []},
+    )
+
+    assert candidate["proposal_status"] == "direction_only"
+    assert candidate["patch_ready"] is False
+    assert candidate["material_delta_found"] is False
+    assert candidate["materiality_validation_status"] == (
+        "scorer_neutral_evidence_regression"
+    )
+    assert candidate["precheck_supported_jd_signal_gains"] == []
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == [
+        "statistics"
+    ]
+
+
+def test_neutral_live_concrete_supported_signal_gain_can_remain_material(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"explicit_skills": []},
+        patched_snapshot={"explicit_skills": ["NumPy"]},
+    )
+
+    assert candidate["proposal_status"] == "patch_ready"
+    assert candidate["patch_ready"] is True
+    assert candidate["material_delta_found"] is True
+    assert candidate["materiality_validation_status"] == "material_candidate"
+    assert candidate["precheck_supported_jd_signal_gains"] == ["numpy"]
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == []
+
+
+def test_tiny_positive_live_concrete_without_supported_gain_is_directional(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"explicit_skills": []},
+        patched_snapshot={"explicit_skills": []},
+        projected_delta=0.000031,
+    )
+
+    assert candidate["proposal_status"] == "direction_only"
+    assert candidate["patch_ready"] is False
+    assert candidate["material_delta_found"] is False
+    assert candidate["materiality_validation_status"] == (
+        "scorer_neutral_no_supported_jd_signal_gain"
+    )
+
+
+def test_tiny_positive_live_concrete_supported_gain_can_remain_material(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"explicit_skills": []},
+        patched_snapshot={"explicit_skills": ["NumPy"]},
+        projected_delta=0.000031,
+    )
+
+    assert candidate["proposal_status"] == "patch_ready"
+    assert candidate["patch_ready"] is True
+    assert candidate["material_delta_found"] is True
+    assert candidate["materiality_validation_status"] == "material_candidate"
+    assert candidate["precheck_supported_jd_signal_gains"] == ["numpy"]
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == []
+
+
+def test_tiny_positive_live_concrete_regression_remains_directional(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"analytics_ml_signals": ["statistics"]},
+        patched_snapshot={"analytics_ml_signals": []},
+        projected_delta=0.000031,
+    )
+
+    assert candidate["proposal_status"] == "direction_only"
+    assert candidate["patch_ready"] is False
+    assert candidate["material_delta_found"] is False
+    assert candidate["materiality_validation_status"] == (
+        "scorer_neutral_evidence_regression"
+    )
+    assert candidate["precheck_scorer_visible_evidence_regressions"] == [
+        "statistics"
+    ]
 
 
 def test_live_concrete_patch_contract_rejects_instruction_and_unsupported_patch_text():

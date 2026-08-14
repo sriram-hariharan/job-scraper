@@ -235,6 +235,10 @@ def test_targeted_regeneration_passes_owner_scoped_env_to_both_commands(
         monkeypatch, tmp_path
     )
     calls = []
+    monkeypatch.delenv(
+        "APPLYLENS_SAFE_APP_READY_REWRITE_PROMOTION_ENABLED",
+        raising=False,
+    )
     monkeypatch.setenv("JOB_STACK_USER_PIPELINE_MODE", "parent-mode")
     monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "parent-owner")
     parent_before = {
@@ -252,6 +256,7 @@ def test_targeted_regeneration_passes_owner_scoped_env_to_both_commands(
         job_corpus=job_corpus,
         job_doc_id="job-1",
         selected_resume=selected_resume,
+        generate_llm_tailoring=True,
         owner_user_id="owner-a",
     )
 
@@ -259,6 +264,8 @@ def test_targeted_regeneration_passes_owner_scoped_env_to_both_commands(
     assert result["selected_resume"] == selected_resume
     assert len(calls) == 2
     assert calls[0][0][calls[0][0].index("--resume-name-contains") + 1] == selected_resume
+    assert "--enable-safe-app-ready-rewrite-promotion" not in calls[0][0]
+    assert "--enable-safe-app-ready-rewrite-promotion" in calls[1][0]
     assert calls[0][1] is calls[1][1]
     assert calls[0][1]["JOB_STACK_USER_PIPELINE_MODE"] == "1"
     assert calls[0][1]["JOB_STACK_OWNER_USER_ID"] == "owner-a"
@@ -268,6 +275,38 @@ def test_targeted_regeneration_passes_owner_scoped_env_to_both_commands(
         "JOB_STACK_OWNER_USER_ID": os.environ.get("JOB_STACK_OWNER_USER_ID"),
     } == parent_before
     assert "owner_user_id" not in result
+
+
+def test_targeted_regeneration_explicit_false_disables_safe_rewrite_promotion(
+    tmp_path, monkeypatch
+):
+    output_dir, job_corpus, selected_resume = _install_targeted_regeneration_fixture(
+        monkeypatch, tmp_path
+    )
+    calls = []
+    monkeypatch.setenv(
+        "APPLYLENS_SAFE_APP_READY_REWRITE_PROMOTION_ENABLED",
+        "false",
+    )
+    monkeypatch.setattr(
+        services,
+        "_run_checked_cmd",
+        lambda cmd, *, env=None: calls.append((list(cmd), env)),
+    )
+
+    result = services.regenerate_selected_resume_tailoring_payload(
+        output_dir=output_dir,
+        job_corpus=job_corpus,
+        job_doc_id="job-1",
+        selected_resume=selected_resume,
+        generate_llm_tailoring=True,
+        owner_user_id="owner-a",
+    )
+
+    assert result["ok"] is True
+    assert len(calls) == 2
+    assert "--enable-safe-app-ready-rewrite-promotion" not in calls[0][0]
+    assert "--enable-safe-app-ready-rewrite-promotion" not in calls[1][0]
 
 
 def test_targeted_regeneration_child_envs_are_owner_isolated_and_legacy_safe(

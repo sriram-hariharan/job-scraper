@@ -1,7 +1,6 @@
 (function initializePreferencesWorkflow(global) {
   "use strict";
 
-  const STEP_COUNT = 5;
   const SENIORITY_LABELS = {
     entry: "Entry",
     mid: "Mid",
@@ -37,14 +36,17 @@
     if (!form) return null;
 
     const panels = Array.from(form.querySelectorAll("[data-preferences-step]"));
+    const stepCount = panels.length;
     const stepButtons = Array.from(form.querySelectorAll("[data-preferences-step-target]"));
     const backButton = form.querySelector("[data-preferences-back]");
     const nextButton = form.querySelector("[data-preferences-next]");
+    const skipButton = form.querySelector("[data-preferences-skip]");
     const finalActions = form.querySelector("[data-preferences-final-actions]");
     const mobileCompletion = form.querySelector("[data-preferences-mobile-completion]");
     const roleError = form.querySelector("[data-preferences-role-error]");
     let currentStep = 0;
     let maximumVisitedStep = 0;
+    let savedComplete = false;
 
     function values() {
       if (typeof options.getValues !== "function") return {};
@@ -76,13 +78,14 @@
       const fallback = strict && payload.location_show_others_if_unmatched === true;
       const skills = uniqueStrings(payload.preferred_skills);
       const excluded = uniqueStrings(payload.excluded_keywords);
-      const completionPercent = (
+      const configuredPercent = (
         (roleNames.length ? 30 : 0)
         + (seniorityNames.length ? 20 : 0)
         + (locationNames.length ? 25 : 0)
         + (skills.length ? 15 : 0)
         + (excluded.length ? 10 : 0)
       );
+      const completionPercent = savedComplete ? 100 : configuredPercent;
 
       return {
         roles: summaryText(roleNames, "None selected", 3),
@@ -103,9 +106,29 @@
         .forEach((node) => { node.textContent = value; });
     }
 
+    function workflowStepVisualState(step) {
+      const stepIndex = Number(step);
+      if (savedComplete && stepIndex === stepCount - 1) return "is-complete";
+      return stepVisualState(stepIndex, currentStep);
+    }
+
+    function updateStepButtons(nextStep = currentStep) {
+      stepButtons.forEach((button) => {
+        const buttonStep = Number(button.dataset.preferencesStepTarget);
+        const state = stepVisualState(buttonStep, nextStep);
+        const visualState = savedComplete && buttonStep === stepCount - 1
+          ? "is-complete"
+          : state;
+        button.classList.toggle("is-active", visualState === "is-active");
+        button.classList.toggle("is-complete", visualState === "is-complete");
+        button.classList.toggle("is-upcoming", visualState === "is-upcoming");
+        button.setAttribute("aria-current", visualState === "is-active" ? "step" : "false");
+      });
+    }
+
     function updateStepSummaries() {
-      const summaries = Array.from({ length: STEP_COUNT }, (_, index) => {
-        const state = stepVisualState(index, currentStep);
+      const summaries = Array.from({ length: stepCount }, (_, index) => {
+        const state = workflowStepVisualState(index);
         if (state === "is-active") return "In progress";
         if (state === "is-complete") return "Complete";
         return "Not started";
@@ -129,7 +152,7 @@
     }
 
     function showStep(step, { focus = true } = {}) {
-      const nextStep = Math.max(0, Math.min(STEP_COUNT - 1, Number(step) || 0));
+      const nextStep = Math.max(0, Math.min(stepCount - 1, Number(step) || 0));
       currentStep = nextStep;
       maximumVisitedStep = Math.max(maximumVisitedStep, nextStep);
 
@@ -139,19 +162,16 @@
         panel.classList.toggle("is-active", isActive);
       });
 
-      stepButtons.forEach((button) => {
-        const buttonStep = Number(button.dataset.preferencesStepTarget);
-        const state = stepVisualState(buttonStep, nextStep);
-        button.classList.toggle("is-active", state === "is-active");
-        button.classList.toggle("is-complete", state === "is-complete");
-        button.classList.toggle("is-upcoming", state === "is-upcoming");
-        button.setAttribute("aria-current", state === "is-active" ? "step" : "false");
-      });
+      updateStepButtons(nextStep);
 
       if (backButton) backButton.disabled = nextStep === 0;
-      if (nextButton) nextButton.classList.toggle("hidden", nextStep === STEP_COUNT - 1);
-      finalActions?.classList.toggle("hidden", nextStep !== STEP_COUNT - 1);
-      if (mobileCompletion) mobileCompletion.textContent = `Step ${nextStep + 1} of ${STEP_COUNT}`;
+      if (nextButton) nextButton.classList.toggle("hidden", nextStep === stepCount - 1);
+      skipButton?.classList.toggle(
+        "hidden",
+        root.dataset.preferencesMode !== "onboarding" || nextStep !== 4
+      );
+      finalActions?.classList.toggle("hidden", nextStep !== stepCount - 1);
+      if (mobileCompletion) mobileCompletion.textContent = `Step ${nextStep + 1} of ${stepCount}`;
       update();
 
       if (focus) {
@@ -199,6 +219,11 @@
       clearValidationError,
       getCurrentStep: () => currentStep,
       getMaximumVisitedStep: () => maximumVisitedStep,
+      setCompleted: (completed) => {
+        savedComplete = Boolean(completed);
+        updateStepButtons();
+        update();
+      },
     };
   }
 

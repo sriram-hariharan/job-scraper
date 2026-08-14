@@ -4,6 +4,8 @@ import pytest
 
 from tests.support.phase_guard_registry import (
     BROAD_TECH_PREFILTER_TAXONOMY_FILES,
+    DISCOVERY_ACQUISITION_LIFECYCLE_FILES,
+    HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES,
     HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
     HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
     HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
@@ -45,12 +47,19 @@ from tests.support.phase_guard_registry import (
     PHASE21H_PROVIDER_BENCHMARK_HERMETICITY_FILES,
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
-    PERSONIO_SOURCE_INTEGRATION_FILES,
+    PERSONIO_SOURCE_RETIREMENT_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
+    RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
+    SMARTRECRUITERS_PAGINATION_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
+    SOURCE_YIELD_UI_FILES,
+    JOBVITE_LOCATION_FRESHNESS_FILES,
+    JOBVITE_STANDALONE_DISCOVERY_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
+    WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES,
+    WORKDAY_PAGINATION_FRESHNESS_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -364,8 +373,52 @@ def test_scraper_prefilter_ownership_boundary_surface_is_exact():
     assert not any("*" in path for path in SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES)
 
 
-def test_personio_source_integration_surface_is_exact():
-    assert PERSONIO_SOURCE_INTEGRATION_FILES == {
+def test_recruitee_standalone_discovery_surface_is_exact():
+    assert RECRUITEE_STANDALONE_DISCOVERY_FILES == {
+        "src/agents/company_discovery_agent.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_company_discovery_agent.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any("*" in path for path in RECRUITEE_STANDALONE_DISCOVERY_FILES)
+
+
+def test_jobvite_standalone_discovery_surface_is_exact():
+    assert JOBVITE_STANDALONE_DISCOVERY_FILES == {
+        "src/agents/company_discovery_agent.py",
+        "src/scrapers/jobvite_scraper.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_company_discovery_agent.py",
+        "tests/test_jobvite_location_freshness.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any("*" in path for path in JOBVITE_STANDALONE_DISCOVERY_FILES)
+
+
+def test_workday_discovery_identity_contract_surface_is_exact():
+    assert WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES == {
+        "src/agents/company_discovery_agent.py",
+        "src/discovery/career_ats_detector.py",
+        "src/discovery/discovery.py",
+        "src/discovery/sitemap_fetcher.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_company_discovery_agent.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_workday_discovery_identity_contract.py",
+    }
+    assert not any(
+        "*" in path for path in WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES
+    )
+
+
+def test_personio_source_retirement_surface_is_exact():
+    assert PERSONIO_SOURCE_RETIREMENT_FILES == {
         "src/config/consts.py",
         "src/config/curated_ats_sources.json",
         "src/discovery/curated_ats_sources.py",
@@ -374,14 +427,16 @@ def test_personio_source_integration_surface_is_exact():
         "tests/support/phase_guard_registry.py",
         "tests/test_curated_ats_sources.py",
         "tests/test_personio_scraper.py",
+        "tests/test_personio_source_retirement.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
         "tests/test_scraper_prefilter_ownership_boundary.py",
         "tests/test_scraper_source_health_metrics.py",
         "tests/test_scraper_transport_pagination_hardening.py",
+        "tests/test_user_pipeline_role_preferences.py",
     }
-    assert not any("*" in path for path in PERSONIO_SOURCE_INTEGRATION_FILES)
+    assert not any("*" in path for path in PERSONIO_SOURCE_RETIREMENT_FILES)
 
 
 def test_usajobs_source_integration_surface_is_exact():
@@ -501,6 +556,24 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    smartrecruiters_pagination_profile = legacy_guard_allowlist(
+        "smartrecruiters_pagination"
+    )
+    assert smartrecruiters_pagination_profile == SMARTRECRUITERS_PAGINATION_FILES
+    assert not any("*" in path for path in smartrecruiters_pagination_profile)
+    workday_pagination_freshness_profile = legacy_guard_allowlist(
+        "workday_pagination_freshness"
+    )
+    assert (
+        workday_pagination_freshness_profile
+        == WORKDAY_PAGINATION_FRESHNESS_FILES
+    )
+    assert not any("*" in path for path in workday_pagination_freshness_profile)
+    himalayas_step2b_profile = legacy_guard_allowlist(
+        "himalayas_step2b_location_coverage"
+    )
+    assert himalayas_step2b_profile == HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES
+    assert not any("*" in path for path in himalayas_step2b_profile)
     himalayas_step6e_r1_profile = legacy_guard_allowlist(
         "himalayas_step6e_r1_location_activation"
     )
@@ -640,6 +713,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     phase133d_profile = legacy_guard_allowlist("phase133d_pipeline_dashboard_react_island")
     phase133g_profile = legacy_guard_allowlist("phase133g_premium_planning_dashboard")
     phase133ef_profile = legacy_guard_allowlist("phase133ef_decisions_applications_dashboards")
+    source_yield_ui_profile = legacy_guard_allowlist("source_yield_ui")
+    assert source_yield_ui_profile == SOURCE_YIELD_UI_FILES
+    assert not any("*" in path for path in source_yield_ui_profile)
+    jobvite_location_freshness_profile = legacy_guard_allowlist(
+        "jobvite_location_freshness"
+    )
+    assert jobvite_location_freshness_profile == JOBVITE_LOCATION_FRESHNESS_FILES
+    assert not any("*" in path for path in jobvite_location_freshness_profile)
     expected_phase132_profile = {
         "src/app/api.py",
         "src/app/onboarding_ui.py",
@@ -1657,7 +1738,9 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }.isdisjoint(phase9_step12_compatibility_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
-        himalayas_step6c1_profile
+        smartrecruiters_pagination_profile
+        | himalayas_step2b_profile
+        | himalayas_step6c1_profile
         | himalayas_step6b2_profile
         | himalayas_step6b1_profile
         | legacy_guard_allowlist("policy_driven_llm_adjudicator_readback")
@@ -1669,6 +1752,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133d_profile
         | phase133g_profile
         | phase133ef_profile
+        | source_yield_ui_profile
+        | jobvite_location_freshness_profile
         | phase133h_profile
         | scheduler_admin_health_profile
         | scheduler_visual_correction_profile
@@ -1739,9 +1824,14 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | PHASE21R_HISTORICAL_GUARD_FILES
         | SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES
         | SCRAPER_SOURCE_HEALTH_METRICS_FILES
-        | PERSONIO_SOURCE_INTEGRATION_FILES
-        | RECRUITEE_SOURCE_INTEGRATION_FILES
-        | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
+        | DISCOVERY_ACQUISITION_LIFECYCLE_FILES
+        | WORKDAY_PAGINATION_FRESHNESS_FILES
+            | PERSONIO_SOURCE_RETIREMENT_FILES
+            | RECRUITEE_SOURCE_INTEGRATION_FILES
+            | RECRUITEE_STANDALONE_DISCOVERY_FILES
+            | JOBVITE_STANDALONE_DISCOVERY_FILES
+            | WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES
+            | SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES
         | BROAD_TECH_PREFILTER_TAXONOMY_FILES
         | TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES
         | PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES

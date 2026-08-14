@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import requests
+import pycountry
 
 from models.job import Job
 from src.config.consts import (
@@ -379,7 +380,7 @@ def _parse_page(response, page):
         raise _MalformedPayload("inconsistent pagination")
     if offset + len(items) > total_count:
         raise _MalformedPayload("impossible result count")
-    has_more = offset + limit < total_count
+    has_more = offset + len(items) < total_count
     return items, has_more
 
 
@@ -530,6 +531,88 @@ def _ordered_text_list(value, *, dictionary_key=None, maximum=200):
     return rows
 
 
+def _country_from_code(value):
+    if isinstance(value, bool) or not isinstance(value, str):
+        return ""
+    code = value.strip().upper()
+    if len(code) != 2 or not code.isascii() or not code.isalpha():
+        return ""
+    country = pycountry.countries.get(alpha_2=code)
+    return str(getattr(country, "name", "") or "").strip()
+
+
+def _country_from_name(value):
+    if isinstance(value, bool) or not isinstance(value, str):
+        return ""
+    name = _clean_text(value, maximum=201)
+    if not name or len(name) > 200:
+        return ""
+    normalized = name.casefold()
+    for country in pycountry.countries:
+        known_names = {
+            str(getattr(country, field, "") or "").strip().casefold()
+            for field in ("name", "official_name", "common_name")
+        }
+        if normalized in known_names:
+            return str(getattr(country, "name", "") or "").strip()
+    return ""
+
+
+def _country_from_slug(value):
+    if isinstance(value, bool) or not isinstance(value, str):
+        return ""
+    slug = value.strip().lower()
+    if (
+        not slug
+        or len(slug) > 200
+        or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug)
+    ):
+        return ""
+    return _country_from_name(slug.replace("-", " "))
+
+
+def _restriction_country(value):
+    if isinstance(value, str):
+        return _country_from_code(value) or _country_from_name(value)
+    if not isinstance(value, dict):
+        return ""
+    return (
+        _country_from_code(value.get("alpha2"))
+        or _country_from_name(value.get("name"))
+        or _country_from_slug(value.get("slug"))
+    )
+
+
+def _normalize_country_restrictions(value):
+    if value is None:
+        return [], False, False
+    if not isinstance(value, list) or len(value) > _MAX_METADATA_LIST_ITEMS:
+        return [], False, True
+
+    countries = []
+    worldwide = False
+    malformed = False
+    for restriction in value:
+        if isinstance(restriction, str) and restriction.strip().lower() == "worldwide":
+            worldwide = True
+            continue
+        country = _restriction_country(restriction)
+        if not country:
+            malformed = True
+            continue
+        if country not in countries:
+            countries.append(country)
+    return countries, worldwide, malformed
+
+
+def _remote_locations(countries, *, worldwide=False):
+    if countries:
+        return [f"Remote, {country}" for country in countries]
+    if worldwide:
+        return ["Remote, Worldwide"]
+    return ["Remote"]
+
+
 def _decimal_string(value):
     if value is None or isinstance(value, bool):
         return ""
@@ -545,9 +628,9 @@ def _decimal_string(value):
     return text or "0"
 
 
-def _normalize_result(item, *, now=None):
+def _normalize_result_with_reason(item, *, now=None):
     if not isinstance(item, dict):
-        return "malformed", None
+        return "malformed", None, "invalid_row"
     raw_guid = item.get("guid")
     raw_title = item.get("title")
     raw_company = item.get("companyName")
@@ -561,32 +644,37 @@ def _normalize_result(item, *, now=None):
     publication = _timestamp(item.get("pubDate"), now=now)
     expiry = _timestamp(item.get("expiryDate"), now=now)
     url = _canonical_url(item.get("applicationLink"))
-    if (
-        not _GUID_PATTERN.fullmatch(guid)
-        or not title
-        or not company
-        or publication is None
-        or expiry is None
-        or not url
-    ):
-        return "malformed", None
+    required_fields = (
+        ("invalid_guid", bool(_GUID_PATTERN.fullmatch(guid))),
+        ("invalid_title", bool(title)),
+        ("invalid_company", bool(company)),
+        ("invalid_publication_timestamp", publication is not None),
+        ("invalid_expiry_timestamp", expiry is not None),
+        ("invalid_application_link", bool(url)),
+    )
+    for reason, valid in required_fields:
+        if not valid:
+            return "malformed", None, reason
 
     current = _resolve_now(now)
     publication_text, _publication_datetime = publication
     expiry_text, expiry_datetime = expiry
     if expiry_datetime <= current:
-        return "expired", None
+        return "expired", None, ""
 
-    countries = _ordered_text_list(
-        item.get("locationRestrictions"), dictionary_key="name", maximum=200
+    countries, worldwide_restriction, malformed_restrictions = (
+        _normalize_country_restrictions(item.get("locationRestrictions"))
     )
     timezones = _ordered_text_list(item.get("timezoneRestrictions"), maximum=32)
-    locations = countries or ["Remote"]
+    locations = _remote_locations(countries, worldwide=worldwide_restriction)
 
     metadata = {
         "expiry_date": expiry_text,
         "remote": True,
-        "worldwide": not countries and not timezones,
+        "worldwide": (
+            worldwide_restriction
+            or not countries and not timezones and not malformed_restrictions
+        ),
         "provider_attribution_required": True,
         "provider_attribution_label": "Himalayas",
         "provider_attribution_url": url,
@@ -594,6 +682,8 @@ def _normalize_result(item, *, now=None):
     description = _plain_text(item.get("description"))
     if description:
         metadata["description"] = description
+    if malformed_restrictions:
+        metadata["location_restrictions_unresolved"] = True
 
     company_slug = item.get("companySlug")
     if isinstance(company_slug, str):
@@ -651,8 +741,13 @@ def _normalize_result(item, *, now=None):
             meta=metadata,
         ).to_dict()
     except Exception:
-        return "malformed", None
-    return "usable", job
+        return "malformed", None, "invalid_job"
+    return "usable", job, ""
+
+
+def _normalize_result(item, *, now=None):
+    state, job, _reason = _normalize_result_with_reason(item, now=now)
+    return state, job
 
 
 def _failed_outcome(profile_id, reason, *, page_count=0, raw_job_count=0):
@@ -665,6 +760,54 @@ def _failed_outcome(profile_id, reason, *, page_count=0, raw_job_count=0):
     )
 
 
+def _page_guid_evidence(items):
+    evidence = []
+    for item in items:
+        raw_guid = item.get("guid") if isinstance(item, dict) else None
+        guid = raw_guid.strip() if isinstance(raw_guid, str) else ""
+        evidence.append(guid if _GUID_PATTERN.fullmatch(guid) else "")
+    return tuple(evidence)
+
+
+def _log_row_diagnostics(profile_id, diagnostics):
+    for reason in sorted(diagnostics):
+        count = diagnostics[reason]
+        if count:
+            logger.info(
+                "himalayas_event profile=%s row_normalization_%s_count=%s",
+                profile_id,
+                reason,
+                count,
+            )
+
+
+def _incomplete_outcome(
+    profile_id,
+    jobs,
+    reason,
+    *,
+    page_count,
+    raw_job_count,
+    diagnostics,
+):
+    _log_row_diagnostics(profile_id, diagnostics)
+    if jobs:
+        return AcquisitionOutcome(
+            f"himalayas:{profile_id}",
+            AcquisitionStatus.PARTIAL,
+            tuple(jobs),
+            reason=reason,
+            page_count=page_count,
+            raw_job_count=raw_job_count,
+        )
+    return _failed_outcome(
+        profile_id,
+        reason,
+        page_count=page_count,
+        raw_job_count=raw_job_count,
+    )
+
+
 def _fetch_profile_outcome(profile, *, now=None):
     profile_id = profile["profile_id"]
     jobs = []
@@ -672,72 +815,71 @@ def _fetch_profile_outcome(profile, *, now=None):
     expired_count = 0
     raw_job_count = 0
     parsed_page_count = 0
+    row_diagnostics = {}
+    page_fingerprints = set()
+    seen_guids = set()
+    incomplete_reason = ""
 
     for page in range(1, HIMALAYAS_MAX_PAGES_PER_PROFILE + 1):
         try:
             response = _request_page(profile, page)
         except Exception:
-            if jobs:
-                return AcquisitionOutcome(
-                    f"himalayas:{profile_id}",
-                    AcquisitionStatus.PARTIAL,
-                    tuple(jobs),
-                    reason="pagination_interrupted",
-                    page_count=parsed_page_count,
-                    raw_job_count=raw_job_count,
-                )
             reason = "transport_error" if page == 1 else "pagination_interrupted"
-            return _failed_outcome(
+            return _incomplete_outcome(
                 profile_id,
+                jobs,
                 reason,
                 page_count=parsed_page_count,
                 raw_job_count=raw_job_count,
+                diagnostics=row_diagnostics,
             )
 
         if response is None or getattr(response, "status_code", None) != 200:
-            if jobs:
-                return AcquisitionOutcome(
-                    f"himalayas:{profile_id}",
-                    AcquisitionStatus.PARTIAL,
-                    tuple(jobs),
-                    reason="pagination_interrupted",
-                    page_count=parsed_page_count,
-                    raw_job_count=raw_job_count,
-                )
             reason = "non_200_response" if page == 1 else "pagination_interrupted"
-            return _failed_outcome(
+            return _incomplete_outcome(
                 profile_id,
+                jobs,
                 reason,
                 page_count=parsed_page_count,
                 raw_job_count=raw_job_count,
+                diagnostics=row_diagnostics,
             )
 
         try:
             items, has_more = _parse_page(response, page)
         except _MalformedPayload:
-            if jobs:
-                return AcquisitionOutcome(
-                    f"himalayas:{profile_id}",
-                    AcquisitionStatus.PARTIAL,
-                    tuple(jobs),
-                    reason="pagination_interrupted",
-                    page_count=parsed_page_count,
-                    raw_job_count=raw_job_count,
-                )
             reason = "malformed_payload" if page == 1 else "pagination_interrupted"
-            return _failed_outcome(
+            return _incomplete_outcome(
                 profile_id,
+                jobs,
                 reason,
                 page_count=parsed_page_count,
                 raw_job_count=raw_job_count,
+                diagnostics=row_diagnostics,
             )
 
         parsed_page_count += 1
         raw_job_count += len(items)
+        guid_evidence = _page_guid_evidence(items)
+        fingerprint = (len(items), guid_evidence)
+        if fingerprint in page_fingerprints:
+            logger.info("himalayas_event profile=%s repeated_page=true", profile_id)
+            incomplete_reason = "pagination_no_progress"
+            break
+        page_fingerprints.add(fingerprint)
+
+        valid_page_guids = {guid for guid in guid_evidence if guid}
+        if items and not valid_page_guids.difference(seen_guids) and has_more:
+            logger.info("himalayas_event profile=%s no_new_guids=true", profile_id)
+            incomplete_reason = "pagination_no_progress"
+            break
+        seen_guids.update(valid_page_guids)
+
         for item in items:
-            state, job = _normalize_result(item, now=now)
+            state, job, row_reason = _normalize_result_with_reason(item, now=now)
             if state == "malformed":
                 malformed_count += 1
+                row_diagnostics[row_reason] = row_diagnostics.get(row_reason, 0) + 1
             elif state == "expired":
                 expired_count += 1
             else:
@@ -747,8 +889,20 @@ def _fetch_profile_outcome(profile, *, now=None):
             break
         if page == HIMALAYAS_MAX_PAGES_PER_PROFILE:
             logger.info("himalayas_event bounded_page_cap_reached=true")
+            incomplete_reason = "pagination_limit_reached"
+
+    if incomplete_reason:
+        return _incomplete_outcome(
+            profile_id,
+            jobs,
+            incomplete_reason,
+            page_count=parsed_page_count,
+            raw_job_count=raw_job_count,
+            diagnostics=row_diagnostics,
+        )
 
     company = f"himalayas:{profile_id}"
+    _log_row_diagnostics(profile_id, row_diagnostics)
     if jobs:
         status = AcquisitionStatus.PARTIAL if malformed_count else AcquisitionStatus.SUCCESS
         return AcquisitionOutcome(

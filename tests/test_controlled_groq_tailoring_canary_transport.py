@@ -33,20 +33,20 @@ OWNER = (
     / "src/evaluation/controlled_groq_tailoring_canary_transport.py"
 )
 GENERIC_SHA = (
-    "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
+    "d7a35d798804b7ab8f04be0cb808fa472ee55b5eccb2a843c3a5ef14f204d1b7"
 )
 PROTECTED_FILE_SHAS = {
     "src/app/services.py": (
-        "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d"
+        "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7"
     ),
     "src/agents/tailoring_decision_agent.py": (
         "8937816651d96e6f5b475a4fc99285ff0a80443269dd1a0359b94fc6f599921e"
     ),
     "src/ai/llm_client.py": (
-        "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2"
+        "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1"
     ),
     "src/evaluation/controlled_groq_canary_transport.py": (
-        "7df9dfcff70197c84a665a0d9f101b1ca4ce74322ea580c60f4e33a8cdf8a7d3"
+        "89d01fe8460e7eae40e794dce808bb26aef6dbb02366e7c5d5bed268fdf00489"
     ),
 }
 

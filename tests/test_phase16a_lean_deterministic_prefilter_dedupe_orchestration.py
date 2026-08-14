@@ -588,7 +588,7 @@ def test_collector_gate_off_keeps_existing_direct_owner_calls():
     )
     gate_call = source.index(
         "_maybe_execute_authoritative_prefilter_dedupe_graph("
-        "\n            jobs=all_jobs,"
+        "\n            jobs=filtering_input_jobs,"
     )
     direct_branch = source.index(
         "if prefilter_dedupe_graph_result is None:",

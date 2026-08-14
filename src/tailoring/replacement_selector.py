@@ -7,6 +7,8 @@ from src.config.consts import (
     _DIRECT_APPLY_OPTIONAL_MATERIALITY_STATUSES,
 )
 from src.tailoring.score_utils import (
+    is_effectively_score_neutral,
+    is_meaningful_positive_score_lift,
     is_score_negative,
     is_score_neutral,
     is_score_positive,
@@ -70,9 +72,9 @@ def _candidate_delta_rank(candidate: Dict[str, Any]) -> float:
 
 def _candidate_score_gate_rank(candidate: Dict[str, Any]) -> int:
     delta = candidate.get("projected_overall_delta", None)
-    if is_score_positive(delta):
+    if is_meaningful_positive_score_lift(delta):
         return 3
-    if is_score_neutral(delta):
+    if is_effectively_score_neutral(delta):
         return 2
     if is_score_negative(delta):
         return 0
@@ -88,8 +90,20 @@ def _candidate_projected_delta(candidate: Dict[str, Any]) -> Optional[float]:
         return None
 
 
-def _has_positive_projected_delta(candidate: Dict[str, Any]) -> bool:
-    return is_score_positive(candidate.get("projected_overall_delta", None))
+def _has_meaningful_positive_projected_delta(candidate: Dict[str, Any]) -> bool:
+    return is_meaningful_positive_score_lift(
+        candidate.get("projected_overall_delta", None)
+    )
+
+
+def _candidate_actionability_rank(candidate: Dict[str, Any]) -> int:
+    if _is_direct_apply_ready(candidate):
+        return 3
+    if _is_direct_apply_optional(candidate):
+        return 2
+    if _is_ai_optimize_optional(candidate):
+        return 1
+    return 0
 
 def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
     proposal_status = _text(candidate.get("proposal_status", ""))
@@ -103,6 +117,7 @@ def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
 
     return (
         patch_ready,
+        _candidate_actionability_rank(candidate),
         _candidate_score_gate_rank(candidate),
         0 if list(candidate.get("unsupported_risk_signals", []) or []) else 1,
         _candidate_delta_rank(candidate),
@@ -170,7 +185,7 @@ def _passes_direct_apply_safety(candidate: Dict[str, Any]) -> bool:
 def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
     if not _passes_direct_apply_safety(candidate):
         return False
-    if not _has_positive_projected_delta(candidate):
+    if not _has_meaningful_positive_projected_delta(candidate):
         return False
 
     materiality_status = _text(candidate.get("materiality_validation_status", ""))
@@ -180,7 +195,7 @@ def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
 def _is_direct_apply_optional(candidate: Dict[str, Any]) -> bool:
     if not _passes_direct_apply_safety(candidate):
         return False
-    if not _has_positive_projected_delta(candidate):
+    if not _has_meaningful_positive_projected_delta(candidate):
         return False
 
     materiality_status = _text(candidate.get("materiality_validation_status", ""))
@@ -192,17 +207,63 @@ def _is_direct_apply_optional(candidate: Dict[str, Any]) -> bool:
 def _is_ai_optimize_optional(candidate: Dict[str, Any]) -> bool:
     if not _passes_direct_apply_safety(candidate):
         return False
-    if not _has_positive_projected_delta(candidate):
+    if not bool(candidate.get("llm_refinement_used", False)):
+        return False
+    if _has_meaningful_positive_projected_delta(candidate):
+        return True
+    if not is_effectively_score_neutral(
+        candidate.get("projected_overall_delta", None)
+    ):
         return False
 
-    return bool(candidate.get("llm_refinement_used", False))
+    return _has_qualified_effective_neutral_live_evidence(candidate)
+
+
+def _has_qualified_effective_neutral_live_evidence(
+    candidate: Dict[str, Any],
+) -> bool:
+    if not _passes_direct_apply_safety(candidate):
+        return False
+    if not bool(candidate.get("llm_refinement_used", False)):
+        return False
+
+    supported_gains = candidate.get("precheck_supported_jd_signal_gains", None)
+    scorer_regressions = candidate.get(
+        "precheck_scorer_visible_evidence_regressions", None
+    )
+    if not isinstance(supported_gains, list) or not any(
+        _text(value) for value in supported_gains
+    ):
+        return False
+    if not isinstance(scorer_regressions, list) or scorer_regressions:
+        return False
+
+    return bool(
+        _text(candidate.get("patch_generation_method", ""))
+        == "live_llm_concrete_patch_candidate"
+        and _text(candidate.get("materiality_validation_status", ""))
+        == "material_candidate"
+        and candidate.get("material_delta_found", False) is True
+        and _candidate_confidence_rank(candidate) >= 2
+    )
 
 def _apply_priority(candidate: Dict[str, Any]) -> str:
     materiality_status = _text(candidate.get("materiality_validation_status", ""))
     confidence_rank = _candidate_confidence_rank(candidate)
 
-    if materiality_status == "material_candidate":
+    if (
+        materiality_status == "material_candidate"
+        and _has_meaningful_positive_projected_delta(candidate)
+    ):
         return "high"
+    if (
+        materiality_status == "material_candidate"
+        and is_effectively_score_neutral(
+            candidate.get("projected_overall_delta", None)
+        )
+        and _has_qualified_effective_neutral_live_evidence(candidate)
+    ):
+        return "medium"
     if materiality_status == "export_safe_no_score_lift" and confidence_rank >= 2:
         return "medium"
     return "low"

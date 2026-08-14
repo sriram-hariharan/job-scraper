@@ -5,6 +5,8 @@ import importlib
 import json
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 import pytest
 
 
@@ -473,5 +475,10 @@ def test_docs_include_required_phase48b_markers():
 
 
 def test_protected_runtime_hashes_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative_path) == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )

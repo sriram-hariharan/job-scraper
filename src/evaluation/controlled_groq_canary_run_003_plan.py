@@ -40,10 +40,26 @@ RUN_003_CONTRACT_KIND = (
 )
 
 TARGET_CASE_ALIAS = "case_fb2b069aa9340571b60e1fb5"
+CURRENT_TARGET_CASE_ALIAS = "case_eff6ed2fb3643d23b87bab48"
+TARGET_CASE_ID = "skill_extraction_required_preferred_v1"
 TARGET_WORKLOAD = "skill_extraction"
+TARGET_SCHEMA_ID = "skill_extraction_result_v1"
 TARGET_PROVIDER = "groq"
 TARGET_MODEL = "openai/gpt-oss-120b"
 RUN_003_SCHEDULE_KEY_PREFIX = "canary_run_003_"
+
+_HISTORICAL_BENCHMARK_CONTRACT_SHA256 = (
+    "ba4e817f4e82f9df967011709a42bc7d2f22998f176f555cfee9dfc9e0071b98"
+)
+_HISTORICAL_CONTROLLED_PLAN_SHA256 = (
+    "a3ef53ff992a2d1daf43f8fa9b0556202268d34e21f7611eb5de4d26e9abe6b6"
+)
+_HISTORICAL_FIXTURE_CORPUS_SHA256 = (
+    "0ddc82e62745856c0d5d4d3f0efbe3fc86bd4e84e5da070f54f4ea635e74b05c"
+)
+_HISTORICAL_STEP8O_ENGINE_SHA256 = (
+    "7a6463fc465d963633f82a18de0b067daab31dc387680b1d004e706c61a55c15"
+)
 
 _PLAN_FIELDS = {
     "run_003_plan_version",
@@ -222,8 +238,8 @@ def _committed_ownership() -> tuple[
     )
     review, case = matches[0]
     _require(
-        review["case_alias"] == TARGET_CASE_ALIAS,
-        "run-003 target case alias changed",
+        review["case_alias"] == CURRENT_TARGET_CASE_ALIAS,
+        "current skill-extraction case alias changed",
     )
     _require(
         review["wholly_synthetic"] is True
@@ -237,7 +253,9 @@ def _committed_ownership() -> tuple[
         "run-003 target contains prohibited transmission material",
     )
     _require(
-        case["workload_id"] == TARGET_WORKLOAD
+        case["case_id"] == TARGET_CASE_ID
+        and case["workload_id"] == TARGET_WORKLOAD
+        and case["schema_id"] == TARGET_SCHEMA_ID
         and case["sanitized_classification"] == "synthetic_sanitized"
         and case["contains_personal_resume_content"] is False
         and case["additional_redaction_required"] is False,
@@ -299,8 +317,8 @@ def _expected_plan_contract() -> Dict[str, Any]:
         fixture,
         ownership,
     ) = _committed_ownership()
-    plan_sha = controlled_provider_benchmark_plan_sha256(controlled_plan)
-    corpus_sha = fixture_case_corpus_sha256(corpus)
+    plan_sha = _HISTORICAL_CONTROLLED_PLAN_SHA256
+    corpus_sha = _HISTORICAL_FIXTURE_CORPUS_SHA256
     request_limits = fixture["request_limits"]
     maximum_input = controlled_plan["token_budget_schema"][
         "maximum_input_tokens_per_request"
@@ -331,15 +349,13 @@ def _expected_plan_contract() -> Dict[str, Any]:
         "run_identifier": RUN_003_IDENTIFIER,
         "contract_kind": RUN_003_CONTRACT_KIND,
         "benchmark_contract_version": BENCHMARK_CONTRACT_VERSION,
-        "benchmark_contract_sha256": provider_benchmark_contract_sha256(
-            benchmark
-        ),
+        "benchmark_contract_sha256": _HISTORICAL_BENCHMARK_CONTRACT_SHA256,
         "controlled_plan_version": CONTROLLED_PLAN_VERSION,
         "controlled_plan_sha256": plan_sha,
         "fixture_corpus_version": CASE_CORPUS_VERSION,
         "fixture_corpus_sha256": corpus_sha,
         "step8o_engine_version": FIXTURE_BENCHMARK_VERSION,
-        "step8o_engine_sha256": provider_fixture_benchmark_sha256(step8o),
+        "step8o_engine_sha256": _HISTORICAL_STEP8O_ENGINE_SHA256,
         "target_case_alias": TARGET_CASE_ALIAS,
         "target_workload": TARGET_WORKLOAD,
         "target_provider": TARGET_PROVIDER,

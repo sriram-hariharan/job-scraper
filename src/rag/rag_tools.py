@@ -225,6 +225,7 @@ def answer_job_query_tool(
     filters: Optional[Dict[str, Any]] = None,
     include_diagnostics: bool = False,
     output_mode: str = "full",
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     question_error = _validate_non_empty_string(question, "question")
     if question_error:
@@ -254,12 +255,16 @@ def answer_job_query_tool(
         )
 
     try:
-        result = answer_job_query(
-            question=question,
-            top_k=top_k,
-            fetch_k=fetch_k,
-            filters=filters,
-        )
+        answer_kwargs = {
+            "question": question,
+            "top_k": top_k,
+            "fetch_k": fetch_k,
+            "filters": filters,
+        }
+        owner = str(owner_user_id or "").strip()
+        if owner:
+            answer_kwargs["owner_user_id"] = owner
+        result = answer_job_query(**answer_kwargs)
     except Exception as exc:
         return _error_payload(
             "answer_job_query",

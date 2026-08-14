@@ -1,4 +1,5 @@
 import socket
+from types import SimpleNamespace
 
 import pytest
 
@@ -456,3 +457,552 @@ def test_assistant_query_payload_cleans_known_internal_retrieval_error(monkeypat
     assert "Legacy filesystem RAG index is disabled" not in payload["response"]["answer"]
     assert "current corpus" in payload["response"]["answer"]
     assert "Try broadening" in payload["response"]["answer"]
+
+
+@pytest.mark.parametrize(
+    ("endpoint_name", "service_name"),
+    (
+        ("rag_answer", "rag_answer_payload"),
+        ("assistant_query", "assistant_query_payload"),
+    ),
+)
+def test_grounded_answer_api_requires_and_passes_exact_authenticated_owner(
+    monkeypatch,
+    endpoint_name,
+    service_name,
+):
+    from src.app import api as app_api
+
+    auth_calls = []
+    service_calls = []
+    monkeypatch.setattr(
+        app_api,
+        "_require_auth_owner_user_id",
+        lambda request: auth_calls.append(request) or "owner-a",
+    )
+    monkeypatch.setattr(
+        app_api.services,
+        service_name,
+        lambda **kwargs: service_calls.append(kwargs) or {"ok": True},
+    )
+    http_request = SimpleNamespace(state=SimpleNamespace(auth_user={}))
+
+    result = getattr(app_api, endpoint_name)(
+        "Which jobs require Python?",
+        http_request,
+        top_k=3,
+        fetch_k=7,
+        include_diagnostics=True,
+    )
+
+    assert result == {"ok": True}
+    assert auth_calls == [http_request]
+    assert service_calls[0]["owner_user_id"] == "owner-a"
+    assert service_calls[0]["request"] == "Which jobs require Python?"
+    assert service_calls[0]["top_k"] == 3
+    assert service_calls[0]["fetch_k"] == 7
+
+
+@pytest.mark.parametrize("endpoint_name", ("rag_answer", "assistant_query"))
+def test_grounded_answer_api_missing_owner_stops_before_service(
+    monkeypatch,
+    endpoint_name,
+):
+    from src.app import api as app_api
+
+    monkeypatch.setattr(
+        app_api.services,
+        "rag_answer_payload",
+        lambda **_kwargs: pytest.fail("RAG answer service must not run"),
+    )
+    monkeypatch.setattr(
+        app_api.services,
+        "assistant_query_payload",
+        lambda **_kwargs: pytest.fail("assistant service must not run"),
+    )
+    http_request = SimpleNamespace(
+        state=SimpleNamespace(auth_user={}),
+    )
+
+    with pytest.raises(app_api.HTTPException) as exc_info:
+        getattr(app_api, endpoint_name)(
+            "Which jobs require Python?",
+            http_request,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Authentication required."
+
+
+def test_rag_search_api_remains_owner_free_and_retrieval_only(monkeypatch):
+    from src.app import api as app_api
+
+    calls = []
+    monkeypatch.setattr(
+        app_api,
+        "_require_auth_owner_user_id",
+        lambda *_args, **_kwargs: pytest.fail("search must not require owner"),
+    )
+    monkeypatch.setattr(
+        app_api.services,
+        "rag_search_payload",
+        lambda **kwargs: calls.append(kwargs) or {"ok": True},
+    )
+
+    result = app_api.rag_search(
+        "python jobs",
+        top_k=2,
+        fetch_k=4,
+    )
+
+    assert result == {"ok": True}
+    assert calls == [
+        {
+            "request": "python jobs",
+            "top_k": 2,
+            "fetch_k": 4,
+            "output_mode": "compact",
+            "include_diagnostics": False,
+        }
+    ]
+
+
+def test_assistant_and_rag_services_propagate_normalized_owner(monkeypatch):
+    from src.app import services
+    from src.rag import rag_executor
+
+    original_rag_answer_payload = services.rag_answer_payload
+    answer_calls = []
+    monkeypatch.setattr(
+        services,
+        "route_assistant_intent",
+        lambda _request: {
+            "intent": "answer_job_query",
+            "reason": "test",
+        },
+    )
+    monkeypatch.setattr(
+        services,
+        "rag_answer_payload",
+        lambda **kwargs: answer_calls.append(kwargs) or {
+            "ok": True,
+            "response": {"answer": "answer", "sources": []},
+        },
+    )
+
+    services.assistant_query_payload(
+        "Which jobs require Python?",
+        owner_user_id=" owner-a ",
+    )
+
+    assert answer_calls[0]["owner_user_id"] == "owner-a"
+
+    executor_calls = []
+    monkeypatch.setattr(
+        rag_executor,
+        "execute_rag_request",
+        lambda **kwargs: executor_calls.append(kwargs) or {
+            "ok": True,
+            "response": {},
+        },
+    )
+    monkeypatch.setattr(
+        services,
+        "_overlay_application_actions",
+        lambda rows: rows,
+    )
+
+    original_rag_answer_payload(
+        "Which jobs require Python?",
+        owner_user_id=" owner-a ",
+    )
+
+    assert executor_calls == [
+        {
+            "request": "Which jobs require Python?",
+            "top_k": 5,
+            "fetch_k": 15,
+            "filters": None,
+            "output_mode": "compact",
+            "include_diagnostics": False,
+            "intent_override": "answer_job_query",
+            "owner_user_id": "owner-a",
+        }
+    ]
+
+
+def test_rag_executor_routes_owner_only_to_answer_tool(monkeypatch):
+    from src.rag import rag_executor
+
+    answer_calls = []
+    search_calls = []
+    monkeypatch.setattr(
+        rag_executor,
+        "answer_job_query_tool",
+        lambda **kwargs: answer_calls.append(kwargs) or {"ok": True},
+    )
+    monkeypatch.setattr(
+        rag_executor,
+        "search_jobs_tool",
+        lambda **kwargs: search_calls.append(kwargs) or {"ok": True},
+    )
+
+    rag_executor.execute_rag_request(
+        "Which jobs require Python?",
+        intent_override="answer_job_query",
+        owner_user_id=" owner-a ",
+    )
+    rag_executor.execute_rag_request(
+        "find python jobs",
+        intent_override="search_jobs",
+        owner_user_id="owner-a",
+    )
+
+    assert answer_calls[0]["owner_user_id"] == "owner-a"
+    assert "owner_user_id" not in search_calls[0]
+
+
+def test_rag_tool_and_answerer_propagate_owner_to_timeout(monkeypatch):
+    from src.rag import rag_answerer, rag_tools
+
+    tool_calls = []
+    monkeypatch.setattr(
+        rag_tools,
+        "answer_job_query",
+        lambda **kwargs: tool_calls.append(kwargs) or {
+            "question": kwargs["question"],
+            "answer": "No match",
+            "insufficient_evidence": True,
+            "sources": [],
+        },
+    )
+
+    rag_tools.answer_job_query_tool(
+        "Which jobs require Python?",
+        owner_user_id=" owner-a ",
+    )
+
+    assert tool_calls[0]["owner_user_id"] == "owner-a"
+
+    timeout_calls = []
+    monkeypatch.setattr(
+        rag_answerer,
+        "search_jobs",
+        lambda **_kwargs: [_grounded_answer_result()],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "_run_chat_completion_with_timeout",
+        lambda **kwargs: timeout_calls.append(kwargs) or _grounded_llm_result(),
+    )
+
+    rag_answerer.answer_job_query(
+        "Which jobs require Python?",
+        owner_user_id=" owner-a ",
+    )
+
+    assert timeout_calls[0]["owner_user_id"] == "owner-a"
+
+
+def _grounded_answer_result():
+    return {
+        "score": 1.0,
+        "doc_id": "job-1",
+        "company": "Acme AI",
+        "title": "Machine Learning Engineer",
+        "location": "Remote",
+        "source": "lever",
+        "job_url": "https://example.com/job-1",
+        "posted_at": "2026-05-01",
+        "preview": "Python machine learning role.",
+        "retrieval_text": "Python machine learning role.",
+        "retrieval_lanes": ["semantic"],
+    }
+
+
+def _grounded_llm_result(provider="openai", model="gpt-5-mini"):
+    return {
+        "content": (
+            '{"answer":"The Acme role requires Python. [S1]",'
+            '"insufficient_evidence":false,'
+            '"used_source_ids":["S1"],'
+            '"job_evidence":[{"source_id":"S1",'
+            '"evidence_points":["Python requirement"]}]}'
+        ),
+        "provider": provider,
+        "model": model,
+        "fallback_used": False,
+    }
+
+
+def test_owner_grounded_answer_executes_exact_route_once_inside_timeout(
+    monkeypatch,
+):
+    from src.rag import rag_answerer
+
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        rag_answerer,
+        "search_jobs",
+        lambda **_kwargs: [_grounded_answer_result()],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "effective_selection_source": "user_override",
+        },
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: runtime_calls.append(kwargs)
+        or _grounded_llm_result(),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    result = rag_answerer.answer_job_query(
+        "Which jobs require Python?",
+        owner_user_id=" owner-a ",
+    )
+
+    assert resolver_calls == [("owner-a", "grounded_rag_answer")]
+    assert len(runtime_calls) == 1
+    call = runtime_calls[0]
+    assert call["owner_user_id"] == "owner-a"
+    assert call["provider"] == "openai"
+    assert call["model"] == "gpt-5-mini"
+    assert call["temperature"] == rag_answerer.GROUNDED_RAG_TEMPERATURE
+    assert call["max_tokens"] == rag_answerer.GROUNDED_RAG_MAX_TOKENS
+    assert "fallback_enabled" not in call
+    assert result["insufficient_evidence"] is False
+    assert result["llm_provider"] == "openai"
+    assert result["llm_model"] == "gpt-5-mini"
+    assert result["llm_fallback_used"] is False
+
+
+def test_owner_grounded_answer_timeout_uses_existing_executor_without_fallback(
+    monkeypatch,
+):
+    from src.rag import rag_answerer
+
+    submitted = []
+    future_events = []
+    executor_events = []
+
+    class TimeoutFuture:
+        def result(self, timeout):
+            future_events.append(("result", timeout))
+            raise rag_answerer.FuturesTimeoutError()
+
+        def cancel(self):
+            future_events.append(("cancel",))
+
+    class RecordingExecutor:
+        def __init__(self, max_workers):
+            executor_events.append(("init", max_workers))
+
+        def submit(self, function, **kwargs):
+            submitted.append((function, kwargs))
+            return TimeoutFuture()
+
+        def shutdown(self, *, wait, cancel_futures):
+            executor_events.append(("shutdown", wait, cancel_futures))
+
+    monkeypatch.setattr(
+        rag_answerer,
+        "search_jobs",
+        lambda **_kwargs: [_grounded_answer_result()],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: {
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+        },
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "ThreadPoolExecutor",
+        RecordingExecutor,
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    result = rag_answerer.answer_job_query(
+        "Which jobs require Python?",
+        owner_user_id="owner-a",
+    )
+
+    assert submitted[0][0] is (
+        rag_answerer.run_user_chat_completion_with_metadata
+    )
+    assert submitted[0][1]["owner_user_id"] == "owner-a"
+    assert submitted[0][1]["provider"] == "groq"
+    assert submitted[0][1]["model"] == "openai/gpt-oss-120b"
+    assert "fallback_enabled" not in submitted[0][1]
+    assert future_events == [
+        ("result", rag_answerer.ANSWER_LLM_TIMEOUT_SECONDS),
+        ("cancel",),
+    ]
+    assert executor_events == [
+        ("init", 1),
+        ("shutdown", False, True),
+    ]
+    assert result["insufficient_evidence"] is True
+    assert "timed out after 25 seconds" in result["answer"]
+    assert result["llm_fallback_used"] is False
+
+
+def test_owner_grounded_route_failure_is_bounded_and_calls_no_runtime(
+    monkeypatch,
+):
+    from src.rag import rag_answerer
+
+    monkeypatch.setattr(
+        rag_answerer,
+        "search_jobs",
+        lambda **_kwargs: [_grounded_answer_result()],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("secret registry database detail")
+        ),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "ThreadPoolExecutor",
+        lambda *_args, **_kwargs: pytest.fail("executor must not be created"),
+    )
+
+    result = rag_answerer.answer_job_query(
+        "Which jobs require Python?",
+        owner_user_id="owner-a",
+    )
+
+    assert result["insufficient_evidence"] is True
+    assert "grounded_rag_owner_route_unavailable" in result["answer"]
+    assert "secret" not in repr(result)
+    assert result["sources"] == []
+    assert result["llm_fallback_used"] is False
+
+
+def test_owner_grounded_provider_failure_never_uses_legacy_fallback(monkeypatch):
+    from src.rag import rag_answerer
+
+    monkeypatch.setattr(
+        rag_answerer,
+        "search_jobs",
+        lambda **_kwargs: [_grounded_answer_result()],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        },
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("provider unavailable")
+        ),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    result = rag_answerer.answer_job_query(
+        "Which jobs require Python?",
+        owner_user_id="owner-a",
+    )
+
+    assert result["insufficient_evidence"] is True
+    assert "grounded answer generation failed" in result["answer"]
+    assert result["llm_fallback_used"] is False
+
+
+def test_blank_owner_grounded_answer_preserves_legacy_timeout_path(monkeypatch):
+    from src.rag import rag_answerer
+
+    legacy_calls = []
+    monkeypatch.setattr(
+        rag_answerer,
+        "search_jobs",
+        lambda **_kwargs: [_grounded_answer_result()],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("resolver must not execute"),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_chat_completion_with_metadata",
+        lambda **kwargs: legacy_calls.append(kwargs)
+        or _grounded_llm_result("legacy", rag_answerer.MODEL),
+    )
+
+    result = rag_answerer.answer_job_query(
+        "Which jobs require Python?",
+    )
+
+    assert len(legacy_calls) == 1
+    assert legacy_calls[0]["model"] == rag_answerer.MODEL
+    assert result["llm_provider"] == "legacy"
+    assert result["llm_model"] == rag_answerer.MODEL
+
+
+def test_execute_rag_request_blank_owner_remains_cli_compatible(monkeypatch):
+    from src.rag import rag_executor
+
+    calls = []
+    monkeypatch.setattr(
+        rag_executor,
+        "answer_job_query_tool",
+        lambda question, top_k, fetch_k, filters, include_diagnostics, output_mode: (
+            calls.append(question) or {"ok": True}
+        ),
+    )
+
+    payload = rag_executor.execute_rag_request(
+        "Which jobs require Python?",
+        intent_override="answer_job_query",
+    )
+
+    assert calls == ["Which jobs require Python?"]
+    assert payload["ok"] is True

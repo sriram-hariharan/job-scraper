@@ -1,0 +1,1165 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+import pytest
+
+from src.app import api
+from src.app import user_ai_settings_service as service
+from src.auth import runtime as auth_runtime
+
+
+ROOT = Path(__file__).resolve().parents[1]
+API_PATH = ROOT / "src/app/api.py"
+SERVICE_PATH = ROOT / "src/app/user_ai_settings_service.py"
+SYNTHETIC_SECRET = "synthetic-step6-never-return-secret"
+AUTHENTICATED_OWNER = "synthetic-authenticated-user"
+
+
+def _authenticated_client(monkeypatch) -> TestClient:
+    def guard(request):
+        request.state.auth_user = {"user_id": AUTHENTICATED_OWNER}
+        return None
+
+    monkeypatch.setattr(api, "auth_guard_response", guard)
+    return TestClient(api.app)
+
+
+def _unauthenticated_client(monkeypatch) -> TestClient:
+    monkeypatch.setattr(api, "auth_guard_response", lambda _request: None)
+    return TestClient(api.app)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    (
+        ("get", "/ai/settings", None),
+        ("get", "/ai/settings/catalog", None),
+        ("post", "/ai/settings/preferred-provider", {"provider": "groq"}),
+        ("delete", "/ai/settings/preferred-provider", None),
+        ("put", "/ai/settings/credentials/groq", {"api_key": "synthetic"}),
+        ("delete", "/ai/settings/credentials/groq", None),
+        (
+            "post",
+            "/ai/settings/test-connection",
+            {"provider": "groq", "model": "openai/gpt-oss-20b"},
+        ),
+        (
+            "get",
+            "/ai/settings/recommended-route/skill_extraction",
+            None,
+        ),
+        (
+            "get",
+            "/ai/settings/recommended-routes",
+            None,
+        ),
+        (
+            "put",
+            "/ai/settings/task-routes/skill_extraction",
+            {"provider": "openai", "model": "gpt-5-mini"},
+        ),
+        (
+            "delete",
+            "/ai/settings/task-routes/skill_extraction",
+            None,
+        ),
+    ),
+)
+def test_every_ai_settings_route_requires_authenticated_request_owner(
+    monkeypatch,
+    method,
+    path,
+    body,
+):
+    client = _unauthenticated_client(monkeypatch)
+    response = getattr(client, method)(path, json=body) if body else getattr(
+        client, method
+    )(path)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required."}
+
+
+def test_ai_routes_are_not_public_and_owner_can_only_come_from_request_state():
+    for path in (
+        "/ai/settings",
+        "/ai/settings/catalog",
+        "/ai/settings/preferred-provider",
+        "/ai/settings/credentials/groq",
+        "/ai/settings/test-connection",
+        "/ai/settings/recommended-route/skill_extraction",
+        "/ai/settings/recommended-routes",
+        "/ai/settings/task-routes/skill_extraction",
+    ):
+        assert auth_runtime._is_public_auth_path(path) is False
+
+    source = API_PATH.read_text(encoding="utf-8")
+    routes = source.split('@app.get("/ai/settings")', 1)[1].split(
+        '@app.get("/onboarding/preferences")', 1
+    )[0]
+    assert routes.count("_require_auth_owner_user_id(http_request)") == 11
+    assert "owner_user_id=request." not in routes
+    assert "owner_user_id=provider" not in routes
+    assert "owner_user_id: str" not in routes
+    for model in (
+        api.UserAiPreferredProviderRequest,
+        api.UserAiCredentialRequest,
+        api.UserAiTestConnectionRequest,
+        api.UserAiTaskRouteRequest,
+    ):
+        assert "owner_user_id" not in model.model_fields
+
+
+def test_request_models_forbid_extra_fields_and_credential_uses_secretstr(
+    monkeypatch,
+):
+    assert api.UserAiCredentialRequest.model_fields["api_key"].annotation is SecretStr
+    client = _authenticated_client(monkeypatch)
+
+    responses = (
+        client.post(
+            "/ai/settings/preferred-provider",
+            json={"provider": "groq", "owner_user_id": "synthetic-attacker"},
+        ),
+        client.put(
+            "/ai/settings/credentials/groq",
+            json={"api_key": SYNTHETIC_SECRET, "extra": "forbidden"},
+        ),
+        client.post(
+            "/ai/settings/test-connection",
+            json={
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "api_key": SYNTHETIC_SECRET,
+            },
+        ),
+        client.put(
+            "/ai/settings/task-routes/skill_extraction",
+            json={
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "owner_user_id": "synthetic-attacker",
+            },
+        ),
+    )
+
+    assert [response.status_code for response in responses] == [422, 422, 422, 422]
+    assert all(SYNTHETIC_SECRET not in response.text for response in responses)
+
+
+def test_settings_service_returns_exact_safe_step3_metadata(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "get_user_ai_settings_store_payload",
+        lambda owner_user_id, **_kwargs: {
+            "data": {
+                "found": True,
+                "owner_user_id": owner_user_id,
+                "preferred_provider": "groq",
+                "providers": {
+                    "groq": {
+                        "configured": True,
+                        "credential_hint": "••••••••CRET",
+                        "credential": SYNTHETIC_SECRET,
+                        "credential_ciphertext": "synthetic-ciphertext",
+                    },
+                    "openai": {
+                        "configured": False,
+                        "credential_hint": "",
+                    },
+                },
+                "credential": SYNTHETIC_SECRET,
+            }
+        },
+    )
+
+    payload = service.user_ai_settings_payload(
+        owner_user_id=AUTHENTICATED_OWNER
+    )
+
+    assert payload == {
+        "ok": True,
+        "owner_user_id": AUTHENTICATED_OWNER,
+        "preferred_provider": "groq",
+        "providers": {
+            "groq": {
+                "configured": True,
+                "credential_hint": "••••••••CRET",
+            },
+            "openai": {"configured": False, "credential_hint": ""},
+        },
+    }
+    rendered = json.dumps(payload, ensure_ascii=False)
+    assert SYNTHETIC_SECRET not in rendered
+    assert "synthetic-ciphertext" not in rendered
+    assert "credential_ciphertext" not in rendered
+
+
+def test_get_settings_api_uses_authenticated_owner_and_safe_response(
+    monkeypatch,
+):
+    captured = []
+
+    def get_settings(owner_user_id, **_kwargs):
+        captured.append(owner_user_id)
+        return {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "preferred_provider": None,
+                "providers": {
+                    "groq": {"configured": False, "credential_hint": ""},
+                    "openai": {"configured": False, "credential_hint": ""},
+                },
+            }
+        }
+
+    monkeypatch.setattr(service, "get_user_ai_settings_store_payload", get_settings)
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail("GET must not call a provider"),
+    )
+    response = _authenticated_client(monkeypatch).get("/ai/settings")
+
+    assert response.status_code == 200
+    assert captured == [AUTHENTICATED_OWNER]
+    assert response.json()["owner_user_id"] == AUTHENTICATED_OWNER
+
+
+def test_catalog_is_exact_ordered_candidate_metadata_and_read_only(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail("catalog must not call a provider"),
+    )
+    payload = service.user_ai_provider_catalog_payload(
+        owner_user_id=AUTHENTICATED_OWNER
+    )
+
+    assert [item["provider"] for item in payload["providers"]] == [
+        "groq",
+        "openai",
+    ]
+    pairs = [
+        (provider["provider"], model["model_id"])
+        for provider in payload["providers"]
+        for model in provider["models"]
+    ]
+    assert pairs == [
+        ("groq", "openai/gpt-oss-20b"),
+        ("groq", "openai/gpt-oss-120b"),
+        ("openai", "gpt-5-mini"),
+        ("openai", "gpt-5.1"),
+    ]
+    assert all("llama" not in model.lower() for _provider, model in pairs)
+    assert all(
+        model["live_qualification_status"] == "live_qualification_required"
+        for provider in payload["providers"]
+        for model in provider["models"]
+    )
+
+
+def test_catalog_api_is_authenticated_and_deterministic(monkeypatch):
+    first = _authenticated_client(monkeypatch).get("/ai/settings/catalog")
+    second = _authenticated_client(monkeypatch).get("/ai/settings/catalog")
+
+    assert first.status_code == 200
+    assert first.json() == second.json()
+    assert [row["provider"] for row in first.json()["providers"]] == [
+        "groq",
+        "openai",
+    ]
+
+
+def test_preferred_provider_save_and_clear_are_owner_scoped_without_provider_call(
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        service,
+        "set_preferred_provider_store_payload",
+        lambda owner, provider, **kwargs: calls.append(("set", owner, provider, kwargs))
+        or {"data": {}},
+    )
+    monkeypatch.setattr(
+        service,
+        "clear_preferred_provider_store_payload",
+        lambda owner, **kwargs: calls.append(("clear", owner, kwargs))
+        or {"data": {}},
+    )
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail("preference writes must not call provider"),
+    )
+
+    saved = service.save_user_ai_preferred_provider_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+        provider=" OpenAI ",
+    )
+    cleared = service.clear_user_ai_preferred_provider_service_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+    )
+
+    assert saved["preferred_provider"] == "openai"
+    assert cleared["preferred_provider"] is None
+    assert calls[0][0:3] == ("set", AUTHENTICATED_OWNER, "openai")
+    assert calls[1][0:2] == ("clear", AUTHENTICATED_OWNER)
+
+
+def test_unknown_preferred_provider_fails_before_storage(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "set_preferred_provider_store_payload",
+        lambda *_args, **_kwargs: pytest.fail("storage must not run"),
+    )
+    with pytest.raises(service.UserAiSettingsServiceError) as exc_info:
+        service.save_user_ai_preferred_provider_payload(
+            owner_user_id=AUTHENTICATED_OWNER,
+            provider="unknown",
+        )
+    assert exc_info.value.category == "unsupported_provider"
+
+
+def test_credential_save_replace_uses_exact_encrypted_upsert_boundary_only(
+    monkeypatch,
+):
+    calls = []
+
+    def upsert(owner, provider, credential, **kwargs):
+        calls.append((owner, provider, credential, kwargs))
+        return {
+            "data": {
+                "owner_user_id": owner,
+                "provider": provider,
+                "configured": True,
+                "credential_hint": "••••••••CRET",
+                "encryption_scheme": "fernet-v1",
+                "created_at": "2026-08-09T00:00:00Z",
+                "updated_at": "2026-08-09T00:00:00Z",
+                "credential": SYNTHETIC_SECRET,
+                "credential_ciphertext": "synthetic-ciphertext",
+            }
+        }
+
+    monkeypatch.setattr(service, "upsert_provider_credential_store_payload", upsert)
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail("save must not test provider"),
+    )
+
+    first = service.save_user_ai_provider_credential_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+        provider="groq",
+        credential=SYNTHETIC_SECRET,
+    )
+    second = service.save_user_ai_provider_credential_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+        provider="groq",
+        credential="synthetic-replacement-secret",
+    )
+
+    assert len(calls) == 2
+    assert calls[0][0:3] == (
+        AUTHENTICATED_OWNER,
+        "groq",
+        SYNTHETIC_SECRET,
+    )
+    assert first == second
+    rendered = json.dumps(first)
+    assert SYNTHETIC_SECRET not in rendered
+    assert "synthetic-ciphertext" not in rendered
+
+
+def test_credential_api_extracts_secretstr_for_exact_authenticated_owner(
+    monkeypatch,
+):
+    captured = []
+
+    def save(**kwargs):
+        captured.append(kwargs)
+        return {
+            "ok": True,
+            "provider": kwargs["provider"],
+            "configured": True,
+            "credential_hint": "••••••••CRET",
+        }
+
+    monkeypatch.setattr(service, "save_user_ai_provider_credential_payload", save)
+    response = _authenticated_client(monkeypatch).put(
+        "/ai/settings/credentials/openai",
+        json={"api_key": SYNTHETIC_SECRET},
+    )
+
+    assert response.status_code == 200
+    assert captured == [
+        {
+            "owner_user_id": AUTHENTICATED_OWNER,
+            "provider": "openai",
+            "credential": SYNTHETIC_SECRET,
+        }
+    ]
+    assert SYNTHETIC_SECRET not in response.text
+
+
+def test_credential_delete_is_exact_and_does_not_clear_or_cross_delete(
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        service,
+        "delete_provider_credential_store_payload",
+        lambda owner, provider, **kwargs: calls.append((owner, provider, kwargs))
+        or {
+            "data": {
+                "owner_user_id": owner,
+                "provider": provider,
+                "deleted": True,
+            }
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "clear_preferred_provider_store_payload",
+        lambda *_args, **_kwargs: pytest.fail("delete must not clear preference"),
+    )
+
+    payload = service.delete_user_ai_provider_credential_service_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+        provider="groq",
+    )
+
+    assert [(owner, provider) for owner, provider, _kwargs in calls] == [
+        (AUTHENTICATED_OWNER, "groq")
+    ]
+    assert payload == {
+        "ok": True,
+        "provider": "groq",
+        "deleted": True,
+        "configured": False,
+        "credential_hint": "",
+    }
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    (
+        ("groq", "arbitrary-model"),
+        ("groq", "llama-3.1-8b-instant"),
+        ("groq", "gpt-5-mini"),
+        ("openai", "openai/gpt-oss-20b"),
+    ),
+)
+def test_connection_rejects_non_catalog_pair_before_execution(
+    monkeypatch,
+    provider,
+    model,
+):
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail("provider execution must not run"),
+    )
+    with pytest.raises(service.UserAiSettingsServiceError) as exc_info:
+        service.test_user_ai_provider_connection_payload(
+            owner_user_id=AUTHENTICATED_OWNER,
+            provider=provider,
+            model=model,
+        )
+    assert exc_info.value.category == "unsupported_provider_model"
+
+
+def test_connection_uses_stored_user_runtime_fixed_prompt_and_bounded_request(
+    monkeypatch,
+):
+    calls = []
+
+    def run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {
+            "content": "provider-generated-body-must-not-return",
+            "provider": args[1],
+            "model": args[2],
+            "fallback_used": False,
+        }
+
+    monkeypatch.setattr(service, "run_user_chat_completion_with_metadata", run)
+
+    payload = service.test_user_ai_provider_connection_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+        provider="openai",
+        model="gpt-5-mini",
+    )
+
+    args, kwargs = calls[0]
+    assert args[0:3] == (AUTHENTICATED_OWNER, "openai", "gpt-5-mini")
+    assert args[3] == [{"role": "user", "content": "Reply with OK."}]
+    assert service.CONNECTION_TEST_MAX_TOKENS == 128
+    assert kwargs["max_tokens"] == 128
+    assert kwargs["temperature"] == 0
+    assert kwargs["thinking_budget"] == 0
+    assert kwargs["response_mime_type"] is None
+    assert kwargs["response_schema"] is None
+    assert kwargs["return_parsed"] is False
+    assert "fallback_enabled" not in kwargs
+    assert "credential" not in kwargs
+    assert "api_key" not in kwargs
+    assert payload == {
+        "ok": True,
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "status": "connected",
+    }
+    rendered = json.dumps(payload)
+    assert "provider-generated-body-must-not-return" not in rendered
+    assert "content" not in payload
+
+
+def test_connection_failure_is_bounded_in_service_and_http_response(monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise RuntimeError(f"raw SDK response credential={SYNTHETIC_SECRET}")
+
+    monkeypatch.setattr(service, "run_user_chat_completion_with_metadata", fail)
+
+    with pytest.raises(service.UserAiSettingsServiceError) as exc_info:
+        service.test_user_ai_provider_connection_payload(
+            owner_user_id=AUTHENTICATED_OWNER,
+            provider="groq",
+            model="openai/gpt-oss-20b",
+        )
+    assert exc_info.value.category == "connection_test_failed"
+    assert SYNTHETIC_SECRET not in str(exc_info.value)
+
+    response = _authenticated_client(monkeypatch).post(
+        "/ai/settings/test-connection",
+        json={"provider": "groq", "model": "openai/gpt-oss-20b"},
+    )
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": {"ok": False, "error_category": "connection_test_failed"}
+    }
+    assert SYNTHETIC_SECRET not in response.text
+
+
+
+def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
+    monkeypatch,
+):
+    owners = []
+
+    def list_routes(*, owner_user_id):
+        owners.append(owner_user_id)
+        return {
+            "workloads": [
+                {
+                    "workload_id": "skill_extraction",
+                    "recommendation_status": "recommended",
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                    "selection_basis": "quality",
+                    "execution_mode": "qualified_provider_model",
+                    "recommended_option": {
+                        "provider": "groq",
+                        "model": "openai/gpt-oss-20b",
+                    },
+                    "qualified_options": [
+                        {
+                            "provider": "groq",
+                            "model": "openai/gpt-oss-20b",
+                        },
+                        {
+                            "provider": "openai",
+                            "model": "gpt-5-mini",
+                        },
+                    ],
+                    "requested_selection": {
+                        "provider": "openai",
+                        "model": "gpt-5-mini",
+                    },
+                    "requested_selection_status": "qualified",
+                    "effective_selection": {
+                        "provider": "openai",
+                        "model": "gpt-5-mini",
+                    },
+                    "effective_selection_source": "user_override",
+                },
+                {
+                    "workload_id": "job_fit_evaluation",
+                    "recommendation_status": "fail_closed_zero_qualified",
+                    "provider": None,
+                    "model": None,
+                    "selection_basis": None,
+                    "execution_mode": "deterministic",
+                    "recommended_option": None,
+                    "qualified_options": [],
+                    "requested_selection": None,
+                    "requested_selection_status": "none",
+                    "effective_selection": None,
+                    "effective_selection_source": "deterministic",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "list_provider_model_routing_statuses",
+        list_routes,
+    )
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "aggregate route must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-routes"
+    )
+
+    assert response.status_code == 200
+    assert owners == [AUTHENTICATED_OWNER]
+
+    assert response.json() == {
+        "ok": True,
+        "workloads": [
+            {
+                "workload_id": "skill_extraction",
+                "recommendation_status": "recommended",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "selection_basis": "quality",
+                "execution_mode": "qualified_provider_model",
+                "recommended_option": {
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                },
+                "qualified_options": [
+                    {
+                        "provider": "groq",
+                        "model": "openai/gpt-oss-20b",
+                    },
+                    {
+                        "provider": "openai",
+                        "model": "gpt-5-mini",
+                    },
+                ],
+                "requested_selection": {
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                },
+                "requested_selection_status": "qualified",
+                "effective_selection": {
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                },
+                "effective_selection_source": "user_override",
+            },
+            {
+                "workload_id": "job_fit_evaluation",
+                "recommendation_status": (
+                    "fail_closed_zero_qualified"
+                ),
+                "provider": None,
+                "model": None,
+                "selection_basis": None,
+                "execution_mode": "deterministic",
+                "recommended_option": None,
+                "qualified_options": [],
+                "requested_selection": None,
+                "requested_selection_status": "none",
+                "effective_selection": None,
+                "effective_selection_source": "deterministic",
+            },
+        ],
+    }
+
+    rendered = response.text
+    assert "execution_mode" in rendered
+    assert "recommended_option" in rendered
+    assert "qualified_options" in rendered
+    for prohibited in (
+        "task_contract_sha256",
+        "qualification_binding_sha256",
+        "evidence_sha256",
+        "review_sha256",
+        "registry_sha",
+        "credential",
+        "api_key",
+        "raw_response",
+    ):
+        assert prohibited not in rendered
+
+
+def test_task_route_service_validates_before_exact_owner_scoped_upsert(
+    monkeypatch,
+):
+    calls = []
+    selected = {"provider": "openai", "model": "gpt-5-mini"}
+
+    monkeypatch.setattr(
+        service.provider_model_routing_service,
+        "validate_current_qualified_provider_model_selection",
+        lambda workload, provider, model: selected
+        if (workload, provider, model)
+        == ("skill_extraction", "openai", "gpt-5-mini")
+        else pytest.fail("unexpected validation input"),
+    )
+
+    def upsert(owner, workload, provider, model, **kwargs):
+        calls.append((owner, workload, provider, model, kwargs))
+        return {
+            "data": {
+                "owner_user_id": owner,
+                "workload_id": workload,
+                "provider": provider,
+                "model": model,
+            }
+        }
+
+    monkeypatch.setattr(
+        service,
+        "upsert_task_model_selection_store_payload",
+        upsert,
+    )
+    monkeypatch.setattr(
+        service.provider_model_routing_service,
+        "read_provider_model_routing_status",
+        lambda workload, *, owner_user_id=None: {
+            "workload_id": workload,
+            "requested_selection": selected,
+            "requested_selection_status": "qualified",
+            "effective_selection": selected,
+            "effective_selection_source": "user_override",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "task route save must not call provider or connection test"
+        ),
+    )
+
+    payload = service.save_user_ai_task_model_selection_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+        workload_id="skill_extraction",
+        provider=" OpenAI ",
+        model="gpt-5-mini",
+    )
+
+    assert calls[0][0:4] == (
+        AUTHENTICATED_OWNER,
+        "skill_extraction",
+        "openai",
+        "gpt-5-mini",
+    )
+    assert payload["effective_selection"] == selected
+    assert payload["effective_selection_source"] == "user_override"
+
+
+def test_unqualified_task_route_fails_before_store_mutation(monkeypatch):
+    monkeypatch.setattr(
+        service.provider_model_routing_service,
+        "validate_current_qualified_provider_model_selection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            service.provider_model_routing_service
+            .ProviderModelSelectionNotQualifiedError(
+                "internal registry detail"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "upsert_task_model_selection_store_payload",
+        lambda *_args, **_kwargs: pytest.fail("store mutation must not run"),
+    )
+
+    with pytest.raises(service.UserAiSettingsServiceError) as exc_info:
+        service.save_user_ai_task_model_selection_payload(
+            owner_user_id=AUTHENTICATED_OWNER,
+            workload_id="job_fit_evaluation",
+            provider="groq",
+            model="openai/gpt-oss-20b",
+        )
+    assert exc_info.value.category == "task_route_not_qualified"
+    assert "internal registry detail" not in str(exc_info.value)
+
+
+def test_task_route_clear_deletes_only_owner_workload_and_reads_fresh_state(
+    monkeypatch,
+):
+    calls = []
+    read_calls = []
+
+    def read(workload, *, owner_user_id=None):
+        read_calls.append((workload, owner_user_id))
+        return {
+            "workload_id": workload,
+            "requested_selection": None,
+            "requested_selection_status": "none",
+            "effective_selection": (
+                {"provider": "groq", "model": "openai/gpt-oss-20b"}
+                if owner_user_id is not None
+                else None
+            ),
+            "effective_selection_source": (
+                "applylens_recommended"
+                if owner_user_id is not None
+                else "validation_only"
+            ),
+        }
+
+    monkeypatch.setattr(
+        service.provider_model_routing_service,
+        "read_provider_model_routing_status",
+        read,
+    )
+    monkeypatch.setattr(
+        service,
+        "delete_task_model_selection_store_payload",
+        lambda owner, workload, **kwargs: calls.append(
+            (owner, workload, kwargs)
+        ) or {"data": {"deleted": True}},
+    )
+    monkeypatch.setattr(
+        service,
+        "clear_preferred_provider_store_payload",
+        lambda *_args, **_kwargs: pytest.fail(
+            "task route clear must not clear preferred provider"
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "delete_provider_credential_store_payload",
+        lambda *_args, **_kwargs: pytest.fail(
+            "task route clear must not delete credentials"
+        ),
+    )
+
+    payload = service.clear_user_ai_task_model_selection_payload(
+        owner_user_id=AUTHENTICATED_OWNER,
+        workload_id="skill_extraction",
+    )
+
+    assert calls[0][0:2] == (
+        AUTHENTICATED_OWNER,
+        "skill_extraction",
+    )
+    assert read_calls == [
+        ("skill_extraction", None),
+        ("skill_extraction", AUTHENTICATED_OWNER),
+    ]
+    assert payload["effective_selection_source"] == "applylens_recommended"
+
+
+def test_task_route_put_uses_authenticated_owner_and_returns_updated_state(
+    monkeypatch,
+):
+    calls = []
+    route = {
+        "ok": True,
+        "workload_id": "skill_extraction",
+        "requested_selection": {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        },
+        "requested_selection_status": "qualified",
+        "effective_selection": {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        },
+        "effective_selection_source": "user_override",
+    }
+
+    def save(**kwargs):
+        calls.append(kwargs)
+        return route
+
+    monkeypatch.setattr(
+        service,
+        "save_user_ai_task_model_selection_payload",
+        save,
+    )
+    response = _authenticated_client(monkeypatch).put(
+        "/ai/settings/task-routes/skill_extraction",
+        json={"provider": "openai", "model": "gpt-5-mini"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == route
+    assert calls == [
+        {
+            "owner_user_id": AUTHENTICATED_OWNER,
+            "workload_id": "skill_extraction",
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        }
+    ]
+    for prohibited in (
+        "owner_user_id",
+        "credential",
+        "api_key",
+        "task_contract_sha256",
+        "qualification_binding_sha256",
+        "evidence_sha256",
+        "review_sha256",
+    ):
+        assert prohibited not in response.text
+
+
+@pytest.mark.parametrize(
+    "workload_id",
+    ("job_fit_evaluation", "manual_provider_preview"),
+)
+def test_task_route_put_rejects_nonselectable_mode_with_bounded_error(
+    monkeypatch,
+    workload_id,
+):
+    monkeypatch.setattr(
+        service,
+        "save_user_ai_task_model_selection_payload",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            service.UserAiSettingsServiceError("task_route_not_qualified")
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).put(
+        f"/ai/settings/task-routes/{workload_id}",
+        json={"provider": "groq", "model": "openai/gpt-oss-20b"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "task_route_not_qualified",
+        }
+    }
+
+
+def test_task_route_delete_is_owner_workload_scoped_and_restores_recommended(
+    monkeypatch,
+):
+    calls = []
+    route = {
+        "ok": True,
+        "workload_id": "skill_extraction",
+        "requested_selection": None,
+        "requested_selection_status": "none",
+        "effective_selection": {
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+        },
+        "effective_selection_source": "applylens_recommended",
+    }
+
+    def clear(**kwargs):
+        calls.append(kwargs)
+        return route
+
+    monkeypatch.setattr(
+        service,
+        "clear_user_ai_task_model_selection_payload",
+        clear,
+    )
+    response = _authenticated_client(monkeypatch).delete(
+        "/ai/settings/task-routes/skill_extraction"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == route
+    assert calls == [
+        {
+            "owner_user_id": AUTHENTICATED_OWNER,
+            "workload_id": "skill_extraction",
+        }
+    ]
+    for prohibited in (
+        "owner_user_id",
+        "credential",
+        "api_key",
+        "task_contract_sha256",
+        "qualification_binding_sha256",
+        "evidence_sha256",
+        "review_sha256",
+    ):
+        assert prohibited not in response.text
+
+
+def test_recommended_route_api_is_authenticated_read_only_and_bounded(
+    monkeypatch,
+):
+    calls = []
+
+    def resolve(workload_id):
+        calls.append(workload_id)
+        return {
+            "workload_id": workload_id,
+            "recommendation_status": "recommended",
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+            "selection_basis": "durable_quality_tie_latency_tiebreak",
+            "task_contract_sha256": "internal-task-hash",
+            "qualification_binding_sha256": "internal-binding-hash",
+            "evidence_sha256": "internal-evidence-hash",
+            "review_sha256": None,
+        }
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "read-only recommendation route must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-route/skill_extraction"
+    )
+
+    assert response.status_code == 200
+    assert calls == ["skill_extraction"]
+    assert response.json() == {
+        "ok": True,
+        "workload_id": "skill_extraction",
+        "recommendation_status": "recommended",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "selection_basis": "durable_quality_tie_latency_tiebreak",
+    }
+
+    rendered = response.text
+    assert "internal-task-hash" not in rendered
+    assert "internal-binding-hash" not in rendered
+    assert "internal-evidence-hash" not in rendered
+
+
+@pytest.mark.parametrize(
+    "recommendation_status",
+    (
+        "fail_closed_zero_qualified",
+        "blocked_non_live",
+    ),
+)
+def test_recommended_route_api_preserves_fail_closed_status_without_execution(
+    monkeypatch,
+    recommendation_status,
+):
+    def resolve(workload_id):
+        raise (
+            api.provider_model_routing_service
+            .RecommendedProviderRoutingUnavailableError(
+                workload_id,
+                recommendation_status,
+            )
+        )
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "unavailable recommendation must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-route/job_fit_evaluation"
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "recommended_provider_route_unavailable",
+            "workload_id": "job_fit_evaluation",
+            "recommendation_status": recommendation_status,
+        }
+    }
+
+
+def test_recommended_route_policy_failure_is_bounded_and_leaks_no_detail(
+    monkeypatch,
+):
+    def fail(_workload_id):
+        raise ValueError(
+            f"raw recommendation failure credential={SYNTHETIC_SECRET}"
+        )
+
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "resolve_recommended_user_provider_route",
+        fail,
+    )
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "run_recommended_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "policy failure must not execute provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-route/skill_extraction"
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "recommended_provider_policy_unavailable",
+        }
+    }
+    assert SYNTHETIC_SECRET not in response.text
+
+
+def test_recommended_route_api_has_no_generic_execution_surface():
+    source = API_PATH.read_text(encoding="utf-8")
+
+    routes = source.split('@app.get("/ai/settings")', 1)[1].split(
+        '@app.get("/onboarding/preferences")', 1
+    )[0]
+
+    assert (
+        "run_recommended_user_chat_completion_with_metadata"
+        not in routes
+    )
+    assert "messages:" not in routes
+    assert "messages=" not in routes
+    assert "api_key" not in routes.split(
+        '@app.get("/ai/settings/recommended-route/{workload_id}")',
+        1,
+    )[1]
+
+
+def test_step6_sources_have_no_secret_environment_or_direct_sdk_ownership():
+    api_source = API_PATH.read_text(encoding="utf-8")
+    service_source = SERVICE_PATH.read_text(encoding="utf-8")
+    combined = api_source + service_source
+    assert "GROQ_API_KEY" not in service_source
+    assert "OPENAI_API_KEY" not in service_source
+    assert "os.environ" not in service_source
+    assert "os.putenv" not in combined
+    assert "Groq(" not in combined
+    assert "OpenAI(" not in combined
+    assert "chat.completions.create" not in combined
+    assert "responses.create" not in combined
+    assert "print(request)" not in combined
+    assert "model_dump()" not in combined
+    assert "get_secret_value()" in api_source

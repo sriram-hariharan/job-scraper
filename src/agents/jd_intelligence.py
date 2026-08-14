@@ -1250,6 +1250,7 @@ def build_jd_intelligence_step_snapshot(
 
 
 LIVE_DRY_RUN_PROMPT_VERSION = "live-jd-intelligence-dry-run-v1"
+LIVE_DRY_RUN_NORMALIZATION_CONTRACT_VERSION = "live-jd-intelligence-normalization-v1"
 LIVE_DRY_RUN_LIST_FIELDS: tuple[str, ...] = (
     "required_skills",
     "preferred_skills",

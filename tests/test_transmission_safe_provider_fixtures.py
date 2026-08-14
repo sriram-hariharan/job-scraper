@@ -316,31 +316,31 @@ def test_complete_offline_fixture_benchmark_remains_green():
 def test_rebuilt_matrix_counts_are_exact_and_bounded():
     counts = _plan()["request_counts"]
 
-    assert counts["by_provider"] == {"groq": 22, "openai": 6}
+    assert counts["by_provider"] == {"groq": 22, "openai": 22}
     assert counts["by_model"] == {
         "groq/openai/gpt-oss-20b": 12,
         "groq/openai/gpt-oss-120b": 10,
-        "openai/gpt-5-mini": 6,
-        "openai/gpt-5.1": 0,
+        "openai/gpt-5-mini": 12,
+        "openai/gpt-5.1": 10,
     }
-    assert counts["maximum_total_requests"] == 28
-    assert counts["maximum_requests_per_case"] == 3
+    assert counts["maximum_total_requests"] == 44
+    assert counts["maximum_requests_per_case"] == 4
 
 
 def test_rebuilt_matrix_workload_counts_are_exact():
     assert _plan()["request_counts"]["by_workload"] == {
         "skill_extraction": 2,
-        "job_fit_evaluation": 2,
-        "jd_intelligence": 2,
-        "grounded_rag_answer": 3,
-        "resume_fallback_ranking": 3,
-        "ambiguous_resume_adjudication": 3,
-        "critic_evaluation": 3,
-        "tailoring_generation": 2,
-        "tailoring_refinement": 2,
-        "tailoring_judge": 2,
+        "job_fit_evaluation": 4,
+        "jd_intelligence": 4,
+        "grounded_rag_answer": 4,
+        "resume_fallback_ranking": 4,
+        "ambiguous_resume_adjudication": 4,
+        "critic_evaluation": 4,
+        "tailoring_generation": 4,
+        "tailoring_refinement": 4,
+        "tailoring_judge": 4,
         "manual_scan_phrase": 2,
-        "manual_provider_preview": 2,
+        "manual_provider_preview": 4,
     }
 
 
@@ -348,7 +348,7 @@ def test_rebuilt_matrix_preserves_serial_no_fallback_no_retry_policy():
     plan = _plan()
 
     assert [row["execution_order"] for row in plan["staged_matrix"]] == list(
-        range(1, 29)
+        range(1, 45)
     )
     assert all(row["fallback"] is False for row in plan["staged_matrix"])
     assert all(
@@ -361,16 +361,13 @@ def test_rebuilt_matrix_preserves_serial_no_fallback_no_retry_policy():
     assert plan["timeout_policy"]["timeout_seconds"] == 30
 
 
-def test_gpt_5_1_remains_conditional_and_unscheduled():
+def test_gpt_5_1_is_planned_for_all_tier_b_and_c_synthetic_cases():
     plan = _plan()
 
-    assert plan["request_counts"]["by_model"]["openai/gpt-5.1"] == 0
-    assert plan["conditional_future_comparisons"][
-        "gpt_5_1_automatic_assignment"
-    ] is False
-    assert plan["conditional_future_comparisons"][
-        "gpt_5_1_requires_revised_plan_and_authorization"
-    ] is True
+    rows = [row for row in plan["staged_matrix"] if row["model"] == "gpt-5.1"]
+    assert len(rows) == 10
+    assert {row["tier"] for row in rows} == {"B", "C"}
+    assert all(row["workload_id"] != "skill_extraction" for row in rows)
 
 
 def test_aggregate_token_budgets_recalculate_from_request_count():
@@ -378,8 +375,8 @@ def test_aggregate_token_budgets_recalculate_from_request_count():
 
     assert budget["maximum_input_tokens_per_request"] == 4096
     assert budget["maximum_output_tokens_per_request"] == 1024
-    assert budget["maximum_total_observed_input_tokens"] == 28 * 4096
-    assert budget["maximum_total_observed_output_tokens"] == 28 * 1024
+    assert budget["maximum_total_observed_input_tokens"] == 44 * 4096
+    assert budget["maximum_total_observed_output_tokens"] == 44 * 1024
     assert budget["missing_usage_blocks_cost_comparison"] is True
 
 

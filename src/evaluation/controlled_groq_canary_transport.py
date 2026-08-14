@@ -35,6 +35,7 @@ from src.evaluation.controlled_provider_benchmark_plan import (
 TRANSPORT_VERSION = "controlled-groq-canary-transport-v1"
 LOCAL_INPUT_SIZE_UNIT = "canonical_utf8_bytes"
 MAXIMUM_LOCAL_INPUT_SIZE_BYTES = 4096
+MAXIMUM_PRODUCTION_PARITY_LOCAL_INPUT_SIZE_BYTES = 16384
 SYSTEM_MESSAGE = "Return only JSON matching the supplied strict schema."
 
 _CHAT_ARGUMENT_FIELDS = {
@@ -441,6 +442,139 @@ def build_groq_chat_completion_arguments(
     return deepcopy(arguments)
 
 
+def build_groq_production_parity_chat_completion_arguments(
+    *,
+    parity_request: Dict[str, Any],
+    scheduled: Mapping[str, Any],
+    plan: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Adapt a validated production-parity request without prompt ownership."""
+
+    from src.evaluation.controlled_production_parity_benchmark import (
+        validate_production_parity_request,
+    )
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan()
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(parity_request, plan=controlled_plan)
+    _require(
+        scheduled.get("provider") == parity_request.get("provider") == "groq"
+        and scheduled.get("model") == parity_request.get("model")
+        and scheduled.get("case_alias") == parity_request.get("case_alias")
+        and scheduled.get("workload_id") == parity_request.get("workload_id"),
+        "production-parity schedule binding mismatch",
+    )
+    _require(
+        scheduled.get("fallback") is False
+        and scheduled.get("harness_retry_limit") == 0
+        and scheduled.get("provider_sdk_retry_limit") == 0
+        and parity_request.get("fallback") is False
+        and parity_request.get("retry_limit") == 0,
+        "production-parity retries or fallback are prohibited",
+    )
+    arguments = {
+        "model": scheduled["model"],
+        "messages": deepcopy(parity_request["messages"]),
+        "temperature": parity_request["task_parameters"]["temperature"],
+        "max_completion_tokens": parity_request["task_parameters"]["max_tokens"],
+        "stream": False,
+        "n": 1,
+    }
+    response_contract = parity_request["response_contract"]
+    if response_contract["mode"] == "structured_json":
+        arguments["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": response_contract["schema_name"],
+                "strict": True,
+                "schema": deepcopy(response_contract["schema"]),
+            },
+        }
+    validate_groq_production_parity_chat_completion_arguments(
+        arguments,
+        parity_request=parity_request,
+        scheduled=scheduled,
+        plan=controlled_plan,
+    )
+    return deepcopy(arguments)
+
+
+def validate_groq_production_parity_chat_completion_arguments(
+    arguments: Dict[str, Any],
+    *,
+    parity_request: Dict[str, Any],
+    scheduled: Mapping[str, Any],
+    plan: Dict[str, Any] | None = None,
+) -> bool:
+    from src.evaluation.controlled_production_parity_benchmark import (
+        validate_production_parity_request,
+    )
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan()
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(parity_request, plan=controlled_plan)
+    response_contract = parity_request["response_contract"]
+    expected_fields = {
+        "model",
+        "messages",
+        "temperature",
+        "max_completion_tokens",
+        "stream",
+        "n",
+    }
+    if response_contract["mode"] == "structured_json":
+        expected_fields.add("response_format")
+    _require(
+        isinstance(arguments, dict) and set(arguments) == expected_fields,
+        "production-parity Groq arguments differ from the allowlist",
+    )
+    _require(
+        scheduled.get("provider") == "groq"
+        and arguments.get("model") == scheduled.get("model")
+        and parity_request.get("model") == scheduled.get("model"),
+        "production-parity Groq model mismatch",
+    )
+    _require(
+        arguments.get("messages") == parity_request.get("messages")
+        and arguments.get("temperature") == 0
+        and arguments.get("max_completion_tokens")
+        == parity_request["task_parameters"]["max_tokens"]
+        and arguments.get("stream") is False
+        and arguments.get("n") == 1,
+        "production-parity Groq request semantics changed",
+    )
+    if response_contract["mode"] == "structured_json":
+        _require(
+            arguments.get("response_format")
+            == {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_contract["schema_name"],
+                    "strict": True,
+                    "schema": response_contract["schema"],
+                },
+            },
+            "production-parity Groq structured schema mismatch",
+        )
+    else:
+        _require(
+            "response_format" not in arguments,
+            "plain or JSON-text production task was forced into a schema",
+        )
+    _require(
+        conservative_local_input_size_bytes(arguments)
+        <= MAXIMUM_PRODUCTION_PARITY_LOCAL_INPUT_SIZE_BYTES,
+        "production-parity Groq input-size bound exceeded",
+    )
+    return True
+
+
 def conservative_local_input_size_bytes(
     arguments: Mapping[str, Any],
 ) -> int:
@@ -688,3 +822,70 @@ def execute_groq_chat_completion_once(
         latency_ms=latency_ms,
         plan=plan,
     )
+
+
+def execute_groq_production_parity_chat_completion_once(
+    *,
+    api_key: str,
+    parity_request: Dict[str, Any],
+    scheduled: Mapping[str, Any],
+    parity_response_consumer: Callable[[Any], Dict[str, Any]],
+    monotonic_clock: Callable[[], float],
+    sdk_module: Any | None = None,
+    plan: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Execute one explicit Groq parity call and discard its raw envelope."""
+
+    _require(callable(parity_response_consumer), "parity consumer is required")
+    _require(callable(monotonic_clock), "monotonic clock is required")
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan()
+        if plan is None
+        else deepcopy(plan)
+    )
+    arguments = build_groq_production_parity_chat_completion_arguments(
+        parity_request=parity_request,
+        scheduled=scheduled,
+        plan=controlled_plan,
+    )
+    client = create_live_groq_client(api_key=api_key, sdk_module=sdk_module)
+    try:
+        started = monotonic_clock()
+        response = client.chat.completions.create(**deepcopy(arguments))
+        finished = monotonic_clock()
+    except Exception as exc:
+        _raise_bounded_sdk_failure(exc)
+    try:
+        latency_ms = (float(finished) - float(started)) * 1000.0
+    except (TypeError, ValueError, OverflowError):
+        raise DefinitiveTransportFailure("invalid_latency_measurement") from None
+    choices = _read_attr(response, "choices")
+    if not isinstance(choices, (list, tuple)) or len(choices) != 1:
+        raise DefinitiveTransportFailure("malformed_choice_count")
+    if _read_attr(response, "model") != scheduled.get("model"):
+        raise DefinitiveTransportFailure("provider_model_mismatch")
+    content = _read_attr(_read_attr(choices[0], "message"), "content")
+    if not isinstance(content, str) or not content.strip():
+        raise DefinitiveTransportFailure("malformed_empty_content")
+    usage = _read_attr(response, "usage")
+    input_tokens = _read_attr(usage, "prompt_tokens")
+    output_tokens = _read_attr(usage, "completion_tokens")
+    for value, label, ceiling in (
+        (input_tokens, "input", 4096),
+        (output_tokens, "output", 1024),
+    ):
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise DefinitiveTransportFailure(f"missing_{label}_usage")
+        if value > ceiling:
+            raise DefinitiveTransportFailure(f"{label}_usage_ceiling_exceeded")
+    parity_result = parity_response_consumer(content)
+    _require(isinstance(parity_result, dict), "parity result is invalid")
+    return {
+        "parity_result": deepcopy(parity_result),
+        "provider": "groq",
+        "model": scheduled["model"],
+        "latency_ms": float(latency_ms),
+        "input_token_count": input_tokens,
+        "output_token_count": output_tokens,
+        "provider_outcome_category": "success",
+    }

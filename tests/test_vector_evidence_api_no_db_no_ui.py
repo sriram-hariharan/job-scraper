@@ -9,6 +9,8 @@ from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from fastapi.testclient import TestClient
 
 from src.app import api, services
@@ -383,10 +385,13 @@ def test_no_schema_dependency_ui_or_pipeline_change():
         "src/pipeline/application_scorer.py": ("e0ec9ebb0993be5ea99b089f4c771f34c34804ba3a02c93e8940af1b8a7ed61b"),
         "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
     }
-    for relative_path, expected_hash in protected_hashes.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        protected_hashes,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
 
     for relative_path in (
         "src/app/static/agentic_review.js",

@@ -516,6 +516,509 @@ def test_production_structured_validation_failure_uses_existing_parse_retry(
     assert graph["intelligence"]["skills"]["all"] == []
 
 
+def _skill_job_text() -> str:
+    return (
+        "Required Qualifications:\n- Python\n- SQL\n"
+        "Responsibilities:\n"
+        + ("Maintain reliable data quality and reporting workflows. " * 8)
+        + "\n"
+        "Preferred Qualifications:\n- Airflow"
+    )
+
+
+def _skill_response() -> str:
+    return (
+        '{"required_skills":["python","sql"],'
+        '"preferred_skills":["airflow"]}'
+    )
+
+
+def _forbid_owner_skill_execution(monkeypatch, skill_enricher):
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("route must not resolve"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+
+def test_owner_skill_cache_hit_returns_before_route_or_provider(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    cached = {
+        "required_skills": ["python", "sql"],
+        "preferred_skills": ["airflow"],
+    }
+    cache_keys = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda key: cache_keys.append(key) or cached,
+    )
+    _forbid_owner_skill_execution(monkeypatch, skill_enricher)
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert result is cached
+    assert cache_keys == [
+        skill_enricher.build_skill_cache_key(_skill_job_text())
+    ]
+    assert skill_enricher.get_skill_cache_metrics() == {
+        "cache_hits": 1,
+        "cache_misses": 0,
+        "cache_stores": 0,
+        "cache_only_skips": 0,
+        "live_failures": 0,
+    }
+
+
+def test_owner_skill_cache_only_miss_stops_before_route_or_provider(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(skill_enricher, "SKILL_EXTRACTION_MODE", "cache_only")
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    _forbid_owner_skill_execution(monkeypatch, skill_enricher)
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert result == skill_enricher.get_empty_skill_result()
+    assert skill_enricher.get_skill_cache_metrics() == {
+        "cache_hits": 0,
+        "cache_misses": 1,
+        "cache_stores": 0,
+        "cache_only_skips": 1,
+        "live_failures": 0,
+    }
+
+
+def test_owner_skill_live_miss_executes_exact_route_once_and_stores_model(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "environment-owner")
+    cache_keys = []
+    resolver_calls = []
+    runtime_calls = []
+    stores = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda key: cache_keys.append(key) or None,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "effective_selection_source": "user_override",
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: runtime_calls.append(kwargs) or {
+            "content": _skill_response(),
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "fallback_used": False,
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **kwargs: stores.append(kwargs),
+    )
+    expected_cache_key = skill_enricher.build_skill_cache_key(
+        _skill_job_text()
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id=" owner-a ",
+    )
+
+    assert resolver_calls == [("owner-a", "skill_extraction")]
+    assert cache_keys == [expected_cache_key]
+    assert len(runtime_calls) == 1
+    call = runtime_calls[0]
+    assert call["owner_user_id"] == "owner-a"
+    assert call["provider"] == "openai"
+    assert call["model"] == "gpt-5-mini"
+    assert call["temperature"] == (
+        skill_enricher.SKILL_EXTRACTION_TEMPERATURE
+    )
+    assert call["max_tokens"] == skill_enricher.SKILL_EXTRACTION_MAX_TOKENS
+    assert "fallback_enabled" not in call
+    assert result == {
+        "required_skills": ["python", "sql"],
+        "preferred_skills": ["airflow"],
+    }
+    assert stores == [
+        {
+            "cache_key": expected_cache_key,
+            "model": "gpt-5-mini",
+            "required_skills": ["python", "sql"],
+            "preferred_skills": ["airflow"],
+        }
+    ]
+    assert skill_enricher.get_skill_cache_metrics()["cache_stores"] == 1
+
+
+def test_owner_skill_parse_retry_reuses_one_frozen_route(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    resolver_calls = []
+    runtime_calls = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+        },
+    )
+
+    def user_runtime(**kwargs):
+        runtime_calls.append(kwargs)
+        return {
+            "content": (
+                "not structured output"
+                if len(runtime_calls) == 1
+                else _skill_response()
+            )
+        }
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        user_runtime,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+    stores = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **kwargs: stores.append(kwargs),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert resolver_calls == [("owner-a", "skill_extraction")]
+    assert len(runtime_calls) == 2
+    assert {
+        (call["owner_user_id"], call["provider"], call["model"])
+        for call in runtime_calls
+    } == {("owner-a", "groq", "openai/gpt-oss-20b")}
+    assert runtime_calls[0]["messages"][1]["content"] != (
+        runtime_calls[1]["messages"][1]["content"]
+    )
+    assert result["required_skills"] == ["python", "sql"]
+    assert stores[0]["model"] == "openai/gpt-oss-20b"
+
+
+def test_owner_skill_route_failure_is_bounded_and_increments_live_failure(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    resolver_calls = []
+
+    def fail_route(owner, workload):
+        resolver_calls.append((owner, workload))
+        raise RuntimeError("secret registry and database detail")
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        fail_route,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert resolver_calls == [("owner-a", "skill_extraction")]
+    assert result == skill_enricher.get_empty_skill_result()
+    assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
+
+
+def test_owner_skill_provider_failure_has_no_legacy_fallback(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        },
+    )
+    user_calls = []
+
+    def fail_user_runtime(**kwargs):
+        user_calls.append(kwargs)
+        raise RuntimeError("provider secret detail")
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        fail_user_runtime,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy fallback must not execute"),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert len(user_calls) == 1
+    assert result == skill_enricher.get_empty_skill_result()
+    assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
+
+
+def test_skill_owner_falls_back_to_existing_pipeline_environment(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", " pipeline-owner ")
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    resolver_calls = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: {"content": _skill_response()},
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: None,
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="   ",
+    )
+
+    assert resolver_calls == [("pipeline-owner", "skill_extraction")]
+    assert result["required_skills"] == ["python", "sql"]
+
+
+def test_blank_owner_skill_cache_miss_preserves_legacy_model_execution(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("resolver must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    legacy_calls = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **kwargs: legacy_calls.append(kwargs) or _skill_response(),
+    )
+    stores = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **kwargs: stores.append(kwargs),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(_skill_job_text())
+
+    assert len(legacy_calls) == 1
+    assert legacy_calls[0]["model"] == skill_enricher.MODEL
+    assert result["required_skills"] == ["python", "sql"]
+    assert stores[0]["model"] == skill_enricher.MODEL
+
+
+def test_owner_skill_live_only_bypasses_cache_and_store(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(skill_enricher, "SKILL_EXTRACTION_MODE", "live_only")
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: pytest.fail("live_only must bypass cache read"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: pytest.fail("live_only must bypass cache store"),
+    )
+    resolver_calls = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: resolver_calls.append(
+            (owner, workload)
+        ) or {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: {"content": _skill_response()},
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert resolver_calls == [("owner-a", "skill_extraction")]
+    assert result["preferred_skills"] == ["airflow"]
+    assert skill_enricher.get_skill_cache_metrics() == {
+        "cache_hits": 0,
+        "cache_misses": 0,
+        "cache_stores": 0,
+        "cache_only_skips": 0,
+        "live_failures": 0,
+    }
+
+
+def test_owner_skill_section_parser_remains_before_json_retry(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+        },
+    )
+    calls = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: calls.append(kwargs) or {
+            "content": (
+                "REQUIRED SKILLS:\n- python\n- sql\n\n"
+                "PREFERRED SKILLS:\n- airflow"
+            )
+        },
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert len(calls) == 1
+    assert result == {
+        "required_skills": ["python", "sql"],
+        "preferred_skills": ["airflow"],
+    }
+
+
 def test_collector_preserves_details_jd_filter_semantic_and_scoring_order():
     source = Path("src/pipeline/collector.py").read_text(encoding="utf-8")
     details = source.index("detailed_jobs = enrich_job_details(new_jobs)")

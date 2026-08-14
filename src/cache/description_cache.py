@@ -72,7 +72,16 @@ def _run_psql_json_query(sql: str) -> Dict[str, Any]:
     if not lines:
         return {}
 
-    return dict(json.loads(lines[-1]) or {})
+    for line in reversed(lines):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(payload, dict):
+            return dict(payload)
+
+    return {}
 
 
 def _run_psql_statement(sql: str) -> None:

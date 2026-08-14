@@ -6,6 +6,7 @@ import pytest
 import requests
 
 from src.discovery.crawl_scheduler import AcquisitionOutcome, AcquisitionStatus
+from src.pipeline.job_filter import us_location
 from src.scrapers import recruitee_scraper
 from src.utils import http_retry, pipeline_metrics
 
@@ -45,6 +46,20 @@ def _offer(suffix="1", **overrides):
     return offer
 
 
+def _outcome(monkeypatch, offers):
+    monkeypatch.setattr(
+        recruitee_scraper,
+        "_request_offers",
+        lambda tenant: _Response({"offers": offers}),
+    )
+    return recruitee_scraper._fetch_company_outcome("acme")
+
+
+def _location_is_us(location):
+    locations = location if isinstance(location, list) else [location]
+    return any(us_location(value, "recruitee") for value in locations)
+
+
 def test_valid_success_uses_stable_id_canonical_url_and_public_fields(monkeypatch):
     payload = {"offers": [_offer()]}
     monkeypatch.setattr(
@@ -73,6 +88,220 @@ def test_valid_success_uses_stable_id_canonical_url_and_public_fields(monkeypatc
         }
     ]
     assert "careers_apply_url" not in outcome.jobs[0]
+
+
+def test_unusable_secondary_locations_preserve_primary_string(monkeypatch):
+    outcome = _outcome(
+        monkeypatch,
+        [
+            _offer(
+                locations={"city": "Boston", "country": "United States"},
+            )
+        ],
+    )
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.jobs[0]["location"] == "New York, NY, United States"
+
+
+def test_complete_secondary_us_location_is_retained_for_central_filter(monkeypatch):
+    outcome = _outcome(
+        monkeypatch,
+        [
+            _offer(
+                location="Remote job",
+                locations=[
+                    {
+                        "city": "Boston",
+                        "state": "Massachusetts",
+                        "state_code": "MA",
+                        "country": "United States",
+                        "country_code": "US",
+                    }
+                ],
+            )
+        ],
+    )
+
+    location = outcome.jobs[0]["location"]
+    assert location == [
+        "Remote job",
+        "Boston, Massachusetts, United States",
+    ]
+    assert _location_is_us(location) is True
+
+
+def test_us_country_code_fills_missing_country_name(monkeypatch):
+    outcome = _outcome(
+        monkeypatch,
+        [
+            _offer(
+                location="",
+                locations=[
+                    {
+                        "city": "Boston",
+                        "state": "Massachusetts",
+                        "country_code": "US",
+                    }
+                ],
+            )
+        ],
+    )
+
+    assert outcome.jobs[0]["location"] == "Boston, Massachusetts, United States"
+
+
+@pytest.mark.parametrize(
+    ("group", "expected"),
+    [
+        (
+            {"city": "Berlin", "country": "Germany", "country_code": "DE"},
+            "Berlin, Germany",
+        ),
+        (
+            {
+                "city": "Toronto",
+                "state": "Ontario",
+                "country": "Canada",
+                "country_code": "CA",
+            },
+            "Toronto, Ontario, Canada",
+        ),
+        (
+            {
+                "city": "Bangalore",
+                "state": "Karnataka",
+                "country": "India",
+                "country_code": "IN",
+            },
+            "Bangalore, Karnataka, India",
+        ),
+    ],
+)
+def test_foreign_country_codes_are_not_flattened_as_us_states(
+    monkeypatch, group, expected
+):
+    outcome = _outcome(
+        monkeypatch,
+        [_offer(location="", locations=[group])],
+    )
+
+    location = outcome.jobs[0]["location"]
+    assert location == expected
+    assert _location_is_us(location) is False
+
+
+def test_mixed_locations_remain_complete_and_recover_explicit_us(monkeypatch):
+    outcome = _outcome(
+        monkeypatch,
+        [
+            _offer(
+                location="Remote job",
+                locations=[
+                    {
+                        "city": "Boston",
+                        "state": "Massachusetts",
+                        "state_code": "MA",
+                        "country": "United States",
+                        "country_code": "US",
+                    },
+                    {
+                        "city": "Berlin",
+                        "country": "Germany",
+                        "country_code": "DE",
+                    },
+                ],
+            )
+        ],
+    )
+
+    location = outcome.jobs[0]["location"]
+    assert location == [
+        "Remote job",
+        "Boston, Massachusetts, United States",
+        "Berlin, Germany",
+    ]
+    assert all(value not in location for value in ("MA", "US", "DE"))
+    assert _location_is_us(location) is True
+    assert _location_is_us("Berlin, Germany") is False
+
+
+def test_location_deduplication_preserves_primary_and_api_order(monkeypatch):
+    duplicate = {
+        "name": "Remote - US",
+        "city": "Remote",
+        "state": "New York",
+        "country": "United States",
+        "country_code": "US",
+    }
+    outcome = _outcome(
+        monkeypatch,
+        [
+            _offer(
+                location="Remote - US, Remote, New York, United States",
+                locations=[
+                    duplicate,
+                    dict(duplicate),
+                    {
+                        "name": "Boston",
+                        "city": "Boston",
+                        "state": "Massachusetts",
+                        "country": "United States",
+                    },
+                ],
+            )
+        ],
+    )
+
+    assert outcome.jobs[0]["location"] == [
+        "Remote - US, Remote, New York, United States",
+        "Boston, Massachusetts, United States",
+    ]
+
+
+@pytest.mark.parametrize(
+    "locations",
+    [
+        {"city": "Boston", "country": "United States"},
+        [None, "invalid", 7, {}, {"city": "Berlin", "country_code": "DE"}],
+    ],
+)
+def test_malformed_optional_locations_do_not_degrade_valid_offer(
+    monkeypatch, locations
+):
+    outcome = _outcome(monkeypatch, [_offer(locations=locations)])
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.reason == ""
+    assert outcome.raw_job_count == 1
+    assert len(outcome.jobs) == 1
+    assert outcome.jobs[0]["location"] == "New York, NY, United States"
+
+
+def test_secondary_locations_preserve_authoritative_job_contract(monkeypatch):
+    offer = _offer(
+        location="Remote job",
+        locations=[
+            {
+                "city": "Boston",
+                "state": "Massachusetts",
+                "country": "United States",
+                "country_code": "US",
+            }
+        ],
+    )
+    outcome = _outcome(monkeypatch, [offer])
+    job = outcome.jobs[0]
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.raw_job_count == 1
+    assert len(outcome.jobs) == 1
+    assert job["company"] == "acme"
+    assert job["job_id"] == "rq_acme_1"
+    assert job["url"] == offer["careers_url"]
+    assert job["posted_at"] == offer["published_at"]
+    assert job["description"] == offer["description"]
+    assert job["requirements"] == offer["requirements"]
 
 
 def test_valid_empty_board_is_empty(monkeypatch):

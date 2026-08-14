@@ -683,11 +683,12 @@ def tailoring_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
+  <link rel="stylesheet" href="/static/tailoring_workspace_premium.css?v=tailoring_workspace_finish_r3" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
   <div
+    id="tailoringWorkspacePage"
     class="page tailoring-workspace-page"
     data-job-doc-id="{job_doc_id_safe}"
     data-job-company="{company_safe}"
@@ -702,81 +703,89 @@ def tailoring_workspace(
     data-packet-json-key="{packet_json_key_safe}"
     data-planning-output-dir="{output_dir_safe}"
   >
-    <header class="page-header tailoring-workspace-header app-page-header">
-      <div class="app-page-header__main">
-        <div class="app-page-header__title-row">
-          <h1 class="app-page-header__title">Tailoring Workspace</h1>
+    <header class="tailoring-workspace-header">
+      <div class="tailoring-workspace-header-topline">
+        <div class="tailoring-workspace-header-main">
+          <div class="tailoring-workspace-eyebrow">AI tailoring workspace</div>
+          <div class="tailoring-workspace-title-row">
+            <h1 class="tailoring-workspace-title">Tailor resume</h1>
+
+            <div class="tailoring-workspace-status-badge" role="status">
+              <span class="tailoring-workspace-status-dot" aria-hidden="true"></span>
+              <span id="tailoringWorkspaceStatusValue">{status_safe}</span>
+            </div>
+          </div>
         </div>
-        <p class="subtext app-page-header__description">
-          Review suggested bullet replacements on the left and resume preview on the right.
-        </p>
       </div>
+
+      <section class="tailoring-workspace-hero tailoring-workspace-context" aria-label="Job and resume context">
+        <div class="tailoring-workspace-context-main">
+          <div class="tailoring-workspace-context-job">
+            <div class="tailoring-workspace-context-company">{company_safe}</div>
+            <div class="tailoring-workspace-context-role">{title_safe}</div>
+          </div>
+
+          <div class="tailoring-workspace-context-resume">
+            <span class="tailoring-workspace-context-resume-icon" aria-hidden="true"></span>
+            <span class="tailoring-workspace-context-resume-label">Resume variant</span>
+            <span class="tailoring-workspace-context-resume-name">{resume_display_safe}</span>
+          </div>
+        </div>
+
+        <div class="tailoring-workspace-context-actions" aria-label="Tailoring commands">
+          <a
+            id="tailoringWorkspaceOpenScanBtn"
+            class="tailoring-ai-optimize-btn"
+            href="{scan_href_safe}"
+          >
+            <span class="tailoring-ai-optimize-btn-icon-wrap" aria-hidden="true">
+              <img
+                class="tailoring-ai-optimize-btn-icon"
+                src="/static/media/ai-img.svg"
+                alt=""
+                aria-hidden="true"
+              />
+            </span>
+            <span class="tailoring-ai-optimize-btn-label">AI optimize</span>
+          </a>
+
+          <button
+            id="tailoringWorkspaceRegenerateBtn"
+            class="tailoring-regenerate-btn"
+            type="button"
+            title="Generate a fresh set of AI tailoring suggestions"
+            aria-label="Generate a fresh set of AI tailoring suggestions"
+          >
+            <span class="tailoring-regenerate-btn-icon" aria-hidden="true">&#8635;</span>
+            <span class="tailoring-regenerate-btn-label">Regenerate Suggestions</span>
+          </button>
+        </div>
+      </section>
     </header>
 
-    <section class="card tailoring-workspace-hero">
-      <div class="tailoring-workspace-hero-grid">
-        <div class="info-pair">
-          <span class="label">Company</span>
-          <span>{company_safe}</span>
-        </div>
-
-        <div class="info-pair">
-          <span class="label">Role</span>
-          <span>{title_safe}</span>
-        </div>
-
-        <div class="info-pair">
-          <span class="label">Resume Variant</span>
-          <span>{resume_display_safe}</span>
-        </div>
-
-        <div class="info-pair">
-          <span class="label">Status</span>
-          <span id="tailoringWorkspaceStatusValue">{status_safe}</span>
-        </div>
-      </div>
-    </section>
-
     <section class="tailoring-workspace-layout">
-      <section class="card tailoring-workspace-pane tailoring-workspace-pane--left">
-        <div class="section-header">
+      <section class="tailoring-workspace-pane tailoring-workspace-pane--left">
+        <div class="tailoring-workspace-rail-header">
           <div>
             <div class="tailoring-section-title-row">
               <h2>Suggested changes</h2>
-
-              <a
-                id="tailoringWorkspaceOpenScanBtn"
-                class="ghost-btn tailoring-ai-optimize-btn"
-                href="{scan_href_safe}"
-              >
-                <span class="tailoring-ai-optimize-btn-icon-wrap" aria-hidden="true">
-                  <img
-                    class="tailoring-ai-optimize-btn-icon"
-                    src="/static/media/ai-img.svg"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                </span>
-
-                <span class="tailoring-ai-optimize-btn-label">AI optimize</span>
-              </a>
             </div>
 
-            <div class="subtext" id="tailoringWorkspaceMeta">
+            <div class="tailoring-workspace-meta" id="tailoringWorkspaceMeta">
               Loading suggestion set...
             </div>
           </div>
         </div>
 
         <section
-          class="card tailoring-workspace-subcard tailoring-workspace-selected-tabs hidden"
+          class="tailoring-workspace-selected-tabs hidden"
           id="tailoringWorkspaceSelectedTabsShell"
         >
-          <div class="scheduler-table-tabs tailoring-selected-tabs-shell">
-            <div class="scheduler-tab-row tailoring-selected-tab-row" id="tailoringWorkspaceSelectedTabRow">
+          <div class="tailoring-selected-tabs-shell">
+            <div class="tailoring-selected-tab-row" id="tailoringWorkspaceSelectedTabRow">
               <button
                 type="button"
-                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--ready active"
+                class="tailoring-selected-tab-btn tailoring-selected-tab-btn--ready active"
                 id="tailoringWorkspaceSelectedReadyTab"
                 data-tailoring-selected-tab="ready"
               >
@@ -785,7 +794,7 @@ def tailoring_workspace(
 
               <button
                 type="button"
-                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--review"
+                class="tailoring-selected-tab-btn tailoring-selected-tab-btn--review"
                 id="tailoringWorkspaceSelectedReviewTab"
                 data-tailoring-selected-tab="review"
               >
@@ -794,7 +803,7 @@ def tailoring_workspace(
 
               <button
                 type="button"
-                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--free-edit"
+                class="tailoring-selected-tab-btn tailoring-selected-tab-btn--free-edit"
                 id="tailoringWorkspaceSelectedFreeEditTab"
                 data-tailoring-selected-tab="free_edit"
               >
@@ -806,18 +815,18 @@ def tailoring_workspace(
 
         <div
           id="tailoringWorkspaceInteractiveSummary"
-          class="tailoring-interactive-shell tailoring-workspace-content"
+          class="tailoring-workspace-content"
         >
           <div class="tailoring-empty-state">
             Loading suggested changes...
           </div>
         </div>
 
-        <section id="tailoringWorkspaceSavedSelectionCard" class="card tailoring-workspace-subcard hidden">
-          <div class="section-header section-header--compact">
+        <section id="tailoringWorkspaceSavedSelectionCard" class="tailoring-workspace-saved-selection hidden">
+          <div class="tailoring-workspace-saved-selection-header">
             <div>
               <h3>Saved selection</h3>
-              <div class="subtext">
+              <div class="tailoring-workspace-saved-selection-copy">
                 Last persisted suggestion choice for this job/resume pair.
               </div>
             </div>
@@ -826,33 +835,31 @@ def tailoring_workspace(
           <div id="tailoringWorkspaceSavedSelectionShell"></div>
         </section>
       </section>
-      <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
-        <div class="section-header">
-          <div>
-            <h2>Resume preview</h2>
-            <div class="subtext">
-              Review the selected resume variant here while checking suggestion coverage on the left.
-            </div>
-          </div>
-        </div>
-        
+      <section class="tailoring-workspace-pane tailoring-workspace-pane--right">
         <div class="tailoring-preview-shell">
           <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
             <div class="tailoring-workspace-preview-header">
               <div class="tailoring-workspace-preview-header-main">
-                <div class="subtext">Current resume preview</div>
-
                 <div class="tailoring-workspace-preview-title-row">
-                  <div
-                    class="tailoring-workspace-preview-name"
-                    id="tailoringWorkspacePreviewName"
-                  >
-                    {resume_display_safe}
+                  <div class="tailoring-workspace-document-identity">
+                    <svg class="tailoring-workspace-toolbar-icon tailoring-workspace-document-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M6 3.75h8.5L19 8.25v12H6z"></path>
+                      <path d="M14.5 3.75v4.5H19M9 12h6M9 15.5h6"></path>
+                    </svg>
+                    <div>
+                      <div class="tailoring-workspace-document-label">Resume document</div>
+                      <div
+                        class="tailoring-workspace-preview-name"
+                        id="tailoringWorkspacePreviewName"
+                      >
+                        {resume_display_safe}
+                      </div>
+                    </div>
                   </div>
 
                   <button
                     type="button"
-                    class="ghost-btn tailoring-workspace-mode-toggle"
+                    class="tailoring-workspace-mode-toggle"
                     id="tailoringWorkspaceModeToggleBtn"
                     aria-label="Switch to edit mode"
                     aria-pressed="false"
@@ -863,7 +870,11 @@ def tailoring_workspace(
                       data-mode-segment="pdf"
                       aria-hidden="true"
                     >
-                      <span class="tailoring-workspace-icon tailoring-workspace-icon--preview"></span>
+                      <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 3.75h8.5L19 8.25v12H6z"></path>
+                        <path d="M14.5 3.75v4.5H19"></path>
+                      </svg>
+                      <span class="tailoring-workspace-mode-toggle-label">PDF</span>
                     </span>
 
                     <span
@@ -876,13 +887,17 @@ def tailoring_workspace(
                       data-mode-segment="edit"
                       aria-hidden="true"
                     >
-                      <span class="tailoring-workspace-mode-image-icon"></span>
+                      <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m4.5 19.5 3.6-.8 10-10a1.75 1.75 0 0 0-2.5-2.5l-10 10z"></path>
+                        <path d="m14.3 7.5 2.5 2.5"></path>
+                      </svg>
+                      <span class="tailoring-workspace-mode-toggle-label">Edit</span>
                     </span>
                   </button>
                 </div>
 
                 <div
-                  class="subtext tailoring-workspace-selection-status"
+                  class="tailoring-workspace-selection-status"
                   id="tailoringWorkspaceSelectionStatus"
                   aria-live="polite"
                 >
@@ -894,44 +909,44 @@ def tailoring_workspace(
                 <span class="tailoring-workspace-action-tooltip" data-tooltip="Discard selection">
                   <button
                     type="button"
-                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                    class="tailoring-workspace-icon-btn"
                     id="tailoringWorkspaceDiscardBtn"
                     aria-label="Discard selection"
                     disabled
                   >
-                    <span
-                      class="tailoring-workspace-icon tailoring-workspace-icon--discard"
-                      aria-hidden="true"
-                    ></span>
+                    <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4.5 7h15M9 3.75h6L16 7H8zM7 7l.75 13h8.5L17 7"></path>
+                      <path d="M10 10.5v6M14 10.5v6"></path>
+                    </svg>
                   </button>
                 </span>
 
                 <span class="tailoring-workspace-action-tooltip" data-tooltip="Export tailored draft">
                   <button
                     type="button"
-                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                    class="tailoring-workspace-icon-btn"
                     id="tailoringWorkspaceDownloadBtn"
                     aria-label="Export tailored draft"
                   >
-                    <span
-                      class="tailoring-workspace-icon tailoring-workspace-icon--download"
-                      aria-hidden="true"
-                    ></span>
+                    <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 3.75v11.5M7.75 11l4.25 4.25L16.25 11"></path>
+                      <path d="M5 19.5h14"></path>
+                    </svg>
                   </button>
                 </span>
 
                 <span class="tailoring-workspace-action-tooltip" data-tooltip="Save changes">
                   <button
                     type="button"
-                    class="btn-sm tailoring-workspace-icon-btn tailoring-workspace-icon-btn--save"
+                    class="tailoring-workspace-icon-btn tailoring-workspace-icon-btn--save"
                     id="tailoringWorkspaceSaveSelectionBtn"
                     aria-label="Save changes"
                     disabled
                   >
-                    <span
-                      class="tailoring-workspace-icon tailoring-workspace-icon--save"
-                      aria-hidden="true"
-                    ></span>
+                    <svg class="tailoring-workspace-toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M5 4h12l2 2v14H5z"></path>
+                      <path d="M8 4v6h8V4M8.5 20v-6h7v6"></path>
+                    </svg>
                   </button>
                 </span>
               </div>
@@ -940,7 +955,7 @@ def tailoring_workspace(
               <div class="tailoring-workspace-preview-toolbar-left">
                 <button
                   type="button"
-                  class="ghost-btn btn-sm"
+                  class="tailoring-workspace-zoom-btn"
                   id="tailoringWorkspaceZoomOutBtn"
                   aria-label="Zoom out"
                 >
@@ -949,7 +964,7 @@ def tailoring_workspace(
 
                 <button
                   type="button"
-                  class="ghost-btn btn-sm tailoring-workspace-zoom-value"
+                  class="tailoring-workspace-zoom-btn tailoring-workspace-zoom-value"
                   id="tailoringWorkspaceZoomResetBtn"
                   aria-label="Reset zoom"
                 >
@@ -958,7 +973,7 @@ def tailoring_workspace(
 
                 <button
                   type="button"
-                  class="ghost-btn btn-sm"
+                  class="tailoring-workspace-zoom-btn"
                   id="tailoringWorkspaceZoomInBtn"
                   aria-label="Zoom in"
                 >
@@ -966,7 +981,7 @@ def tailoring_workspace(
                 </button>
               </div>
 
-              <div class="subtext" id="tailoringWorkspacePreviewMeta">
+              <div class="tailoring-workspace-preview-meta" id="tailoringWorkspacePreviewMeta">
                 Loading PDF preview...
               </div>
             </div>
@@ -974,7 +989,7 @@ def tailoring_workspace(
             <div id="tailoringWorkspaceModeBody" class="tailoring-workspace-mode-body">
               <div
                 id="tailoringWorkspaceLiveDraftPreview"
-                class="tailoring-interactive-shell tailoring-workspace-mode-panel hidden"
+                class="tailoring-workspace-mode-panel hidden"
               >
                 <div class="tailoring-empty-state">
                   Loading working draft preview...
@@ -985,7 +1000,7 @@ def tailoring_workspace(
                 class="tailoring-workspace-pdf-scroller tailoring-workspace-mode-panel"
                 id="tailoringWorkspacePdfScroller"
               >
-                <div class="resume-choice-empty" id="tailoringWorkspacePreviewEmpty">
+                <div class="tailoring-workspace-preview-empty" id="tailoringWorkspacePreviewEmpty">
                   Loading PDF preview...
                 </div>
 
@@ -1003,33 +1018,34 @@ def tailoring_workspace(
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
-    <div class="modal-card tailoring-workspace-export-modal-card">
-      <div class="modal-header">
+  <section class="tailoring-workspace-export-modal hidden" id="tailoringWorkspaceExportModal">
+    <div class="tailoring-workspace-export-modal-card" role="dialog" aria-modal="true" aria-labelledby="tailoringWorkspaceExportTitle">
+      <div class="tailoring-workspace-export-header">
         <div>
-          <h3>Export tailored draft</h3>
-          <div class="subtext">
+          <h3 id="tailoringWorkspaceExportTitle">Export tailored draft</h3>
+          <div class="tailoring-workspace-export-header-copy">
             Export is only available from the saved workspace draft.
           </div>
         </div>
         <button
-          class="ghost-btn modal-close-btn"
+          class="tailoring-workspace-export-close-btn"
           id="closeTailoringWorkspaceExportModalBtn"
           type="button"
+          aria-label="Close export dialog"
         >
-          Close
+          <span aria-hidden="true">&#215;</span>
         </button>
       </div>
 
-      <div class="tailoring-workspace-export-shell">
+      <div class="tailoring-workspace-export-shell tailoring-workspace-export-inset">
         <div class="tailoring-workspace-export-summary">
-          <div class="info-pair">
-            <span class="label">Resume variant</span>
+          <div class="tailoring-workspace-export-summary-item">
+            <span class="tailoring-workspace-export-summary-label">Resume variant</span>
             <span id="tailoringWorkspaceExportResume">-</span>
           </div>
 
-          <div class="info-pair">
-            <span class="label">Export status</span>
+          <div class="tailoring-workspace-export-summary-item">
+            <span class="tailoring-workspace-export-summary-label">Export status</span>
             <span id="tailoringWorkspaceExportStatus">-</span>
           </div>
         </div>
@@ -1037,7 +1053,7 @@ def tailoring_workspace(
         <div class="tailoring-workspace-export-format-grid">
           <button
             type="button"
-            class="ghost-btn tailoring-workspace-export-format-btn planning-tailoring-btn--review"
+            class="tailoring-workspace-export-format-btn tailoring-workspace-export-format-btn--pdf"
             id="tailoringWorkspaceExportPdfBtn"
           >
             <span class="tailoring-workspace-export-format-title">
@@ -1046,7 +1062,6 @@ def tailoring_workspace(
                 alt=""
                 class="tailoring-workspace-action-icon"
                 aria-hidden="true"
-                style="width: 34px; height: 34px; min-width: 34px; min-height: 34px; flex: 0 0 34px;"
               />
               <span>PDF</span>
             </span>
@@ -1057,7 +1072,7 @@ def tailoring_workspace(
 
           <button
             type="button"
-            class="ghost-btn tailoring-workspace-export-format-btn planning-tailoring-btn--ready"
+            class="tailoring-workspace-export-format-btn tailoring-workspace-export-format-btn--word"
             id="tailoringWorkspaceExportWordBtn"
           >
             <span class="tailoring-workspace-export-format-title">
@@ -1074,7 +1089,7 @@ def tailoring_workspace(
             </span>
           </button>
         </div>
-        </div>
+      </div>
     </div>
   </section>
   <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
@@ -1312,7 +1327,7 @@ def scan_workspace(
     power_edit_link_html = ""
     if has_tailoring_context:
         tailoring_back_link_html = f"""
-          <a class="ghost-btn tailoring-scan-back-btn" href="{back_href_safe}">
+          <a class="scan-workspace-back-link" href="{back_href_safe}">
             Back to Tailoring
           </a>
         """.strip()
@@ -1389,11 +1404,12 @@ def scan_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_75_popover_sticky_actions" />
+  <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
   <div
+    id="scanWorkspacePage"
     class="page scan-workspace-page"
     data-job-doc-id="{job_doc_id_safe}"
     data-job-company="{company_safe}"
@@ -1411,16 +1427,15 @@ def scan_workspace(
     data-scan-initial-mode="{scan_initial_mode_safe}"
     data-scan-mode=""
   >
-    <header class="page-header scan-workspace-header-shell scan-workspace-header-shell--minimal app-page-header">
+    <header class="scan-workspace-header-shell scan-workspace-header-shell--minimal">
       <div class="scan-workspace-header-row">
-        <div class="scan-workspace-header-copy app-page-header__title-row">
-          <h1 class="app-page-header__title">AI Optimize Scan</h1>
+        <div class="scan-workspace-header-copy">
+          <h1>AI Optimize Scan</h1>
         </div>
+      </div>
 
-        <div class="scan-workspace-header-actions app-page-header__actions">
-          {tailoring_back_link_html}
-
-        </div>
+      <div class="scan-workspace-header-actions" aria-label="Scan commands">
+        {tailoring_back_link_html}
       </div>
     </header>
 
@@ -1429,18 +1444,18 @@ def scan_workspace(
       data-scan-mode-panel="new_scan"
       hidden
     >
-      <section class="card scan-workspace-intake-card">
+      <section class="scan-workspace-intake-card">
         <div class="scan-workspace-intake-header">
           <div>
             <h2>New scan</h2>
-            <div class="subtext">
+            <div class="scan-workspace-supporting-copy">
               Choose a saved profile resume, paste a job description, and start an AI optimization scan.
             </div>
           </div>
 
           <button
             type="button"
-            class="ghost-btn scan-workspace-sample-btn"
+            class="scan-workspace-sample-btn"
             id="scanWorkspaceViewSampleBtn"
             data-scan-switch-mode="review"
           >
@@ -1452,7 +1467,7 @@ def scan_workspace(
           <section class="scan-workspace-intake-panel scan-workspace-intake-panel--resume">
             <div class="scan-workspace-intake-panel-header">
               <h3>Resume</h3>
-              <div class="subtext">
+              <div class="scan-workspace-supporting-copy">
                 Select one of the resumes saved in your profile.
               </div>
             </div>
@@ -1477,7 +1492,7 @@ def scan_workspace(
           <section class="scan-workspace-intake-panel scan-workspace-intake-panel--job">
             <div class="scan-workspace-intake-panel-header">
               <h3>Job Description</h3>
-              <div class="subtext">
+              <div class="scan-workspace-supporting-copy">
                 Paste the target job description to generate the optimization review.
               </div>
             </div>
@@ -1546,7 +1561,7 @@ def scan_workspace(
           <div class="scan-workspace-intake-actions">
             <button
               type="button"
-              class="ghost-btn"
+              class="scan-workspace-clear-btn"
               id="scanWorkspaceClearIntakeBtn"
             >
               Clear
@@ -1570,7 +1585,7 @@ def scan_workspace(
       data-scan-mode-panel="processing"
       hidden
     >
-      <section class="card scan-workspace-processing-card">
+      <section class="scan-workspace-processing-card">
         <div class="scan-workspace-processing-topline">
           <div
             class="scan-workspace-processing-badge"
@@ -1581,7 +1596,7 @@ def scan_workspace(
 
           <button
             type="button"
-            class="ghost-btn scan-workspace-processing-back-btn"
+            class="scan-workspace-processing-back-btn"
             id="scanWorkspaceProcessingBackBtn"
           >
             Back
@@ -1597,7 +1612,7 @@ def scan_workspace(
           </div>
 
           <div
-            class="subtext scan-workspace-processing-subtitle"
+            class="scan-workspace-processing-subtitle"
             id="scanWorkspaceProcessingSubtitle"
           >
             Preparing scan request...
@@ -1636,7 +1651,7 @@ def scan_workspace(
             <div class="scan-workspace-processing-check" aria-hidden="true"></div>
             <div>
               <div class="scan-workspace-processing-complete-title">Scan complete</div>
-              <div class="subtext">The match report is ready to review.</div>
+              <div class="scan-workspace-processing-complete-copy">The match report is ready to review.</div>
             </div>
             <button
               type="button"
@@ -1656,7 +1671,7 @@ def scan_workspace(
       hidden
     >
       <section class="scan-workspace-review-shell scan-review-v2">
-        <aside class="card scan-workspace-review-rail scan-review-left-pane">
+        <aside class="scan-workspace-review-rail scan-review-left-pane">
           <div class="scan-workspace-review-rail-header">
             <div class="scan-workspace-review-score-card scan-workspace-review-score-card--minimal">
               <div class="scan-workspace-review-score-ring" id="scanWorkspaceScoreValue">AI</div>
@@ -1690,7 +1705,7 @@ def scan_workspace(
           </div>
 
           <section
-            class="card tailoring-workspace-subcard scan-workspace-review-controls"
+            class="scan-workspace-review-controls"
             id="scanWorkspaceControlsShell"
           >
             <div class="scan-workspace-tabs-shell">
@@ -1747,9 +1762,9 @@ def scan_workspace(
           <div class="scan-workspace-review-rail-body scan-review-left-scroll">
             <div
               id="scanWorkspaceInteractiveSummary"
-              class="tailoring-interactive-shell tailoring-workspace-content"
+              class="scan-workspace-interactive-summary"
             >
-              <div class="tailoring-empty-state">
+              <div class="scan-workspace-empty-state">
                 Loading scan suggestions...
               </div>
             </div>
@@ -1765,7 +1780,7 @@ def scan_workspace(
           tabindex="0"
         ></div>
 
-        <section class="card scan-workspace-review-main scan-review-right-pane">
+        <section class="scan-workspace-review-main scan-review-right-pane">
           <div class="scan-workspace-review-main-header scan-review-toolbar">
             <div class="scan-workspace-review-toolbar-row">
               <div class="scan-workspace-review-nav">
@@ -1798,7 +1813,7 @@ def scan_workspace(
               <div class="scan-workspace-review-main-actions scan-review-actions">
                 <button
                   type="button"
-                  class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                  class="scan-workspace-toolbar-btn scan-workspace-toolbar-btn--icon"
                   id="scanWorkspaceUndoBtn"
                   aria-label="Undo scan change"
                   aria-disabled="true"
@@ -1814,7 +1829,7 @@ def scan_workspace(
 
               <button
                 type="button"
-                class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                class="scan-workspace-toolbar-btn scan-workspace-toolbar-btn--icon"
                 id="scanWorkspaceRedoBtn"
                 aria-label="Redo scan change"
                 aria-disabled="true"
@@ -1830,7 +1845,7 @@ def scan_workspace(
 
               <button
                 type="button"
-                class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                class="scan-workspace-toolbar-btn scan-workspace-toolbar-btn--positive"
                 id="scanWorkspaceAcceptAllAiBtn"
               >
                 Accept All
@@ -1839,7 +1854,7 @@ def scan_workspace(
               <div class="scan-workspace-export-menu-wrap">
                 <button
                   type="button"
-                  class="ghost-btn btn-sm scan-workspace-toolbar-btn scan-workspace-export-btn"
+                  class="scan-workspace-toolbar-btn scan-workspace-toolbar-btn--secondary scan-workspace-export-btn"
                   id="scanWorkspaceExportBtn"
                   aria-haspopup="menu"
                   aria-expanded="false"
@@ -1850,7 +1865,7 @@ def scan_workspace(
                     alt=""
                     aria-hidden="true"
                   />
-                  <span>Export</span>
+                  <span data-scan-action-label>Export</span>
                 </button>
 
                 <div
@@ -1859,18 +1874,20 @@ def scan_workspace(
                   role="menu"
                   aria-label="Export optimized draft"
                 >
+                  <div class="scan-workspace-export-menu-label" role="presentation">Export as</div>
+
                   <button
                     type="button"
                     class="scan-workspace-export-option"
                     data-scan-export-format="pdf"
                     role="menuitem"
                   >
-                    <img
-                      class="scan-workspace-export-format-icon"
-                      src="/static/media/pdf-icon.svg"
-                      alt=""
-                      aria-hidden="true"
-                    />
+                    <span class="scan-workspace-export-format-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6.5 3.5h7.25l3.75 3.75V20.5h-11z"></path>
+                        <path d="M13.75 3.5v3.75h3.75M9 12h6M9 15.5h4.5"></path>
+                      </svg>
+                    </span>
                     <span>PDF</span>
                   </button>
 
@@ -1880,12 +1897,12 @@ def scan_workspace(
                     data-scan-export-format="word"
                     role="menuitem"
                   >
-                    <img
-                      class="scan-workspace-export-format-icon"
-                      src="/static/media/doc-icon.svg"
-                      alt=""
-                      aria-hidden="true"
-                    />
+                    <span class="scan-workspace-export-format-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6.5 3.5h7.25l3.75 3.75V20.5h-11z"></path>
+                        <path d="M13.75 3.5v3.75h3.75M9 12h6M9 15.5h6"></path>
+                      </svg>
+                    </span>
                     <span>DOCX</span>
                   </button>
                 </div>
@@ -1898,7 +1915,7 @@ def scan_workspace(
               >
                 <button
                   type="button"
-                  class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                  class="scan-workspace-toolbar-btn scan-workspace-toolbar-btn--secondary"
                   data-scan-switch-mode="compare"
                   id="scanWorkspaceCompareBtn"
                   aria-disabled="true"
@@ -1916,13 +1933,13 @@ def scan_workspace(
               >
                 <button
                   type="button"
-                  class="btn-sm scan-workspace-toolbar-btn scan-workspace-continue-btn"
+                  class="scan-workspace-toolbar-btn scan-workspace-toolbar-btn--primary scan-workspace-continue-btn"
                   id="scanWorkspaceSaveBtn"
                   aria-disabled="true"
                   disabled
                   title="No changes made"
                 >
-                  Continue
+                  <span data-scan-action-label>Continue</span>
                 </button>
               </span>
 
@@ -1937,7 +1954,7 @@ def scan_workspace(
 
                 <button
                   type="button"
-                  class="ghost-btn btn-sm scan-workspace-toolbar-btn scan-workspace-rescan-btn"
+                  class="scan-workspace-toolbar-btn scan-workspace-rescan-btn"
                   id="scanWorkspaceRescanBtn"
                   hidden
                 >
@@ -1973,7 +1990,7 @@ def scan_workspace(
           <section class="scan-workspace-annotation-shell scan-review-preview-area">
             <div class="scan-workspace-annotation-topbar scan-workspace-annotation-topbar--minimal">
               <div
-                class="subtext scan-workspace-annotation-status"
+                class="scan-workspace-annotation-status"
                 id="scanWorkspaceAnnotationStatus"
                 aria-live="polite"
               ></div>
@@ -1986,38 +2003,31 @@ def scan_workspace(
                 aria-hidden="true"
               ></div>
 
-              <div class="tailoring-preview-shell scan-workspace-review-preview-shell">
-                <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
-                  <div class="tailoring-workspace-preview-header scan-workspace-preview-header--minimal">
-                    <div class="tailoring-workspace-preview-title-row scan-workspace-preview-title-row--minimal">
-                      <div
-                        class="tailoring-workspace-preview-name"
-                        id="scanWorkspacePreviewName"
-                      >
-                        {resume_display_safe}
-                      </div>
-
+              <div class="scan-workspace-review-preview-shell">
+                <div class="scan-workspace-preview-canvas">
+                  <div class="scan-workspace-preview-header scan-workspace-preview-header--minimal">
+                    <div class="scan-workspace-preview-title-row scan-workspace-preview-title-row--minimal">
                       <div class="scan-workspace-preview-meta-inline">
                         <span
-                          class="subtext tailoring-workspace-selection-status"
+                          class="scan-workspace-preview-status"
                           id="scanWorkspacePreviewStatus"
                           aria-live="polite"
                         >
                           Resume preview
                         </span>
 
-                        <span class="subtext" id="scanWorkspacePreviewMeta">
+                        <span class="scan-workspace-preview-meta" id="scanWorkspacePreviewMeta">
                           Loading preview...
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div class="tailoring-workspace-mode-body">
+                  <div class="scan-workspace-preview-mode-body">
                     <div
                       id="scanWorkspaceLiveDraftPreview"
                       class="scan-workspace-live-draft-preview"
                     >
-                      <div class="tailoring-empty-state">
+                      <div class="scan-workspace-empty-state">
                         Loading reconstructed draft preview...
                       </div>
                     </div>
@@ -2039,7 +2049,7 @@ def scan_workspace(
 
                   <button
                     type="button"
-                    class="ghost-btn btn-sm scan-workspace-suggestion-popover-close"
+                    class="scan-workspace-suggestion-popover-close"
                     id="scanWorkspaceSuggestionPopoverCloseBtn"
                     aria-label="Close suggestion dialog"
                   >
@@ -2070,7 +2080,7 @@ def scan_workspace(
                   </span>
 
                   <span
-                    class="subtext scan-workspace-suggestion-decision-meta"
+                    class="scan-workspace-suggestion-decision-meta"
                     id="scanWorkspaceSuggestionDecisionMeta"
                   >
                     No decision recorded yet.
@@ -2080,7 +2090,7 @@ def scan_workspace(
                 <div class="scan-workspace-suggestion-popover-actions">
                   <button
                     type="button"
-                    class="btn-sm scan-workspace-suggestion-action-btn"
+                    class="scan-workspace-suggestion-action-btn"
                     id="scanWorkspaceSuggestionAcceptBtn"
                     data-scan-decision-action="accept"
                     disabled
@@ -2090,7 +2100,7 @@ def scan_workspace(
 
                   <button
                     type="button"
-                    class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
+                    class="scan-workspace-suggestion-action-btn"
                     id="scanWorkspaceSuggestionRejectBtn"
                     data-scan-decision-action="reject"
                     disabled
@@ -2100,7 +2110,7 @@ def scan_workspace(
 
                   <button
                     type="button"
-                    class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
+                    class="scan-workspace-suggestion-action-btn"
                     id="scanWorkspaceSuggestionResetBtn"
                     data-scan-decision-action="reset"
                     disabled
@@ -2146,15 +2156,7 @@ def scan_workspace(
                 <div class="scan-workspace-continue-modal-actions">
                   <button
                     type="button"
-                    class="scan-workspace-continue-modal-primary"
-                    id="scanWorkspaceContinueToEditBtn"
-                  >
-                    Continue to edit
-                  </button>
-
-                  <button
-                    type="button"
-                    class="scan-workspace-continue-modal-secondary"
+                    class="scan-workspace-continue-modal-action scan-workspace-continue-modal-action--secondary"
                     id="scanWorkspaceContinueDownloadBtn"
                   >
                     <img
@@ -2163,7 +2165,15 @@ def scan_workspace(
                       alt=""
                       aria-hidden="true"
                     />
-                    <span>Download</span>
+                    <span data-scan-action-label>Download</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="scan-workspace-continue-modal-action scan-workspace-continue-modal-action--primary"
+                    id="scanWorkspaceContinueToEditBtn"
+                  >
+                    <span>Continue to edit</span>
                   </button>
                 </div>
               </div>
@@ -2178,11 +2188,11 @@ def scan_workspace(
       data-scan-mode-panel="compare"
       hidden
     >
-      <section class="card scan-workspace-compare-shell">
+      <section class="scan-workspace-compare-shell">
         <div class="scan-workspace-compare-header">
           <div>
             <h2>Compare</h2>
-            <div class="subtext" id="scanWorkspaceCompareStatus">
+            <div class="scan-workspace-compare-status" id="scanWorkspaceCompareStatus">
               Compare the baseline draft against the current accepted AI decision set.
             </div>
           </div>
@@ -2190,7 +2200,7 @@ def scan_workspace(
           <div class="scan-workspace-compare-header-actions">
             <button
               type="button"
-              class="ghost-btn btn-sm"
+              class="scan-workspace-compare-action-btn"
               id="scanWorkspaceCompareRefreshBtn"
             >
               Refresh compare
@@ -2198,7 +2208,7 @@ def scan_workspace(
 
             <button
               type="button"
-              class="ghost-btn btn-sm"
+              class="scan-workspace-compare-action-btn"
               data-scan-switch-mode="review"
             >
               Back to review
@@ -2221,7 +2231,7 @@ def scan_workspace(
                 <div class="scan-workspace-compare-pane-title">Baseline draft</div>
               </div>
 
-              <div class="subtext" id="scanWorkspaceCompareBeforeMeta">
+              <div class="scan-workspace-compare-pane-meta" id="scanWorkspaceCompareBeforeMeta">
                 Loading baseline preview...
               </div>
             </div>
@@ -2230,7 +2240,7 @@ def scan_workspace(
               class="scan-workspace-compare-pane-body"
               id="scanWorkspaceCompareBeforePane"
             >
-              <div class="tailoring-empty-state">
+              <div class="scan-workspace-empty-state">
                 Loading baseline preview...
               </div>
             </div>
@@ -2243,7 +2253,7 @@ def scan_workspace(
                 <div class="scan-workspace-compare-pane-title">Accepted AI decision set</div>
               </div>
 
-              <div class="subtext" id="scanWorkspaceCompareAfterMeta">
+              <div class="scan-workspace-compare-pane-meta" id="scanWorkspaceCompareAfterMeta">
                 Waiting for accepted linked suggestions...
               </div>
             </div>
@@ -2252,7 +2262,7 @@ def scan_workspace(
               class="scan-workspace-compare-pane-body"
               id="scanWorkspaceCompareAfterPane"
             >
-              <div class="tailoring-empty-state">
+              <div class="scan-workspace-empty-state">
                 Accept at least one linked suggestion to generate the after preview.
               </div>
             </div>
@@ -2260,6 +2270,16 @@ def scan_workspace(
         </div>
       </section>
     </section>
+
+    <div
+      class="scan-workspace-evidence-tooltip"
+      id="scanWorkspaceEvidenceTooltip"
+      role="tooltip"
+      hidden
+    >
+      <span class="scan-workspace-evidence-tooltip-kicker">JD evidence</span>
+      <span class="scan-workspace-evidence-tooltip-copy" id="scanWorkspaceEvidenceTooltipCopy"></span>
+    </div>
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>

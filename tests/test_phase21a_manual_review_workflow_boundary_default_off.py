@@ -8,6 +8,8 @@ from pathlib import Path
 import subprocess
 
 from tests.support.phase_guard_registry import (
+    DISCOVERY_ACQUISITION_LIFECYCLE_FILES,
+    HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES,
     HIMALAYAS_STEP6B1_ATTRIBUTION_FOUNDATION_FILES,
     HIMALAYAS_STEP6B2_SOURCE_INTEGRATION_FILES,
     HIMALAYAS_STEP6C1_PAGINATION_REPAIR_FILES,
@@ -15,15 +17,21 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
     HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
     HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
+    JOBVITE_LOCATION_FRESHNESS_FILES,
+    JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
-    PERSONIO_SOURCE_INTEGRATION_FILES,
+    PERSONIO_SOURCE_RETIREMENT_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
+    RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
+    SMARTRECRUITERS_PAGINATION_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
+    WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES,
+    WORKDAY_PAGINATION_FRESHNESS_FILES,
     assert_changed_files_allowed,
     assert_protected_hashes,
     get_changed_files,
@@ -137,6 +145,9 @@ def test_protected_runtime_files_are_unchanged():
         ROOT,
         PROTECTED_HASHES,
         compatibility_profiles=(
+            "smartrecruiters_pagination",
+            "workday_pagination_freshness",
+            "himalayas_step2b_location_coverage",
             "himalayas_step6d_c_source_retirement",
             "himalayas_step6d_b2_retention_integration",
             "himalayas_step6c1_pagination_repair",
@@ -144,10 +155,14 @@ def test_protected_runtime_files_are_unchanged():
             "himalayas_step6b1_attribution_foundation",
             "phase129c_workflow_overlay_and_run_scoped_corpus",
             "usajobs_source_integration",
-            "personio_source_integration",
+            "personio_source_retirement",
             "recruitee_source_integration",
+            "recruitee_standalone_discovery",
             "phase2d_a_independent_seniority_policy",
             "phase2d_b2_strict_seniority_filter",
+            "source_yield_ui",
+            "jobvite_location_freshness",
+            "jobvite_standalone_discovery",
         ),
     )
 
@@ -816,6 +831,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         changed,
         allowed | legacy_guards,
         legacy_guard_profiles=(
+            "smartrecruiters_pagination",
+            "workday_pagination_freshness",
+            "himalayas_step2b_location_coverage",
             "himalayas_step6e_r1_location_activation",
             "himalayas_step6d_c_source_retirement",
             "himalayas_step6d_b2_retention_integration",
@@ -834,7 +852,9 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "phase133g_premium_planning_dashboard",
             "phase10_step8_shadow_observation_safety",
             "usajobs_source_integration",
-            "personio_source_integration",
+            "personio_source_retirement",
+            "recruitee_standalone_discovery",
+            "jobvite_standalone_discovery",
         ),
     )
 
@@ -847,6 +867,96 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    discovery_acquisition_lifecycle_runtime_files = {
+        ROOT / relative_path
+        for relative_path in DISCOVERY_ACQUISITION_LIFECYCLE_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == discovery_acquisition_lifecycle_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    smartrecruiters_pagination_runtime_files = {
+        ROOT / relative_path
+        for relative_path in SMARTRECRUITERS_PAGINATION_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == smartrecruiters_pagination_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    workday_pagination_freshness_runtime_files = {
+        ROOT / relative_path
+        for relative_path in WORKDAY_PAGINATION_FRESHNESS_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == workday_pagination_freshness_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    himalayas_step2b_runtime_files = {
+        ROOT / relative_path
+        for relative_path in HIMALAYAS_STEP2B_LOCATION_COVERAGE_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == himalayas_step2b_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
     himalayas_step6e_r1_runtime_files = {
         ROOT / relative_path
         for relative_path in HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES
@@ -1031,6 +1141,15 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     }
+    recruitee_location_runtime_files = {
+        ROOT / "src/scrapers/recruitee_scraper.py",
+    }
+    if set(changed_runtime_files) == recruitee_location_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     if set(changed_runtime_files) == recruitee_runtime_files:
         diff = subprocess.check_output(
             [
@@ -1051,13 +1170,25 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         for marker in FORBIDDEN_RUNTIME_MARKERS:
             assert marker not in added_lines
         return
-    personio_runtime_files = {
+    recruitee_standalone_runtime_files = {
         ROOT / relative_path
-        for relative_path in PERSONIO_SOURCE_INTEGRATION_FILES
+        for relative_path in RECRUITEE_STANDALONE_DISCOVERY_FILES
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     }
-    if set(changed_runtime_files) == personio_runtime_files:
+    if set(changed_runtime_files) == recruitee_standalone_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    personio_retirement_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PERSONIO_SOURCE_RETIREMENT_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == personio_retirement_runtime_files:
         diff = subprocess.check_output(
             [
                 "git",
@@ -1187,6 +1318,24 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         if relative_path.startswith("src/")
         and Path(relative_path).suffix in runtime_suffixes
     }
+    builtin_source_breadth_runtime_files = {
+        ROOT / "src/scrapers/builtin_scraper.py",
+    }
+    if set(changed_runtime_files) == builtin_source_breadth_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    workable_identity_runtime_files = {
+        ROOT / "src/scrapers/workable_scraper.py",
+    }
+    if set(changed_runtime_files) == workable_identity_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     if set(changed_runtime_files) == scraper_transport_pagination_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
@@ -2114,6 +2263,48 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
     }
     if set(changed_runtime_files) == phase133a_executive_kpi_runtime_files:
+        return
+    source_yield_ui_runtime_files = phase133a_executive_kpi_runtime_files | {
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app_redesign.css",
+    }
+    if set(changed_runtime_files) == source_yield_ui_runtime_files:
+        return
+    jobvite_location_freshness_runtime_files = {
+        ROOT / relative_path
+        for relative_path in JOBVITE_LOCATION_FRESHNESS_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == jobvite_location_freshness_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    jobvite_standalone_runtime_files = {
+        ROOT / relative_path
+        for relative_path in JOBVITE_STANDALONE_DISCOVERY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == jobvite_standalone_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    workday_discovery_identity_runtime_files = {
+        ROOT / relative_path
+        for relative_path in WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == workday_discovery_identity_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
         return
     phase133b_executive_dashboard_runtime_files = (
         phase133a_executive_kpi_runtime_files

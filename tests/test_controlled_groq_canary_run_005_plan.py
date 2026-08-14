@@ -3,6 +3,9 @@ from copy import deepcopy
 import pytest
 
 from src.evaluation import controlled_groq_canary_run_005_plan as owner
+from src.evaluation.controlled_provider_benchmark_plan import (
+    build_transmittable_request_packet,
+)
 from src.evaluation.controlled_groq_canary_transport import (
     build_groq_chat_completion_arguments,
     conservative_local_input_size_bytes,
@@ -64,12 +67,14 @@ def test_selected_fixture_is_exactly_one_transmission_safe_synthetic_case():
     assert len(rows) == 1
     review = rows[0]["review"]
     case = rows[0]["case"]
-    assert review["case_alias"] == "case_ece85e9411ca52b579359fb8"
+    assert review["case_alias"] == "case_3dddc5f43be918e0932d3bb2"
     assert review["eligible_for_later_controlled_transmission"] is True
     assert review["wholly_synthetic"] is True
     assert review["requires_additional_redaction"] is False
     assert review["human_approval_required"] is True
     assert all(review[field] is False for field in owner._REVIEW_FALSE_FIELDS)
+    assert case["case_id"] == "tailoring_generation_evidence_bound_v1"
+    assert case["schema_id"] == "tailoring_generation_result_v1"
     assert case["contains_personal_resume_content"] is False
 
 
@@ -86,23 +91,41 @@ def test_fresh_key_does_not_collide_with_prior_or_base_keys():
     assert SCHEDULE_KEY not in prohibited
 
 
-def test_mapping_and_base_transport_reuse_are_exact():
+def test_historical_mapping_and_packet_identity_are_exact():
     plan = owner.build_run_005_plan_contract()
     fresh, base, packet = owner.resolve_run_005_transport_inputs(SCHEDULE_KEY)
 
     assert fresh == plan["schedule"][0]
     assert base == plan["base_transport_mapping"][0]["base_transport_row"]
     assert base["schedule_key"] == BASE_KEY
+    assert packet["case_alias"] == "case_ece85e9411ca52b579359fb8"
+
+
+def test_current_semantic_transport_compatibility_is_exact():
+    _corpus, _benchmark, current_plan, _engine, _fixture, rows, _canary = (
+        owner._committed_ownership()
+    )
+    review = rows[0]["review"]
+    base = rows[0]["base_transport_row"]
+    assert review["case_alias"] == "case_3dddc5f43be918e0932d3bb2"
+    assert base["schedule_key"] == "canary_38aa2602e052b5c5ae84772abee84708"
+    packet = build_transmittable_request_packet(
+        case_alias=review["case_alias"],
+        provider=base["provider"],
+        model=base["model"],
+        plan=current_plan,
+        live_execution_requested=False,
+    )
     arguments = build_groq_chat_completion_arguments(
         packet=packet,
         scheduled=base,
-        plan=owner._committed_ownership()[2],
+        plan=current_plan,
     )
     assert validate_groq_chat_completion_arguments(
         arguments,
         packet=packet,
         scheduled=base,
-        plan=owner._committed_ownership()[2],
+        plan=current_plan,
     )
     assert conservative_local_input_size_bytes(arguments) == 641
 

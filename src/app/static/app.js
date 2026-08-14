@@ -46,6 +46,7 @@ const PIPELINE_ACCEPTED_RUN_STORAGE_KEY = "applylens_pipeline_accepted_run_id";
 const PIPELINE_ACCEPTED_RUN_EVENT_NAME = "applylens:pipeline-run-accepted";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
 const EXECUTIVE_KPI_EVENT_NAME = "applylens:executive-kpi-state";
+const SOURCE_YIELD_EVENT_NAME = "applylens:source-yield-state";
 const EXECUTIVE_QUEUE_STATE_EVENT_NAME = "applylens:executive-queue-state";
 const EXECUTIVE_QUEUE_ACTION_EVENT_NAME = "applylens:executive-queue-action";
 let pipelinePollTimer = null;
@@ -1526,6 +1527,11 @@ function publishExecutiveQueueState() {
   window.dispatchEvent(new CustomEvent(EXECUTIVE_QUEUE_STATE_EVENT_NAME, { detail }));
 }
 
+function publishSourceYieldState(detail) {
+  window.__APPLYLENS_SOURCE_YIELD_STATE__ = detail;
+  window.dispatchEvent(new CustomEvent(SOURCE_YIELD_EVENT_NAME, { detail }));
+}
+
 function normalizeExecutiveKpiValue(value, fallback = null) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue : fallback;
@@ -2765,13 +2771,19 @@ function buildBrowseUrl(pageOverride = null) {
 
 async function loadStatus() {
   publishExecutiveKpiState({ status: "loading" });
+  publishSourceYieldState({ status: "loading" });
   try {
     const data = await fetchJson("/status");
     renderStats(data);
+    publishSourceYieldState({ status: "ready", data: data.source_yield || null });
   } catch (err) {
     publishExecutiveKpiState({
       status: "error",
       message: err?.message || "Dashboard status is unavailable.",
+    });
+    publishSourceYieldState({
+      status: "error",
+      message: err?.message || "Source yield is unavailable.",
     });
     throw err;
   }

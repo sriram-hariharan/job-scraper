@@ -27,6 +27,7 @@ sys.modules.setdefault(
 )
 from src.pipeline.job_filter import filter_jobs
 from src.pipeline.job_ranker import rank_jobs
+from src.pipeline.location_preferences import canonicalize_location_text
 from src.pipeline import collector, runtime_status
 from src.app import services
 
@@ -66,6 +67,28 @@ def _write_launch_config(path, preferences):
         encoding="utf-8",
     )
     return path
+
+
+def test_pipeline_preference_defaults_include_location_policy(monkeypatch):
+    expected = {
+        "preferred_location_specs": [],
+        "location_strict_match": False,
+        "location_show_others_if_unmatched": False,
+    }
+    assert {
+        field: services._preferences_for_pipeline("")[field]
+        for field in expected
+    } == expected
+
+    monkeypatch.setattr(
+        services,
+        "get_onboarding_preferences_postgres_payload",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+    assert {
+        field: services._preferences_for_pipeline("user_123")[field]
+        for field in expected
+    } == expected
 
 
 def test_user_backend_role_allows_backend_job_through_filter():
@@ -156,6 +179,7 @@ class _FakeJobApp:
 
 def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_not_child_env():
     captured = {}
+    boston_spec = canonicalize_location_text("Boston, MA")
     originals = {
         "user_pipeline_gate_payload": services.user_pipeline_gate_payload,
         "get_onboarding_preferences_postgres_payload": services.get_onboarding_preferences_postgres_payload,
@@ -175,6 +199,10 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
         def fake_popen(cmd, stdout=None, stderr=None, env=None):
             captured["cmd"] = cmd
             captured["env"] = dict(env or {})
+            captured["launch_config"] = json.loads(
+                Path(captured["env"]["JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH"])
+                .read_text(encoding="utf-8")
+            )
             return _FakeProcess()
 
         services.user_pipeline_gate_payload = lambda **kwargs: {
@@ -190,9 +218,12 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
                 "preferences": {
                     "onboarding_completed": True,
                     "selected_role_families": ["backend_engineering"],
-                        "target_seniority": ["senior"],
-                        "seniority_strict_match": True,
-                    "preferred_locations": ["New York"],
+                    "target_seniority": ["senior"],
+                    "seniority_strict_match": True,
+                    "preferred_locations": ["Boston, MA"],
+                    "preferred_location_specs": [boston_spec],
+                    "location_strict_match": True,
+                    "location_show_others_if_unmatched": False,
                     "preferred_skills": ["Python"],
                     "excluded_keywords": ["intern"],
                 },
@@ -237,13 +268,29 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
     assert payload["pipeline"]["config"]["preferences"]["seniority_strict_match"] is True
     assert captured["state"]["config"]["selected_role_families"] == ["backend_engineering"]
     assert captured["state"]["config"]["preferences"]["target_seniority"] == ["senior"]
+    assert captured["state"]["config"]["preferences"]["preferred_location_specs"] == [
+        boston_spec
+    ]
+    assert captured["state"]["config"]["preferences"]["location_strict_match"] is True
+    assert (
+        captured["state"]["config"]["preferences"][
+            "location_show_others_if_unmatched"
+        ]
+        is False
+    )
+    assert captured["launch_config"]["options"]["preferences"] == (
+        captured["state"]["config"]["preferences"]
+    )
     assert captured["state"]["config"]["preference_runtime"] == {
         "schema_version": runtime_status.PREFERENCE_RUNTIME_SCHEMA_VERSION,
         "requested": {
             "selected_role_families": ["backend_engineering"],
             "target_seniority": ["senior"],
             "seniority_strict_match": True,
-            "preferred_locations": ["New York"],
+            "preferred_locations": ["Boston, MA"],
+            "preferred_location_specs": [boston_spec],
+            "location_strict_match": True,
+            "location_show_others_if_unmatched": False,
             "preferred_skills": ["Python"],
             "excluded_keywords": ["intern"],
         },
@@ -257,12 +304,16 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
 
 
 def test_child_loads_launch_preferences_and_excluded_keywords_reach_filter(tmp_path):
+    boston_spec = canonicalize_location_text("Boston, MA")
     launch_path = _write_launch_config(
         tmp_path / "live_pipeline_launch_config.json",
         {
             "selected_role_families": ["backend_engineering"],
             "target_seniority": ["senior"],
-            "preferred_locations": ["New York"],
+            "preferred_locations": ["Boston, MA"],
+            "preferred_location_specs": [boston_spec],
+            "location_strict_match": True,
+            "location_show_others_if_unmatched": False,
             "preferred_skills": ["Python"],
             "excluded_keywords": ["intern"],
         },
@@ -279,6 +330,13 @@ def test_child_loads_launch_preferences_and_excluded_keywords_reach_filter(tmp_p
         "backend_engineering"
     ]
     assert preference_runtime["sources"]["selected_role_families"] == "launch_config"
+    assert preference_runtime["requested"]["preferred_location_specs"] == [boston_spec]
+    assert preference_runtime["effective"]["preferred_location_specs"] == [boston_spec]
+    assert preference_runtime["effective"]["location_strict_match"] is True
+    assert (
+        preference_runtime["effective"]["location_show_others_if_unmatched"]
+        is False
+    )
     filtered = filter_jobs(
         [_job("Backend Engineer Intern"), _job("Backend Engineer")],
         selected_role_families=preference_runtime["effective"]["selected_role_families"],
@@ -287,7 +345,7 @@ def test_child_loads_launch_preferences_and_excluded_keywords_reach_filter(tmp_p
     assert [job["title"] for job in filtered] == ["Backend Engineer"]
 
     ranked_job = _job("Senior Backend Engineer")
-    ranked_job.update({"location": "New York, United States", "description": "Python"})
+    ranked_job.update({"location": "Boston, MA", "description": "Python"})
     ranked = rank_jobs(
         [ranked_job],
         selected_role_families=preference_runtime["effective"]["selected_role_families"],
@@ -296,7 +354,7 @@ def test_child_loads_launch_preferences_and_excluded_keywords_reach_filter(tmp_p
         preferred_skills=preference_runtime["effective"]["preferred_skills"],
     )
     assert ranked[0]["_preference_seniority_match"] is True
-    assert ranked[0]["_preference_location_matches"] == ["new york"]
+    assert ranked[0]["_preference_location_matches"] == ["boston, ma"]
     assert ranked[0]["_preference_skill_matches"] == ["python"]
 
 
@@ -364,6 +422,9 @@ def test_malformed_launch_preferences_do_not_partially_apply(tmp_path):
         "preferred_skills": [],
         "excluded_keywords": [],
         "seniority_strict_match": False,
+        "preferred_location_specs": [],
+        "location_strict_match": False,
+        "location_show_others_if_unmatched": False,
     }
     assert preference_runtime["effective"] == preference_runtime["requested"]
     assert set(preference_runtime["sources"].values()) == {"defaults"}
@@ -401,6 +462,9 @@ def test_launch_seniority_is_canonical_and_invalid_snapshot_is_all_or_nothing(tm
         "preferred_skills": [],
         "excluded_keywords": [],
         "seniority_strict_match": False,
+        "preferred_location_specs": [],
+        "location_strict_match": False,
+        "location_show_others_if_unmatched": False,
     }
     assert invalid["effective"] == invalid["requested"]
     assert set(invalid["sources"].values()) == {"defaults"}
@@ -454,6 +518,53 @@ def test_effective_hash_includes_strict_seniority_boolean():
         {"target_seniority": ["senior"], "seniority_strict_match": True}
     )
     assert collector._preference_snapshot_sha256(flexible) != collector._preference_snapshot_sha256(strict)
+
+
+def test_effective_hash_includes_location_policy_and_legacy_snapshots_gain_specs():
+    flexible = collector._normalized_preference_snapshot(
+        {
+            "preferred_locations": ["Boston, MA"],
+            "location_strict_match": False,
+        }
+    )
+    strict = collector._normalized_preference_snapshot(
+        {
+            "preferred_locations": ["Boston, MA"],
+            "location_strict_match": True,
+        }
+    )
+
+    assert flexible["preferred_location_specs"] == [
+        canonicalize_location_text("Boston, MA")
+    ]
+    assert collector._preference_snapshot_sha256(flexible) != (
+        collector._preference_snapshot_sha256(strict)
+    )
+
+
+def test_explicit_location_override_rebuilds_canonical_specs(tmp_path):
+    launch_path = _write_launch_config(
+        tmp_path / "live_pipeline_launch_config.json",
+        {
+            "preferred_locations": ["Boston, MA"],
+            "preferred_location_specs": [canonicalize_location_text("Boston, MA")],
+            "location_strict_match": True,
+        },
+    )
+
+    runtime = collector.resolve_pipeline_preference_runtime(
+        env={
+            "JOB_STACK_PIPELINE_LAUNCH_CONFIG_PATH": str(launch_path),
+            "JOB_STACK_PREFERRED_LOCATIONS": '["Austin, TX"]',
+        }
+    )
+
+    assert runtime["effective"]["preferred_locations"] == ["Austin, TX"]
+    assert runtime["effective"]["preferred_location_specs"] == [
+        canonicalize_location_text("Austin, TX")
+    ]
+    assert runtime["sources"]["preferred_location_specs"] == "explicit_override"
+    assert runtime["effective"]["location_strict_match"] is True
 
 
 def test_effective_preference_hash_is_canonical_distinct_and_secret_free(tmp_path):
@@ -573,6 +684,7 @@ def _install_drop_pct_collector_fakes(
     user_pipeline,
     scraper_source="workday",
     selected_role_families=None,
+    pipeline_preferences=None,
 ):
     captured = {
         "logs": [],
@@ -580,6 +692,7 @@ def _install_drop_pct_collector_fakes(
         "stage_completions": [],
     }
     filtered_jobs = list(jobs[:filtered_count])
+    filtered_job_ids = {job.get("job_id") for job in filtered_jobs}
 
     monkeypatch.setenv(
         "JOB_STACK_JOB_CORPUS_PATH",
@@ -590,18 +703,23 @@ def _install_drop_pct_collector_fakes(
         raising=False,
     )
     monkeypatch.setattr(collector, "logger", _DropPctLogger(captured["logs"]))
+    effective_preferences = {
+        "selected_role_families": list(selected_role_families or []),
+        "target_seniority": [],
+        "seniority_strict_match": False,
+        "preferred_locations": [],
+        "preferred_location_specs": [],
+        "location_strict_match": False,
+        "location_show_others_if_unmatched": False,
+        "preferred_skills": [],
+        "excluded_keywords": [],
+        **dict(pipeline_preferences or {}),
+    }
     monkeypatch.setattr(
         collector,
         "resolve_pipeline_preference_runtime",
         lambda: {
-            "effective": {
-                "selected_role_families": list(selected_role_families or []),
-                "target_seniority": [],
-                "seniority_strict_match": False,
-                "preferred_locations": [],
-                "preferred_skills": [],
-                "excluded_keywords": [],
-            },
+            "effective": effective_preferences,
             "effective_sha256": "0" * 64,
             "schema_version": "test-v1",
         },
@@ -612,7 +730,12 @@ def _install_drop_pct_collector_fakes(
     monkeypatch.setattr(
         collector,
         "complete_stage",
-        lambda stage, **_kwargs: captured["stage_completions"].append(stage),
+        lambda stage, **kwargs: (
+            captured["stage_completions"].append(stage),
+            captured.setdefault("stage_counts", {})
+            .setdefault(stage, {})
+            .update(kwargs.get("counts", {})),
+        ),
     )
     monkeypatch.setattr(collector, "section", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
@@ -645,14 +768,18 @@ def _install_drop_pct_collector_fakes(
     def execute_prefilter_graph(**kwargs):
         if not graph_route:
             return None
+        captured["filter_inputs"] = list(kwargs["jobs"])
+        routed_filtered_jobs = [
+            job for job in kwargs["jobs"] if job.get("job_id") in filtered_job_ids
+        ]
         captured["route_events"].extend(["graph_filter", "graph_dedupe"])
-        kwargs["on_prefilter_completed"](filtered_jobs, {}, [])
-        kwargs["on_dedupe_completed"](filtered_jobs)
+        kwargs["on_prefilter_completed"](routed_filtered_jobs, {}, [])
+        kwargs["on_dedupe_completed"](routed_filtered_jobs)
         return {
-            "filtered_jobs": filtered_jobs,
+            "filtered_jobs": routed_filtered_jobs,
             "filter_diagnostics": {},
             "role_title_audit_rows": [],
-            "deduplicated_jobs": filtered_jobs,
+            "deduplicated_jobs": routed_filtered_jobs,
             "execution_metadata": {
                 "execution_mode": "langgraph",
                 "node_order": ["filter_jobs", "dedupe_jobs"],
@@ -685,7 +812,7 @@ def _install_drop_pct_collector_fakes(
             "primary_attempts": 0,
             "fallback_attempts": 0,
             "groq_calls": 0,
-            "gemini_calls": 0,
+            "openai_calls": 0,
             "fallback_successes": 0,
             "provider_failures": 0,
         },
@@ -756,7 +883,9 @@ def _install_drop_pct_collector_fakes(
         captured["route_events"].append("direct_filter")
         captured["filter_inputs"] = list(_rows)
         captured["filter_kwargs"] = dict(kwargs)
-        return list(filtered_jobs), {}
+        return [
+            job for job in _rows if job.get("job_id") in filtered_job_ids
+        ], {}
 
     install_module(
         "src.pipeline.job_filter",
@@ -771,7 +900,15 @@ def _install_drop_pct_collector_fakes(
         write_source_health_report_csv=lambda *_args: None,
         write_role_title_filter_audit_csv=lambda *_args: None,
     )
-    install_module("src.pipeline.job_ranker", rank_jobs=lambda rows, **_kwargs: list(rows))
+    install_module(
+        "src.pipeline.job_ranker",
+        rank_jobs=lambda rows, **_kwargs: (
+            captured.setdefault("ranking_inputs", []).extend(
+                dict(row) for row in rows
+            )
+            or list(rows)
+        ),
+    )
     install_module(
         "src.rag.export_job_corpus",
         export_job_corpus=lambda rows, _path: len(rows),
@@ -784,7 +921,6 @@ def _install_drop_pct_collector_fakes(
         "src.scrapers.ashby_scraper": "scrape_all_ashby",
         "src.scrapers.workable_scraper": "scrape_all_workable",
         "src.scrapers.jobvite_scraper": "scrape_all_jobvite",
-        "src.scrapers.personio_scraper": "scrape_all_personio",
         "src.scrapers.recruitee_scraper": "scrape_all_recruitee",
         "src.scrapers.smartrecruiters_scraper": "scrape_all_smartrecruiters",
         "src.scrapers.builtin_scraper": "scrape_all_builtin",
@@ -989,3 +1125,60 @@ def test_usajobs_rows_join_common_collector_filter_and_only_retained_rows_contin
         "Retained sanitized provider description."
     )
     assert [row["job_id"] for row in result] == ["usajobs_1"]
+
+
+@pytest.mark.parametrize("graph_route", [False, True])
+def test_strict_location_policy_precedes_both_filter_routes_and_downstream(
+    monkeypatch,
+    tmp_path,
+    graph_route,
+):
+    jobs = [
+        {
+            "job_id": "boston",
+            "title": "Data Scientist",
+            "company": "Acme",
+            "location": "Boston, MA",
+        },
+        {
+            "job_id": "austin",
+            "title": "Data Scientist",
+            "company": "Acme",
+            "location": "Austin, TX",
+        },
+    ]
+    captured = _install_drop_pct_collector_fakes(
+        monkeypatch,
+        tmp_path,
+        jobs=jobs,
+        filtered_count=2,
+        graph_route=graph_route,
+        user_pipeline=True,
+        pipeline_preferences={
+            "preferred_locations": ["Boston, MA"],
+            "preferred_location_specs": [canonicalize_location_text("Boston, MA")],
+            "location_strict_match": True,
+            "location_show_others_if_unmatched": False,
+        },
+    )
+
+    result = asyncio.run(collector.collect_all_jobs_async())
+
+    assert [job["job_id"] for job in captured["filter_inputs"]] == ["boston"]
+    assert [job["job_id"] for job in captured["ranking_inputs"]] == ["boston"]
+    assert [job["job_id"] for job in captured["detail_inputs"]] == ["boston"]
+    assert [job["job_id"] for job in captured["intelligence_inputs"]] == [
+        "boston"
+    ]
+    assert [job["job_id"] for job in result] == ["boston"]
+    expected_counts = {
+        "location_preference_input_count": 2,
+        "location_preference_matched_count": 1,
+        "location_preference_retained_count": 1,
+        "location_preference_rejected_count": 1,
+        "location_preference_strict_match": True,
+        "location_preference_show_others_if_unmatched": False,
+        "location_preference_fallback_activated": False,
+        "filtered_jobs": 1,
+    }
+    assert expected_counts.items() <= captured["stage_counts"]["filtering"].items()

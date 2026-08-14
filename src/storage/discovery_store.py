@@ -15,6 +15,8 @@ _db_write_lock = Lock()
 
 _DISCOVERY_COMPANY_DOMAINS_CACHE_KEY = "discovery:company_domains:v1"
 _DISCOVERY_ATS_COMPANIES_CACHE_PREFIX = "discovery:ats_companies:v1"
+_ACQUISITION_LIFECYCLE_METADATA_KEY = "acquisition_lifecycle"
+_ACQUISITION_DISABLED_REASON_MAX_LENGTH = 160
 
 
 def _discovery_cache_ttl_seconds() -> int:
@@ -110,6 +112,20 @@ CREATE TABLE IF NOT EXISTS ats_detection_cache (
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _sanitize_acquisition_disabled_reason(value: Any) -> str:
+    return " ".join(str(value or "").split())[
+        :_ACQUISITION_DISABLED_REASON_MAX_LENGTH
+    ]
+
+
+def _acquisition_disabled(metadata: Any) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+
+    lifecycle = metadata.get(_ACQUISITION_LIFECYCLE_METADATA_KEY)
+    return isinstance(lifecycle, dict) and lifecycle.get("disabled") is True
 
 
 def _database_url() -> str:
@@ -293,17 +309,22 @@ SELECT json_build_object(
     return int(payload.get("new_count", 0) or 0)
 
 
-def get_discovered_ats_companies(ats: str = "") -> Set[str]:
+def get_discovered_ats_companies(
+    ats: str = "",
+    *,
+    include_disabled: bool = False,
+) -> Set[str]:
     safe_ats = _clean_text(ats).lower()
     cache_key = _ats_companies_cache_key(safe_ats)
 
-    cached = _cache_get_list_safe(cache_key)
-    if cached is not None:
-        return {
-            _clean_text(company)
-            for company in cached
-            if _clean_text(company)
-        }
+    if not include_disabled:
+        cached = _cache_get_list_safe(cache_key)
+        if cached is not None:
+            return {
+                _clean_text(company)
+                for company in cached
+                if _clean_text(company)
+            }
 
     init_discovery_store()
 
@@ -311,24 +332,116 @@ def get_discovered_ats_companies(ats: str = "") -> Set[str]:
 
     sql = f"""
 WITH company_rows AS (
-    SELECT company
+    SELECT company, metadata_json
     FROM discovered_ats_companies
     {ats_filter}
     ORDER BY company ASC
 )
 SELECT json_build_object(
-    'companies', COALESCE((SELECT json_agg(company) FROM company_rows), '[]'::json)
+    'rows', COALESCE(
+        (
+            SELECT json_agg(
+                json_build_object(
+                    'company', company,
+                    'metadata_json', metadata_json
+                )
+            )
+            FROM company_rows
+        ),
+        '[]'::json
+    )
 );
 """.strip()
 
     payload = _run_psql_json_query(sql)
-    companies = {
-        _clean_text(company)
-        for company in list(payload.get("companies", []) or [])
-        if _clean_text(company)
-    }
-    _cache_set_list_safe(cache_key, companies)
+    companies = set()
+    for row in list(payload.get("rows", []) or []):
+        if not isinstance(row, dict):
+            continue
+
+        company = _clean_text(row.get("company"))
+        if not company:
+            continue
+        if not include_disabled and _acquisition_disabled(row.get("metadata_json")):
+            continue
+
+        companies.add(company)
+
+    if not include_disabled:
+        _cache_set_list_safe(cache_key, companies)
     return companies
+
+
+def set_discovered_ats_company_acquisition_disabled(
+    ats: str,
+    company: str,
+    *,
+    disabled: bool,
+    reason: Any = "",
+) -> Dict[str, bool]:
+    if not isinstance(ats, str) or not ats:
+        raise ValueError("ats must be a nonempty exact provider string")
+    if not isinstance(company, str) or not company:
+        raise ValueError("company must be a nonempty exact stored identity string")
+    if not isinstance(disabled, bool):
+        raise ValueError("disabled must be a boolean")
+
+    safe_reason = _sanitize_acquisition_disabled_reason(reason) if disabled else ""
+    if disabled and not safe_reason:
+        raise ValueError("a nonempty acquisition-disabled reason is required")
+
+    lifecycle_json = _sql_jsonb(
+        {
+            "disabled": disabled,
+            "reason": safe_reason,
+        }
+    )
+
+    init_discovery_store()
+
+    sql = f"""
+WITH existing AS MATERIALIZED (
+    SELECT metadata_json
+    FROM discovered_ats_companies
+    WHERE ats = {_sql_quote_text(ats)}
+      AND company = {_sql_quote_text(company)}
+),
+updated AS (
+    UPDATE discovered_ats_companies
+    SET metadata_json = jsonb_set(
+        metadata_json,
+        '{{{_ACQUISITION_LIFECYCLE_METADATA_KEY}}}',
+        {lifecycle_json},
+        true
+    )
+    WHERE ats = {_sql_quote_text(ats)}
+      AND company = {_sql_quote_text(company)}
+      AND metadata_json -> {_sql_quote_text(_ACQUISITION_LIFECYCLE_METADATA_KEY)}
+          IS DISTINCT FROM {lifecycle_json}
+    RETURNING 1
+)
+SELECT json_build_object(
+    'found', EXISTS(SELECT 1 FROM existing),
+    'changed', EXISTS(SELECT 1 FROM updated)
+);
+""".strip()
+
+    with _db_write_lock:
+        payload = _run_psql_json_query(sql)
+
+    found = bool(payload.get("found", False))
+    changed = bool(payload.get("changed", False))
+    if found:
+        _cache_delete_safe(
+            _ats_companies_cache_key(ats),
+            _ats_companies_cache_key(""),
+        )
+
+    return {
+        "found": found,
+        "changed": changed,
+        "acquisition_disabled": disabled if found else False,
+    }
 
 
 def upsert_discovered_ats_companies(

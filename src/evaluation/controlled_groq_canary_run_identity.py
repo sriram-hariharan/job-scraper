@@ -18,12 +18,9 @@ from src.evaluation.controlled_groq_canary_evidence_runtime import (
 )
 from src.evaluation.controlled_groq_canary_transport import (
     TRANSPORT_VERSION,
-    controlled_groq_transport_sha256,
 )
 from src.evaluation.controlled_groq_provider_canary import (
     CANARY_VERSION,
-    build_controlled_groq_canary_contract,
-    controlled_groq_canary_sha256,
 )
 
 
@@ -33,6 +30,104 @@ AUTHORIZATION_TEMPLATE_VERSION = (
     "controlled-groq-canary-run-authorization-template-v1"
 )
 PLACEHOLDER = "OPERATOR_INPUT_REQUIRED"
+
+_HISTORICAL_BASE_CANARY_SHA256 = (
+    "43241c341fe4d69c8cbeb2d6e95b6c56e68e67134b693c91396a932775a673bf"
+)
+_HISTORICAL_TRANSPORT_SHA256 = (
+    "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
+)
+_HISTORICAL_CANDIDATE_PROVIDER_MODELS = [
+    {"provider": "groq", "model": "openai/gpt-oss-20b"},
+    {"provider": "groq", "model": "openai/gpt-oss-120b"},
+]
+_HISTORICAL_SCHEDULE = [
+    {
+        "execution_order": 1,
+        "case_alias": "case_fb2b069aa9340571b60e1fb5",
+        "workload_id": "skill_extraction",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "timeout_seconds": 30,
+        "fallback": False,
+        "harness_retry_limit": 0,
+        "provider_sdk_retry_limit": 0,
+        "base_schedule_key": "canary_6ee9934ebe7f25bd0612d19a12d9923a",
+        "run_schedule_key": "canary_run_002_f6a3df4b6caa7e82e229efc59bea7687",
+    },
+    {
+        "execution_order": 2,
+        "case_alias": "case_5360b349ebc160b8c7335cf0",
+        "workload_id": "grounded_rag_answer",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "timeout_seconds": 30,
+        "fallback": False,
+        "harness_retry_limit": 0,
+        "provider_sdk_retry_limit": 0,
+        "base_schedule_key": "canary_67e00c3471c03a2d231049fb31441ee1",
+        "run_schedule_key": "canary_run_002_19cfcee433993511035305348b7503f1",
+    },
+    {
+        "execution_order": 3,
+        "case_alias": "case_db0a584dd7f8653ca842281f",
+        "workload_id": "jd_intelligence",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "timeout_seconds": 30,
+        "fallback": False,
+        "harness_retry_limit": 0,
+        "provider_sdk_retry_limit": 0,
+        "base_schedule_key": "canary_8b167323a8667845ab0e26083b5294f5",
+        "run_schedule_key": "canary_run_002_d592a547c5344cdbdf3ba926b0806c69",
+    },
+    {
+        "execution_order": 4,
+        "case_alias": "case_ece85e9411ca52b579359fb8",
+        "workload_id": "tailoring_generation",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "timeout_seconds": 30,
+        "fallback": False,
+        "harness_retry_limit": 0,
+        "provider_sdk_retry_limit": 0,
+        "base_schedule_key": "canary_969374f055f6d3a74a60a3e4ce6ee440",
+        "run_schedule_key": "canary_run_002_03e1b156d6ef1d8401c99298bdf09942",
+    },
+]
+_HISTORICAL_REQUEST_BOUNDS = {
+    "automatic_expansion": False,
+    "conditional_additional_calls": False,
+    "maximum_requests_per_case": 1,
+    "maximum_requests_per_provider_model": {
+        "groq/openai/gpt-oss-120b": 2,
+        "groq/openai/gpt-oss-20b": 2,
+    },
+    "maximum_total_requests": 4,
+    "serial_concurrency": 1,
+}
+_HISTORICAL_TOKEN_BOUNDS = {
+    "maximum_aggregate_input_tokens": 16384,
+    "maximum_aggregate_output_tokens": 4096,
+    "maximum_input_tokens_per_request": 4096,
+    "maximum_output_tokens_per_request": 1024,
+    "missing_usage_estimation_allowed": False,
+    "observed_usage_required": True,
+}
+_HISTORICAL_STOP_POLICY = {
+    "ambiguous_timeout": "outcome_unknown_no_retry",
+    "fallback": False,
+    "harness_retry_limit": 0,
+    "provider_sdk_retry_limit": 0,
+    "resume_ambiguous_key": False,
+    "resume_completed_key": False,
+    "resume_hard_failure_key": False,
+    "stop_on_first_hard_failure": True,
+    "stop_on_missing_usage": True,
+    "stop_on_provider_model_mismatch": True,
+    "stop_on_unauthorized_transport_behavior": True,
+    "timeout_seconds": 30,
+}
 
 RUN_002_ARTIFACT_PATHS = {
     "pricing": (
@@ -185,44 +280,19 @@ def _run_schedule_key(
 
 
 def _expected_identity_contract() -> Dict[str, Any]:
-    canary = build_controlled_groq_canary_contract()
-    canary_sha = controlled_groq_canary_sha256(canary)
-    schedule = []
-    for row in canary["schedule"]:
-        schedule.append(
-            {
-                "execution_order": row["execution_order"],
-                "case_alias": row["case_alias"],
-                "workload_id": row["workload_id"],
-                "provider": row["provider"],
-                "model": row["model"],
-                "timeout_seconds": row["timeout_seconds"],
-                "fallback": row["fallback"],
-                "harness_retry_limit": row["harness_retry_limit"],
-                "provider_sdk_retry_limit": row[
-                    "provider_sdk_retry_limit"
-                ],
-                "base_schedule_key": row["schedule_key"],
-                "run_schedule_key": _run_schedule_key(
-                    base_canary_sha256=canary_sha,
-                    base_schedule_key=row["schedule_key"],
-                    execution_order=row["execution_order"],
-                ),
-            }
-        )
     return {
         "run_identity_version": RUN_IDENTITY_VERSION,
         "run_identifier": RUN_IDENTIFIER,
         "contract_kind": "offline_future_groq_canary_run_identity",
         "base_canary_version": CANARY_VERSION,
-        "base_canary_sha256": canary_sha,
+        "base_canary_sha256": _HISTORICAL_BASE_CANARY_SHA256,
         "transport_version": TRANSPORT_VERSION,
-        "transport_sha256": controlled_groq_transport_sha256(),
+        "transport_sha256": _HISTORICAL_TRANSPORT_SHA256,
         "evidence_runtime_version": EVIDENCE_RUNTIME_VERSION,
         "candidate_provider_models": deepcopy(
-            canary["candidate_provider_models"]
+            _HISTORICAL_CANDIDATE_PROVIDER_MODELS
         ),
-        "schedule": schedule,
+        "schedule": deepcopy(_HISTORICAL_SCHEDULE),
         "future_artifact_identities": deepcopy(RUN_002_ARTIFACT_PATHS),
         "protected_prior_incident_artifacts": {
             **deepcopy(PROTECTED_RUN_001_ARTIFACTS),
@@ -232,9 +302,9 @@ def _expected_identity_contract() -> Dict[str, Any]:
             "use_checkpoint_001_as_initial_state": False,
             "write_to_run_001_paths_allowed": False,
         },
-        "request_bounds": deepcopy(canary["request_bounds"]),
-        "token_bounds": deepcopy(canary["token_bounds"]),
-        "stop_policy": deepcopy(canary["stop_policy"]),
+        "request_bounds": deepcopy(_HISTORICAL_REQUEST_BOUNDS),
+        "token_bounds": deepcopy(_HISTORICAL_TOKEN_BOUNDS),
+        "stop_policy": deepcopy(_HISTORICAL_STOP_POLICY),
         "authority_invariants": {
             "identity_only": True,
             "live_execution_authorized": False,

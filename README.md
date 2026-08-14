@@ -411,12 +411,11 @@ LLM_PROVIDER=groq
 LLM_MODEL=llama-3.1-8b-instant
 GROQ_API_KEY=...
 
-# Optional alternatives/fallbacks
+# Optional OpenAI quality lane/fallback
 OPENAI_API_KEY=...
-GEMINI_API_KEY=...
 LLM_FALLBACK_ENABLED=false
-LLM_FALLBACK_PROVIDER=gemini
-LLM_FALLBACK_MODEL=gemini-2.5-flash
+LLM_FALLBACK_PROVIDER=openai
+LLM_FALLBACK_MODEL=gpt-5-mini
 
 # Optional production persistence
 DATABASE_URL=postgresql://user:password@localhost:5432/job_scraper_ops
@@ -547,7 +546,6 @@ The project supports many optional settings. The most commonly useful ones are b
 | `LLM_MODEL` | Default model for general LLM calls. |
 | `GROQ_API_KEY` | Groq API key. |
 | `OPENAI_API_KEY` | OpenAI API key. |
-| `GEMINI_API_KEY` | Gemini API key. |
 | `LLM_FALLBACK_ENABLED` | Enables provider fallback. |
 | `SKILL_EXTRACTION_BACKEND` | Skill extraction backend selection. |
 | `EVAL_MODE` | Job-fit evaluation mode. |

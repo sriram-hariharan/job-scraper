@@ -206,7 +206,7 @@ def test_result_counts_retain_strict_integer_contract(field):
         usajobs_scraper._parse_page(_Response(payload), 1)
 
 
-def test_checked_in_query_profile_activates_exact_broad_public_it_data_scope():
+def test_checked_in_query_profiles_activate_proven_bounded_public_it_data_scope():
     path = Path(consts.USAJOBS_QUERY_PROFILES_PATH)
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload == [
@@ -227,12 +227,38 @@ def test_checked_in_query_profile_activates_exact_broad_public_it_data_scope():
                 "2210",
             ],
             "remote_only": False,
-        }
+        },
+        {
+            "profile_id": "public-keyword-artificial-intelligence-us",
+            "keyword": "artificial intelligence",
+            "location_name": "",
+            "organization_codes": [],
+            "job_category_codes": [],
+            "remote_only": False,
+        },
+        {
+            "profile_id": "public-keyword-data-scientist-us",
+            "keyword": "data scientist",
+            "location_name": "",
+            "organization_codes": [],
+            "job_category_codes": [],
+            "remote_only": False,
+        },
     ]
 
     profiles = usajobs_scraper._load_query_profiles()
-    assert len(profiles) == 1
-    assert usajobs_scraper._profile_params(profiles[0], 1) == {
+    assert [profile["profile_id"] for profile in profiles] == [
+        "public-it-data-us",
+        "public-keyword-artificial-intelligence-us",
+        "public-keyword-data-scientist-us",
+    ]
+
+    params_by_profile = {
+        profile["profile_id"]: usajobs_scraper._profile_params(profile, 1)
+        for profile in profiles
+    }
+
+    assert params_by_profile["public-it-data-us"] == {
         "WhoMayApply": "Public",
         "Fields": "Full",
         "DatePosted": 1,
@@ -240,31 +266,93 @@ def test_checked_in_query_profile_activates_exact_broad_public_it_data_scope():
         "Page": 1,
         "JobCategoryCode": "0391;0854;0855;1515;1529;1530;1550;1560;2210",
     }
+    assert params_by_profile[
+        "public-keyword-artificial-intelligence-us"
+    ] == {
+        "WhoMayApply": "Public",
+        "Fields": "Full",
+        "DatePosted": 1,
+        "ResultsPerPage": 50,
+        "Page": 1,
+        "Keyword": "artificial intelligence",
+    }
+    assert params_by_profile["public-keyword-data-scientist-us"] == {
+        "WhoMayApply": "Public",
+        "Fields": "Full",
+        "DatePosted": 1,
+        "ResultsPerPage": 50,
+        "Page": 1,
+        "Keyword": "data scientist",
+    }
 
-
-def test_active_checked_in_profile_is_eligible_for_acquisition_without_live_http(monkeypatch):
+    assert all(
+        profile["keyword"] != "machine learning"
+        for profile in profiles
+    )
+def test_active_checked_in_profiles_are_eligible_for_acquisition_without_live_http(
+    monkeypatch,
+):
     monkeypatch.setenv("USAJOBS_API_KEY", "fixture-key")
-    monkeypatch.setenv("USAJOBS_USER_AGENT_EMAIL", "owner@example.test")
+    monkeypatch.setenv(
+        "USAJOBS_USER_AGENT_EMAIL",
+        "owner@example.test",
+    )
     captured = []
 
     def acquire(profile, api_key, user_agent_email):
+        profile_id = profile["profile_id"]
         captured.append((profile, api_key, user_agent_email))
         return usajobs_scraper.AcquisitionOutcome(
-            "usajobs:public-it-data-us",
+            f"usajobs:{profile_id}",
             AcquisitionStatus.SUCCESS,
-            ({"source": "usajobs", "job_id": "usajobs_123"},),
+            (
+                {
+                    "source": "usajobs",
+                    "job_id": f"usajobs_{profile_id}",
+                },
+            ),
             page_count=1,
             raw_job_count=1,
         )
 
-    monkeypatch.setattr(usajobs_scraper, "_fetch_profile_outcome", acquire)
+    monkeypatch.setattr(
+        usajobs_scraper,
+        "_fetch_profile_outcome",
+        acquire,
+    )
+
     assert usajobs_scraper.scrape_all_usajobs() == [
-        {"source": "usajobs", "job_id": "usajobs_123"}
+        {
+            "source": "usajobs",
+            "job_id": "usajobs_public-it-data-us",
+        },
+        {
+            "source": "usajobs",
+            "job_id": (
+                "usajobs_"
+                "public-keyword-artificial-intelligence-us"
+            ),
+        },
+        {
+            "source": "usajobs",
+            "job_id": "usajobs_public-keyword-data-scientist-us",
+        },
     ]
-    assert len(captured) == 1
-    assert captured[0][0]["profile_id"] == "public-it-data-us"
 
+    assert [
+        row[0]["profile_id"]
+        for row in captured
+    ] == [
+        "public-it-data-us",
+        "public-keyword-artificial-intelligence-us",
+        "public-keyword-data-scientist-us",
+    ]
 
+    assert all(
+        api_key == "fixture-key"
+        and user_agent_email == "owner@example.test"
+        for _, api_key, user_agent_email in captured
+    )
 def test_empty_profiles_exit_before_credentials_http_metrics_or_schedule(monkeypatch):
     monkeypatch.setattr(usajobs_scraper, "_load_query_profiles", lambda: [])
 

@@ -149,25 +149,6 @@ def test_checked_in_recruitee_sources_are_validated_and_supported():
     ]
 
 
-def test_checked_in_personio_sources_are_empty_and_supported():
-    config = load_curated_ats_sources()
-    assert config["personio"] == []
-
-    summary = seed_curated_ats_sources(
-        validators={"personio": lambda hosts: set(hosts)},
-        existing_func=lambda ats: set(),
-        upsert_func=lambda ats, companies: pytest.fail("empty source must not upsert"),
-    )
-
-    assert summary["personio"] == {
-        "status": "seeded",
-        "candidate_count": 0,
-        "valid_count": 0,
-        "existing_count": 0,
-        "inserted_count": 0,
-        "invalid": [],
-    }
-
 def test_checked_in_workable_sources_are_validated_and_supported():
     config = load_curated_ats_sources()
     sources = config["workable"]

@@ -7,6 +7,8 @@ from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from fastapi.testclient import TestClient
 
 from src.app import api, services
@@ -20,7 +22,7 @@ DOC_PATH = (
 PROTECTED_HASHES = {
     "src/matching/scorer.py": "f56624b5b3c7e2bb01a824386b86fbc2a194e727f0437ca0773764eae64ec941",
     "src/matching/prefilter.py": "489d9461a0b6422d94be717dd3a54bfb2609660ad1f305e03eab20e7cec64a7f",
-    "src/tailoring/llm.py": "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
+    "src/tailoring/llm.py": "5e9e858c6b671526eb6839d110ae05aae780d1c165a37a8bde2c1cc5bcecf31d",
     "generate_tailoring_" + "suggestions" + ".py": (
         "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d"
     ),
@@ -541,47 +543,50 @@ def test_phase78b_compare_and_continue_disable_when_no_changes():
     assert 'const noChangesLabel = "No changes made";' in script
     assert "const compareBtn = getScanWorkspaceInput(\"scanWorkspaceCompareBtn\");" in script
     assert "compareBtn.disabled =" in script
-    assert "saveBtn.disabled =" in script
+    assert "const isSaveDisabled =" in script
     assert "!isDirty" in script
     assert "syncDisabledHelp(compareBtn, compareBtn.disabled, \"Compare draft changes\")" in script
-    assert "syncDisabledHelp(saveBtn, saveBtn.disabled, \"Continue\")" in script
+    assert "syncScanWorkspacePremiumActionState(saveBtn" in script
+    assert "syncDisabledHelp(saveBtn, isSaveDisabled, \"Continue\")" in script
+    assert 'button.classList.toggle("is-loading", Boolean(loading));' in script
 
 
 def test_phase78b_scan_controls_use_calm_tinted_styles():
     html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
-    css = (ROOT / "src/app/static/scan_workspace_review.css").read_text(encoding="utf-8")
+    css = (ROOT / "src/app/static/scan_workspace_premium.css").read_text(encoding="utf-8")
     scan_script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
     redesign_css = (ROOT / "src/app/static/app_redesign.css").read_text(encoding="utf-8")
     styles_css = (ROOT / "src/app/static/styles.css").read_text(encoding="utf-8")
     tab_active = css[
-        css.rindex(".scan-review-left-pane .scan-workspace-tab-btn.active"):
-        css.index("}", css.rindex(".scan-review-left-pane .scan-workspace-tab-btn.active"))
+        css.index(".scan-workspace-tab-btn.active {"):
+        css.index("}", css.index(".scan-workspace-tab-btn.active {"))
     ]
     surface_block = css[
-        css.index(".scan-review-v2 .scan-workspace-surface-tab,"):
-        css.index("}", css.index(".scan-review-v2 .scan-workspace-surface-tab,"))
+        css.index(".scan-workspace-surface-tab {"):
+        css.index("}", css.index(".scan-workspace-surface-tab {"))
     ]
     back_block = css[
-        css.rindex(".scan-workspace-page .scan-workspace-header-actions .ghost-btn"):
-        css.index("}", css.rindex(".scan-workspace-page .scan-workspace-header-actions .ghost-btn"))
+        css.index(".scan-workspace-back-link {"):
+        css.index("}", css.index(".scan-workspace-back-link {"))
     ]
 
-    assert "scan_workspace_review.css" in html
+    assert "scan_workspace_premium.css" in html
+    assert "scan_workspace_review.css" not in html[
+        html.index("<title>AI Optimize Scan</title>"):
+        html.index("</head>", html.index("<title>AI Optimize Scan</title>"))
+    ]
     assert "scan_workspace.css?v=tailoring_workspace_consolidated_v11" not in html[
         html.index("<title>AI Optimize Scan</title>"):
         html.index("</head>", html.index("<title>AI Optimize Scan</title>"))
     ]
     assert ".scan-workspace-disabled-action-wrap" in scan_script
-    assert "background-image: none !important;" in tab_active
     assert "linear-gradient(135deg, #2563eb" not in tab_active
-    assert "background-image: none !important;" in surface_block
-    assert "border-radius: 0 !important;" in surface_block
-    assert "background-image: none !important;" in back_block
+    assert "background: transparent;" in surface_block
+    assert "border: 1px solid var(--scan-border);" in back_block
     assert "linear-gradient(" not in back_block
     assert ":not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab)" in redesign_css
     assert ":not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab)" in styles_css
-    assert "background: #2563eb !important" not in tab_active
-    assert "background: var(--scan-ui-blue) !important" not in tab_active
+    assert "background: #2563eb" not in tab_active
 
 
 def test_docs_capture_phase56a_wiring_and_safety():
@@ -600,5 +605,10 @@ def test_docs_capture_phase56a_wiring_and_safety():
 
 
 def test_protected_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )

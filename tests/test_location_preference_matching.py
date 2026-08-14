@@ -214,3 +214,55 @@ def test_policy_rejects_non_boolean_flags():
         apply_location_preference_policy([], [], 1, False)
     with pytest.raises(ValueError, match="location_show_others_if_unmatched must be a boolean"):
         apply_location_preference_policy([], [], False, "yes")
+
+
+def test_boston_strict_policy_uses_any_match_for_multi_location_rows():
+    jobs = [
+        {"id": "exact", "location": "Boston, MA"},
+        {"id": "multi", "location": "Boston, MA | New York, NY"},
+        {
+            "id": "multi_middle",
+            "location": "Chicago, IL | Boston, MA | Austin, TX",
+        },
+        {"id": "other", "location": "New York, NY | Chicago, IL"},
+    ]
+
+    result = apply_location_preference_policy(
+        jobs,
+        [_spec("Boston, MA")],
+        True,
+        False,
+    )
+
+    assert [job["id"] for job in result["retained_jobs"]] == [
+        "exact",
+        "multi",
+        "multi_middle",
+    ]
+    assert [job["id"] for job in result["rejected_jobs"]] == ["other"]
+    assert result["diagnostics"] == {
+        "input_count": 4,
+        "matched_count": 3,
+        "retained_count": 3,
+        "rejected_count": 1,
+        "strict_match": True,
+        "show_others_if_unmatched": False,
+        "show_others_inactive": False,
+        "fallback_activated": False,
+    }
+
+
+def test_boston_policy_fallback_and_non_strict_behavior_remain_stable():
+    jobs = [
+        {"id": "a", "location": "Austin, TX"},
+        {"id": "b", "location": "Denver, CO"},
+    ]
+    boston = [_spec("Boston, MA")]
+
+    fallback = apply_location_preference_policy(jobs, boston, True, True)
+    non_strict = apply_location_preference_policy(jobs, boston, False, False)
+
+    assert [job["id"] for job in fallback["retained_jobs"]] == ["a", "b"]
+    assert fallback["diagnostics"]["fallback_activated"] is True
+    assert [job["id"] for job in non_strict["retained_jobs"]] == ["a", "b"]
+    assert non_strict["diagnostics"]["retained_count"] == 2

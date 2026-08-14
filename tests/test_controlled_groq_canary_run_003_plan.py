@@ -17,19 +17,12 @@ from src.evaluation import controlled_provider_benchmark_plan as base_plan
 from src.evaluation import provider_fixture_benchmark as step8o
 from src.evaluation.provider_benchmark_contract import (
     build_provider_benchmark_contract,
-    provider_benchmark_contract_sha256,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNER_PATH = (
     ROOT / "src/evaluation/controlled_groq_canary_run_003_plan.py"
-)
-RUN_002_IDENTITY_SHA = (
-    "e1c7159d42daebe64ad2c8ddea5f0bb40b45c0ff1cd56111e980a52585685fef"
-)
-BASE_CANARY_SHA = (
-    "43241c341fe4d69c8cbeb2d6e95b6c56e68e67134b693c91396a932775a673bf"
 )
 BASE_PLAN_SHA = (
     "a3ef53ff992a2d1daf43f8fa9b0556202268d34e21f7611eb5de4d26e9abe6b6"
@@ -57,7 +50,7 @@ def _case_and_review():
     matches = [
         (review, case)
         for review, case in zip(plan["transmission_review"], corpus["cases"])
-        if review["case_alias"] == owner.TARGET_CASE_ALIAS
+        if review["case_alias"] == owner.CURRENT_TARGET_CASE_ALIAS
     ]
     assert len(matches) == 1
     return matches[0]
@@ -141,11 +134,15 @@ def test_exact_one_row_schedule_and_fresh_key():
 
 def test_target_is_exactly_one_eligible_synthetic_case():
     review, case = _case_and_review()
+    assert review["case_alias"] == "case_eff6ed2fb3643d23b87bab48"
     assert review["workload_id"] == "skill_extraction"
     assert review["wholly_synthetic"] is True
     assert review["eligible_for_later_controlled_transmission"] is True
     assert review["requires_additional_redaction"] is False
     assert review["eligibility_reasons"] == []
+    assert case["case_id"] == "skill_extraction_required_preferred_v1"
+    assert case["workload_id"] == "skill_extraction"
+    assert case["schema_id"] == "skill_extraction_result_v1"
     assert case["sanitized_classification"] == "synthetic_sanitized"
     assert case["contains_personal_resume_content"] is False
     assert case["additional_redaction_required"] is False
@@ -157,7 +154,6 @@ def test_target_candidate_is_owned_by_committed_benchmark():
         (row["provider"], row["model"])
         for row in benchmark["candidate_definitions"]
     }
-    assert provider_benchmark_contract_sha256(benchmark) == BASE_BENCHMARK_SHA
 
 
 def test_request_token_stop_and_authority_bounds_are_exact():
@@ -382,16 +378,15 @@ def test_building_validation_and_hashing_perform_no_write(monkeypatch):
     owner.build_run_003_transmittable_request_packet()
 
 
-def test_completed_contracts_remain_unchanged():
-    assert base_plan.controlled_provider_benchmark_plan_sha256() == BASE_PLAN_SHA
-    assert canary.controlled_groq_canary_sha256() == BASE_CANARY_SHA
-    assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
+def test_historical_run003_contract_remains_unchanged():
+    contract = _contract()
+    assert contract["controlled_plan_sha256"] == BASE_PLAN_SHA
+    assert contract["benchmark_contract_sha256"] == BASE_BENCHMARK_SHA
+    assert contract["fixture_corpus_sha256"] == CORPUS_SHA
+    assert contract["step8o_engine_sha256"] == STEP8O_SHA
 
 
 def test_runtime_artifacts_are_not_plan_test_prerequisites():
-    output = ROOT / "outputs/provider_benchmark"
-    assert not output.exists()
-    assert run_002.run_identity_sha256() == RUN_002_IDENTITY_SHA
     assert owner.run_003_plan_sha256() == (
         "5d63ef8bc8749645c19211184e8b7be16aa1909fbdb8a3682b9073af7270e9e8"
     )

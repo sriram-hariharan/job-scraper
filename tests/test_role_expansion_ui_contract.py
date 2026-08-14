@@ -20,14 +20,16 @@ def test_onboarding_copy_is_user_facing_and_cache_busted():
     assert "Build a focused search profile for the roles, seniority, locations, and signals that matter to you." in source
     assert "without changing the pipeline defaults" not in source
     assert 'href="/static/styles.css?v=preferences_toolbar_ownership_r11"' in source
-    assert 'src="/static/onboarding.js?v=preferences_guided_parity_r9"' in source
+    assert 'src="/static/onboarding.js?v=phase1_step8b_r1"' in source
 
 
 def test_onboarding_resume_satisfied_copy_contract():
     js = Path("src/app/static/onboarding.js").read_text(encoding="utf-8")
 
-    assert "Resume requirement satisfied." in js
-    assert "Upload at least one profile resume." in js
+    assert '${profileResumeCount} resume${profileResumeCount === 1 ? "" : "s"} ready' in js
+    assert ': "Ready")' in js
+    assert ': "Resume required"' in js
+    assert "Add at least one profile resume before completing onboarding." in js
 
 
 def test_profile_role_mapping_summary_has_click_affordance_and_cache_bust():

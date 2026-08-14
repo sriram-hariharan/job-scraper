@@ -10,6 +10,7 @@ from types import ModuleType
 
 import pytest
 
+from src.ai import provider_model_catalog
 from src.evaluation import provider_benchmark_contract as contract_owner
 
 
@@ -111,6 +112,86 @@ def test_contract_version_provider_and_model_sets_are_exact():
     ] == EXPECTED_MODELS
     assert all(row["provider"] != "gemini" for row in payload["candidate_definitions"])
     assert "winner" not in payload
+
+
+def test_ambiguous_resume_workload_is_readback_only_and_review_required():
+    workload = next(
+        row
+        for row in _contract()["workloads"]
+        if row["workload_id"] == "ambiguous_resume_adjudication"
+    )
+
+    assert workload["tier"] == "B"
+    assert workload["execution_responsibility"] == (
+        "read-only advisory review of ambiguous resume candidates"
+    )
+    assert workload["output_classification"] == (
+        "advisory_readback_summary_and_recommendation"
+    )
+    assert workload["current_authority_level"] == "advisory_only"
+    assert workload["failure_disposition"] == "preserve_deterministic_result"
+    assert workload["fallback_eligible"] is False
+    assert workload["human_review_required"] is True
+
+
+def test_qualification_candidates_and_tiers_derive_from_canonical_catalog():
+    payload = _contract()
+    catalog_rows = [
+        row
+        for row in provider_model_catalog.list_configurable_models()
+        if row["configuration_status"] == "configuration_eligible"
+        and row["synthetic_compatibility_status"]
+        == "synthetic_compatibility_expected"
+        and row["live_qualification_status"]
+        == "live_qualification_required"
+        and row["eligible_benchmark_tiers"]
+    ]
+
+    assert [
+        (row["provider"], row["model"], row["eligible_tiers"])
+        for row in payload["candidate_definitions"]
+    ] == [
+        (row["provider"], row["model_id"], row["eligible_benchmark_tiers"])
+        for row in catalog_rows
+    ]
+
+
+def test_catalog_snapshot_and_digest_are_deterministic_and_contract_bound():
+    first = contract_owner.build_provider_model_catalog_snapshot()
+    second = contract_owner.build_provider_model_catalog_snapshot()
+    digest = contract_owner.provider_model_catalog_snapshot_sha256(first)
+    payload = _contract()
+
+    assert first == second
+    assert (
+        contract_owner.serialize_provider_model_catalog_snapshot(first)
+        == contract_owner.serialize_provider_model_catalog_snapshot(second)
+    )
+    assert digest == contract_owner.provider_model_catalog_snapshot_sha256(
+        second
+    )
+    assert len(digest) == 64
+    assert payload["model_catalog_snapshot"] == first
+    assert payload["model_catalog_snapshot_sha256"] == digest
+
+
+def test_qualification_relevant_catalog_eligibility_changes_snapshot_digest():
+    original = contract_owner.build_provider_model_catalog_snapshot()
+    changed = deepcopy(original)
+    changed["candidates"][0]["eligible_tiers"] = ["A", "B"]
+
+    assert contract_owner.validate_provider_model_catalog_snapshot(changed)
+    assert contract_owner.provider_model_catalog_snapshot_sha256(changed) != (
+        contract_owner.provider_model_catalog_snapshot_sha256(original)
+    )
+
+    payload = _contract()
+    payload["model_catalog_snapshot"] = changed
+    payload["model_catalog_snapshot_sha256"] = (
+        contract_owner.provider_model_catalog_snapshot_sha256(changed)
+    )
+    with pytest.raises(ValueError, match="canonical model catalog"):
+        contract_owner.validate_provider_benchmark_contract(payload)
 
 
 def test_workloads_are_unique_stable_complete_and_tiered():
@@ -376,7 +457,7 @@ def test_construction_does_not_reach_an_injected_provider_module(monkeypatch):
     assert payload["benchmark_controls"]["provider_client_allowed"] is False
 
 
-def test_contract_owner_imports_only_side_effect_free_standard_library_modules():
+def test_contract_owner_imports_only_catalog_and_side_effect_free_standard_library():
     tree = ast.parse(CONTRACT_PATH.read_text(encoding="utf-8"))
     imports = set()
     for node in ast.walk(tree):
@@ -391,6 +472,7 @@ def test_contract_owner_imports_only_side_effect_free_standard_library_modules()
         "hashlib",
         "json",
         "pathlib",
+        "src.ai.provider_model_catalog",
         "typing",
     }
     assert not imports.intersection(

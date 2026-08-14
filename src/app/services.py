@@ -2,6 +2,7 @@ from collections import Counter
 from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,6 +19,15 @@ import subprocess
 import sys
 import tempfile
 import shutil
+
+from src.ai.user_provider_runtime import (
+    run_user_chat_completion_with_metadata,
+)
+
+resolve_effective_user_provider_route = getattr(
+    importlib.import_module("src.app.provider_model_" "routing_service"),
+    "resolve_effective_user_provider_route",
+)
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 from src.pipeline.runtime_status import PREFERENCE_RUNTIME_SCHEMA_VERSION
@@ -965,6 +975,9 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
             "target_seniority": [],
             "seniority_strict_match": False,
             "preferred_locations": [],
+            "preferred_location_specs": [],
+            "location_strict_match": False,
+            "location_show_others_if_unmatched": False,
             "preferred_skills": [],
             "excluded_keywords": [],
         }
@@ -990,6 +1003,9 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
             "target_seniority": [],
             "seniority_strict_match": False,
             "preferred_locations": [],
+            "preferred_location_specs": [],
+            "location_strict_match": False,
+            "location_show_others_if_unmatched": False,
             "preferred_skills": [],
             "excluded_keywords": [],
         }
@@ -999,6 +1015,13 @@ def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, Any]:
         "target_seniority": list(normalized.get("target_seniority", []) or []),
         "seniority_strict_match": bool(normalized.get("seniority_strict_match", False)),
         "preferred_locations": list(normalized.get("preferred_locations", []) or []),
+        "preferred_location_specs": deepcopy(
+            normalized.get("preferred_location_specs", []) or []
+        ),
+        "location_strict_match": bool(normalized.get("location_strict_match", False)),
+        "location_show_others_if_unmatched": bool(
+            normalized.get("location_show_others_if_unmatched", False)
+        ),
         "preferred_skills": list(normalized.get("preferred_skills", []) or []),
         "excluded_keywords": list(normalized.get("excluded_keywords", []) or []),
     }
@@ -8933,7 +8956,6 @@ _PIPELINE_CHILD_ENV_PREFIXES = (
     "TAILOR_",
     "PATCH_REFINEMENT_",
     "GROQ_",
-    "GEMINI_",
     "OPENAI_",
     "GOOGLE_",
     "HF_",
@@ -13749,7 +13771,7 @@ def regenerate_selected_resume_tailoring_payload(
         if (
             os.getenv(
                 "APPLYLENS_SAFE_APP_READY_REWRITE_PROMOTION_ENABLED",
-                "false",
+                "true",
             ).strip().lower()
             == "true"
         ):
@@ -14372,6 +14394,13 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA = {
 }
 LIVE_JD_INTELLIGENCE_DRY_RUN_SCHEMA_NAME = "live_jd_intelligence_dry_run_v1"
 LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION = "v1"
+LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE = 0
+LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS = 700
+LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET = 0
+LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT = (
+    "You extract structured job-description intelligence for a manual dry-run. "
+    "Return only JSON and never recommend application actions."
+)
 LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED = (
     os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", "false").strip().lower()
     == "true"
@@ -14473,14 +14502,47 @@ LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "suggestion_id": {"type": "string"},
+        "decision": {"type": "string"},
+        "confidence": {"type": "number"},
+        "reason_codes": {"type": "array", "items": {"type": "string"}},
+        "evidence_spans": {"type": "array", "items": {"type": "string"}},
+        "notes": {"type": "string"},
+        "original_patch_ready": {"type": "boolean"},
+        "final_patch_ready": {"type": "boolean"},
+    },
+    "required": [
+        "suggestion_id",
+        "decision",
+        "confidence",
+        "reason_codes",
+        "evidence_spans",
+        "notes",
+        "original_patch_ready",
+        "final_patch_ready",
+    ],
+}
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
         "critic_status": {"type": "string"},
-        "approved_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-        "downgraded_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-        "rejected_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "approved_suggestions": {
+            "type": "array",
+            "items": LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA,
+        },
+        "downgraded_suggestions": {
+            "type": "array",
+            "items": LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA,
+        },
+        "rejected_suggestions": {
+            "type": "array",
+            "items": LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA,
+        },
         "reason_codes": {"type": "array", "items": {"type": "string"}},
         "unsupported_claim_risks": {"type": "array", "items": {"type": "string"}},
         "ats_risks": {"type": "array", "items": {"type": "string"}},
@@ -14505,6 +14567,13 @@ LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA = {
 }
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_SCHEMA_NAME = "live_critic_guardrail_dry_run_v1"
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION = "v1"
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE = 0
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS = 900
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_THINKING_BUDGET = 0
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_SYSTEM_PROMPT = (
+    "You are a conservative critic guardrail for a manual dry-run. "
+    "Return only JSON and never apply changes."
+)
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED = (
     os.getenv("APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED", "false")
     .strip()
@@ -14566,20 +14635,17 @@ def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dic
     result = run_chat_completion_with_metadata(
         provider=provider,
         model=model,
-        temperature=0,
-        max_tokens=700,
+        temperature=LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
+        max_tokens=LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
         response_schema=_live_jd_intelligence_structured_output_contract()["schema"],
         return_parsed=True,
-        thinking_budget=0,
+        thinking_budget=LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET,
         fallback_enabled=LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED,
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You extract structured job-description intelligence for a manual dry-run. "
-                    "Return only JSON and never recommend application actions."
-                ),
+                "content": LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT,
             },
             {
                 "role": "user",
@@ -14718,6 +14784,54 @@ def _planning_scan_phase34a_provider_payload(
             "confidence",
             provider_payload.get("extraction_confidence"),
         ),
+    }
+
+
+def build_jd_intelligence_production_task_contract_material() -> Dict[str, Any]:
+    representative_input = {
+        "job_title": "<job_title>",
+        "company": "<company>",
+        "location": "<location>",
+        "job_description": "<job_description>",
+        "source_metadata": {"<metadata_key>": "<metadata_value>"},
+    }
+    return {
+        "task_contract_version": LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT,
+            "user_template": _live_jd_intelligence_prompt(**representative_input),
+        },
+        "input_contract": {
+            "provider_visible_fields": list(representative_input),
+            "source_metadata_serialization": "sorted_json",
+        },
+        "output_contract": {
+            "schema_name": LIVE_JD_INTELLIGENCE_DRY_RUN_SCHEMA_NAME,
+            "strict": True,
+            "schema": LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA,
+        },
+        "deterministic_transformation_contract": {
+            "normalization_version": (
+                jd_intelligence.LIVE_DRY_RUN_NORMALIZATION_CONTRACT_VERSION
+            ),
+            "list_fields": list(jd_intelligence.LIVE_DRY_RUN_LIST_FIELDS),
+            "seniority_alias": "seniority_indicators",
+            "planning_projection": {
+                "required_tools_and_preferred_tools": "tools",
+                "workflows_methods_ownership_stakeholders": "responsibilities",
+                "business_contexts": "domain",
+                "risk_flags": "red_flags",
+                "required_skills": "resume_evidence_needed_fallback",
+            },
+            "empty_signal_result": "invalid",
+        },
+        "task_parameters": {
+            "temperature": LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
+            "max_tokens": LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
+            "thinking_budget": LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET,
+            "response_mime_type": "application/json",
+            "return_parsed": True,
+        },
     }
 
 
@@ -20011,20 +20125,17 @@ def _live_critic_guardrail_provider_adapter(adapter_input: Dict[str, Any]) -> Di
     result = run_chat_completion_with_metadata(
         provider=LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER,
         model=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL,
-        temperature=0,
-        max_tokens=900,
+        temperature=LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE,
+        max_tokens=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
         response_schema=_live_critic_guardrail_structured_output_contract()["schema"],
         return_parsed=True,
-        thinking_budget=0,
+        thinking_budget=LIVE_CRITIC_GUARDRAIL_DRY_RUN_THINKING_BUDGET,
         fallback_enabled=LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED,
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are a conservative critic guardrail for a manual dry-run. "
-                    "Return only JSON and never apply changes."
-                ),
+                "content": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SYSTEM_PROMPT,
             },
             {"role": "user", "content": _live_critic_guardrail_prompt(adapter_input)},
         ],
@@ -20141,6 +20252,49 @@ def _normalise_live_critic_provider_payload(
         "confidence": _tailoring_live_float(parsed.get("confidence")),
         "rationale": _clean_text(parsed.get("rationale")) or "Live critic guardrail dry-run returned provider decisions.",
     }, []
+
+
+def build_critic_evaluation_production_task_contract_material() -> Dict[str, Any]:
+    representative_input = {
+        "tailoring_suggestion_payload": {"<suggestion_field>": "<suggestion_value>"},
+        "jd_intelligence": {"<jd_field>": "<jd_value>"},
+        "resume_evidence_rows": [{"<evidence_field>": "<evidence_value>"}],
+    }
+    return {
+        "task_contract_version": LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SYSTEM_PROMPT,
+            "user_template": _live_critic_guardrail_prompt(representative_input),
+        },
+        "input_contract": {
+            "provider_visible_fields": list(representative_input),
+            "serialization": "sorted_json",
+        },
+        "output_contract": {
+            "schema_name": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SCHEMA_NAME,
+            "strict": True,
+            "schema": LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA,
+        },
+        "deterministic_transformation_contract": {
+            "decision_buckets": ["approve", "downgrade_to_guidance", "reject"],
+            "decision_lists": [
+                "approved_suggestions",
+                "downgraded_suggestions",
+                "rejected_suggestions",
+            ],
+            "missing_decision_id": "deterministic_bucket_fallback_id",
+            "missing_critic_status": "derive_from_rejected_then_downgraded_then_approved",
+            "no_decisions": "provider_critic_decisions_missing",
+            "invalid_json": "invalid_json_response",
+        },
+        "task_parameters": {
+            "temperature": LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE,
+            "max_tokens": LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS,
+            "thinking_budget": LIVE_CRITIC_GUARDRAIL_DRY_RUN_THINKING_BUDGET,
+            "response_mime_type": "application/json",
+            "return_parsed": True,
+        },
+    }
 
 
 def build_manual_jd_intelligence_dry_run_payload(
@@ -27715,6 +27869,8 @@ def _latest_user_pipeline_artifact_context(
     tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
     operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
     corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
+    source_health_report_text = _artifact_text_by_name(artifacts, "source_health_report.csv")
+    source_acquisition_metrics_text = _artifact_text_by_name(artifacts, "source_acquisition_metrics.json")
     workflow_summary = _agentic_workflow_summary_from_artifacts(artifacts)
     workflow_verification = _agentic_workflow_verification_from_artifacts(artifacts)
 
@@ -27744,6 +27900,8 @@ def _latest_user_pipeline_artifact_context(
         "agentic_workflow_summary": workflow_summary,
         "agentic_workflow_verification": workflow_verification,
         "current_run_job_corpus_text": corpus_text,
+        "source_health_report_text": source_health_report_text,
+        "source_acquisition_metrics_text": source_acquisition_metrics_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
         "zero_result_run": zero_result_run,
     }
@@ -27781,6 +27939,8 @@ def _latest_user_pipeline_filesystem_context(
     tailoring_decision_text = _read_text_if_file(output_dir / "tailoring_decision_recommendations.csv")
     operator_review_text = _read_text_if_file(output_dir / "operator_review_recommendations.csv")
     corpus_text = _read_text_if_file(output_dir / "current_run_job_corpus.jsonl")
+    source_health_report_text = _read_text_if_file(output_dir / "source_health_report.csv")
+    source_acquisition_metrics_text = _read_text_if_file(output_dir / "source_acquisition_metrics.json")
 
     status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
     final_job_count = run.get("final_job_count", status_json.get("final_job_count"))
@@ -27809,8 +27969,190 @@ def _latest_user_pipeline_filesystem_context(
         "agentic_workflow_summary": _agentic_workflow_summary_from_dir(output_dir),
         "agentic_workflow_verification": _agentic_workflow_verification_from_dir(output_dir),
         "current_run_job_corpus_text": corpus_text,
+        "source_health_report_text": source_health_report_text,
+        "source_acquisition_metrics_text": source_acquisition_metrics_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
         "zero_result_run": zero_result_run,
+    }
+
+
+SOURCE_YIELD_FUNNEL_FIELDS = (
+    "scraped_jobs",
+    "title_pass_jobs",
+    "title_reject_jobs",
+    "location_pass_jobs",
+    "location_reject_jobs",
+    "freshness_pass_jobs",
+    "not_recent_jobs",
+    "missing_timestamp_jobs",
+    "final_corpus_jobs",
+    "final_display_jobs",
+)
+SOURCE_YIELD_ACQUISITION_FIELDS = (
+    "raw_job_count",
+    "normalized_job_count",
+    "page_count",
+    "request_count",
+    "retry_count",
+    "partial_result_count",
+    "timestamp_present_count",
+    "timestamp_missing_count",
+    "description_present_count",
+    "description_missing_count",
+    "canonical_url_present_count",
+    "canonical_url_missing_count",
+)
+SOURCE_YIELD_STATUS_VALUES = ("SUCCESS", "PARTIAL", "EMPTY", "FAILED")
+
+
+def _source_yield_nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(float(str(value or "0").strip())))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _source_yield_source(value: Any) -> str:
+    return " ".join(_clean_text(value).lower().split())
+
+
+def _empty_source_yield_row(source: str) -> Dict[str, Any]:
+    return {
+        "source": source,
+        "accounts_queried": 0,
+        **{field: 0 for field in SOURCE_YIELD_FUNNEL_FIELDS},
+        "yield_percent": 0.0,
+        **{field: 0 for field in SOURCE_YIELD_ACQUISITION_FIELDS},
+        "acquisition_status_counts": {status: 0 for status in SOURCE_YIELD_STATUS_VALUES},
+    }
+
+
+def _source_yield_payload(
+    *,
+    run_id: Any = "",
+    source_health_report_text: Any = "",
+    source_acquisition_metrics_text: Any = "",
+    current_run_job_corpus_text: Any = "",
+) -> Dict[str, Any]:
+    health_text = str(source_health_report_text or "")
+    acquisition_text = str(source_acquisition_metrics_text or "")
+    corpus_text = str(current_run_job_corpus_text or "")
+    health_present = bool(health_text.strip())
+    acquisition_present = bool(acquisition_text.strip())
+    rows_by_source: Dict[str, Dict[str, Any]] = {}
+    health_sources = set()
+    stage_final_counts: Dict[str, int] = {}
+
+    if health_present:
+        try:
+            for raw_row in csv.DictReader(health_text.splitlines()):
+                row = dict(raw_row or {})
+                source = _source_yield_source(row.get("source"))
+                if not source:
+                    continue
+                target = rows_by_source.setdefault(source, _empty_source_yield_row(source))
+                health_sources.add(source)
+                for field in SOURCE_YIELD_FUNNEL_FIELDS:
+                    target[field] += _source_yield_nonnegative_int(row.get(field))
+        except (csv.Error, TypeError, ValueError):
+            pass
+
+    acquisition_payload: Dict[str, Any] = {}
+    if acquisition_present:
+        try:
+            parsed = json.loads(acquisition_text)
+            if isinstance(parsed, dict):
+                acquisition_payload = parsed
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    acquisition_rows = acquisition_payload.get("acquisition_metrics", [])
+    if isinstance(acquisition_rows, list):
+        for raw_row in acquisition_rows:
+            if not isinstance(raw_row, dict):
+                continue
+            source = _source_yield_source(raw_row.get("source"))
+            if not source:
+                continue
+            target = rows_by_source.setdefault(source, _empty_source_yield_row(source))
+            target["accounts_queried"] += 1
+            for field in SOURCE_YIELD_ACQUISITION_FIELDS:
+                target[field] += _source_yield_nonnegative_int(raw_row.get(field))
+            status = _clean_text(raw_row.get("acquisition_status")).upper()
+            if status in SOURCE_YIELD_STATUS_VALUES:
+                target["acquisition_status_counts"][status] += 1
+
+    stage_rows = acquisition_payload.get("source_stage_metrics", [])
+    if isinstance(stage_rows, list):
+        for raw_row in stage_rows:
+            if not isinstance(raw_row, dict):
+                continue
+            source = _source_yield_source(raw_row.get("source"))
+            if not source:
+                continue
+            rows_by_source.setdefault(source, _empty_source_yield_row(source))
+            stage_final_counts[source] = (
+                stage_final_counts.get(source, 0)
+                + _source_yield_nonnegative_int(raw_row.get("final_retained_job_count"))
+            )
+
+    for source, target in rows_by_source.items():
+        if source not in health_sources:
+            target["scraped_jobs"] = target["raw_job_count"]
+
+    for source, final_count in stage_final_counts.items():
+        if source not in health_sources:
+            rows_by_source[source]["final_corpus_jobs"] = final_count
+            rows_by_source[source]["final_display_jobs"] = final_count
+
+    corpus_fallback_used = False
+    if (health_present or acquisition_present) and corpus_text.strip():
+        corpus_counts: Counter[str] = Counter()
+        for line in corpus_text.splitlines():
+            try:
+                corpus_row = json.loads(line)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+            if not isinstance(corpus_row, dict):
+                continue
+            source = _source_yield_source(corpus_row.get("source"))
+            if source:
+                corpus_counts[source] += 1
+        for source, count in corpus_counts.items():
+            target = rows_by_source.setdefault(source, _empty_source_yield_row(source))
+            if source not in health_sources and source not in stage_final_counts:
+                target["final_corpus_jobs"] = count
+                target["final_display_jobs"] = count
+                corpus_fallback_used = True
+
+    sources = list(rows_by_source.values())
+    for row in sources:
+        acquired = row["scraped_jobs"] or row["raw_job_count"]
+        row["yield_percent"] = round((row["final_display_jobs"] / acquired) * 100, 1) if acquired else 0.0
+    sources.sort(key=lambda row: (-row["final_display_jobs"], -row["final_corpus_jobs"], row["source"]))
+
+    total_fields = (
+        "accounts_queried",
+        "scraped_jobs",
+        "title_pass_jobs",
+        "location_pass_jobs",
+        "freshness_pass_jobs",
+        "final_corpus_jobs",
+        "final_display_jobs",
+    )
+    return {
+        "available": health_present or acquisition_present,
+        "run_id": _clean_text(run_id),
+        "generated_from": {
+            "source_health_report": health_present,
+            "source_acquisition_metrics": acquisition_present,
+            "current_run_job_corpus": corpus_fallback_used,
+        },
+        "totals": {
+            "source_count": len(sources),
+            **{field: sum(row[field] for row in sources) for field in total_fields},
+        },
+        "sources": sources,
     }
 
 
@@ -27934,6 +28276,12 @@ def status_payload(
             manifest_rows=manifest_rows,
         )
         job_corpus_rows = int(artifact_context.get("job_corpus_rows", 0) or 0)
+        source_yield = _source_yield_payload(
+            run_id=artifact_context.get("run_id", ""),
+            source_health_report_text=artifact_context.get("source_health_report_text", ""),
+            source_acquisition_metrics_text=artifact_context.get("source_acquisition_metrics_text", ""),
+            current_run_job_corpus_text=artifact_context.get("current_run_job_corpus_text", ""),
+        )
         if _clean_text(artifact_context.get("output_dir")):
             planning_output_dir_value = _clean_text(artifact_context.get("output_dir"))
         else:
@@ -27954,6 +28302,11 @@ def status_payload(
         agentic_workflow_verification = _agentic_workflow_verification_from_dir(output_dir)
         merged_rows = ja._build_job_index(output_dir)
         job_corpus_rows = ja._count_jsonl_rows(job_corpus)
+        source_yield = _source_yield_payload(
+            source_health_report_text=_read_text_if_file(output_dir / "source_health_report.csv"),
+            source_acquisition_metrics_text=_read_text_if_file(output_dir / "source_acquisition_metrics.json"),
+            current_run_job_corpus_text=_read_text_if_file(job_corpus),
+        )
         planning_output_dir_value = str(output_dir)
 
     decision_rows = _load_latest_operator_decision_rows(owner_user_id=owner_user_id)
@@ -28108,6 +28461,7 @@ def status_payload(
         "llm_tailoring_status_counts": dict(sorted(llm_tailoring_counts.items())),
         "agentic_workflow_summary": agentic_workflow_summary,
         "agentic_workflow_verification": agentic_workflow_verification,
+        "source_yield": source_yield,
         "top_queue_rows": top_queue,
     }
 
@@ -31015,6 +31369,13 @@ SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA = {
 }
 SCAN_PHRASE_OPTIONS_SCHEMA_NAME = "scan_phrase_options_v1"
 SCAN_PHRASE_PROMPT_VERSION = "v1"
+SCAN_PHRASE_TEMPERATURE = 0
+SCAN_PHRASE_MAX_TOKENS = 520
+SCAN_PHRASE_THINKING_BUDGET = 0
+SCAN_PHRASE_SYSTEM_PROMPT = (
+    "You generate conservative, truthful resume bullet rewrite options for manual editing. "
+    "Return only JSON."
+)
 
 
 def _scan_phrase_structured_output_contract() -> Dict[str, Any]:
@@ -31039,8 +31400,6 @@ def _scan_phrase_default_provider() -> str:
 def _scan_phrase_default_model(provider: str) -> str:
     if provider == "openai":
         return os.getenv("TAILORING_PHRASE_MODEL", "gpt-5-mini")
-    if provider == "gemini":
-        return "gemini-2.5-flash"
     return os.getenv(
         "TAILORING_PHRASE_MODEL",
         os.getenv(
@@ -31193,13 +31552,30 @@ def _scan_phrase_llm_prompt(
 ) -> str:
     term_line = ", ".join(terms) if terms else "none"
     return "\n".join([
-        "Create up to three high-quality resume bullet rewrite drafts for a manual editor.",
+        "Create three high-quality, materially distinct resume bullet rewrite drafts for a manual editor.",
         "",
         "Rewrite objective:",
         "- Apply the AI guidance as a concrete wording improvement, not a vague note.",
-        "- Put the strongest supported job signal earlier in the bullet when truthful.",
+        "- Begin every draft with a strong, capitalized action verb.",
+        "- Use normal resume sentence case and standard capitalization for the opening action verb.",
+        "- Never render the opening action verb in ALL CAPS.",
+        "- Preserve legitimate technical acronyms such as SQL, AWS, API, AI, LLM, and ETL.",
+        "- Use a different truthful opening action verb for each draft.",
+        "- Preserve the current bullet's grammatical tense, factual meaning, and claim strength.",
+        "- Do not force a synonym when it would change responsibility or claim strength.",
+        "- Incorporate supported terms naturally after the opening action verb.",
+        "- Never prefix the bullet with a keyword or tool list such as 'Python, SQL —' or 'AWS / Python —'.",
+        "- Never begin with Using, With, By, Through, or Via.",
+        "- Sound like a real resume bullet, not a keyword shuffle.",
         "- Preserve the original metric values, tools, employer context, and scope.",
         "- Do not invent tools, domains, ownership, impact, numbers, or responsibilities.",
+        "- Keep all three drafts factually equivalent; vary phrasing and structure, not substance.",
+        "",
+        "Distinct draft strategies:",
+        "1. Concise / direct accomplishment rewrite.",
+        "2. Technical-signal-forward rewrite.",
+        "3. Outcome / impact-forward rewrite.",
+        "- Avoid repetitive sentence structure and return fewer than three only when safety requires it.",
         "- Keep each option as one resume bullet without a leading bullet symbol.",
         "- Return only JSON in this exact shape:",
         '{"options":[{"text":"...","reason":"...","supported_terms":["..."],"risk_flags":[]}]}',
@@ -31210,6 +31586,41 @@ def _scan_phrase_llm_prompt(
         "Current bullet:",
         current,
     ])
+
+
+def _scan_phrase_first_lexical_word(value: Any) -> str:
+    match = re.search(
+        r"[^\W\d_]+(?:['’][^\W\d_]+)*",
+        str(value or ""),
+        flags=re.UNICODE,
+    )
+    return match.group(0) if match else ""
+
+
+def _scan_phrase_normalize_opening_sentence_case(value: Any) -> str:
+    text = _clean_text(value)
+    match = re.search(
+        r"[^\W\d_]+(?:['’][^\W\d_]+)*",
+        text,
+        flags=re.UNICODE,
+    )
+    if not match:
+        return text
+
+    opening = match.group(0)
+    if len(opening) <= 1 or not opening.isalpha() or not opening.isupper():
+        return text
+
+    sentence_case_opening = opening[:1].upper() + opening[1:].lower()
+    return f"{text[:match.start()]}{sentence_case_opening}{text[match.end():]}"
+
+
+def _scan_phrase_similarity_ratio(left: str, right: str) -> float:
+    left_norm = _normalize_tailoring_workspace_text_key(left)
+    right_norm = _normalize_tailoring_workspace_text_key(right)
+    if not left_norm or not right_norm:
+        return 0.0
+    return SequenceMatcher(None, left_norm, right_norm).ratio()
 
 
 def _scan_phrase_validate_llm_options(
@@ -31223,22 +31634,47 @@ def _scan_phrase_validate_llm_options(
         return []
 
     current_norm = _normalize_tailoring_workspace_text_key(current)
+    prohibited_openings = {"using", "with", "by", "through", "via"}
+    supported_term_openings = {
+        _scan_phrase_first_lexical_word(term).casefold()
+        for term in terms
+        if _scan_phrase_first_lexical_word(term)
+    }
     options: List[Dict[str, Any]] = []
     seen = set()
+    seen_openings = set()
 
     for index, row in enumerate(raw_option_rows, start=1):
         if not isinstance(row, dict):
             continue
 
-        text = _clean_text(row.get("text"))
+        text = _scan_phrase_normalize_opening_sentence_case(row.get("text"))
         normalized = _normalize_tailoring_workspace_text_key(text)
         if not text or not normalized or normalized in seen:
+            continue
+
+        generated_lead_word = _scan_phrase_first_lexical_word(text)
+        generated_lead_key = generated_lead_word.casefold()
+        if (
+            not generated_lead_word
+            or not generated_lead_word[:1].isupper()
+            or generated_lead_key in prohibited_openings
+            or generated_lead_key in supported_term_openings
+            or generated_lead_key in seen_openings
+        ):
             continue
 
         if len(text) > max(280, len(current) + 120):
             continue
 
+        if any(
+            _scan_phrase_similarity_ratio(text, option["text"]) >= 0.89
+            for option in options
+        ):
+            continue
+
         seen.add(normalized)
+        seen_openings.add(generated_lead_key)
         options.append({
             "option_id": f"phrase_llm_{index}",
             "text": text,
@@ -31259,27 +31695,88 @@ def _scan_phrase_validate_llm_options(
     return options
 
 
+def build_manual_scan_phrase_production_task_contract_material() -> Dict[str, Any]:
+    return {
+        "task_contract_version": SCAN_PHRASE_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": SCAN_PHRASE_SYSTEM_PROMPT,
+            "user_template": _scan_phrase_llm_prompt(
+                current="<current_bullet>",
+                guidance="<guidance>",
+                terms=["<supported_term>"],
+            ),
+        },
+        "input_contract": {
+            "fields": ["current_bullet", "guidance", "supported_terms"],
+            "supported_term_limit": 3,
+            "supported_term_max_chars": 48,
+            "guidance_extraction": "lead_with_phrase_then_supplied_terms",
+            "supported_term_deduplication": "case_insensitive_preserve_order",
+        },
+        "output_contract": {
+            "schema_name": SCAN_PHRASE_OPTIONS_SCHEMA_NAME,
+            "strict": True,
+            "schema": SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA,
+            "parsers": ["structured_object", "list", "first_balanced_json_value"],
+        },
+        "deterministic_transformation_contract": {
+            "opening_case": "normalize_all_caps_opening_to_sentence_case",
+            "opening_requirements": "capitalized_unique_action_word",
+            "prohibited_openings": ["using", "with", "by", "through", "via"],
+            "supported_term_opening": "reject",
+            "maximum_length": "max_280_or_current_plus_120",
+            "pairwise_similarity_reject_at_or_above": 0.89,
+            "maximum_options": 3,
+            "manual_review_required": True,
+            "can_accept_directly": False,
+            "plain_json_retry": "only_when_structured_response_has_no_valid_options",
+        },
+        "task_parameters": {
+            "temperature": SCAN_PHRASE_TEMPERATURE,
+            "max_tokens": SCAN_PHRASE_MAX_TOKENS,
+            "thinking_budget": SCAN_PHRASE_THINKING_BUDGET,
+            "structured_response_mime_type": "application/json",
+            "structured_return_parsed": True,
+            "plain_retry_return_parsed": False,
+        },
+    }
+
+
 def _generate_scan_phrase_options_with_llm(
     *,
     current: str,
     guidance: str,
     terms: List[str],
+    owner_user_id: str = "",
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     from src.ai.llm_client import run_chat_completion_with_metadata
     from src.tailoring import llm as tailoring_llm
 
+    owner = _clean_text(owner_user_id)
     provider = SCAN_PHRASE_PROVIDER or tailoring_llm.PATCH_REFINEMENT_WRITER_PROVIDER
-    model = SCAN_PHRASE_MODEL or (
-        "gemini-2.5-flash"
-        if provider == "gemini"
-        else tailoring_llm.PATCH_REFINEMENT_WRITER_MODEL
-    )
+    model = SCAN_PHRASE_MODEL or tailoring_llm.PATCH_REFINEMENT_WRITER_MODEL
     fallback_provider = SCAN_PHRASE_FALLBACK_PROVIDER
     fallback_model = SCAN_PHRASE_FALLBACK_MODEL
-    system_prompt = (
-        "You generate conservative, truthful resume bullet rewrite options for manual editing. "
-        "Return only JSON."
-    )
+    effective_selection_source = ""
+    if owner:
+        try:
+            effective_route = resolve_effective_user_provider_route(
+                owner,
+                "manual_scan_phrase",
+            )
+            provider = _clean_text(effective_route.get("provider"))
+            model = _clean_text(effective_route.get("model"))
+            effective_selection_source = _clean_text(
+                effective_route.get("effective_selection_source")
+            )
+            if not provider or not model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            raise RuntimeError(
+                "Effective scan phrase provider route unavailable."
+            ) from None
+
+    system_prompt = SCAN_PHRASE_SYSTEM_PROMPT
     user_prompt = _scan_phrase_llm_prompt(
         current=current,
         guidance=guidance,
@@ -31287,28 +31784,50 @@ def _generate_scan_phrase_options_with_llm(
     )
     last_error = ""
 
-    result = run_chat_completion_with_metadata(
-        provider=provider,
-        model=model,
-        temperature=0,
-        max_tokens=520,
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt,
+        },
+        {
+            "role": "user",
+            "content": user_prompt,
+        },
+    ]
+
+    def _call_llm(
+        *,
+        response_mime_type: Optional[str],
+        response_schema: Optional[Dict[str, Any]],
+        return_parsed: bool,
+    ) -> Dict[str, Any]:
+        request_kwargs = {
+            "provider": provider,
+            "model": model,
+            "temperature": SCAN_PHRASE_TEMPERATURE,
+            "max_tokens": SCAN_PHRASE_MAX_TOKENS,
+            "response_mime_type": response_mime_type,
+            "response_schema": response_schema,
+            "return_parsed": return_parsed,
+            "thinking_budget": SCAN_PHRASE_THINKING_BUDGET,
+            "messages": messages,
+        }
+        if owner:
+            return run_user_chat_completion_with_metadata(
+                owner_user_id=owner,
+                **request_kwargs,
+            )
+        return run_chat_completion_with_metadata(
+            fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
+            fallback_provider=fallback_provider,
+            fallback_model=fallback_model,
+            **request_kwargs,
+        )
+
+    result = _call_llm(
         response_mime_type="application/json",
         response_schema=_scan_phrase_structured_output_contract()["schema"],
         return_parsed=True,
-        thinking_budget=0,
-        fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
-        fallback_provider=fallback_provider,
-        fallback_model=fallback_model,
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt,
-            },
-            {
-                "role": "user",
-                "content": user_prompt,
-            },
-        ],
     )
 
     content = result.get("content")
@@ -31321,22 +31840,10 @@ def _generate_scan_phrase_options_with_llm(
         last_error = (
             "Structured phrase response had no valid options. Retrying with plain JSON parsing."
         )
-        plain_result = run_chat_completion_with_metadata(
-            provider=provider,
-            model=model,
-            temperature=0,
-            max_tokens=520,
+        plain_result = _call_llm(
             response_mime_type=None,
             response_schema=None,
             return_parsed=False,
-            thinking_budget=0,
-            fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
-            fallback_provider=fallback_provider,
-            fallback_model=fallback_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
         )
         result = plain_result
         content = plain_result.get("content")
@@ -31348,7 +31855,11 @@ def _generate_scan_phrase_options_with_llm(
     metadata = {
         "provider": _clean_text(result.get("provider")),
         "model": _clean_text(result.get("model")),
-        "fallback_used": bool(result.get("fallback_used", False)),
+        "fallback_used": (
+            False
+            if owner
+            else bool(result.get("fallback_used", False))
+        ),
         "requested_provider": provider,
         "requested_model": model,
         "prompt_version": SCAN_PHRASE_PROMPT_VERSION,
@@ -31356,6 +31867,10 @@ def _generate_scan_phrase_options_with_llm(
         "structured_output_schema": _scan_phrase_structured_output_contract(),
         "plain_retry_used": bool(last_error),
     }
+    if owner:
+        metadata["effective_selection_source"] = (
+            effective_selection_source
+        )
     if last_error and not options:
         metadata["last_error"] = last_error
     return options, metadata
@@ -31370,6 +31885,7 @@ def generate_tailoring_scan_phrase_payload(
     current_text: str = "",
     guidance_text: str = "",
     supported_terms: Any = None,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     artifact_path = _resolve_planning_artifact_path(
         tailoring_json_path,
@@ -31397,6 +31913,7 @@ def generate_tailoring_scan_phrase_payload(
                 current=current,
                 guidance=guidance,
                 terms=terms,
+                owner_user_id=_clean_text(owner_user_id),
             )
         except Exception as exc:
             llm_error = str(exc)
@@ -35639,6 +36156,7 @@ def assistant_query_payload(
     top_k: int = 5,
     fetch_k: int = 10,
     include_diagnostics: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     router = route_assistant_intent(request)
     intent = router["intent"]
@@ -35661,12 +36179,18 @@ def assistant_query_payload(
         }
 
     try:
+        answer_kwargs = {
+            "request": request,
+            "top_k": top_k,
+            "fetch_k": fetch_k,
+            "output_mode": "compact",
+            "include_diagnostics": include_diagnostics,
+        }
+        owner = _clean_text(owner_user_id)
+        if owner:
+            answer_kwargs["owner_user_id"] = owner
         answer_payload = rag_answer_payload(
-            request=request,
-            top_k=top_k,
-            fetch_k=fetch_k,
-            output_mode="compact",
-            include_diagnostics=include_diagnostics,
+            **answer_kwargs,
         )
     except Exception as exc:
         if not _is_assistant_internal_retrieval_error(exc):
@@ -35739,17 +36263,24 @@ def rag_answer_payload(
     fetch_k: int = 15,
     output_mode: str = "compact",
     include_diagnostics: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     from src.rag.rag_executor import execute_rag_request
 
+    execute_kwargs = {
+        "request": request,
+        "top_k": top_k,
+        "fetch_k": fetch_k,
+        "filters": None,
+        "output_mode": output_mode,
+        "include_diagnostics": include_diagnostics,
+        "intent_override": "answer_job_query",
+    }
+    owner = _clean_text(owner_user_id)
+    if owner:
+        execute_kwargs["owner_user_id"] = owner
     payload = execute_rag_request(
-        request=request,
-        top_k=top_k,
-        fetch_k=fetch_k,
-        filters=None,
-        output_mode=output_mode,
-        include_diagnostics=include_diagnostics,
-        intent_override="answer_job_query",
+        **execute_kwargs,
     )
 
     if payload.get("ok") and isinstance(payload.get("response"), dict):

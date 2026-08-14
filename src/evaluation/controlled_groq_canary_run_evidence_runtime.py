@@ -28,7 +28,16 @@ from src.evaluation.controlled_groq_provider_canary import (
     build_controlled_groq_canary_contract,
     build_operator_authorization_template,
     pricing_table_sha256,
+    validate_controlled_groq_canary_contract,
     validate_operator_approved_pricing,
+)
+from src.evaluation.controlled_provider_benchmark_plan import (
+    build_controlled_provider_benchmark_plan,
+    validate_controlled_provider_benchmark_plan,
+)
+from src.evaluation.provider_fixture_benchmark import (
+    load_fixture_case_corpus,
+    validate_fixture_case_corpus,
 )
 
 
@@ -106,6 +115,62 @@ _RETENTION_POLICY = {
     "maximum_retention_days": 7,
     "operator_review_required": True,
     "overwrite_allowed": False,
+}
+_CURRENT_SEMANTIC_OWNERSHIP = {
+    "canary_run_002_f6a3df4b6caa7e82e229efc59bea7687": {
+        "execution_order": 1,
+        "workload_id": "skill_extraction",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "case_alias": "case_eff6ed2fb3643d23b87bab48",
+        "base_schedule_key": "canary_9c6a5ef970de552a6f830054e635ecd4",
+        "case_id": "skill_extraction_required_preferred_v1",
+        "schema_id": "skill_extraction_result_v1",
+    },
+    "canary_run_002_19cfcee433993511035305348b7503f1": {
+        "execution_order": 2,
+        "workload_id": "grounded_rag_answer",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "case_alias": "case_8e43ca2af1d94798ae9d5167",
+        "base_schedule_key": "canary_8443c4b254128440d76bab0163f78454",
+        "case_id": "grounded_rag_synthetic_transmission_safe_v1",
+        "schema_id": "grounded_rag_answer_result_v1",
+    },
+    "canary_run_002_d592a547c5344cdbdf3ba926b0806c69": {
+        "execution_order": 3,
+        "workload_id": "jd_intelligence",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "case_alias": "case_c4f73240ce6ff98809579b5d",
+        "base_schedule_key": "canary_d57f61cec14a93f0e9658ae9e04f18bb",
+        "case_id": "jd_intelligence_signals_v1",
+        "schema_id": "jd_intelligence_result_v1",
+    },
+    "canary_run_002_03e1b156d6ef1d8401c99298bdf09942": {
+        "execution_order": 4,
+        "workload_id": "tailoring_generation",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "case_alias": "case_3dddc5f43be918e0932d3bb2",
+        "base_schedule_key": "canary_38aa2602e052b5c5ae84772abee84708",
+        "case_id": "tailoring_generation_evidence_bound_v1",
+        "schema_id": "tailoring_generation_result_v1",
+    },
+}
+_REVIEW_FALSE_FIELDS = {
+    "contains_personal_data",
+    "contains_runtime_derived_data",
+    "contains_employer_or_company_identity",
+    "contains_person_name",
+    "contains_resume_derived_text",
+    "contains_private_job_description_text",
+    "contains_credentials_or_secrets",
+    "contains_internal_paths",
+    "contains_request_identifiers",
+    "contains_database_information",
+    "contains_proprietary_application_state",
+    "contains_unsupported_free_form_text",
 }
 
 
@@ -282,7 +347,12 @@ def _base_authorization(
 @lru_cache(maxsize=1)
 def _identity_maps():
     identity = _identity_contract_cached()
-    base = build_controlled_groq_canary_contract()
+    corpus = load_fixture_case_corpus()
+    validate_fixture_case_corpus(corpus)
+    controlled_plan = build_controlled_provider_benchmark_plan(corpus=corpus)
+    validate_controlled_provider_benchmark_plan(controlled_plan)
+    base = build_controlled_groq_canary_contract(controlled_plan)
+    validate_controlled_groq_canary_contract(base)
     run_rows = identity["schedule"]
     base_rows = base["schedule"]
     _require(len(run_rows) == len(base_rows) == 4, "schedule count changed")
@@ -290,22 +360,66 @@ def _identity_maps():
     base_to_run: Dict[str, str] = {}
     run_by_key: Dict[str, Dict[str, Any]] = {}
     base_by_key: Dict[str, Dict[str, Any]] = {}
-    shared = (
-        "execution_order",
-        "case_alias",
-        "workload_id",
-        "provider",
-        "model",
-        "timeout_seconds",
-        "fallback",
-        "harness_retry_limit",
-        "provider_sdk_retry_limit",
-    )
-    for run_row, base_row in zip(run_rows, base_rows):
+    reviews = controlled_plan["transmission_review"]
+    cases = corpus["cases"]
+    _require(len(reviews) == len(cases), "current review/corpus count changed")
+    for run_row in run_rows:
+        target = _CURRENT_SEMANTIC_OWNERSHIP.get(run_row["run_schedule_key"])
+        _require(target is not None, "historical run schedule ownership changed")
+        matches = [
+            (review, case)
+            for review, case in zip(reviews, cases)
+            if review["case_alias"] == target["case_alias"]
+            and case["case_id"] == target["case_id"]
+        ]
+        _require(len(matches) == 1, "current semantic case ownership changed")
+        review, case = matches[0]
+        base_matches = [
+            row
+            for row in base_rows
+            if row["schedule_key"] == target["base_schedule_key"]
+            and row["case_alias"] == target["case_alias"]
+        ]
+        _require(len(base_matches) == 1, "current semantic base row changed")
+        base_row = base_matches[0]
         _require(
-            all(run_row[field] == base_row[field] for field in shared)
-            and run_row["base_schedule_key"] == base_row["schedule_key"],
-            "run/base schedule projection changed",
+            all(
+                run_row[field] == target[field] == base_row[field]
+                for field in (
+                    "execution_order",
+                    "workload_id",
+                    "provider",
+                    "model",
+                )
+            )
+            and all(
+                run_row[field] == base_row[field] == expected
+                for field, expected in (
+                    ("timeout_seconds", 30),
+                    ("fallback", False),
+                    ("harness_retry_limit", 0),
+                    ("provider_sdk_retry_limit", 0),
+                )
+            ),
+            "run/current semantic schedule projection changed",
+        )
+        _require(
+            case["workload_id"] == target["workload_id"]
+            and case["schema_id"] == target["schema_id"]
+            and case["sanitized_classification"] == "synthetic_sanitized"
+            and case["contains_personal_resume_content"] is False
+            and case["additional_redaction_required"] is False,
+            "current semantic fixture safety changed",
+        )
+        _require(
+            review["workload_id"] == target["workload_id"]
+            and review["eligible_for_later_controlled_transmission"] is True
+            and review["wholly_synthetic"] is True
+            and review["requires_additional_redaction"] is False
+            and review["human_approval_required"] is True
+            and review["eligibility_reasons"] == []
+            and all(review[field] is False for field in _REVIEW_FALSE_FIELDS),
+            "current semantic transmission safety changed",
         )
         run_key = run_row["run_schedule_key"]
         base_key = base_row["schedule_key"]

@@ -3,6 +3,8 @@ from __future__ import annotations
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from src.app import services
 from tests.test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off import (
     _request_payload,
@@ -231,8 +233,13 @@ def test_ui_readback_display_uses_existing_response_data_and_is_passive():
 
 
 def test_protected_files_are_unchanged():
-    for relative, expected in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative) == expected
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
     assert _sha256(ROOT / "src/matching/scorer.py") == PROTECTED_HASHES[
         "src/matching/scorer.py"
     ]

@@ -222,6 +222,27 @@ body.preferences-page-shell > .app-shell-top-right--flow {
   text-decoration: none;
 }
 
+.preferences-workflow .onboarding-solid-link {
+  border: 1px solid var(--preferences-border-strong);
+  border-radius: 7px;
+  background: var(--preferences-bg-raised);
+  color: var(--preferences-text-secondary);
+  font-size: 11px;
+  font-weight: 850;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.preferences-workflow .onboarding-solid-link:hover {
+  border-color: color-mix(in srgb, var(--preferences-primary) 40%, var(--preferences-border));
+  background: color-mix(in srgb, var(--preferences-primary) 9%, var(--preferences-bg-raised));
+  color: var(--preferences-text);
+}
+
+.preferences-workflow .onboarding-solid-link:focus-visible {
+  outline: 3px solid var(--preferences-focus);
+  outline-offset: 2px;
+}
+
 body .preferences-workflow .preferences-command-header h1,
 body .preferences-workflow .preferences-command-header h2 {
   max-width: none;
@@ -959,6 +980,10 @@ body .preferences-workflow .preferences-command-header .subtext {
   gap: 8px;
 }
 
+.preferences-workflow .preferences-seniority-group + .preference-location-policy {
+  margin-top: 12px;
+}
+
 .preferences-workflow .preference-policy-option {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) auto;
@@ -1151,6 +1176,39 @@ body .preferences-workflow .preferences-command-header .subtext {
   line-height: 1.4;
 }
 
+.preferences-workflow .preferences-review-item--resume,
+.preferences-workflow .preferences-review-item--ai {
+  align-items: center;
+}
+
+.preferences-workflow .preferences-review-ai-details {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 0;
+}
+
+.preferences-workflow .preferences-review-ai-details[hidden] {
+  display: none;
+}
+
+.preferences-workflow .preferences-review-ai-details > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.preferences-workflow .preferences-review-ai-details dt,
+.preferences-workflow .preferences-review-ai-details dd {
+  margin: 0;
+  color: var(--preferences-text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preferences-workflow .preferences-review-ai-details dt {
+  font-weight: 800;
+}
+
 .preferences-workflow .preferences-edit-button {
   min-width: auto;
   min-height: 30px;
@@ -1162,30 +1220,6 @@ body .preferences-workflow .preferences-command-header .subtext {
   font-size: 11px;
   font-weight: 850;
   cursor: pointer;
-}
-
-.preferences-workflow .preferences-resume-requirement {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
-  align-items: center;
-  gap: 14px;
-  margin-top: 12px;
-  padding: 14px;
-  border: 1px solid var(--preferences-border);
-  border-radius: 7px;
-  background: var(--preferences-bg-subtle);
-}
-
-.preferences-workflow .preferences-resume-requirement h3,
-.preferences-workflow .preferences-resume-requirement p {
-  margin: 3px 0 0;
-}
-
-.preferences-workflow .onboarding-resume-callout {
-  display: grid;
-  gap: 3px;
-  color: var(--preferences-text-secondary);
-  font-size: 12px;
 }
 
 .preferences-workflow .preferences-role-error {
@@ -1281,6 +1315,28 @@ body .preferences-workflow .preferences-command-header .subtext {
 .preferences-workflow .preferences-final-actions .preferences-secondary-action {
   grid-column: var(--preferences-secondary-action-column);
   grid-row: 1;
+}
+
+.preferences-workflow .preferences-final-actions .onboarding-ai-skip-button {
+  border-color: color-mix(in srgb, #64748b 72%, var(--preferences-border));
+  background: #475569;
+  color: #f8fafc;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.14);
+  transform: none;
+}
+
+.preferences-workflow .preferences-final-actions .onboarding-ai-skip-button:hover,
+.preferences-workflow .preferences-final-actions .onboarding-ai-skip-button:focus,
+.preferences-workflow .preferences-final-actions .onboarding-ai-skip-button:active {
+  border-color: #64748b;
+  background: #334155;
+  color: #ffffff;
+  transform: none;
+}
+
+.preferences-workflow .preferences-final-actions .onboarding-ai-skip-button:focus-visible {
+  outline: 3px solid var(--preferences-focus);
+  outline-offset: 2px;
 }
 
 .preferences-workflow .preferences-final-actions .preferences-save-state {
@@ -1448,6 +1504,506 @@ body .preferences-workflow .preferences-command-header .subtext {
   color: var(--preferences-danger);
 }
 
+.preferences-workflow .onboarding-ai-step {
+  gap: 16px;
+}
+
+.preferences-workflow .onboarding-ai-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.preferences-workflow .onboarding-ai-optional-badge,
+.preferences-workflow .onboarding-ai-status-badge,
+.preferences-workflow .onboarding-ai-preferred-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.preferences-workflow .onboarding-ai-optional-badge {
+  border-color: color-mix(in srgb, var(--preferences-primary) 35%, var(--preferences-border));
+  background: color-mix(in srgb, var(--preferences-primary) 9%, var(--preferences-bg));
+  color: var(--preferences-primary-strong);
+}
+
+.preferences-workflow .onboarding-ai-load-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 9px;
+  background: var(--preferences-bg-subtle);
+  color: var(--preferences-muted);
+  font-size: 12px;
+}
+
+.preferences-workflow .onboarding-ai-load-status.is-error {
+  border-color: color-mix(in srgb, var(--preferences-danger) 35%, var(--preferences-border));
+  color: var(--preferences-danger);
+}
+
+.preferences-workflow .onboarding-ai-content {
+  display: grid;
+  gap: 13px;
+}
+
+.preferences-workflow .onboarding-ai-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.preferences-workflow .onboarding-ai-provider-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 10px;
+  background: var(--preferences-bg-subtle);
+}
+
+.preferences-workflow .onboarding-ai-provider-card[data-provider="groq"] {
+  border-left: 3px solid rgba(249, 115, 22, 0.64);
+}
+
+.preferences-workflow .onboarding-ai-provider-card[data-provider="openai"] {
+  border-left: 3px solid color-mix(in srgb, var(--preferences-primary) 56%, var(--preferences-border));
+}
+
+.preferences-workflow .onboarding-ai-provider-heading,
+.preferences-workflow .onboarding-ai-provider-identity,
+.preferences-workflow .onboarding-ai-provider-badges,
+.preferences-workflow .onboarding-ai-provider-actions {
+  display: flex;
+  align-items: center;
+}
+
+.preferences-workflow .onboarding-ai-provider-heading {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.preferences-workflow .onboarding-ai-provider-identity {
+  min-width: 0;
+  gap: 9px;
+}
+
+.preferences-workflow .onboarding-ai-provider-identity h3,
+.preferences-workflow .onboarding-ai-test-card h3 {
+  margin: 0;
+  color: var(--preferences-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.preferences-workflow .onboarding-ai-model-count,
+.preferences-workflow .onboarding-ai-provider-detail,
+.preferences-workflow .onboarding-ai-test-card p {
+  color: var(--preferences-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preferences-workflow .onboarding-ai-model-count {
+  display: block;
+  margin-top: 2px;
+}
+
+.preferences-workflow .onboarding-ai-provider-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+}
+
+.preferences-workflow .onboarding-ai-provider-card[data-provider="groq"] .onboarding-ai-provider-mark {
+  border-color: rgba(249, 115, 22, 0.3);
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.preferences-workflow .onboarding-ai-provider-logo {
+  width: 21px;
+  height: 21px;
+}
+
+.preferences-workflow .onboarding-ai-provider-wordmark {
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.preferences-workflow .onboarding-ai-provider-badges,
+.preferences-workflow .onboarding-ai-provider-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.preferences-workflow .onboarding-ai-provider-actions {
+  justify-content: flex-start;
+}
+
+.preferences-workflow .onboarding-ai-status-badge.is-configured {
+  border-color: color-mix(in srgb, var(--preferences-success) 38%, var(--preferences-border));
+  color: var(--preferences-success);
+}
+
+.preferences-workflow .onboarding-ai-status-badge.is-unconfigured {
+  color: var(--preferences-muted);
+}
+
+.preferences-workflow .onboarding-ai-preferred-badge {
+  border-color: color-mix(in srgb, var(--preferences-primary) 34%, var(--preferences-border));
+  color: var(--preferences-primary-strong);
+}
+
+.preferences-workflow .onboarding-ai-credential-hint {
+  display: block;
+  overflow: hidden;
+  color: var(--preferences-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preferences-workflow .onboarding-ai-primary-button {
+  border-color: color-mix(in srgb, var(--preferences-primary) 42%, var(--preferences-border));
+  background: color-mix(in srgb, var(--preferences-primary) 10%, var(--preferences-bg));
+  color: var(--preferences-primary-strong);
+}
+
+.preferences-workflow .provider-key-guidance {
+  border-top: 1px solid var(--preferences-border);
+  border-bottom: 1px solid var(--preferences-border);
+}
+
+.preferences-workflow .provider-key-guidance summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 1px;
+  color: var(--preferences-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  list-style: none;
+  cursor: pointer;
+}
+
+.preferences-workflow .provider-key-guidance summary::-webkit-details-marker {
+  display: none;
+}
+
+.preferences-workflow .provider-key-guidance summary:focus-visible {
+  outline: 2px solid var(--preferences-primary);
+  outline-offset: 2px;
+}
+
+.preferences-workflow .provider-key-guidance-chevron {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  transition: var(--preferences-progress-transition);
+}
+
+.preferences-workflow .provider-key-guidance[open] .provider-key-guidance-chevron {
+  transform: rotate(90deg);
+}
+
+.preferences-workflow .provider-key-guidance-content {
+  padding: 2px 1px 10px;
+  color: var(--preferences-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.preferences-workflow .provider-key-guidance-content h4 {
+  margin: 0 0 6px;
+  color: var(--preferences-text);
+  font-size: 12px;
+}
+
+.preferences-workflow .provider-key-guidance-content ol {
+  margin: 0 0 8px;
+  padding-left: 19px;
+}
+
+.preferences-workflow .provider-key-guidance-note,
+.preferences-workflow .provider-key-guidance-security {
+  margin: 7px 0 0;
+}
+
+.preferences-workflow .provider-key-guidance-security {
+  color: var(--preferences-text-secondary);
+}
+
+.preferences-workflow .provider-key-guidance-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+}
+
+.preferences-workflow .provider-key-guidance-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--preferences-primary-strong);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.preferences-workflow .provider-key-guidance-links a:hover {
+  text-decoration: underline;
+}
+
+.preferences-workflow .provider-key-guidance-external-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.preferences-workflow .onboarding-ai-test-card {
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid var(--preferences-border);
+  border-left: 3px solid color-mix(in srgb, #38bdf8 64%, var(--preferences-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, #38bdf8 5%, var(--preferences-bg));
+}
+
+.preferences-workflow .onboarding-ai-test-card p {
+  margin: 3px 0 0;
+}
+
+.preferences-workflow .onboarding-ai-test-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
+  align-items: end;
+  gap: 9px;
+}
+
+.preferences-workflow .onboarding-ai-test-controls label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--preferences-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.preferences-workflow .onboarding-ai-test-controls select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--preferences-border);
+  border-radius: 8px;
+  background-color: var(--preferences-bg);
+  color: var(--preferences-text);
+  font: inherit;
+}
+
+.preferences-workflow .onboarding-ai-inline-status {
+  margin: 0;
+  color: var(--preferences-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preferences-workflow .onboarding-ai-inline-status.is-success {
+  color: var(--preferences-success);
+}
+
+.preferences-workflow .onboarding-ai-inline-status.is-error {
+  color: var(--preferences-danger);
+}
+
+.preferences-workflow .onboarding-ai-skip-button {
+  flex: 0 0 auto;
+}
+
+.onboarding-ai-modal {
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.onboarding-ai-modal-card {
+  width: min(100%, 430px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 24px 70px rgba(2, 8, 23, 0.34);
+}
+
+.onboarding-ai-modal-card .modal-header,
+.onboarding-ai-modal-card .modal-body,
+.onboarding-ai-modal-card .modal-actions {
+  margin: 0;
+  padding-inline: 21px;
+}
+
+.onboarding-ai-modal-header {
+  padding-block: 19px 9px;
+  border: 0;
+}
+
+.onboarding-ai-modal-header h3,
+.onboarding-ai-modal-header p {
+  margin: 0;
+}
+
+.onboarding-ai-modal-header p {
+  margin-top: 3px;
+  color: var(--app-muted);
+}
+
+.onboarding-ai-modal-body {
+  padding-block: 10px 13px;
+}
+
+.onboarding-ai-secret-field {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.onboarding-ai-secret-control {
+  display: grid;
+}
+
+.onboarding-ai-secret-control > input {
+  grid-area: 1 / 1;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 52px 0 11px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+.onboarding-ai-secret-control > button {
+  grid-area: 1 / 1;
+  align-self: center;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin-right: 11px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-muted);
+  box-shadow: none;
+  transform: none;
+}
+
+.onboarding-ai-secret-control > button:hover,
+.onboarding-ai-secret-control > button:focus-visible {
+  border-color: var(--app-border);
+  background: var(--app-surface-3);
+  color: var(--app-text);
+  transform: none;
+}
+
+.onboarding-ai-secret-icon {
+  display: block;
+  width: 17px;
+  height: 17px;
+  pointer-events: none;
+}
+
+.onboarding-ai-secret-icon[hidden] {
+  display: none;
+}
+
+.onboarding-ai-security-copy {
+  margin: 9px 0 0;
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.onboarding-ai-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-block: 12px 18px;
+  border: 0;
+}
+
+.onboarding-ai-modal-footer .preferences-secondary-action,
+.onboarding-ai-modal-footer .preferences-primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 104px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.onboarding-ai-modal-footer .preferences-secondary-action {
+  background: var(--app-surface-2);
+  color: var(--app-text-2);
+}
+
+.onboarding-ai-modal-footer .preferences-primary-action {
+  border-color: var(--app-primary);
+  background: var(--app-primary);
+  color: #ffffff;
+}
+
+.onboarding-ai-modal-footer button:focus-visible,
+.onboarding-ai-secret-control > input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--app-primary) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.onboarding-ai-modal-footer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 @media (min-width: 1720px) {
   :root {
     --preferences-role-grid-columns: repeat(4, minmax(0, 1fr));
@@ -1520,8 +2076,23 @@ body .preferences-workflow .preferences-command-header .subtext {
 
   .preferences-workflow .preferences-editor-grid,
   .preferences-workflow .preferences-review-grid,
-  .preferences-workflow .preferences-resume-requirement {
+  .preferences-workflow .onboarding-ai-provider-grid,
+  .preferences-workflow .onboarding-ai-test-controls {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preferences-workflow .onboarding-ai-provider-grid .onboarding-ai-provider-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .preferences-workflow .onboarding-ai-provider-badges {
+    justify-content: flex-start;
+  }
+
+  .preferences-workflow .onboarding-ai-skip-button,
+  .preferences-workflow .onboarding-ai-test-controls button {
+    width: 100%;
   }
 }
 

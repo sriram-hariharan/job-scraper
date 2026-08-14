@@ -22219,25 +22219,347 @@ function rF({ state: e }) {
 	});
 }
 //#endregion
+//#region src/SourceYield.tsx
+var iF = "applylens:source-yield-state", aF = { status: "loading" }, oF = new Intl.NumberFormat("en-US"), sF = (e) => oF.format(Number.isFinite(e) && e || 0);
+function cF(e) {
+	return e.split(/[\s_-]+/).filter(Boolean).map((e) => e.charAt(0).toUpperCase() + e.slice(1)).join(" ") || "Unknown source";
+}
+var lF = "Company boards, ATS tenants, global feeds, or configured query profiles contacted during this run.";
+function uF(e) {
+	let t = e.acquisition_status_counts;
+	return t.SUCCESS > 0 ? t.FAILED > 0 || t.PARTIAL > 0 ? {
+		label: "Degraded",
+		tone: "degraded"
+	} : {
+		label: "Healthy",
+		tone: "healthy"
+	} : t.FAILED > 0 ? {
+		label: "Failed",
+		tone: "failed"
+	} : t.PARTIAL > 0 ? {
+		label: "Partial",
+		tone: "partial"
+	} : t.EMPTY > 0 ? {
+		label: "Empty",
+		tone: "empty"
+	} : {
+		label: "Unavailable",
+		tone: "unavailable"
+	};
+}
+function dF(e) {
+	return `Successful targets: ${sF(e.SUCCESS)}; partial targets: ${sF(e.PARTIAL)}; empty targets: ${sF(e.EMPTY)}; failed targets: ${sF(e.FAILED)}.`;
+}
+function fF({ row: e }) {
+	let t = e.scraped_jobs || e.raw_job_count, n = [
+		["Acquired", t],
+		["Title", e.title_pass_jobs],
+		["U.S.", e.location_pass_jobs],
+		["Fresh", e.freshness_pass_jobs],
+		["Final", e.final_display_jobs]
+	];
+	return /* @__PURE__ */ (0, X.jsx)("div", {
+		className: "source-yield-funnel",
+		"aria-label": n.map(([e, t]) => `${e} ${sF(t)}`).join(", "),
+		children: n.map(([e, n]) => /* @__PURE__ */ (0, X.jsx)("span", {
+			className: "source-yield-funnel__step",
+			title: `${e}: ${sF(n)}`,
+			children: /* @__PURE__ */ (0, X.jsx)("span", { style: { width: `${t ? Math.max(8, n / t * 100) : 0}%` } })
+		}, e))
+	});
+}
+function pF({ label: e, value: t }) {
+	return /* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: e }), /* @__PURE__ */ (0, X.jsx)("strong", { children: sF(t) })] });
+}
+function mF({ row: e }) {
+	let [t, n] = (0, C.useState)(!1), r = `source-yield-detail-${e.source.replace(/[^a-z0-9_-]/gi, "-")}`, i = uF(e), a = dF(e.acquisition_status_counts), o = e.scraped_jobs || e.raw_job_count;
+	return /* @__PURE__ */ (0, X.jsxs)(X.Fragment, { children: [/* @__PURE__ */ (0, X.jsxs)("tr", { children: [
+		/* @__PURE__ */ (0, X.jsx)("th", {
+			scope: "row",
+			children: /* @__PURE__ */ (0, X.jsxs)("button", {
+				type: "button",
+				className: "source-yield-source-button",
+				"aria-expanded": t,
+				"aria-controls": r,
+				onClick: () => n((e) => !e),
+				children: [/* @__PURE__ */ (0, X.jsx)(M, {
+					"aria-hidden": "true",
+					className: t ? "is-expanded" : "",
+					size: 16
+				}), /* @__PURE__ */ (0, X.jsx)("span", { children: cF(e.source) })]
+			})
+		}),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: sF(e.accounts_queried) }),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: /* @__PURE__ */ (0, X.jsxs)("div", {
+			className: "source-yield-acquired",
+			children: [/* @__PURE__ */ (0, X.jsx)("span", { children: sF(o) }), /* @__PURE__ */ (0, X.jsx)(fF, { row: e })]
+		}) }),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: sF(e.title_pass_jobs) }),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: sF(e.location_pass_jobs) }),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: sF(e.freshness_pass_jobs) }),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: /* @__PURE__ */ (0, X.jsx)("strong", { children: sF(e.final_display_jobs) }) }),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: /* @__PURE__ */ (0, X.jsxs)("span", {
+			className: "source-yield-percent",
+			children: [e.yield_percent.toFixed(1), "%"]
+		}) }),
+		/* @__PURE__ */ (0, X.jsx)("td", { children: /* @__PURE__ */ (0, X.jsx)("span", {
+			className: `source-yield-health source-yield-health--${i.tone}`,
+			title: a,
+			children: i.label
+		}) })
+	] }), t && /* @__PURE__ */ (0, X.jsx)("tr", {
+		className: "source-yield-detail-row",
+		children: /* @__PURE__ */ (0, X.jsx)("td", {
+			colSpan: 9,
+			id: r,
+			children: /* @__PURE__ */ (0, X.jsxs)("div", {
+				className: "source-yield-detail",
+				children: [
+					/* @__PURE__ */ (0, X.jsxs)("div", {
+						className: "source-yield-detail__funnel",
+						children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Conversion funnel" }), /* @__PURE__ */ (0, X.jsx)(fF, { row: e })]
+					}),
+					/* @__PURE__ */ (0, X.jsxs)("div", {
+						className: "source-yield-detail__metrics",
+						children: [
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Raw provider jobs",
+								value: e.raw_job_count
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Normalized jobs",
+								value: e.normalized_job_count
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Final corpus jobs",
+								value: e.final_corpus_jobs
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Final displayed jobs",
+								value: e.final_display_jobs
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Title rejects",
+								value: e.title_reject_jobs
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Location rejects",
+								value: e.location_reject_jobs
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Not recent",
+								value: e.not_recent_jobs
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Missing timestamps",
+								value: e.missing_timestamp_jobs
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Pages",
+								value: e.page_count
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Requests",
+								value: e.request_count
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Retries",
+								value: e.retry_count
+							}),
+							/* @__PURE__ */ (0, X.jsx)(pF, {
+								label: "Partial results",
+								value: e.partial_result_count
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, X.jsxs)("p", {
+						className: "source-yield-detail__evidence",
+						children: [
+							"Targets · ",
+							sF(e.acquisition_status_counts.SUCCESS),
+							" successful / ",
+							sF(e.acquisition_status_counts.PARTIAL),
+							" partial / ",
+							sF(e.acquisition_status_counts.EMPTY),
+							" empty / ",
+							sF(e.acquisition_status_counts.FAILED),
+							" failed · Completeness · timestamp ",
+							sF(e.timestamp_present_count),
+							" present / ",
+							sF(e.timestamp_missing_count),
+							" missing · description ",
+							sF(e.description_present_count),
+							" present / ",
+							sF(e.description_missing_count),
+							" missing · canonical URL ",
+							sF(e.canonical_url_present_count),
+							" present / ",
+							sF(e.canonical_url_missing_count),
+							" missing"
+						]
+					})
+				]
+			})
+		})
+	})] });
+}
+function hF({ icon: e, title: t, body: n }) {
+	return /* @__PURE__ */ (0, X.jsxs)("div", {
+		className: "source-yield-state",
+		children: [/* @__PURE__ */ (0, X.jsx)(e === "activity" ? O : ae, {
+			"aria-hidden": "true",
+			size: 22
+		}), /* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: t }), /* @__PURE__ */ (0, X.jsx)("span", { children: n })] })]
+	});
+}
+function gF({ state: e }) {
+	if (e.status === "loading") return /* @__PURE__ */ (0, X.jsxs)("div", {
+		className: "source-yield-card",
+		"aria-label": "Loading source yield",
+		children: [/* @__PURE__ */ (0, X.jsx)("div", { className: "source-yield-skeleton source-yield-skeleton--heading" }), /* @__PURE__ */ (0, X.jsx)("div", { className: "source-yield-skeleton source-yield-skeleton--table" })]
+	});
+	if (e.status === "error") return /* @__PURE__ */ (0, X.jsx)("div", {
+		className: "source-yield-card",
+		children: /* @__PURE__ */ (0, X.jsx)(hF, {
+			icon: "activity",
+			title: "Source yield unavailable",
+			body: e.message || "Status could not be loaded."
+		})
+	});
+	let t = e.data;
+	return t != null && t.available ? t.sources.length ? /* @__PURE__ */ (0, X.jsxs)("section", {
+		className: "source-yield-card",
+		"aria-labelledby": "sourceYieldHeading",
+		children: [/* @__PURE__ */ (0, X.jsxs)("header", {
+			className: "source-yield-header",
+			children: [/* @__PURE__ */ (0, X.jsxs)("div", { children: [
+				/* @__PURE__ */ (0, X.jsx)("span", {
+					className: "source-yield-eyebrow",
+					children: "Acquisition intelligence"
+				}),
+				/* @__PURE__ */ (0, X.jsx)("h2", {
+					id: "sourceYieldHeading",
+					children: "Source Yield"
+				}),
+				/* @__PURE__ */ (0, X.jsxs)("p", { children: ["Latest completed pipeline run", t.run_id ? ` · ${t.run_id}` : ""] }),
+				/* @__PURE__ */ (0, X.jsx)("p", {
+					className: "source-yield-coverage-note",
+					children: "Sources shown reflect the latest completed pipeline run."
+				}),
+				/* @__PURE__ */ (0, X.jsx)("span", {
+					className: "sr-only",
+					id: "sourceYieldTargetsHelp",
+					children: lF
+				})
+			] }), /* @__PURE__ */ (0, X.jsxs)("div", {
+				className: "source-yield-chips",
+				"aria-label": "Source yield summary",
+				children: [
+					/* @__PURE__ */ (0, X.jsxs)("span", { children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: sF(t.totals.source_count) }), " sources contributing"] }),
+					/* @__PURE__ */ (0, X.jsxs)("span", {
+						title: lF,
+						"aria-describedby": "sourceYieldTargetsHelp",
+						children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: sF(t.totals.accounts_queried) }), " targets queried"]
+					}),
+					/* @__PURE__ */ (0, X.jsxs)("span", { children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: sF(t.totals.scraped_jobs) }), " acquired"] }),
+					/* @__PURE__ */ (0, X.jsxs)("span", {
+						className: "is-accent",
+						children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: sF(t.totals.final_display_jobs) }), " final jobs"]
+					})
+				]
+			})]
+		}), /* @__PURE__ */ (0, X.jsx)("div", {
+			className: "source-yield-table-wrap",
+			children: /* @__PURE__ */ (0, X.jsxs)("table", {
+				className: "source-yield-table",
+				children: [
+					/* @__PURE__ */ (0, X.jsx)("caption", {
+						className: "sr-only",
+						children: "Source yield funnel metrics for the latest successful pipeline run"
+					}),
+					/* @__PURE__ */ (0, X.jsx)("thead", { children: /* @__PURE__ */ (0, X.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "Source"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: /* @__PURE__ */ (0, X.jsx)("span", {
+								className: "source-yield-target-label",
+								title: lF,
+								"aria-describedby": "sourceYieldTargetsHelp",
+								children: "Targets queried"
+							})
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "Acquired"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "Title pass"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "U.S. pass"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "Fresh 24h"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "Final jobs"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "Yield"
+						}),
+						/* @__PURE__ */ (0, X.jsx)("th", {
+							scope: "col",
+							children: "Health"
+						})
+					] }) }),
+					/* @__PURE__ */ (0, X.jsx)("tbody", { children: t.sources.map((e) => /* @__PURE__ */ (0, X.jsx)(mF, { row: e }, e.source)) })
+				]
+			})
+		})]
+	}) : /* @__PURE__ */ (0, X.jsx)("div", {
+		className: "source-yield-card",
+		children: /* @__PURE__ */ (0, X.jsx)(hF, {
+			icon: "database",
+			title: "No source activity",
+			body: "The latest completed run produced no source-yield rows."
+		})
+	}) : /* @__PURE__ */ (0, X.jsx)("div", {
+		className: "source-yield-card",
+		children: /* @__PURE__ */ (0, X.jsx)(hF, {
+			icon: "database",
+			title: "Source evidence unavailable",
+			body: "Source yield data is unavailable for this run."
+		})
+	});
+}
+//#endregion
 //#region node_modules/@tanstack/table-core/build/lib/index.mjs
-function iF(e, t) {
+function _F(e, t) {
 	return typeof e == "function" ? e(t) : e;
 }
-function aF(e, t) {
+function vF(e, t) {
 	return (n) => {
 		t.setState((t) => ({
 			...t,
-			[e]: iF(n, t[e])
+			[e]: _F(n, t[e])
 		}));
 	};
 }
-function oF(e) {
+function yF(e) {
 	return e instanceof Function;
 }
-function sF(e) {
+function bF(e) {
 	return Array.isArray(e) && e.every((e) => typeof e == "number");
 }
-function cF(e, t) {
+function xF(e, t) {
 	let n = [], r = (e) => {
 		e.forEach((e) => {
 			n.push(e);
@@ -22279,7 +22601,7 @@ function Q(e, t, n, r) {
 		onChange: r
 	};
 }
-function lF(e, t, n, r) {
+function SF(e, t, n, r) {
 	let i = {
 		id: `${t.id}_${n.id}`,
 		row: t,
@@ -22307,7 +22629,7 @@ function lF(e, t, n, r) {
 		r.createCell == null || r.createCell(i, n, t, e);
 	}, {}), i;
 }
-function uF(e, t, n, r) {
+function CF(e, t, n, r) {
 	var i, a;
 	let o = {
 		...e._getDefaultColumnDef(),
@@ -22340,8 +22662,8 @@ function uF(e, t, n, r) {
 	for (let t of e._features) t.createColumn == null || t.createColumn(u, e);
 	return u;
 }
-var dF = "debugHeaders";
-function fF(e, t, n) {
+var wF = "debugHeaders";
+function TF(e, t, n) {
 	var r;
 	let i = {
 		id: (r = n.id) == null ? t.id : r,
@@ -22370,7 +22692,7 @@ function fF(e, t, n) {
 		t.createHeader == null || t.createHeader(i, e);
 	}), i;
 }
-var pF = { createTable: (e) => {
+var EF = { createTable: (e) => {
 	e.getHeaderGroups = Z(() => [
 		e.getAllColumns(),
 		e.getVisibleLeafColumns(),
@@ -22379,40 +22701,40 @@ var pF = { createTable: (e) => {
 	], (t, n, r, i) => {
 		var a, o;
 		let s = (a = r == null ? void 0 : r.map((e) => n.find((t) => t.id === e)).filter(Boolean)) == null ? [] : a, c = (o = i == null ? void 0 : i.map((e) => n.find((t) => t.id === e)).filter(Boolean)) == null ? [] : o, l = n.filter((e) => !(r != null && r.includes(e.id)) && !(i != null && i.includes(e.id)));
-		return mF(t, [
+		return DF(t, [
 			...s,
 			...l,
 			...c
 		], e);
-	}, Q(e.options, dF, "getHeaderGroups")), e.getCenterHeaderGroups = Z(() => [
+	}, Q(e.options, wF, "getHeaderGroups")), e.getCenterHeaderGroups = Z(() => [
 		e.getAllColumns(),
 		e.getVisibleLeafColumns(),
 		e.getState().columnPinning.left,
 		e.getState().columnPinning.right
-	], (t, n, r, i) => (n = n.filter((e) => !(r != null && r.includes(e.id)) && !(i != null && i.includes(e.id))), mF(t, n, e, "center")), Q(e.options, dF, "getCenterHeaderGroups")), e.getLeftHeaderGroups = Z(() => [
+	], (t, n, r, i) => (n = n.filter((e) => !(r != null && r.includes(e.id)) && !(i != null && i.includes(e.id))), DF(t, n, e, "center")), Q(e.options, wF, "getCenterHeaderGroups")), e.getLeftHeaderGroups = Z(() => [
 		e.getAllColumns(),
 		e.getVisibleLeafColumns(),
 		e.getState().columnPinning.left
 	], (t, n, r) => {
 		var i;
-		return mF(t, (i = r == null ? void 0 : r.map((e) => n.find((t) => t.id === e)).filter(Boolean)) == null ? [] : i, e, "left");
-	}, Q(e.options, dF, "getLeftHeaderGroups")), e.getRightHeaderGroups = Z(() => [
+		return DF(t, (i = r == null ? void 0 : r.map((e) => n.find((t) => t.id === e)).filter(Boolean)) == null ? [] : i, e, "left");
+	}, Q(e.options, wF, "getLeftHeaderGroups")), e.getRightHeaderGroups = Z(() => [
 		e.getAllColumns(),
 		e.getVisibleLeafColumns(),
 		e.getState().columnPinning.right
 	], (t, n, r) => {
 		var i;
-		return mF(t, (i = r == null ? void 0 : r.map((e) => n.find((t) => t.id === e)).filter(Boolean)) == null ? [] : i, e, "right");
-	}, Q(e.options, dF, "getRightHeaderGroups")), e.getFooterGroups = Z(() => [e.getHeaderGroups()], (e) => [...e].reverse(), Q(e.options, dF, "getFooterGroups")), e.getLeftFooterGroups = Z(() => [e.getLeftHeaderGroups()], (e) => [...e].reverse(), Q(e.options, dF, "getLeftFooterGroups")), e.getCenterFooterGroups = Z(() => [e.getCenterHeaderGroups()], (e) => [...e].reverse(), Q(e.options, dF, "getCenterFooterGroups")), e.getRightFooterGroups = Z(() => [e.getRightHeaderGroups()], (e) => [...e].reverse(), Q(e.options, dF, "getRightFooterGroups")), e.getFlatHeaders = Z(() => [e.getHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, dF, "getFlatHeaders")), e.getLeftFlatHeaders = Z(() => [e.getLeftHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, dF, "getLeftFlatHeaders")), e.getCenterFlatHeaders = Z(() => [e.getCenterHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, dF, "getCenterFlatHeaders")), e.getRightFlatHeaders = Z(() => [e.getRightHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, dF, "getRightFlatHeaders")), e.getCenterLeafHeaders = Z(() => [e.getCenterFlatHeaders()], (e) => e.filter((e) => {
+		return DF(t, (i = r == null ? void 0 : r.map((e) => n.find((t) => t.id === e)).filter(Boolean)) == null ? [] : i, e, "right");
+	}, Q(e.options, wF, "getRightHeaderGroups")), e.getFooterGroups = Z(() => [e.getHeaderGroups()], (e) => [...e].reverse(), Q(e.options, wF, "getFooterGroups")), e.getLeftFooterGroups = Z(() => [e.getLeftHeaderGroups()], (e) => [...e].reverse(), Q(e.options, wF, "getLeftFooterGroups")), e.getCenterFooterGroups = Z(() => [e.getCenterHeaderGroups()], (e) => [...e].reverse(), Q(e.options, wF, "getCenterFooterGroups")), e.getRightFooterGroups = Z(() => [e.getRightHeaderGroups()], (e) => [...e].reverse(), Q(e.options, wF, "getRightFooterGroups")), e.getFlatHeaders = Z(() => [e.getHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, wF, "getFlatHeaders")), e.getLeftFlatHeaders = Z(() => [e.getLeftHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, wF, "getLeftFlatHeaders")), e.getCenterFlatHeaders = Z(() => [e.getCenterHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, wF, "getCenterFlatHeaders")), e.getRightFlatHeaders = Z(() => [e.getRightHeaderGroups()], (e) => e.map((e) => e.headers).flat(), Q(e.options, wF, "getRightFlatHeaders")), e.getCenterLeafHeaders = Z(() => [e.getCenterFlatHeaders()], (e) => e.filter((e) => {
 		var t;
 		return !((t = e.subHeaders) != null && t.length);
-	}), Q(e.options, dF, "getCenterLeafHeaders")), e.getLeftLeafHeaders = Z(() => [e.getLeftFlatHeaders()], (e) => e.filter((e) => {
+	}), Q(e.options, wF, "getCenterLeafHeaders")), e.getLeftLeafHeaders = Z(() => [e.getLeftFlatHeaders()], (e) => e.filter((e) => {
 		var t;
 		return !((t = e.subHeaders) != null && t.length);
-	}), Q(e.options, dF, "getLeftLeafHeaders")), e.getRightLeafHeaders = Z(() => [e.getRightFlatHeaders()], (e) => e.filter((e) => {
+	}), Q(e.options, wF, "getLeftLeafHeaders")), e.getRightLeafHeaders = Z(() => [e.getRightFlatHeaders()], (e) => e.filter((e) => {
 		var t;
 		return !((t = e.subHeaders) != null && t.length);
-	}), Q(e.options, dF, "getRightLeafHeaders")), e.getLeafHeaders = Z(() => [
+	}), Q(e.options, wF, "getRightLeafHeaders")), e.getLeafHeaders = Z(() => [
 		e.getLeftHeaderGroups(),
 		e.getCenterHeaderGroups(),
 		e.getRightHeaderGroups()
@@ -22423,9 +22745,9 @@ var pF = { createTable: (e) => {
 			...(a = (o = t[0]) == null ? void 0 : o.headers) == null ? [] : a,
 			...(s = (c = n[0]) == null ? void 0 : c.headers) == null ? [] : s
 		].map((e) => e.getLeafHeaders()).flat();
-	}, Q(e.options, dF, "getLeafHeaders"));
+	}, Q(e.options, wF, "getLeafHeaders"));
 } };
-function mF(e, t, n, r) {
+function DF(e, t, n, r) {
 	var i, a;
 	let o = 0, s = function(e, t) {
 		t === void 0 && (t = 1), o = Math.max(o, t), e.filter((e) => e.getIsVisible()).forEach((e) => {
@@ -22444,7 +22766,7 @@ function mF(e, t, n, r) {
 			let o = [...a].reverse()[0], s = e.column.depth === i.depth, c, l = !1;
 			if (s && e.column.parent ? c = e.column.parent : (c = e.column, l = !0), o && (o == null ? void 0 : o.column) === c) o.subHeaders.push(e);
 			else {
-				let i = fF(n, c, {
+				let i = TF(n, c, {
 					id: [
 						r,
 						t,
@@ -22461,7 +22783,7 @@ function mF(e, t, n, r) {
 			i.headers.push(e), e.headerGroup = i;
 		}), c.push(i), t > 0 && l(a, t - 1);
 	};
-	l(t.map((e, t) => fF(n, e, {
+	l(t.map((e, t) => TF(n, e, {
 		depth: o,
 		index: t
 	})), o - 1), c.reverse();
@@ -22479,7 +22801,7 @@ function mF(e, t, n, r) {
 	});
 	return u((i = (a = c[0]) == null ? void 0 : a.headers) == null ? [] : i), c;
 }
-var hF = (e, t, n, r, i, a, o) => {
+var OF = (e, t, n, r, i, a, o) => {
 	let s = {
 		id: t,
 		index: r,
@@ -22503,7 +22825,7 @@ var hF = (e, t, n, r, i, a, o) => {
 			return (n = s.getValue(t)) == null ? e.options.renderFallbackValue : n;
 		},
 		subRows: a == null ? [] : a,
-		getLeafRows: () => cF(s.subRows, (e) => e.subRows),
+		getLeafRows: () => xF(s.subRows, (e) => e.subRows),
 		getParentRow: () => s.parentId ? e.getRow(s.parentId, !0) : void 0,
 		getParentRows: () => {
 			let e = [], t = s;
@@ -22514,7 +22836,7 @@ var hF = (e, t, n, r, i, a, o) => {
 			}
 			return e.reverse();
 		},
-		getAllCells: Z(() => [e.getAllLeafColumns()], (t) => t.map((t) => lF(e, s, t, t.id)), Q(e.options, "debugRows", "getAllCells")),
+		getAllCells: Z(() => [e.getAllLeafColumns()], (t) => t.map((t) => SF(e, s, t, t.id)), Q(e.options, "debugRows", "getAllCells")),
 		_getAllCellsByColumnId: Z(() => [s.getAllCells()], (e) => e.reduce((e, t) => (e[t.column.id] = t, e), {}), Q(e.options, "debugRows", "getAllCellsByColumnId"))
 	};
 	for (let t = 0; t < e._features.length; t++) {
@@ -22522,89 +22844,89 @@ var hF = (e, t, n, r, i, a, o) => {
 		n == null || n.createRow == null || n.createRow(s, e);
 	}
 	return s;
-}, gF = { createColumn: (e, t) => {
+}, kF = { createColumn: (e, t) => {
 	e._getFacetedRowModel = t.options.getFacetedRowModel && t.options.getFacetedRowModel(t, e.id), e.getFacetedRowModel = () => e._getFacetedRowModel ? e._getFacetedRowModel() : t.getPreFilteredRowModel(), e._getFacetedUniqueValues = t.options.getFacetedUniqueValues && t.options.getFacetedUniqueValues(t, e.id), e.getFacetedUniqueValues = () => e._getFacetedUniqueValues ? e._getFacetedUniqueValues() : /* @__PURE__ */ new Map(), e._getFacetedMinMaxValues = t.options.getFacetedMinMaxValues && t.options.getFacetedMinMaxValues(t, e.id), e.getFacetedMinMaxValues = () => {
 		if (e._getFacetedMinMaxValues) return e._getFacetedMinMaxValues();
 	};
-} }, _F = (e, t, n) => {
+} }, AF = (e, t, n) => {
 	var r, i;
 	let a = n == null || (r = n.toString()) == null ? void 0 : r.toLowerCase();
 	return !!(!((i = e.getValue(t)) == null || (i = i.toString()) == null || (i = i.toLowerCase()) == null) && i.includes(a));
 };
-_F.autoRemove = (e) => DF(e);
-var vF = (e, t, n) => {
+AF.autoRemove = (e) => BF(e);
+var jF = (e, t, n) => {
 	var r;
 	return !!(!((r = e.getValue(t)) == null || (r = r.toString()) == null) && r.includes(n));
 };
-vF.autoRemove = (e) => DF(e);
-var yF = (e, t, n) => {
+jF.autoRemove = (e) => BF(e);
+var MF = (e, t, n) => {
 	var r;
 	return ((r = e.getValue(t)) == null || (r = r.toString()) == null ? void 0 : r.toLowerCase()) === (n == null ? void 0 : n.toLowerCase());
 };
-yF.autoRemove = (e) => DF(e);
-var bF = (e, t, n) => {
+MF.autoRemove = (e) => BF(e);
+var NF = (e, t, n) => {
 	var r;
 	return (r = e.getValue(t)) == null ? void 0 : r.includes(n);
 };
-bF.autoRemove = (e) => DF(e);
-var xF = (e, t, n) => !n.some((n) => {
+NF.autoRemove = (e) => BF(e);
+var PF = (e, t, n) => !n.some((n) => {
 	var r;
 	return !((r = e.getValue(t)) != null && r.includes(n));
 });
-xF.autoRemove = (e) => DF(e) || !(e != null && e.length);
-var SF = (e, t, n) => n.some((n) => {
+PF.autoRemove = (e) => BF(e) || !(e != null && e.length);
+var FF = (e, t, n) => n.some((n) => {
 	var r;
 	return (r = e.getValue(t)) == null ? void 0 : r.includes(n);
 });
-SF.autoRemove = (e) => DF(e) || !(e != null && e.length);
-var CF = (e, t, n) => e.getValue(t) === n;
-CF.autoRemove = (e) => DF(e);
-var wF = (e, t, n) => e.getValue(t) == n;
-wF.autoRemove = (e) => DF(e);
-var TF = (e, t, n) => {
+FF.autoRemove = (e) => BF(e) || !(e != null && e.length);
+var IF = (e, t, n) => e.getValue(t) === n;
+IF.autoRemove = (e) => BF(e);
+var LF = (e, t, n) => e.getValue(t) == n;
+LF.autoRemove = (e) => BF(e);
+var RF = (e, t, n) => {
 	let [r, i] = n, a = e.getValue(t);
 	return a >= r && a <= i;
 };
-TF.resolveFilterValue = (e) => {
+RF.resolveFilterValue = (e) => {
 	let [t, n] = e, r = typeof t == "number" ? t : parseFloat(t), i = typeof n == "number" ? n : parseFloat(n), a = t === null || Number.isNaN(r) ? -Infinity : r, o = n === null || Number.isNaN(i) ? Infinity : i;
 	if (a > o) {
 		let e = a;
 		a = o, o = e;
 	}
 	return [a, o];
-}, TF.autoRemove = (e) => DF(e) || DF(e[0]) && DF(e[1]);
-var EF = {
-	includesString: _F,
-	includesStringSensitive: vF,
-	equalsString: yF,
-	arrIncludes: bF,
-	arrIncludesAll: xF,
-	arrIncludesSome: SF,
-	equals: CF,
-	weakEquals: wF,
-	inNumberRange: TF
+}, RF.autoRemove = (e) => BF(e) || BF(e[0]) && BF(e[1]);
+var zF = {
+	includesString: AF,
+	includesStringSensitive: jF,
+	equalsString: MF,
+	arrIncludes: NF,
+	arrIncludesAll: PF,
+	arrIncludesSome: FF,
+	equals: IF,
+	weakEquals: LF,
+	inNumberRange: RF
 };
-function DF(e) {
+function BF(e) {
 	return e == null || e === "";
 }
-var OF = {
+var VF = {
 	getDefaultColumnDef: () => ({ filterFn: "auto" }),
 	getInitialState: (e) => ({
 		columnFilters: [],
 		...e
 	}),
 	getDefaultOptions: (e) => ({
-		onColumnFiltersChange: aF("columnFilters", e),
+		onColumnFiltersChange: vF("columnFilters", e),
 		filterFromLeafRows: !1,
 		maxLeafRowFilterDepth: 100
 	}),
 	createColumn: (e, t) => {
 		e.getAutoFilterFn = () => {
 			let n = t.getCoreRowModel().flatRows[0], r = n == null ? void 0 : n.getValue(e.id);
-			return typeof r == "string" ? EF.includesString : typeof r == "number" ? EF.inNumberRange : typeof r == "boolean" || typeof r == "object" && r ? EF.equals : Array.isArray(r) ? EF.arrIncludes : EF.weakEquals;
+			return typeof r == "string" ? zF.includesString : typeof r == "number" ? zF.inNumberRange : typeof r == "boolean" || typeof r == "object" && r ? zF.equals : Array.isArray(r) ? zF.arrIncludes : zF.weakEquals;
 		}, e.getFilterFn = () => {
 			var n, r;
-			return oF(e.columnDef.filterFn) ? e.columnDef.filterFn : e.columnDef.filterFn === "auto" ? e.getAutoFilterFn() : (n = (r = t.options.filterFns) == null ? void 0 : r[e.columnDef.filterFn]) == null ? EF[e.columnDef.filterFn] : n;
+			return yF(e.columnDef.filterFn) ? e.columnDef.filterFn : e.columnDef.filterFn === "auto" ? e.getAutoFilterFn() : (n = (r = t.options.filterFns) == null ? void 0 : r[e.columnDef.filterFn]) == null ? zF[e.columnDef.filterFn] : n;
 		}, e.getCanFilter = () => {
 			var n, r, i;
 			return ((n = e.columnDef.enableColumnFilter) == null || n) && ((r = t.options.enableColumnFilters) == null || r) && ((i = t.options.enableFilters) == null || i) && !!e.accessorFn;
@@ -22616,8 +22938,8 @@ var OF = {
 			return (n = (r = t.getState().columnFilters) == null ? void 0 : r.findIndex((t) => t.id === e.id)) == null ? -1 : n;
 		}, e.setFilterValue = (n) => {
 			t.setColumnFilters((t) => {
-				let r = e.getFilterFn(), i = t == null ? void 0 : t.find((t) => t.id === e.id), a = iF(n, i ? i.value : void 0);
-				if (kF(r, a, e)) {
+				let r = e.getFilterFn(), i = t == null ? void 0 : t.find((t) => t.id === e.id), a = _F(n, i ? i.value : void 0);
+				if (HF(r, a, e)) {
 					var o;
 					return (o = t == null ? void 0 : t.filter((t) => t.id !== e.id)) == null ? [] : o;
 				}
@@ -22641,9 +22963,9 @@ var OF = {
 			let n = e.getAllLeafColumns();
 			e.options.onColumnFiltersChange == null || e.options.onColumnFiltersChange((e) => {
 				var r;
-				return (r = iF(t, e)) == null ? void 0 : r.filter((e) => {
+				return (r = _F(t, e)) == null ? void 0 : r.filter((e) => {
 					let t = n.find((t) => t.id === e.id);
-					return !(t && kF(t.getFilterFn(), e.value, t));
+					return !(t && HF(t.getFilterFn(), e.value, t));
 				});
 			});
 		}, e.resetColumnFilters = (t) => {
@@ -22652,10 +22974,10 @@ var OF = {
 		}, e.getPreFilteredRowModel = () => e.getCoreRowModel(), e.getFilteredRowModel = () => (!e._getFilteredRowModel && e.options.getFilteredRowModel && (e._getFilteredRowModel = e.options.getFilteredRowModel(e)), e.options.manualFiltering || !e._getFilteredRowModel ? e.getPreFilteredRowModel() : e._getFilteredRowModel());
 	}
 };
-function kF(e, t, n) {
+function HF(e, t, n) {
 	return (e && e.autoRemove ? e.autoRemove(t, n) : !1) || t === void 0 || typeof t == "string" && !t;
 }
-var AF = {
+var UF = {
 	sum: (e, t, n) => n.reduce((t, n) => {
 		let r = n.getValue(e);
 		return t + (typeof r == "number" ? r : 0);
@@ -22691,7 +23013,7 @@ var AF = {
 	median: (e, t) => {
 		if (!t.length) return;
 		let n = t.map((t) => t.getValue(e));
-		if (!sF(n)) return;
+		if (!bF(n)) return;
 		if (n.length === 1) return n[0];
 		let r = Math.floor(n.length / 2), i = n.sort((e, t) => e - t);
 		return n.length % 2 == 0 ? (i[r - 1] + i[r]) / 2 : i[r];
@@ -22699,7 +23021,7 @@ var AF = {
 	unique: (e, t) => Array.from(new Set(t.map((t) => t.getValue(e))).values()),
 	uniqueCount: (e, t) => new Set(t.map((t) => t.getValue(e))).size,
 	count: (e, t) => t.length
-}, jF = {
+}, WF = {
 	getDefaultColumnDef: () => ({
 		aggregatedCell: (e) => {
 			var t, n;
@@ -22712,7 +23034,7 @@ var AF = {
 		...e
 	}),
 	getDefaultOptions: (e) => ({
-		onGroupingChange: aF("grouping", e),
+		onGroupingChange: vF("grouping", e),
 		groupedColumnMode: "reorder"
 	}),
 	createColumn: (e, t) => {
@@ -22734,12 +23056,12 @@ var AF = {
 			};
 		}, e.getAutoAggregationFn = () => {
 			let n = t.getCoreRowModel().flatRows[0], r = n == null ? void 0 : n.getValue(e.id);
-			if (typeof r == "number") return AF.sum;
-			if (Object.prototype.toString.call(r) === "[object Date]") return AF.extent;
+			if (typeof r == "number") return UF.sum;
+			if (Object.prototype.toString.call(r) === "[object Date]") return UF.extent;
 		}, e.getAggregationFn = () => {
 			var n, r;
 			if (!e) throw Error();
-			return oF(e.columnDef.aggregationFn) ? e.columnDef.aggregationFn : e.columnDef.aggregationFn === "auto" ? e.getAutoAggregationFn() : (n = (r = t.options.aggregationFns) == null ? void 0 : r[e.columnDef.aggregationFn]) == null ? AF[e.columnDef.aggregationFn] : n;
+			return yF(e.columnDef.aggregationFn) ? e.columnDef.aggregationFn : e.columnDef.aggregationFn === "auto" ? e.getAutoAggregationFn() : (n = (r = t.options.aggregationFns) == null ? void 0 : r[e.columnDef.aggregationFn]) == null ? UF[e.columnDef.aggregationFn] : n;
 		};
 	},
 	createTable: (e) => {
@@ -22762,24 +23084,24 @@ var AF = {
 		};
 	}
 };
-function MF(e, t, n) {
+function GF(e, t, n) {
 	if (!(t != null && t.length) || !n) return e;
 	let r = e.filter((e) => !t.includes(e.id));
 	return n === "remove" ? r : [...t.map((t) => e.find((e) => e.id === t)).filter(Boolean), ...r];
 }
-var NF = {
+var KF = {
 	getInitialState: (e) => ({
 		columnOrder: [],
 		...e
 	}),
-	getDefaultOptions: (e) => ({ onColumnOrderChange: aF("columnOrder", e) }),
+	getDefaultOptions: (e) => ({ onColumnOrderChange: vF("columnOrder", e) }),
 	createColumn: (e, t) => {
-		e.getIndex = Z((e) => [WF(t, e)], (t) => t.findIndex((t) => t.id === e.id), Q(t.options, "debugColumns", "getIndex")), e.getIsFirstColumn = (n) => {
+		e.getIndex = Z((e) => [rI(t, e)], (t) => t.findIndex((t) => t.id === e.id), Q(t.options, "debugColumns", "getIndex")), e.getIsFirstColumn = (n) => {
 			var r;
-			return ((r = WF(t, n)[0]) == null ? void 0 : r.id) === e.id;
+			return ((r = rI(t, n)[0]) == null ? void 0 : r.id) === e.id;
 		}, e.getIsLastColumn = (n) => {
 			var r;
-			let i = WF(t, n);
+			let i = rI(t, n);
 			return ((r = i[i.length - 1]) == null ? void 0 : r.id) === e.id;
 		};
 	},
@@ -22802,18 +23124,18 @@ var NF = {
 				}
 				i = [...i, ...n];
 			}
-			return MF(i, t, n);
+			return GF(i, t, n);
 		}, Q(e.options, "debugTable", "_getOrderColumnsFn"));
 	}
-}, PF = () => ({
+}, qF = () => ({
 	left: [],
 	right: []
-}), FF = {
+}), JF = {
 	getInitialState: (e) => ({
-		columnPinning: PF(),
+		columnPinning: qF(),
 		...e
 	}),
-	getDefaultOptions: (e) => ({ onColumnPinningChange: aF("columnPinning", e) }),
+	getDefaultOptions: (e) => ({ onColumnPinningChange: vF("columnPinning", e) }),
 	createColumn: (e, t) => {
 		e.pin = (n) => {
 			let r = e.getLeafColumns().map((e) => e.id).filter(Boolean);
@@ -22869,7 +23191,7 @@ var NF = {
 	createTable: (e) => {
 		e.setColumnPinning = (t) => e.options.onColumnPinningChange == null ? void 0 : e.options.onColumnPinningChange(t), e.resetColumnPinning = (t) => {
 			var n, r;
-			return e.setColumnPinning(t || (n = (r = e.initialState) == null ? void 0 : r.columnPinning) == null ? PF() : n);
+			return e.setColumnPinning(t || (n = (r = e.initialState) == null ? void 0 : r.columnPinning) == null ? qF() : n);
 		}, e.getIsSomeColumnsPinned = (t) => {
 			var n;
 			let r = e.getState().columnPinning;
@@ -22888,45 +23210,45 @@ var NF = {
 		}, Q(e.options, "debugColumns", "getCenterLeafColumns"));
 	}
 };
-function IF(e) {
+function YF(e) {
 	return e || (typeof document < "u" ? document : null);
 }
-var LF = {
+var XF = {
 	size: 150,
 	minSize: 20,
 	maxSize: 2 ** 53 - 1
-}, RF = () => ({
+}, ZF = () => ({
 	startOffset: null,
 	startSize: null,
 	deltaOffset: null,
 	deltaPercentage: null,
 	isResizingColumn: !1,
 	columnSizingStart: []
-}), zF = {
-	getDefaultColumnDef: () => LF,
+}), QF = {
+	getDefaultColumnDef: () => XF,
 	getInitialState: (e) => ({
 		columnSizing: {},
-		columnSizingInfo: RF(),
+		columnSizingInfo: ZF(),
 		...e
 	}),
 	getDefaultOptions: (e) => ({
 		columnResizeMode: "onEnd",
 		columnResizeDirection: "ltr",
-		onColumnSizingChange: aF("columnSizing", e),
-		onColumnSizingInfoChange: aF("columnSizingInfo", e)
+		onColumnSizingChange: vF("columnSizing", e),
+		onColumnSizingInfoChange: vF("columnSizingInfo", e)
 	}),
 	createColumn: (e, t) => {
 		e.getSize = () => {
 			var n, r, i;
 			let a = t.getState().columnSizing[e.id];
-			return Math.min(Math.max((n = e.columnDef.minSize) == null ? LF.minSize : n, (r = a == null ? e.columnDef.size : a) == null ? LF.size : r), (i = e.columnDef.maxSize) == null ? LF.maxSize : i);
+			return Math.min(Math.max((n = e.columnDef.minSize) == null ? XF.minSize : n, (r = a == null ? e.columnDef.size : a) == null ? XF.size : r), (i = e.columnDef.maxSize) == null ? XF.maxSize : i);
 		}, e.getStart = Z((e) => [
 			e,
-			WF(t, e),
+			rI(t, e),
 			t.getState().columnSizing
 		], (t, n) => n.slice(0, e.getIndex(t)).reduce((e, t) => e + t.getSize(), 0), Q(t.options, "debugColumns", "getStart")), e.getAfter = Z((e) => [
 			e,
-			WF(t, e),
+			rI(t, e),
 			t.getState().columnSizing
 		], (t, n) => n.slice(e.getIndex(t) + 1).reduce((e, t) => e + t.getSize(), 0), Q(t.options, "debugColumns", "getAfter")), e.resetSize = () => {
 			t.setColumnSizing((t) => {
@@ -22957,8 +23279,8 @@ var LF = {
 		}, e.getResizeHandler = (n) => {
 			let r = t.getColumn(e.column.id), i = r == null ? void 0 : r.getCanResize();
 			return (a) => {
-				if (!r || !i || (a.persist == null || a.persist(), HF(a) && a.touches && a.touches.length > 1)) return;
-				let o = e.getSize(), s = e ? e.getLeafHeaders().map((e) => [e.column.id, e.column.getSize()]) : [[r.id, r.getSize()]], c = HF(a) ? Math.round(a.touches[0].clientX) : a.clientX, l = {}, u = (e, n) => {
+				if (!r || !i || (a.persist == null || a.persist(), tI(a) && a.touches && a.touches.length > 1)) return;
+				let o = e.getSize(), s = e ? e.getLeafHeaders().map((e) => [e.column.id, e.column.getSize()]) : [[r.id, r.getSize()]], c = tI(a) ? Math.round(a.touches[0].clientX) : a.clientX, l = {}, u = (e, n) => {
 					typeof n == "number" && (t.setColumnSizingInfo((e) => {
 						var r, i;
 						let a = t.options.columnResizeDirection === "rtl" ? -1 : 1, o = (n - ((r = e == null ? void 0 : e.startOffset) == null ? 0 : r)) * a, s = Math.max(o / ((i = e == null ? void 0 : e.startSize) == null ? 0 : i), -.999999);
@@ -22984,7 +23306,7 @@ var LF = {
 						deltaPercentage: null,
 						columnSizingStart: []
 					}));
-				}, p = IF(n), m = {
+				}, p = YF(n), m = {
 					moveHandler: (e) => d(e.clientX),
 					upHandler: (e) => {
 						p == null || p.removeEventListener("mousemove", m.moveHandler), p == null || p.removeEventListener("mouseup", m.upHandler), f(e.clientX);
@@ -22995,8 +23317,8 @@ var LF = {
 						var t;
 						p == null || p.removeEventListener("touchmove", h.moveHandler), p == null || p.removeEventListener("touchend", h.upHandler), e.cancelable && (e.preventDefault(), e.stopPropagation()), f((t = e.touches[0]) == null ? void 0 : t.clientX);
 					}
-				}, g = VF() ? { passive: !1 } : !1;
-				HF(a) ? (p == null || p.addEventListener("touchmove", h.moveHandler, g), p == null || p.addEventListener("touchend", h.upHandler, g)) : (p == null || p.addEventListener("mousemove", m.moveHandler, g), p == null || p.addEventListener("mouseup", m.upHandler, g)), t.setColumnSizingInfo((e) => ({
+				}, g = eI() ? { passive: !1 } : !1;
+				tI(a) ? (p == null || p.addEventListener("touchmove", h.moveHandler, g), p == null || p.addEventListener("touchend", h.upHandler, g)) : (p == null || p.addEventListener("mousemove", m.moveHandler, g), p == null || p.addEventListener("mouseup", m.upHandler, g)), t.setColumnSizingInfo((e) => ({
 					...e,
 					startOffset: c,
 					startSize: o,
@@ -23014,7 +23336,7 @@ var LF = {
 			e.setColumnSizing(t || (n = e.initialState.columnSizing) == null ? {} : n);
 		}, e.resetHeaderSizeInfo = (t) => {
 			var n;
-			e.setColumnSizingInfo(t || (n = e.initialState.columnSizingInfo) == null ? RF() : n);
+			e.setColumnSizingInfo(t || (n = e.initialState.columnSizingInfo) == null ? ZF() : n);
 		}, e.getTotalSize = () => {
 			var t, n;
 			return (t = (n = e.getHeaderGroups()[0]) == null ? void 0 : n.headers.reduce((e, t) => e + t.getSize(), 0)) == null ? 0 : t;
@@ -23029,9 +23351,9 @@ var LF = {
 			return (t = (n = e.getRightHeaderGroups()[0]) == null ? void 0 : n.headers.reduce((e, t) => e + t.getSize(), 0)) == null ? 0 : t;
 		};
 	}
-}, BF = null;
-function VF() {
-	if (typeof BF == "boolean") return BF;
+}, $F = null;
+function eI() {
+	if (typeof $F == "boolean") return $F;
 	let e = !1;
 	try {
 		let t = { get passive() {
@@ -23041,17 +23363,17 @@ function VF() {
 	} catch (t) {
 		e = !1;
 	}
-	return BF = e, BF;
+	return $F = e, $F;
 }
-function HF(e) {
+function tI(e) {
 	return e.type === "touchstart";
 }
-var UF = {
+var nI = {
 	getInitialState: (e) => ({
 		columnVisibility: {},
 		...e
 	}),
-	getDefaultOptions: (e) => ({ onColumnVisibilityChange: aF("columnVisibility", e) }),
+	getDefaultOptions: (e) => ({ onColumnVisibilityChange: vF("columnVisibility", e) }),
 	createColumn: (e, t) => {
 		e.toggleVisibility = (n) => {
 			e.getCanHide() && t.setColumnVisibility((t) => ({
@@ -23097,20 +23419,20 @@ var UF = {
 		};
 	}
 };
-function WF(e, t) {
+function rI(e, t) {
 	return t ? t === "center" ? e.getCenterVisibleLeafColumns() : t === "left" ? e.getLeftVisibleLeafColumns() : e.getRightVisibleLeafColumns() : e.getVisibleLeafColumns();
 }
-var GF = { createTable: (e) => {
+var iI = { createTable: (e) => {
 	e._getGlobalFacetedRowModel = e.options.getFacetedRowModel && e.options.getFacetedRowModel(e, "__global__"), e.getGlobalFacetedRowModel = () => e.options.manualFiltering || !e._getGlobalFacetedRowModel ? e.getPreFilteredRowModel() : e._getGlobalFacetedRowModel(), e._getGlobalFacetedUniqueValues = e.options.getFacetedUniqueValues && e.options.getFacetedUniqueValues(e, "__global__"), e.getGlobalFacetedUniqueValues = () => e._getGlobalFacetedUniqueValues ? e._getGlobalFacetedUniqueValues() : /* @__PURE__ */ new Map(), e._getGlobalFacetedMinMaxValues = e.options.getFacetedMinMaxValues && e.options.getFacetedMinMaxValues(e, "__global__"), e.getGlobalFacetedMinMaxValues = () => {
 		if (e._getGlobalFacetedMinMaxValues) return e._getGlobalFacetedMinMaxValues();
 	};
-} }, KF = {
+} }, aI = {
 	getInitialState: (e) => ({
 		globalFilter: void 0,
 		...e
 	}),
 	getDefaultOptions: (e) => ({
-		onGlobalFilterChange: aF("globalFilter", e),
+		onGlobalFilterChange: vF("globalFilter", e),
 		globalFilterFn: "auto",
 		getColumnCanGlobalFilter: (t) => {
 			var n;
@@ -23125,23 +23447,23 @@ var GF = { createTable: (e) => {
 		};
 	},
 	createTable: (e) => {
-		e.getGlobalAutoFilterFn = () => EF.includesString, e.getGlobalFilterFn = () => {
+		e.getGlobalAutoFilterFn = () => zF.includesString, e.getGlobalFilterFn = () => {
 			var t, n;
 			let { globalFilterFn: r } = e.options;
-			return oF(r) ? r : r === "auto" ? e.getGlobalAutoFilterFn() : (t = (n = e.options.filterFns) == null ? void 0 : n[r]) == null ? EF[r] : t;
+			return yF(r) ? r : r === "auto" ? e.getGlobalAutoFilterFn() : (t = (n = e.options.filterFns) == null ? void 0 : n[r]) == null ? zF[r] : t;
 		}, e.setGlobalFilter = (t) => {
 			e.options.onGlobalFilterChange == null || e.options.onGlobalFilterChange(t);
 		}, e.resetGlobalFilter = (t) => {
 			e.setGlobalFilter(t ? void 0 : e.initialState.globalFilter);
 		};
 	}
-}, qF = {
+}, oI = {
 	getInitialState: (e) => ({
 		expanded: {},
 		...e
 	}),
 	getDefaultOptions: (e) => ({
-		onExpandedChange: aF("expanded", e),
+		onExpandedChange: vF("expanded", e),
 		paginateExpandedRows: !0
 	}),
 	createTable: (e) => {
@@ -23216,18 +23538,18 @@ var GF = { createTable: (e) => {
 			};
 		};
 	}
-}, JF = 0, YF = 10, XF = () => ({
-	pageIndex: JF,
-	pageSize: YF
-}), ZF = {
+}, sI = 0, cI = 10, lI = () => ({
+	pageIndex: sI,
+	pageSize: cI
+}), uI = {
 	getInitialState: (e) => ({
 		...e,
 		pagination: {
-			...XF(),
+			...lI(),
 			...e == null ? void 0 : e.pagination
 		}
 	}),
-	getDefaultOptions: (e) => ({ onPaginationChange: aF("pagination", e) }),
+	getDefaultOptions: (e) => ({ onPaginationChange: vF("pagination", e) }),
 	createTable: (e) => {
 		let t = !1, n = !1;
 		e._autoResetPageIndex = () => {
@@ -23244,12 +23566,12 @@ var GF = { createTable: (e) => {
 					e.resetPageIndex(), n = !1;
 				});
 			}
-		}, e.setPagination = (t) => e.options.onPaginationChange == null ? void 0 : e.options.onPaginationChange((e) => iF(t, e)), e.resetPagination = (t) => {
+		}, e.setPagination = (t) => e.options.onPaginationChange == null ? void 0 : e.options.onPaginationChange((e) => _F(t, e)), e.resetPagination = (t) => {
 			var n;
-			e.setPagination(t || (n = e.initialState.pagination) == null ? XF() : n);
+			e.setPagination(t || (n = e.initialState.pagination) == null ? lI() : n);
 		}, e.setPageIndex = (t) => {
 			e.setPagination((n) => {
-				let r = iF(t, n.pageIndex), i = e.options.pageCount === void 0 || e.options.pageCount === -1 ? 2 ** 53 - 1 : e.options.pageCount - 1;
+				let r = _F(t, n.pageIndex), i = e.options.pageCount === void 0 || e.options.pageCount === -1 ? 2 ** 53 - 1 : e.options.pageCount - 1;
 				return r = Math.max(0, Math.min(r, i)), {
 					...n,
 					pageIndex: r
@@ -23257,13 +23579,13 @@ var GF = { createTable: (e) => {
 			});
 		}, e.resetPageIndex = (t) => {
 			var n, r;
-			e.setPageIndex(t || (n = (r = e.initialState) == null || (r = r.pagination) == null ? void 0 : r.pageIndex) == null ? JF : n);
+			e.setPageIndex(t || (n = (r = e.initialState) == null || (r = r.pagination) == null ? void 0 : r.pageIndex) == null ? sI : n);
 		}, e.resetPageSize = (t) => {
 			var n, r;
-			e.setPageSize(t || (n = (r = e.initialState) == null || (r = r.pagination) == null ? void 0 : r.pageSize) == null ? YF : n);
+			e.setPageSize(t || (n = (r = e.initialState) == null || (r = r.pagination) == null ? void 0 : r.pageSize) == null ? cI : n);
 		}, e.setPageSize = (t) => {
 			e.setPagination((e) => {
-				let n = Math.max(1, iF(t, e.pageSize)), r = e.pageSize * e.pageIndex, i = Math.floor(r / n);
+				let n = Math.max(1, _F(t, e.pageSize)), r = e.pageSize * e.pageIndex, i = Math.floor(r / n);
 				return {
 					...e,
 					pageIndex: i,
@@ -23272,7 +23594,7 @@ var GF = { createTable: (e) => {
 			});
 		}, e.setPageCount = (t) => e.setPagination((n) => {
 			var r;
-			let i = iF(t, (r = e.options.pageCount) == null ? -1 : r);
+			let i = _F(t, (r = e.options.pageCount) == null ? -1 : r);
 			return typeof i == "number" && (i = Math.max(-1, i)), {
 				...n,
 				pageCount: i
@@ -23291,15 +23613,15 @@ var GF = { createTable: (e) => {
 			return (t = e.options.rowCount) == null ? e.getPrePaginationRowModel().rows.length : t;
 		};
 	}
-}, QF = () => ({
+}, dI = () => ({
 	top: [],
 	bottom: []
-}), $F = {
+}), fI = {
 	getInitialState: (e) => ({
-		rowPinning: QF(),
+		rowPinning: dI(),
 		...e
 	}),
-	getDefaultOptions: (e) => ({ onRowPinningChange: aF("rowPinning", e) }),
+	getDefaultOptions: (e) => ({ onRowPinningChange: vF("rowPinning", e) }),
 	createRow: (e, t) => {
 		e.pin = (n, r, i) => {
 			let a = r ? e.getLeafRows().map((e) => {
@@ -23355,7 +23677,7 @@ var GF = { createTable: (e) => {
 	createTable: (e) => {
 		e.setRowPinning = (t) => e.options.onRowPinningChange == null ? void 0 : e.options.onRowPinningChange(t), e.resetRowPinning = (t) => {
 			var n, r;
-			return e.setRowPinning(t || (n = (r = e.initialState) == null ? void 0 : r.rowPinning) == null ? QF() : n);
+			return e.setRowPinning(t || (n = (r = e.initialState) == null ? void 0 : r.rowPinning) == null ? dI() : n);
 		}, e.getIsSomeRowsPinned = (t) => {
 			var n;
 			let r = e.getState().rowPinning;
@@ -23382,13 +23704,13 @@ var GF = { createTable: (e) => {
 			return e.filter((e) => !r.has(e.id));
 		}, Q(e.options, "debugRows", "getCenterRows"));
 	}
-}, eI = {
+}, pI = {
 	getInitialState: (e) => ({
 		rowSelection: {},
 		...e
 	}),
 	getDefaultOptions: (e) => ({
-		onRowSelectionChange: aF("rowSelection", e),
+		onRowSelectionChange: vF("rowSelection", e),
 		enableRowSelection: !0,
 		enableMultiRowSelection: !0,
 		enableSubRowSelection: !0
@@ -23410,17 +23732,17 @@ var GF = { createTable: (e) => {
 		}, e.toggleAllPageRowsSelected = (t) => e.setRowSelection((n) => {
 			let r = t === void 0 ? !e.getIsAllPageRowsSelected() : t, i = { ...n };
 			return e.getRowModel().rows.forEach((t) => {
-				tI(i, t.id, r, !0, e);
+				mI(i, t.id, r, !0, e);
 			}), i;
-		}), e.getPreSelectedRowModel = () => e.getCoreRowModel(), e.getSelectedRowModel = Z(() => [e.getState().rowSelection, e.getCoreRowModel()], (t, n) => Object.keys(t).length ? nI(e, n) : {
+		}), e.getPreSelectedRowModel = () => e.getCoreRowModel(), e.getSelectedRowModel = Z(() => [e.getState().rowSelection, e.getCoreRowModel()], (t, n) => Object.keys(t).length ? hI(e, n) : {
 			rows: [],
 			flatRows: [],
 			rowsById: {}
-		}, Q(e.options, "debugTable", "getSelectedRowModel")), e.getFilteredSelectedRowModel = Z(() => [e.getState().rowSelection, e.getFilteredRowModel()], (t, n) => Object.keys(t).length ? nI(e, n) : {
+		}, Q(e.options, "debugTable", "getSelectedRowModel")), e.getFilteredSelectedRowModel = Z(() => [e.getState().rowSelection, e.getFilteredRowModel()], (t, n) => Object.keys(t).length ? hI(e, n) : {
 			rows: [],
 			flatRows: [],
 			rowsById: {}
-		}, Q(e.options, "debugTable", "getFilteredSelectedRowModel")), e.getGroupedSelectedRowModel = Z(() => [e.getState().rowSelection, e.getSortedRowModel()], (t, n) => Object.keys(t).length ? nI(e, n) : {
+		}, Q(e.options, "debugTable", "getFilteredSelectedRowModel")), e.getGroupedSelectedRowModel = Z(() => [e.getState().rowSelection, e.getSortedRowModel()], (t, n) => Object.keys(t).length ? hI(e, n) : {
 			rows: [],
 			flatRows: [],
 			rowsById: {}
@@ -23450,17 +23772,17 @@ var GF = { createTable: (e) => {
 				var o;
 				if (n = n === void 0 ? !i : n, e.getCanSelect() && i === n) return a;
 				let s = { ...a };
-				return tI(s, e.id, n, (o = r == null ? void 0 : r.selectChildren) == null || o, t), s;
+				return mI(s, e.id, n, (o = r == null ? void 0 : r.selectChildren) == null || o, t), s;
 			});
 		}, e.getIsSelected = () => {
 			let { rowSelection: n } = t.getState();
-			return rI(e, n);
+			return gI(e, n);
 		}, e.getIsSomeSelected = () => {
 			let { rowSelection: n } = t.getState();
-			return iI(e, n) === "some";
+			return _I(e, n) === "some";
 		}, e.getIsAllSubRowsSelected = () => {
 			let { rowSelection: n } = t.getState();
-			return iI(e, n) === "all";
+			return _I(e, n) === "all";
 		}, e.getCanSelect = () => {
 			var n;
 			return typeof t.options.enableRowSelection == "function" ? t.options.enableRowSelection(e) : (n = t.options.enableRowSelection) == null || n;
@@ -23478,16 +23800,16 @@ var GF = { createTable: (e) => {
 			};
 		};
 	}
-}, tI = (e, t, n, r, i) => {
+}, mI = (e, t, n, r, i) => {
 	var a;
 	let o = i.getRow(t, !0);
-	n ? (o.getCanMultiSelect() || Object.keys(e).forEach((t) => delete e[t]), o.getCanSelect() && (e[t] = !0)) : delete e[t], r && (a = o.subRows) != null && a.length && o.getCanSelectSubRows() && o.subRows.forEach((t) => tI(e, t.id, n, r, i));
+	n ? (o.getCanMultiSelect() || Object.keys(e).forEach((t) => delete e[t]), o.getCanSelect() && (e[t] = !0)) : delete e[t], r && (a = o.subRows) != null && a.length && o.getCanSelectSubRows() && o.subRows.forEach((t) => mI(e, t.id, n, r, i));
 };
-function nI(e, t) {
+function hI(e, t) {
 	let n = e.getState().rowSelection, r = [], i = {}, a = function(e, t) {
 		return e.map((e) => {
 			var t;
-			let o = rI(e, n);
+			let o = gI(e, n);
 			if (o && (r.push(e), i[e.id] = e), (t = e.subRows) != null && t.length && (e = {
 				...e,
 				subRows: a(e.subRows)
@@ -23500,33 +23822,33 @@ function nI(e, t) {
 		rowsById: i
 	};
 }
-function rI(e, t) {
+function gI(e, t) {
 	var n;
 	return (n = t[e.id]) != null && n;
 }
-function iI(e, t, n) {
+function _I(e, t, n) {
 	var r;
 	if (!((r = e.subRows) != null && r.length)) return !1;
 	let i = !0, a = !1;
 	return e.subRows.forEach((e) => {
-		if (!(a && !i) && (e.getCanSelect() && (rI(e, t) ? a = !0 : i = !1), e.subRows && e.subRows.length)) {
-			let n = iI(e, t);
+		if (!(a && !i) && (e.getCanSelect() && (gI(e, t) ? a = !0 : i = !1), e.subRows && e.subRows.length)) {
+			let n = _I(e, t);
 			n === "all" ? a = !0 : (n === "some" && (a = !0), i = !1);
 		}
 	}), i ? "all" : a ? "some" : !1;
 }
-var aI = /([0-9]+)/gm, oI = (e, t, n) => mI(pI(e.getValue(n)).toLowerCase(), pI(t.getValue(n)).toLowerCase()), sI = (e, t, n) => mI(pI(e.getValue(n)), pI(t.getValue(n))), cI = (e, t, n) => fI(pI(e.getValue(n)).toLowerCase(), pI(t.getValue(n)).toLowerCase()), lI = (e, t, n) => fI(pI(e.getValue(n)), pI(t.getValue(n))), uI = (e, t, n) => {
+var vI = /([0-9]+)/gm, yI = (e, t, n) => DI(EI(e.getValue(n)).toLowerCase(), EI(t.getValue(n)).toLowerCase()), bI = (e, t, n) => DI(EI(e.getValue(n)), EI(t.getValue(n))), xI = (e, t, n) => TI(EI(e.getValue(n)).toLowerCase(), EI(t.getValue(n)).toLowerCase()), SI = (e, t, n) => TI(EI(e.getValue(n)), EI(t.getValue(n))), CI = (e, t, n) => {
 	let r = e.getValue(n), i = t.getValue(n);
 	return r > i ? 1 : r < i ? -1 : 0;
-}, dI = (e, t, n) => fI(e.getValue(n), t.getValue(n));
-function fI(e, t) {
+}, wI = (e, t, n) => TI(e.getValue(n), t.getValue(n));
+function TI(e, t) {
 	return e === t ? 0 : e > t ? 1 : -1;
 }
-function pI(e) {
+function EI(e) {
 	return typeof e == "number" ? isNaN(e) || e === Infinity || e === -Infinity ? "" : String(e) : typeof e == "string" ? e : "";
 }
-function mI(e, t) {
-	let n = e.split(aI).filter(Boolean), r = t.split(aI).filter(Boolean);
+function DI(e, t) {
+	let n = e.split(vI).filter(Boolean), r = t.split(vI).filter(Boolean);
 	for (; n.length && r.length;) {
 		let e = n.shift(), t = r.shift(), i = parseInt(e, 10), a = parseInt(t, 10), o = [i, a].sort();
 		if (isNaN(o[0])) {
@@ -23540,22 +23862,22 @@ function mI(e, t) {
 	}
 	return n.length - r.length;
 }
-var hI = {
-	alphanumeric: oI,
-	alphanumericCaseSensitive: sI,
-	text: cI,
-	textCaseSensitive: lI,
-	datetime: uI,
-	basic: dI
-}, gI = [
-	pF,
-	UF,
-	NF,
-	FF,
-	gF,
-	OF,
-	GF,
+var OI = {
+	alphanumeric: yI,
+	alphanumericCaseSensitive: bI,
+	text: xI,
+	textCaseSensitive: SI,
+	datetime: CI,
+	basic: wI
+}, kI = [
+	EF,
+	nI,
 	KF,
+	JF,
+	kF,
+	VF,
+	iI,
+	aI,
 	{
 		getInitialState: (e) => ({
 			sorting: [],
@@ -23566,7 +23888,7 @@ var hI = {
 			sortUndefined: 1
 		}),
 		getDefaultOptions: (e) => ({
-			onSortingChange: aF("sorting", e),
+			onSortingChange: vF("sorting", e),
 			isMultiSortEvent: (e) => e.shiftKey
 		}),
 		createColumn: (e, t) => {
@@ -23574,17 +23896,17 @@ var hI = {
 				let n = t.getFilteredRowModel().flatRows.slice(10), r = !1;
 				for (let t of n) {
 					let n = t == null ? void 0 : t.getValue(e.id);
-					if (Object.prototype.toString.call(n) === "[object Date]") return hI.datetime;
-					if (typeof n == "string" && (r = !0, n.split(aI).length > 1)) return hI.alphanumeric;
+					if (Object.prototype.toString.call(n) === "[object Date]") return OI.datetime;
+					if (typeof n == "string" && (r = !0, n.split(vI).length > 1)) return OI.alphanumeric;
 				}
-				return r ? hI.text : hI.basic;
+				return r ? OI.text : OI.basic;
 			}, e.getAutoSortDir = () => {
 				let n = t.getFilteredRowModel().flatRows[0];
 				return typeof (n == null ? void 0 : n.getValue(e.id)) == "string" ? "asc" : "desc";
 			}, e.getSortingFn = () => {
 				var n, r;
 				if (!e) throw Error();
-				return oF(e.columnDef.sortingFn) ? e.columnDef.sortingFn : e.columnDef.sortingFn === "auto" ? e.getAutoSortingFn() : (n = (r = t.options.sortingFns) == null ? void 0 : r[e.columnDef.sortingFn]) == null ? hI[e.columnDef.sortingFn] : n;
+				return yF(e.columnDef.sortingFn) ? e.columnDef.sortingFn : e.columnDef.sortingFn === "auto" ? e.getAutoSortingFn() : (n = (r = t.options.sortingFns) == null ? void 0 : r[e.columnDef.sortingFn]) == null ? OI[e.columnDef.sortingFn] : n;
 			}, e.toggleSorting = (n, r) => {
 				let i = e.getNextSortingOrder(), a = n != null;
 				t.setSorting((o) => {
@@ -23640,16 +23962,16 @@ var hI = {
 			}, e.getPreSortedRowModel = () => e.getGroupedRowModel(), e.getSortedRowModel = () => (!e._getSortedRowModel && e.options.getSortedRowModel && (e._getSortedRowModel = e.options.getSortedRowModel(e)), e.options.manualSorting || !e._getSortedRowModel ? e.getPreSortedRowModel() : e._getSortedRowModel());
 		}
 	},
-	jF,
-	qF,
-	ZF,
-	$F,
-	eI,
-	zF
+	WF,
+	oI,
+	uI,
+	fI,
+	pI,
+	QF
 ];
-function _I(e) {
+function AI(e) {
 	var t, n;
-	let r = [...gI, ...(t = e._features) == null ? [] : t], i = { _features: r }, a = i._features.reduce((e, t) => Object.assign(e, t.getDefaultOptions == null ? void 0 : t.getDefaultOptions(i)), {}), o = (e) => i.options.mergeOptions ? i.options.mergeOptions(a, e) : {
+	let r = [...kI, ...(t = e._features) == null ? [] : t], i = { _features: r }, a = i._features.reduce((e, t) => Object.assign(e, t.getDefaultOptions == null ? void 0 : t.getDefaultOptions(i)), {}), o = (e) => i.options.mergeOptions ? i.options.mergeOptions(a, e) : {
 		...a,
 		...e
 	}, s = { ...(n = e.initialState) == null ? {} : n };
@@ -23676,7 +23998,7 @@ function _I(e) {
 			i.setState(i.initialState);
 		},
 		setOptions: (e) => {
-			let t = iF(e, i.options);
+			let t = _F(e, i.options);
 			i.options = o(t);
 		},
 		getState: () => i.options.state,
@@ -23713,7 +24035,7 @@ function _I(e) {
 		getAllColumns: Z(() => [i._getColumnDefs()], (e) => {
 			let t = function(e, n, r) {
 				return r === void 0 && (r = 0), e.map((e) => {
-					let a = uF(i, e, r, n), o = e;
+					let a = CF(i, e, r, n), o = e;
 					return a.columns = o.columns ? t(o.columns, a, r + 1) : [], a;
 				});
 			};
@@ -23731,7 +24053,7 @@ function _I(e) {
 	}
 	return i;
 }
-function vI() {
+function jI() {
 	return (e) => Z(() => [e.options.data], (t) => {
 		let n = {
 			rows: [],
@@ -23741,7 +24063,7 @@ function vI() {
 			i === void 0 && (i = 0);
 			let o = [];
 			for (let c = 0; c < t.length; c++) {
-				let l = hF(e, e._getRowId(t[c], c, a), t[c], c, i, void 0, a == null ? void 0 : a.id);
+				let l = OF(e, e._getRowId(t[c], c, a), t[c], c, i, void 0, a == null ? void 0 : a.id);
 				if (n.flatRows.push(l), n.rowsById[l.id] = l, o.push(l), e.options.getSubRows) {
 					var s;
 					l.originalSubRows = e.options.getSubRows(t[c], c), (s = l.originalSubRows) != null && s.length && (l.subRows = r(l.originalSubRows, i + 1, l));
@@ -23752,7 +24074,7 @@ function vI() {
 		return n.rows = r(t), n;
 	}, Q(e.options, "debugTable", "getRowModel", () => e._autoResetPageIndex()));
 }
-function yI() {
+function MI() {
 	return (e) => Z(() => [e.getState().sorting, e.getPreSortedRowModel()], (t, n) => {
 		if (!n.rows.length || !(t != null && t.length)) return n;
 		let r = e.getState().sorting, i = [], a = r.filter((t) => {
@@ -23798,28 +24120,28 @@ function yI() {
 }
 //#endregion
 //#region node_modules/@tanstack/react-table/build/lib/index.mjs
-function bI(e, t) {
-	return e ? xI(e) ? /*#__PURE__*/ C.createElement(e, t) : e : null;
+function NI(e, t) {
+	return e ? PI(e) ? /*#__PURE__*/ C.createElement(e, t) : e : null;
 }
-function xI(e) {
-	return SI(e) || typeof e == "function" || CI(e);
+function PI(e) {
+	return FI(e) || typeof e == "function" || II(e);
 }
-function SI(e) {
+function FI(e) {
 	return typeof e == "function" && (() => {
 		let t = Object.getPrototypeOf(e);
 		return t.prototype && t.prototype.isReactComponent;
 	})();
 }
-function CI(e) {
+function II(e) {
 	return typeof e == "object" && typeof e.$$typeof == "symbol" && ["react.memo", "react.forward_ref"].includes(e.$$typeof.description);
 }
-function wI(e) {
+function LI(e) {
 	let t = {
 		state: {},
 		onStateChange: () => {},
 		renderFallbackValue: null,
 		...e
-	}, [n] = C.useState(() => ({ current: _I(t) })), [r, i] = C.useState(() => n.current.initialState);
+	}, [n] = C.useState(() => ({ current: AI(t) })), [r, i] = C.useState(() => n.current.initialState);
 	return n.current.setOptions((t) => ({
 		...t,
 		...e,
@@ -23834,12 +24156,12 @@ function wI(e) {
 }
 //#endregion
 //#region src/filter/FilterSelect.tsx
-var TI = "applylens:shared-filter-select-open";
-function EI(e) {
+var RI = "applylens:shared-filter-select-open";
+function zI(e) {
 	return e.toLowerCase().replace(/[\/_-]+/g, " ").trim().replace(/\s+/g, " ");
 }
-function DI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: a, allLabel: o, mode: s, searchable: c = !1, disabled: l = !1, portalClassName: u }) {
-	let [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(""), [h, g] = (0, C.useState)(0), [_, v] = (0, C.useState)(null), y = (0, C.useId)(), b = (0, C.useRef)(null), x = (0, C.useRef)(null), S = (0, C.useRef)([]), w = `${e}-label`, T = `${e}-menu`, E = EI(p), D = (0, C.useMemo)(() => n.filter((e) => EI(e.label).includes(E)), [E, n]), O = !!(o && (!E || EI(o).includes(E))), k = (0, C.useMemo)(() => [...O ? [{
+function BI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: a, allLabel: o, mode: s, searchable: c = !1, disabled: l = !1, portalClassName: u }) {
+	let [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(""), [h, g] = (0, C.useState)(0), [_, v] = (0, C.useState)(null), y = (0, C.useId)(), b = (0, C.useRef)(null), x = (0, C.useRef)(null), S = (0, C.useRef)([]), w = `${e}-label`, T = `${e}-menu`, E = zI(p), D = (0, C.useMemo)(() => n.filter((e) => zI(e.label).includes(E)), [E, n]), O = !!(o && (!E || zI(o).includes(E))), k = (0, C.useMemo)(() => [...O ? [{
 		value: "__all__",
 		label: o || a,
 		isAll: !0
@@ -23871,7 +24193,7 @@ function DI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 			return (e = b.current) == null ? void 0 : e.focus();
 		});
 	}, ee = () => {
-		l || (window.dispatchEvent(new CustomEvent(TI, { detail: { instanceId: y } })), f(!0), g(0));
+		l || (window.dispatchEvent(new CustomEvent(RI, { detail: { instanceId: y } })), f(!0), g(0));
 	};
 	(0, C.useLayoutEffect)(() => {
 		d && P();
@@ -23887,8 +24209,8 @@ function DI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 		}, n = (e) => {
 			e.key === "Escape" && (e.preventDefault(), F(!0));
 		}, r = () => P();
-		return window.addEventListener(TI, e), document.addEventListener("pointerdown", t), document.addEventListener("keydown", n), window.addEventListener("resize", r), window.addEventListener("scroll", r, !0), () => {
-			window.removeEventListener(TI, e), document.removeEventListener("pointerdown", t), document.removeEventListener("keydown", n), window.removeEventListener("resize", r), window.removeEventListener("scroll", r, !0);
+		return window.addEventListener(RI, e), document.addEventListener("pointerdown", t), document.addEventListener("keydown", n), window.addEventListener("resize", r), window.addEventListener("scroll", r, !0), () => {
+			window.removeEventListener(RI, e), document.removeEventListener("pointerdown", t), document.removeEventListener("keydown", n), window.removeEventListener("resize", r), window.removeEventListener("scroll", r, !0);
 		};
 	}, [y, d]), (0, C.useEffect)(() => {
 		!d || c || window.requestAnimationFrame(() => {
@@ -24036,11 +24358,11 @@ function DI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 }
 //#endregion
 //#region src/table/TablePrimitives.tsx
-var OI = "preferences-secondary-action";
-function kI({ expanded: e, label: t, controls: n, className: r = "", onClick: i }) {
+var VI = "preferences-secondary-action";
+function HI({ expanded: e, label: t, controls: n, className: r = "", onClick: i }) {
 	return /* @__PURE__ */ (0, X.jsx)("button", {
 		type: "button",
-		className: `${OI} shared-table-expand-btn ${r}`.trim(),
+		className: `${VI} shared-table-expand-btn ${r}`.trim(),
 		"aria-label": t,
 		"aria-expanded": e,
 		"aria-controls": e ? n : void 0,
@@ -24054,7 +24376,7 @@ function kI({ expanded: e, label: t, controls: n, className: r = "", onClick: i 
 		})
 	});
 }
-function AI({ value: e, strength: t, label: n = "Match score", unavailableLabel: r = "Unavailable", className: i = "" }) {
+function UI({ value: e, strength: t, label: n = "Match score", unavailableLabel: r = "Unavailable", className: i = "" }) {
 	if (e == null || String(e).trim() === "") return /* @__PURE__ */ (0, X.jsx)("span", {
 		className: "shared-table-muted",
 		children: r
@@ -24088,7 +24410,7 @@ function AI({ value: e, strength: t, label: n = "Match score", unavailableLabel:
 		]
 	});
 }
-function jI({ label: e, children: t }) {
+function WI({ label: e, children: t }) {
 	let [n, r] = (0, C.useState)(!1), i = (0, C.useRef)(null), a = (0, C.useRef)(null), o = (0, C.useId)();
 	return (0, C.useEffect)(() => {
 		if (!n) return;
@@ -24114,7 +24436,7 @@ function jI({ label: e, children: t }) {
 		children: [/* @__PURE__ */ (0, X.jsx)("button", {
 			ref: a,
 			type: "button",
-			className: `${OI} shared-info-popover__trigger`,
+			className: `${VI} shared-info-popover__trigger`,
 			"aria-label": e,
 			"aria-expanded": n,
 			"aria-controls": o,
@@ -24132,7 +24454,7 @@ function jI({ label: e, children: t }) {
 		})]
 	});
 }
-function MI({ title: e, location: t, children: n }) {
+function GI({ title: e, location: t, children: n }) {
 	let r = (0, C.useId)();
 	return /* @__PURE__ */ (0, X.jsxs)("span", {
 		className: "shared-job-preview",
@@ -24146,13 +24468,13 @@ function MI({ title: e, location: t, children: n }) {
 		})]
 	});
 }
-function NI({ children: e }) {
+function KI({ children: e }) {
 	return /* @__PURE__ */ (0, X.jsx)("div", {
 		className: "shared-table-details",
 		children: e
 	});
 }
-function PI({ pagination: e, visibleCount: t, noun: n = "jobs", ariaLabel: r, onPageChange: i }) {
+function qI({ pagination: e, visibleCount: t, noun: n = "jobs", ariaLabel: r, onPageChange: i }) {
 	let { page: a, pageSize: o, totalCount: s, totalPages: c, hasPrevPage: l, hasNextPage: u } = e, d = s ? (a - 1) * o + 1 : 0, f = s ? Math.min(d + Math.max(t - 1, 0), s) : 0;
 	return /* @__PURE__ */ (0, X.jsxs)("nav", {
 		className: "shared-table-pagination",
@@ -24160,7 +24482,7 @@ function PI({ pagination: e, visibleCount: t, noun: n = "jobs", ariaLabel: r, on
 		children: [/* @__PURE__ */ (0, X.jsx)("span", { children: s ? `Showing ${d}-${f} of ${s} ${n}` : `0 ${n}` }), /* @__PURE__ */ (0, X.jsxs)("div", { children: [
 			/* @__PURE__ */ (0, X.jsx)("button", {
 				type: "button",
-				className: OI,
+				className: VI,
 				disabled: !l,
 				"aria-label": `Previous ${r.toLowerCase()}`,
 				onClick: () => i(a - 1),
@@ -24176,7 +24498,7 @@ function PI({ pagination: e, visibleCount: t, noun: n = "jobs", ariaLabel: r, on
 			}),
 			/* @__PURE__ */ (0, X.jsx)("button", {
 				type: "button",
-				className: OI,
+				className: VI,
 				disabled: !u,
 				"aria-label": `Next ${r.toLowerCase()}`,
 				onClick: () => i(a + 1),
@@ -24185,21 +24507,21 @@ function PI({ pagination: e, visibleCount: t, noun: n = "jobs", ariaLabel: r, on
 		] })]
 	});
 }
-function FI(e) {
+function JI(e) {
 	let t = e.column.columnDef.header;
 	return typeof t == "string" ? t : e.column.id.replace(/_/g, " ");
 }
-function II({ header: e, sticky: t }) {
-	let n = e.column.getIsSorted(), r = FI(e);
+function YI({ header: e, sticky: t }) {
+	let n = e.column.getIsSorted(), r = JI(e);
 	return /* @__PURE__ */ (0, X.jsxs)("th", {
 		style: { width: e.getSize() },
 		className: `shared-table-column--${e.column.id} ${t ? "is-sticky-action" : ""} ${n ? "is-sorted" : ""}`.trim(),
 		"aria-sort": n === "asc" ? "ascending" : n === "desc" ? "descending" : e.column.getCanSort() ? "none" : void 0,
 		children: [e.isPlaceholder ? null : /* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "shared-table-header-content",
-			children: [bI(e.column.columnDef.header, e.getContext()), e.column.getCanSort() ? /* @__PURE__ */ (0, X.jsx)("button", {
+			children: [NI(e.column.columnDef.header, e.getContext()), e.column.getCanSort() ? /* @__PURE__ */ (0, X.jsx)("button", {
 				type: "button",
-				className: `${OI} shared-table-sort-btn ${n ? "is-sorted" : ""}`,
+				className: `${VI} shared-table-sort-btn ${n ? "is-sorted" : ""}`,
 				"aria-label": r,
 				onClick: e.column.getToggleSortingHandler(),
 				children: n === "asc" ? /* @__PURE__ */ (0, X.jsx)(P, {
@@ -24224,11 +24546,11 @@ function II({ header: e, sticky: t }) {
 			},
 			role: "separator",
 			"aria-orientation": "vertical",
-			"aria-label": `Resize ${FI(e)} column`
+			"aria-label": `Resize ${JI(e)} column`
 		}) : null]
 	}, e.id);
 }
-function LI({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table: a, columns: o, status: s, error: c, headerActions: l, pagination: u, paginationNoun: d = "jobs", paginationLabel: f, stickyColumnId: p, rowClassName: m, detailId: h, renderDetails: g, empty: _, onPageChange: v, onRetry: y, fillAvailableWidth: b = !1, deferPaginationWhileLoading: x = !1 }) {
+function XI({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table: a, columns: o, status: s, error: c, headerActions: l, pagination: u, paginationNoun: d = "jobs", paginationLabel: f, stickyColumnId: p, rowClassName: m, detailId: h, renderDetails: g, empty: _, onPageChange: v, onRetry: y, fillAvailableWidth: b = !1, deferPaginationWhileLoading: x = !1 }) {
 	let S = (e) => x && s === "loading" ? /* @__PURE__ */ (0, X.jsx)("div", {
 		className: "shared-table-pagination shared-table-pagination--loading",
 		role: "status",
@@ -24237,7 +24559,7 @@ function LI({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 			d,
 			"..."
 		] })
-	}) : /* @__PURE__ */ (0, X.jsx)(PI, {
+	}) : /* @__PURE__ */ (0, X.jsx)(qI, {
 		pagination: u,
 		visibleCount: a.getRowModel().rows.length,
 		noun: d,
@@ -24266,7 +24588,7 @@ function LI({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 				role: "alert",
 				children: [/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: "Table data is unavailable" }), /* @__PURE__ */ (0, X.jsx)("span", { children: c || "Try the request again." })] }), /* @__PURE__ */ (0, X.jsx)("button", {
 					type: "button",
-					className: OI,
+					className: VI,
 					onClick: y,
 					children: "Retry"
 				})]
@@ -24278,7 +24600,7 @@ function LI({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 						width: b ? "100%" : a.getTotalSize(),
 						minWidth: a.getTotalSize()
 					},
-					children: [/* @__PURE__ */ (0, X.jsx)("thead", { children: a.getHeaderGroups().map((e) => /* @__PURE__ */ (0, X.jsx)("tr", { children: e.headers.map((e) => /* @__PURE__ */ (0, X.jsx)(II, {
+					children: [/* @__PURE__ */ (0, X.jsx)("thead", { children: a.getHeaderGroups().map((e) => /* @__PURE__ */ (0, X.jsx)("tr", { children: e.headers.map((e) => /* @__PURE__ */ (0, X.jsx)(YI, {
 						header: e,
 						sticky: e.column.id === p
 					}, e.id)) }, e.id)) }), /* @__PURE__ */ (0, X.jsx)("tbody", { children: s === "loading" ? Array.from({ length: 5 }, (e, t) => /* @__PURE__ */ (0, X.jsx)("tr", {
@@ -24292,7 +24614,7 @@ function LI({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 						children: e.getVisibleCells().map((e) => /* @__PURE__ */ (0, X.jsx)("td", {
 							style: { width: e.column.getSize() },
 							className: `shared-table-column--${e.column.id} ${e.column.id === p ? "is-sticky-action" : ""}`.trim(),
-							children: bI(e.column.columnDef.cell, e.getContext())
+							children: NI(e.column.columnDef.cell, e.getContext())
 						}, e.id))
 					}, e.id), e.getIsExpanded() ? /* @__PURE__ */ (0, X.jsx)("tr", {
 						className: "shared-table-detail-row",
@@ -24313,7 +24635,7 @@ function LI({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 }
 //#endregion
 //#region src/ExecutiveQueue.tsx
-var RI = "applylens:executive-queue-state", zI = "applylens:executive-queue-action", BI = "queueTableColumnWidths", VI = OI, HI = {
+var ZI = "applylens:executive-queue-state", QI = "applylens:executive-queue-action", $I = "queueTableColumnWidths", eL = VI, tL = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -24337,7 +24659,7 @@ var RI = "applylens:executive-queue-state", zI = "applylens:executive-queue-acti
 		key: "",
 		direction: "asc"
 	}
-}, UI = [
+}, nL = [
 	{
 		value: "APPLY",
 		label: "Ready for review",
@@ -24358,31 +24680,31 @@ var RI = "applylens:executive-queue-state", zI = "applylens:executive-queue-acti
 		label: "Review later",
 		tone: "later"
 	}
-], WI = "A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.";
-function GI(e) {
-	window.dispatchEvent(new CustomEvent(zI, { detail: e }));
+], rL = "A packet is a review bundle for this job. It includes the job, selected resume, match signals, gaps, and tailoring guidance. It does not apply to the job.";
+function iL(e) {
+	window.dispatchEvent(new CustomEvent(QI, { detail: e }));
 }
-function KI(e) {
+function aL(e) {
 	return String(e == null ? "" : e).trim();
 }
-function qI(e) {
+function oL(e) {
 	return {
 		APPLY: "Ready for review",
 		APPLY_REVIEW_VARIANTS: "Review resume choice",
 		MAYBE_TAILOR: "Tailor first",
 		SKIP_FOR_NOW: "Review later"
-	}[KI(e).toUpperCase()] || KI(e) || "Unavailable";
+	}[aL(e).toUpperCase()] || aL(e) || "Unavailable";
 }
-function JI(e) {
+function sL(e) {
 	return {
 		APPLY: "ready",
 		APPLY_REVIEW_VARIANTS: "choice",
 		MAYBE_TAILOR: "tailor",
 		SKIP_FOR_NOW: "later"
-	}[KI(e).toUpperCase()] || "unavailable";
+	}[aL(e).toUpperCase()] || "unavailable";
 }
-function YI(e) {
-	let t = KI(e).toLowerCase();
+function cL(e) {
+	let t = aL(e).toLowerCase();
 	return [
 		"true",
 		"1",
@@ -24397,7 +24719,7 @@ function YI(e) {
 		"off"
 	].includes(t) ? "No packet" : "Unavailable";
 }
-function XI(e) {
+function lL(e) {
 	return {
 		no_deterministic_winner: "No clear resume match",
 		borderline_deterministic_score: "Borderline match",
@@ -24406,34 +24728,34 @@ function XI(e) {
 		packet_generation_blocked: "Packet unavailable",
 		deterministic_equivalent_variants: "Close resume match",
 		fallback_only_no_deterministic_match: "No credible resume match"
-	}[KI(e).toLowerCase()] || KI(e).replace(/_/g, " ");
+	}[aL(e).toLowerCase()] || aL(e).replace(/_/g, " ");
 }
-function ZI(e) {
+function uL(e) {
 	return {
 		SELECT_RESUME: "Choose resume",
 		MAYBE_TAILOR: "Tailor first",
 		SKIP_FOR_NOW: "Review later",
 		APPLY: "Ready for review",
 		APPLY_REVIEW_VARIANTS: "Review resume choice"
-	}[KI(e.operator_decision).toUpperCase()] || {
+	}[aL(e.operator_decision).toUpperCase()] || {
 		ready_to_apply: "Ready for review",
 		tailor_then_apply: "Tailor then apply",
 		review_before_action: "Review first",
 		hold_or_skip: "Skip for now",
 		source_watch: "Source watch"
-	}[KI(e.operator_review_lane).toLowerCase()] || "—";
+	}[aL(e.operator_review_lane).toLowerCase()] || "—";
 }
-function QI(e) {
-	let t = KI(e);
+function dL(e) {
+	let t = aL(e);
 	return t ? t.replace(/\.pdf$/i, "").replace(/_/g, " ") : "—";
 }
-function $I(e) {
-	if (e == null || KI(e) === "") return null;
-	let t = Number(KI(e).replace(/,/g, ""));
+function fL(e) {
+	if (e == null || aL(e) === "") return null;
+	let t = Number(aL(e).replace(/,/g, ""));
 	return Number.isFinite(t) ? Math.abs(t) <= 1 ? t * 100 : t : null;
 }
-function eL(e, t) {
-	let n = KI(e);
+function pL(e, t) {
+	let n = aL(e);
 	if (!n) return t === "unknown_timestamp_allowed" ? "Timestamp unavailable" : "—";
 	let r = new Date(n);
 	return Number.isNaN(r.getTime()) ? n : new Intl.DateTimeFormat(void 0, {
@@ -24442,10 +24764,10 @@ function eL(e, t) {
 		year: "numeric"
 	}).format(r);
 }
-function tL(e, t) {
-	return KI(e.job_doc_id) || `${KI(e.queue_rank) || "row"}-${t}`;
+function mL(e, t) {
+	return aL(e.job_doc_id) || `${aL(e.queue_rank) || "row"}-${t}`;
 }
-function nL() {
+function hL() {
 	try {
 		let e = JSON.parse(localStorage.getItem("queueTableColumnWidths") || "{}");
 		return e && typeof e == "object" ? e : {};
@@ -24453,7 +24775,7 @@ function nL() {
 		return {};
 	}
 }
-function rL({ state: e }) {
+function gL({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = e.preferenceOptions.map((e) => ({
@@ -24466,10 +24788,10 @@ function rL({ state: e }) {
 		children: [/* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "executive-queue-filter-grid",
 			children: [
-				/* @__PURE__ */ (0, X.jsx)(DI, {
+				/* @__PURE__ */ (0, X.jsx)(BI, {
 					id: "executiveActionFilter",
 					label: "Action",
-					options: UI,
+					options: nL,
 					values: t.actions,
 					onChange: (e) => n((t) => ({
 						...t,
@@ -24478,7 +24800,7 @@ function rL({ state: e }) {
 					placeholder: "All actions",
 					mode: "single"
 				}),
-				/* @__PURE__ */ (0, X.jsx)(DI, {
+				/* @__PURE__ */ (0, X.jsx)(BI, {
 					id: "executivePreferenceFilter",
 					label: "Preferences",
 					options: r,
@@ -24520,7 +24842,7 @@ function rL({ state: e }) {
 						className: "executive-queue-segmented",
 						children: [/* @__PURE__ */ (0, X.jsx)("button", {
 							type: "button",
-							className: `${VI} ${t.undecidedOnly ? "" : "is-active"}`,
+							className: `${eL} ${t.undecidedOnly ? "" : "is-active"}`,
 							"aria-pressed": !t.undecidedOnly,
 							onClick: () => n((e) => ({
 								...e,
@@ -24529,7 +24851,7 @@ function rL({ state: e }) {
 							children: "No"
 						}), /* @__PURE__ */ (0, X.jsx)("button", {
 							type: "button",
-							className: `${VI} ${t.undecidedOnly ? "is-active" : ""}`,
+							className: `${eL} ${t.undecidedOnly ? "is-active" : ""}`,
 							"aria-pressed": t.undecidedOnly,
 							onClick: () => n((e) => ({
 								...e,
@@ -24544,8 +24866,8 @@ function rL({ state: e }) {
 			className: "executive-queue-filter-actions",
 			children: [/* @__PURE__ */ (0, X.jsxs)("button", {
 				type: "button",
-				className: `${VI} executive-queue-clear-btn`,
-				onClick: () => GI({ type: "clear_filters" }),
+				className: `${eL} executive-queue-clear-btn`,
+				onClick: () => iL({ type: "clear_filters" }),
 				children: [/* @__PURE__ */ (0, X.jsx)(ge, {
 					size: 15,
 					"aria-hidden": "true"
@@ -24553,7 +24875,7 @@ function rL({ state: e }) {
 			}), /* @__PURE__ */ (0, X.jsx)("button", {
 				type: "button",
 				className: "executive-queue-apply-btn",
-				onClick: () => GI({
+				onClick: () => iL({
 					type: "apply_filters",
 					filters: t
 				}),
@@ -24562,28 +24884,28 @@ function rL({ state: e }) {
 		})]
 	});
 }
-function iL({ row: e }) {
-	return /* @__PURE__ */ (0, X.jsx)(NI, { children: /* @__PURE__ */ (0, X.jsxs)("div", {
+function _L({ row: e }) {
+	return /* @__PURE__ */ (0, X.jsx)(KI, { children: /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "executive-queue-details executive-queue-details--neutral",
 		children: [
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: XI(e.queue_priority_reason) || "—" })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Next step" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: ZI(e) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Selected resume" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: QI(e.operator_selected_resume || e.winner_resume) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Runner-up" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: QI(e.runner_up_resume) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: KI(e.score_gap) || "—" })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: KI(e.missing_requirement_count) || "0" })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: lL(e.queue_priority_reason) || "—" })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Next step" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: uL(e) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Selected resume" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: dL(e.operator_selected_resume || e.winner_resume) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Runner-up" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: dL(e.runner_up_resume) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: aL(e.score_gap) || "—" })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: aL(e.missing_requirement_count) || "0" })] }),
 			/* @__PURE__ */ (0, X.jsxs)("p", { children: [
 				/* @__PURE__ */ (0, X.jsx)(de, {
 					size: 14,
 					"aria-hidden": "true"
 				}),
 				" ",
-				WI
+				rL
 			] })
 		]
 	}) });
 }
-function aL(e) {
+function vL(e) {
 	let t = {
 		id: "expand",
 		header: "",
@@ -24592,9 +24914,9 @@ function aL(e) {
 		maxSize: 42,
 		enableSorting: !1,
 		enableResizing: !1,
-		cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(kI, {
+		cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(HI, {
 			expanded: e.getIsExpanded(),
-			label: `${e.getIsExpanded() ? "Collapse" : "Expand"} details for ${KI(e.original.job_title) || "job"}`,
+			label: `${e.getIsExpanded() ? "Collapse" : "Expand"} details for ${aL(e.original.job_title) || "job"}`,
 			controls: `executive-queue-detail-${e.id}`,
 			className: "executive-queue-expand-btn",
 			onClick: e.getToggleExpandedHandler()
@@ -24611,8 +24933,8 @@ function aL(e) {
 			type: "button",
 			className: "executive-queue-review-btn",
 			disabled: !!e.original.is_applied,
-			"aria-label": `Review ${KI(e.original.job_title) || "job"}`,
-			onClick: () => GI({
+			"aria-label": `Review ${aL(e.original.job_title) || "job"}`,
+			onClick: () => iL({
 				type: "review",
 				row: e.original
 			}),
@@ -24633,18 +24955,18 @@ function aL(e) {
 			header: e === "simple" ? "Job title / company" : "Job title",
 			size: e === "simple" ? 300 : 250,
 			minSize: 210,
-			accessorFn: (e) => `${KI(e.job_title)} ${KI(e.job_company)}`,
+			accessorFn: (e) => `${aL(e.job_title)} ${aL(e.job_company)}`,
 			cell: ({ row: t }) => /* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "executive-queue-job-cell",
 				children: [
 					/* @__PURE__ */ (0, X.jsx)("a", {
-						href: KI(t.original.job_url || t.original.job_doc_id) || void 0,
+						href: aL(t.original.job_url || t.original.job_doc_id) || void 0,
 						target: "_blank",
 						rel: "noreferrer",
-						children: KI(t.original.job_title) || "Untitled job"
+						children: aL(t.original.job_title) || "Untitled job"
 					}),
-					e === "simple" ? /* @__PURE__ */ (0, X.jsx)("span", { children: KI(t.original.job_company) || "—" }) : null,
-					/* @__PURE__ */ (0, X.jsx)("small", { children: KI(t.original.job_location) || "Location unavailable" })
+					e === "simple" ? /* @__PURE__ */ (0, X.jsx)("span", { children: aL(t.original.job_company) || "—" }) : null,
+					/* @__PURE__ */ (0, X.jsx)("small", { children: aL(t.original.job_location) || "Location unavailable" })
 				]
 			})
 		},
@@ -24666,34 +24988,34 @@ function aL(e) {
 			minSize: 120,
 			accessorFn: (e) => e.posted_at ? new Date(e.posted_at).getTime() : null,
 			sortUndefined: "last",
-			cell: ({ row: e }) => eL(e.original.posted_at, e.original.freshness_status)
+			cell: ({ row: e }) => pL(e.original.posted_at, e.original.freshness_status)
 		},
 		{
 			id: "recommendation",
 			header: "Recommendation",
 			size: 180,
 			minSize: 150,
-			accessorFn: (e) => qI(e.action),
+			accessorFn: (e) => oL(e.action),
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
-				className: `executive-queue-badge executive-queue-badge--${JI(e.original.action)}`,
-				children: qI(e.original.action)
+				className: `executive-queue-badge executive-queue-badge--${sL(e.original.action)}`,
+				children: oL(e.original.action)
 			})
 		},
 		{
 			id: "packet_status",
 			header: () => /* @__PURE__ */ (0, X.jsxs)("span", {
 				className: "executive-queue-packet-head",
-				children: ["Packet ", /* @__PURE__ */ (0, X.jsx)(jI, {
+				children: ["Packet ", /* @__PURE__ */ (0, X.jsx)(WI, {
 					label: "About review packets",
-					children: WI
+					children: rL
 				})]
 			}),
 			size: 138,
 			minSize: 120,
-			accessorFn: (e) => YI(e.packet_generation_allowed),
+			accessorFn: (e) => cL(e.packet_generation_allowed),
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
-				className: `executive-queue-badge executive-queue-badge--packet ${YI(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
-				children: YI(e.original.packet_generation_allowed)
+				className: `executive-queue-badge executive-queue-badge--packet ${cL(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
+				children: cL(e.original.packet_generation_allowed)
 			})
 		},
 		{
@@ -24701,9 +25023,9 @@ function aL(e) {
 			header: "Match",
 			size: 132,
 			minSize: 112,
-			accessorFn: (e) => $I(e.winner_score),
+			accessorFn: (e) => fL(e.winner_score),
 			sortUndefined: "last",
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(AI, {
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(UI, {
 				value: e.original.winner_score,
 				unavailableLabel: "—",
 				className: "executive-queue-match"
@@ -24714,11 +25036,11 @@ function aL(e) {
 			header: "Selected Resume",
 			size: 240,
 			minSize: 220,
-			accessorFn: (e) => KI(e.operator_selected_resume || e.winner_resume),
+			accessorFn: (e) => aL(e.operator_selected_resume || e.winner_resume),
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
 				className: "executive-queue-selected-resume-value",
-				title: KI(e.original.operator_selected_resume || e.original.winner_resume),
-				children: QI(e.original.operator_selected_resume || e.original.winner_resume)
+				title: aL(e.original.operator_selected_resume || e.original.winner_resume),
+				children: dL(e.original.operator_selected_resume || e.original.winner_resume)
 			})
 		},
 		...e === "detailed" ? [
@@ -24727,10 +25049,10 @@ function aL(e) {
 				header: "Runner-up resume",
 				size: 210,
 				minSize: 170,
-				accessorFn: (e) => KI(e.runner_up_resume),
+				accessorFn: (e) => aL(e.runner_up_resume),
 				cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
-					title: KI(e.original.runner_up_resume),
-					children: QI(e.original.runner_up_resume)
+					title: aL(e.original.runner_up_resume),
+					children: dL(e.original.runner_up_resume)
 				})
 			},
 			{
@@ -24752,7 +25074,7 @@ function aL(e) {
 				header: "Next step",
 				size: 160,
 				minSize: 130,
-				accessorFn: (e) => ZI(e),
+				accessorFn: (e) => uL(e),
 				enableSorting: !1
 			},
 			{
@@ -24760,15 +25082,15 @@ function aL(e) {
 				header: "Priority reason",
 				size: 180,
 				minSize: 150,
-				accessorFn: (e) => XI(e.queue_priority_reason) || "—",
+				accessorFn: (e) => lL(e.queue_priority_reason) || "—",
 				enableSorting: !1
 			}
 		] : [],
 		n
 	];
 }
-function oL({ state: e }) {
-	let [t, n] = (0, C.useState)(nL), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(() => aL(e.viewMode), [e.viewMode]), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
+function yL({ state: e }) {
+	let [t, n] = (0, C.useState)(hL), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(() => vL(e.viewMode), [e.viewMode]), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
 		id: e.sort.key,
 		desc: e.sort.direction === "desc"
 	}] : [], [e.sort]);
@@ -24777,7 +25099,7 @@ function oL({ state: e }) {
 		e.pagination.page,
 		e.viewMode
 	]);
-	let c = wI({
+	let c = LI({
 		data: o,
 		columns: a,
 		state: {
@@ -24785,10 +25107,10 @@ function oL({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: (e, t) => tL(e, t),
+		getRowId: (e, t) => mL(e, t),
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(s) : e)[0];
-			t && (i(""), GI({
+			t && (i(""), iL({
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -24797,7 +25119,7 @@ function oL({ state: e }) {
 		onColumnSizingChange: (e) => {
 			n((t) => {
 				let n = typeof e == "function" ? e(t) : e;
-				return localStorage.setItem(BI, JSON.stringify(n)), n;
+				return localStorage.setItem($I, JSON.stringify(n)), n;
 			});
 		},
 		onExpandedChange: (e) => {
@@ -24805,7 +25127,7 @@ function oL({ state: e }) {
 			i(o || Object.keys(a).find((e) => a[e]) || "");
 		},
 		getRowCanExpand: () => !0,
-		getCoreRowModel: vI(),
+		getCoreRowModel: jI(),
 		manualSorting: !0,
 		enableSortingRemoval: !1,
 		columnResizeMode: "onChange"
@@ -24817,15 +25139,15 @@ function oL({ state: e }) {
 			type: "button",
 			role: "radio",
 			"aria-checked": e.viewMode === t,
-			className: `${VI} ${e.viewMode === t ? "is-active" : ""}`,
-			onClick: () => GI({
+			className: `${eL} ${e.viewMode === t ? "is-active" : ""}`,
+			onClick: () => iL({
 				type: "view_mode_change",
 				viewMode: t
 			}),
 			children: t === "detailed" ? "Detailed" : "Simple"
 		}, t))
 	});
-	return /* @__PURE__ */ (0, X.jsx)(LI, {
+	return /* @__PURE__ */ (0, X.jsx)(XI, {
 		className: `executive-queue-table-card executive-queue-table-card--${e.viewMode}`,
 		ariaLabel: "Executive queue table",
 		title: "Queue Table",
@@ -24841,7 +25163,7 @@ function oL({ state: e }) {
 		stickyColumnId: "review",
 		rowClassName: (e) => `executive-queue-row ${e.getIsExpanded() ? "is-expanded" : ""}`.trim(),
 		detailId: (e) => `executive-queue-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)(iL, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)(_L, { row: e.original }),
 		empty: /* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "executive-queue-empty",
 			children: [
@@ -24849,30 +25171,30 @@ function oL({ state: e }) {
 				/* @__PURE__ */ (0, X.jsx)("span", { children: "Clear filters to return to the complete Executive queue." }),
 				/* @__PURE__ */ (0, X.jsx)("button", {
 					type: "button",
-					className: VI,
-					onClick: () => GI({ type: "clear_filters" }),
+					className: eL,
+					onClick: () => iL({ type: "clear_filters" }),
 					children: "Clear Filters"
 				})
 			]
 		}),
-		onPageChange: (e) => GI({
+		onPageChange: (e) => iL({
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => GI({ type: "retry" })
+		onRetry: () => iL({ type: "retry" })
 	});
 }
-function sL({ state: e }) {
+function bL({ state: e }) {
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: `executive-queue-dashboard executive-queue-dashboard--${e.viewMode}`,
-		children: [/* @__PURE__ */ (0, X.jsx)(rL, { state: e }), /* @__PURE__ */ (0, X.jsx)(oL, { state: e })]
+		children: [/* @__PURE__ */ (0, X.jsx)(gL, { state: e }), /* @__PURE__ */ (0, X.jsx)(yL, { state: e })]
 	});
 }
 //#endregion
 //#region src/pipeline/pipelineModel.ts
-var cL = 2e3;
-cL * 15;
-var lL = [
+var xL = 2e3;
+xL * 15;
+var SL = [
 	"startup",
 	"scraping",
 	"filtering",
@@ -24889,7 +25211,7 @@ var lL = [
 	"rag_export",
 	"planning",
 	"finalization"
-], uL = {
+], CL = {
 	startup: "Startup",
 	scraping: "Scraping",
 	filtering: "Filtering",
@@ -24906,7 +25228,7 @@ var lL = [
 	rag_export: "RAG Export",
 	planning: "Planning",
 	finalization: "Finalization"
-}, dL = [
+}, wL = [
 	{
 		label: "Collection",
 		keys: [
@@ -24946,7 +25268,7 @@ var lL = [
 		label: "Final output",
 		keys: [["final_jobs", "Final Jobs"]]
 	}
-], fL = [
+], TL = [
 	["scraped_jobs", "Collected"],
 	["filtered_jobs", "Filtered"],
 	["deduped_jobs", "Deduplicated"],
@@ -24955,7 +25277,7 @@ var lL = [
 	["resume_matched_jobs", "Resume matched"],
 	["final_jobs", "Final"]
 ];
-function pL(e) {
+function EL(e) {
 	let t = String(e || "idle").trim().toLowerCase();
 	return t === "idle" ? "idle" : t === "queued" || t === "starting" ? "starting" : t === "running" ? "running" : t === "succeeded" ? "succeeded" : [
 		"failed",
@@ -24964,19 +25286,19 @@ function pL(e) {
 		"stopped"
 	].includes(t) ? "failed" : "unavailable";
 }
-function mL(e) {
+function DL(e) {
 	let t = Array.isArray(e.stage_order) ? e.stage_order.filter((e) => typeof e == "string" && e.length > 0) : [];
-	return t.length ? t : [...lL];
+	return t.length ? t : [...SL];
 }
-function hL(e) {
+function OL(e) {
 	if (e === "" || e == null || typeof e == "boolean") return null;
 	let t = typeof e == "number" ? e : Number(e);
 	return Number.isFinite(t) && t >= 0 ? t : null;
 }
-function gL(e) {
+function kL(e) {
 	return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(e);
 }
-function _L(e) {
+function AL(e) {
 	if (!e) return "";
 	let t = new Date(String(e));
 	return Number.isNaN(t.getTime()) ? "" : new Intl.DateTimeFormat("en-US", {
@@ -24986,25 +25308,25 @@ function _L(e) {
 		minute: "2-digit"
 	}).format(t);
 }
-function vL(e, t, n = Date.now()) {
+function jL(e, t, n = Date.now()) {
 	let r = new Date(String(e || ""));
 	if (Number.isNaN(r.getTime())) return "";
 	let i = t ? new Date(String(t)) : null, a = i && !Number.isNaN(i.getTime()) ? i.getTime() : n, o = Math.max(0, Math.floor((a - r.getTime()) / 1e3)), s = Math.floor(o / 3600), c = Math.floor(o % 3600 / 60), l = o % 60;
 	return s ? `${s}h ${c}m` : c ? `${c}m ${l}s` : `${l}s`;
 }
-function yL(e) {
+function ML(e) {
 	return String(e.updated_at_utc || e.updated_at || "").trim();
 }
-function bL(e, t = Date.now()) {
-	if (pL(e.status) !== "running") return !1;
-	let n = yL(e);
+function NL(e, t = Date.now()) {
+	if (EL(e.status) !== "running") return !1;
+	let n = ML(e);
 	if (!n) return !1;
 	let r = new Date(n);
 	return !Number.isNaN(r.getTime()) && t - r.getTime() > 3e4;
 }
 //#endregion
 //#region src/pipeline/PipelineDashboard.tsx
-var xL = "applylens:pipeline-run-accepted", SL = "applylens_pipeline_accepted_run_id", CL = [
+var PL = "applylens:pipeline-run-accepted", FL = "applylens_pipeline_accepted_run_id", IL = [
 	["job_limit", "Job limit"],
 	["job_packet_limit", "Packet limit"],
 	["planning_only", "Planning only"],
@@ -25015,25 +25337,25 @@ var xL = "applylens:pipeline-run-accepted", SL = "applylens_pipeline_accepted_ru
 	["generate_llm_adjudication", "AI review"],
 	["delete_seen_data", "Rerun seen jobs"]
 ];
-function wL(e) {
-	return uL[e] || e.replace(/_/g, " ").replace(/\b\w/g, (e) => e.toUpperCase());
+function LL(e) {
+	return CL[e] || e.replace(/_/g, " ").replace(/\b\w/g, (e) => e.toUpperCase());
 }
-function TL(e) {
+function RL(e) {
 	return e === "unavailable" ? "Unavailable" : e.charAt(0).toUpperCase() + e.slice(1);
 }
-function EL(e, t, n) {
+function zL(e, t, n) {
 	return new Set(Array.isArray(e.completed_stages) ? e.completed_stages : []).has(t) ? "complete" : t === e.current_stage && n === "failed" ? "failed" : t === e.current_stage && (n === "running" || n === "starting") ? "active" : "pending";
 }
-function DL(e) {
+function BL(e) {
 	if (typeof e == "boolean") return e ? "Enabled" : "Disabled";
-	if (typeof e == "number" && Number.isFinite(e)) return gL(e);
+	if (typeof e == "number" && Number.isFinite(e)) return kL(e);
 	if (typeof e == "string") {
 		let t = e.trim();
 		return t ? t.toLowerCase() === "yes" ? "Enabled" : t.toLowerCase() === "no" ? "Disabled" : t : "";
 	}
 	return "";
 }
-async function OL() {
+async function VL() {
 	let e = await fetch("/pipeline/status", {
 		method: "GET",
 		credentials: "same-origin",
@@ -25042,26 +25364,26 @@ async function OL() {
 	if (!e.ok) throw Error(`Pipeline status request failed (${e.status})`);
 	return e.json();
 }
-function kL() {
+function HL() {
 	if (typeof window.openApplyLensPipelineConfig == "function") {
 		window.openApplyLensPipelineConfig();
 		return;
 	}
 	console.error("The reviewed Pipeline launch flow is unavailable on this page.");
 }
-function AL() {
+function UL() {
 	try {
 		return String(window.sessionStorage.getItem("applylens_pipeline_accepted_run_id") || "").trim();
 	} catch (e) {
 		return "";
 	}
 }
-function jL(e) {
+function WL(e) {
 	try {
-		window.sessionStorage.getItem("applylens_pipeline_accepted_run_id") === e && window.sessionStorage.removeItem(SL);
+		window.sessionStorage.getItem("applylens_pipeline_accepted_run_id") === e && window.sessionStorage.removeItem(FL);
 	} catch (e) {}
 }
-function ML(e, t = {}) {
+function GL(e, t = {}) {
 	return { pipeline: {
 		...t,
 		status: t.status || "starting",
@@ -25070,7 +25392,7 @@ function ML(e, t = {}) {
 		stage_message: t.stage_message || "Synchronizing the accepted pipeline run."
 	} };
 }
-function NL() {
+function KL() {
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "pipeline-dashboard pipeline-dashboard--loading",
 		"aria-busy": "true",
@@ -25085,7 +25407,7 @@ function NL() {
 		]
 	});
 }
-function PL({ onRefresh: e, onRun: t, refreshing: n, runActive: r }) {
+function qL({ onRefresh: e, onRun: t, refreshing: n, runActive: r }) {
 	return /* @__PURE__ */ (0, X.jsxs)("header", {
 		className: "pipeline-dashboard-header app-page-header",
 		children: [/* @__PURE__ */ (0, X.jsxs)("div", {
@@ -25134,12 +25456,12 @@ function PL({ onRefresh: e, onRun: t, refreshing: n, runActive: r }) {
 		})]
 	});
 }
-function FL({ pipeline: e, checkedAt: t }) {
-	let n = pL(e.status), r = n === "starting" || n === "running", i = mL(e), a = new Set(Array.isArray(e.completed_stages) ? e.completed_stages : []), o = i.filter((e) => a.has(e)).length, s = i.length ? Math.min(o, i.length) : 0, c = String(e.current_stage || "").trim(), l = c && c.toLowerCase() !== "unknown" ? wL(c) : n === "failed" ? "Pipeline failed" : "Not active", u = vL(e.started_at, e.finished_at, t), d = yL(e), f = bL(e, t), p = n === "failed" ? e.error || e.summary_message || e.stage_message || "The latest pipeline run did not complete." : e.summary_message || e.stage_message || (n === "idle" ? "No pipeline run is active." : n === "succeeded" ? "The latest pipeline run completed successfully." : "Waiting for pipeline status details."), m = [
+function JL({ pipeline: e, checkedAt: t }) {
+	let n = EL(e.status), r = n === "starting" || n === "running", i = DL(e), a = new Set(Array.isArray(e.completed_stages) ? e.completed_stages : []), o = i.filter((e) => a.has(e)).length, s = i.length ? Math.min(o, i.length) : 0, c = String(e.current_stage || "").trim(), l = c && c.toLowerCase() !== "unknown" ? LL(c) : n === "failed" ? "Pipeline failed" : "Not active", u = jL(e.started_at, e.finished_at, t), d = ML(e), f = NL(e, t), p = n === "failed" ? e.error || e.summary_message || e.stage_message || "The latest pipeline run did not complete." : e.summary_message || e.stage_message || (n === "idle" ? "No pipeline run is active." : n === "succeeded" ? "The latest pipeline run completed successfully." : "Waiting for pipeline status details."), m = [
 		["Run ID", e.run_id],
-		["Started", _L(e.started_at)],
-		["Last updated", _L(d)],
-		["Completed", _L(e.finished_at)],
+		["Started", AL(e.started_at)],
+		["Last updated", AL(d)],
+		["Completed", AL(e.finished_at)],
 		["Elapsed", u],
 		["Return code", e.return_code === null || e.return_code === void 0 ? "" : String(e.return_code)]
 	].filter((e) => !!e[1]);
@@ -25159,7 +25481,7 @@ function FL({ pipeline: e, checkedAt: t }) {
 				})] }), /* @__PURE__ */ (0, X.jsxs)("span", {
 					className: `pipeline-status-badge pipeline-status-badge--${n}`,
 					role: "status",
-					children: [/* @__PURE__ */ (0, X.jsx)("span", { "aria-hidden": "true" }), TL(n)]
+					children: [/* @__PURE__ */ (0, X.jsx)("span", { "aria-hidden": "true" }), RL(n)]
 				})]
 			}),
 			/* @__PURE__ */ (0, X.jsx)("p", {
@@ -25214,14 +25536,14 @@ function FL({ pipeline: e, checkedAt: t }) {
 						"aria-hidden": "true"
 					}),
 					/* @__PURE__ */ (0, X.jsx)("span", { children: "Final jobs" }),
-					/* @__PURE__ */ (0, X.jsx)("strong", { children: gL(Number(e.final_job_count)) })
+					/* @__PURE__ */ (0, X.jsx)("strong", { children: kL(Number(e.final_job_count)) })
 				]
 			}) : null
 		]
 	});
 }
-function IL({ pipeline: e }) {
-	let t = pL(e.status);
+function YL({ pipeline: e }) {
+	let t = EL(e.status);
 	return /* @__PURE__ */ (0, X.jsxs)("section", {
 		className: "pipeline-panel pipeline-stage-panel",
 		"aria-labelledby": "pipeline-stage-title",
@@ -25240,8 +25562,8 @@ function IL({ pipeline: e }) {
 		}), /* @__PURE__ */ (0, X.jsx)("ol", {
 			className: "pipeline-stage-list",
 			"aria-label": "Pipeline stages",
-			children: mL(e).map((n, r) => {
-				let i = EL(e, n, t);
+			children: DL(e).map((n, r) => {
+				let i = zL(e, n, t);
 				return /* @__PURE__ */ (0, X.jsxs)("li", {
 					className: `pipeline-stage pipeline-stage--${i}`,
 					"aria-current": i === "active" ? "step" : void 0,
@@ -25254,11 +25576,11 @@ function IL({ pipeline: e }) {
 						}),
 						/* @__PURE__ */ (0, X.jsxs)("span", {
 							className: "pipeline-stage-name",
-							title: wL(n),
+							title: LL(n),
 							children: [/* @__PURE__ */ (0, X.jsx)("span", {
 								"aria-hidden": "true",
 								children: String(r + 1).padStart(2, "0")
-							}), wL(n)]
+							}), LL(n)]
 						}),
 						/* @__PURE__ */ (0, X.jsx)("small", { children: i === "complete" ? "Complete" : i === "active" ? "Active" : i === "failed" ? "Failed" : "Pending" })
 					]
@@ -25267,11 +25589,11 @@ function IL({ pipeline: e }) {
 		})]
 	});
 }
-function LL({ pipeline: e }) {
-	let t = e.counts || {}, n = dL.map((e) => ({
+function XL({ pipeline: e }) {
+	let t = e.counts || {}, n = wL.map((e) => ({
 		label: e.label,
 		values: e.keys.flatMap(([e, n]) => {
-			let r = hL(t[e]);
+			let r = OL(t[e]);
 			return r === null ? (t[e] !== void 0 && t[e] !== null && console.warn(`Ignoring malformed pipeline count: ${e}`), []) : [{
 				key: e,
 				label: n,
@@ -25300,7 +25622,7 @@ function LL({ pipeline: e }) {
 					className: "pipeline-count-grid",
 					children: e.values.map((e) => /* @__PURE__ */ (0, X.jsxs)("article", {
 						className: "pipeline-count-card",
-						children: [/* @__PURE__ */ (0, X.jsx)("span", { children: e.label }), /* @__PURE__ */ (0, X.jsx)("strong", { children: gL(e.value) })]
+						children: [/* @__PURE__ */ (0, X.jsx)("span", { children: e.label }), /* @__PURE__ */ (0, X.jsx)("strong", { children: kL(e.value) })]
 					}, e.key))
 				})]
 			}, e.label))
@@ -25310,10 +25632,10 @@ function LL({ pipeline: e }) {
 		})]
 	});
 }
-function RL({ pipeline: e }) {
-	let t = e.counts || {}, n = fL.flatMap(([n, r]) => {
+function ZL({ pipeline: e }) {
+	let t = e.counts || {}, n = TL.flatMap(([n, r]) => {
 		var i;
-		let a = n === "final_jobs" ? e.final_job_count : void 0, o = hL((i = t[n]) == null ? a : i);
+		let a = n === "final_jobs" ? e.final_job_count : void 0, o = OL((i = t[n]) == null ? a : i);
 		return o === null ? [] : [{
 			key: n,
 			label: r,
@@ -25338,7 +25660,7 @@ function RL({ pipeline: e }) {
 		}), n.length ? /* @__PURE__ */ (0, X.jsx)("div", {
 			className: "pipeline-flow",
 			role: "img",
-			"aria-label": n.map((e) => `${e.label}: ${gL(e.value)}`).join(", "),
+			"aria-label": n.map((e) => `${e.label}: ${kL(e.value)}`).join(", "),
 			children: n.map((e, t) => {
 				let i = r > 0 ? Math.max(e.value / r * 100, e.value > 0 ? 3 : 0) : 0;
 				return /* @__PURE__ */ (0, X.jsxs)("div", {
@@ -25346,7 +25668,7 @@ function RL({ pipeline: e }) {
 					children: [
 						/* @__PURE__ */ (0, X.jsxs)("div", {
 							className: "pipeline-flow-meta",
-							children: [/* @__PURE__ */ (0, X.jsx)("span", { children: e.label }), /* @__PURE__ */ (0, X.jsx)("strong", { children: gL(e.value) })]
+							children: [/* @__PURE__ */ (0, X.jsx)("span", { children: e.label }), /* @__PURE__ */ (0, X.jsx)("strong", { children: kL(e.value) })]
 						}),
 						/* @__PURE__ */ (0, X.jsx)("div", {
 							className: "pipeline-flow-track",
@@ -25366,9 +25688,9 @@ function RL({ pipeline: e }) {
 		})]
 	});
 }
-function zL({ pipeline: e }) {
-	let t = e.config || {}, n = CL.flatMap(([e, n]) => {
-		let r = DL(t[e]);
+function QL({ pipeline: e }) {
+	let t = e.config || {}, n = IL.flatMap(([e, n]) => {
+		let r = BL(t[e]);
 		return r ? [{
 			key: e,
 			label: n,
@@ -25399,7 +25721,7 @@ function zL({ pipeline: e }) {
 		})]
 	});
 }
-function BL({ pipeline: e }) {
+function $L({ pipeline: e }) {
 	let t = Array.isArray(e.source_health) ? e.source_health.filter((e) => e && typeof e.source == "string" && e.source.trim()) : [];
 	return /* @__PURE__ */ (0, X.jsxs)("section", {
 		className: "pipeline-panel pipeline-compact-panel",
@@ -25420,10 +25742,10 @@ function BL({ pipeline: e }) {
 			className: "pipeline-health-list",
 			children: t.map((e) => /* @__PURE__ */ (0, X.jsxs)("li", { children: [
 				/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: e.source }), /* @__PURE__ */ (0, X.jsx)("span", { children: e.status || "Status unavailable" })] }),
-				hL(e.jobs_returned) === null ? null : /* @__PURE__ */ (0, X.jsxs)("span", { children: [gL(Number(e.jobs_returned)), " jobs"] }),
+				OL(e.jobs_returned) === null ? null : /* @__PURE__ */ (0, X.jsxs)("span", { children: [kL(Number(e.jobs_returned)), " jobs"] }),
 				e.last_success ? /* @__PURE__ */ (0, X.jsx)("time", {
 					dateTime: e.last_success,
-					children: _L(e.last_success)
+					children: AL(e.last_success)
 				}) : null
 			] }, e.source))
 		}) : /* @__PURE__ */ (0, X.jsxs)("div", {
@@ -25436,10 +25758,10 @@ function BL({ pipeline: e }) {
 		})]
 	});
 }
-function VL({ readStatus: e = OL, launchPipeline: t = kL, pollIntervalMs: n = cL }) {
-	let r = AL(), i = (0, C.useRef)(r), [a, o] = (0, C.useState)(() => r ? {
+function eR({ readStatus: e = VL, launchPipeline: t = HL, pollIntervalMs: n = xL }) {
+	let r = UL(), i = (0, C.useRef)(r), [a, o] = (0, C.useState)(() => r ? {
 		kind: "ready",
-		payload: ML(r),
+		payload: GL(r),
 		checkedAt: Date.now()
 	} : { kind: "loading" }), [s, c] = (0, C.useState)(!1), l = (0, C.useCallback)(async (t = !1) => {
 		t && c(!0);
@@ -25449,18 +25771,18 @@ function VL({ readStatus: e = OL, launchPipeline: t = kL, pollIntervalMs: n = cL
 			if (a && s !== a) {
 				o({
 					kind: "ready",
-					payload: ML(a),
+					payload: GL(a),
 					checkedAt: Date.now()
 				});
 				return;
 			}
-			a && s === a && (i.current = "", jL(a)), o({
+			a && s === a && (i.current = "", WL(a)), o({
 				kind: "ready",
 				payload: t,
 				checkedAt: Date.now()
 			});
 			let c = (r = t.pipeline) == null ? void 0 : r.status;
-			pL(c) === "unavailable" && console.warn(`Unsupported pipeline status: ${String(c || "")}`);
+			EL(c) === "unavailable" && console.warn(`Unsupported pipeline status: ${String(c || "")}`);
 		} catch (e) {
 			console.error("Failed to read Pipeline page status", e), o({
 				kind: "error",
@@ -25478,13 +25800,13 @@ function VL({ readStatus: e = OL, launchPipeline: t = kL, pollIntervalMs: n = cL
 			let n = e.detail || {}, r = String(n.runId || ((t = n.pipeline) == null ? void 0 : t.run_id) || "").trim();
 			r && (i.current = r, o({
 				kind: "ready",
-				payload: ML(r, n.pipeline),
+				payload: GL(r, n.pipeline),
 				checkedAt: Date.now()
 			}), l());
 		};
-		return window.addEventListener(xL, e), () => window.removeEventListener(xL, e);
+		return window.addEventListener(PL, e), () => window.removeEventListener(PL, e);
 	}, [l]);
-	let u = a.kind === "ready" && a.payload.pipeline || {}, d = pL(u.status), f = a.kind === "ready" && (d === "starting" || d === "running");
+	let u = a.kind === "ready" && a.payload.pipeline || {}, d = EL(u.status), f = a.kind === "ready" && (d === "starting" || d === "running");
 	(0, C.useEffect)(() => {
 		if (!f) return;
 		let e = window.setInterval(() => void l(), n);
@@ -25495,9 +25817,9 @@ function VL({ readStatus: e = OL, launchPipeline: t = kL, pollIntervalMs: n = cL
 		f
 	]);
 	let p = a.kind === "ready" ? a.checkedAt : Date.now(), m = (0, C.useMemo)(() => `pipeline-dashboard pipeline-dashboard--${d}`, [d]);
-	return a.kind === "loading" ? /* @__PURE__ */ (0, X.jsx)(NL, {}) : a.kind === "error" ? /* @__PURE__ */ (0, X.jsxs)("div", {
+	return a.kind === "loading" ? /* @__PURE__ */ (0, X.jsx)(KL, {}) : a.kind === "error" ? /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "pipeline-dashboard pipeline-dashboard--error",
-		children: [/* @__PURE__ */ (0, X.jsx)(PL, {
+		children: [/* @__PURE__ */ (0, X.jsx)(qL, {
 			onRefresh: () => void l(!0),
 			onRun: t,
 			refreshing: s,
@@ -25523,7 +25845,7 @@ function VL({ readStatus: e = OL, launchPipeline: t = kL, pollIntervalMs: n = cL
 		"data-theme-surface": "pipeline",
 		"aria-busy": f,
 		children: [
-			/* @__PURE__ */ (0, X.jsx)(PL, {
+			/* @__PURE__ */ (0, X.jsx)(qL, {
 				onRefresh: () => void l(!0),
 				onRun: t,
 				refreshing: s,
@@ -25539,23 +25861,23 @@ function VL({ readStatus: e = OL, launchPipeline: t = kL, pollIntervalMs: n = cL
 			}) : null,
 			/* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "pipeline-dashboard-top-grid",
-				children: [/* @__PURE__ */ (0, X.jsx)(FL, {
+				children: [/* @__PURE__ */ (0, X.jsx)(JL, {
 					pipeline: u,
 					checkedAt: p
-				}), /* @__PURE__ */ (0, X.jsx)(IL, { pipeline: u })]
+				}), /* @__PURE__ */ (0, X.jsx)(YL, { pipeline: u })]
 			}),
-			/* @__PURE__ */ (0, X.jsx)(LL, { pipeline: u }),
-			/* @__PURE__ */ (0, X.jsx)(RL, { pipeline: u }),
+			/* @__PURE__ */ (0, X.jsx)(XL, { pipeline: u }),
+			/* @__PURE__ */ (0, X.jsx)(ZL, { pipeline: u }),
 			/* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "pipeline-dashboard-bottom-grid",
-				children: [/* @__PURE__ */ (0, X.jsx)(zL, { pipeline: u }), /* @__PURE__ */ (0, X.jsx)(BL, { pipeline: u })]
+				children: [/* @__PURE__ */ (0, X.jsx)(QL, { pipeline: u }), /* @__PURE__ */ (0, X.jsx)($L, { pipeline: u })]
 			})
 		]
 	});
 }
 //#endregion
 //#region src/scheduler/schedulerModel.ts
-async function HL() {
+async function tR() {
 	let e = await fetch("/scheduler/summary?limit=25", {
 		method: "GET",
 		credentials: "same-origin",
@@ -25564,63 +25886,63 @@ async function HL() {
 	if (!e.ok) throw Error((t == null ? void 0 : t.detail) || `Scheduler summary request failed (${e.status})`);
 	return t;
 }
-function UL(e) {
+function nR(e) {
 	return String(e == null ? "" : e).trim();
 }
-function WL(e, t = "Unavailable") {
-	return UL(e) || t;
+function rR(e, t = "Unavailable") {
+	return nR(e) || t;
 }
-function GL(e) {
-	return UL(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown";
+function iR(e) {
+	return nR(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown";
 }
-var KL = new Intl.DateTimeFormat(void 0, {
+var aR = new Intl.DateTimeFormat(void 0, {
 	month: "short",
 	day: "numeric",
 	year: "numeric"
-}), qL = new Intl.DateTimeFormat(void 0, {
+}), oR = new Intl.DateTimeFormat(void 0, {
 	hour: "numeric",
 	minute: "2-digit"
-}), JL = new Intl.DateTimeFormat(void 0, {
+}), sR = new Intl.DateTimeFormat(void 0, {
 	hour: "numeric",
 	minute: "2-digit"
 });
-function YL(e) {
-	let t = UL(e);
+function cR(e) {
+	let t = nR(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
-	return Number.isNaN(n.getTime()) ? t : `${KL.format(n)}, ${qL.format(n)}`;
+	return Number.isNaN(n.getTime()) ? t : `${aR.format(n)}, ${oR.format(n)}`;
 }
-function XL(e) {
-	return JL.format(e);
+function lR(e) {
+	return sR.format(e);
 }
-function ZL(e) {
-	return UL(e).toLowerCase() === "failed";
+function uR(e) {
+	return nR(e).toLowerCase() === "failed";
 }
-function QL(e) {
+function dR(e) {
 	return [...e].sort((e, t) => {
-		let n = +!ZL(e.status), r = +!ZL(t.status);
+		let n = +!uR(e.status), r = +!uR(t.status);
 		if (n !== r) return n - r;
-		let i = Date.parse(UL(e.started_at)) || 0;
-		return (Date.parse(UL(t.started_at)) || 0) - i;
+		let i = Date.parse(nR(e.started_at)) || 0;
+		return (Date.parse(nR(t.started_at)) || 0) - i;
 	});
 }
-function $L(e, t) {
-	return UL(e.run_id) || [
-		UL(e.job_name),
-		UL(e.started_at),
+function fR(e, t) {
+	return nR(e.run_id) || [
+		nR(e.job_name),
+		nR(e.started_at),
 		t
 	].join("|");
 }
 //#endregion
 //#region src/scheduler/SchedulerHealthDashboard.tsx
-function eR(e) {
-	let t = WL(e, "Unknown");
+function pR(e) {
+	let t = rR(e, "Unknown");
 	return /* @__PURE__ */ (0, X.jsx)("span", {
-		className: `scheduler-badge scheduler-badge--${GL(e)}`,
+		className: `scheduler-badge scheduler-badge--${iR(e)}`,
 		children: t
 	});
 }
-function tR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
+function mR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 	return /* @__PURE__ */ (0, X.jsxs)("header", {
 		className: "scheduler-health-header app-page-header",
 		children: [/* @__PURE__ */ (0, X.jsxs)("div", {
@@ -25642,7 +25964,7 @@ function tR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 			className: "scheduler-health-header-actions app-page-header__actions",
 			children: [/* @__PURE__ */ (0, X.jsx)("span", {
 				className: "scheduler-last-refreshed",
-				children: n ? `Last refreshed at ${XL(new Date(n))}` : "Not refreshed yet"
+				children: n ? `Last refreshed at ${lR(new Date(n))}` : "Not refreshed yet"
 			}), /* @__PURE__ */ (0, X.jsxs)("button", {
 				type: "button",
 				className: "scheduler-refresh-btn",
@@ -25658,7 +25980,7 @@ function tR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 		})]
 	});
 }
-function nR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRef: r }) {
+function hR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRef: r }) {
 	var i, a, o, s, c, l, u, d, f;
 	let p = !!(!(e == null || (i = e.contract_health) == null) && i.all_checks_pass), m = !!e && p, h = [];
 	e && !p && h.push("configuration integrity");
@@ -25726,147 +26048,147 @@ function nR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRe
 		]
 	});
 }
-function rR() {
+function gR() {
 	return [
 		{
 			id: "job_name",
 			header: "Job",
-			accessorFn: (e) => UL(e.job_name),
+			accessorFn: (e) => nR(e.job_name),
 			size: 220,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("strong", { children: WL(e.original.job_name, "Unnamed job") })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("strong", { children: rR(e.original.job_name, "Unnamed job") })
 		},
 		{
 			id: "status",
 			header: "Status",
-			accessorFn: (e) => UL(e.status),
+			accessorFn: (e) => nR(e.status),
 			size: 130,
 			enableSorting: !1,
-			cell: ({ row: e }) => eR(e.original.status)
+			cell: ({ row: e }) => pR(e.original.status)
 		},
 		{
 			id: "started_at",
 			header: "Last run",
-			accessorFn: (e) => UL(e.started_at),
+			accessorFn: (e) => nR(e.started_at),
 			size: 190,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: YL(e.original.started_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: cR(e.original.started_at) })
 		},
 		{
 			id: "finished_at",
 			header: "Finished",
-			accessorFn: (e) => UL(e.finished_at),
+			accessorFn: (e) => nR(e.finished_at),
 			size: 190,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: YL(e.original.finished_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: cR(e.original.finished_at) })
 		},
 		{
 			id: "return_code",
 			header: "Return code",
-			accessorFn: (e) => UL(e.return_code),
+			accessorFn: (e) => nR(e.return_code),
 			size: 110,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: WL(e.original.return_code, "-") })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: rR(e.original.return_code, "-") })
 		},
 		{
 			id: "run_id",
 			header: "Run ID",
-			accessorFn: (e) => UL(e.run_id),
+			accessorFn: (e) => nR(e.run_id),
 			size: 160,
 			enableSorting: !1,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
 				className: "scheduler-run-id-cell",
-				children: WL(e.original.run_id, "-")
+				children: rR(e.original.run_id, "-")
 			})
 		}
 	];
 }
-function iR() {
+function _R() {
 	return [
 		{
 			id: "job_name",
 			header: "Job",
-			accessorFn: (e) => UL(e.job_name),
+			accessorFn: (e) => nR(e.job_name),
 			size: 200,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("strong", { children: WL(e.original.job_name, "Unnamed job") })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("strong", { children: rR(e.original.job_name, "Unnamed job") })
 		},
 		{
 			id: "status",
 			header: "Status",
-			accessorFn: (e) => UL(e.status),
+			accessorFn: (e) => nR(e.status),
 			size: 130,
 			enableSorting: !1,
-			cell: ({ row: e }) => eR(e.original.status)
+			cell: ({ row: e }) => pR(e.original.status)
 		},
 		{
 			id: "started_at",
 			header: "Started",
-			accessorFn: (e) => UL(e.started_at),
+			accessorFn: (e) => nR(e.started_at),
 			size: 190,
 			enableSorting: !0,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: YL(e.original.started_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: cR(e.original.started_at) })
 		},
 		{
 			id: "finished_at",
 			header: "Finished",
-			accessorFn: (e) => UL(e.finished_at),
+			accessorFn: (e) => nR(e.finished_at),
 			size: 190,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: YL(e.original.finished_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: cR(e.original.finished_at) })
 		},
 		{
 			id: "return_code",
 			header: "Return code",
-			accessorFn: (e) => UL(e.return_code),
+			accessorFn: (e) => nR(e.return_code),
 			size: 110,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: WL(e.original.return_code, "-") })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", { children: rR(e.original.return_code, "-") })
 		},
 		{
 			id: "run_id",
 			header: "Run ID",
-			accessorFn: (e) => UL(e.run_id),
+			accessorFn: (e) => nR(e.run_id),
 			size: 160,
 			enableSorting: !1,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
 				className: "scheduler-run-id-cell",
-				children: WL(e.original.run_id, "-")
+				children: rR(e.original.run_id, "-")
 			})
 		}
 	];
 }
-function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
-	let [i, a] = (0, C.useState)("job_status"), [o, s] = (0, C.useState)([]), [c, l] = (0, C.useState)([]), u = (0, C.useMemo)(() => QL((n == null ? void 0 : n.latest_runs_by_job) || []), [n]), d = (0, C.useMemo)(() => (n == null ? void 0 : n.recent_postgres_runs) || [], [n]), f = (0, C.useMemo)(() => Array.from(new Set(d.map((e) => UL(e.job_name)).filter(Boolean))).sort().map((e) => ({
+function vR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
+	let [i, a] = (0, C.useState)("job_status"), [o, s] = (0, C.useState)([]), [c, l] = (0, C.useState)([]), u = (0, C.useMemo)(() => dR((n == null ? void 0 : n.latest_runs_by_job) || []), [n]), d = (0, C.useMemo)(() => (n == null ? void 0 : n.recent_postgres_runs) || [], [n]), f = (0, C.useMemo)(() => Array.from(new Set(d.map((e) => nR(e.job_name)).filter(Boolean))).sort().map((e) => ({
 		value: e,
 		label: e
-	})), [d]), p = (0, C.useMemo)(() => Array.from(new Set(d.map((e) => UL(e.status)).filter(Boolean))).sort().map((e) => ({
+	})), [d]), p = (0, C.useMemo)(() => Array.from(new Set(d.map((e) => nR(e.status)).filter(Boolean))).sort().map((e) => ({
 		value: e,
 		label: e
-	})), [d]), m = (0, C.useMemo)(() => d.filter((e) => !(o.length && !o.includes(UL(e.job_name)) || c.length && !c.includes(UL(e.status)))), [
+	})), [d]), m = (0, C.useMemo)(() => d.filter((e) => !(o.length && !o.includes(nR(e.job_name)) || c.length && !c.includes(nR(e.status)))), [
 		d,
 		o,
 		c
-	]), h = (0, C.useMemo)(rR, []), g = (0, C.useMemo)(iR, []), [_, v] = (0, C.useState)([{
+	]), h = (0, C.useMemo)(gR, []), g = (0, C.useMemo)(_R, []), [_, v] = (0, C.useState)([{
 		id: "started_at",
 		desc: !0
-	}]), y = wI({
+	}]), y = LI({
 		data: u,
 		columns: h,
-		getRowId: $L,
-		getCoreRowModel: vI()
-	}), b = wI({
+		getRowId: fR,
+		getCoreRowModel: jI()
+	}), b = LI({
 		data: m,
 		columns: g,
 		state: { sorting: _ },
-		getRowId: $L,
-		getCoreRowModel: vI(),
-		getSortedRowModel: yI(),
+		getRowId: fR,
+		getCoreRowModel: jI(),
+		getSortedRowModel: MI(),
 		enableSortingRemoval: !1,
 		onSortingChange: v
 	}), x = (e) => a(e), S = (e, t) => {
 		e.key !== "ArrowLeft" && e.key !== "ArrowRight" || (e.preventDefault(), x(t === "job_status" ? "run_history" : "job_status"));
-	}, w = (e) => `${OI} scheduler-runs-tab ${e ? "is-active" : "is-inactive"}`, T = {
+	}, w = (e) => `${VI} scheduler-runs-tab ${e ? "is-active" : "is-inactive"}`, T = {
 		page: 1,
 		pageSize: Math.max(u.length, 1),
 		totalCount: u.length,
@@ -25902,7 +26224,7 @@ function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 			children: "Run History"
 		})]
 	});
-	return i === "job_status" ? /* @__PURE__ */ (0, X.jsx)(LI, {
+	return i === "job_status" ? /* @__PURE__ */ (0, X.jsx)(XI, {
 		className: "scheduler-shared-table-card",
 		ariaLabel: "Job status table",
 		title: "Scheduler Runs",
@@ -25917,7 +26239,7 @@ function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 		paginationNoun: "jobs",
 		paginationLabel: "Job status",
 		stickyColumnId: "run_id",
-		rowClassName: (e) => `scheduler-run-row ${ZL(e.original.status) ? "is-attention" : ""}`,
+		rowClassName: (e) => `scheduler-run-row ${uR(e.original.status) ? "is-attention" : ""}`,
 		detailId: () => "",
 		renderDetails: () => null,
 		empty: /* @__PURE__ */ (0, X.jsx)("div", {
@@ -25927,7 +26249,7 @@ function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 		onPageChange: () => void 0,
 		onRetry: r,
 		fillAvailableWidth: !0
-	}) : /* @__PURE__ */ (0, X.jsx)(LI, {
+	}) : /* @__PURE__ */ (0, X.jsx)(XI, {
 		className: "scheduler-shared-table-card",
 		ariaLabel: "Run history table",
 		title: "Scheduler Runs",
@@ -25941,7 +26263,7 @@ function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 			className: "scheduler-runs-header-actions",
 			children: [D, /* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "scheduler-runs-filters",
-				children: [/* @__PURE__ */ (0, X.jsx)(DI, {
+				children: [/* @__PURE__ */ (0, X.jsx)(BI, {
 					id: "schedulerRunHistoryJobFilter",
 					label: "Job",
 					options: f,
@@ -25950,7 +26272,7 @@ function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 					placeholder: "All jobs",
 					allLabel: "All jobs",
 					mode: "single"
-				}), /* @__PURE__ */ (0, X.jsx)(DI, {
+				}), /* @__PURE__ */ (0, X.jsx)(BI, {
 					id: "schedulerRunHistoryStatusFilter",
 					label: "Status",
 					options: p,
@@ -25966,7 +26288,7 @@ function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 		paginationNoun: "runs",
 		paginationLabel: "Run history",
 		stickyColumnId: "run_id",
-		rowClassName: (e) => `scheduler-run-row ${ZL(e.original.status) ? "is-attention" : ""}`,
+		rowClassName: (e) => `scheduler-run-row ${uR(e.original.status) ? "is-attention" : ""}`,
 		detailId: () => "",
 		renderDetails: () => null,
 		empty: /* @__PURE__ */ (0, X.jsx)("div", {
@@ -25978,7 +26300,7 @@ function aR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 		fillAvailableWidth: !0
 	});
 }
-function oR({ icon: e, label: t, ok: n, explanation: r }) {
+function yR({ icon: e, label: t, ok: n, explanation: r }) {
 	return /* @__PURE__ */ (0, X.jsxs)("li", {
 		className: `scheduler-config-row ${n ? "is-ok" : "is-issue"}`,
 		children: [
@@ -26001,7 +26323,7 @@ function oR({ icon: e, label: t, ok: n, explanation: r }) {
 		]
 	});
 }
-function sR({ rows: e, emptyMessage: t }) {
+function bR({ rows: e, emptyMessage: t }) {
 	return e.length ? /* @__PURE__ */ (0, X.jsx)("div", {
 		className: "scheduler-diagnostics-table-viewport",
 		children: /* @__PURE__ */ (0, X.jsxs)("table", { children: [/* @__PURE__ */ (0, X.jsx)("thead", { children: /* @__PURE__ */ (0, X.jsxs)("tr", { children: [
@@ -26012,13 +26334,13 @@ function sR({ rows: e, emptyMessage: t }) {
 			/* @__PURE__ */ (0, X.jsx)("th", { children: "Return code" }),
 			/* @__PURE__ */ (0, X.jsx)("th", { children: "Run ID" })
 		] }) }), /* @__PURE__ */ (0, X.jsx)("tbody", { children: e.map((e, t) => {
-			let n = WL(e.job_name, "Unnamed job"), r = YL(e.started_at), i = YL(e.finished_at), a = WL(e.run_id, "-");
+			let n = rR(e.job_name, "Unnamed job"), r = cR(e.started_at), i = cR(e.finished_at), a = rR(e.run_id, "-");
 			return /* @__PURE__ */ (0, X.jsxs)("tr", { children: [
 				/* @__PURE__ */ (0, X.jsx)("td", {
 					title: n,
 					children: n
 				}),
-				/* @__PURE__ */ (0, X.jsx)("td", { children: eR(e.status) }),
+				/* @__PURE__ */ (0, X.jsx)("td", { children: pR(e.status) }),
 				/* @__PURE__ */ (0, X.jsx)("td", {
 					title: r,
 					children: r
@@ -26027,20 +26349,20 @@ function sR({ rows: e, emptyMessage: t }) {
 					title: i,
 					children: i
 				}),
-				/* @__PURE__ */ (0, X.jsx)("td", { children: WL(e.return_code, "-") }),
+				/* @__PURE__ */ (0, X.jsx)("td", { children: rR(e.return_code, "-") }),
 				/* @__PURE__ */ (0, X.jsx)("td", {
 					className: "scheduler-run-id-cell",
 					title: a,
 					children: a
 				})
-			] }, $L(e, t));
+			] }, fR(e, t));
 		}) })] })
 	}) : /* @__PURE__ */ (0, X.jsx)("div", {
 		className: "scheduler-empty scheduler-empty--compact",
 		children: t
 	});
 }
-function cR({ open: e, payload: t, onClose: n, triggerRef: r }) {
+function xR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 	var i, a;
 	let [o, s] = (0, C.useState)("configuration"), c = (0, C.useRef)(null), l = (0, C.useRef)(null);
 	if ((0, C.useEffect)(() => {
@@ -26113,7 +26435,7 @@ function cR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 					children: [["configuration", "Configuration Integrity"], ["database_history", "Database History"]].map(([e, t]) => /* @__PURE__ */ (0, X.jsx)("button", {
 						role: "tab",
 						"aria-selected": o === e,
-						className: `${OI} scheduler-diagnostics-tab ${o === e ? "is-active" : "is-inactive"}`,
+						className: `${VI} scheduler-diagnostics-tab ${o === e ? "is-active" : "is-inactive"}`,
 						onClick: () => s(e),
 						children: t
 					}, e))
@@ -26123,19 +26445,19 @@ function cR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 					children: [o === "configuration" ? /* @__PURE__ */ (0, X.jsxs)("ul", {
 						className: "scheduler-config-list",
 						children: [
-							/* @__PURE__ */ (0, X.jsx)(oR, {
+							/* @__PURE__ */ (0, X.jsx)(yR, {
 								icon: d ? be : xe,
 								label: "Overall configuration integrity",
 								ok: d,
 								explanation: d ? "All configuration checks pass." : "One or more configuration checks failed."
 							}),
-							/* @__PURE__ */ (0, X.jsx)(oR, {
+							/* @__PURE__ */ (0, X.jsx)(yR, {
 								icon: u.seed_sql_matches_artifact ? F : ee,
 								label: "Seed SQL artifact match",
 								ok: !!u.seed_sql_matches_artifact,
 								explanation: "Generated seed SQL matches the committed artifact."
 							}),
-							/* @__PURE__ */ (0, X.jsx)(oR, {
+							/* @__PURE__ */ (0, X.jsx)(yR, {
 								icon: u.init_sql_matches_artifact ? F : ee,
 								label: "Init SQL artifact match",
 								ok: !!u.init_sql_matches_artifact,
@@ -26148,7 +26470,7 @@ function cR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 							size: 13,
 							"aria-hidden": "true"
 						}), " Recent scheduler runs currently mirrored into Postgres."]
-					}), /* @__PURE__ */ (0, X.jsx)(sR, {
+					}), /* @__PURE__ */ (0, X.jsx)(bR, {
 						rows: (t == null ? void 0 : t.recent_postgres_runs) || [],
 						emptyMessage: "No Postgres run rows recorded yet."
 					})] }) : null]
@@ -26157,7 +26479,7 @@ function cR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 		})
 	});
 }
-function lR({ readSummary: e = HL }) {
+function SR({ readSummary: e = tR }) {
 	let [t, n] = (0, C.useState)({ kind: "loading" }), [r, i] = (0, C.useState)(!1), [a, o] = (0, C.useState)(!1), s = (0, C.useRef)(null), c = (0, C.useCallback)(async (t = !1) => {
 		t && i(!0);
 		try {
@@ -26184,7 +26506,7 @@ function lR({ readSummary: e = HL }) {
 		className: "scheduler-health-dashboard",
 		"aria-busy": t.kind === "loading",
 		children: [
-			/* @__PURE__ */ (0, X.jsx)(tR, {
+			/* @__PURE__ */ (0, X.jsx)(mR, {
 				onRefresh: () => void c(!0),
 				refreshing: r,
 				lastRefreshedAt: f
@@ -26194,19 +26516,19 @@ function lR({ readSummary: e = HL }) {
 				role: "alert",
 				children: t.message
 			}) : null,
-			/* @__PURE__ */ (0, X.jsx)(nR, {
+			/* @__PURE__ */ (0, X.jsx)(hR, {
 				payload: l,
 				loading: t.kind === "loading",
 				onOpenDiagnostics: () => o(!0),
 				diagnosticsTriggerRef: s
 			}),
-			/* @__PURE__ */ (0, X.jsx)(aR, {
+			/* @__PURE__ */ (0, X.jsx)(vR, {
 				status: u,
 				errorMessage: d,
 				payload: l,
 				onRetry: () => void c(!0)
 			}),
-			/* @__PURE__ */ (0, X.jsx)(cR, {
+			/* @__PURE__ */ (0, X.jsx)(xR, {
 				open: a,
 				payload: l,
 				onClose: () => o(!1),
@@ -26217,7 +26539,7 @@ function lR({ readSummary: e = HL }) {
 }
 //#endregion
 //#region src/diagnostics/AdvancedDiagnosticsDashboard.tsx
-var uR = {
+var CR = {
 	mode: "empty",
 	savedScanOptions: [],
 	selectedScanId: "",
@@ -26226,7 +26548,7 @@ var uR = {
 		advancedDiagnostics: "/advanced-diagnostics",
 		scanWorkspace: "/scan-workspace"
 	}
-}, dR = [
+}, wR = [
 	{
 		sectionId: "advancedDiagnosticsSectionGeneration",
 		navLabel: "Generation",
@@ -26469,7 +26791,7 @@ var uR = {
 			}
 		]
 	}
-], fR = "advancedDiagnosticsSectionReadbacks", pR = [
+], TR = "advancedDiagnosticsSectionReadbacks", ER = [
 	{
 		id: "scanWorkspaceJdLlmReadback",
 		label: "Live JD LLM",
@@ -26547,16 +26869,16 @@ var uR = {
 		tone: "waiting",
 		ariaLabel: "Demo readiness: backend checkpoint readback waiting for existing data"
 	}
-], mR = pR.filter((e) => e.tone === "default").length, hR = pR.filter((e) => e.tone === "waiting").length, gR = [...dR.map((e) => ({
+], DR = ER.filter((e) => e.tone === "default").length, OR = ER.filter((e) => e.tone === "waiting").length, kR = [...wR.map((e) => ({
 	sectionId: e.sectionId,
 	label: e.navLabel
 })), {
-	sectionId: fR,
+	sectionId: TR,
 	label: "Readback status"
 }];
-function _R() {
+function AR() {
 	let e = {}, t = {}, n = {};
-	for (let r of dR) {
+	for (let r of wR) {
 		for (let t of r.standaloneCheckboxes || []) e[t.id] = !1;
 		for (let i of r.checkboxGroups) {
 			e[i.checkbox.id] = !1;
@@ -26570,7 +26892,7 @@ function _R() {
 		selects: n
 	};
 }
-function vR({ id: e, label: t, checked: n, onChange: r }) {
+function jR({ id: e, label: t, checked: n, onChange: r }) {
 	return /* @__PURE__ */ (0, X.jsxs)("label", {
 		className: "advanced-diagnostics-checkbox-field",
 		htmlFor: e,
@@ -26582,7 +26904,7 @@ function vR({ id: e, label: t, checked: n, onChange: r }) {
 		}), /* @__PURE__ */ (0, X.jsx)("span", { children: t })]
 	});
 }
-function yR({ field: e, value: t, onChange: n, nested: r }) {
+function MR({ field: e, value: t, onChange: n, nested: r }) {
 	return /* @__PURE__ */ (0, X.jsx)("input", {
 		type: "text",
 		id: e.id,
@@ -26593,7 +26915,7 @@ function yR({ field: e, value: t, onChange: n, nested: r }) {
 		onChange: (e) => n(e.target.value)
 	});
 }
-function bR({ field: e, value: t, onChange: n, nested: r }) {
+function NR({ field: e, value: t, onChange: n, nested: r }) {
 	return /* @__PURE__ */ (0, X.jsx)("select", {
 		id: e.id,
 		className: `advanced-diagnostics-select-field ${r ? "is-nested" : ""}`,
@@ -26606,7 +26928,7 @@ function bR({ field: e, value: t, onChange: n, nested: r }) {
 		}, e.value || "__blank__"))
 	});
 }
-function xR({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSelectChange: i }) {
+function PR({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSelectChange: i }) {
 	let a = e.icon;
 	return /* @__PURE__ */ (0, X.jsxs)("section", {
 		className: "advanced-diagnostics-card",
@@ -26635,26 +26957,26 @@ function xR({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSel
 			]
 		}), /* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "advanced-diagnostics-card-fields",
-			children: [(e.standaloneCheckboxes || []).map((e) => /* @__PURE__ */ (0, X.jsx)(vR, {
+			children: [(e.standaloneCheckboxes || []).map((e) => /* @__PURE__ */ (0, X.jsx)(jR, {
 				id: e.id,
 				label: e.label,
 				checked: !!t.checkboxes[e.id],
 				onChange: (t) => n(e.id, t)
 			}, e.id)), e.checkboxGroups.map((e) => /* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "advanced-diagnostics-field-group",
-				children: [/* @__PURE__ */ (0, X.jsx)(vR, {
+				children: [/* @__PURE__ */ (0, X.jsx)(jR, {
 					id: e.checkbox.id,
 					label: e.checkbox.label,
 					checked: !!t.checkboxes[e.checkbox.id],
 					onChange: (t) => n(e.checkbox.id, t)
 				}), /* @__PURE__ */ (0, X.jsxs)("div", {
 					className: "advanced-diagnostics-field-group-nested",
-					children: [(e.texts || []).map((e) => /* @__PURE__ */ (0, X.jsx)(yR, {
+					children: [(e.texts || []).map((e) => /* @__PURE__ */ (0, X.jsx)(MR, {
 						field: e,
 						value: t.texts[e.id] || "",
 						onChange: (t) => r(e.id, t),
 						nested: !0
-					}, e.id)), (e.selects || []).map((e) => /* @__PURE__ */ (0, X.jsx)(bR, {
+					}, e.id)), (e.selects || []).map((e) => /* @__PURE__ */ (0, X.jsx)(NR, {
 						field: e,
 						value: t.selects[e.id] || "",
 						onChange: (t) => i(e.id, t),
@@ -26665,7 +26987,7 @@ function xR({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSel
 		})]
 	});
 }
-function SR({ row: e }) {
+function FR({ row: e }) {
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: `advanced-diagnostics-readback-row advanced-diagnostics-readback-row--${e.tone}`,
 		id: e.id,
@@ -26680,21 +27002,21 @@ function SR({ row: e }) {
 		})]
 	});
 }
-function CR({ activeSection: e }) {
+function IR({ activeSection: e }) {
 	return /* @__PURE__ */ (0, X.jsxs)(X.Fragment, { children: [/* @__PURE__ */ (0, X.jsxs)("nav", {
 		className: "advanced-diagnostics-section-rail",
 		"aria-label": "Diagnostics sections",
 		children: [/* @__PURE__ */ (0, X.jsxs)("p", {
 			className: "advanced-diagnostics-section-rail-summary",
 			children: [
-				pR.length,
+				ER.length,
 				" readbacks · ",
-				mR,
+				DR,
 				" default-off · ",
-				hR,
+				OR,
 				" waiting"
 			]
-		}), /* @__PURE__ */ (0, X.jsx)("ul", { children: gR.map((t) => /* @__PURE__ */ (0, X.jsx)("li", { children: /* @__PURE__ */ (0, X.jsx)("a", {
+		}), /* @__PURE__ */ (0, X.jsx)("ul", { children: kR.map((t) => /* @__PURE__ */ (0, X.jsx)("li", { children: /* @__PURE__ */ (0, X.jsx)("a", {
 			href: `#${t.sectionId}`,
 			className: e === t.sectionId ? "is-active" : "",
 			children: t.label
@@ -26702,14 +27024,14 @@ function CR({ activeSection: e }) {
 	}), /* @__PURE__ */ (0, X.jsx)("nav", {
 		className: "advanced-diagnostics-section-shortcuts",
 		"aria-label": "Diagnostics sections",
-		children: gR.map((t) => /* @__PURE__ */ (0, X.jsx)("a", {
+		children: kR.map((t) => /* @__PURE__ */ (0, X.jsx)("a", {
 			href: `#${t.sectionId}`,
 			className: e === t.sectionId ? "is-active" : "",
 			children: t.label
 		}, t.sectionId))
 	})] });
 }
-function wR() {
+function LR() {
 	return /* @__PURE__ */ (0, X.jsx)("header", {
 		className: "advanced-diagnostics-header app-page-header",
 		children: /* @__PURE__ */ (0, X.jsxs)("div", {
@@ -26744,7 +27066,7 @@ function wR() {
 		})
 	});
 }
-function TR({ options: e, hrefs: t, navigate: n }) {
+function RR({ options: e, hrefs: t, navigate: n }) {
 	let [r, i] = (0, C.useState)([]), a = (0, C.useMemo)(() => e.map((e) => ({
 		value: e.scanId,
 		label: e.secondary ? `${e.primary} — ${e.secondary}` : e.primary
@@ -26759,7 +27081,7 @@ function TR({ options: e, hrefs: t, navigate: n }) {
 			}),
 			/* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "advanced-diagnostics-hub-controls",
-				children: [/* @__PURE__ */ (0, X.jsx)(DI, {
+				children: [/* @__PURE__ */ (0, X.jsx)(BI, {
 					id: "advancedDiagnosticsScanSelect",
 					label: "Saved scan",
 					options: a,
@@ -26783,7 +27105,7 @@ function TR({ options: e, hrefs: t, navigate: n }) {
 		]
 	});
 }
-function ER({ hrefs: e }) {
+function zR({ hrefs: e }) {
 	return /* @__PURE__ */ (0, X.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-empty-card",
 		children: [
@@ -26805,7 +27127,7 @@ function ER({ hrefs: e }) {
 		]
 	});
 }
-function DR({ hrefs: e }) {
+function BR({ hrefs: e }) {
 	return /* @__PURE__ */ (0, X.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-invalid-card",
 		children: [
@@ -26827,7 +27149,7 @@ function DR({ hrefs: e }) {
 		]
 	});
 }
-function OR({ context: e, hrefs: t }) {
+function VR({ context: e, hrefs: t }) {
 	return /* @__PURE__ */ (0, X.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-context-hero",
 		children: [
@@ -26883,7 +27205,7 @@ function OR({ context: e, hrefs: t }) {
 		]
 	});
 }
-function kR() {
+function HR() {
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "advanced-diagnostics-safety-callout",
 		role: "note",
@@ -26893,7 +27215,7 @@ function kR() {
 		}), /* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: "Selections are review-only" }), /* @__PURE__ */ (0, X.jsx)("p", { children: "Selecting diagnostics does not run them. These do not apply to jobs automatically. Diagnostics never apply to jobs automatically." })] })]
 	});
 }
-function AR({ onClear: e }) {
+function UR({ onClear: e }) {
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "advanced-diagnostics-action-bar",
 		children: [/* @__PURE__ */ (0, X.jsx)("p", {
@@ -26916,10 +27238,10 @@ function AR({ onClear: e }) {
 		})]
 	});
 }
-function jR({ state: e = uR, navigate: t = (e) => {
+function WR({ state: e = CR, navigate: t = (e) => {
 	window.location.href = e;
 } }) {
-	let [n, r] = (0, C.useState)(() => _R()), [i, a] = (0, C.useState)(gR[0].sectionId);
+	let [n, r] = (0, C.useState)(() => AR()), [i, a] = (0, C.useState)(kR[0].sectionId);
 	(0, C.useEffect)(() => {
 		if (typeof IntersectionObserver > "u") return;
 		let e = new IntersectionObserver((e) => {
@@ -26927,7 +27249,7 @@ function jR({ state: e = uR, navigate: t = (e) => {
 			let n = e.filter((e) => e.isIntersecting).sort((e, t) => t.intersectionRatio - e.intersectionRatio)[0];
 			!(n == null || (t = n.target) == null) && t.id && a(n.target.id);
 		}, { rootMargin: "-35% 0px -45% 0px" });
-		for (let t of gR) {
+		for (let t of kR) {
 			let n = document.getElementById(t.sectionId);
 			n && e.observe(n);
 		}
@@ -26957,19 +27279,19 @@ function jR({ state: e = uR, navigate: t = (e) => {
 				[e]: t
 			}
 		}));
-	}, l = () => r(_R()), u = e.mode === "context";
+	}, l = () => r(AR()), u = e.mode === "context";
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "advanced-diagnostics-dashboard",
 		children: [
-			/* @__PURE__ */ (0, X.jsx)(wR, {}),
-			e.mode === "hub" ? /* @__PURE__ */ (0, X.jsx)(TR, {
+			/* @__PURE__ */ (0, X.jsx)(LR, {}),
+			e.mode === "hub" ? /* @__PURE__ */ (0, X.jsx)(RR, {
 				options: e.savedScanOptions,
 				hrefs: e.hrefs,
 				navigate: t
 			}) : null,
-			e.mode === "empty" ? /* @__PURE__ */ (0, X.jsx)(ER, { hrefs: e.hrefs }) : null,
-			e.mode === "invalid" ? /* @__PURE__ */ (0, X.jsx)(DR, { hrefs: e.hrefs }) : null,
-			e.mode === "context" && e.context ? /* @__PURE__ */ (0, X.jsx)(OR, {
+			e.mode === "empty" ? /* @__PURE__ */ (0, X.jsx)(zR, { hrefs: e.hrefs }) : null,
+			e.mode === "invalid" ? /* @__PURE__ */ (0, X.jsx)(BR, { hrefs: e.hrefs }) : null,
+			e.mode === "context" && e.context ? /* @__PURE__ */ (0, X.jsx)(VR, {
 				context: e.context,
 				hrefs: e.hrefs
 			}) : null,
@@ -26977,12 +27299,12 @@ function jR({ state: e = uR, navigate: t = (e) => {
 				className: "advanced-diagnostics-body",
 				id: "scanWorkspaceAdvancedDiagnostics",
 				children: [
-					/* @__PURE__ */ (0, X.jsx)(kR, {}),
+					/* @__PURE__ */ (0, X.jsx)(HR, {}),
 					/* @__PURE__ */ (0, X.jsxs)("div", {
 						className: "advanced-diagnostics-layout",
-						children: [/* @__PURE__ */ (0, X.jsx)(CR, { activeSection: i }), /* @__PURE__ */ (0, X.jsxs)("div", {
+						children: [/* @__PURE__ */ (0, X.jsx)(IR, { activeSection: i }), /* @__PURE__ */ (0, X.jsxs)("div", {
 							className: "advanced-diagnostics-groups",
-							children: [dR.map((e) => /* @__PURE__ */ (0, X.jsx)(xR, {
+							children: [wR.map((e) => /* @__PURE__ */ (0, X.jsx)(PR, {
 								group: e,
 								controls: n,
 								onCheckboxChange: o,
@@ -26991,8 +27313,8 @@ function jR({ state: e = uR, navigate: t = (e) => {
 							}, e.sectionId)), /* @__PURE__ */ (0, X.jsxs)("section", {
 								className: "advanced-diagnostics-card",
 								"data-tone": "slate",
-								id: fR,
-								"aria-labelledby": `${fR}Heading`,
+								id: TR,
+								"aria-labelledby": `${TR}Heading`,
 								children: [/* @__PURE__ */ (0, X.jsxs)("div", {
 									className: "advanced-diagnostics-card-heading",
 									children: [/* @__PURE__ */ (0, X.jsx)("span", {
@@ -27000,7 +27322,7 @@ function jR({ state: e = uR, navigate: t = (e) => {
 										"aria-hidden": "true",
 										children: /* @__PURE__ */ (0, X.jsx)(ne, { size: 17 })
 									}), /* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("h3", {
-										id: `${fR}Heading`,
+										id: `${TR}Heading`,
 										children: "Readback status"
 									}), /* @__PURE__ */ (0, X.jsx)("p", {
 										className: "advanced-diagnostics-card-description",
@@ -27009,12 +27331,12 @@ function jR({ state: e = uR, navigate: t = (e) => {
 								}), /* @__PURE__ */ (0, X.jsx)("div", {
 									className: "advanced-diagnostics-readbacks",
 									"aria-label": "Advanced diagnostic readbacks",
-									children: pR.map((e) => /* @__PURE__ */ (0, X.jsx)(SR, { row: e }, e.id))
+									children: ER.map((e) => /* @__PURE__ */ (0, X.jsx)(FR, { row: e }, e.id))
 								})]
 							})]
 						})]
 					}),
-					/* @__PURE__ */ (0, X.jsx)(AR, { onClear: l })
+					/* @__PURE__ */ (0, X.jsx)(UR, { onClear: l })
 				]
 			}) : null
 		]
@@ -27022,7 +27344,7 @@ function jR({ state: e = uR, navigate: t = (e) => {
 }
 //#endregion
 //#region src/PlanningWorklist.tsx
-var MR = "applylens:planning-worklist-state", NR = "applylens:planning-worklist-action", PR = "applylens.planning.columnWidths.v1", FR = {
+var GR = "applylens:planning-worklist-state", KR = "applylens:planning-worklist-action", qR = "applylens.planning.columnWidths.v1", JR = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Planning view · loading",
@@ -27054,7 +27376,7 @@ var MR = "applylens:planning-worklist-state", NR = "applylens:planning-worklist-
 		limit: 15
 	},
 	preferenceOptions: []
-}, IR = [
+}, YR = [
 	{
 		value: "APPLY",
 		label: "Ready for review",
@@ -27075,7 +27397,7 @@ var MR = "applylens:planning-worklist-state", NR = "applylens:planning-worklist-
 		label: "Review later",
 		tone: "later"
 	}
-], LR = [
+], XR = [
 	{
 		value: "strong",
 		label: "Excellent match",
@@ -27101,7 +27423,7 @@ var MR = "applylens:planning-worklist-state", NR = "applylens:planning-worklist-
 		label: "No credible match",
 		tone: "unavailable"
 	}
-], RR = [
+], ZR = [
 	{
 		value: "ready",
 		label: "Ready",
@@ -27122,7 +27444,7 @@ var MR = "applylens:planning-worklist-state", NR = "applylens:planning-worklist-
 		label: "Unavailable",
 		tone: "unavailable"
 	}
-], zR = {
+], QR = {
 	queue_rank: {
 		min: 72,
 		max: 110
@@ -27152,25 +27474,25 @@ var MR = "applylens:planning-worklist-state", NR = "applylens:planning-worklist-
 		max: 280
 	}
 };
-function BR(e) {
-	window.dispatchEvent(new CustomEvent(NR, { detail: e }));
+function $R(e) {
+	window.dispatchEvent(new CustomEvent(KR, { detail: e }));
 }
-function VR(e) {
+function ez(e) {
 	return String(e == null ? "" : e).trim();
 }
-function HR(e) {
-	let t = VR(e).replace(/_/g, " ");
+function tz(e) {
+	let t = ez(e).replace(/_/g, " ");
 	return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Unavailable";
 }
-function UR(e) {
-	let t = VR(e);
+function nz(e) {
+	let t = ez(e);
 	return t ? t.replace(/\.pdf$/i, "").replace(/_/g, " ") : "Not selected";
 }
-function WR(e) {
-	return VR(e.operator_selected_resume || e.selected_resume || e.winner_resume);
+function rz(e) {
+	return ez(e.operator_selected_resume || e.selected_resume || e.winner_resume);
 }
-function GR(e) {
-	let t = VR(e);
+function iz(e) {
+	let t = ez(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
 	return Number.isNaN(n.getTime()) ? t : new Intl.DateTimeFormat(void 0, {
@@ -27179,7 +27501,7 @@ function GR(e) {
 		year: "numeric"
 	}).format(n);
 }
-function KR(e) {
+function az(e) {
 	return {
 		APPLY: {
 			label: "Ready for review",
@@ -27197,13 +27519,13 @@ function KR(e) {
 			label: "Review later",
 			tone: "later"
 		}
-	}[VR(e.action).toUpperCase()] || {
-		label: VR(e.action) || "Unavailable",
+	}[ez(e.action).toUpperCase()] || {
+		label: ez(e.action) || "Unavailable",
 		tone: "unavailable"
 	};
 }
-function qR(e) {
-	let t = VR(e).toLowerCase();
+function oz(e) {
+	let t = ez(e).toLowerCase();
 	return [
 		"true",
 		"1",
@@ -27218,31 +27540,31 @@ function qR(e) {
 		"off"
 	].includes(t) ? "No packet" : "Packet unavailable";
 }
-function JR() {
+function sz() {
 	try {
 		let e = JSON.parse(localStorage.getItem("applylens.planning.columnWidths.v1") || "{}");
 		if (!e || typeof e != "object" || Array.isArray(e)) return {};
 		let t = "version" in e && e.version === 1 ? e.widths : e;
 		return !t || typeof t != "object" || Array.isArray(t) ? {} : Object.fromEntries(Object.entries(t).flatMap(([e, t]) => {
-			let n = zR[e], r = Number(t);
+			let n = QR[e], r = Number(t);
 			return !n || !Number.isFinite(r) ? [] : [[e, Math.min(n.max, Math.max(n.min, r))]];
 		}));
 	} catch (e) {
 		return {};
 	}
 }
-function YR(e) {
-	localStorage.setItem(PR, JSON.stringify({
+function cz(e) {
+	localStorage.setItem(qR, JSON.stringify({
 		version: 1,
 		widths: e
 	}));
 }
-function XR(e, t) {
-	return VR(e.job_doc_id || e.job_url || e.queue_rank) || `planning-row-${t}`;
+function lz(e, t) {
+	return ez(e.job_doc_id || e.job_url || e.queue_rank) || `planning-row-${t}`;
 }
-function ZR(e) {
+function uz(e) {
 	if (e && typeof e == "object" && !Array.isArray(e)) return e;
-	let t = VR(e);
+	let t = ez(e);
 	if (!t) return null;
 	try {
 		let e = JSON.parse(t);
@@ -27251,14 +27573,14 @@ function ZR(e) {
 		return null;
 	}
 }
-function QR({ row: e }) {
-	let t = ZR(e.llm_adjudicator_readback), n = VR((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map(VR).filter(Boolean).join(", ") : "", i = [
-		["Status", HR(n)],
-		["Provider", VR((t == null ? void 0 : t.provider_used) || (t == null ? void 0 : t.provider_requested))],
-		["Model", VR((t == null ? void 0 : t.model_used) || (t == null ? void 0 : t.model_requested))],
+function dz({ row: e }) {
+	let t = uz(e.llm_adjudicator_readback), n = ez((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map(ez).filter(Boolean).join(", ") : "", i = [
+		["Status", tz(n)],
+		["Provider", ez((t == null ? void 0 : t.provider_used) || (t == null ? void 0 : t.provider_requested))],
+		["Model", ez((t == null ? void 0 : t.model_used) || (t == null ? void 0 : t.model_requested))],
 		["Candidates", r],
-		["Recommendation", VR(t == null ? void 0 : t.adjudicator_recommendation_label)],
-		["Summary", VR(t == null ? void 0 : t.adjudicator_summary)]
+		["Recommendation", ez(t == null ? void 0 : t.adjudicator_recommendation_label)],
+		["Summary", ez(t == null ? void 0 : t.adjudicator_summary)]
 	].filter((e) => e[1]);
 	return /* @__PURE__ */ (0, X.jsxs)("details", {
 		className: "planning-react-ai-review",
@@ -27269,29 +27591,29 @@ function QR({ row: e }) {
 		]
 	});
 }
-function $R({ row: e }) {
+function fz({ row: e }) {
 	let t = [
 		"true",
 		"1",
 		"yes",
 		"on"
-	].includes(VR(e.llm_adjudicator_readback_enabled).toLowerCase());
-	return /* @__PURE__ */ (0, X.jsxs)(NI, { children: [/* @__PURE__ */ (0, X.jsxs)("div", {
+	].includes(ez(e.llm_adjudicator_readback_enabled).toLowerCase());
+	return /* @__PURE__ */ (0, X.jsxs)(KI, { children: [/* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "planning-react-details-grid",
 		children: [
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Full location" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: VR(e.job_location) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: HR(e.selection_signal) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: HR(e.llm_adjudicator_readback_status) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: UR(e.runner_up_resume || e.runnerup_resume) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Runner-up score" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: VR(e.runner_up_score) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: VR(e.score_gap) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: HR(e.operator_decision || "Not decided") })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: VR(e.queue_priority_reason) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: VR(e.missing_requirement_count) || "0" })] })
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Full location" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: ez(e.job_location) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: tz(e.selection_signal) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: tz(e.llm_adjudicator_readback_status) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: nz(e.runner_up_resume || e.runnerup_resume) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Runner-up score" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: ez(e.runner_up_score) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: ez(e.score_gap) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: tz(e.operator_decision || "Not decided") })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: ez(e.queue_priority_reason) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: ez(e.missing_requirement_count) || "0" })] })
 		]
-	}), t ? /* @__PURE__ */ (0, X.jsx)(QR, { row: e }) : null] });
+	}), t ? /* @__PURE__ */ (0, X.jsx)(dz, { row: e }) : null] });
 }
-function ez() {
+function pz() {
 	return [
 		{
 			id: "expand",
@@ -27301,9 +27623,9 @@ function ez() {
 			maxSize: 42,
 			enableSorting: !1,
 			enableResizing: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(kI, {
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(HI, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} planning details for ${VR(e.original.job_title) || "job"}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} planning details for ${ez(e.original.job_title) || "job"}`,
 				controls: `planning-react-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			})
@@ -27321,10 +27643,10 @@ function ez() {
 			size: 270,
 			minSize: 210,
 			maxSize: 420,
-			accessorFn: (e) => VR(e.job_title),
+			accessorFn: (e) => ez(e.job_title),
 			cell: ({ row: e }) => {
-				let t = VR(e.original.job_title) || "Untitled job", n = VR(e.original.job_company) || "Company unavailable", r = VR(e.original.job_location) || "Location unavailable", i = VR(e.original.job_url || e.original.job_doc_id);
-				return /* @__PURE__ */ (0, X.jsx)(MI, {
+				let t = ez(e.original.job_title) || "Untitled job", n = ez(e.original.job_company) || "Company unavailable", r = ez(e.original.job_location) || "Location unavailable", i = ez(e.original.job_url || e.original.job_doc_id);
+				return /* @__PURE__ */ (0, X.jsx)(GI, {
 					title: t,
 					location: r,
 					children: /* @__PURE__ */ (0, X.jsxs)("span", {
@@ -27352,8 +27674,8 @@ function ez() {
 			accessorFn: (e) => e.posted_at ? new Date(e.posted_at).getTime() : null,
 			sortUndefined: "last",
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("time", {
-				dateTime: VR(e.original.posted_at),
-				children: GR(e.original.posted_at)
+				dateTime: ez(e.original.posted_at),
+				children: iz(e.original.posted_at)
 			})
 		},
 		{
@@ -27362,14 +27684,14 @@ function ez() {
 			size: 184,
 			minSize: 150,
 			maxSize: 260,
-			accessorFn: (e) => KR(e).label,
+			accessorFn: (e) => az(e).label,
 			cell: ({ row: e }) => {
-				let t = KR(e.original), n = [
+				let t = az(e.original), n = [
 					"true",
 					"1",
 					"yes",
 					"on"
-				].includes(VR(e.original.llm_adjudicator_readback_enabled).toLowerCase());
+				].includes(ez(e.original.llm_adjudicator_readback_enabled).toLowerCase());
 				return /* @__PURE__ */ (0, X.jsxs)("span", {
 					className: "planning-react-readiness",
 					children: [/* @__PURE__ */ (0, X.jsx)("span", {
@@ -27390,9 +27712,9 @@ function ez() {
 			maxSize: 180,
 			accessorFn: (e) => e.winner_score,
 			sortUndefined: "last",
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(AI, {
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(UI, {
 				value: e.original.winner_score,
-				strength: HR(e.original.winner_bucket)
+				strength: tz(e.original.winner_bucket)
 			})
 		},
 		{
@@ -27401,18 +27723,18 @@ function ez() {
 			size: 230,
 			minSize: 200,
 			maxSize: 360,
-			accessorFn: WR,
+			accessorFn: rz,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
 				className: "planning-react-resume",
-				title: WR(e.original),
-				children: UR(WR(e.original))
+				title: rz(e.original),
+				children: nz(rz(e.original))
 			})
 		},
 		{
 			id: "packet_status",
 			header: () => /* @__PURE__ */ (0, X.jsxs)("span", {
 				className: "planning-react-packet-header",
-				children: ["Packet / workspace", /* @__PURE__ */ (0, X.jsx)(jI, {
+				children: ["Packet / workspace", /* @__PURE__ */ (0, X.jsx)(WI, {
 					label: "About packet and workspace status",
 					children: "A packet is a review bundle for this job. It does not apply to the job."
 				})]
@@ -27420,13 +27742,13 @@ function ez() {
 			size: 188,
 			minSize: 160,
 			maxSize: 280,
-			accessorFn: (e) => qR(e.packet_generation_allowed),
+			accessorFn: (e) => oz(e.packet_generation_allowed),
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsxs)("span", {
 				className: "planning-react-status-stack",
 				children: [/* @__PURE__ */ (0, X.jsx)("span", {
-					className: `planning-react-badge ${qR(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
-					children: qR(e.original.packet_generation_allowed)
-				}), /* @__PURE__ */ (0, X.jsx)("span", { children: HR(e.original.tailoring_workspace_state || "Workspace unavailable") })]
+					className: `planning-react-badge ${oz(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
+					children: oz(e.original.packet_generation_allowed)
+				}), /* @__PURE__ */ (0, X.jsx)("span", { children: tz(e.original.tailoring_workspace_state || "Workspace unavailable") })]
 			})
 		},
 		{
@@ -27449,7 +27771,7 @@ function ez() {
 					className: `planning-react-next-step ${t.kind === "generate_suggestions" ? "is-primary" : ""}`,
 					disabled: t.disabled,
 					title: t.title,
-					onClick: () => BR({
+					onClick: () => $R({
 						type: "next_step",
 						row: e.original
 					}),
@@ -27459,11 +27781,11 @@ function ez() {
 		}
 	];
 }
-function tz({ state: e }) {
+function mz({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (e) => {
-		n(e), BR({
+		n(e), $R({
 			type: "filters_change",
 			filters: e
 		});
@@ -27475,10 +27797,10 @@ function tz({ state: e }) {
 		className: "planning-react-filter-grid",
 		"aria-label": "Planning filters",
 		children: [
-			/* @__PURE__ */ (0, X.jsx)(DI, {
+			/* @__PURE__ */ (0, X.jsx)(BI, {
 				id: "planningActionFilter",
 				label: "Action",
-				options: IR,
+				options: YR,
 				values: t.actions,
 				onChange: (e) => r({
 					...t,
@@ -27487,7 +27809,7 @@ function tz({ state: e }) {
 				placeholder: "All",
 				mode: "single"
 			}),
-			/* @__PURE__ */ (0, X.jsx)(DI, {
+			/* @__PURE__ */ (0, X.jsx)(BI, {
 				id: "planningPreferenceFilter",
 				label: "Preferences",
 				options: i,
@@ -27501,10 +27823,10 @@ function tz({ state: e }) {
 				searchable: !0,
 				mode: "multiple"
 			}),
-			/* @__PURE__ */ (0, X.jsx)(DI, {
+			/* @__PURE__ */ (0, X.jsx)(BI, {
 				id: "planningWinnerBucket",
 				label: "Match Strength",
-				options: LR,
+				options: XR,
 				values: t.winnerBuckets,
 				onChange: (e) => r({
 					...t,
@@ -27513,10 +27835,10 @@ function tz({ state: e }) {
 				placeholder: "All",
 				mode: "single"
 			}),
-			/* @__PURE__ */ (0, X.jsx)(DI, {
+			/* @__PURE__ */ (0, X.jsx)(BI, {
 				id: "planningTailoringFilter",
 				label: "Tailoring",
-				options: RR,
+				options: ZR,
 				values: t.tailoringStates,
 				onChange: (e) => r({
 					...t,
@@ -27534,7 +27856,7 @@ function tz({ state: e }) {
 					children: [/* @__PURE__ */ (0, X.jsx)("button", {
 						type: "button",
 						"aria-pressed": !t.undecidedOnly,
-						className: `${OI} ${t.undecidedOnly ? "" : "is-active"}`.trim(),
+						className: `${VI} ${t.undecidedOnly ? "" : "is-active"}`.trim(),
 						onClick: () => r({
 							...t,
 							undecidedOnly: !1
@@ -27543,7 +27865,7 @@ function tz({ state: e }) {
 					}), /* @__PURE__ */ (0, X.jsx)("button", {
 						type: "button",
 						"aria-pressed": t.undecidedOnly,
-						className: `${OI} ${t.undecidedOnly ? "is-active" : ""}`.trim(),
+						className: `${VI} ${t.undecidedOnly ? "is-active" : ""}`.trim(),
 						onClick: () => r({
 							...t,
 							undecidedOnly: !0
@@ -27573,7 +27895,7 @@ function tz({ state: e }) {
 					type: "button",
 					className: "planning-filter-apply",
 					id: "planningApplyFiltersBtn",
-					onClick: () => BR({
+					onClick: () => $R({
 						type: "apply_filters",
 						filters: t
 					}),
@@ -27582,15 +27904,15 @@ function tz({ state: e }) {
 					type: "button",
 					className: "planning-filter-clear",
 					id: "planningClearFiltersBtn",
-					onClick: () => BR({ type: "clear_filters" }),
+					onClick: () => $R({ type: "clear_filters" }),
 					children: "Clear"
 				})]
 			})
 		]
 	});
 }
-function nz({ state: e }) {
-	let [t, n] = (0, C.useState)(JR), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(ez, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
+function hz({ state: e }) {
+	let [t, n] = (0, C.useState)(sz), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(pz, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
 		id: e.sort.key,
 		desc: e.sort.direction === "desc"
 	}] : [], [e.sort]);
@@ -27600,7 +27922,7 @@ function nz({ state: e }) {
 		e.sort.key,
 		e.sort.direction
 	]);
-	let c = wI({
+	let c = LI({
 		data: o,
 		columns: a,
 		state: {
@@ -27608,10 +27930,10 @@ function nz({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: XR,
+		getRowId: lz,
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(s) : e)[0];
-			t && (i(""), BR({
+			t && (i(""), $R({
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -27620,7 +27942,7 @@ function nz({ state: e }) {
 		onColumnSizingChange: (e) => {
 			n((t) => {
 				let n = typeof e == "function" ? e(t) : e;
-				return YR(n), n;
+				return cz(n), n;
 			});
 		},
 		onExpandedChange: (e) => {
@@ -27628,12 +27950,12 @@ function nz({ state: e }) {
 			i(o || Object.keys(a).find((e) => a[e]) || "");
 		},
 		getRowCanExpand: () => !0,
-		getCoreRowModel: vI(),
+		getCoreRowModel: jI(),
 		manualSorting: !0,
 		enableSortingRemoval: !1,
 		columnResizeMode: "onChange"
 	});
-	return /* @__PURE__ */ (0, X.jsx)(LI, {
+	return /* @__PURE__ */ (0, X.jsx)(XI, {
 		className: "planning-react-table-card",
 		ariaLabel: "Planning worklist table",
 		title: "Planning worklist",
@@ -27648,7 +27970,7 @@ function nz({ state: e }) {
 		stickyColumnId: "next_step",
 		rowClassName: (e, t) => `planning-react-row ${t % 2 ? "is-alternate" : ""} ${e.getIsExpanded() ? "is-expanded" : ""}`.trim(),
 		detailId: (e) => `planning-react-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)($R, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)(fz, { row: e.original }),
 		empty: /* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "planning-react-empty",
 			children: [
@@ -27656,20 +27978,20 @@ function nz({ state: e }) {
 				/* @__PURE__ */ (0, X.jsx)("span", { children: "Clear the current filters to return to the complete planning worklist." }),
 				/* @__PURE__ */ (0, X.jsx)("button", {
 					type: "button",
-					className: OI,
-					onClick: () => BR({ type: "clear_filters" }),
+					className: VI,
+					onClick: () => $R({ type: "clear_filters" }),
 					children: "Clear filters"
 				})
 			]
 		}),
-		onPageChange: (e) => BR({
+		onPageChange: (e) => $R({
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => BR({ type: "retry" })
+		onRetry: () => $R({ type: "retry" })
 	});
 }
-var rz = [
+var gz = [
 	{
 		key: "total",
 		label: "Total results",
@@ -27699,11 +28021,11 @@ var rz = [
 		icon: Se
 	}
 ];
-function iz({ state: e }) {
+function _z({ state: e }) {
 	return /* @__PURE__ */ (0, X.jsx)("section", {
 		className: "planning-react-summary-grid",
 		"aria-label": "Planning summary",
-		children: rz.map((t) => {
+		children: gz.map((t) => {
 			let n = t.icon;
 			return /* @__PURE__ */ (0, X.jsxs)("article", {
 				className: `planning-react-summary-card planning-react-summary-card--${t.key}`,
@@ -27716,7 +28038,7 @@ function iz({ state: e }) {
 								size: 18,
 								"aria-hidden": "true"
 							}), /* @__PURE__ */ (0, X.jsx)("span", { children: t.label })]
-						}), /* @__PURE__ */ (0, X.jsx)(jI, {
+						}), /* @__PURE__ */ (0, X.jsx)(WI, {
 							label: `About ${t.label.toLowerCase()}`,
 							children: t.help
 						})]
@@ -27730,7 +28052,7 @@ function iz({ state: e }) {
 }
 //#endregion
 //#region src/OperationalDashboards.tsx
-var az = "applylens:decisions-dashboard-state", oz = "applylens:decisions-dashboard-action", sz = "applylens:decisions-dashboard-ready", cz = "applylens:applications-dashboard-state", lz = "applylens:applications-dashboard-action", uz = "applylens:applications-dashboard-ready", dz = "applylens.decisions.columnWidths.v1", fz = "applylens.applications.columnWidths.v1", pz = {
+var vz = "applylens:decisions-dashboard-state", yz = "applylens:decisions-dashboard-action", bz = "applylens:decisions-dashboard-ready", xz = "applylens:applications-dashboard-state", Sz = "applylens:applications-dashboard-action", Cz = "applylens:applications-dashboard-ready", wz = "applylens.decisions.columnWidths.v1", Tz = "applylens.applications.columnWidths.v1", Ez = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -27752,7 +28074,7 @@ var az = "applylens:decisions-dashboard-state", oz = "applylens:decisions-dashbo
 		companyContains: "",
 		limit: 15
 	}
-}, mz = {
+}, Dz = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -27775,7 +28097,7 @@ var az = "applylens:decisions-dashboard-state", oz = "applylens:decisions-dashbo
 		titleContains: "",
 		limit: 15
 	}
-}, hz = [
+}, Oz = [
 	"APPLY",
 	"TAILOR",
 	"SKIP",
@@ -27783,7 +28105,7 @@ var az = "applylens:decisions-dashboard-state", oz = "applylens:decisions-dashbo
 ].map((e) => ({
 	value: e,
 	label: e
-})), $ = (e) => String(e == null ? "" : e).trim(), gz = (e, t = "Unavailable") => $(e) || t, _z = (e) => {
+})), $ = (e) => String(e == null ? "" : e).trim(), kz = (e, t = "Unavailable") => $(e) || t, Az = (e) => {
 	let t = $(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
@@ -27794,19 +28116,19 @@ var az = "applylens:decisions-dashboard-state", oz = "applylens:decisions-dashbo
 		hour: "numeric",
 		minute: "2-digit"
 	}).format(n);
-}, vz = (e, t) => $(e.action_key) || [
+}, jz = (e, t) => $(e.action_key) || [
 	$(e.decision_timestamp || e.action_timestamp),
 	$(e.job_doc_id || e.job_url),
 	$(e.decision || e.application_status),
 	t
-].join("|"), yz = (e) => e.key ? [{
+].join("|"), Mz = (e) => e.key ? [{
 	id: e.key,
 	desc: e.direction === "desc"
 }] : [];
-function bz(e, t) {
+function Nz(e, t) {
 	window.dispatchEvent(new CustomEvent(e, { detail: t }));
 }
-function xz(e) {
+function Pz(e) {
 	try {
 		let t = JSON.parse(localStorage.getItem(e) || "{}"), n = (t == null ? void 0 : t.version) === 1 ? t.widths : t;
 		return n && typeof n == "object" && !Array.isArray(n) ? n : {};
@@ -27814,20 +28136,20 @@ function xz(e) {
 		return {};
 	}
 }
-function Sz(e, t) {
+function Fz(e, t) {
 	localStorage.setItem(e, JSON.stringify({
 		version: 1,
 		widths: t
 	}));
 }
-function Cz(e, t) {
-	let n = gz(e);
+function Iz(e, t) {
+	let n = kz(e);
 	return /* @__PURE__ */ (0, X.jsx)("span", {
 		className: `${t}-badge ${t}-badge--${$(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown"}`,
 		children: n
 	});
 }
-function wz({ cards: e, label: t, loading: n = !1 }) {
+function Lz({ cards: e, label: t, loading: n = !1 }) {
 	return /* @__PURE__ */ (0, X.jsx)("section", {
 		className: "operational-summary-grid",
 		"aria-label": t,
@@ -27837,7 +28159,7 @@ function wz({ cards: e, label: t, loading: n = !1 }) {
 				/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsxs)("span", { children: [/* @__PURE__ */ (0, X.jsx)(a, {
 					size: 17,
 					"aria-hidden": "true"
-				}), e] }), /* @__PURE__ */ (0, X.jsx)(jI, {
+				}), e] }), /* @__PURE__ */ (0, X.jsx)(WI, {
 					label: `About ${e.toLowerCase()}`,
 					children: i
 				})] }),
@@ -27847,7 +28169,7 @@ function wz({ cards: e, label: t, loading: n = !1 }) {
 		}, e))
 	});
 }
-function Tz({ state: e }) {
+function Rz({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	return (0, C.useEffect)(() => n(e.filters), [e.filters]), /* @__PURE__ */ (0, X.jsx)("section", {
 		className: "operational-filter-card",
@@ -27855,10 +28177,10 @@ function Tz({ state: e }) {
 		children: /* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "operational-filter-grid decisions-filter-grid",
 			children: [
-				/* @__PURE__ */ (0, X.jsx)(DI, {
+				/* @__PURE__ */ (0, X.jsx)(BI, {
 					id: "decisionFilter",
 					label: "Decision",
-					options: hz,
+					options: Oz,
 					values: t.decisions,
 					onChange: (e) => n({
 						...t,
@@ -27893,15 +28215,15 @@ function Tz({ state: e }) {
 					children: [/* @__PURE__ */ (0, X.jsx)("button", {
 						id: "decisionApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => bz(oz, {
+						onClick: () => Nz(yz, {
 							type: "apply_filters",
 							filters: t
 						}),
 						children: "Apply Filters"
 					}), /* @__PURE__ */ (0, X.jsx)("button", {
 						id: "decisionClearFiltersBtn",
-						className: `${OI} operational-secondary-action`,
-						onClick: () => bz(oz, { type: "clear_filters" }),
+						className: `${VI} operational-secondary-action`,
+						onClick: () => Nz(yz, { type: "clear_filters" }),
 						children: "Clear"
 					})]
 				})
@@ -27909,29 +28231,29 @@ function Tz({ state: e }) {
 		})
 	});
 }
-function Ez({ row: e }) {
-	return /* @__PURE__ */ (0, X.jsx)(NI, { children: /* @__PURE__ */ (0, X.jsxs)("div", {
+function zz({ row: e }) {
+	return /* @__PURE__ */ (0, X.jsx)(KI, { children: /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: gz(e.queue_rank) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: _z(e.posted_at) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: kz(e.queue_rank) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: Az(e.posted_at) })] }),
 			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Winner resume" }), /* @__PURE__ */ (0, X.jsx)("strong", {
 				title: $(e.winner_resume),
-				children: gz(e.winner_resume)
+				children: kz(e.winner_resume)
 			})] }),
 			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, X.jsx)("strong", {
 				title: $(e.runner_up_resume),
-				children: gz(e.runner_up_resume)
+				children: kz(e.runner_up_resume)
 			})] }),
 			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Selected resume" }), /* @__PURE__ */ (0, X.jsx)("strong", {
 				title: $(e.selected_resume),
-				children: gz(e.selected_resume)
+				children: kz(e.selected_resume)
 			})] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: gz(e.note, "No note recorded") })] })
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: kz(e.note, "No note recorded") })] })
 		]
 	}) });
 }
-function Dz() {
+function Bz() {
 	return [
 		{
 			id: "expand",
@@ -27941,9 +28263,9 @@ function Dz() {
 			maxSize: 42,
 			enableSorting: !1,
 			enableResizing: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(kI, {
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)(HI, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${gz(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${kz(e.original.job_title, "job")}`,
 				controls: `decision-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			})
@@ -27955,7 +28277,7 @@ function Dz() {
 			size: 156,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("time", {
 				dateTime: $(e.original.decision_timestamp),
-				children: _z(e.original.decision_timestamp)
+				children: Az(e.original.decision_timestamp)
 			})
 		},
 		{
@@ -27963,7 +28285,7 @@ function Dz() {
 			header: "Decision",
 			accessorFn: (e) => $(e.decision),
 			size: 118,
-			cell: ({ row: e }) => Cz(e.original.decision, "operational")
+			cell: ({ row: e }) => Iz(e.original.decision, "operational")
 		},
 		{
 			id: "job",
@@ -27972,7 +28294,7 @@ function Dz() {
 			size: 270,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: gz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, X.jsx)("span", { children: gz(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: kz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, X.jsx)("span", { children: kz(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
@@ -27980,7 +28302,7 @@ function Dz() {
 			header: "Planning action",
 			accessorFn: (e) => $(e.planning_action),
 			size: 150,
-			cell: ({ row: e }) => gz(e.original.planning_action)
+			cell: ({ row: e }) => kz(e.original.planning_action)
 		},
 		{
 			id: "selected_resume",
@@ -27990,7 +28312,7 @@ function Dz() {
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
 				className: "operational-truncate",
 				title: $(e.original.selected_resume),
-				children: gz(e.original.selected_resume)
+				children: kz(e.original.selected_resume)
 			})
 		},
 		{
@@ -28007,7 +28329,7 @@ function Dz() {
 				children: "Applied"
 			}) : /* @__PURE__ */ (0, X.jsx)("button", {
 				className: "operational-row-action",
-				onClick: () => bz(oz, {
+				onClick: () => Nz(yz, {
 					type: "open_application",
 					row: e.original
 				}),
@@ -28016,14 +28338,14 @@ function Dz() {
 		}
 	];
 }
-function Oz({ state: e }) {
-	let [t, n] = (0, C.useState)(() => xz(dz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(Dz, []), o = (0, C.useMemo)(() => yz(e.sort), [e.sort]);
+function Vz({ state: e }) {
+	let [t, n] = (0, C.useState)(() => Pz(wz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(Bz, []), o = (0, C.useMemo)(() => Mz(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.pagination.page,
 		e.sort
 	]);
-	let s = wI({
+	let s = LI({
 		data: e.rows,
 		columns: a,
 		state: {
@@ -28031,15 +28353,15 @@ function Oz({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: vz,
-		getCoreRowModel: vI(),
-		getSortedRowModel: yI(),
+		getRowId: jz,
+		getCoreRowModel: jI(),
+		getSortedRowModel: MI(),
 		getRowCanExpand: () => !0,
 		enableSortingRemoval: !1,
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && bz(oz, {
+			t && Nz(yz, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -28047,14 +28369,14 @@ function Oz({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return Sz(dz, n), n;
+			return Fz(wz, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
 			i(Object.keys(a).find((e) => a[e] && e !== r) || Object.keys(a).find((e) => a[e]) || "");
 		}
 	});
-	return /* @__PURE__ */ (0, X.jsx)(LI, {
+	return /* @__PURE__ */ (0, X.jsx)(XI, {
 		className: "operational-table-card decisions-table-card",
 		ariaLabel: "Operator decisions table",
 		title: "Operator decisions",
@@ -28070,30 +28392,30 @@ function Oz({ state: e }) {
 		stickyColumnId: "application_action",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `decision-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)(Ez, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)(zz, { row: e.original }),
 		empty: /* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: "No operator decisions match the current filters." }), /* @__PURE__ */ (0, X.jsx)("button", {
-				className: OI,
-				onClick: () => bz(oz, { type: "clear_filters" }),
+				className: VI,
+				onClick: () => Nz(yz, { type: "clear_filters" }),
 				children: "Clear filters"
 			})]
 		}),
-		onPageChange: (e) => bz(oz, {
+		onPageChange: (e) => Nz(yz, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => bz(oz, { type: "retry" }),
+		onRetry: () => Nz(yz, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function kz({ state: e }) {
+function Hz({ state: e }) {
 	let t = e.rows, n = new Set(t.map((e) => $(e.job_doc_id || e.job_url || `${e.job_company}|${e.job_title}`)).filter(Boolean));
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, X.jsx)(wz, {
+			/* @__PURE__ */ (0, X.jsx)(Lz, {
 				cards: [
 					{
 						label: "Total decisions",
@@ -28127,22 +28449,22 @@ function kz({ state: e }) {
 				label: "Decision summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, X.jsx)(Tz, { state: e }),
-			/* @__PURE__ */ (0, X.jsx)(Oz, { state: e })
+			/* @__PURE__ */ (0, X.jsx)(Rz, { state: e }),
+			/* @__PURE__ */ (0, X.jsx)(Vz, { state: e })
 		]
 	});
 }
-function Az({ state: e }) {
+function Uz({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (t) => {
-		t !== e.activeTab && bz(lz, {
+		t !== e.activeTab && Nz(Sz, {
 			type: "tab_change",
 			tab: t
 		});
 	}, i = (e, t) => {
 		e.key !== "ArrowLeft" && e.key !== "ArrowRight" || (e.preventDefault(), r(t === "APPLIED" ? "SAVED" : "APPLIED"));
-	}, a = (e) => `${OI} applications-tab ${e ? "is-active" : "is-inactive"}`;
+	}, a = (e) => `${VI} applications-tab ${e ? "is-active" : "is-inactive"}`;
 	return /* @__PURE__ */ (0, X.jsxs)("section", {
 		className: "operational-filter-card applications-filter-card",
 		children: [/* @__PURE__ */ (0, X.jsxs)("div", {
@@ -28201,15 +28523,15 @@ function Az({ state: e }) {
 					children: [/* @__PURE__ */ (0, X.jsx)("button", {
 						id: "applicationApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => bz(lz, {
+						onClick: () => Nz(Sz, {
 							type: "apply_filters",
 							filters: t
 						}),
 						children: "Apply Filters"
 					}), /* @__PURE__ */ (0, X.jsx)("button", {
 						id: "applicationClearFiltersBtn",
-						className: `${OI} operational-secondary-action`,
-						onClick: () => bz(lz, { type: "clear_filters" }),
+						className: `${VI} operational-secondary-action`,
+						onClick: () => Nz(Sz, { type: "clear_filters" }),
 						children: "Clear"
 					})]
 				})
@@ -28217,20 +28539,20 @@ function Az({ state: e }) {
 		})]
 	});
 }
-function jz({ row: e }) {
-	return /* @__PURE__ */ (0, X.jsx)(NI, { children: /* @__PURE__ */ (0, X.jsxs)("div", {
+function Wz({ row: e }) {
+	return /* @__PURE__ */ (0, X.jsx)(KI, { children: /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: _z(e.action_timestamp) })] }),
-			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: gz(e.source_view) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: Az(e.action_timestamp) })] }),
+			/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: kz(e.source_view) })] }),
 			/* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "is-wide",
-				children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: gz(e.note, "No note recorded") })]
+				children: [/* @__PURE__ */ (0, X.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, X.jsx)("strong", { children: kz(e.note, "No note recorded") })]
 			})
 		]
 	}) });
 }
-function Mz() {
+function Gz() {
 	return [
 		{
 			id: "expand",
@@ -28240,9 +28562,9 @@ function Mz() {
 			maxSize: 42,
 			enableSorting: !1,
 			enableResizing: !1,
-			cell: ({ row: e }) => e.getCanExpand() ? /* @__PURE__ */ (0, X.jsx)(kI, {
+			cell: ({ row: e }) => e.getCanExpand() ? /* @__PURE__ */ (0, X.jsx)(HI, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${gz(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${kz(e.original.job_title, "job")}`,
 				controls: `application-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			}) : null
@@ -28252,7 +28574,7 @@ function Mz() {
 			header: "Date / time",
 			accessorFn: (e) => $(e.action_timestamp),
 			size: 156,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("time", { children: _z(e.original.action_timestamp) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("time", { children: Az(e.original.action_timestamp) })
 		},
 		{
 			id: "job",
@@ -28261,7 +28583,7 @@ function Mz() {
 			size: 300,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: gz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, X.jsx)("span", { children: gz(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: kz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, X.jsx)("span", { children: kz(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
@@ -28269,14 +28591,14 @@ function Mz() {
 			header: "Status",
 			accessorFn: (e) => $(e.application_status),
 			size: 130,
-			cell: ({ row: e }) => Cz(e.original.application_status, "application")
+			cell: ({ row: e }) => Iz(e.original.application_status, "application")
 		},
 		{
 			id: "source_view",
 			header: "Source view",
 			accessorFn: (e) => $(e.source_view),
 			size: 140,
-			cell: ({ row: e }) => gz(e.original.source_view)
+			cell: ({ row: e }) => kz(e.original.source_view)
 		},
 		{
 			id: "note",
@@ -28286,7 +28608,7 @@ function Mz() {
 			cell: ({ row: e }) => /* @__PURE__ */ (0, X.jsx)("span", {
 				className: "operational-truncate",
 				title: $(e.original.note),
-				children: gz(e.original.note, "No note")
+				children: kz(e.original.note, "No note")
 			})
 		},
 		{
@@ -28314,15 +28636,15 @@ function Mz() {
 		}
 	];
 }
-function Nz({ state: e }) {
-	let [t, n] = (0, C.useState)(() => xz(fz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(Mz, []), o = (0, C.useMemo)(() => yz(e.sort), [e.sort]);
+function Kz({ state: e }) {
+	let [t, n] = (0, C.useState)(() => Pz(Tz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(Gz, []), o = (0, C.useMemo)(() => Mz(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.activeTab,
 		e.pagination.page,
 		e.sort
 	]);
-	let s = wI({
+	let s = LI({
 		data: e.rows,
 		columns: a,
 		state: {
@@ -28330,15 +28652,15 @@ function Nz({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: vz,
-		getCoreRowModel: vI(),
-		getSortedRowModel: yI(),
+		getRowId: jz,
+		getCoreRowModel: jI(),
+		getSortedRowModel: MI(),
 		getRowCanExpand: (e) => !!$(e.original.note),
 		enableSortingRemoval: !1,
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && bz(lz, {
+			t && Nz(Sz, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -28346,14 +28668,14 @@ function Nz({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return Sz(fz, n), n;
+			return Fz(Tz, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
 			i(Object.keys(a).find((e) => a[e] && e !== r) || Object.keys(a).find((e) => a[e]) || "");
 		}
 	}), c = e.activeTab === "APPLIED" ? "Applied Jobs" : "Saved for Later", l = e.activeTab === "APPLIED" ? "No applied jobs yet." : "No jobs have been saved for later.";
-	return /* @__PURE__ */ (0, X.jsx)(LI, {
+	return /* @__PURE__ */ (0, X.jsx)(XI, {
 		className: "operational-table-card applications-table-card",
 		ariaLabel: `${c} table`,
 		title: c,
@@ -28368,25 +28690,25 @@ function Nz({ state: e }) {
 		stickyColumnId: "open",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `application-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)(jz, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, X.jsx)(Wz, { row: e.original }),
 		empty: /* @__PURE__ */ (0, X.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: l }), /* @__PURE__ */ (0, X.jsx)("span", { children: e.activeTab === "APPLIED" ? "Applied jobs will appear after an explicit manual status update." : "Jobs explicitly saved for later will appear here." })]
 		}),
-		onPageChange: (e) => bz(lz, {
+		onPageChange: (e) => Nz(Sz, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => bz(lz, { type: "retry" }),
+		onRetry: () => Nz(Sz, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function Pz({ state: e }) {
+function qz({ state: e }) {
 	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, X.jsx)(wz, {
+			/* @__PURE__ */ (0, X.jsx)(Lz, {
 				cards: [
 					{
 						label: "Current view",
@@ -28420,76 +28742,88 @@ function Pz({ state: e }) {
 				label: "Application summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, X.jsx)(Az, { state: e }),
-			/* @__PURE__ */ (0, X.jsx)(Nz, { state: e })
+			/* @__PURE__ */ (0, X.jsx)(Uz, { state: e }),
+			/* @__PURE__ */ (0, X.jsx)(Kz, { state: e })
 		]
 	});
 }
 //#endregion
 //#region src/main.tsx
-var Fz = "applylens:executive-kpi-state", Iz = { status: "loading" };
-function Lz() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || Iz);
+var Jz = "applylens:executive-kpi-state", Yz = { status: "loading" };
+function Xz() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_SOURCE_YIELD_STATE__ || aF);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let n = e.detail;
 			n != null && n.status && t(n);
 		};
-		return window.addEventListener(Fz, e), () => window.removeEventListener(Fz, e);
+		return window.addEventListener(iF, e), () => window.removeEventListener(iF, e);
+	}, []), /* @__PURE__ */ (0, X.jsx)(gF, { state: e });
+}
+function Zz() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || Yz);
+	return (0, C.useEffect)(() => {
+		let e = (e) => {
+			let n = e.detail;
+			n != null && n.status && t(n);
+		};
+		return window.addEventListener(Jz, e), () => window.removeEventListener(Jz, e);
 	}, []), /* @__PURE__ */ (0, X.jsx)(rF, { state: e });
 }
-function Rz() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ || HI);
+function Qz() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ || tL);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let n = e.detail;
 			n != null && n.status && t(n);
 		};
-		return window.addEventListener(RI, e), () => window.removeEventListener(RI, e);
-	}, []), /* @__PURE__ */ (0, X.jsx)(sL, { state: e });
+		return window.addEventListener(ZI, e), () => window.removeEventListener(ZI, e);
+	}, []), /* @__PURE__ */ (0, X.jsx)(bL, { state: e });
 }
-function zz({ view: e }) {
-	let [t, n] = (0, C.useState)(() => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || FR);
+function $z({ view: e }) {
+	let [t, n] = (0, C.useState)(() => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || JR);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let t = e.detail;
 			t != null && t.status && n(t);
 		};
-		return window.addEventListener(MR, e), () => window.removeEventListener(MR, e);
-	}, []), e === "filters" ? /* @__PURE__ */ (0, X.jsx)(tz, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, X.jsx)(iz, { state: t }) : /* @__PURE__ */ (0, X.jsx)(nz, { state: t });
+		return window.addEventListener(GR, e), () => window.removeEventListener(GR, e);
+	}, []), e === "filters" ? /* @__PURE__ */ (0, X.jsx)(mz, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, X.jsx)(_z, { state: t }) : /* @__PURE__ */ (0, X.jsx)(hz, { state: t });
 }
-function Bz() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || pz);
+function eB() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || Ez);
 	return (0, C.useEffect)(() => {
 		let e = (e) => t(e.detail);
-		return window.addEventListener(az, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(sz)), () => window.removeEventListener(az, e);
-	}, []), /* @__PURE__ */ (0, X.jsx)(kz, { state: e });
+		return window.addEventListener(vz, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(bz)), () => window.removeEventListener(vz, e);
+	}, []), /* @__PURE__ */ (0, X.jsx)(Hz, { state: e });
 }
-function Vz() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || mz);
+function tB() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || Dz);
 	return (0, C.useEffect)(() => {
 		let e = (e) => t(e.detail);
-		return window.addEventListener(cz, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent(uz)), () => window.removeEventListener(cz, e);
-	}, []), /* @__PURE__ */ (0, X.jsx)(Pz, { state: e });
+		return window.addEventListener(xz, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent(Cz)), () => window.removeEventListener(xz, e);
+	}, []), /* @__PURE__ */ (0, X.jsx)(qz, { state: e });
 }
-var Hz = document.getElementById("executiveKpiRoot");
-Hz && (0, YP.createRoot)(Hz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(Lz, {}) }));
-var Uz = document.getElementById("executiveQueueRoot");
-Uz && (0, YP.createRoot)(Uz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(Rz, {}) }));
-var Wz = document.getElementById("pipelineDashboardRoot");
-Wz && (0, YP.createRoot)(Wz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(VL, {}) }));
-var Gz = document.getElementById("planningSummaryRoot");
-Gz && (0, YP.createRoot)(Gz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(zz, { view: "summary" }) }));
-var Kz = document.getElementById("planningFiltersRoot");
-Kz && (0, YP.createRoot)(Kz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(zz, { view: "filters" }) }));
-var qz = document.getElementById("planningWorklistRoot");
-qz && (0, YP.createRoot)(qz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(zz, { view: "worklist" }) }));
-var Jz = document.getElementById("decisionsDashboardRoot");
-Jz && (0, YP.createRoot)(Jz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(Bz, {}) }));
-var Yz = document.getElementById("applicationsDashboardRoot");
-Yz && (0, YP.createRoot)(Yz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(Vz, {}) }));
-var Xz = document.getElementById("schedulerHealthDashboardRoot");
-Xz && (0, YP.createRoot)(Xz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(lR, {}) }));
-var Zz = document.getElementById("advancedDiagnosticsRoot");
-Zz && (0, YP.createRoot)(Zz).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(jR, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || uR }) }));
+var nB = document.getElementById("executiveKpiRoot");
+nB && (0, YP.createRoot)(nB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(Zz, {}) }));
+var rB = document.getElementById("executiveQueueRoot");
+rB && (0, YP.createRoot)(rB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(Qz, {}) }));
+var iB = document.getElementById("sourceYieldRoot");
+iB && (0, YP.createRoot)(iB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(Xz, {}) }));
+var aB = document.getElementById("pipelineDashboardRoot");
+aB && (0, YP.createRoot)(aB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(eR, {}) }));
+var oB = document.getElementById("planningSummaryRoot");
+oB && (0, YP.createRoot)(oB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)($z, { view: "summary" }) }));
+var sB = document.getElementById("planningFiltersRoot");
+sB && (0, YP.createRoot)(sB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)($z, { view: "filters" }) }));
+var cB = document.getElementById("planningWorklistRoot");
+cB && (0, YP.createRoot)(cB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)($z, { view: "worklist" }) }));
+var lB = document.getElementById("decisionsDashboardRoot");
+lB && (0, YP.createRoot)(lB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(eB, {}) }));
+var uB = document.getElementById("applicationsDashboardRoot");
+uB && (0, YP.createRoot)(uB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(tB, {}) }));
+var dB = document.getElementById("schedulerHealthDashboardRoot");
+dB && (0, YP.createRoot)(dB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(SR, {}) }));
+var fB = document.getElementById("advancedDiagnosticsRoot");
+fB && (0, YP.createRoot)(fB).render(/* @__PURE__ */ (0, X.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, X.jsx)(WR, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || CR }) }));
 //#endregion

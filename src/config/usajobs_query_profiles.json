@@ -16,5 +16,21 @@
       "2210"
     ],
     "remote_only": false
+  },
+  {
+    "profile_id": "public-keyword-artificial-intelligence-us",
+    "keyword": "artificial intelligence",
+    "location_name": "",
+    "organization_codes": [],
+    "job_category_codes": [],
+    "remote_only": false
+  },
+  {
+    "profile_id": "public-keyword-data-scientist-us",
+    "keyword": "data scientist",
+    "location_name": "",
+    "organization_codes": [],
+    "job_category_codes": [],
+    "remote_only": false
   }
 ]

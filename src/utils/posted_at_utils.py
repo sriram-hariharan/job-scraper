@@ -55,6 +55,9 @@ def parse_posted_at(value):
     if not isinstance(value, str):
         return None
 
+    if value == "Posted 30+ Days Ago":
+        return datetime.now(timezone.utc) - timedelta(days=30)
+
     s = value.strip()
 
     # Workday "Posted Yesterday" etc.

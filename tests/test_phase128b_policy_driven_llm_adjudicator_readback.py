@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
+import json
 from pathlib import Path
 
 from src.agents.llm_adjudicator_readback import (
+    _provider_prompt,
+    build_llm_adjudicator_readback_production_task_contract_material,
     build_policy_driven_llm_adjudicator_readback,
     llm_adjudicator_provider_configured,
     resolve_llm_adjudicator_readback_mode,
@@ -15,6 +18,28 @@ from src.agents.llm_adjudicator_readback import (
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "src/agents/llm_adjudicator_readback.py"
 SELECTOR = ROOT / "batch_select_best_resume_variant.py"
+
+
+def test_production_semantic_export_matches_exact_readback_prompt_and_shape():
+    candidates = [_candidate("candidate_alpha", 0.80)]
+    material = build_llm_adjudicator_readback_production_task_contract_material()
+    messages = _provider_prompt(candidates)
+
+    assert messages[0]["content"] == material["prompt_contract"]["system"]
+    assert json.loads(messages[1]["content"]) == {"candidates": candidates}
+    assert material["output_contract"]["fields"] == [
+        "adjudicator_summary",
+        "adjudicator_recommendation_label",
+    ]
+    assert material["output_contract"]["at_least_one_nonempty_field_required"] is True
+    assert material["deterministic_transformation_contract"] == {
+        "summary": "clean_text_then_truncate_to_600_chars",
+        "recommendation_label": "clean_text_then_truncate_to_160_chars",
+        "readback_only": True,
+        "no_winner_override": True,
+        "no_score_override": True,
+        "no_queue_mutation": True,
+    }
 
 
 def _candidate(
@@ -211,7 +236,7 @@ def test_provider_preflight_requires_supported_provider_model_and_key():
     ) is True
     assert llm_adjudicator_provider_configured(
         provider="gemini", model="model", environ={"GEMINI_API_KEY": "key"}
-    ) is True
+    ) is False
     assert llm_adjudicator_provider_configured(
         provider="groq", model="model", environ={}
     ) is False

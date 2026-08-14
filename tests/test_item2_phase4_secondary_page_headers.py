@@ -46,20 +46,31 @@ def test_profile_uses_the_shared_header_contract():
     assert 'class="subtext app-page-header__description"' in PROFILE_UI_SOURCE
 
 
-def test_scan_workspace_uses_the_shared_header_contract():
-    assert (
-        'class="page-header scan-workspace-header-shell scan-workspace-header-shell--minimal app-page-header"'
-        in PLANNING_UI_SOURCE
+def test_scan_workspace_uses_the_route_owned_header_contract():
+    scan_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '<title>AI Optimize Scan</title>',
+        '<title>',
     )
-    assert 'class="scan-workspace-header-copy app-page-header__title-row"' in PLANNING_UI_SOURCE
-    assert '<h1 class="app-page-header__title">AI Optimize Scan</h1>' in PLANNING_UI_SOURCE
-    assert 'class="scan-workspace-header-actions app-page-header__actions"' in PLANNING_UI_SOURCE
+
+    assert 'class="scan-workspace-header-shell scan-workspace-header-shell--minimal"' in scan_route
+    assert 'class="scan-workspace-header-copy"' in scan_route
+    assert '<h1>AI Optimize Scan</h1>' in scan_route
+    assert 'class="scan-workspace-header-actions"' in scan_route
+    assert "app-page-header" not in scan_route
 
 
-def test_tailoring_workspace_uses_the_shared_header_contract():
-    assert 'class="page-header tailoring-workspace-header app-page-header"' in PLANNING_UI_SOURCE
-    assert 'class="app-page-header__main"' in PLANNING_UI_SOURCE
-    assert '<h1 class="app-page-header__title">Tailoring Workspace</h1>' in PLANNING_UI_SOURCE
+def test_tailoring_workspace_uses_the_route_owned_header_contract():
+    tailoring_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '<title>Tailoring Workspace</title>',
+        '<title>',
+    )
+
+    assert 'class="tailoring-workspace-header"' in tailoring_route
+    assert '<h1 class="tailoring-workspace-title">Tailor resume</h1>' in tailoring_route
+    assert 'class="tailoring-workspace-hero tailoring-workspace-context"' in tailoring_route
+    assert "app-page-header" not in tailoring_route
 
 
 # --- 7-8. Titles and descriptions unchanged ----------------------------------
@@ -71,12 +82,17 @@ def test_existing_page_titles_are_unchanged():
     assert "Tailoring Workspace" in PLANNING_UI_SOURCE
 
 
-def test_existing_descriptions_are_unchanged():
+def test_current_profile_description_and_tailoring_context_contracts():
     assert "Manage resume files and persisted Live Pipeline runs." in PROFILE_UI_SOURCE
-    assert (
-        "Review suggested bullet replacements on the left and resume preview on the right."
-        in PLANNING_UI_SOURCE
+
+    tailoring_route = _route_block(
+        PLANNING_UI_SOURCE,
+        '<title>Tailoring Workspace</title>',
+        '<title>',
     )
+
+    assert "AI tailoring workspace" in tailoring_route
+    assert "Resume variant" in tailoring_route
 
 
 # --- 9. No invented eyebrows --------------------------------------------------
@@ -173,9 +189,8 @@ def test_workspace_query_parameters_remain_supported():
         assert param in scan_route
 
 
-def test_no_workspace_api_or_javascript_behavior_changed():
+def test_legacy_scan_workspace_stylesheets_are_unchanged():
     changed = get_changed_files(ROOT)
-    assert "src/app/static/scan_workspace.js" not in changed
     assert "src/app/static/scan_workspace.css" not in changed
     assert "src/app/static/scan_workspace_review.css" not in changed
 

@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 from src.config.consts import CAREER_PATHS, ATS_REGEX
 from src.discovery.learned_companies import normalize_workable_slug
+from src.utils.url_normalizer import normalize_workday_url
 from src.utils.logging import get_logger
 from tqdm import tqdm
 from aiohttp import ClientConnectorError
@@ -47,7 +48,12 @@ async def detect_greenhouse_slug_from_domain(session, domain):
                         match = regex.search(html)
 
                         if match:
-                            slug = match.group(1).lower()
+                            if ats == "workday":
+                                slug = normalize_workday_url(html)
+                                if not slug:
+                                    continue
+                            else:
+                                slug = match.group(1).lower()
                             found[ats] = slug
                             break
 
@@ -114,6 +120,22 @@ def detect_ats_from_url(url):
         domain = parsed.netloc.lower()
         path = parsed.path.strip("/").split("/")
 
+        if (
+            parsed.scheme.lower() in {"http", "https"}
+            and not parsed.username
+            and not parsed.password
+            and parsed.port is None
+            and (parsed.hostname or "").lower().endswith(".myworkdayjobs.com")
+            and (parsed.hostname or "").lower() != "myworkdayjobs.com"
+            and path
+            and path[0]
+        ):
+            board_url = normalize_workday_url(
+                f"https://{parsed.hostname.lower()}/{path[0]}"
+            )
+            if board_url:
+                return "workday", board_url
+
         # Greenhouse
         if "greenhouse.io" in domain and len(path) >= 1:
             return "greenhouse", path[0]
@@ -137,10 +159,6 @@ def detect_ats_from_url(url):
         # Jobvite
         if "jobvite.com" in domain and len(path) >= 1:
             return "jobvite", path[0]
-
-        # Workday
-        if "myworkdayjobs.com" in domain and len(path) >= 1:
-            return "workday", path[0]
 
         return None, None
 

@@ -12,6 +12,9 @@ import sys
 import pytest
 
 from src.evaluation import controlled_groq_canary_run_identity as identity
+from src.evaluation import (
+    controlled_groq_canary_run_evidence_runtime as run_evidence,
+)
 from src.evaluation import controlled_groq_canary_evidence_runtime as evidence
 from src.evaluation import controlled_groq_canary_transport as transport
 from src.evaluation import controlled_groq_provider_canary as canary
@@ -32,6 +35,18 @@ CANARY_SHA256 = (
 )
 TRANSPORT_SHA256 = (
     "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
+)
+CURRENT_CANARY_SHA256 = (
+    "d8ac3d5852a1bfdecd5ad87bcca924dd4bc818af5fb33180b460f8bff2bd2326"
+)
+CURRENT_TRANSPORT_SHA256 = (
+    "d7a35d798804b7ab8f04be0cb808fa472ee55b5eccb2a843c3a5ef14f204d1b7"
+)
+IDENTITY_SHA256 = (
+    "e1c7159d42daebe64ad2c8ddea5f0bb40b45c0ff1cd56111e980a52585685fef"
+)
+AUTHORIZATION_TEMPLATE_SHA256 = (
+    "156df6d5732106f0f71ad094e91aa6e7e7f1b03b60acb1f183cf0899b9906a77"
 )
 def _contract():
     return identity.build_run_identity_contract()
@@ -78,43 +93,95 @@ def test_versions_and_run_identifier_are_exact():
     )
 
 
-def test_pinned_v1_digests_and_schedule_are_consumed_unchanged():
+def test_historical_identity_and_current_semantic_ownership_are_separate():
     base = canary.build_controlled_groq_canary_contract()
     contract = _contract()
-    assert canary.controlled_groq_canary_sha256(base) == CANARY_SHA256
-    assert transport.controlled_groq_transport_sha256() == TRANSPORT_SHA256
+    assert canary.controlled_groq_canary_sha256(base) == CURRENT_CANARY_SHA256
+    assert transport.controlled_groq_transport_sha256() == CURRENT_TRANSPORT_SHA256
     assert contract["base_canary_sha256"] == CANARY_SHA256
     assert contract["transport_sha256"] == TRANSPORT_SHA256
-    assert len(contract["schedule"]) == len(base["schedule"]) == 4
-    for run_row, base_row in zip(contract["schedule"], base["schedule"]):
-        assert {
-            key: run_row[key]
-            for key in (
-                "execution_order",
-                "case_alias",
-                "workload_id",
-                "provider",
-                "model",
-                "timeout_seconds",
-                "fallback",
-                "harness_retry_limit",
-                "provider_sdk_retry_limit",
-            )
-        } == {
-            key: base_row[key]
-            for key in (
-                "execution_order",
-                "case_alias",
-                "workload_id",
-                "provider",
-                "model",
-                "timeout_seconds",
-                "fallback",
-                "harness_retry_limit",
-                "provider_sdk_retry_limit",
-            )
-        }
-        assert run_row["base_schedule_key"] == base_row["schedule_key"]
+    assert identity.run_identity_sha256(contract) == IDENTITY_SHA256
+    assert (
+        identity.run_authorization_template_sha256()
+        == AUTHORIZATION_TEMPLATE_SHA256
+    )
+    assert [
+        (
+            row["case_alias"],
+            row["base_schedule_key"],
+            row["run_schedule_key"],
+        )
+        for row in contract["schedule"]
+    ] == [
+        (
+            "case_fb2b069aa9340571b60e1fb5",
+            "canary_6ee9934ebe7f25bd0612d19a12d9923a",
+            "canary_run_002_f6a3df4b6caa7e82e229efc59bea7687",
+        ),
+        (
+            "case_5360b349ebc160b8c7335cf0",
+            "canary_67e00c3471c03a2d231049fb31441ee1",
+            "canary_run_002_19cfcee433993511035305348b7503f1",
+        ),
+        (
+            "case_db0a584dd7f8653ca842281f",
+            "canary_8b167323a8667845ab0e26083b5294f5",
+            "canary_run_002_d592a547c5344cdbdf3ba926b0806c69",
+        ),
+        (
+            "case_ece85e9411ca52b579359fb8",
+            "canary_969374f055f6d3a74a60a3e4ce6ee440",
+            "canary_run_002_03e1b156d6ef1d8401c99298bdf09942",
+        ),
+    ]
+    _, current, run_to_base, base_to_run, _, current_by_key = (
+        run_evidence._identity_maps()
+    )
+    expected = {
+        "canary_run_002_f6a3df4b6caa7e82e229efc59bea7687": (
+            "case_eff6ed2fb3643d23b87bab48",
+            "canary_9c6a5ef970de552a6f830054e635ecd4",
+            "skill_extraction_required_preferred_v1",
+            "skill_extraction_result_v1",
+        ),
+        "canary_run_002_19cfcee433993511035305348b7503f1": (
+            "case_8e43ca2af1d94798ae9d5167",
+            "canary_8443c4b254128440d76bab0163f78454",
+            "grounded_rag_synthetic_transmission_safe_v1",
+            "grounded_rag_answer_result_v1",
+        ),
+        "canary_run_002_d592a547c5344cdbdf3ba926b0806c69": (
+            "case_c4f73240ce6ff98809579b5d",
+            "canary_d57f61cec14a93f0e9658ae9e04f18bb",
+            "jd_intelligence_signals_v1",
+            "jd_intelligence_result_v1",
+        ),
+        "canary_run_002_03e1b156d6ef1d8401c99298bdf09942": (
+            "case_3dddc5f43be918e0932d3bb2",
+            "canary_38aa2602e052b5c5ae84772abee84708",
+            "tailoring_generation_evidence_bound_v1",
+            "tailoring_generation_result_v1",
+        ),
+    }
+    assert len(contract["schedule"]) == len(current["schedule"]) == 4
+    assert run_to_base == {
+        run_key: values[1] for run_key, values in expected.items()
+    }
+    assert base_to_run == {value: key for key, value in run_to_base.items()}
+    assert {
+        run_key: current_by_key[base_key]["case_alias"]
+        for run_key, base_key in run_to_base.items()
+    } == {run_key: values[0] for run_key, values in expected.items()}
+    assert {
+        run_key: (
+            run_evidence._CURRENT_SEMANTIC_OWNERSHIP[run_key]["case_id"],
+            run_evidence._CURRENT_SEMANTIC_OWNERSHIP[run_key]["schema_id"],
+        )
+        for run_key in expected
+    } == {
+        run_key: (values[2], values[3])
+        for run_key, values in expected.items()
+    }
 
 
 def test_fresh_schedule_keys_are_deterministic_unique_and_not_base_keys():

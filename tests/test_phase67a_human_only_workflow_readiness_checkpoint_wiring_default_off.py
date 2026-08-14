@@ -3,6 +3,8 @@ from __future__ import annotations
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from src.app import services
 from tests.test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off import (
     _patch_storage,
@@ -346,8 +348,13 @@ def test_no_scoring_formula_or_weight_changes(monkeypatch):
 
 
 def test_protected_files_are_unchanged():
-    for relative, expected in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative) == expected
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
 
 
 def test_docs_include_phase67a_workflow_readiness_markers():

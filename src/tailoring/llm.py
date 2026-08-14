@@ -4,6 +4,7 @@ import os
 import re
 import json
 import hashlib
+from importlib import import_module
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import Counter
@@ -13,6 +14,14 @@ from src.tailoring.replacement_selector import build_final_replacement_plan
 from src.ai.llm_client import (
     FALLBACK_ENABLED as LLM_FALLBACK_ENABLED,
     run_chat_completion_with_metadata,
+)
+from src.ai.user_provider_runtime import (
+    run_user_chat_completion_with_metadata,
+)
+
+resolve_effective_user_provider_route = getattr(
+    import_module("src.app.provider_model_" "routing_service"),
+    "resolve_effective_user_provider_route",
 )
 
 from src.tailoring.packet_support import (
@@ -35,10 +44,14 @@ from src.tailoring.selection import (
 
 from src.config.consts import (
     ACTION_VERB_HINTS,
+    ANALYTICS_ML_SIGNAL_PATTERNS,
+    DOMAIN_SIGNAL_PATTERNS,
+    EXPERIMENTATION_SIGNAL_PATTERNS,
     TAILORING_ROLE_FAMILY_FALLBACK,
     TAILORING_ROLE_FRAMING_PROFILES,
     TAILORING_STYLE_ONLY_CHURN_HINTS,
     TAILORING_WRITER_STRONG_GAIN_TARGETS,
+    TOOLING_SIGNAL_PATTERNS,
     _SKILL_ALIASES,
 )
 
@@ -62,6 +75,7 @@ LLM_TAILOR_MODEL = os.getenv(
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
 LLM_TAILOR_PROMPT_VERSION = "v6"
+TAILORING_GENERATION_TRANSFORMATION_CONTRACT_VERSION = "tailoring-generation-validation-v1"
 
 TAILOR_LLM_FALLBACK_ENABLED = (
     os.getenv(
@@ -85,7 +99,6 @@ LIVE_REWRITE_RESPONSE_SCHEMA = {
     "properties": {
         "rewrite_directions": {
             "type": "array",
-            "minItems": 1,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -218,6 +231,7 @@ PATCH_REFINEMENT_WRITER_MODEL = os.getenv(
 PATCH_REFINEMENT_WRITER_MAX_TOKENS = 420
 PATCH_REFINEMENT_WRITER_TEMPERATURE = 0
 PATCH_REFINEMENT_WRITER_PROMPT_VERSION = "v2"
+PATCH_REFINEMENT_VALIDATION_CONTRACT_VERSION = "patch-refinement-validation-v1"
 
 PATCH_REFINEMENT_JUDGE_PROVIDER = os.getenv(
     "TAILORING_JUDGE_PROVIDER",
@@ -232,6 +246,7 @@ PATCH_REFINEMENT_JUDGE_MODEL = os.getenv(
 PATCH_REFINEMENT_JUDGE_MAX_TOKENS = 500
 PATCH_REFINEMENT_JUDGE_TEMPERATURE = 0
 PATCH_REFINEMENT_JUDGE_PROMPT_VERSION = "v1"
+PATCH_REFINEMENT_JUDGE_DECISION_CONTRACT_VERSION = "patch-refinement-judge-decision-v1"
 
 
 def tailoring_llm_model_config_payload() -> Dict[str, Any]:
@@ -308,6 +323,112 @@ PATCH_REFINEMENT_JUDGE_RESPONSE_SCHEMA = {
     },
     "required": ["winner", "reason", "rejected_options", "quality_flags"],
 }
+
+TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT = """
+You generate evidence-anchored resume rewrite directions.
+
+You MUST obey these rules:
+1. Return ONLY JSON with one top-level key: rewrite_directions.
+2. Use ONLY the supplied evidence.
+3. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
+4. Direct-overlap bullets are the only primary anchors.
+5. Semantic-similarity bullets are support only.
+6. Same-role or adjacent-context bullets are lowest-priority support only.
+7. If anchor bullets exist, return at least 3 rewrite_directions.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
+9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
+10. Every Lead with / Support with item must reference a specific source entry.
+11. Use only these prefixes: Lead with, Support with, Keep gap explicit, Do not add.
+12. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets exist.
+13. Prefer distinct source labels across Lead with / Support with items when multiple valid sources exist.
+14. Reuse the same source label at most once, and only when the second direction is materially different.
+15. Do not concentrate 3 or more Lead with / Support with items on the same source label.
+16. Lead with / Support with direction fragments must be at least 5 words and materially specific.
+17. Avoid ultra-short fragments like "excel reporting" or "sql visibility".
+"""
+
+TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT = """
+You generate evidence-anchored resume rewrite directions and optional concrete replacement bullets.
+
+You MUST obey these rules:
+1. Return ONLY JSON with top-level keys: rewrite_directions and concrete_replacement_candidates.
+2. Use ONLY the supplied evidence.
+3. Do NOT invent tools, methods, metrics, skills, domains, employers, responsibilities, credentials, or outcomes.
+4. Direct-overlap bullets are the only primary anchors.
+5. Semantic-similarity bullets are support only.
+6. Same-role or adjacent-context bullets are lowest-priority support only.
+7. If anchor bullets exist, return at least 3 rewrite_directions.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
+9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
+10. Every Lead with / Support with item must reference a specific source entry.
+11. concrete_replacement_candidates is optional evidence-backed patch text; return [] when no safe concrete patch exists.
+12. A concrete candidate patch_text must be a complete replacement bullet, not an instruction.
+13. Do not put rewrite directions, writing advice, or "Lead with..." text into patch_text.
+14. Preserve original factual claims unless a changed fact is present in source evidence.
+15. If unsupported_risk_signals would be non-empty, omit the concrete candidate and keep direction-only guidance.
+"""
+
+TAILORING_GENERATION_RETRY_SYSTEM_PROMPT = """
+You are returning JSON for a strict Python parser.
+
+You MUST obey these rules:
+1. Return ONLY valid JSON.
+2. Do NOT return markdown, code fences, commentary, or explanatory text.
+3. Keep the entire JSON on a single line.
+4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
+5. Use empty arrays instead of null.
+6. Output ONLY one top-level key: rewrite_directions.
+7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
+9. Do not return only gap-explicit rewrite directions when anchor bullets are present.
+10. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets are present.
+11. Lead with / Support with direction fragments must be at least 5 words.
+12. Do not concentrate 3 or more Lead with / Support with items on the same source label.
+13. Use ONLY the supplied evidence. Do NOT invent anything.
+"""
+
+TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT = """
+You are returning JSON for a strict Python parser.
+
+You MUST obey these rules:
+1. Return ONLY valid JSON.
+2. Do NOT return markdown, code fences, commentary, or explanatory text.
+3. Keep the entire JSON on a single line.
+4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
+5. Use empty arrays instead of null.
+6. Output ONLY top-level keys: rewrite_directions and concrete_replacement_candidates.
+7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
+8. concrete_replacement_candidates may be [].
+9. concrete patch_text must be a complete replacement bullet, not an instruction.
+10. Use ONLY the supplied evidence. Do NOT invent tools, metrics, domains, employers, responsibilities, outcomes, or unsupported claims.
+"""
+
+PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT = """
+You are the writer stage for one resume bullet under strict evidence constraints.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+Either return:
+ABSTAIN: <short reason>
+or up to two lines:
+OPTION_1: <single rewritten bullet>
+OPTION_2: <single rewritten bullet>
+"""
+
+PATCH_REFINEMENT_JUDGE_SYSTEM_PROMPT = """
+You are the judge stage for one resume bullet rewrite.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+Use exactly:
+WINNER: deterministic | writer_option_1 | writer_option_2 | abstain
+REASON: <one short sentence>
+REJECTED: <comma-separated option ids or none>
+QUALITY_FLAGS: <comma-separated tags or none>
+SCORE_INTENT: <short scorer-visible improvement intent or none>
+EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>
+RISK_FLAGS: <comma-separated risk tags or none>
+"""
 
 def _parse_patch_refinement_writer_text(raw_text: str) -> Dict[str, Any]:
     text = str(raw_text or "").strip()
@@ -1694,6 +1815,7 @@ def _obvious_unbacked_patch_tokens(
     row: Dict[str, Any],
     payload: Dict[str, Any],
 ) -> List[str]:
+    del payload
     evidence_text = " ".join(
         str(value or "")
         for value in (
@@ -1702,27 +1824,225 @@ def _obvious_unbacked_patch_tokens(
             row.get("overlaps", ""),
             row.get("supported_terms", ""),
             row.get("semantic_terms", ""),
-            payload.get("job", {}).get("title", ""),
-            payload.get("job", {}).get("company", ""),
-            payload.get("summary", {}).get("matched_required", ""),
-            payload.get("summary", {}).get("matched_preferred", ""),
-            payload.get("summary", {}).get("matched_terms", ""),
         )
-    ).lower()
-    evidence_tokens = set(re.findall(r"[A-Za-z][A-Za-z0-9+#./-]{2,}", evidence_text))
-    patch_tokens = re.findall(r"\b[A-Z][A-Za-z0-9+#./-]{2,}\b|\b[A-Z]{2,}\b", patch_text)
-    allowed_common = {
-        "Built", "Led", "Managed", "Created", "Developed", "Delivered",
-        "Improved", "Supported", "Drove", "Designed", "Implemented",
-        "Analyzed", "Used", "Using", "Partnered", "Collaborated",
+    )
+    style_only_lead = _is_style_only_live_lead_substitution(patch_text, evidence_text)
+    patch_lead = _patch_refinement_lead_token(patch_text)
+    unbacked: List[str] = []
+    unbacked_keys = set()
+
+    def _append_unbacked(value: str) -> None:
+        text = _text(value)
+        key = text.lower()
+        if not text or not key or key in unbacked_keys:
+            return
+        unbacked_keys.add(key)
+        unbacked.append(text)
+
+    supported_values = (
+        list(row.get("supported_terms", []) or [])
+        + list(row.get("overlaps", []) or [])
+    )
+    grounded_alias_text = " ".join(
+        variant
+        for value in supported_values
+        for variant in _patch_refinement_term_variants(_text(value))
+    )
+    grounded_word_stems = {
+        _live_claim_word_stem(token)
+        for token in re.findall(
+            r"[A-Za-z][A-Za-z0-9+#./-]*",
+            f"{evidence_text} {grounded_alias_text}",
+        )
+        if _live_claim_word_stem(token)
     }
-    unbacked = []
-    for token in patch_tokens:
-        if token in allowed_common:
+    for term in _LIVE_CLAIM_BEARING_SIGNAL_TERMS:
+        if (
+            _live_text_contains_term(patch_text, term)
+            and not _live_text_contains_term(evidence_text, term)
+            and not _live_claim_term_is_grounded(term, grounded_word_stems)
+        ):
+            _append_unbacked(term)
+
+    action_stems = _live_action_word_stems()
+    patch_words = re.findall(r"[A-Za-z][A-Za-z0-9+#./-]*", patch_text)
+    for index, token in enumerate(patch_words):
+        token_lower = token.lower()
+        token_stem = _live_claim_word_stem(token)
+        token_action_stem = _live_action_word_stem(token)
+        if not token_stem or token_stem in grounded_word_stems:
             continue
-        if token.lower() not in evidence_tokens:
-            unbacked.append(token)
-    return _unique_preserve_order(unbacked)[:8]
+        if (
+            _is_live_style_connective_word(patch_words, index)
+            or token_action_stem in action_stems
+        ):
+            continue
+        if style_only_lead and token_lower == patch_lead:
+            continue
+        _append_unbacked(token)
+
+    evidence_numbers = {
+        token.lower() for token in _patch_refinement_numeric_tokens(evidence_text)
+    }
+    for token in _patch_refinement_numeric_tokens(patch_text):
+        if token.lower() not in evidence_numbers:
+            _append_unbacked(token)
+
+    return unbacked[:8]
+
+
+def _live_action_word_stem(value: str) -> str:
+    token = _patch_refinement_lead_token(value)
+    if token.endswith("ied") and len(token) > 4:
+        return token[:-3] + "y"
+    if token.endswith("ying") and len(token) > 5:
+        return token[:-4] + "y"
+    if token.endswith("ing") and len(token) > 5:
+        return token[:-3]
+    if token.endswith("ed") and len(token) > 4:
+        return token[:-2]
+    return token
+
+
+def _live_claim_word_stem(value: str) -> str:
+    token = _patch_refinement_lead_token(value)
+    if token.endswith("ication") and len(token) > 8:
+        return token[:-7]
+    if token.endswith("ied") and len(token) > 4:
+        token = token[:-3] + "y"
+    elif token.endswith("ying") and len(token) > 5:
+        token = token[:-4] + "y"
+    elif token.endswith("tion") and len(token) > 5:
+        token = token[:-3]
+    elif token.endswith("ysis") and len(token) > 6:
+        token = token[:-4] + "yz"
+    elif token.endswith("ment") and len(token) > 6:
+        token = token[:-4]
+    elif token.endswith("ing") and len(token) > 5:
+        token = token[:-3]
+    elif token.endswith("ed") and len(token) > 4:
+        token = token[:-2]
+    elif token.endswith("s") and len(token) > 4:
+        token = token[:-1]
+    if token.endswith("ify") and len(token) > 4:
+        token = token[:-1]
+    if token.endswith("e") and len(token) > 4:
+        token = token[:-1]
+    return token
+
+
+def _live_claim_term_is_grounded(term: str, grounded_word_stems: set) -> bool:
+    term_stems = {
+        _live_claim_word_stem(token)
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9+#./-]*", str(term or ""))
+        if token.lower() not in _LIVE_STYLE_CONNECTIVE_WORDS
+        and _live_claim_word_stem(token)
+    }
+    return bool(term_stems) and term_stems.issubset(grounded_word_stems)
+
+
+def _live_action_word_stems() -> set:
+    return {
+        _live_action_word_stem(value)
+        for value in (
+            list(ACTION_VERB_HINTS)
+            + list(TAILORING_STYLE_ONLY_CHURN_HINTS)
+        )
+        if _live_action_word_stem(value)
+    }
+
+
+def _is_style_only_live_lead_substitution(
+    patch_text: str,
+    evidence_text: str,
+) -> bool:
+    patch_lead = _patch_refinement_lead_token(patch_text)
+    evidence_lead = _patch_refinement_lead_token(evidence_text)
+    if not patch_lead or not evidence_lead or patch_lead == evidence_lead:
+        return False
+
+    action_stems = _live_action_word_stems()
+    evidence_stem = _live_action_word_stem(evidence_lead)
+    patch_stem = _live_action_word_stem(patch_lead)
+    if evidence_stem not in action_stems:
+        return False
+    if patch_stem in action_stems:
+        return True
+
+    patch_words = re.findall(r"[A-Za-z][A-Za-z-]+", str(patch_text or "").lower())
+    return bool(
+        patch_lead.endswith("ing")
+        and len(patch_words) > 1
+        and patch_words[1] in {"in", "through", "using", "while"}
+        and patch_lead not in _LIVE_CLAIM_BEARING_SIGNAL_TERMS
+    )
+
+
+def _live_text_contains_term(text: str, term: str) -> bool:
+    raw_term = _text(term).lower()
+    if len(raw_term) < 2:
+        return False
+    pattern = re.escape(raw_term).replace(r"\ ", r"\s+")
+    return bool(
+        re.search(
+            rf"(?<![A-Za-z0-9]){pattern}(?![A-Za-z0-9])",
+            str(text or "").lower(),
+        )
+    )
+
+
+_LIVE_CLAIM_BEARING_SIGNAL_TERMS = tuple(
+    sorted(
+        {
+            _text(value).lower()
+            for value in (
+                list(TOOLING_SIGNAL_PATTERNS)
+                + list(ANALYTICS_ML_SIGNAL_PATTERNS)
+                + list(EXPERIMENTATION_SIGNAL_PATTERNS)
+                + list(DOMAIN_SIGNAL_PATTERNS)
+            )
+            if len(_text(value)) >= 2
+        },
+        key=lambda value: (-len(value), value),
+    )
+)
+
+_LIVE_STYLE_CONNECTIVE_WORDS = {
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "into",
+    "of", "on", "the", "to", "using", "via", "with", "while", "through",
+}
+
+_LIVE_RESULT_CONNECTIVE_STEMS = {"lead", "result", "yield"}
+
+
+def _is_live_style_connective_word(words: List[str], index: int) -> bool:
+    token = str(words[index] or "").lower()
+    if token in _LIVE_STYLE_CONNECTIVE_WORDS:
+        return True
+    next_token = str(words[index + 1] or "").lower() if index + 1 < len(words) else ""
+    return bool(
+        token.endswith("ing")
+        and _live_claim_word_stem(token) in _LIVE_RESULT_CONNECTIVE_STEMS
+        and next_token in {"in", "to"}
+    )
+
+
+def _authoritative_live_supported_jd_signals(
+    row: Dict[str, Any],
+) -> List[str]:
+    signals: List[str] = []
+    seen = set()
+    for value in (
+        list(row.get("supported_terms", []) or [])
+        + list(row.get("overlaps", []) or [])
+    ):
+        text = _text(value)
+        normalized = normalize_signal_text(text)
+        if not text or not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        signals.append(text)
+    return _unique_preserve_order(signals)
 
 
 def _normalize_live_concrete_replacement_candidates(
@@ -1822,6 +2142,7 @@ def _normalize_live_concrete_replacement_candidates(
             or _text(item.get("original_text", ""))
         )
         source_label = _text(item.get("source", "")) or _display_row_source(row)
+        supported_jd_signals = _authoritative_live_supported_jd_signals(row)
 
         valid.append(
             {
@@ -1851,6 +2172,7 @@ def _normalize_live_concrete_replacement_candidates(
                     if _text(value)
                 ],
                 "unsupported_risk_signals": [],
+                "supported_jd_signals": supported_jd_signals,
                 "likely_impacted_dimensions": [],
                 "llm_refinement_used": True,
                 "live_concrete_candidate_validation_status": "accepted_for_materiality_gate",
@@ -2892,6 +3214,239 @@ def _build_patch_refinement_judge_prompt(
     return "\n".join(lines)
 
 
+def _production_task_contract_representative_tailoring_inputs() -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    evidence_row = {
+        "section": "<section>",
+        "source": "<source>",
+        "source_entry_id": "<source_entry_id>",
+        "source_bullet_id": "<source_bullet_id>",
+        "text": "<evidence_text>",
+        "parent_bullet": "<original_bullet>",
+        "overlaps": ["<supported_signal>"],
+        "evidence_type": "direct_overlap",
+        "semantic_score": 1.0,
+    }
+    packet = {
+        "job": {"company": "<company>", "title": "<job_title>"},
+        "job_snapshot": {"description": "<job_description>"},
+        "selection": {
+            "selected_resume": "<selected_resume>",
+            "selected_score": "<selected_score>",
+        },
+        "summary": {
+            "matched_required": ["<matched_required>"],
+            "missing_required": ["<missing_required>"],
+            "matched_preferred": ["<matched_preferred>"],
+            "missing_preferred": ["<missing_preferred>"],
+            "matched_terms": ["<matched_term>"],
+        },
+        "guardrail": "<guardrail>",
+    }
+    payload = {
+        "job": packet["job"],
+        "job_snapshot": packet["job_snapshot"],
+        "selection": packet["selection"],
+        "summary": packet["summary"],
+        "evidence_layers": {
+            "anchors": [evidence_row],
+            "supports": [],
+            "context": [],
+        },
+        "tailoring_plan": {"safe_to_tailor": [], "unsupported_gaps": []},
+        "rewrite_candidates": [],
+    }
+    candidate = {
+        "source_bullet_id": "<source_bullet_id>",
+        "source_entry_id": "<source_entry_id>",
+        "section": "<section>",
+        "source": "<source>",
+        "original_text": "Improved <original_claim> by 10% using <core_term>.",
+        "patch_text": "Improved <supported_signal> <original_claim> by 10% using <core_term>.",
+        "operation_type": "rewrite",
+        "proposal_status": "patch_ready",
+        "materiality_validation_status": "material_candidate",
+        "supported_jd_signals": ["<supported_signal>"],
+        "canonical_supported_signal": "<supported_signal>",
+        "unsupported_risk_signals": [],
+        "adjacent_risk_signals": [],
+    }
+    return packet, payload, candidate
+
+
+def build_tailoring_generation_production_task_contract_material() -> Dict[str, Any]:
+    from src.tailoring.rendering import (
+        TAILORING_GENERATION_PAYLOAD_CONTRACT_VERSION,
+        TAILORING_GENERATION_PAYLOAD_SEMANTIC_FIELDS,
+    )
+
+    packet, payload, _candidate = _production_task_contract_representative_tailoring_inputs()
+    return {
+        "task_contract_version": LLM_TAILOR_PROMPT_VERSION,
+        "prompt_contract": {
+            "primary_system": TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT,
+            "retry_system": TAILORING_GENERATION_RETRY_SYSTEM_PROMPT,
+            "promotion_system": TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT,
+            "promotion_retry_system": TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT,
+            "primary_user_template": _build_live_rewrite_prompt(packet, payload),
+            "promotion_user_template": _build_live_concrete_rewrite_prompt(packet, payload),
+            "retry_user_prefix": (
+                "Return EXACTLY one-line valid JSON only for the task below. "
+                "No markdown. No code fences. No commentary. "
+                "No literal newline characters inside string values. "
+                "Use empty arrays when needed.\n\n"
+            ),
+        },
+        "input_contract": {
+            "payload_contract_version": TAILORING_GENERATION_PAYLOAD_CONTRACT_VERSION,
+            "payload_semantic_fields": list(TAILORING_GENERATION_PAYLOAD_SEMANTIC_FIELDS),
+            "evidence_tiers": ["anchors", "supports", "context"],
+            "evidence_row_fields": list(payload["evidence_layers"]["anchors"][0]),
+        },
+        "output_contract": {
+            "default_schema": LIVE_REWRITE_RESPONSE_SCHEMA,
+            "promotion_schema": LIVE_REWRITE_WITH_CONCRETE_PATCH_RESPONSE_SCHEMA,
+            "parser": "structured_object_or_first_normalized_json_object",
+        },
+        "deterministic_transformation_contract": {
+            "version": TAILORING_GENERATION_TRANSFORMATION_CONTRACT_VERSION,
+            "steps": [
+                "validate_live_llm_parsed_contract",
+                "canonicalize_direction_objects",
+                "normalize_live_llm_parsed",
+                "canonicalize_direction_sources",
+                "build_shadow_replacement_plan",
+            ],
+            "source_grounding": "exact_available_source_labels",
+            "promotion_mode": "changes_prompt_schema_and_allows_validated_concrete_candidates",
+            "parse_failure": "one_retry_with_retry_prompt_then_empty_parsed_result",
+        },
+        "task_parameters": {
+            "temperature": LLM_TAILOR_TEMPERATURE,
+            "max_tokens": LLM_TAILOR_MAX_TOKENS,
+            "thinking_budget": 0,
+            "response_mime_type": "application/json",
+            "return_parsed": True,
+        },
+    }
+
+
+def build_tailoring_refinement_production_task_contract_material() -> Dict[str, Any]:
+    _packet, payload, candidate = _production_task_contract_representative_tailoring_inputs()
+    return {
+        "task_contract_version": PATCH_REFINEMENT_WRITER_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT,
+            "user_template": _build_patch_refinement_writer_prompt(payload, candidate),
+        },
+        "input_contract": {
+            "candidate_fields": list(candidate),
+            "context": [
+                "job",
+                "matched_jd_terms",
+                "matched_jd_snippets",
+                "role_profile",
+                "sibling_openings",
+                "protected_numbers",
+                "protected_core_terms",
+                "protected_phrases",
+            ],
+        },
+        "output_contract": {
+            "format": "plain_text",
+            "variants": [
+                "ABSTAIN: <short reason>",
+                "OPTION_1: <single rewritten bullet>",
+                "OPTION_2: <single rewritten bullet>",
+            ],
+            "parser": "patch_refinement_writer_plain_text_v1",
+            "maximum_options": 2,
+        },
+        "deterministic_transformation_contract": {
+            "version": PATCH_REFINEMENT_VALIDATION_CONTRACT_VERSION,
+            "steps": [
+                "deduplicate_writer_options",
+                "preserve_numbers_core_terms_and_phrases",
+                "preserve_original_lead_token",
+                "require_supported_signal",
+                "reject_near_duplicate_or_style_only_delta",
+                "keep_deterministic_on_abstain_error_or_no_valid_options",
+            ],
+        },
+        "task_parameters": {
+            "temperature": PATCH_REFINEMENT_WRITER_TEMPERATURE,
+            "max_tokens": PATCH_REFINEMENT_WRITER_MAX_TOKENS,
+            "thinking_budget": 0,
+            "response_mime_type": None,
+            "return_parsed": False,
+        },
+    }
+
+
+def build_tailoring_judge_production_task_contract_material() -> Dict[str, Any]:
+    _packet, payload, candidate = _production_task_contract_representative_tailoring_inputs()
+    writer_options = [
+        {
+            "option_id": "writer_option_1",
+            "patch_text": "<writer_option_1>",
+            "reason": "<writer_reason_1>",
+        },
+        {
+            "option_id": "writer_option_2",
+            "patch_text": "<writer_option_2>",
+            "reason": "<writer_reason_2>",
+        },
+    ]
+    return {
+        "task_contract_version": PATCH_REFINEMENT_JUDGE_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": PATCH_REFINEMENT_JUDGE_SYSTEM_PROMPT,
+            "user_template": _build_patch_refinement_judge_prompt(
+                payload,
+                candidate,
+                writer_options,
+            ),
+        },
+        "input_contract": {
+            "candidate_fields": list(candidate),
+            "writer_option_fields": list(writer_options[0]),
+            "allowed_option_ids": ["writer_option_1", "writer_option_2"],
+        },
+        "output_contract": {
+            "format": "plain_text",
+            "fields": [
+                "WINNER",
+                "REASON",
+                "REJECTED",
+                "QUALITY_FLAGS",
+                "SCORE_INTENT",
+                "EXPECTED_DIMENSIONS",
+                "RISK_FLAGS",
+            ],
+            "allowed_winners": [
+                "deterministic",
+                "writer_option_1",
+                "writer_option_2",
+                "abstain",
+            ],
+            "parser": "patch_refinement_judge_plain_text_v1",
+        },
+        "deterministic_transformation_contract": {
+            "version": PATCH_REFINEMENT_JUDGE_DECISION_CONTRACT_VERSION,
+            "invalid_winner": "abstain",
+            "deterministic_or_abstain": "keep_deterministic",
+            "unavailable_writer_option": "keep_deterministic",
+            "selected_writer_option": "pending_post_validation_export_gate",
+        },
+        "task_parameters": {
+            "temperature": PATCH_REFINEMENT_JUDGE_TEMPERATURE,
+            "max_tokens": PATCH_REFINEMENT_JUDGE_MAX_TOKENS,
+            "thinking_budget": 0,
+            "response_mime_type": None,
+            "return_parsed": False,
+        },
+    }
+
+
 def _keep_deterministic_with_status(
     candidate: Dict[str, Any],
     *,
@@ -3407,17 +3962,7 @@ def _maybe_promote_multisignal_directional_candidate(
         )
         return skipped
 
-    writer_system_prompt = """
-You are the writer stage for one resume bullet under strict evidence constraints.
-Return plain text only.
-Do not use markdown.
-Do not use code fences.
-Either return:
-ABSTAIN: <short reason>
-or up to two lines:
-OPTION_1: <single rewritten bullet>
-OPTION_2: <single rewritten bullet>
-"""
+    writer_system_prompt = PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT
 
     writer_prompt = _build_substantive_multisignal_writer_prompt(payload, candidate)
 
@@ -3627,17 +4172,7 @@ def _maybe_refine_patch_ready_rewrite_candidate(
             note=deterministic_sufficient_note,
         )
 
-    writer_system_prompt = """
-You are the writer stage for one resume bullet under strict evidence constraints.
-Return plain text only.
-Do not use markdown.
-Do not use code fences.
-Either return:
-ABSTAIN: <short reason>
-or up to two lines:
-OPTION_1: <single rewritten bullet>
-OPTION_2: <single rewritten bullet>
-"""
+    writer_system_prompt = PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT
     writer_prompt = _build_patch_refinement_writer_prompt(payload, candidate)
 
     writer_raw, writer_metadata, writer_error_type, writer_error_note = _run_patch_refinement_writer_plain_call(
@@ -3695,20 +4230,7 @@ OPTION_2: <single rewritten bullet>
             invalid_writer_options=invalid_writer_options,
         )
 
-    judge_system_prompt = """
-You are the judge stage for one resume bullet rewrite.
-Return plain text only.
-Do not use markdown.
-Do not use code fences.
-Use exactly:
-WINNER: deterministic | writer_option_1 | writer_option_2 | abstain
-REASON: <one short sentence>
-REJECTED: <comma-separated option ids or none>
-QUALITY_FLAGS: <comma-separated tags or none>
-SCORE_INTENT: <short scorer-visible improvement intent or none>
-EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>
-RISK_FLAGS: <comma-separated risk tags or none>
-"""
+    judge_system_prompt = PATCH_REFINEMENT_JUDGE_SYSTEM_PROMPT
     judge_prompt = _build_patch_refinement_judge_prompt(
         payload,
         candidate,
@@ -3841,7 +4363,37 @@ def _compute_live_llm_cache_meta(
     packet: Dict[str, Any],
     *,
     enable_safe_app_ready_rewrite_promotion: bool = False,
+    requested_provider: Optional[str] = None,
+    requested_model: Optional[str] = None,
+    fallback_enabled: Optional[bool] = None,
+    fallback_provider: Optional[str] = None,
+    fallback_model: Optional[str] = None,
 ) -> Dict[str, Any]:
+    active_provider = (
+        LLM_TAILOR_PROVIDER
+        if requested_provider is None
+        else str(requested_provider or "").strip()
+    )
+    active_model = (
+        LLM_TAILOR_MODEL
+        if requested_model is None
+        else str(requested_model or "").strip()
+    )
+    active_fallback_enabled = (
+        TAILOR_LLM_FALLBACK_ENABLED
+        if fallback_enabled is None
+        else bool(fallback_enabled)
+    )
+    active_fallback_provider = (
+        TAILOR_LLM_FALLBACK_PROVIDER
+        if fallback_provider is None
+        else str(fallback_provider or "").strip()
+    ) if active_fallback_enabled else ""
+    active_fallback_model = (
+        TAILOR_LLM_FALLBACK_MODEL
+        if fallback_model is None
+        else str(fallback_model or "").strip()
+    ) if active_fallback_enabled else ""
     packet_sha256 = _sha256_text(_canonical_json(packet))
 
     job_doc_id = str(
@@ -3862,11 +4414,11 @@ def _compute_live_llm_cache_meta(
             "job_doc_id": job_doc_id,
             "selected_resume": selected_resume,
             "packet_sha256": packet_sha256,
-            "requested_provider": LLM_TAILOR_PROVIDER,
-            "requested_model": LLM_TAILOR_MODEL,
-            "fallback_enabled": TAILOR_LLM_FALLBACK_ENABLED,
-            "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
-            "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+            "requested_provider": active_provider,
+            "requested_model": active_model,
+            "fallback_enabled": active_fallback_enabled,
+            "fallback_provider": active_fallback_provider,
+            "fallback_model": active_fallback_model,
             "prompt_version": LLM_TAILOR_PROMPT_VERSION,
             "safe_app_ready_rewrite_promotion_enabled": bool(
                 enable_safe_app_ready_rewrite_promotion
@@ -3880,11 +4432,11 @@ def _compute_live_llm_cache_meta(
         "packet_sha256": packet_sha256,
         "cache_key": _sha256_text(cache_key_material),
         "prompt_version": LLM_TAILOR_PROMPT_VERSION,
-        "requested_provider": LLM_TAILOR_PROVIDER,
-        "requested_model": LLM_TAILOR_MODEL,
-        "fallback_enabled": TAILOR_LLM_FALLBACK_ENABLED,
-        "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
-        "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+        "requested_provider": active_provider,
+        "requested_model": active_model,
+        "fallback_enabled": active_fallback_enabled,
+        "fallback_provider": active_fallback_provider,
+        "fallback_model": active_fallback_model,
         "safe_app_ready_rewrite_promotion_enabled": bool(
             enable_safe_app_ready_rewrite_promotion
         ),
@@ -3969,9 +4521,81 @@ def _run_live_llm_tailoring(
     refresh_llm_cache: bool = False,
     enable_safe_app_ready_rewrite_promotion: bool = False,
 ) -> Dict[str, Any]:
+    owner_user_id = str(
+        os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
+    ).strip()
+    owner_route_enabled = bool(owner_user_id)
+
+    requested_provider = LLM_TAILOR_PROVIDER
+    requested_model = LLM_TAILOR_MODEL
+    fallback_enabled = TAILOR_LLM_FALLBACK_ENABLED
+    fallback_provider = TAILOR_LLM_FALLBACK_PROVIDER
+    fallback_model = TAILOR_LLM_FALLBACK_MODEL
+
+    if owner_route_enabled:
+        try:
+            effective_route = resolve_effective_user_provider_route(
+                owner_user_id,
+                "tailoring_generation",
+            )
+            requested_provider = str(
+                effective_route.get("provider") or ""
+            ).strip()
+            requested_model = str(
+                effective_route.get("model") or ""
+            ).strip()
+            if not requested_provider or not requested_model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            failure_cache_meta = _compute_live_llm_cache_meta(
+                packet,
+                enable_safe_app_ready_rewrite_promotion=(
+                    enable_safe_app_ready_rewrite_promotion
+                ),
+                requested_provider="",
+                requested_model="",
+                fallback_enabled=False,
+                fallback_provider="",
+                fallback_model="",
+            )
+            return _attach_live_llm_cache_meta(
+                {
+                    "requested_provider": "",
+                    "requested_model": "",
+                    "provider": "",
+                    "model": "",
+                    "resolved_provider": "",
+                    "resolved_model": "",
+                    "fallback_used": False,
+                    "fallback_attempted": False,
+                    "fallback_provider": "",
+                    "fallback_model": "",
+                    "attempted_providers": [],
+                    "parse_ok": False,
+                    "parse_error": (
+                        "Effective tailoring provider route unavailable."
+                    ),
+                    "retry_used": False,
+                    "raw_response": "",
+                    "retry_raw_response": "",
+                    "parsed": _empty_live_llm_parsed(),
+                },
+                failure_cache_meta,
+                cache_hit=False,
+            )
+
+        fallback_enabled = False
+        fallback_provider = ""
+        fallback_model = ""
+
     cache_meta = _compute_live_llm_cache_meta(
         packet,
         enable_safe_app_ready_rewrite_promotion=enable_safe_app_ready_rewrite_promotion,
+        requested_provider=requested_provider,
+        requested_model=requested_model,
+        fallback_enabled=fallback_enabled,
+        fallback_provider=fallback_provider,
+        fallback_model=fallback_model,
     )
 
     if not refresh_llm_cache:
@@ -4004,49 +4628,9 @@ def _run_live_llm_tailoring(
 # 12. Keep lists concise, practical, and recruiter-usable.
 # """
 
-    primary_system_prompt = """
-You generate evidence-anchored resume rewrite directions.
-
-You MUST obey these rules:
-1. Return ONLY JSON with one top-level key: rewrite_directions.
-2. Use ONLY the supplied evidence.
-3. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
-4. Direct-overlap bullets are the only primary anchors.
-5. Semantic-similarity bullets are support only.
-6. Same-role or adjacent-context bullets are lowest-priority support only.
-7. If anchor bullets exist, return at least 3 rewrite_directions.
-8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
-9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
-10. Every Lead with / Support with item must reference a specific source entry.
-11. Use only these prefixes: Lead with, Support with, Keep gap explicit, Do not add.
-12. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets exist.
-13. Prefer distinct source labels across Lead with / Support with items when multiple valid sources exist.
-14. Reuse the same source label at most once, and only when the second direction is materially different.
-15. Do not concentrate 3 or more Lead with / Support with items on the same source label.
-16. Lead with / Support with direction fragments must be at least 5 words and materially specific.
-17. Avoid ultra-short fragments like "excel reporting" or "sql visibility".
-"""
+    primary_system_prompt = TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT
     if enable_safe_app_ready_rewrite_promotion:
-        primary_system_prompt = """
-You generate evidence-anchored resume rewrite directions and optional concrete replacement bullets.
-
-You MUST obey these rules:
-1. Return ONLY JSON with top-level keys: rewrite_directions and concrete_replacement_candidates.
-2. Use ONLY the supplied evidence.
-3. Do NOT invent tools, methods, metrics, skills, domains, employers, responsibilities, credentials, or outcomes.
-4. Direct-overlap bullets are the only primary anchors.
-5. Semantic-similarity bullets are support only.
-6. Same-role or adjacent-context bullets are lowest-priority support only.
-7. If anchor bullets exist, return at least 3 rewrite_directions.
-8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
-9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
-10. Every Lead with / Support with item must reference a specific source entry.
-11. concrete_replacement_candidates is optional evidence-backed patch text; return [] when no safe concrete patch exists.
-12. A concrete candidate patch_text must be a complete replacement bullet, not an instruction.
-13. Do not put rewrite directions, writing advice, or "Lead with..." text into patch_text.
-14. Preserve original factual claims unless a changed fact is present in source evidence.
-15. If unsupported_risk_signals would be non-empty, omit the concrete candidate and keep direction-only guidance.
-"""
+        primary_system_prompt = TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT
 
 #     retry_system_prompt = """
 # You are returning JSON for a strict Python parser.
@@ -4066,53 +4650,41 @@ You MUST obey these rules:
 # 12. Do not use generic action verbs like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.
 # """
 
-    retry_system_prompt = """
-You are returning JSON for a strict Python parser.
-
-You MUST obey these rules:
-1. Return ONLY valid JSON.
-2. Do NOT return markdown, code fences, commentary, or explanatory text.
-3. Keep the entire JSON on a single line.
-4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
-5. Use empty arrays instead of null.
-6. Output ONLY one top-level key: rewrite_directions.
-7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
-8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
-9. Do not return only gap-explicit rewrite directions when anchor bullets are present.
-10. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets are present.
-11. Lead with / Support with direction fragments must be at least 5 words.
-12. Do not concentrate 3 or more Lead with / Support with items on the same source label.
-13. Use ONLY the supplied evidence. Do NOT invent anything.
-"""
+    retry_system_prompt = TAILORING_GENERATION_RETRY_SYSTEM_PROMPT
     if enable_safe_app_ready_rewrite_promotion:
-        retry_system_prompt = """
-You are returning JSON for a strict Python parser.
-
-You MUST obey these rules:
-1. Return ONLY valid JSON.
-2. Do NOT return markdown, code fences, commentary, or explanatory text.
-3. Keep the entire JSON on a single line.
-4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
-5. Use empty arrays instead of null.
-6. Output ONLY top-level keys: rewrite_directions and concrete_replacement_candidates.
-7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
-8. concrete_replacement_candidates may be [].
-9. concrete patch_text must be a complete replacement bullet, not an instruction.
-10. Use ONLY the supplied evidence. Do NOT invent tools, metrics, domains, employers, responsibilities, outcomes, or unsupported claims.
-"""
+        retry_system_prompt = TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT
 
     fallback_attempted = bool(
-        TAILOR_LLM_FALLBACK_ENABLED
-        and LLM_TAILOR_PROVIDER != TAILOR_LLM_FALLBACK_PROVIDER
+        fallback_enabled
+        and requested_provider != fallback_provider
     )
-    attempted_providers = [LLM_TAILOR_PROVIDER]
+    attempted_providers = [requested_provider]
     if fallback_attempted:
-        attempted_providers.append(TAILOR_LLM_FALLBACK_PROVIDER)
+        attempted_providers.append(fallback_provider)
 
     def _call_llm(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        if owner_route_enabled:
+            return run_user_chat_completion_with_metadata(
+                owner_user_id=owner_user_id,
+                provider=requested_provider,
+                model=requested_model,
+                temperature=LLM_TAILOR_TEMPERATURE,
+                max_tokens=LLM_TAILOR_MAX_TOKENS,
+                response_mime_type="application/json",
+                response_schema=_live_rewrite_response_schema(
+                    enable_safe_app_ready_rewrite_promotion
+                ),
+                return_parsed=True,
+                thinking_budget=0,
+                messages=messages,
+            )
         return run_chat_completion_with_metadata(
-            provider=LLM_TAILOR_PROVIDER,
-            model=LLM_TAILOR_MODEL,
+            provider=requested_provider,
+            model=requested_model,
             temperature=LLM_TAILOR_TEMPERATURE,
             max_tokens=LLM_TAILOR_MAX_TOKENS,
             response_mime_type="application/json",
@@ -4121,13 +4693,10 @@ You MUST obey these rules:
             ),
             return_parsed=True,
             thinking_budget=0,
-            fallback_enabled=TAILOR_LLM_FALLBACK_ENABLED,
-            fallback_provider=TAILOR_LLM_FALLBACK_PROVIDER,
-            fallback_model=TAILOR_LLM_FALLBACK_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            fallback_enabled=fallback_enabled,
+            fallback_provider=fallback_provider,
+            fallback_model=fallback_model,
+            messages=messages,
         )
 
     def _raw_text(value: Any) -> str:
@@ -4139,21 +4708,27 @@ You MUST obey these rules:
         result_meta = result_meta or {}
         resolved_provider = str(result_meta.get("provider", "") or "").strip()
         resolved_model = str(result_meta.get("model", "") or "").strip()
-        fallback_used = bool(result_meta.get("fallback_used", False))
+        fallback_used = (
+            False
+            if owner_route_enabled
+            else bool(result_meta.get("fallback_used", False))
+        )
 
         return {
-            "requested_provider": LLM_TAILOR_PROVIDER,
-            "requested_model": LLM_TAILOR_MODEL,
-            "provider": resolved_provider or LLM_TAILOR_PROVIDER,
-            "model": resolved_model or LLM_TAILOR_MODEL,
+            "requested_provider": requested_provider,
+            "requested_model": requested_model,
+            "provider": resolved_provider or requested_provider,
+            "model": resolved_model or requested_model,
             "resolved_provider": resolved_provider,
             "resolved_model": resolved_model,
             "fallback_used": fallback_used,
             "fallback_attempted": fallback_attempted,
-            "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
-            "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+            "fallback_provider": (
+                fallback_provider if fallback_enabled else ""
+            ),
+            "fallback_model": fallback_model if fallback_enabled else "",
             "attempted_providers": _unique_preserve_order(
-                [LLM_TAILOR_PROVIDER, TAILOR_LLM_FALLBACK_PROVIDER if fallback_used else ""]
+                [requested_provider, fallback_provider if fallback_used else ""]
                 if resolved_provider
                 else attempted_providers
             ),

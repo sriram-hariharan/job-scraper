@@ -648,6 +648,22 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function isAccountConfigurationRoute(pathname = window.location.pathname) {
+    const normalizedPath = String(pathname || "/").trim().replace(/\/+$/, "") || "/";
+    return new Set([
+      "/onboarding",
+      "/profile",
+      "/profile/preferences",
+      "/profile/ai-settings",
+    ]).has(normalizedPath);
+  }
+
+  function clearNewUserWorkspaceEmptyState() {
+    storageRemove(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY);
+    document.body.classList.remove("app-new-user-empty");
+    document.querySelectorAll(".new-user-empty-state").forEach((node) => node.remove());
+  }
+
   function openLivePipelineFromShell() {
     if (window.location.pathname !== "/") {
       storageSet(window.sessionStorage, APPLYLENS_OPEN_PIPELINE_KEY, "1");
@@ -672,7 +688,7 @@ window.addEventListener("DOMContentLoaded", () => {
   function ensureNewUserEmptyState() {
     if (storageGet(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY) !== "1") return;
     if (document.body.classList.contains("auth-page")) return;
-    if (window.location.pathname === "/profile") return;
+    if (isAccountConfigurationRoute()) return;
 
     const page = document.querySelector(".page");
     if (!page || page.querySelector(".new-user-empty-state")) return;
@@ -702,8 +718,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   async function refreshNewUserWorkspaceState() {
     if (document.body.classList.contains("auth-page")) return;
-    if (window.location.pathname === "/onboarding") return;
-    if (window.location.pathname === "/profile") return;
+    if (isAccountConfigurationRoute()) return;
 
     try {
       const response = await fetch("/user/workspace-state", {
@@ -719,33 +734,40 @@ window.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      clearNewUserOnboardingState();
+      clearNewUserWorkspaceEmptyState();
     } catch (_) {
       ensureNewUserEmptyState();
     }
   }
 
   async function redirectIncompleteOnboarding() {
-    if (document.body.classList.contains("auth-page")) return;
+    if (document.body.classList.contains("auth-page")) return false;
 
     const currentPath = window.location.pathname || "/";
-    if (currentPath === "/onboarding" || currentPath === "/profile") return;
-    if (currentPath.startsWith("/static/")) return;
+    if (currentPath === "/profile" || currentPath.startsWith("/static/")) return false;
 
     try {
       const response = await fetch("/onboarding/status", {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
       });
-      if (!response.ok) return;
+      if (!response.ok) return false;
 
       const payload = await response.json();
       if (payload && payload.onboarding_completed === false) {
-        window.location.href = "/onboarding";
+        const hasProfileResume = payload.requirements?.has_profile_resume === true;
+        const destination = hasProfileResume
+          ? "/onboarding"
+          : "/profile?onboarding=resume_upload";
+        if (currentPath !== destination) {
+          window.location.href = destination;
+          return true;
+        }
       }
     } catch (_) {
       // Onboarding is a product setup gate; failed status checks should not block navigation.
     }
+    return false;
   }
 
   function closeFirstRunPrompt(modal) {
@@ -755,6 +777,7 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   function showFirstRunPrompt() {
+    if (isAccountConfigurationRoute()) return;
     if (storageGet(window.sessionStorage, APPLYLENS_FIRST_RUN_PROMPT_KEY) !== "1") return;
 
     let modal = qs("firstRunPromptModal");
@@ -1139,8 +1162,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   loadProfileShellUser();
   loadUnreadCount();
-  redirectIncompleteOnboarding();
-  refreshNewUserWorkspaceState();
+  redirectIncompleteOnboarding().then(async (redirecting) => {
+    if (redirecting || isAccountConfigurationRoute()) return;
+    await refreshNewUserWorkspaceState();
+    showFirstRunPrompt();
+  });
   initAuthInactivityLogout();
-  showFirstRunPrompt();
 });

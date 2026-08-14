@@ -167,7 +167,7 @@ def _contains_prohibited_application_data(value):
     return any(marker in text for marker in prohibited_values)
 
 
-def test_checked_in_query_profiles_are_exactly_the_bounded_data_us_activation():
+def test_checked_in_query_profiles_are_exactly_the_two_approved_us_queries():
     path = Path(consts.HIMALAYAS_QUERY_PROFILES_PATH)
     assert json.loads(path.read_text(encoding="utf-8")) == [
         {
@@ -176,7 +176,14 @@ def test_checked_in_query_profiles_are_exactly_the_bounded_data_us_activation():
             "country": "US",
             "exclude_worldwide": True,
             "sort": "recent",
-        }
+        },
+        {
+            "profile_id": "software-us",
+            "query": "software",
+            "country": "US",
+            "exclude_worldwide": True,
+            "sort": "recent",
+        },
     ]
     assert himalayas_scraper._load_query_profiles(path) == [
         {
@@ -190,8 +197,22 @@ def test_checked_in_query_profiles_are_exactly_the_bounded_data_us_activation():
             "employment_type": (),
             "company_slugs": (),
             "sort": "recent",
-        }
+        },
+        {
+            "profile_id": "software-us",
+            "query": "software",
+            "country": "US",
+            "worldwide": False,
+            "exclude_worldwide": True,
+            "timezone": "",
+            "seniority": (),
+            "employment_type": (),
+            "company_slugs": (),
+            "sort": "recent",
+        },
     ]
+    assert not any(profile["query"] == "engineer" for profile in himalayas_scraper._load_query_profiles(path))
+    assert all(profile["query"] for profile in himalayas_scraper._load_query_profiles(path))
 
 
 def test_empty_profiles_exit_before_http_metrics_workers_or_schedule(monkeypatch):
@@ -447,7 +468,7 @@ def test_success_normalizes_active_job_and_discards_application_data(monkeypatch
     assert job["title"] == "Software Engineer"
     assert job["posted_at"] == "2025-08-01T12:00:00Z"
     assert job["expiry_date"] == "2026-09-01T10:40:00Z"
-    assert job["location"] == ["United States", "Canada"]
+    assert job["location"] == ["Remote, United States", "Remote, Canada"]
     assert job["country_restrictions"] == ["United States", "Canada"]
     assert job["timezone_restrictions"] == ["UTC-5", "UTC-8"]
     assert job["remote"] is True
@@ -483,6 +504,59 @@ def test_remote_fallback_and_worldwide_require_empty_country_and_timezone():
     assert timezone_restricted["worldwide"] is False
 
 
+def test_country_restrictions_accept_exact_live_strings_and_strict_object_priority():
+    item = _item()
+    item["locationRestrictions"] = [
+        "US",
+        "Canada",
+        {"alpha2": "FR", "name": "Canada", "slug": "united-states"},
+        {"name": "United States"},
+        {"slug": "germany"},
+    ]
+
+    state, job = himalayas_scraper._normalize_result(item, now=NOW)
+
+    assert state == "usable"
+    assert job["location"] == [
+        "Remote, United States",
+        "Remote, Canada",
+        "Remote, France",
+        "Remote, Germany",
+    ]
+    assert job["country_restrictions"] == [
+        "United States",
+        "Canada",
+        "France",
+        "Germany",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("restrictions", "expected", "worldwide", "unresolved"),
+    [
+        (["US"], ["Remote, United States"], False, False),
+        ([{"name": "France"}], ["Remote, France"], False, False),
+        ([{"slug": "united-states"}], ["Remote, United States"], False, False),
+        (["Worldwide"], ["Remote, Worldwide"], True, False),
+        ([], ["Remote"], True, False),
+        ([True, {"alpha2": "USA"}, {"name": {"nested": "US"}}], ["Remote"], False, True),
+    ],
+)
+def test_country_restriction_boundaries(
+    restrictions, expected, worldwide, unresolved
+):
+    item = _item()
+    item["locationRestrictions"] = restrictions
+    item["timezoneRestrictions"] = []
+
+    state, job = himalayas_scraper._normalize_result(item, now=NOW)
+
+    assert state == "usable"
+    assert job["location"] == expected
+    assert job["worldwide"] is worldwide
+    assert bool(job.get("location_restrictions_unresolved")) is unresolved
+
+
 @pytest.mark.parametrize(
     "application_link",
     [
@@ -501,6 +575,23 @@ def test_external_or_unsafe_application_link_makes_row_malformed(application_lin
         _item(application_link=application_link), now=NOW
     )
     assert (state, job) == ("malformed", None)
+
+
+def test_invalid_application_link_diagnostic_is_bounded_and_payload_free(
+    monkeypatch, capsys
+):
+    invalid = _item(application_link="https://evil.example/private-candidate-payload")
+    _set_page_responses(monkeypatch, _response(_payload([_item(), invalid])))
+
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+    logged = capsys.readouterr().out
+
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "parse_error"
+    assert len(outcome.jobs) == 1
+    assert "row_normalization_invalid_application_link_count=1" in logged
+    assert "evil.example" not in logged
+    assert "private-candidate-payload" not in logged
 
 
 @pytest.mark.parametrize(
@@ -688,6 +779,7 @@ def test_zero_row_nonterminal_page_continues(monkeypatch):
 
 
 def test_two_short_nonterminal_pages_reach_cap_without_page_three(monkeypatch, capsys):
+    monkeypatch.setattr(himalayas_scraper, "HIMALAYAS_MAX_PAGES_PER_PROFILE", 2)
     requests = []
     pages = {
         1: _response(
@@ -706,13 +798,15 @@ def test_two_short_nonterminal_pages_reach_cap_without_page_three(monkeypatch, c
     outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
     logged = capsys.readouterr().out
 
-    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_limit_reached"
     assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 36, 36)
     assert requests == [1, 2]
     assert "bounded_page_cap_reached=true" in logged
 
 
 def test_intentional_page_cap_retains_40_jobs_and_logs_bounded_marker(monkeypatch, capsys):
+    monkeypatch.setattr(himalayas_scraper, "HIMALAYAS_MAX_PAGES_PER_PROFILE", 2)
     first = [_item(f"first-{index}") for index in range(20)]
     second = [_item(f"second-{index}") for index in range(20)]
     _set_page_responses(
@@ -722,10 +816,107 @@ def test_intentional_page_cap_retains_40_jobs_and_logs_bounded_marker(monkeypatc
     )
     outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
     logged = capsys.readouterr().out
-    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_limit_reached"
     assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 40, 40)
     assert "bounded_page_cap_reached=true" in logged
     assert "engineer" not in logged
+
+
+def test_repeated_page_is_partial_without_requesting_to_ceiling(monkeypatch):
+    rows = [_item(f"same-{index}") for index in range(2)]
+    repeated = _response(_payload(rows, total=50))
+    requests = []
+
+    def request(_profile, page):
+        requests.append(page)
+        payload = json.loads(repeated.content)
+        payload["offset"] = (page - 1) * 20
+        return _response(payload)
+
+    monkeypatch.setattr(himalayas_scraper, "_request_page", request)
+
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_no_progress"
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 4, 2)
+    assert requests == [1, 2]
+
+
+def test_reordered_page_with_zero_new_guids_is_partial(monkeypatch):
+    first = [_item("one"), _item("two")]
+    second = [_item("two"), _item("one")]
+    _set_page_responses(
+        monkeypatch,
+        _response(_payload(first, page=1, total=50)),
+        _response(_payload(second, page=2, total=50)),
+    )
+
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+
+    assert outcome.status is AcquisitionStatus.PARTIAL
+    assert outcome.reason == "pagination_no_progress"
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 4, 2)
+
+
+def test_empty_nonterminal_page_can_continue_to_a_later_result(monkeypatch):
+    _set_page_responses(
+        monkeypatch,
+        _response(_payload([], page=1, total=21)),
+        _response(_payload([_item("last")], page=2, total=21)),
+    )
+
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+
+    assert outcome.status is AcquisitionStatus.SUCCESS
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (2, 1, 1)
+
+
+@pytest.mark.parametrize(("total", "status", "reason"), [
+    (201, AcquisitionStatus.PARTIAL, "pagination_limit_reached"),
+    (200, AcquisitionStatus.SUCCESS, ""),
+])
+def test_page_ten_ceiling_status_and_no_page_eleven(
+    monkeypatch, total, status, reason
+):
+    requests = []
+
+    def request(_profile, page):
+        requests.append(page)
+        rows = [_item(f"page-{page}-{index}") for index in range(20)]
+        return _response(_payload(rows, page=page, total=total))
+
+    monkeypatch.setattr(himalayas_scraper, "_request_page", request)
+
+    outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
+
+    assert outcome.status is status
+    assert outcome.reason == reason
+    assert (outcome.page_count, outcome.raw_job_count, len(outcome.jobs)) == (10, 200, 200)
+    assert requests == list(range(1, 11))
+
+
+def test_same_guid_in_separate_profiles_remains_for_centralized_dedupe(monkeypatch):
+    responses = iter(
+        [
+            _response(_payload([_item("shared")])),
+            _response(_payload([_item("shared")])),
+        ]
+    )
+    monkeypatch.setattr(
+        himalayas_scraper,
+        "_request_page",
+        lambda *_args, **_kwargs: next(responses),
+    )
+
+    data = himalayas_scraper._fetch_profile_outcome(_profile("data-us"), now=NOW)
+    software = himalayas_scraper._fetch_profile_outcome(
+        _profile("software-us"), now=NOW
+    )
+
+    assert len(data.jobs) == len(software.jobs) == 1
+    assert data.jobs[0]["job_id"] == software.jobs[0]["job_id"]
 
 
 def test_profiles_execute_sequentially_in_sorted_order_with_exact_metrics(monkeypatch):
@@ -762,18 +953,17 @@ def test_adapter_retains_structurally_trustworthy_irrelevant_job(monkeypatch):
     outcome = himalayas_scraper._fetch_profile_outcome(_profile(), now=NOW)
     assert outcome.status is AcquisitionStatus.SUCCESS
     assert outcome.jobs[0]["title"] == "Chief Poetry Officer"
-    assert outcome.jobs[0]["location"] == ["France"]
+    assert outcome.jobs[0]["location"] == ["Remote, France"]
 
 
-def test_bounds_limit_theoretical_rows_to_160():
+def test_bounds_limit_active_profile_requests_to_twenty():
     assert consts.HIMALAYAS_MAX_QUERY_PROFILES == 4
-    assert consts.HIMALAYAS_MAX_PAGES_PER_PROFILE == 2
+    assert consts.HIMALAYAS_MAX_PAGES_PER_PROFILE == 10
     assert consts.HIMALAYAS_RESULTS_PER_PAGE == 20
     assert (
-        consts.HIMALAYAS_MAX_QUERY_PROFILES
+        2
         * consts.HIMALAYAS_MAX_PAGES_PER_PROFILE
-        * consts.HIMALAYAS_RESULTS_PER_PAGE
-        == 160
+        == 20
     )
 
 

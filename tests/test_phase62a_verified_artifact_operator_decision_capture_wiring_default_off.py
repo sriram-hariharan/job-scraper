@@ -4,6 +4,8 @@ from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from fastapi.testclient import TestClient
 
 from src.app import api, services
@@ -443,8 +445,13 @@ def test_no_application_execution_submission_or_scoring_changes(monkeypatch):
 
 
 def test_protected_files_are_unchanged():
-    for relative, expected in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative) == expected
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
 
 
 def test_docs_include_phase62a_operator_decision_safety_markers():

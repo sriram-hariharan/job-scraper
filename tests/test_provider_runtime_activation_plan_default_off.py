@@ -3,6 +3,8 @@ from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from src.agents.provider_runtime_activation_plan import (
     build_provider_runtime_activation_plan,
 )
@@ -218,7 +220,10 @@ def test_pipeline_dependencies_and_application_authority_are_unchanged():
             "9bb4530b5a308356b908a958456ff18415c19e264b5e1c030fe8828d6caa481f"
         ),
     }
-    for relative_path, expected_hash in expected.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == (
-            expected_hash
-        )
+    assert_protected_hashes(
+        ROOT,
+        expected,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )

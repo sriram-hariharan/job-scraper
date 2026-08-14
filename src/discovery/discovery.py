@@ -22,6 +22,7 @@ from src.discovery.ats_detector import (
 )
 from src.config.consts import SUPPORTED_ATS
 from src.storage.discovery_store import load_ats_detection_cache, save_ats_detection_cache
+from src.utils.url_normalizer import normalize_workday_url
 from tqdm import tqdm
 
 
@@ -84,6 +85,7 @@ def detect_ats_for_domain(domain: str):
 
     try:
         wd_url = extract_workday_board_url(domain)
+        wd_url = normalize_workday_url(wd_url)
         if wd_url:
             result["workday"] = wd_url
             return result
@@ -94,9 +96,12 @@ def detect_ats_for_domain(domain: str):
     try:
         ats, value = detect_ats_from_redirect(domain)
         if ats:
-            # print("REDIRECT:", domain, ats, value)
-            result[ats] = value
-            return result
+            if ats == "workday":
+                value = normalize_workday_url(value)
+            if ats != "workday" or value:
+                # print("REDIRECT:", domain, ats, value)
+                result[ats] = value
+                return result
     except:
         pass
 
@@ -150,6 +155,7 @@ def detect_ats_for_domain(domain: str):
 
         elif ats == "workday":
             wd_url = extract_workday_url(html)
+            wd_url = normalize_workday_url(wd_url)
             if wd_url:
                 result["workday"] = wd_url
                 return result
@@ -209,10 +215,11 @@ def detect_ats_for_domain(domain: str):
             wd_url = None
 
             if link and "myworkdayjobs.com" in link:
-                wd_url = link.split("?")[0]
+                wd_url = normalize_workday_url(link)
 
             if not wd_url:
                 wd_url = extract_workday_url(html)
+                wd_url = normalize_workday_url(wd_url)
 
             if wd_url:
                 result["workday"] = wd_url
@@ -274,6 +281,7 @@ def detect_ats_for_domain(domain: str):
 
         try:
             wd_url = extract_workday_board_url(domain)
+            wd_url = normalize_workday_url(wd_url)
             if wd_url:
                 result["workday"] = wd_url
                 return result

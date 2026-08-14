@@ -29,7 +29,16 @@ from src.utils.pipeline_metrics import observe_acquisition
 logger = get_logger("builtin")
 
 BUILTIN_JOBS_URL = "https://builtin.com/jobs/dev-engineering"
+BUILTIN_JOBS_URLS = (
+    BUILTIN_JOBS_URL,
+    "https://builtin.com/jobs/data-analytics/data-science",
+    "https://builtin.com/jobs/data-analytics/machine-learning",
+)
 BUILTIN_BASE_URL = "https://builtin.com"
+BUILTIN_FAILURE_REASON_PRIORITY = (
+    "transport_error",
+    "non_200_response",
+)
 
 POSTED_TEXT_RE = re.compile(
     r"\b(?:reposted\s+)?(?:(\d+)\s+)?"
@@ -234,9 +243,9 @@ def extract_builtin_jobs_from_html(html_text: str, *, now: Optional[datetime] = 
     return jobs
 
 
-def _fetch_builtin_jobs_html_result():
+def _fetch_builtin_jobs_html_result(url: str = BUILTIN_JOBS_URL):
     request = Request(
-        BUILTIN_JOBS_URL,
+        url,
         headers={"User-Agent": "Mozilla/5.0"},
     )
 
@@ -290,21 +299,50 @@ def smoke_builtin_live(limit: int = 5) -> List[Dict[str, str]]:
 
 def _fetch_builtin_outcome():
     company = "<global_feed>"
-    html_text, reason = _fetch_builtin_jobs_html_result()
-    if reason:
-        return AcquisitionOutcome(
-            company,
-            AcquisitionStatus.FAILED,
-            reason=reason,
+    jobs = []
+    seen_job_urls = set()
+    raw_job_urls = set()
+    failed_reasons = []
+    page_count = 0
+
+    for route_url in BUILTIN_JOBS_URLS:
+        html_text, reason = _fetch_builtin_jobs_html_result(route_url)
+        if reason:
+            failed_reasons.append(reason)
+            continue
+
+        page_count += 1
+        raw_job_urls.update(
+            urljoin(BUILTIN_BASE_URL, href)
+            for href in JOB_HREF_RE.findall(html_text)
         )
-    jobs = extract_builtin_jobs_from_html(html_text)
-    status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+        for job in extract_builtin_jobs_from_html(html_text):
+            job_url = job.get("url")
+            if job_url in seen_job_urls:
+                continue
+            seen_job_urls.add(job_url)
+            jobs.append(job)
+
+    reason = next(
+        (
+            candidate
+            for candidate in BUILTIN_FAILURE_REASON_PRIORITY
+            if candidate in failed_reasons
+        ),
+        failed_reasons[0] if failed_reasons else "",
+    )
+    if failed_reasons:
+        status = AcquisitionStatus.PARTIAL if jobs else AcquisitionStatus.FAILED
+    else:
+        status = AcquisitionStatus.SUCCESS if jobs else AcquisitionStatus.EMPTY
+
     return AcquisitionOutcome(
         company,
         status,
         tuple(jobs),
-        page_count=1,
-        raw_job_count=len(set(JOB_HREF_RE.findall(html_text))),
+        reason=reason,
+        page_count=page_count,
+        raw_job_count=len(raw_job_urls),
     )
 
 

@@ -1,0 +1,2613 @@
+/* AI Optimize Scan — canonical route-owned premium visual system. */
+
+/* 1. Scan tokens */
+#scanWorkspacePage {
+  --scan-page: #eef4fb;
+  --scan-rail: #f7f9fd;
+  --scan-document: #ffffff;
+  --scan-surface: #ffffff;
+  --scan-surface-2: #f5f8fc;
+  --scan-surface-3: #edf2f8;
+  --scan-canvas: #e6edf6;
+  --scan-border: var(--app-border);
+  --scan-border-strong: var(--app-border-2);
+  --scan-text: var(--app-text);
+  --scan-text-2: var(--app-text-2);
+  --scan-muted: var(--app-muted);
+  --scan-primary: var(--app-primary);
+  --scan-primary-strong: var(--app-primary-strong);
+  --scan-ai: var(--app-violet);
+  --scan-success: var(--app-success);
+  --scan-warning: var(--app-warning);
+  --scan-danger: var(--app-danger);
+  --scan-focus: var(--app-focus);
+  --scan-primary-soft: color-mix(in srgb, var(--scan-primary) 10%, var(--scan-surface));
+  --scan-ai-soft: color-mix(in srgb, var(--scan-ai) 11%, var(--scan-surface));
+  --scan-success-soft: color-mix(in srgb, var(--scan-success) 10%, var(--scan-surface));
+  --scan-warning-soft: color-mix(in srgb, var(--scan-warning) 11%, var(--scan-surface));
+  --scan-danger-soft: color-mix(in srgb, var(--scan-danger) 9%, var(--scan-surface));
+  --scan-z-divider: 5;
+  --scan-z-document-overlay: 10;
+  --scan-z-toolbar: 20;
+  --scan-z-menu: 40;
+  --scan-z-popover: 50;
+  --scan-z-modal: 100;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  margin: 0;
+  padding: 18px clamp(16px, 2vw, 30px) 30px;
+  color: var(--scan-text);
+  background: var(--scan-page);
+}
+
+body .app-shell ~ #scanWorkspacePage.page,
+body.app-shell-collapsed .app-shell ~ #scanWorkspacePage.page {
+  width: auto !important;
+  max-width: none !important;
+  margin-right: 0 !important;
+  padding: 18px clamp(16px, 2vw, 30px) 30px !important;
+}
+
+html[data-theme="dark"] #scanWorkspacePage {
+  --scan-page: #080d18;
+  --scan-rail: #10192a;
+  --scan-document: #121a2a;
+  --scan-surface: #172238;
+  --scan-surface-2: #1c2940;
+  --scan-surface-3: #223149;
+  --scan-canvas: #0a1120;
+  --scan-primary-soft: color-mix(in srgb, var(--scan-primary) 15%, var(--scan-surface));
+  --scan-ai-soft: color-mix(in srgb, var(--scan-ai) 16%, var(--scan-surface));
+  --scan-success-soft: color-mix(in srgb, var(--scan-success) 13%, var(--scan-surface));
+  --scan-warning-soft: color-mix(in srgb, var(--scan-warning) 14%, var(--scan-surface));
+  --scan-danger-soft: color-mix(in srgb, var(--scan-danger) 12%, var(--scan-surface));
+  color-scheme: dark;
+}
+
+#scanWorkspacePage,
+#scanWorkspacePage * {
+  box-sizing: border-box;
+}
+
+#scanWorkspacePage [hidden],
+#scanWorkspacePage .hidden {
+  display: none !important;
+}
+
+#scanWorkspacePage :is(button, input, select, textarea) {
+  font: inherit;
+}
+
+#scanWorkspacePage :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--scan-focus);
+  outline-offset: 2px;
+}
+
+#scanWorkspacePage button {
+  appearance: none;
+  margin: 0;
+}
+
+#scanWorkspacePage button:disabled,
+#scanWorkspacePage [aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* 2. Page shell and header */
+.scan-workspace-mode-panel {
+  display: none;
+  min-width: 0;
+}
+
+.scan-workspace-mode-panel.is-active {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.scan-workspace-header-shell {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.scan-workspace-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
+  min-height: 40px;
+}
+
+#scanWorkspacePage .scan-workspace-header-copy h1 {
+  margin: 0;
+  color: var(--scan-text);
+  font-size: clamp(26px, 2vw, 34px) !important;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  line-height: 1.04 !important;
+}
+
+.scan-workspace-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.scan-workspace-header-actions:not(:has(*)) {
+  display: none;
+}
+
+.scan-workspace-back-link,
+.scan-workspace-power-edit-link {
+  color: var(--scan-text-2);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.scan-workspace-back-link {
+  min-height: 36px;
+  padding: 9px 12px;
+  border: 1px solid var(--scan-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--scan-surface) 82%, transparent);
+}
+
+.scan-workspace-back-link:hover,
+.scan-workspace-power-edit-link:hover {
+  color: var(--scan-primary);
+}
+
+/* 3. New Scan intake */
+
+.scan-workspace-intake-card {
+  overflow: hidden;
+  border: 1px solid var(--scan-border);
+  border-radius: 14px;
+  background: var(--scan-surface);
+  box-shadow: 0 18px 48px rgba(28, 43, 70, 0.09);
+}
+
+.scan-workspace-intake-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--scan-border);
+  background: color-mix(in srgb, var(--scan-primary) 3%, var(--scan-surface));
+}
+
+.scan-workspace-intake-header h2,
+.scan-workspace-intake-panel h3 {
+  margin: 0;
+  color: var(--scan-text);
+  font-weight: 760;
+  letter-spacing: -0.015em;
+}
+
+.scan-workspace-intake-header h2 {
+  font-size: 18px;
+}
+
+.scan-workspace-supporting-copy,
+.scan-workspace-input-hint {
+  margin-top: 5px;
+  color: var(--scan-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scan-workspace-sample-btn,
+.scan-workspace-clear-btn,
+.scan-workspace-processing-back-btn,
+.scan-workspace-compare-action-btn {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--scan-text-2);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.scan-workspace-sample-btn:hover,
+.scan-workspace-clear-btn:hover,
+.scan-workspace-processing-back-btn:hover,
+.scan-workspace-compare-action-btn:hover {
+  color: var(--scan-primary);
+  background: var(--scan-primary-soft);
+}
+
+.scan-workspace-intake-grid {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.72fr) minmax(360px, 1.28fr);
+  gap: 0;
+}
+
+.scan-workspace-intake-panel {
+  min-width: 0;
+  padding: 24px;
+}
+
+.scan-workspace-intake-panel--resume {
+  border-right: 1px solid var(--scan-border);
+  background: color-mix(in srgb, var(--scan-primary) 2%, var(--scan-surface));
+}
+
+.scan-workspace-intake-panel--job {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.scan-workspace-intake-panel--job .scan-workspace-intake-panel-header,
+.scan-workspace-input-group--url {
+  grid-column: 1 / -1;
+}
+
+.scan-workspace-intake-panel--jd {
+  grid-column: 1 / -1;
+  padding-top: 0;
+}
+
+.scan-workspace-intake-panel-header {
+  margin-bottom: 18px;
+}
+
+.scan-workspace-intake-panel h3 {
+  font-size: 14px;
+}
+
+.scan-workspace-input-group {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.scan-workspace-input-label,
+.scan-workspace-personal-field > span {
+  color: var(--scan-text-2);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.015em;
+}
+
+#scanWorkspacePage :is(.scan-workspace-input, .scan-workspace-textarea),
+#scanWorkspaceInteractiveSummary .scan-workspace-personal-field :is(input, select) {
+  width: 100%;
+  border: 1px solid var(--scan-border);
+  border-radius: 9px;
+  color: var(--scan-text);
+  background: var(--scan-surface-2);
+  box-shadow: inset 0 1px 2px rgba(20, 34, 58, 0.03);
+}
+
+#scanWorkspacePage .scan-workspace-input {
+  min-height: 42px;
+  padding: 9px 11px;
+}
+
+#scanWorkspacePage .scan-workspace-textarea {
+  min-height: 300px;
+  padding: 14px 15px;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+#scanWorkspacePage :is(.scan-workspace-input, .scan-workspace-textarea):focus,
+#scanWorkspaceInteractiveSummary .scan-workspace-personal-field :is(input, select):focus {
+  border-color: var(--scan-primary);
+  outline: 3px solid color-mix(in srgb, var(--scan-primary) 18%, transparent);
+  background: var(--scan-surface);
+}
+
+#scanWorkspacePage :is(.scan-workspace-input, .scan-workspace-textarea).is-invalid {
+  border-color: var(--scan-danger);
+}
+
+.scan-workspace-field-error {
+  min-height: 15px;
+  color: var(--scan-danger);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.scan-workspace-intake-validation {
+  display: none;
+  margin: 0 24px 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--scan-danger) 28%, var(--scan-border));
+  border-radius: 8px;
+  color: var(--scan-danger);
+  background: var(--scan-danger-soft);
+  font-size: 11px;
+}
+
+.scan-workspace-intake-validation.is-visible {
+  display: block;
+}
+
+.scan-workspace-intake-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--scan-border);
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-intake-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-workspace-start-btn,
+.scan-workspace-processing-ok-btn {
+  min-height: 40px;
+  padding: 9px 17px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--scan-primary);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--scan-primary) 23%, transparent);
+  font-size: 12px;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.scan-workspace-start-btn:hover:not(:disabled),
+.scan-workspace-processing-ok-btn:hover:not(:disabled) {
+  background: var(--scan-primary-strong);
+}
+
+.scan-workspace-start-btn:disabled {
+  color: var(--scan-muted);
+  background: var(--scan-surface-3);
+  box-shadow: none;
+}
+
+/* 4. Processing */
+.scan-workspace-processing-card {
+  overflow: hidden;
+  border: 1px solid var(--scan-border);
+  border-radius: 14px;
+  background: var(--scan-surface);
+  box-shadow: 0 18px 48px rgba(28, 43, 70, 0.09);
+}
+
+.scan-workspace-processing-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--scan-border);
+}
+
+.scan-workspace-processing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--scan-ai);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-processing-badge::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--scan-ai);
+  box-shadow: 0 0 0 5px var(--scan-ai-soft);
+  content: "";
+}
+
+.scan-workspace-processing-shell {
+  max-width: 900px;
+  margin-inline: auto;
+  padding: clamp(28px, 4vw, 52px);
+}
+
+.scan-workspace-processing-title {
+  color: var(--scan-text);
+  font-size: clamp(21px, 2.4vw, 28px);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+}
+
+.scan-workspace-processing-subtitle {
+  margin-top: 7px;
+  color: var(--scan-text-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.scan-workspace-processing-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 24px 0;
+  border: 1px solid var(--scan-border);
+  border-radius: 10px;
+  background: var(--scan-border);
+}
+
+.scan-workspace-processing-summary-card {
+  min-width: 0;
+  padding: 12px;
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-processing-summary-label,
+.scan-workspace-compare-summary-label {
+  color: var(--scan-muted);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-processing-summary-value,
+.scan-workspace-compare-summary-value {
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--scan-text);
+  font-size: 12px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-workspace-processing-bar {
+  height: 6px;
+  overflow: hidden;
+  margin: 0 0 26px;
+  border-radius: 99px;
+  background: var(--scan-surface-3);
+}
+
+.scan-workspace-processing-bar-fill {
+  width: 12%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--scan-ai);
+  transition: width 240ms ease;
+}
+
+.scan-workspace-processing-step-list {
+  position: relative;
+  display: grid;
+  gap: 0;
+}
+
+.scan-workspace-processing-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 68px;
+  padding: 2px 0 18px;
+}
+
+.scan-workspace-processing-step::before {
+  grid-column: 1;
+  grid-row: 1;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--scan-border-strong);
+  border-radius: 50%;
+  background: var(--scan-surface);
+  content: "";
+}
+
+.scan-workspace-processing-step:not(:last-child)::after {
+  position: absolute;
+  top: 26px;
+  bottom: 0;
+  left: 11px;
+  width: 2px;
+  background: var(--scan-border);
+  content: "";
+}
+
+.scan-workspace-processing-step.is-current::before {
+  border-color: var(--scan-ai);
+  background: var(--scan-ai-soft);
+  box-shadow: inset 0 0 0 6px var(--scan-ai);
+}
+
+.scan-workspace-processing-step.is-complete::before {
+  border-color: var(--scan-success);
+  background: var(--scan-success);
+}
+
+.scan-workspace-processing-step.is-complete::after {
+  background: var(--scan-success);
+}
+
+.scan-workspace-processing-step-copy {
+  grid-column: 2;
+}
+
+.scan-workspace-processing-step-title {
+  color: var(--scan-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.scan-workspace-processing-step-text,
+.scan-workspace-processing-note,
+.scan-workspace-processing-complete-copy {
+  margin-top: 4px;
+  color: var(--scan-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.scan-workspace-processing-step-pill {
+  grid-column: 3;
+  color: var(--scan-muted);
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.scan-workspace-processing-step.is-current .scan-workspace-processing-step-pill {
+  color: var(--scan-ai);
+}
+
+.scan-workspace-processing-step.is-complete .scan-workspace-processing-step-pill {
+  color: var(--scan-success);
+}
+
+.scan-workspace-processing-note {
+  padding: 11px 13px;
+  border: 1px solid var(--scan-border);
+  border-radius: 8px;
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-processing-complete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--scan-success) 28%, var(--scan-border));
+  border-radius: 10px;
+  background: var(--scan-success-soft);
+}
+
+.scan-workspace-processing-check {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--scan-success);
+}
+
+.scan-workspace-processing-check::after {
+  content: "✓";
+}
+
+.scan-workspace-processing-complete-title {
+  color: var(--scan-text);
+  font-size: 13px;
+  font-weight: 780;
+}
+
+/* 5. Review split workspace */
+.scan-workspace-mode-panel--review.is-active {
+  min-width: 0;
+}
+
+.scan-workspace-review-shell {
+  --scan-workspace-left-width: 40%;
+  display: grid;
+  grid-template-columns: minmax(380px, var(--scan-workspace-left-width)) 8px minmax(0, 1fr);
+  min-width: 0;
+  height: calc(100vh - 146px);
+  min-height: 690px;
+  overflow: hidden;
+  border: 1px solid var(--scan-border);
+  border-radius: 14px;
+  background: var(--scan-surface);
+  box-shadow: 0 20px 52px rgba(24, 39, 66, 0.12);
+}
+
+.scan-workspace-review-rail,
+.scan-workspace-review-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: var(--scan-surface);
+}
+
+.scan-workspace-review-rail {
+  display: flex;
+  flex-direction: column;
+  background: var(--scan-rail);
+}
+
+.scan-workspace-review-main {
+  display: flex;
+  flex-direction: column;
+  background: var(--scan-document);
+}
+
+.scan-workspace-divider {
+  position: relative;
+  z-index: var(--scan-z-divider);
+  width: 8px;
+  cursor: col-resize;
+  background: var(--scan-surface-3);
+}
+
+.scan-workspace-divider::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 46px;
+  border-radius: 99px;
+  background: var(--scan-border-strong);
+  content: "";
+  transform: translate(-50%, -50%);
+  transition: height 140ms ease, background 140ms ease;
+}
+
+.scan-workspace-divider:hover::after,
+.scan-workspace-divider:focus-visible::after,
+body.scan-workspace-resizing .scan-workspace-divider::after {
+  height: 70px;
+  background: var(--scan-primary);
+}
+
+/* 6. Score and review navigation */
+.scan-workspace-review-rail-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--scan-border);
+}
+
+.scan-workspace-review-score-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.scan-workspace-review-score-ring {
+  display: grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  border: 7px solid color-mix(in srgb, var(--scan-primary) 24%, var(--scan-border));
+  border-top-color: var(--scan-primary);
+  border-radius: 50%;
+  color: var(--scan-primary);
+  background: var(--scan-surface);
+  font-size: 20px;
+  font-weight: 820;
+  font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 0 0 1px var(--scan-border);
+}
+
+.scan-workspace-review-score-copy {
+  min-width: 0;
+}
+
+.scan-workspace-review-score-title {
+  color: var(--scan-text);
+  font-size: 14px;
+  font-weight: 790;
+}
+
+.scan-workspace-review-context-line {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--scan-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-workspace-review-inline-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.scan-workspace-review-inline-metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: 6px;
+  color: var(--scan-text-2);
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-review-inline-metric:nth-child(1) {
+  color: var(--scan-success);
+  background: var(--scan-success-soft);
+}
+
+.scan-workspace-review-inline-metric:nth-child(2) {
+  color: var(--scan-ai);
+  background: var(--scan-ai-soft);
+}
+
+.scan-workspace-review-inline-metric:nth-child(3) {
+  color: var(--scan-warning);
+  background: var(--scan-warning-soft);
+}
+
+.scan-workspace-review-inline-metric-label {
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-workspace-review-inline-metric-value {
+  font-size: 10px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-workspace-review-controls {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--scan-border);
+  background: var(--scan-rail);
+}
+
+.scan-workspace-tab-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.scan-workspace-tab-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 4px 9px;
+  border: 0;
+  border-radius: 0;
+  color: var(--scan-muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.scan-workspace-tab-btn::after {
+  position: absolute;
+  right: 5px;
+  bottom: 0;
+  left: 5px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  content: "";
+}
+
+.scan-workspace-tab-btn:hover {
+  color: var(--scan-text);
+}
+
+.scan-workspace-tab-btn.active {
+  color: var(--scan-primary);
+}
+
+.scan-workspace-tab-btn.active::after {
+  background: var(--scan-primary);
+}
+
+#scanWorkspaceTrustedTab.active::after {
+  background: var(--scan-success);
+}
+
+#scanWorkspaceAiTab.active::after {
+  background: var(--scan-ai);
+}
+
+#scanWorkspaceGuidanceTab.active::after {
+  background: var(--scan-warning);
+}
+
+.scan-review-left-scroll {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.scan-workspace-interactive-summary {
+  min-width: 0;
+  padding: 16px 18px 80px;
+}
+
+/* 7. Taxonomy and finding inventory */
+.scan-workspace-taxonomy-panel {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.scan-workspace-taxonomy-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  padding-bottom: 2px;
+}
+
+.scan-workspace-taxonomy-kicker,
+.scan-workspace-job-description-kicker,
+.scan-workspace-suggestion-popover-kicker,
+.scan-workspace-compare-pane-kicker {
+  color: var(--scan-primary);
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-taxonomy-title {
+  margin-top: 3px;
+  color: var(--scan-text);
+  font-size: 17px;
+  font-weight: 790;
+  letter-spacing: -0.018em;
+}
+
+.scan-workspace-taxonomy-counts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.scan-workspace-taxonomy-count {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 23px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, var(--scan-border));
+  border-radius: 6px;
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-taxonomy-count--matched { color: var(--scan-success); }
+.scan-workspace-taxonomy-count--missing { color: var(--scan-warning); }
+.scan-workspace-taxonomy-count--ai { color: var(--scan-ai); }
+
+.scan-workspace-taxonomy-count-label {
+  font-size: 8px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.scan-workspace-taxonomy-count-value {
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.scan-workspace-taxonomy-group {
+  min-width: 0;
+}
+
+.scan-workspace-taxonomy-group + .scan-workspace-taxonomy-group {
+  padding-top: 18px;
+  border-top: 1px solid var(--scan-border);
+}
+
+.scan-workspace-taxonomy-group-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.scan-workspace-taxonomy-group-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  min-width: 0;
+}
+
+.scan-workspace-taxonomy-group-title {
+  color: var(--scan-text);
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.scan-workspace-taxonomy-group-summary {
+  flex-basis: 100%;
+  color: var(--scan-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scan-workspace-taxonomy-group-weight,
+.scan-workspace-taxonomy-group-count {
+  color: var(--scan-muted);
+  font-size: 10px;
+  font-weight: 740;
+}
+
+.scan-workspace-taxonomy-group-count {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--scan-surface-3);
+}
+
+.scan-workspace-issue-list {
+  display: grid;
+  gap: 7px;
+}
+
+#scanWorkspacePage .scan-workspace-issue-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 13px !important;
+  border: 1px solid var(--scan-border) !important;
+  border-radius: 10px !important;
+  color: var(--scan-text) !important;
+  background: var(--scan-surface) !important;
+  background-image: none !important;
+  font-weight: inherit !important;
+  text-align: left;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+  transition: border-color 130ms ease, background 130ms ease, box-shadow 130ms ease;
+}
+
+#scanWorkspacePage .scan-workspace-issue-row--skill {
+  align-items: center;
+  padding-block: 9px !important;
+}
+
+.scan-workspace-issue-row--skill .scan-workspace-issue-status {
+  align-self: center;
+  margin-top: 0;
+}
+
+.scan-workspace-issue-row--skill .scan-workspace-issue-main {
+  gap: 2px;
+}
+
+.scan-workspace-issue-row--skill[data-scan-evidence-tooltip] .scan-workspace-issue-meta,
+.scan-workspace-issue-row--skill[data-scan-evidence-tooltip] .scan-workspace-issue-count {
+  cursor: help;
+}
+
+#scanWorkspacePage .scan-workspace-issue-row:hover {
+  border-color: var(--scan-border-strong) !important;
+  color: var(--scan-text) !important;
+  background: var(--scan-surface-2) !important;
+  background-image: none !important;
+  box-shadow: 0 8px 20px rgba(20, 35, 60, 0.07) !important;
+  transform: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-issue-row.is-active {
+  border-color: var(--scan-primary) !important;
+  background: var(--scan-primary-soft) !important;
+  background-image: none !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--scan-primary) 13%, transparent) !important;
+}
+
+.scan-workspace-issue-row.is-static {
+  cursor: default;
+}
+
+.scan-workspace-issue-status {
+  align-self: start;
+  width: 7px;
+  height: 7px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--scan-muted);
+}
+
+.scan-workspace-issue-row.is-matched .scan-workspace-issue-status { background: var(--scan-success); }
+.scan-workspace-issue-row.is-ai .scan-workspace-issue-status { background: var(--scan-ai); }
+.scan-workspace-issue-row.is-missing .scan-workspace-issue-status { background: var(--scan-warning); }
+.scan-workspace-issue-row.is-predicted .scan-workspace-issue-status { background: var(--scan-primary); }
+.scan-workspace-issue-row.is-other-keyword .scan-workspace-issue-status { background: var(--scan-muted); }
+
+.scan-workspace-issue-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.scan-workspace-issue-title {
+  overflow-wrap: break-word;
+  color: var(--scan-text);
+  font-size: 14px;
+  font-weight: 720;
+  line-height: 1.4;
+}
+
+.scan-workspace-issue-signals,
+.scan-workspace-issue-jd-context {
+  overflow: visible;
+  color: var(--scan-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.scan-workspace-issue-signals {
+  overflow: visible;
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.scan-workspace-issue-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.scan-workspace-issue-meta,
+.scan-workspace-issue-count,
+.scan-workspace-critic-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 150px;
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 6px;
+  color: var(--scan-text-2);
+  background: var(--scan-surface-3);
+  background-image: none !important;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1.2;
+}
+
+.scan-workspace-issue-pill--ready,
+.scan-workspace-issue-pill--backed,
+.scan-workspace-issue-pill--done,
+.scan-workspace-issue-pill--pass {
+  color: var(--scan-success);
+  background: var(--scan-success-soft);
+}
+
+.scan-workspace-issue-pill--ai-suggested,
+.scan-workspace-issue-pill--ai-replacement,
+.scan-workspace-issue-pill--ai-guidance {
+  color: var(--scan-ai);
+  background: var(--scan-ai-soft);
+}
+
+.scan-workspace-issue-pill--manual-edit,
+.scan-workspace-issue-pill--open,
+.scan-workspace-issue-pill--phrase {
+  color: var(--scan-warning);
+  background: var(--scan-warning-soft);
+}
+
+.scan-workspace-issue-pill--check,
+.scan-workspace-issue-pill--keyword,
+.scan-workspace-issue-pill--seen {
+  color: var(--scan-text-2);
+  background: var(--scan-surface-3);
+}
+
+.scan-workspace-issue-count--score.is-positive { color: var(--scan-success); }
+.scan-workspace-issue-count--score.is-negative { color: var(--scan-danger); }
+
+.scan-workspace-issue-token-wrap,
+.scan-workspace-issue-token-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.scan-workspace-issue-token-icon {
+  color: var(--scan-ai);
+  font-size: 10px;
+}
+
+.scan-workspace-issue-exclude-btn {
+  color: var(--scan-muted);
+  font-size: 8px;
+  font-weight: 720;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.scan-workspace-issue-exclude-btn:hover {
+  color: var(--scan-danger);
+}
+
+/* 8. Personal details and safety callouts */
+.scan-workspace-personal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scan-workspace-personal-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.scan-workspace-personal-field:first-child,
+.scan-workspace-personal-field:nth-child(5),
+.scan-workspace-personal-field:nth-child(6),
+.scan-workspace-personal-field:nth-child(7) {
+  grid-column: 1 / -1;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-personal-field :is(input, select) {
+  min-height: 40px !important;
+  padding: 9px 11px !important;
+  border: 1px solid var(--scan-border) !important;
+  border-radius: 8px !important;
+  color: var(--scan-text) !important;
+  background: var(--scan-surface) !important;
+  box-shadow: none !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-personal-field :is(input, select):focus {
+  border-color: var(--scan-primary) !important;
+  box-shadow: 0 0 0 3px var(--scan-focus) !important;
+}
+
+.scan-workspace-hard-requirement-warning {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--scan-warning) 30%, var(--scan-border));
+  border-radius: 8px;
+  background: var(--scan-warning-soft);
+}
+
+.scan-workspace-hard-requirement-warning-kicker {
+  color: var(--scan-warning);
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-hard-requirement-warning-text {
+  margin: 0;
+  color: var(--scan-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scan-workspace-critic-card {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--scan-border);
+  border-radius: 8px;
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-critic-card-header,
+.scan-workspace-critic-reasons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.scan-workspace-critic-card-kicker {
+  color: var(--scan-muted);
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.scan-workspace-critic-card-badge,
+.scan-workspace-critic-card-meta,
+.scan-workspace-critic-reason {
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: var(--scan-text-2);
+  background: var(--scan-surface-3);
+  font-size: 8px;
+}
+
+.scan-workspace-critic-card--approve .scan-workspace-critic-card-badge,
+.scan-workspace-critic-mini--approve { color: var(--scan-success); background: var(--scan-success-soft); }
+.scan-workspace-critic-card--reject .scan-workspace-critic-card-badge,
+.scan-workspace-critic-mini--reject { color: var(--scan-danger); background: var(--scan-danger-soft); }
+.scan-workspace-critic-card--guidance .scan-workspace-critic-card-badge,
+.scan-workspace-critic-mini--guidance { color: var(--scan-warning); background: var(--scan-warning-soft); }
+
+.scan-workspace-critic-notes,
+.scan-workspace-critic-evidence {
+  margin-top: 7px;
+  color: var(--scan-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+/* 9. Right toolbar and surface switcher */
+.scan-workspace-review-main-header {
+  position: relative;
+  z-index: var(--scan-z-toolbar);
+  flex: 0 0 auto;
+  overflow: visible;
+  border-bottom: 1px solid var(--scan-border);
+  background: var(--scan-document);
+}
+
+.scan-workspace-review-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 58px;
+  overflow: visible;
+  padding: 9px 14px;
+}
+
+.scan-workspace-review-nav,
+.scan-workspace-review-surface-tabs,
+.scan-workspace-review-main-actions,
+.scan-workspace-toolbar-title-actions,
+.scan-workspace-workflow-row {
+  display: flex;
+  align-items: center;
+}
+
+.scan-workspace-review-surface-tabs {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-surface-tab {
+  position: relative;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--scan-muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.scan-workspace-surface-tab.is-active {
+  color: var(--scan-primary);
+  background: var(--scan-primary-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--scan-primary) 18%, transparent);
+}
+
+.scan-workspace-review-main-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+  overflow: visible;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn,
+#scanWorkspacePage .scan-workspace-diagnostics-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px !important;
+  padding: 8px 10px !important;
+  border: 1px solid var(--scan-border) !important;
+  border-radius: 8px !important;
+  color: var(--scan-text-2) !important;
+  background: var(--scan-surface) !important;
+  background-image: none !important;
+  font-size: 11px !important;
+  font-weight: 740 !important;
+  text-decoration: none;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn--icon,
+#scanWorkspacePage .scan-workspace-diagnostics-icon-btn {
+  width: 38px;
+  min-width: 38px;
+  padding: 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn:hover:not(:disabled):not([aria-disabled="true"]),
+#scanWorkspacePage .scan-workspace-diagnostics-icon-btn:hover:not(.is-disabled) {
+  border-color: color-mix(in srgb, var(--scan-primary) 28%, var(--scan-border)) !important;
+  color: var(--scan-primary) !important;
+  background: var(--scan-primary-soft) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn:disabled,
+#scanWorkspacePage .scan-workspace-toolbar-btn[aria-disabled="true"],
+#scanWorkspacePage .scan-workspace-diagnostics-icon-btn.is-disabled {
+  border-color: var(--scan-border) !important;
+  color: var(--scan-muted) !important;
+  background: var(--scan-surface-3) !important;
+  background-image: none !important;
+  opacity: 0.55 !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn--positive:not(:disabled):not([aria-disabled="true"]) {
+  border-color: color-mix(in srgb, var(--scan-success) 30%, var(--scan-border)) !important;
+  color: var(--scan-success) !important;
+  background: var(--scan-success-soft) !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn--secondary:not(:disabled):not([aria-disabled="true"]) {
+  color: var(--scan-primary) !important;
+  background: color-mix(in srgb, var(--scan-primary) 5%, var(--scan-surface)) !important;
+  background-image: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn--primary {
+  border-color: var(--scan-primary) !important;
+  color: #fff !important;
+  background: var(--scan-primary) !important;
+  background-image: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn--primary:hover:not(:disabled) {
+  border-color: var(--scan-primary-strong) !important;
+  color: #fff !important;
+  background: var(--scan-primary-strong) !important;
+  background-image: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn.is-loading,
+#scanWorkspacePage .scan-workspace-suggestion-action-btn.is-loading,
+#scanWorkspacePage .scan-workspace-continue-modal-action.is-loading {
+  cursor: progress !important;
+  opacity: 0.82 !important;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn.is-loading::before,
+#scanWorkspacePage .scan-workspace-suggestion-action-btn.is-loading::before,
+#scanWorkspacePage .scan-workspace-continue-modal-action.is-loading::before {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  content: "";
+  animation: scan-workspace-action-spin 700ms linear infinite;
+}
+
+#scanWorkspacePage .scan-workspace-toolbar-btn--primary.is-loading {
+  border-color: var(--scan-primary) !important;
+  color: #fff !important;
+  background: var(--scan-primary) !important;
+  background-image: none !important;
+}
+
+@keyframes scan-workspace-action-spin {
+  to { transform: rotate(360deg); }
+}
+
+.scan-workspace-toolbar-icon,
+.scan-workspace-diagnostics-icon-btn img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+html[data-theme="dark"] #scanWorkspacePage .scan-workspace-toolbar-icon,
+html[data-theme="dark"] #scanWorkspacePage .scan-workspace-diagnostics-icon-btn img {
+  filter: invert(1) brightness(1.35);
+}
+
+.scan-workspace-disabled-action-wrap,
+.scan-workspace-export-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.scan-workspace-disabled-action-wrap::after {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  bottom: auto;
+  z-index: var(--scan-z-menu);
+  display: none;
+  min-width: max-content;
+  padding: 5px 7px;
+  border-radius: 5px;
+  color: var(--scan-surface);
+  background: var(--scan-text);
+  font-size: 9px;
+  content: attr(data-scan-disabled-help);
+}
+
+.scan-workspace-disabled-action-wrap:focus-within::after,
+.scan-workspace-disabled-action-wrap:hover::after {
+  display: block;
+}
+
+.scan-workspace-evidence-tooltip {
+  position: fixed;
+  z-index: var(--scan-z-menu);
+  display: grid;
+  gap: 4px;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--scan-surface) 18%, transparent);
+  border-radius: 8px;
+  color: var(--scan-surface);
+  background: var(--scan-text);
+  box-shadow: 0 14px 32px rgba(15, 26, 48, 0.24);
+  pointer-events: none;
+}
+
+.scan-workspace-evidence-tooltip[hidden] {
+  display: none !important;
+}
+
+.scan-workspace-evidence-tooltip-kicker {
+  color: color-mix(in srgb, var(--scan-surface) 68%, transparent);
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-evidence-tooltip-copy {
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.scan-workspace-export-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: var(--scan-z-menu);
+  display: grid;
+  min-width: max(100%, 184px);
+  padding: 6px;
+  border: 1px solid var(--scan-border-strong);
+  border-radius: 10px;
+  background: var(--scan-surface);
+  box-shadow: 0 16px 38px rgba(15, 26, 48, 0.22);
+}
+
+.scan-workspace-export-menu-label {
+  padding: 5px 8px 7px;
+  color: var(--scan-muted);
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#scanWorkspacePage .scan-workspace-export-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100% !important;
+  min-height: 40px !important;
+  padding: 8px 9px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  color: var(--scan-text) !important;
+  background: transparent !important;
+  background-image: none !important;
+  font-size: 11px !important;
+  font-weight: 720 !important;
+  text-align: left;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+#scanWorkspacePage .scan-workspace-export-option:hover {
+  border: 0 !important;
+  color: var(--scan-primary) !important;
+  background: var(--scan-primary-soft) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.scan-workspace-export-format-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 5px;
+  color: var(--scan-primary);
+  background: var(--scan-primary-soft);
+}
+
+.scan-workspace-export-format-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.scan-workspace-toolbar-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--scan-border);
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-toolbar-title-actions {
+  min-width: 0;
+  gap: 7px;
+}
+
+.scan-workspace-toolbar-resume-name {
+  overflow: hidden;
+  color: var(--scan-text);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-workspace-rescan-btn {
+  min-height: 28px;
+  padding: 5px 8px;
+}
+
+.scan-workspace-workflow-row {
+  gap: 6px;
+}
+
+.scan-workspace-workflow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--scan-muted);
+  font-size: 9px;
+  font-weight: 730;
+}
+
+.scan-workspace-workflow-step.is-active {
+  color: var(--scan-ai);
+}
+
+.scan-workspace-workflow-step-number {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--scan-surface-3);
+  font-size: 8px;
+}
+
+.scan-workspace-workflow-step.is-active .scan-workspace-workflow-step-number {
+  color: #fff;
+  background: var(--scan-ai);
+}
+
+/* 10. Document preview */
+.scan-workspace-annotation-shell,
+.scan-workspace-annotation-stage,
+.scan-workspace-review-preview-shell,
+.scan-workspace-preview-canvas,
+.scan-workspace-preview-mode-body,
+.scan-workspace-live-draft-preview {
+  min-width: 0;
+  min-height: 0;
+}
+
+.scan-workspace-annotation-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--scan-canvas);
+}
+
+.scan-workspace-annotation-topbar {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--scan-border);
+  background: var(--scan-document);
+}
+
+.scan-workspace-annotation-topbar:has(.scan-workspace-annotation-status:empty) {
+  display: none;
+}
+
+.scan-workspace-annotation-status,
+.scan-workspace-preview-meta,
+.scan-workspace-preview-status {
+  color: var(--scan-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.scan-workspace-annotation-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.scan-workspace-annotation-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--scan-z-document-overlay);
+  pointer-events: none;
+}
+
+.scan-workspace-review-preview-shell,
+.scan-workspace-preview-canvas {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+}
+
+.scan-workspace-preview-header {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--scan-border);
+  background: var(--scan-document);
+}
+
+.scan-workspace-preview-title-row,
+.scan-workspace-preview-meta-inline {
+  display: flex;
+  align-items: center;
+}
+
+.scan-workspace-preview-title-row {
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.scan-workspace-preview-meta-inline {
+  gap: 8px;
+}
+
+.scan-workspace-preview-status {
+  color: var(--scan-primary);
+  font-weight: 720;
+}
+
+.scan-workspace-preview-mode-body,
+.scan-workspace-live-draft-preview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scan-workspace-live-draft-preview {
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 18px clamp(18px, 3vw, 40px) 38px;
+  background: var(--scan-canvas);
+  scrollbar-gutter: stable;
+}
+
+#scanWorkspaceLiveDraftPreview .tailoring-workspace-doc-mirror-note {
+  display: none !important;
+}
+
+.scan-workspace-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 38px;
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--scan-border);
+  background: var(--scan-document);
+}
+
+.scan-workspace-zoom-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--scan-text-2);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.scan-workspace-zoom-btn:hover {
+  color: var(--scan-primary);
+  background: var(--scan-primary-soft);
+}
+
+.scan-workspace-zoom-value {
+  min-width: 48px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-workspace-pdf-preview-shell {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#scanWorkspacePdfScroller {
+  flex: 1 1 auto;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--scan-canvas);
+  scrollbar-gutter: stable;
+}
+
+.scan-workspace-job-description-panel {
+  width: min(100%, 850px);
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 44px);
+  border: 1px solid var(--scan-border);
+  background: var(--scan-document);
+  box-shadow: 0 16px 40px rgba(22, 36, 61, 0.12);
+}
+
+.scan-workspace-job-description-panel h3 {
+  margin: 5px 0 18px;
+  color: var(--scan-text);
+  font-size: 20px;
+  font-weight: 780;
+}
+
+.scan-workspace-job-description-panel pre {
+  margin: 0;
+  max-width: 100%;
+  overflow: visible;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--scan-text-2) !important;
+  background: transparent !important;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.65;
+  box-shadow: none !important;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.scan-workspace-preview-suggestion-target {
+  position: relative;
+  border-radius: 4px;
+  outline: 1px solid color-mix(in srgb, var(--scan-primary) 36%, transparent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--scan-primary) 7%, transparent);
+}
+
+.scan-workspace-preview-suggestion-target--replacement {
+  outline-color: color-mix(in srgb, var(--scan-ai) 45%, transparent);
+  background: color-mix(in srgb, var(--scan-ai) 8%, transparent);
+}
+
+.scan-workspace-preview-suggestion-target--guidance {
+  outline-color: color-mix(in srgb, var(--scan-warning) 48%, transparent);
+  background: color-mix(in srgb, var(--scan-warning) 9%, transparent);
+}
+
+.scan-workspace-preview-suggestion-target[data-scan-preview-active="true"] {
+  outline-width: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--scan-primary) 12%, transparent);
+}
+
+.scan-workspace-preview-suggestion-target[data-scan-preview-decision="accepted"] {
+  outline-color: var(--scan-success);
+  background: color-mix(in srgb, var(--scan-success) 9%, transparent);
+}
+
+.scan-workspace-preview-suggestion-target[data-scan-preview-decision="rejected"] {
+  outline-color: color-mix(in srgb, var(--scan-danger) 52%, transparent);
+  background: var(--scan-danger-soft);
+  opacity: 0.72;
+}
+
+/* 11. Suggestion popover, phrase generation, and decisions */
+.scan-workspace-suggestion-popover {
+  position: fixed;
+  z-index: var(--scan-z-popover);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  width: min(520px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid var(--scan-border-strong);
+  border-radius: 12px;
+  color: var(--scan-text);
+  background: var(--scan-surface);
+  box-shadow: 0 24px 64px rgba(11, 22, 42, 0.28);
+}
+
+.scan-workspace-suggestion-popover-topline,
+.scan-workspace-suggestion-popover-meta,
+.scan-workspace-suggestion-popover-actions {
+  display: flex;
+  align-items: center;
+}
+
+.scan-workspace-suggestion-popover-topline,
+.scan-workspace-suggestion-popover-meta {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scan-workspace-suggestion-popover-kicker {
+  color: var(--scan-ai);
+}
+
+#scanWorkspacePage .scan-workspace-suggestion-popover-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  color: var(--scan-muted) !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+#scanWorkspacePage .scan-workspace-suggestion-popover-close:hover {
+  border-color: var(--scan-border) !important;
+  color: var(--scan-text) !important;
+  background: var(--scan-surface-3) !important;
+  background-image: none !important;
+}
+
+.scan-workspace-suggestion-popover-title {
+  margin-top: 9px;
+  color: var(--scan-text);
+  font-size: 15px;
+  font-weight: 790;
+}
+
+.scan-workspace-suggestion-popover-copy {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  margin-top: 12px;
+  padding-right: 4px;
+  color: var(--scan-text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.scan-workspace-inline-diff {
+  display: grid;
+  gap: 8px;
+}
+
+.scan-workspace-inline-diff-del,
+.scan-workspace-inline-diff-add,
+.scan-workspace-suggestion-reason,
+.scan-workspace-best-draft {
+  padding: 10px 11px;
+  border-radius: 8px;
+  overflow-wrap: break-word;
+}
+
+.scan-workspace-inline-diff-del {
+  color: var(--scan-text-2);
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-inline-diff-add,
+.scan-workspace-best-draft {
+  color: var(--scan-text);
+  background: var(--scan-ai-soft);
+}
+
+.scan-workspace-inline-diff-del::before,
+.scan-workspace-inline-diff-add::before {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 8px;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-inline-diff-del::before { content: "Original"; color: var(--scan-muted); }
+.scan-workspace-inline-diff-add::before { content: "Suggested"; color: var(--scan-ai); }
+
+.scan-workspace-suggestion-reason {
+  margin-top: 8px;
+  color: var(--scan-muted);
+  background: var(--scan-surface-2);
+  font-size: 10px;
+}
+
+.scan-workspace-guidance-textarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, var(--scan-ai) 25%, var(--scan-border));
+  border-radius: 7px;
+  color: var(--scan-text);
+  background: var(--scan-surface);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.scan-workspace-phrase-tools,
+.scan-workspace-phrase-option-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.scan-workspace-phrase-option-list {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+#scanWorkspacePage .scan-workspace-phrase-generate-btn,
+#scanWorkspacePage .scan-workspace-phrase-option {
+  border: 1px solid var(--scan-border) !important;
+  border-radius: 7px !important;
+  color: var(--scan-text-2) !important;
+  background: var(--scan-surface) !important;
+  background-image: none !important;
+  font-size: 10px !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+#scanWorkspacePage .scan-workspace-phrase-generate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  min-height: 34px;
+  padding: 7px 10px;
+  color: var(--scan-ai);
+  font-weight: 760;
+}
+
+#scanWorkspacePage .scan-workspace-phrase-generate-btn.is-loading::before {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  content: "";
+  animation: scan-workspace-action-spin 700ms linear infinite;
+}
+
+.scan-workspace-phrase-option {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 9px;
+  text-align: left;
+  white-space: normal !important;
+}
+
+.scan-workspace-phrase-option:hover {
+  border-color: var(--scan-ai);
+  background: var(--scan-ai-soft);
+}
+
+.scan-workspace-phrase-option-index {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  color: var(--scan-ai);
+  background: var(--scan-ai-soft);
+  font-weight: 820;
+}
+
+.scan-workspace-phrase-option-text {
+  display: block;
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.scan-workspace-phrase-status {
+  color: var(--scan-muted);
+  font-size: 9px;
+}
+
+.scan-workspace-phrase-status.is-error {
+  color: var(--scan-danger);
+}
+
+.scan-workspace-suggestion-popover-meta {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--scan-border);
+}
+
+.scan-workspace-suggestion-decision-pill {
+  padding: 4px 7px;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 780;
+}
+
+.scan-workspace-suggestion-decision-pill--pending { color: var(--scan-warning); background: var(--scan-warning-soft); }
+.scan-workspace-suggestion-decision-pill--accepted { color: var(--scan-success); background: var(--scan-success-soft); }
+.scan-workspace-suggestion-decision-pill--rejected { color: var(--scan-danger); background: var(--scan-danger-soft); }
+
+.scan-workspace-suggestion-decision-meta {
+  color: var(--scan-muted);
+  font-size: 9px;
+}
+
+.scan-workspace-suggestion-popover-actions {
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+#scanWorkspacePage .scan-workspace-suggestion-action-btn {
+  min-height: 36px !important;
+  padding: 7px 12px !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  color: var(--scan-text-2) !important;
+  background: var(--scan-surface-3) !important;
+  background-image: none !important;
+  font-size: 10px !important;
+  font-weight: 760 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+#scanWorkspaceSuggestionAcceptBtn,
+#scanWorkspacePage .scan-workspace-suggestion-action-btn--save-guidance {
+  color: #fff !important;
+  background: var(--scan-success) !important;
+  background-image: none !important;
+}
+
+#scanWorkspaceSuggestionRejectBtn.is-active,
+#scanWorkspaceSuggestionRejectBtn:hover:not(:disabled) {
+  color: var(--scan-danger) !important;
+  background: var(--scan-danger-soft) !important;
+  background-image: none !important;
+}
+
+/* 12. Compare */
+.scan-workspace-compare-shell {
+  overflow: hidden;
+  border: 1px solid var(--scan-border);
+  border-radius: 14px;
+  background: var(--scan-surface);
+  box-shadow: 0 18px 48px rgba(28, 43, 70, 0.1);
+}
+
+.scan-workspace-compare-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--scan-border);
+}
+
+.scan-workspace-compare-header h2 {
+  margin: 0;
+  color: var(--scan-text);
+  font-size: 18px;
+  font-weight: 780;
+}
+
+.scan-workspace-compare-status {
+  margin-top: 4px;
+  color: var(--scan-muted);
+  font-size: 11px;
+}
+
+.scan-workspace-compare-header-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.scan-workspace-compare-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  border-bottom: 1px solid var(--scan-border);
+  background: var(--scan-border);
+}
+
+.scan-workspace-compare-summary-card {
+  padding: 11px 13px;
+  background: var(--scan-surface-2);
+}
+
+.scan-workspace-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 680px;
+}
+
+.scan-workspace-compare-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.scan-workspace-compare-pane + .scan-workspace-compare-pane {
+  border-left: 1px solid var(--scan-border);
+}
+
+.scan-workspace-compare-pane--after {
+  background: color-mix(in srgb, var(--scan-success) 2%, var(--scan-surface));
+}
+
+.scan-workspace-compare-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--scan-border);
+}
+
+.scan-workspace-compare-pane-kicker {
+  color: var(--scan-muted);
+}
+
+.scan-workspace-compare-pane--after .scan-workspace-compare-pane-kicker {
+  color: var(--scan-success);
+}
+
+.scan-workspace-compare-pane-title {
+  margin-top: 2px;
+  color: var(--scan-text);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.scan-workspace-compare-pane-meta {
+  color: var(--scan-muted);
+  font-size: 9px;
+}
+
+.scan-workspace-compare-pane-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  background: var(--scan-canvas);
+}
+
+.scan-workspace-compare-score-badge {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  color: var(--scan-text-2);
+  background: var(--scan-surface-3);
+}
+
+.scan-workspace-compare-score-badge--after {
+  color: var(--scan-success);
+  background: var(--scan-success-soft);
+}
+
+.scan-workspace-compare-score-value {
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.scan-workspace-compare-score-label {
+  font-size: 8px;
+  font-weight: 720;
+}
+
+/* 13. Modal */
+body.scan-workspace-modal-open,
+body.scan-workspace-suggestion-dialog-open {
+  overflow: hidden;
+}
+
+.scan-workspace-continue-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--scan-z-modal);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.scan-workspace-continue-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(3px);
+}
+
+.scan-workspace-continue-modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 460px);
+  padding: 22px;
+  border: 1px solid var(--scan-border-strong);
+  border-radius: 12px;
+  color: var(--scan-text);
+  background: var(--scan-surface);
+  box-shadow: 0 24px 64px rgba(7, 15, 29, 0.28);
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 38px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  color: var(--scan-muted) !important;
+  background: transparent !important;
+  background-image: none !important;
+  font-size: 20px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-close:hover {
+  border-color: var(--scan-border) !important;
+  color: var(--scan-text) !important;
+  background: var(--scan-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.scan-workspace-continue-modal-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--scan-success);
+  background: var(--scan-success-soft);
+  font-size: 18px;
+  font-weight: 840;
+}
+
+.scan-workspace-continue-modal-card h2 {
+  margin: 14px 42px 7px 0;
+  color: var(--scan-text);
+  font-size: 18px;
+  font-weight: 790;
+}
+
+.scan-workspace-continue-modal-card p {
+  margin: 0;
+  color: var(--scan-text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.scan-workspace-continue-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--scan-border);
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px !important;
+  padding: 8px 13px !important;
+  border: 1px solid var(--scan-border) !important;
+  border-radius: 8px !important;
+  background-image: none !important;
+  font-size: 11px !important;
+  font-weight: 760 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-action--primary {
+  border-color: var(--scan-primary) !important;
+  color: #fff !important;
+  background: var(--scan-primary) !important;
+  background-image: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-action--secondary {
+  color: var(--scan-primary) !important;
+  background: var(--scan-surface-2) !important;
+  background-image: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--scan-primary) 30%, var(--scan-border)) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-action--primary:hover:not(:disabled) {
+  border-color: var(--scan-primary-strong) !important;
+  color: #fff !important;
+  background: var(--scan-primary-strong) !important;
+  background-image: none !important;
+}
+
+#scanWorkspacePage .scan-workspace-continue-modal-action:disabled {
+  border-color: var(--scan-border) !important;
+  color: var(--scan-muted) !important;
+  background: var(--scan-surface-3) !important;
+  background-image: none !important;
+  opacity: 0.68 !important;
+}
+
+/* 14. Empty, loading, and error states */
+.scan-workspace-empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  padding: 22px;
+  border: 1px dashed var(--scan-border-strong);
+  border-radius: 9px;
+  color: var(--scan-muted);
+  background: color-mix(in srgb, var(--scan-surface-2) 84%, transparent);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+/* 15. Responsive */
+@media (max-width: 1180px) {
+  .scan-workspace-review-shell {
+    grid-template-columns: minmax(310px, 38%) 7px minmax(0, 1fr);
+  }
+
+  .scan-workspace-review-toolbar-row,
+  .scan-workspace-toolbar-context {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .scan-workspace-review-main-actions {
+    justify-content: flex-start;
+  }
+
+  #scanWorkspacePage .scan-workspace-issue-row {
+    grid-template-columns: 8px minmax(0, 1fr);
+  }
+
+  .scan-workspace-issue-right {
+    grid-column: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 900px) {
+  #scanWorkspacePage {
+    padding: 14px 12px 24px;
+  }
+
+  .scan-workspace-intake-grid,
+  .scan-workspace-compare-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scan-workspace-intake-panel--resume,
+  .scan-workspace-compare-pane + .scan-workspace-compare-pane {
+    border-right: 0;
+    border-left: 0;
+    border-bottom: 1px solid var(--scan-border);
+  }
+
+  .scan-workspace-processing-summary,
+  .scan-workspace-compare-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scan-workspace-review-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .scan-workspace-divider {
+    display: none;
+  }
+
+  .scan-workspace-review-rail,
+  .scan-workspace-review-main {
+    min-height: 640px;
+  }
+
+  .scan-workspace-review-rail {
+    border-bottom: 1px solid var(--scan-border);
+  }
+
+  .scan-review-left-scroll {
+    max-height: 680px;
+  }
+}
+
+@media (max-width: 620px) {
+  .scan-workspace-suggestion-popover {
+    width: min(520px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 32px);
+  }
+
+  .scan-workspace-header-row,
+  .scan-workspace-intake-header,
+  .scan-workspace-intake-footer,
+  .scan-workspace-compare-header,
+  .scan-workspace-continue-modal-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scan-workspace-header-actions,
+  .scan-workspace-intake-actions,
+  .scan-workspace-compare-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .scan-workspace-intake-panel--job,
+  .scan-workspace-personal-grid,
+  .scan-workspace-processing-summary,
+  .scan-workspace-compare-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scan-workspace-input-group--company,
+  .scan-workspace-input-group--role {
+    grid-column: 1 / -1;
+  }
+
+  .scan-workspace-tab-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .scan-workspace-review-inline-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scan-workspace-review-score-card {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .scan-workspace-review-score-ring {
+    width: 58px;
+    height: 58px;
+  }
+
+  .scan-workspace-suggestion-popover-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #scanWorkspacePage *,
+  #scanWorkspacePage *::before,
+  #scanWorkspacePage *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

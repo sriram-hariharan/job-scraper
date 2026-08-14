@@ -74,6 +74,11 @@ _ICON_PATHS = {
         '<path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/>'
         '<path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/>'
     ),
+    "ai-settings": (
+        '<path d="M12 2a4 4 0 0 0-4 4v1.1A4.5 4.5 0 0 0 5.5 15H7v1a5 5 0 0 0 10 0v-1h1.5A4.5 4.5 0 0 0 16 7.1V6a4 4 0 0 0-4-4Z"/>'
+        '<path d="M9 10h.01"/><path d="M15 10h.01"/>'
+        '<path d="M9.5 14.5a4 4 0 0 0 5 0"/>'
+    ),
     "menu": (
         '<line x1="4" x2="20" y1="6" y2="6"/>'
         '<line x1="4" x2="20" y1="12" y2="12"/>'
@@ -354,6 +359,17 @@ def render_top_shell(active_href: str) -> str:
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">Preferences</span>
             <span class="profile-dropdown-nav-subtitle">Role focus, location, and matching signals</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
+        <a class="profile-dropdown-nav-btn" href="/profile/ai-settings">
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--ai-settings" aria-hidden="true">
+            {_icon_svg("ai-settings")}
+          </span>
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">AI Settings</span>
+            <span class="profile-dropdown-nav-subtitle">Providers, API keys, and model access</span>
           </span>
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>

@@ -8,6 +8,8 @@ from src.config.consts import (
     EXPERIMENTATION_SIGNAL_PATTERNS,
 )
 
+EXTRACTED_SKILL_NORMALIZATION_CONTRACT_VERSION = "normalize_extracted_skills_v1"
+
 def normalize_skill(skill: str) -> str | None:
     if not skill:
         return None

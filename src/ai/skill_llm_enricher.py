@@ -8,7 +8,10 @@ from tqdm import tqdm
 from threading import Lock
 
 from src.ai.llm_client import run_chat_completion, get_default_model
-from src.utils.skill_normalizer import normalize_extracted_skills
+from src.utils.skill_normalizer import (
+    EXTRACTED_SKILL_NORMALIZATION_CONTRACT_VERSION,
+    normalize_extracted_skills,
+)
 
 from src.storage.skill_corpus_store import (
     get_cached_llm_skills,
@@ -30,6 +33,13 @@ SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live").
 VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}
 
 SKILL_EXTRACTION_PROMPT_VERSION = "v6_postfilter_cleanup"
+SKILL_EXTRACTION_TEMPERATURE = 0
+SKILL_EXTRACTION_MAX_TOKENS = 500
+SKILL_EXTRACTION_FULL_TEXT_LIMIT = 7000
+SKILL_EXTRACTION_HEAD_CHARS = 2500
+SKILL_EXTRACTION_TAIL_CHARS = 1800
+SKILL_EXTRACTION_WINDOW_CHARS = 900
+SKILL_EXTRACTION_MAX_KEYWORD_WINDOWS = 10
 
 skill_cache_metrics_lock = Lock()
 
@@ -156,6 +166,84 @@ Correct output:
   "preferred_skills": ["netsuite", "floqast", "cryptio"]
 }
 """
+
+
+def _build_skill_extraction_user_prompt(extraction_text: str) -> str:
+    return f"""
+    Extract REQUIRED and PREFERRED technical skills
+    from the following job description.
+
+    JOB DESCRIPTION:
+    {extraction_text}
+    """
+
+
+def _build_skill_extraction_retry_prompt(primary_prompt: str) -> str:
+    return primary_prompt + "\n\nReturn ONLY valid JSON. No prose. No markdown. No explanation."
+
+
+def resolve_effective_user_provider_route(owner_user_id: str, workload_id: str):
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
+    )
+    return routing_service.resolve_effective_user_provider_route(
+        owner_user_id,
+        workload_id,
+    )
+
+
+def run_user_chat_completion_with_metadata(**kwargs):
+    from src.ai.user_provider_runtime import (
+        run_user_chat_completion_with_metadata as execute,
+    )
+
+    return execute(**kwargs)
+
+
+def build_skill_extraction_production_task_contract_material():
+    primary_prompt = _build_skill_extraction_user_prompt("<job_description>")
+    return {
+        "task_contract_version": SKILL_EXTRACTION_PROMPT_VERSION,
+        "prompt_contract": {
+            "system": SYSTEM_PROMPT,
+            "primary_user_template": primary_prompt,
+            "retry_user_template": _build_skill_extraction_retry_prompt(primary_prompt),
+        },
+        "input_contract": {
+            "fields": ["job_description"],
+            "full_text_limit": SKILL_EXTRACTION_FULL_TEXT_LIMIT,
+            "head_chars": SKILL_EXTRACTION_HEAD_CHARS,
+            "tail_chars": SKILL_EXTRACTION_TAIL_CHARS,
+            "window_chars": SKILL_EXTRACTION_WINDOW_CHARS,
+            "max_keyword_windows": SKILL_EXTRACTION_MAX_KEYWORD_WINDOWS,
+            "window_labels": ["HEAD", "PRIORITY:<pattern>", "FALLBACK:<pattern>", "TAIL"],
+        },
+        "output_contract": {
+            "type": "object",
+            "required": ["required_skills", "preferred_skills"],
+            "properties": {
+                "required_skills": {"type": "array", "items": {"type": "string"}},
+                "preferred_skills": {"type": "array", "items": {"type": "string"}},
+            },
+            "parsers": ["json_object_extraction", "sectioned_skill_lists", "json_retry"],
+        },
+        "deterministic_transformation_contract": {
+            "normalizer": EXTRACTED_SKILL_NORMALIZATION_CONTRACT_VERSION,
+            "steps": [
+                "expand_skill_candidates",
+                "verbatim_job_text_filter",
+                "required_preferred_deduplication",
+                "context_bucket_reassignment",
+                "shadowed_generic_skill_removal",
+            ],
+        },
+        "task_parameters": {
+            "temperature": SKILL_EXTRACTION_TEMPERATURE,
+            "max_tokens": SKILL_EXTRACTION_MAX_TOKENS,
+        },
+    }
 
 def _response_preview(response: str, limit: int = 500) -> str:
     text = (response or "").replace("\n", "\\n").strip()
@@ -556,16 +644,16 @@ def increment_skill_cache_metric(metric_name: str):
 
 def _build_skill_extraction_text(
     job_text: str,
-    head_chars: int = 2500,
-    tail_chars: int = 1800,
-    window_chars: int = 900,
-    max_keyword_windows: int = 10,
+    head_chars: int = SKILL_EXTRACTION_HEAD_CHARS,
+    tail_chars: int = SKILL_EXTRACTION_TAIL_CHARS,
+    window_chars: int = SKILL_EXTRACTION_WINDOW_CHARS,
+    max_keyword_windows: int = SKILL_EXTRACTION_MAX_KEYWORD_WINDOWS,
 ) -> str:
     text = (job_text or "").strip()
     if not text:
         return ""
 
-    if len(text) <= 7000:
+    if len(text) <= SKILL_EXTRACTION_FULL_TEXT_LIMIT:
         return text
 
     priority_patterns = [
@@ -644,7 +732,7 @@ def _build_skill_extraction_text(
     return "\n\n".join(parts)
 
 
-def enrich_skills_with_llm(job_text):
+def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
 
     if SKILL_EXTRACTION_MODE not in VALID_EXTRACTION_MODES:
         logger.warning(
@@ -679,28 +767,66 @@ def enrich_skills_with_llm(job_text):
 
     extraction_text = _build_skill_extraction_text(job_text)
 
-    prompt = f"""
-    Extract REQUIRED and PREFERRED technical skills
-    from the following job description.
+    prompt = _build_skill_extraction_user_prompt(extraction_text)
 
-    JOB DESCRIPTION:
-    {extraction_text}
-    """
+    explicit_owner = str(owner_user_id or "").strip()
+    owner = explicit_owner or str(
+        os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
+    ).strip()
+    active_provider = ""
+    active_model = MODEL
+    if owner:
+        try:
+            route = resolve_effective_user_provider_route(
+                owner,
+                "skill_extraction",
+            )
+            active_provider = str(route.get("provider") or "").strip()
+            active_model = str(route.get("model") or "").strip()
+            if not active_provider or not active_model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            increment_skill_cache_metric("live_failures")
+            logger.warning("LLM skill extraction owner route unavailable")
+            return get_empty_skill_result()
 
-    try:
-        response = run_chat_completion(
+    def _call_live_llm(user_prompt: str):
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        if owner:
+            result = run_user_chat_completion_with_metadata(
+                owner_user_id=owner,
+                provider=active_provider,
+                model=active_model,
+                temperature=SKILL_EXTRACTION_TEMPERATURE,
+                max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
+                messages=messages,
+            )
+            return result.get("content", "")
+        return run_chat_completion(
             model=MODEL,
-            temperature=0,
-            max_tokens=500,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
+            temperature=SKILL_EXTRACTION_TEMPERATURE,
+            max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
+            messages=messages,
         )
 
-    except Exception as e:
+    try:
+        response = _call_live_llm(prompt)
+
+    except Exception as exc:
         increment_skill_cache_metric("live_failures")
-        logger.warning(f"LLM skill extraction failed: {e}")
+        if owner:
+            logger.warning("LLM skill extraction owner execution failed")
+        else:
+            logger.warning(f"LLM skill extraction failed: {exc}")
+        return get_empty_skill_result()
+    except SystemExit:
+        if not owner:
+            raise
+        increment_skill_cache_metric("live_failures")
+        logger.warning("LLM skill extraction owner execution failed")
         return get_empty_skill_result()
 
     def _finalize_skill_result(parsed_obj):
@@ -719,7 +845,7 @@ def enrich_skills_with_llm(job_text):
         if mode != "live_only":
             store_cached_llm_skills(
                 cache_key=cache_key,
-                model=MODEL,
+                model=active_model,
                 required_skills=required,
                 preferred_skills=preferred,
             )
@@ -751,27 +877,22 @@ def enrich_skills_with_llm(job_text):
             _response_preview(response),
         )
 
-    retry_prompt = prompt + "\n\nReturn ONLY valid JSON. No prose. No markdown. No explanation."
+    retry_prompt = _build_skill_extraction_retry_prompt(prompt)
 
     try:
-        retry_response = run_chat_completion(
-            model=MODEL,
-            temperature=0,
-            max_tokens=500,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": retry_prompt}
-            ],
-        )
+        retry_response = _call_live_llm(retry_prompt)
 
         parsed_retry = extract_json_from_response(retry_response)
         logger.info("LLM skill extraction parse retry succeeded")
         return _finalize_skill_result(parsed_retry)
 
     except Exception as retry_error:
-        logger.warning(
-            "Failed to parse LLM skill output after retry: %s | retry_response_preview=%s",
-            retry_error,
-            _response_preview(retry_response if 'retry_response' in locals() else ""),
-        )
+        if owner:
+            logger.warning("Failed to parse owner LLM skill output after retry")
+        else:
+            logger.warning(
+                "Failed to parse LLM skill output after retry: %s | retry_response_preview=%s",
+                retry_error,
+                _response_preview(retry_response if 'retry_response' in locals() else ""),
+            )
         return get_empty_skill_result()

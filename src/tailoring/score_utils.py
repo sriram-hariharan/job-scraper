@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Optional
 
 
@@ -51,3 +52,19 @@ def is_score_neutral(value: Any) -> bool:
 def is_score_negative(value: Any) -> bool:
     delta = score_delta_value(value)
     return delta is not None and delta < 0
+
+
+def is_meaningful_positive_score_lift(value: Any) -> bool:
+    delta = score_delta_value(value)
+    if delta is None or not math.isfinite(delta) or delta <= 0:
+        return False
+    points = score_delta_to_points(value)
+    return points is not None and points > 0
+
+
+def is_effectively_score_neutral(value: Any) -> bool:
+    delta = score_delta_value(value)
+    if delta is None or not math.isfinite(delta) or delta < 0:
+        return False
+    points = score_delta_to_points(value)
+    return points == 0

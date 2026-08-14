@@ -9,6 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 ANSWER_LLM_TIMEOUT_SECONDS = 25
 MODEL = get_default_model()
 MAX_SOURCE_CHARS = 2500
+GROUNDED_RAG_TASK_CONTRACT_VERSION = "v1"
+GROUNDED_RAG_TEMPERATURE = 0
+GROUNDED_RAG_MAX_TOKENS = 500
 SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS = (
     "Legacy filesystem RAG index is disabled",
 )
@@ -49,6 +52,58 @@ Return this exact JSON shape:
   ]
 }
 """.strip()
+
+
+def build_grounded_rag_production_task_contract_material() -> Dict[str, Any]:
+    representative_sources = [
+        {
+            "source_id": "S1",
+            "doc_id": "<doc_id>",
+            "company": "<company>",
+            "title": "<job_title>",
+            "location": "<location>",
+            "source": "<source>",
+            "job_url": "<job_url>",
+            "posted_at": "<posted_at>",
+            "score": "<retrieval_score>",
+            "preview": "<preview>",
+            "retrieval_text": "<retrieval_text>",
+        }
+    ]
+    return {
+        "task_contract_version": GROUNDED_RAG_TASK_CONTRACT_VERSION,
+        "prompt_contract": {
+            "system": SYSTEM_PROMPT,
+            "user_template": _build_user_prompt("<question>", representative_sources),
+        },
+        "input_contract": {
+            "question_fields": ["question", "top_k", "fetch_k", "filters"],
+            "prompt_source_fields": list(representative_sources[0]),
+            "retrieval_text_max_chars": MAX_SOURCE_CHARS,
+            "source_id_format": "S<one_based_index>",
+        },
+        "output_contract": {
+            "model_fields": [
+                "answer",
+                "insufficient_evidence",
+                "used_source_ids",
+                "job_evidence",
+            ],
+            "job_evidence_fields": ["source_id", "evidence_points"],
+            "parser": "first_json_object",
+        },
+        "deterministic_transformation_contract": {
+            "used_source_ids": "allowlist_deduplicate_in_model_order",
+            "evidence_points": "nonempty_unique_max_4",
+            "citations": "inline_source_ids_required_for_sufficient_answer",
+            "uncited_nonempty_answer": "force_insufficient_evidence",
+            "insufficient_answer": "strip_citations_clear_sources_and_evidence",
+        },
+        "task_parameters": {
+            "temperature": GROUNDED_RAG_TEMPERATURE,
+            "max_tokens": GROUNDED_RAG_MAX_TOKENS,
+        },
+    }
 
 
 
@@ -297,19 +352,124 @@ def _extract_inline_source_ids(answer: str, valid_source_ids: List[str]) -> List
 
     return ordered
 
+
+def normalize_grounded_rag_model_response(
+    parsed: Dict[str, Any],
+    prompt_sources: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Apply the production citation and source-allowlist contract without I/O."""
+
+    valid_source_ids = [source["source_id"] for source in prompt_sources]
+    answer = str(parsed.get("answer") or "").strip()
+    insufficient_evidence = bool(parsed.get("insufficient_evidence", False))
+    model_used_source_ids = _normalize_used_source_ids(
+        parsed.get("used_source_ids", []),
+        valid_source_ids,
+    )
+    normalized_job_evidence = _normalize_job_evidence(
+        parsed.get("job_evidence", []),
+        valid_source_ids,
+    )
+
+    answer = _ensure_inline_citations(answer, model_used_source_ids)
+    cited_source_ids = _extract_inline_source_ids(answer, valid_source_ids)
+    used_source_ids = cited_source_ids if cited_source_ids else []
+
+    if answer and not insufficient_evidence and not used_source_ids:
+        insufficient_evidence = True
+        answer = (
+            "I could not produce a grounded answer because the answer text "
+            "did not contain valid source citations."
+        )
+
+    if insufficient_evidence:
+        used_source_ids = []
+        answer = _strip_inline_citations(answer)
+        answer = _normalize_insufficient_answer(answer)
+        job_evidence_output = []
+    else:
+        job_evidence_output = _build_job_evidence_output(
+            prompt_sources=prompt_sources,
+            job_evidence=normalized_job_evidence,
+            allowed_source_ids=used_source_ids,
+        )
+
+    return {
+        "answer": answer,
+        "insufficient_evidence": insufficient_evidence,
+        "used_source_ids": used_source_ids,
+        "job_evidence": job_evidence_output,
+    }
+
+
 def _is_semantic_retrieval_unavailable_error(exc: Exception) -> bool:
     message = str(exc)
     return any(marker in message for marker in SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS)
 
-def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(
-        run_chat_completion_with_metadata,
-        model=MODEL,
-        temperature=0,
-        max_tokens=500,
-        messages=messages,
+def resolve_effective_user_provider_route(
+    owner_user_id: str,
+    workload_id: str,
+) -> Dict[str, Any]:
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
     )
+    return routing_service.resolve_effective_user_provider_route(
+        owner_user_id,
+        workload_id,
+    )
+
+
+def run_user_chat_completion_with_metadata(**kwargs: Any) -> Dict[str, Any]:
+    from src.ai.user_provider_runtime import (
+        run_user_chat_completion_with_metadata as execute,
+    )
+
+    return execute(**kwargs)
+
+
+def _run_chat_completion_with_timeout(
+    messages: List[Dict[str, str]],
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = str(owner_user_id or "").strip()
+    provider = ""
+    model = MODEL
+    if owner:
+        try:
+            route = resolve_effective_user_provider_route(
+                owner,
+                "grounded_rag_answer",
+            )
+            provider = str(route.get("provider") or "").strip()
+            model = str(route.get("model") or "").strip()
+            if not provider or not model:
+                raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            raise RuntimeError(
+                "grounded_rag_owner_route_unavailable"
+            ) from None
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    if owner:
+        future = executor.submit(
+            run_user_chat_completion_with_metadata,
+            owner_user_id=owner,
+            provider=provider,
+            model=model,
+            temperature=GROUNDED_RAG_TEMPERATURE,
+            max_tokens=GROUNDED_RAG_MAX_TOKENS,
+            messages=messages,
+        )
+    else:
+        future = executor.submit(
+            run_chat_completion_with_metadata,
+            model=MODEL,
+            temperature=GROUNDED_RAG_TEMPERATURE,
+            max_tokens=GROUNDED_RAG_MAX_TOKENS,
+            messages=messages,
+        )
     try:
         return future.result(timeout=ANSWER_LLM_TIMEOUT_SECONDS)
     except FuturesTimeoutError as exc:
@@ -332,6 +492,7 @@ def answer_job_query(
     top_k: int = 5,
     fetch_k: int = 15,
     filters: Optional[Dict[str, Any]] = None,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     try:
         results = search_jobs(
@@ -389,15 +550,18 @@ def answer_job_query(
         }
 
     prompt_sources = _build_prompt_sources(results)
-    valid_source_ids = [source["source_id"] for source in prompt_sources]
 
     try:
-        llm_result = _run_chat_completion_with_timeout(
-            messages=[
+        timeout_kwargs = {
+            "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": _build_user_prompt(question, prompt_sources)},
             ]
-        )
+        }
+        owner = str(owner_user_id or "").strip()
+        if owner:
+            timeout_kwargs["owner_user_id"] = owner
+        llm_result = _run_chat_completion_with_timeout(**timeout_kwargs)
         parsed = _extract_json_from_response(llm_result["content"])
         llm_provider = llm_result.get("provider", "")
         llm_model = llm_result.get("model", "")
@@ -417,9 +581,16 @@ def answer_job_query(
             "job_evidence": [],
         }
     except Exception as exc:
+        owner = str(owner_user_id or "").strip()
+        failure_detail = str(exc)
+        if owner and failure_detail != "grounded_rag_owner_route_unavailable":
+            failure_detail = "grounded_rag_owner_execution_unavailable"
         return {
             "question": question,
-            "answer": f"I could not answer this because grounded answer generation failed: {exc}",
+            "answer": (
+                "I could not answer this because grounded answer generation "
+                f"failed: {failure_detail}"
+            ),
             "insufficient_evidence": True,
             "used_source_ids": [],
             "sources": [],
@@ -431,42 +602,14 @@ def answer_job_query(
             "job_evidence": [],
         }
 
-    answer = str(parsed.get("answer") or "").strip()
-    insufficient_evidence = bool(parsed.get("insufficient_evidence", False))
-    model_used_source_ids = _normalize_used_source_ids(
-        parsed.get("used_source_ids", []),
-        valid_source_ids,
+    normalized_response = normalize_grounded_rag_model_response(
+        parsed,
+        prompt_sources,
     )
-    normalized_job_evidence = _normalize_job_evidence(
-        parsed.get("job_evidence", []),
-        valid_source_ids,
-    )
-
-    answer = _ensure_inline_citations(answer, model_used_source_ids)
-    cited_source_ids = _extract_inline_source_ids(answer, valid_source_ids)
-
-    if cited_source_ids:
-        used_source_ids = cited_source_ids
-    else:
-        used_source_ids = []
-
-    if answer and not insufficient_evidence and not used_source_ids:
-        insufficient_evidence = True
-        answer = "I could not produce a grounded answer because the answer text did not contain valid source citations."
-
-    if insufficient_evidence:
-        used_source_ids = []
-        answer = _strip_inline_citations(answer)
-        answer = _normalize_insufficient_answer(answer)
-
-    if insufficient_evidence:
-        job_evidence_output = []
-    else:
-        job_evidence_output = _build_job_evidence_output(
-            prompt_sources=prompt_sources,
-            job_evidence=normalized_job_evidence,
-            allowed_source_ids=used_source_ids,
-        )
+    answer = normalized_response["answer"]
+    insufficient_evidence = normalized_response["insufficient_evidence"]
+    used_source_ids = normalized_response["used_source_ids"]
+    job_evidence_output = normalized_response["job_evidence"]
 
     return {
         "question": question,

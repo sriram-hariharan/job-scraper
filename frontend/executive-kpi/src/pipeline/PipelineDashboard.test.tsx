@@ -151,6 +151,70 @@ describe("PipelineDashboard", () => {
     await waitFor(() => expect(readStatus).toHaveBeenCalledTimes(2));
   });
 
+  it("disables idle launch and shows the AI Settings prerequisite for zero providers", async () => {
+    const launchPipeline = vi.fn();
+    render(
+      <PipelineDashboard
+        readStatus={async () => ({
+          pipeline_gate: {
+            can_run_live_pipeline: false,
+            requires_resume_upload: false,
+            requires_ai_provider_setup: true,
+            live_pipeline_block_reason: "Configure at least one AI provider API key in AI Settings before running the live pipeline.",
+            profile_ai_settings_url: "/profile/ai-settings",
+          },
+          pipeline: { status: "idle" },
+        })}
+        launchPipeline={launchPipeline}
+      />,
+    );
+
+    const runButton = await screen.findByRole("button", { name: "Run Pipeline" });
+    expect(runButton).toBeDisabled();
+    fireEvent.click(runButton);
+    expect(launchPipeline).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Configure at least one AI provider API key in AI Settings before running the live pipeline.",
+    );
+    expect(screen.getByRole("link", { name: "Go to AI Settings" })).toHaveAttribute(
+      "href",
+      "/profile/ai-settings",
+    );
+    expect(screen.getByRole("link", { name: "Go to AI Settings" })).not.toHaveAttribute(
+      "href",
+      "/profile#ai-settings",
+    );
+  });
+
+  it("enables idle launch when the canonical pipeline gate is ready", async () => {
+    render(
+      <PipelineDashboard
+        readStatus={async () => ({
+          pipeline_gate: { can_run_live_pipeline: true },
+          pipeline: { status: "idle" },
+        })}
+        launchPipeline={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "Run Pipeline" })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: "Go to AI Settings" })).not.toBeInTheDocument();
+  });
+
+  it("keeps an active pipeline disabled even when readiness is satisfied", async () => {
+    render(
+      <PipelineDashboard
+        readStatus={async () => ({
+          pipeline_gate: { can_run_live_pipeline: true },
+          pipeline: runningPipeline,
+        })}
+        launchPipeline={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "Pipeline Running..." })).toBeDisabled();
+  });
+
   it("disables launch while a run is active and keeps Refresh Status available", async () => {
     const launchPipeline = vi.fn();
     const readStatus = vi.fn().mockResolvedValue({ pipeline: runningPipeline });

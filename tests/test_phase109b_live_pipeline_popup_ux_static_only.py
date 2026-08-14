@@ -50,6 +50,14 @@ def _collect_pipeline_config_source() -> str:
     )
 
 
+def _pipeline_gate_source() -> str:
+    return _between(
+        _source(APP_JS_PATH),
+        "function applyPipelineGateUi(gate)",
+        "async function loadPipelineGateForDashboard()",
+    )
+
+
 def test_live_pipeline_popup_uses_demo_friendly_sections_and_labels():
     modal = _pipeline_modal_html()
 
@@ -149,6 +157,29 @@ def test_confirm_summary_uses_user_facing_labels_not_internal_buckets():
         "SKIP_FOR_NOW",
     ]:
         assert forbidden not in source
+
+
+def test_legacy_pipeline_gate_renders_ai_settings_prerequisite_and_preserves_resume_cta():
+    source = _pipeline_gate_source()
+
+    assert "runButton.disabled = true" in source
+    assert "safeGate.live_pipeline_block_reason" in source
+    assert '"Go to AI Settings"' in source
+    assert '"/profile/ai-settings"' in source
+    assert '"/profile#ai-settings"' not in source
+    assert '"Upload resume"' in source
+    assert '"/profile?onboarding=resume_upload"' in source
+    assert "safeGate.requires_resume_upload" in source
+    assert "safeGate.requires_ai_provider_setup" in source
+
+
+def test_legacy_pipeline_launch_guards_use_the_canonical_blocker_setup_url():
+    source = _source(APP_JS_PATH)
+
+    assert "const blocked = gate && gate.can_run_live_pipeline === false" in source
+    assert "window.location.href = pipelineGateSetupUrl(gate)" in source
+    assert 'const workspaceState = await fetchJson("/user/workspace-state")' in source
+    assert source.count('fetchJson("/user/workspace-state")') == 1
 
 
 def test_phase109b_adds_only_ui_static_and_focused_test_files():

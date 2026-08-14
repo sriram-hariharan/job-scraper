@@ -177,6 +177,119 @@ class _FakeJobApp:
         return ["python", "main.py"]
 
 
+def _install_pipeline_gate_inputs(
+    monkeypatch,
+    *,
+    resume_count=1,
+    configured=False,
+    successful_runs=0,
+):
+    monkeypatch.setattr(
+        services,
+        "profile_resumes_payload",
+        lambda **_kwargs: {"count": resume_count},
+    )
+    monkeypatch.setattr(
+        services,
+        "get_user_pipeline_runs_postgres_payload",
+        lambda **_kwargs: {
+            "total_row_count": successful_runs,
+            "rows": [{}] if successful_runs else [],
+        },
+    )
+    monkeypatch.setattr(
+        services,
+        "user_ai_settings_readiness_payload",
+        lambda **_kwargs: {
+            "providers": {
+                "openai": {
+                    "configured": configured,
+                    "credential_hint": "must-not-leak",
+                    "credential": "must-not-leak",
+                },
+            },
+        },
+    )
+
+
+def test_pipeline_gate_requires_one_configured_ai_provider_without_changing_delete_seen(monkeypatch):
+    _install_pipeline_gate_inputs(
+        monkeypatch,
+        configured=False,
+        successful_runs=1,
+    )
+
+    gate = services.user_pipeline_gate_payload(owner_user_id="owner-ai-gate")
+
+    assert gate["can_run_live_pipeline"] is False
+    assert gate["has_configured_ai_provider"] is False
+    assert gate["requires_ai_provider_setup"] is True
+    assert gate["can_delete_seen_data"] is True
+    assert gate["live_pipeline_block_reason"] == (
+        "Configure at least one AI provider API key in AI Settings before "
+        "running the live pipeline."
+    )
+    assert gate["profile_ai_settings_url"] == "/profile/ai-settings"
+    assert gate["profile_ai_settings_url"] != "/profile#ai-settings"
+    serialized_gate = json.dumps(gate)
+    assert "credential_hint" not in serialized_gate
+    assert "api_key" not in serialized_gate
+    assert "must-not-leak" not in serialized_gate
+
+
+def test_pipeline_gate_allows_ready_owner_with_one_configured_ai_provider(monkeypatch):
+    _install_pipeline_gate_inputs(monkeypatch, configured=True)
+
+    gate = services.user_pipeline_gate_payload(owner_user_id="owner-ai-ready")
+
+    assert gate["can_run_live_pipeline"] is True
+    assert gate["has_configured_ai_provider"] is True
+    assert gate["requires_ai_provider_setup"] is False
+    assert gate["live_pipeline_block_reason"] == ""
+
+
+def test_pipeline_gate_preserves_resume_blocker_precedence(monkeypatch):
+    _install_pipeline_gate_inputs(monkeypatch, resume_count=0, configured=False)
+
+    gate = services.user_pipeline_gate_payload(owner_user_id="owner-missing-both")
+
+    assert gate["requires_resume_upload"] is True
+    assert gate["requires_ai_provider_setup"] is True
+    assert gate["live_pipeline_block_reason"] == (
+        "Upload at least one resume before running Live Pipeline."
+    )
+    assert gate["profile_resume_upload_url"] == "/profile?onboarding=resume_upload"
+
+
+def test_pipeline_gate_fails_closed_safely_when_ai_readiness_is_unavailable(monkeypatch):
+    _install_pipeline_gate_inputs(monkeypatch, configured=True)
+    monkeypatch.setattr(
+        services,
+        "user_ai_settings_readiness_payload",
+        lambda **_kwargs: (_ for _ in ()).throw(SystemExit("sensitive storage detail")),
+    )
+
+    gate = services.user_pipeline_gate_payload(owner_user_id="owner-ai-error")
+
+    assert gate["can_run_live_pipeline"] is False
+    assert gate["ai_provider_readiness_available"] is False
+    assert gate["live_pipeline_block_reason"] == (
+        "AI provider configuration readiness is unavailable. "
+        "Try again before running the live pipeline."
+    )
+    assert "sensitive storage detail" not in json.dumps(gate)
+
+
+def test_direct_pipeline_launch_with_zero_configured_providers_never_starts_process(monkeypatch):
+    _install_pipeline_gate_inputs(monkeypatch, configured=False)
+    popen = pytest.fail
+    monkeypatch.setattr(services.subprocess, "Popen", popen)
+
+    with pytest.raises(ValueError, match="Configure at least one AI provider API key"):
+        services.run_live_pipeline_payload(owner_user_id="owner-ai-blocked")
+
+
+
 def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_not_child_env():
     captured = {}
     boston_spec = canonicalize_location_text("Boston, MA")

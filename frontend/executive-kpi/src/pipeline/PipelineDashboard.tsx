@@ -165,11 +165,13 @@ function DashboardHeader({
   onRun,
   refreshing,
   runActive,
+  runBlocked,
 }: {
   onRefresh: () => void;
   onRun: () => void;
   refreshing: boolean;
   runActive: boolean;
+  runBlocked: boolean;
 }) {
   return (
     <header className="pipeline-dashboard-header app-page-header">
@@ -185,7 +187,7 @@ function DashboardHeader({
           <RefreshCw size={17} aria-hidden="true" />
           {refreshing ? "Refreshing" : "Refresh Status"}
         </button>
-        <button className="pipeline-dashboard-btn pipeline-dashboard-btn--primary" type="button" onClick={onRun} disabled={runActive}>
+        <button className="pipeline-dashboard-btn pipeline-dashboard-btn--primary" type="button" onClick={onRun} disabled={runActive || runBlocked}>
           {runActive ? <Activity size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
           {runActive ? "Pipeline Running..." : "Run Pipeline"}
         </button>
@@ -506,7 +508,7 @@ export function PipelineDashboard({
   if (state.kind === "error") {
     return (
       <div className="pipeline-dashboard pipeline-dashboard--error">
-        <DashboardHeader onRefresh={() => void refresh(true)} onRun={launchPipeline} refreshing={refreshing} runActive={false} />
+        <DashboardHeader onRefresh={() => void refresh(true)} onRun={launchPipeline} refreshing={refreshing} runActive={false} runBlocked />
         <section className="pipeline-status-error" role="alert">
           <AlertTriangle size={22} aria-hidden="true" />
           <div><h2>Pipeline status is unavailable</h2><p>{state.message}</p></div>
@@ -516,6 +518,14 @@ export function PipelineDashboard({
     );
   }
 
+  const pipelineGate = state.payload.pipeline_gate;
+  const runBlocked = pipelineGate?.can_run_live_pipeline === false;
+  const resumeBlocked = Boolean(pipelineGate?.requires_resume_upload);
+  const setupUrl = resumeBlocked
+    ? pipelineGate?.profile_resume_upload_url || "/profile?onboarding=resume_upload"
+    : pipelineGate?.profile_ai_settings_url || "/profile/ai-settings";
+  const setupLabel = resumeBlocked ? "Upload resume" : "Go to AI Settings";
+
   return (
     <div className={pageClassName} data-theme-surface="pipeline" aria-busy={shouldPoll}>
       <DashboardHeader
@@ -523,7 +533,18 @@ export function PipelineDashboard({
         onRun={launchPipeline}
         refreshing={refreshing}
         runActive={status === "starting" || status === "running"}
+        runBlocked={runBlocked}
       />
+      {runBlocked ? (
+        <section className="pipeline-readiness-warning" role="alert">
+          <AlertTriangle size={20} aria-hidden="true" />
+          <div>
+            <strong>{resumeBlocked ? "Resume required" : "AI provider setup required"}</strong>
+            <span>{pipelineGate?.live_pipeline_block_reason || "Live Pipeline prerequisites are not satisfied."}</span>
+          </div>
+          <a className="pipeline-dashboard-btn pipeline-dashboard-btn--primary" href={setupUrl}>{setupLabel}</a>
+        </section>
+      ) : null}
       {status === "idle" ? (
         <section className="pipeline-idle-banner" role="status">
           <Clock3 size={20} aria-hidden="true" />

@@ -25407,7 +25407,7 @@ function KL() {
 		]
 	});
 }
-function qL({ onRefresh: e, onRun: t, refreshing: n, runActive: r }) {
+function qL({ onRefresh: e, onRun: t, refreshing: n, runActive: r, runBlocked: i }) {
 	return /* @__PURE__ */ (0, X.jsxs)("header", {
 		className: "pipeline-dashboard-header app-page-header",
 		children: [/* @__PURE__ */ (0, X.jsxs)("div", {
@@ -25444,7 +25444,7 @@ function qL({ onRefresh: e, onRun: t, refreshing: n, runActive: r }) {
 				className: "pipeline-dashboard-btn pipeline-dashboard-btn--primary",
 				type: "button",
 				onClick: t,
-				disabled: r,
+				disabled: r || i,
 				children: [r ? /* @__PURE__ */ (0, X.jsx)(O, {
 					size: 17,
 					"aria-hidden": "true"
@@ -25817,13 +25817,15 @@ function eR({ readStatus: e = VL, launchPipeline: t = HL, pollIntervalMs: n = xL
 		f
 	]);
 	let p = a.kind === "ready" ? a.checkedAt : Date.now(), m = (0, C.useMemo)(() => `pipeline-dashboard pipeline-dashboard--${d}`, [d]);
-	return a.kind === "loading" ? /* @__PURE__ */ (0, X.jsx)(KL, {}) : a.kind === "error" ? /* @__PURE__ */ (0, X.jsxs)("div", {
+	if (a.kind === "loading") return /* @__PURE__ */ (0, X.jsx)(KL, {});
+	if (a.kind === "error") return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: "pipeline-dashboard pipeline-dashboard--error",
 		children: [/* @__PURE__ */ (0, X.jsx)(qL, {
 			onRefresh: () => void l(!0),
 			onRun: t,
 			refreshing: s,
-			runActive: !1
+			runActive: !1,
+			runBlocked: !0
 		}), /* @__PURE__ */ (0, X.jsxs)("section", {
 			className: "pipeline-status-error",
 			role: "alert",
@@ -25840,7 +25842,9 @@ function eR({ readStatus: e = VL, launchPipeline: t = HL, pollIntervalMs: n = xL
 				})
 			]
 		})]
-	}) : /* @__PURE__ */ (0, X.jsxs)("div", {
+	});
+	let h = a.payload.pipeline_gate, g = (h == null ? void 0 : h.can_run_live_pipeline) === !1, _ = !!(h != null && h.requires_resume_upload), v = _ ? (h == null ? void 0 : h.profile_resume_upload_url) || "/profile?onboarding=resume_upload" : (h == null ? void 0 : h.profile_ai_settings_url) || "/profile/ai-settings", y = _ ? "Upload resume" : "Go to AI Settings";
+	return /* @__PURE__ */ (0, X.jsxs)("div", {
 		className: m,
 		"data-theme-surface": "pipeline",
 		"aria-busy": f,
@@ -25849,8 +25853,25 @@ function eR({ readStatus: e = VL, launchPipeline: t = HL, pollIntervalMs: n = xL
 				onRefresh: () => void l(!0),
 				onRun: t,
 				refreshing: s,
-				runActive: d === "starting" || d === "running"
+				runActive: d === "starting" || d === "running",
+				runBlocked: g
 			}),
+			g ? /* @__PURE__ */ (0, X.jsxs)("section", {
+				className: "pipeline-readiness-warning",
+				role: "alert",
+				children: [
+					/* @__PURE__ */ (0, X.jsx)(xe, {
+						size: 20,
+						"aria-hidden": "true"
+					}),
+					/* @__PURE__ */ (0, X.jsxs)("div", { children: [/* @__PURE__ */ (0, X.jsx)("strong", { children: _ ? "Resume required" : "AI provider setup required" }), /* @__PURE__ */ (0, X.jsx)("span", { children: (h == null ? void 0 : h.live_pipeline_block_reason) || "Live Pipeline prerequisites are not satisfied." })] }),
+					/* @__PURE__ */ (0, X.jsx)("a", {
+						className: "pipeline-dashboard-btn pipeline-dashboard-btn--primary",
+						href: v,
+						children: y
+					})
+				]
+			}) : null,
 			d === "idle" ? /* @__PURE__ */ (0, X.jsxs)("section", {
 				className: "pipeline-idle-banner",
 				role: "status",

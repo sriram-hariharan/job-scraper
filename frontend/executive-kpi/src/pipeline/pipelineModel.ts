@@ -125,6 +125,14 @@ export type PipelineRecord = {
 
 export type PipelineStatusResponse = {
   ok?: boolean;
+  pipeline_gate?: {
+    can_run_live_pipeline?: boolean;
+    requires_resume_upload?: boolean;
+    requires_ai_provider_setup?: boolean;
+    live_pipeline_block_reason?: string;
+    profile_resume_upload_url?: string;
+    profile_ai_settings_url?: string;
+  };
   pipeline?: PipelineRecord;
 };
 

@@ -3348,7 +3348,18 @@ function applyPipelineGateUi(gate) {
   if (!safeGate.can_run_live_pipeline) {
     const message =
       safeGate.live_pipeline_block_reason ||
-      "Upload at least one resume before running Live Pipeline.";
+      "Live Pipeline prerequisites are not satisfied.";
+    const resumeBlocked = Boolean(safeGate.requires_resume_upload);
+    const aiSetupBlocked = !resumeBlocked && Boolean(safeGate.requires_ai_provider_setup);
+    const blockerTitle = resumeBlocked
+      ? "Resume required."
+      : aiSetupBlocked
+        ? "AI provider setup required."
+        : "Pipeline setup unavailable.";
+    const targetUrl = resumeBlocked
+      ? safeGate.profile_resume_upload_url || "/profile?onboarding=resume_upload"
+      : safeGate.profile_ai_settings_url || "/profile/ai-settings";
+    const targetLabel = resumeBlocked ? "Upload resume" : "Go to AI Settings";
 
     if (runButton) {
       runButton.disabled = true;
@@ -3359,10 +3370,10 @@ function applyPipelineGateUi(gate) {
     if (banner) {
       banner.className = "profile-inline-status info pipeline-gate-banner";
       banner.innerHTML = `
-        <strong>Resume required.</strong>
+        <strong>${escapeHtml(blockerTitle)}</strong>
         ${escapeHtml(message)}
-        <a class="ghost-btn btn-sm" href="${escapeHtml(safeGate.profile_resume_upload_url || "/profile?onboarding=resume_upload")}">
-          Upload resume
+        <a class="ghost-btn btn-sm" href="${escapeHtml(targetUrl)}">
+          ${escapeHtml(targetLabel)}
         </a>
       `;
     }
@@ -3402,6 +3413,14 @@ function redirectToResumeOnboardingIfRequired(gate) {
   window.location.href = target;
 }
 
+function pipelineGateSetupUrl(gate) {
+  const safeGate = gate || {};
+  if (safeGate.requires_resume_upload) {
+    return safeGate.profile_resume_upload_url || "/profile?onboarding=resume_upload";
+  }
+  return safeGate.profile_ai_settings_url || "/profile/ai-settings";
+}
+
 async function loadPipelineGateForDashboard() {
   const workspaceState = await fetchJson("/user/workspace-state");
   const gate = workspaceState.pipeline_gate || {};
@@ -3425,7 +3444,7 @@ function bindPipelineGateGuards() {
       if (blocked && runTrigger) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        window.location.href = gate.profile_resume_upload_url || "/profile?onboarding=resume_upload";
+        window.location.href = pipelineGateSetupUrl(gate);
         return;
       }
 
@@ -3463,6 +3482,12 @@ window.addEventListener("DOMContentLoaded", () => {
   bindPipelineGateGuards();
 
   loadPipelineGateForDashboard().catch((err) => {
+    state.pipelineGate = {
+      can_run_live_pipeline: false,
+      live_pipeline_block_reason: "Pipeline configuration readiness is unavailable. Try again before running the live pipeline.",
+      profile_ai_settings_url: "/profile/ai-settings",
+    };
+    applyPipelineGateUi(state.pipelineGate);
     const banner = ensurePipelineGateBanner();
     if (banner) {
       banner.className = "profile-inline-status error pipeline-gate-banner";

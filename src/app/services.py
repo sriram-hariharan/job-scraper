@@ -23,6 +23,9 @@ import shutil
 from src.ai.user_provider_runtime import (
     run_user_chat_completion_with_metadata,
 )
+from src.app.user_ai_settings_service import (
+    user_ai_settings_payload as user_ai_settings_readiness_payload,
+)
 
 resolve_effective_user_provider_route = getattr(
     importlib.import_module("src.app.provider_model_" "routing_service"),
@@ -4485,8 +4488,41 @@ def user_pipeline_gate_payload(
         or bool(successful_runs_payload.get("rows", []) or [])
     )
 
-    can_run_live_pipeline = has_resumes
+    ai_provider_readiness_available = True
+    has_configured_ai_provider = False
+    try:
+        ai_settings = user_ai_settings_readiness_payload(owner_user_id=owner)
+        has_configured_ai_provider = any(
+            bool(dict(metadata or {}).get("configured", False))
+            for metadata in dict(ai_settings.get("providers", {}) or {}).values()
+        )
+    except (Exception, SystemExit):
+        ai_provider_readiness_available = False
+
+    requires_ai_provider_setup = not has_configured_ai_provider
+    can_run_live_pipeline = (
+        has_resumes
+        and ai_provider_readiness_available
+        and has_configured_ai_provider
+    )
     can_delete_seen_data = has_resumes and has_successful_pipeline_run
+
+    if not has_resumes:
+        live_pipeline_block_reason = (
+            "Upload at least one resume before running Live Pipeline."
+        )
+    elif not ai_provider_readiness_available:
+        live_pipeline_block_reason = (
+            "AI provider configuration readiness is unavailable. "
+            "Try again before running the live pipeline."
+        )
+    elif requires_ai_provider_setup:
+        live_pipeline_block_reason = (
+            "Configure at least one AI provider API key in AI Settings before "
+            "running the live pipeline."
+        )
+    else:
+        live_pipeline_block_reason = ""
 
     return {
         "ok": True,
@@ -4494,13 +4530,15 @@ def user_pipeline_gate_payload(
         "resume_count": resume_count,
         "has_resumes": has_resumes,
         "requires_resume_upload": not has_resumes,
+        "has_configured_ai_provider": has_configured_ai_provider,
+        "requires_ai_provider_setup": requires_ai_provider_setup,
+        "ai_provider_readiness_available": ai_provider_readiness_available,
         "can_run_live_pipeline": can_run_live_pipeline,
         "can_delete_seen_data": can_delete_seen_data,
         "has_successful_pipeline_run": has_successful_pipeline_run,
         "profile_resume_upload_url": "/profile?onboarding=resume_upload",
-        "live_pipeline_block_reason": (
-            "" if can_run_live_pipeline else "Upload at least one resume before running Live Pipeline."
-        ),
+        "profile_ai_settings_url": "/profile/ai-settings",
+        "live_pipeline_block_reason": live_pipeline_block_reason,
         "delete_seen_data_block_reason": (
             ""
             if can_delete_seen_data

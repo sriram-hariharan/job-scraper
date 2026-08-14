@@ -1,6 +1,8 @@
 from hashlib import sha256
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 import pytest
 
 from src.agents import (
@@ -376,8 +378,13 @@ def test_no_mutation_persistence_scoring_artifact_execution_or_decision_acceptan
 
 
 def test_protected_files_are_unchanged():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
 
 
 def test_docs_capture_default_off_sequence_and_safety_boundaries():

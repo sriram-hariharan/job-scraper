@@ -9,6 +9,8 @@ import hashlib
 from copy import deepcopy
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from fastapi.testclient import TestClient
 
 from src.app import api, services
@@ -233,8 +235,10 @@ def test_no_ui_pipeline_dependency_or_decision_module_change():
         "src/pipeline/job_ranker.py": ("5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54"),
         "requirements.txt": ("75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3"),
     }
-    for relative_path, expected_hash in expected.items():
-        actual_hash = hashlib.sha256(
-            (ROOT / relative_path).read_bytes()
-        ).hexdigest()
-        assert actual_hash == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        expected,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )

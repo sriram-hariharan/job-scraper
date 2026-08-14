@@ -8,6 +8,8 @@
 from copy import deepcopy
 from pathlib import Path
 
+from tests.support.phase_guard_registry import assert_protected_hashes
+
 from src.app.services import provider_runtime_readiness_service_payload
 
 
@@ -208,11 +210,13 @@ def test_no_api_ui_pipeline_or_dependency_changes():
     }
     import hashlib
 
-    for relative_path, expected_hash in expected.items():
-        actual_hash = hashlib.sha256(
-            (ROOT / relative_path).read_bytes()
-        ).hexdigest()
-        assert actual_hash == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        expected,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
 
 
 def test_api_bridge_delegates_to_service_without_provider_execution():

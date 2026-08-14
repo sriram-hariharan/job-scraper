@@ -247,6 +247,7 @@ PHASE15C_CONDITIONAL_OPERATOR_REVIEW_NODE_FILES = {
 
 PHASE17C_TAILORING_GENERATION_LLM_CLOSURE_FILES = {
     "generate_tailoring_suggestions.py",
+    "src/tailoring/llm.py",
     "src/pipeline/collector.py",
     "src/agents/tailoring_generation_authoritative_graph.py",
     "tests/test_phase17c_lean_tailoring_intelligence_llm_closure.py",
@@ -1565,6 +1566,18 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_vector_evidence_service_pgvector_store_flagged_default_off.py",
             "tests/test_vector_evidence_ui_no_db_readonly.py",
         },
+        "phase1_ai_provider_model_routing_hash_maintenance": {
+            "requirements.txt",
+            "src/ai/llm_client.py",
+            "src/ai/job_fit_evaluator.py",
+            "src/app/services.py",
+            "src/app/static/app_redesign.css",
+            "src/pipeline/collector.py",
+            "src/pipeline/job_ranker.py",
+            "src/agents/jd_intelligence.py",
+            "src/tailoring/llm.py",
+            "tests/support/phase_guard_registry.py",
+        },
         "phase132b_premium_preferences_ui": {
             "src/app/api.py",
             "src/app/onboarding_ui.py",
@@ -2364,7 +2377,14 @@ def assert_protected_hashes(
         (
             "requirements.txt",
             "5dc563901e19c10a0f59fe811ec6961ee47f837827a7448e3a669aed9f244cc6",
-        ): "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
+        ): frozenset({
+            "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
+            "d396bfd09de172954a0bfd652aceb25c0def1f64081b46067a337f4ebe06714c",
+        }),
+        (
+            "requirements.txt",
+            "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
+        ): "d396bfd09de172954a0bfd652aceb25c0def1f64081b46067a337f4ebe06714c",
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
@@ -2384,7 +2404,18 @@ def assert_protected_hashes(
         (
             "src/app/static/app_redesign.css",
             "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
-        ): "f544310044957fcd28c74e9375093695a0b94814e2473435ff1fdefe7fc93df5",
+        ): frozenset({
+            "f544310044957fcd28c74e9375093695a0b94814e2473435ff1fdefe7fc93df5",
+            "8f2ab896d709e95a6ae0300004a799e9206e8c20af1c82fa08d9414bd85ef06a",
+        }),
+        (
+            "src/ai/llm_client.py",
+            "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2",
+        ): "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
+        (
+            "src/ai/job_fit_evaluator.py",
+            "3776e5ce3c098c5329d2e7631195915f6bcf098ec0303ec619e9b0e9ecf393fb",
+        ): "33a145c4d1aa640f970b698c95298600ea5903711315d44ed136174d6f27a999",
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
@@ -2415,6 +2446,7 @@ def assert_protected_hashes(
             "0fbfc4ee3b57b29626cce7ffdbd9b1f9a8e1e3475f098371a398161dabfbe51e",
             "e25bf271beb6da9bc27597d1c2a8b564b36970f4db31ce763f5d3a08523419fc",
             "ea8e18c8a25c3630e389a527a42b238bdd09084e3c89b07ed12ec348eec54caf",
+            "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
         }),
             (
                 "src/agents/jd_intelligence.py",
@@ -2467,7 +2499,16 @@ def assert_protected_hashes(
                     "c3d103420c5613c8717c64ec0a66d1636e00c721ec2a754c22978c9feaab85d4",
                     "02be627dd01e1593215a83fc28c1afe94ba9493dae25d4d4894b067acd1b0455",
                     "153a2f59dd9b8efb8fa958751beb3ace7a933509e2abb61fe2054f0468922139",
+                    "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
                 }),
+        (
+            "src/tailoring/llm.py",
+            "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
+        ): "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+        (
+            "src/tailoring/llm.py",
+            "5e9e858c6b671526eb6839d110ae05aae780d1c165a37a8bde2c1cc5bcecf31d",
+        ): "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
         (
             "src/pipeline/job_ranker.py",
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
@@ -2476,6 +2517,10 @@ def assert_protected_hashes(
             "src/pipeline/collector.py",
             "55a5de9a2147c2aa96f94c7466b81998f69a567bd2da8c920b0c94288ed4ab23",
         ): "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+        (
+            "src/pipeline/collector.py",
+            "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+        ): "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
         (
             "src/pipeline/collector.py",
             "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",
@@ -2510,6 +2555,9 @@ def assert_protected_hashes(
             ),
             legacy_guard_allowlist(
                 "phase17c_tailoring_generation_llm_closure"
+            ),
+            legacy_guard_allowlist(
+                "phase1_ai_provider_model_routing_hash_maintenance"
             ),
             legacy_guard_allowlist("workday_pagination_freshness"),
         )

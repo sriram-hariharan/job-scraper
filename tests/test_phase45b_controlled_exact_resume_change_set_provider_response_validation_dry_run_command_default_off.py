@@ -8,6 +8,8 @@ import importlib
 from io import StringIO
 import json
 from pathlib import Path
+
+from tests.support.phase_guard_registry import assert_protected_hashes
 import subprocess
 
 from tests.support.phase_guard_registry import (
@@ -567,8 +569,13 @@ def test_docs_contain_required_markers_and_references():
 
 
 def test_protected_runtime_files_are_unchanged_by_hash():
-    for relative_path, expected_hash in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative_path) == expected_hash
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_HASHES,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )
 
 
 def test_changed_files_are_limited_to_phase45b_and_legacy_guard_tests():

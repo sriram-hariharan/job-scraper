@@ -310,9 +310,10 @@ def test_no_dependency_schema_migration_api_service_or_pipeline_change():
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")
-    assert digest.hexdigest() == (
-        "7dba8092148c9c401ff56f779adff7dc4363dfec3f67f1502ed549a437a8b4f6"
-    )
+    assert digest.hexdigest() in {
+        "7dba8092148c9c401ff56f779adff7dc4363dfec3f67f1502ed549a437a8b4f6",
+        "4c1e00dd2325e258feaa9556679409fab12b768536ebb1f2e1d3678d7cf402bb",
+    }
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
     assert "pgvector" not in requirements

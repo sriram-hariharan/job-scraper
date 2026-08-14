@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 import socket
@@ -44,6 +45,31 @@ REVIEW_NOT_REQUIRED = {
     "job_fit_evaluation",
     "grounded_rag_answer",
 }
+
+
+def _repository_registry_artifact_snapshot():
+    artifact_path = ROOT / registry.REGISTRY_ARTIFACT_PATH
+    try:
+        artifact_stat = artifact_path.lstat()
+    except FileNotFoundError:
+        return (False, False, False, None, None, None, None)
+
+    is_file = stat.S_ISREG(artifact_stat.st_mode)
+    is_symlink = stat.S_ISLNK(artifact_stat.st_mode)
+    return (
+        True,
+        is_file,
+        is_symlink,
+        stat.S_IMODE(artifact_stat.st_mode),
+        artifact_stat.st_size,
+        sha256(artifact_path.read_bytes()).hexdigest() if is_file else None,
+        artifact_path.readlink().as_posix() if is_symlink else None,
+    )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def repository_registry_artifact_baseline():
+    return _repository_registry_artifact_snapshot()
 
 
 class GoldenTransport:
@@ -1042,8 +1068,13 @@ def test_invalid_registry_fails_before_creating_persistence_namespace(
     assert not (tmp_path / "outputs").exists()
 
 
-def test_focused_tests_create_no_repository_registry_artifact():
-    assert not (ROOT / registry.REGISTRY_ARTIFACT_PATH).exists()
+def test_focused_tests_create_no_repository_registry_artifact(
+    repository_registry_artifact_baseline,
+):
+    assert (
+        _repository_registry_artifact_snapshot()
+        == repository_registry_artifact_baseline
+    )
 
 
 def test_owner_has_no_sdk_transport_environment_user_or_application_access():

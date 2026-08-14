@@ -386,7 +386,14 @@ def test_bounded_himalayas_profile_usajobs_active_and_no_new_stage():
             "country": "US",
             "exclude_worldwide": True,
             "sort": "recent",
-        }
+        },
+        {
+            "profile_id": "software-us",
+            "query": "software",
+            "country": "US",
+            "exclude_worldwide": True,
+            "sort": "recent",
+        },
     ]
     assert json.loads(Path("src/config/usajobs_query_profiles.json").read_text()) == [
         {
@@ -406,10 +413,26 @@ def test_bounded_himalayas_profile_usajobs_active_and_no_new_stage():
                 "2210",
             ],
             "remote_only": False,
-        }
+        },
+        {
+            "profile_id": "public-keyword-artificial-intelligence-us",
+            "keyword": "artificial intelligence",
+            "location_name": "",
+            "organization_codes": [],
+            "job_category_codes": [],
+            "remote_only": False,
+        },
+        {
+            "profile_id": "public-keyword-data-scientist-us",
+            "keyword": "data scientist",
+            "location_name": "",
+            "organization_codes": [],
+            "job_category_codes": [],
+            "remote_only": False,
+        },
     ]
     curated = json.loads(Path("src/config/curated_ats_sources.json").read_text())
-    assert curated["personio"] == []
+    assert "personio" not in curated
     collector_source = Path("src/pipeline/collector.py").read_text(encoding="utf-8")
     assert collector_source.count('start_stage("rag_export"') == 1
     assert "start_stage(\"himalayas_retirement\"" not in collector_source

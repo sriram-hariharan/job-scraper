@@ -21,7 +21,14 @@ def test_checked_in_profile_is_exact_bounded_data_us_activation():
             "country": "US",
             "exclude_worldwide": True,
             "sort": "recent",
-        }
+        },
+        {
+            "profile_id": "software-us",
+            "query": "software",
+            "country": "US",
+            "exclude_worldwide": True,
+            "sort": "recent",
+        },
     ]
 
 

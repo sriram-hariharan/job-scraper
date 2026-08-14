@@ -92,6 +92,7 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
         ":not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button)"
         ":not(.preference-location-chip-remove):not(.preferences-utility-button)"
         ":not(.preferences-back-button):not(.preferences-secondary-action)"
+        ":not(.source-yield-source-button)"
     )
     assert primary_selector in css
     assert f"{primary_selector},\n.app-shell-primary-link" in css

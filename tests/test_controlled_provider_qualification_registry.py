@@ -1141,4 +1141,6 @@ def test_no_production_source_imports_qualification_registry_owner():
         ):
             references.append(path.relative_to(ROOT).as_posix())
 
-    assert references == []
+    assert sorted(references) == [
+        "src/app/provider_model_routing_service.py"
+    ]

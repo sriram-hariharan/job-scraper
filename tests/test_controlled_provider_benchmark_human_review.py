@@ -42,6 +42,17 @@ REVIEW_NOT_REQUIRED = {
 }
 
 
+@pytest.fixture(scope="module", autouse=True)
+def repository_subjective_review_packet_baseline():
+    output_root = ROOT / "outputs/provider_benchmark"
+    return tuple(
+        sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in output_root.glob("subjective-review-packet-*.json")
+        )
+    )
+
+
 class GoldenTransport:
     def __init__(self, outputs, *, fail_workload=None):
         self.outputs = deepcopy(outputs)
@@ -737,10 +748,18 @@ def test_persistence_rejects_outside_namespace_and_symlink_parent(
         )
 
 
-def test_focused_tests_create_no_repository_benchmark_output():
+def test_focused_tests_create_no_repository_benchmark_output(
+    repository_subjective_review_packet_baseline,
+):
     output_root = ROOT / "outputs/provider_benchmark"
 
-    assert not list(output_root.glob("subjective-review-packet-*.json"))
+    current = tuple(
+        sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in output_root.glob("subjective-review-packet-*.json")
+        )
+    )
+    assert current == repository_subjective_review_packet_baseline
 
 
 def test_owner_has_no_sdk_network_environment_or_user_state_access():

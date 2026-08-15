@@ -101,6 +101,8 @@ LLM_ADJUDICATION_MAX_TOKENS = int(os.getenv("LLM_ADJUDICATION_MAX_TOKENS", "700"
 LLM_ADJUDICATION_TEMPERATURE = float(os.getenv("LLM_ADJUDICATION_TEMPERATURE", "0"))
 LLM_ADJUDICATION_PROMPT_VERSION = "v1"
 LLM_ADJUDICATION_CACHE_NAMESPACE = "selector:llm_adjudication:v1"
+RESUME_FALLBACK_RANKING_WORKLOAD_ID = "resume_fallback_ranking"
+AMBIGUOUS_RESUME_ADJUDICATION_WORKLOAD_ID = "ambiguous_resume_adjudication"
 
 LLM_ADJUDICATION_RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -155,6 +157,118 @@ def _llm_fallback_cache_redis_key(cache_key: str) -> str:
 
 def _llm_adjudication_cache_redis_key(cache_key: str) -> str:
     return f"{LLM_ADJUDICATION_CACHE_NAMESPACE}:{cache_key}"
+
+
+def _is_user_pipeline_mode() -> bool:
+    return str(os.getenv("JOB_STACK_USER_PIPELINE_MODE", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _selector_owner_cache_partition(owner_user_id: str) -> str:
+    owner = str(owner_user_id or "").strip()
+    if not owner:
+        raise RuntimeError("selector_owner_context_unavailable")
+    material = f"applylens-selector-owner-cache-v1\0{owner}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def _resolve_selector_effective_user_provider_route(
+    owner_user_id: str,
+    workload_id: str,
+) -> Dict[str, Any]:
+    from src.app.provider_model_routing_service import (
+        resolve_effective_user_provider_route,
+    )
+
+    return resolve_effective_user_provider_route(owner_user_id, workload_id)
+
+
+def _run_effective_selector_user_chat_completion_with_metadata(
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    from src.app.provider_model_routing_service import (
+        run_effective_user_chat_completion_with_metadata,
+    )
+
+    return run_effective_user_chat_completion_with_metadata(**kwargs)
+
+
+def _selector_llm_execution_context(
+    *,
+    workload_id: str,
+    legacy_provider: str,
+    legacy_model: str,
+) -> Dict[str, Any]:
+    provider = str(legacy_provider or "").strip().lower()
+    model = str(legacy_model or "").strip()
+    if not _is_user_pipeline_mode():
+        return {
+            "authenticated": False,
+            "owner_user_id": "",
+            "workload_id": workload_id,
+            "provider": provider,
+            "model": model,
+            "cache_partition": "",
+        }
+
+    owner_user_id = str(os.getenv("JOB_STACK_OWNER_USER_ID", "") or "").strip()
+    if not owner_user_id:
+        raise RuntimeError("selector_owner_context_unavailable")
+
+    route = _resolve_selector_effective_user_provider_route(
+        owner_user_id,
+        workload_id,
+    )
+    if not isinstance(route, dict):
+        raise RuntimeError("selector_effective_route_unavailable")
+    if str(route.get("workload_id") or "").strip() != workload_id:
+        raise RuntimeError("selector_effective_route_mismatch")
+
+    provider = str(route.get("provider") or "").strip().lower()
+    model = str(route.get("model") or "").strip()
+    if not provider or not model:
+        raise RuntimeError("selector_effective_route_unavailable")
+
+    return {
+        "authenticated": True,
+        "owner_user_id": owner_user_id,
+        "workload_id": workload_id,
+        "provider": provider,
+        "model": model,
+        "cache_partition": _selector_owner_cache_partition(owner_user_id),
+    }
+
+
+def _run_selector_chat_completion(
+    context: Dict[str, Any],
+    **kwargs: Any,
+) -> Any:
+    if not bool(context.get("authenticated")):
+        return run_chat_completion(
+            provider=context["provider"],
+            model=context["model"],
+            **kwargs,
+        )
+
+    result = _run_effective_selector_user_chat_completion_with_metadata(
+        owner_user_id=context["owner_user_id"],
+        workload_id=context["workload_id"],
+        **kwargs,
+    )
+    if not isinstance(result, dict):
+        raise RuntimeError("selector_owner_runtime_invalid_response")
+    if (
+        str(result.get("provider") or "").strip().lower() != context["provider"]
+        or str(result.get("model") or "").strip() != context["model"]
+        or result.get("fallback_used") is not False
+        or "content" not in result
+    ):
+        raise RuntimeError("selector_owner_runtime_route_mismatch")
+    return result["content"]
 
 def _load_job_records(job_corpus_path: Path, limit: int) -> List[dict]:
     if not job_corpus_path.exists():
@@ -708,6 +822,8 @@ def _llm_fallback_cache_key(
     model: str,
     system_prompt: str,
     prompt: str,
+    *,
+    owner_partition: str = "",
 ) -> str:
     payload = {
         "prompt_version": LLM_FALLBACK_PROMPT_VERSION,
@@ -716,6 +832,8 @@ def _llm_fallback_cache_key(
         "system_prompt": system_prompt,
         "prompt": prompt,
     }
+    if owner_partition:
+        payload["owner_partition"] = owner_partition
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
@@ -864,28 +982,40 @@ def _run_llm_fallback_ranking(
     )
 
     allowed_resume_names = [result.pair.resume_name for result in strict_results]
-    provider = str(LLM_FALLBACK_PROVIDER or "").strip().lower()
-    model = str(LLM_FALLBACK_MODEL or "").strip()
-    failover_kwargs = _selector_provider_failover_kwargs(provider)
+    authenticated = _is_user_pipeline_mode()
+    provider = "" if authenticated else str(LLM_FALLBACK_PROVIDER or "").strip().lower()
+    model = "" if authenticated else str(LLM_FALLBACK_MODEL or "").strip()
 
     system_prompt = LLM_FALLBACK_SYSTEM_PROMPT
 
-    cache_key = _llm_fallback_cache_key(
-        provider=provider,
-        model=model,
-        system_prompt=system_prompt,
-        prompt=prompt,
-    )
-
-    cached = _load_llm_fallback_cache(cache_key)
-    if cached is not None:
-        return cached
-
     try:
+        context = _selector_llm_execution_context(
+            workload_id=RESUME_FALLBACK_RANKING_WORKLOAD_ID,
+            legacy_provider=LLM_FALLBACK_PROVIDER,
+            legacy_model=LLM_FALLBACK_MODEL,
+        )
+        provider = context["provider"]
+        model = context["model"]
+        cache_key = _llm_fallback_cache_key(
+            provider=provider,
+            model=model,
+            system_prompt=system_prompt,
+            prompt=prompt,
+            owner_partition=context["cache_partition"],
+        )
+
+        cached = _load_llm_fallback_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        failover_kwargs = (
+            {}
+            if context["authenticated"]
+            else _selector_provider_failover_kwargs(provider)
+        )
         if provider == "groq":
-            response = run_chat_completion(
-                provider=provider,
-                model=model,
+            response = _run_selector_chat_completion(
+                context,
                 temperature=LLM_FALLBACK_TEMPERATURE,
                 max_tokens=LLM_FALLBACK_MAX_TOKENS,
                 messages=[
@@ -896,9 +1026,8 @@ def _run_llm_fallback_ranking(
             )
             parsed = _parse_llm_fallback_response(response)
         else:
-            response = run_chat_completion(
-                provider=provider,
-                model=model,
+            response = _run_selector_chat_completion(
+                context,
                 temperature=LLM_FALLBACK_TEMPERATURE,
                 max_tokens=LLM_FALLBACK_MAX_TOKENS,
                 response_mime_type="application/json",
@@ -1037,6 +1166,8 @@ def _llm_adjudication_cache_key(
     model: str,
     system_prompt: str,
     prompt: str,
+    *,
+    owner_partition: str = "",
 ) -> str:
     payload = {
         "prompt_version": LLM_ADJUDICATION_PROMPT_VERSION,
@@ -1045,6 +1176,8 @@ def _llm_adjudication_cache_key(
         "system_prompt": system_prompt,
         "prompt": prompt,
     }
+    if owner_partition:
+        payload["owner_partition"] = owner_partition
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
@@ -1109,9 +1242,9 @@ def _run_llm_adjudication(
         winner.pair.resume_name,
         runner_up.pair.resume_name,
     ]
-    provider = str(LLM_ADJUDICATION_PROVIDER or "").strip().lower()
-    model = str(LLM_ADJUDICATION_MODEL or "").strip()
-    failover_kwargs = _selector_provider_failover_kwargs(provider)
+    authenticated = _is_user_pipeline_mode()
+    provider = "" if authenticated else str(LLM_ADJUDICATION_PROVIDER or "").strip().lower()
+    model = "" if authenticated else str(LLM_ADJUDICATION_MODEL or "").strip()
 
     system_prompt = """
 You adjudicate between two finalist resume variants after deterministic scoring found an ambiguous result.
@@ -1123,22 +1256,34 @@ Rules:
 4. Return ONLY valid JSON.
 """.strip()
 
-    cache_key = _llm_adjudication_cache_key(
-        provider=provider,
-        model=model,
-        system_prompt=system_prompt,
-        prompt=prompt,
-    )
-
-    cached = _load_llm_adjudication_cache(cache_key)
-    if cached is not None:
-        return cached
-
     try:
+        context = _selector_llm_execution_context(
+            workload_id=AMBIGUOUS_RESUME_ADJUDICATION_WORKLOAD_ID,
+            legacy_provider=LLM_ADJUDICATION_PROVIDER,
+            legacy_model=LLM_ADJUDICATION_MODEL,
+        )
+        provider = context["provider"]
+        model = context["model"]
+        cache_key = _llm_adjudication_cache_key(
+            provider=provider,
+            model=model,
+            system_prompt=system_prompt,
+            prompt=prompt,
+            owner_partition=context["cache_partition"],
+        )
+
+        cached = _load_llm_adjudication_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        failover_kwargs = (
+            {}
+            if context["authenticated"]
+            else _selector_provider_failover_kwargs(provider)
+        )
         if provider == "groq":
-            response = run_chat_completion(
-                provider=provider,
-                model=model,
+            response = _run_selector_chat_completion(
+                context,
                 temperature=LLM_ADJUDICATION_TEMPERATURE,
                 max_tokens=LLM_ADJUDICATION_MAX_TOKENS,
                 messages=[
@@ -1149,9 +1294,8 @@ Rules:
             )
             parsed = _parse_llm_fallback_response(response)
         else:
-            response = run_chat_completion(
-                provider=provider,
-                model=model,
+            response = _run_selector_chat_completion(
+                context,
                 temperature=LLM_ADJUDICATION_TEMPERATURE,
                 max_tokens=LLM_ADJUDICATION_MAX_TOKENS,
                 response_mime_type="application/json",

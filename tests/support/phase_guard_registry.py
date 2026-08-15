@@ -531,6 +531,13 @@ STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES = {
     "tests/test_user_pipeline_role_preferences.py",
 }
 
+STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES = {
+    "batch_select_best_resume_variant.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_step1b4_owner_selector_llm_routing.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -2177,6 +2184,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
     return (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
+        | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")

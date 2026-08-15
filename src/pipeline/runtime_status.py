@@ -28,6 +28,12 @@ STAGE_ORDER = [
     "finalization",
 ]
 
+SHARED_POSTGRES_STAGE_ORDER = [
+    "startup",
+    "shared_input",
+    *STAGE_ORDER[2:],
+]
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -89,6 +95,9 @@ def initialize_run(
     generate_llm_fallback: bool,
     generate_llm_adjudication: bool,
     delete_seen_data: str,
+    global_acquisition_only: bool = False,
+    acquisition_input_source: str = "scrapers",
+    shared_input_limit: int = 0,
 ) -> None:
     if not is_enabled():
         return
@@ -104,7 +113,11 @@ def initialize_run(
         "finished_at": "",
         "current_stage": "startup",
         "completed_stages": [],
-        "stage_order": STAGE_ORDER,
+        "stage_order": (
+            SHARED_POSTGRES_STAGE_ORDER
+            if acquisition_input_source == "shared_postgres_pool"
+            else STAGE_ORDER
+        ),
         "stage_started_at": _utc_now(),
         "stage_message": "Starting pipeline entrypoint",
         "counts": {},
@@ -126,6 +139,9 @@ def initialize_run(
             "generate_llm_fallback": generate_llm_fallback,
             "generate_llm_adjudication": generate_llm_adjudication,
             "delete_seen_data": delete_seen_data,
+            "global_acquisition_only": bool(global_acquisition_only),
+            "acquisition_input_source": acquisition_input_source,
+            "shared_input_limit": int(shared_input_limit),
         },
     }
     _write_status(payload)

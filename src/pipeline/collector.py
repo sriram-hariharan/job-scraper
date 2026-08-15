@@ -256,6 +256,58 @@ def _is_user_pipeline_mode() -> bool:
     }
 
 
+COLLECTOR_INPUT_SCRAPERS = "scrapers"
+COLLECTOR_INPUT_SHARED_POSTGRES = "shared_postgres_pool"
+MAX_SHARED_POSTGRES_INPUT_JOBS = 50
+
+
+def _bounded_shared_postgres_input_limit(value: Any) -> int:
+    if isinstance(value, bool):
+        raise RuntimeError("shared_postgres_projection_limit_invalid")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("shared_postgres_projection_limit_invalid") from exc
+    if parsed < 0:
+        raise RuntimeError("shared_postgres_projection_limit_invalid")
+    if parsed == 0:
+        return MAX_SHARED_POSTGRES_INPUT_JOBS
+    return min(parsed, MAX_SHARED_POSTGRES_INPUT_JOBS)
+
+
+def _normalize_shared_postgres_jobs(rows: Any, *, limit: int) -> List[Dict[str, Any]]:
+    if not isinstance(rows, (list, tuple)):
+        raise RuntimeError("shared_postgres_pool_read_failed")
+    jobs: List[Dict[str, Any]] = []
+    for value in list(rows)[:limit]:
+        if not isinstance(value, dict):
+            continue
+        job = dict(value)
+        identity = str(
+            job.get("job_doc_id")
+            or job.get("doc_id")
+            or job.get("job_id")
+            or job.get("job_url")
+            or job.get("url")
+            or ""
+        ).strip()
+        if not identity or not str(job.get("company") or "").strip() or not str(
+            job.get("title") or ""
+        ).strip():
+            continue
+        job.setdefault("job_doc_id", identity)
+        job.setdefault("job_id", identity)
+        job.setdefault("url", str(job.get("job_url") or "").strip())
+        job.setdefault("description_text", job.get("description") or "")
+        jobs.append(job)
+    if not jobs:
+        raise RuntimeError(
+            "shared_postgres_pool_unavailable: global acquisition must run "
+            "before an authenticated pipeline."
+        )
+    return jobs
+
+
 _PREFERENCE_ENV_NAMES = {
     "selected_role_families": "JOB_STACK_SELECTED_ROLE_FAMILIES",
     "target_seniority": "JOB_STACK_TARGET_SENIORITY",
@@ -2705,6 +2757,9 @@ def log_company_hiring(jobs: List[Dict[str, Any]], logger) -> None:
 async def collect_all_jobs_async(
     *,
     global_acquisition_only: bool = False,
+    input_source: str = COLLECTOR_INPUT_SCRAPERS,
+    shared_input_limit: int = MAX_SHARED_POSTGRES_INPUT_JOBS,
+    shared_postgres_reader=None,
 ) -> List[Dict[str, Any]]:
     from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
     from src.ai.llm_client import get_provider_metrics, reset_provider_metrics
@@ -2772,7 +2827,30 @@ async def collect_all_jobs_async(
     from src.utils.pipeline_metrics import log_stage_metrics
     from src.utils import pipeline_metrics as source_health_metrics_owner
 
-    update_config(global_acquisition_only=bool(global_acquisition_only))
+    normalized_input_source = str(input_source or "").strip()
+    if normalized_input_source not in {
+        COLLECTOR_INPUT_SCRAPERS,
+        COLLECTOR_INPUT_SHARED_POSTGRES,
+    }:
+        raise RuntimeError("collector_input_source_invalid")
+    shared_postgres_projection = (
+        normalized_input_source == COLLECTOR_INPUT_SHARED_POSTGRES
+    )
+    if global_acquisition_only and shared_postgres_projection:
+        raise RuntimeError("collector_input_source_conflict")
+    if shared_postgres_projection:
+        owner_user_id = str(
+            os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
+        ).strip()
+        if not _is_user_pipeline_mode() or not owner_user_id:
+            raise RuntimeError(
+                "shared_postgres_projection_requires_authenticated_owner"
+            )
+
+    update_config(
+        global_acquisition_only=bool(global_acquisition_only),
+        acquisition_input_source=normalized_input_source,
+    )
     pipeline_preferences: Dict[str, Any] = {}
     selected_role_families: List[str] = []
     if not global_acquisition_only:
@@ -2820,13 +2898,54 @@ async def collect_all_jobs_async(
             logger.info("Using default data/AI title filtering/ranking behavior.")
         logger.info(f"Loaded {len(seen_job_ids)} cached job IDs")
     start_total = time.time()
-    loop = asyncio.get_running_loop()
-    reset_source_metrics = getattr(
-        source_health_metrics_owner,
-        "reset_acquisition_metrics",
-        lambda: None,
-    )
-    reset_source_metrics()
+    scraped_counts: Dict[str, int] = {}
+    acquisition_source_metrics = ()
+
+    if shared_postgres_projection:
+        bounded_limit = _bounded_shared_postgres_input_limit(shared_input_limit)
+        if shared_postgres_reader is None:
+            from src.storage.rag_store import get_rag_job_documents
+
+            shared_postgres_reader = get_rag_job_documents
+        start_stage(
+            "shared_input",
+            f"Reading up to {bounded_limit} jobs from shared Postgres",
+        )
+        try:
+            shared_rows = shared_postgres_reader(limit=bounded_limit)
+        except Exception as exc:
+            raise RuntimeError("shared_postgres_pool_read_failed") from exc
+        all_jobs = _normalize_shared_postgres_jobs(
+            shared_rows,
+            limit=bounded_limit,
+        )
+        update_counts(
+            shared_input_jobs=len(all_jobs),
+            scraped_jobs=0,
+        )
+        complete_stage(
+            "shared_input",
+            counts={
+                "shared_input_jobs": len(all_jobs),
+                "shared_input_limit": bounded_limit,
+                "scraped_jobs": 0,
+            },
+        )
+        logger.info(
+            "Authenticated owner projection loaded shared Postgres jobs | "
+            "owner_user_id=%s | jobs=%s | limit=%s",
+            owner_user_id,
+            len(all_jobs),
+            bounded_limit,
+        )
+    else:
+        loop = asyncio.get_running_loop()
+        reset_source_metrics = getattr(
+            source_health_metrics_owner,
+            "reset_acquisition_metrics",
+            lambda: None,
+        )
+        reset_source_metrics()
 
     async def run_scraper(name: str, fn):
         start = time.time()
@@ -2839,51 +2958,52 @@ async def collect_all_jobs_async(
             elapsed = round(time.time() - start, 2)
             return name, [], elapsed, exc
 
-    start_stage("scraping", "Running ATS scrapers")
-    tasks = [
-        asyncio.create_task(run_scraper(name, fn))
-        for name, fn in scrapers
-    ]
+    if not shared_postgres_projection:
+        start_stage("scraping", "Running ATS scrapers")
+        tasks = [
+            asyncio.create_task(run_scraper(name, fn))
+            for name, fn in scrapers
+        ]
 
-    for task in asyncio.as_completed(tasks):
-        name, jobs, elapsed, err = await task
+        for task in asyncio.as_completed(tasks):
+            name, jobs, elapsed, err = await task
 
-        if err:
-            logger.error(
-                f"[collector] {name} failed | time={elapsed}s | error={err}"
+            if err:
+                logger.error(
+                    f"[collector] {name} failed | time={elapsed}s | error={err}"
+                )
+                continue
+
+            logger.info(
+                f"[collector] {name} finished | jobs={len(jobs)} | time={elapsed}s"
             )
-            continue
 
-        logger.info(
-            f"[collector] {name} finished | jobs={len(jobs)} | time={elapsed}s"
+            if jobs:
+                all_jobs.extend(jobs)
+
+        section("SCRAPER RESULTS", logger)
+
+        total_elapsed = round(time.time() - start_total, 2)
+        logger.info(f"Total scraping time: {total_elapsed}s")
+
+        scraped_counts = log_stage_metrics("SCRAPED", all_jobs)
+        complete_stage("scraping", counts={"scraped_jobs": len(all_jobs)})
+
+        learn_domains_from_jobs(all_jobs)
+        check_ats_health(all_jobs)
+        acquisition_source_metrics = tuple(
+            getattr(
+                source_health_metrics_owner,
+                "acquisition_metrics_snapshot",
+                lambda: (),
+            )()
         )
-
-        if jobs:
-            all_jobs.extend(jobs)
-
-    section("SCRAPER RESULTS", logger)
-
-    total_elapsed = round(time.time() - start_total, 2)
-    logger.info(f"Total scraping time: {total_elapsed}s")
-
-    scraped_counts = log_stage_metrics("SCRAPED", all_jobs)
-    complete_stage("scraping", counts={"scraped_jobs": len(all_jobs)})
-
-    learn_domains_from_jobs(all_jobs)
-    check_ats_health(all_jobs)
-    acquisition_source_metrics = tuple(
-        getattr(
-            source_health_metrics_owner,
-            "acquisition_metrics_snapshot",
-            lambda: (),
-        )()
-    )
-    enforce_source_health = getattr(
-        ats_health_owner,
-        "enforce_source_health",
-        lambda _metrics: {},
-    )
-    enforce_source_health(acquisition_source_metrics)
+        enforce_source_health = getattr(
+            ats_health_owner,
+            "enforce_source_health",
+            lambda _metrics: {},
+        )
+        enforce_source_health(acquisition_source_metrics)
 
     if global_acquisition_only:
         section("GLOBAL ACQUISITION", logger)
@@ -2938,7 +3058,14 @@ async def collect_all_jobs_async(
         return deduped_jobs
 
     section("FILTER PIPELINE", logger)
-    start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
+    start_stage(
+        "filtering",
+        (
+            f"Filtering {len(all_jobs)} shared jobs for authenticated owner"
+            if shared_postgres_projection
+            else f"Filtering {len(all_jobs)} scraped jobs"
+        ),
+    )
 
     location_policy_result = _apply_pipeline_location_preference_policy(
         all_jobs,
@@ -3597,13 +3724,15 @@ async def collect_all_jobs_async(
         structured_record_owner=structured_seen_records_for_jobs,
         structured_save_owner=save_new_job_records,
     )
-    persist_discovered_companies()
+    if not shared_postgres_projection:
+        persist_discovered_companies()
 
     pipeline_runtime = round(time.time() - start_total, 2)
     logger.info(f"Total pipeline runtime: {pipeline_runtime}s")
 
     current_metrics = {
-        "scraped": len(all_jobs),
+        "scraped": 0 if shared_postgres_projection else len(all_jobs),
+        "shared_input": len(all_jobs) if shared_postgres_projection else 0,
         "filtered": len(filtered_jobs),
         "deduped": len(deduped_jobs),
         "ranked": len(ranked_jobs),
@@ -3615,11 +3744,15 @@ async def collect_all_jobs_async(
         "combine_source_stage_metrics",
         lambda metrics, **_kwargs: tuple(metrics),
     )
-    persisted_source_health_metrics = combine_source_metrics(
-        acquisition_source_metrics,
-        filtered_jobs=filtered_jobs,
-        deduped_jobs=deduped_jobs,
-        final_jobs=scored_jobs,
+    persisted_source_health_metrics = (
+        ()
+        if shared_postgres_projection
+        else combine_source_metrics(
+            acquisition_source_metrics,
+            filtered_jobs=filtered_jobs,
+            deduped_jobs=deduped_jobs,
+            final_jobs=scored_jobs,
+        )
     )
 
     if _is_user_pipeline_mode():

@@ -30,6 +30,7 @@ from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.location_preferences import canonicalize_location_text
 from src.pipeline import collector, runtime_status
 from src.app import services
+from src.storage import rag_store
 
 
 def _job(title):
@@ -394,6 +395,20 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
     assert captured["launch_config"]["options"]["preferences"] == (
         captured["state"]["config"]["preferences"]
     )
+    assert "--shared-postgres-projection" in captured["cmd"]
+    assert captured["cmd"][
+        captured["cmd"].index("--shared-postgres-job-limit") + 1
+    ] == "50"
+    assert captured["state"]["config"]["acquisition_input_source"] == (
+        "shared_postgres_pool"
+    )
+    assert captured["state"]["config"]["shared_input_limit"] == 50
+    assert payload["pipeline"]["stage_order"][1] == "shared_input"
+    assert captured["launch_config"]["options"]["acquisition_input_source"] == (
+        "shared_postgres_pool"
+    )
+    assert captured["env"]["JOB_STACK_OWNER_USER_ID"] == "user_123"
+    assert captured["env"]["JOB_STACK_USER_PIPELINE_MODE"] == "true"
     assert captured["state"]["config"]["preference_runtime"] == {
         "schema_version": runtime_status.PREFERENCE_RUNTIME_SCHEMA_VERSION,
         "requested": {
@@ -918,7 +933,12 @@ def _install_drop_pct_collector_fakes(
 
     install_module(
         "src.ai.job_fit_evaluator",
-        evaluate_jobs=lambda rows: list(rows),
+        evaluate_jobs=lambda rows: (
+            captured.setdefault("job_fit_inputs", []).extend(
+                dict(row) for row in rows
+            )
+            or list(rows)
+        ),
         get_eval_cache_metrics=lambda: {
             "eval_cache_hits": 0,
             "eval_cache_misses": 0,
@@ -981,7 +1001,15 @@ def _install_drop_pct_collector_fakes(
         "src.intelligence.skill_frequency",
         top_skills=lambda _rows, top_n=50: [],
     )
-    install_module("src.pipeline.application_scorer", score_jobs=lambda rows: list(rows))
+    install_module(
+        "src.pipeline.application_scorer",
+        score_jobs=lambda rows: (
+            captured.setdefault("scoring_inputs", []).extend(
+                dict(row) for row in rows
+            )
+            or list(rows)
+        ),
+    )
 
     def direct_dedupe(rows):
         captured["route_events"].append("direct_dedupe")
@@ -1304,6 +1332,209 @@ def test_global_acquisition_only_stops_before_owner_pipeline_and_persists_shared
             },
         }
     ]
+
+
+def test_authenticated_owner_projection_reads_bounded_shared_pool_without_scraping(
+    monkeypatch,
+    tmp_path,
+):
+    jobs = [
+        {
+            "doc_id": "shared-1",
+            "job_id": "shared-1",
+            "job_url": "https://example.test/shared-1",
+            "title": "Data Engineer",
+            "company": "Acme",
+            "location": "United States",
+            "source": "workday",
+            "description": "Python data systems",
+        },
+        {
+            "doc_id": "shared-2",
+            "job_id": "shared-2",
+            "job_url": "https://example.test/shared-2",
+            "title": "Data Engineer",
+            "company": "Acme",
+            "location": "United States",
+            "source": "workday",
+            "description": "Python data systems",
+        },
+    ]
+    captured = _install_drop_pct_collector_fakes(
+        monkeypatch,
+        tmp_path,
+        jobs=jobs,
+        filtered_count=2,
+        graph_route=False,
+        user_pipeline=True,
+    )
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    monkeypatch.setenv("JOB_STACK_USER_PIPELINE_MODE", "true")
+    monkeypatch.setenv("JOB_STACK_SEEN_JOBS_BACKEND", "postgres")
+
+    def forbidden_global_owner(*_args, **_kwargs):
+        raise AssertionError("shared projection must not execute global acquisition")
+
+    for module_name, member_name in {
+        "src.discovery.domain_learner": "learn_domains_from_jobs",
+        "src.discovery.persist_discovered": "persist_discovered_companies",
+        "src.ai.resume_matcher": "match_resumes",
+    }.items():
+        monkeypatch.setattr(
+            sys.modules[module_name],
+            member_name,
+            forbidden_global_owner,
+        )
+    for module_name, function_name in {
+        "src.scrapers.workday_scraper": "scrape_all_workday",
+        "src.scrapers.greenhouse_scraper": "scrape_all_greenhouse",
+        "src.scrapers.lever_scraper": "scrape_all_lever",
+        "src.scrapers.ashby_scraper": "scrape_all_ashby",
+        "src.scrapers.workable_scraper": "scrape_all_workable",
+        "src.scrapers.jobvite_scraper": "scrape_all_jobvite",
+        "src.scrapers.recruitee_scraper": "scrape_all_recruitee",
+        "src.scrapers.smartrecruiters_scraper": "scrape_all_smartrecruiters",
+        "src.scrapers.builtin_scraper": "scrape_all_builtin",
+        "src.scrapers.usajobs_scraper": "scrape_all_usajobs",
+        "src.scrapers.himalayas_scraper": "scrape_all_himalayas",
+    }.items():
+        monkeypatch.setattr(
+            sys.modules[module_name],
+            function_name,
+            forbidden_global_owner,
+        )
+
+    job_cache = sys.modules["src.utils.job_cache"]
+
+    def load_owner_seen_jobs():
+        captured["seen_owner"] = collector.os.environ.get(
+            "JOB_STACK_OWNER_USER_ID"
+        )
+        return set()
+
+    monkeypatch.setattr(job_cache, "load_seen_job_ids", load_owner_seen_jobs)
+    monkeypatch.setattr(
+        job_cache,
+        "filter_new_jobs",
+        lambda rows, seen: (
+            captured.setdefault("seen_filter_inputs", []).extend(
+                dict(row) for row in rows
+            )
+            or (list(rows), [row["job_id"] for row in rows])
+        ),
+    )
+
+    def shared_reader(*, limit):
+        captured["shared_read_limit"] = limit
+        return jobs
+
+    monkeypatch.setattr(rag_store, "get_rag_job_documents", shared_reader)
+    result = asyncio.run(
+        collector.collect_all_jobs_async(
+            input_source="shared_postgres_pool",
+            shared_input_limit=500,
+        )
+    )
+
+    assert [row["job_id"] for row in result] == ["shared-1", "shared-2"]
+    assert captured["shared_read_limit"] == 50
+    assert captured["seen_owner"] == "owner-a"
+    assert captured["runtime_config"]["acquisition_input_source"] == (
+        "shared_postgres_pool"
+    )
+    assert captured["runtime_counts"]["shared_input_jobs"] == 2
+    assert captured["runtime_counts"]["scraped_jobs"] == 0
+    assert [row["job_id"] for row in captured["filter_inputs"]] == [
+        "shared-1",
+        "shared-2",
+    ]
+    assert [row["job_id"] for row in captured["ranking_inputs"]] == [
+        "shared-1",
+        "shared-2",
+    ]
+    assert [row["job_id"] for row in captured["seen_filter_inputs"]] == [
+        "shared-1",
+        "shared-2",
+    ]
+    assert [row["job_id"] for row in captured["job_fit_inputs"]] == [
+        "shared-1",
+        "shared-2",
+    ]
+    assert [row["job_id"] for row in captured["scoring_inputs"]] == [
+        "shared-1",
+        "shared-2",
+    ]
+    assert captured["corpus_exports"][-1]["kwargs"] == {
+        "persist_postgres": False
+    }
+
+
+def test_shared_postgres_projection_fails_closed_for_blank_owner_or_empty_pool(
+    monkeypatch,
+    tmp_path,
+):
+    _install_drop_pct_collector_fakes(
+        monkeypatch,
+        tmp_path,
+        jobs=[],
+        filtered_count=0,
+        graph_route=False,
+        user_pipeline=True,
+    )
+    monkeypatch.setenv("JOB_STACK_USER_PIPELINE_MODE", "true")
+    monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
+
+    with pytest.raises(RuntimeError, match="requires_authenticated_owner"):
+        asyncio.run(
+            collector.collect_all_jobs_async(
+                input_source="shared_postgres_pool",
+                shared_postgres_reader=lambda **_kwargs: [],
+            )
+        )
+
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    with pytest.raises(RuntimeError, match="global acquisition must run"):
+        asyncio.run(
+            collector.collect_all_jobs_async(
+                input_source="shared_postgres_pool",
+                shared_postgres_reader=lambda **_kwargs: [],
+            )
+        )
+
+
+def test_shared_projection_runtime_status_uses_truthful_input_stage(
+    monkeypatch,
+    tmp_path,
+):
+    status_path = tmp_path / "status.json"
+    monkeypatch.setenv(runtime_status.ENV_STATUS_PATH, str(status_path))
+    monkeypatch.setenv(runtime_status.ENV_RUN_ID, "owner-projection-run")
+
+    runtime_status.initialize_run(
+        output_dir=str(tmp_path),
+        log_path=str(tmp_path / "run.log"),
+        status_path=str(status_path),
+        planning_only=False,
+        job_limit=25,
+        job_packet_limit=0,
+        llm_actions=["APPLY"],
+        generate_tailoring=False,
+        generate_llm_tailoring=False,
+        refresh_llm_tailoring=False,
+        generate_llm_fallback=False,
+        generate_llm_adjudication=False,
+        delete_seen_data="no",
+        acquisition_input_source="shared_postgres_pool",
+        shared_input_limit=25,
+    )
+
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["stage_order"][1] == "shared_input"
+    assert "scraping" not in payload["stage_order"]
+    assert payload["config"]["acquisition_input_source"] == (
+        "shared_postgres_pool"
+    )
+    assert payload["config"]["shared_input_limit"] == 25
 
 
 def test_usajobs_rows_join_common_collector_filter_and_only_retained_rows_continue(

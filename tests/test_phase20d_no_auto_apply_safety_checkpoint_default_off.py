@@ -27,6 +27,7 @@ from tests.support.phase_guard_registry import (
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SMARTRECRUITERS_PAGINATION_FILES,
+    STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES,
     TECHNICAL_PRODUCT_PROGRAM_ROLE_FAMILY_FILES,
     USAJOBS_SOURCE_INTEGRATION_FILES,
     WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES,
@@ -895,9 +896,35 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     changed_runtime_files = [
         ROOT / relative_path
         for relative_path in _changed_files()
-        if relative_path.startswith("src/")
+        if (relative_path == "main.py" or relative_path.startswith("src/"))
         and Path(relative_path).suffix in runtime_suffixes
     ]
+    step1b3_runtime_files = {
+        ROOT / relative_path
+        for relative_path in STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
+        if (relative_path == "main.py" or relative_path.startswith("src/"))
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == step1b3_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
     discovery_acquisition_lifecycle_runtime_files = {
         ROOT / relative_path
         for relative_path in DISCOVERY_ACQUISITION_LIFECYCLE_FILES

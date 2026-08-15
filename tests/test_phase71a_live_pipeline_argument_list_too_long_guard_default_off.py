@@ -138,6 +138,8 @@ def test_phase71a_live_pipeline_launch_uses_bounded_argv_with_all_selected_packe
     assert "--application-planning-generate-llm-fallback" in cmd
     assert "--application-planning-generate-llm-adjudication" in cmd
     assert "--delete-seen-data yes" in joined
+    assert "--shared-postgres-projection" in cmd
+    assert "--shared-postgres-job-limit 50" in joined
     assert "job_description" not in joined
     assert "selected_jobs" not in joined
     assert "planning_packet" not in joined

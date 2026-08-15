@@ -88,6 +88,17 @@ def _parse_args():
         help="Run shared job acquisition and owner-neutral persistence only.",
     )
     parser.add_argument(
+        "--shared-postgres-projection",
+        action="store_true",
+        help="Run the authenticated owner pipeline from the shared Postgres job pool.",
+    )
+    parser.add_argument(
+        "--shared-postgres-job-limit",
+        type=int,
+        default=50,
+        help="Maximum shared Postgres jobs to read for an authenticated owner projection.",
+    )
+    parser.add_argument(
         "--skip-application-planning",
         action="store_true",
         help="Explicitly record that downstream application planning is disabled.",
@@ -340,6 +351,19 @@ def _validate_application_planning_only_args(args) -> None:
                 + ", ".join(contradictory)
                 + "."
             )
+    if bool(getattr(args, "shared_postgres_projection", False)):
+        if bool(getattr(args, "global_acquisition_only", False)):
+            raise SystemExit(
+                "--shared-postgres-projection cannot be combined with "
+                "--global-acquisition-only."
+            )
+        if bool(args.application_planning_only):
+            raise SystemExit(
+                "--shared-postgres-projection cannot be combined with "
+                "--application-planning-only."
+            )
+        if int(getattr(args, "shared_postgres_job_limit", 50)) < 0:
+            raise SystemExit("--shared-postgres-job-limit must be non-negative.")
     if args.application_planning_only and not args.run_application_planning:
         raise SystemExit(
             "--application-planning-only requires --run-application-planning."
@@ -667,6 +691,14 @@ async def _main_async(
         global_acquisition_only=bool(
             getattr(args, "global_acquisition_only", False)
         ),
+        acquisition_input_source=(
+            "shared_postgres_pool"
+            if bool(getattr(args, "shared_postgres_projection", False))
+            else "scrapers"
+        ),
+        shared_input_limit=int(
+            getattr(args, "shared_postgres_job_limit", 50)
+        ),
     )
     update_config(corpus_source=corpus_source)
     if postgres_snapshot is not None:
@@ -712,13 +744,24 @@ async def _main_async(
         logger.info("=============================\n")
     else:
         logger.info("=============================")
-        logger.info("SCRAPING JOBS")
+        logger.info(
+            "OWNER PROJECTION FROM SHARED POSTGRES"
+            if bool(getattr(args, "shared_postgres_projection", False))
+            else "SCRAPING JOBS"
+        )
         logger.info("=============================\n")
 
         from src.pipeline.collector import collect_all_jobs_async
 
         if bool(getattr(args, "global_acquisition_only", False)):
             jobs = await collect_all_jobs_async(global_acquisition_only=True)
+        elif bool(getattr(args, "shared_postgres_projection", False)):
+            jobs = await collect_all_jobs_async(
+                input_source="shared_postgres_pool",
+                shared_input_limit=int(
+                    getattr(args, "shared_postgres_job_limit", 50)
+                ),
+            )
         else:
             jobs = await collect_all_jobs_async()
 

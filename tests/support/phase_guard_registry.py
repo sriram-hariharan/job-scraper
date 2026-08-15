@@ -518,6 +518,19 @@ STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES = {
     "tests/test_user_pipeline_role_preferences.py",
 }
 
+STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES = {
+    "main.py",
+    "src/app/services.py",
+    "src/pipeline/collector.py",
+    "src/pipeline/runtime_status.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase71a_live_pipeline_argument_list_too_long_guard_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -2163,6 +2176,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
+        | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2464,6 +2478,7 @@ def assert_protected_hashes(
             "ea8e18c8a25c3630e389a527a42b238bdd09084e3c89b07ed12ec348eec54caf",
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
             "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
+            "aab9f26ebe70b458fb706cfeee7f9b6ae76a9bef5303b1d5c150b9773323d20e",
         }),
             (
                 "src/agents/jd_intelligence.py",
@@ -2517,6 +2532,7 @@ def assert_protected_hashes(
                     "02be627dd01e1593215a83fc28c1afe94ba9493dae25d4d4894b067acd1b0455",
                     "153a2f59dd9b8efb8fa958751beb3ace7a933509e2abb61fe2054f0468922139",
                     "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
+                    "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
                 }),
         (
             "src/tailoring/llm.py",

@@ -277,8 +277,9 @@ def build_agent_discovery_command() -> List[str]:
 
 def build_live_pipeline_command(
     *,
-    run_application_planning: bool = True,
+    run_application_planning: bool = False,
     planning_only: bool = False,
+    global_acquisition_only: bool = True,
     output_dir: Any = DEFAULT_SCHEDULED_OUTPUT_DIR,
     job_limit: Any = 50,
     job_packet_limit: Any = 0,
@@ -289,6 +290,20 @@ def build_live_pipeline_command(
     generate_llm_fallback: bool = False,
     delete_seen_data: Any = DEFAULT_DELETE_SEEN_DATA,
 ) -> List[str]:
+    if global_acquisition_only and (
+        run_application_planning
+        or planning_only
+        or generate_tailoring
+        or generate_llm_tailoring
+        or refresh_llm_tailoring
+        or generate_llm_fallback
+    ):
+        raise ValueError(
+            "global_acquisition_only cannot be combined with planning, "
+            "tailoring, fallback, or adjudication options."
+        )
+    if global_acquisition_only and _normalize_delete_seen_data(delete_seen_data) != "no":
+        raise ValueError("global_acquisition_only requires delete_seen_data='no'.")
     ja = _job_app()
 
     args = SimpleNamespace(
@@ -307,14 +322,20 @@ def build_live_pipeline_command(
         delete_seen_data=_normalize_delete_seen_data(delete_seen_data),
     )
 
-    return ja._build_main_cmd(args, planning_only=bool(planning_only))
+    cmd = ja._build_main_cmd(args, planning_only=bool(planning_only))
+    if global_acquisition_only:
+        cmd.extend(
+            ["--global-acquisition-only", "--skip-application-planning"]
+        )
+    return cmd
 
 
 def build_scheduled_job_command(
     job_name: Any,
     *,
-    run_application_planning: bool = True,
+    run_application_planning: bool = False,
     planning_only: bool = False,
+    global_acquisition_only: bool = True,
     output_dir: Any = DEFAULT_SCHEDULED_OUTPUT_DIR,
     job_limit: Any = 50,
     job_packet_limit: Any = 0,
@@ -334,6 +355,7 @@ def build_scheduled_job_command(
         return build_live_pipeline_command(
             run_application_planning=run_application_planning,
             planning_only=planning_only,
+            global_acquisition_only=global_acquisition_only,
             output_dir=output_dir,
             job_limit=job_limit,
             job_packet_limit=job_packet_limit,
@@ -353,6 +375,7 @@ def build_scheduler_wrapper_command(
     *,
     run_application_planning: bool = True,
     planning_only: bool = False,
+    global_acquisition_only: bool = False,
     output_dir: Any = DEFAULT_SCHEDULED_OUTPUT_DIR,
     job_limit: Any = 50,
     job_packet_limit: Any = 0,
@@ -377,6 +400,25 @@ def build_scheduler_wrapper_command(
         )
     definition = get_scheduled_job_definition(job_name)
     normalized_job = definition["name"]
+    if normalized_job == "live_pipeline":
+        global_acquisition_only = True
+        run_application_planning = False
+    if global_acquisition_only and normalized_job != "live_pipeline":
+        raise ValueError("global_acquisition_only is supported only for live_pipeline.")
+    if global_acquisition_only and (
+        run_application_planning
+        or planning_only
+        or generate_tailoring
+        or generate_llm_tailoring
+        or refresh_llm_tailoring
+        or generate_llm_fallback
+    ):
+        raise ValueError(
+            "global_acquisition_only cannot be combined with planning, "
+            "tailoring, fallback, or adjudication options."
+        )
+    if global_acquisition_only and _normalize_delete_seen_data(delete_seen_data) != "no":
+        raise ValueError("global_acquisition_only requires delete_seen_data='no'.")
 
     cmd: List[str] = [
         sys.executable,
@@ -391,6 +433,9 @@ def build_scheduler_wrapper_command(
 
     if planning_only:
         cmd.append("--planning-only")
+
+    if global_acquisition_only:
+        cmd.append("--global-acquisition-only")
 
     if not run_application_planning:
         cmd.append("--skip-application-planning")
@@ -484,6 +529,14 @@ def build_scheduler_launchd_plist_payload(
     launchd_label_prefix: str = DEFAULT_LAUNCHD_LABEL_PREFIX,
 ) -> Dict[str, Any]:
     definition = get_scheduled_job_definition(job_name)
+    global_acquisition_only = definition["name"] == "live_pipeline"
+    if global_acquisition_only:
+        run_application_planning = False
+        planning_only = False
+        generate_tailoring = False
+        generate_llm_tailoring = False
+        refresh_llm_tailoring = False
+        generate_llm_fallback = False
     if str(database_url or "").strip():
         raise ValueError(
             "Do not embed database_url in launchd configuration; use "
@@ -511,6 +564,7 @@ def build_scheduler_launchd_plist_payload(
         job_name,
         run_application_planning=run_application_planning,
         planning_only=planning_only,
+        global_acquisition_only=global_acquisition_only,
         output_dir=output_dir,
         job_limit=job_limit,
         job_packet_limit=job_packet_limit,
@@ -563,6 +617,7 @@ def build_scheduler_launchd_plist_payload(
         "job_name": get_scheduled_job_definition(job_name)["name"],
         "planning_only": bool(planning_only),
         "run_application_planning": bool(run_application_planning),
+        "global_acquisition_only": bool(global_acquisition_only),
         "himalayas_active_retention_enabled": bool(
             himalayas_active_retention_enabled
         ),
@@ -805,6 +860,11 @@ def _parse_args():
         help="For live_pipeline only: skip scraping and run planning against existing corpus.",
     )
     parser.add_argument(
+        "--global-acquisition-only",
+        action="store_true",
+        help="For live_pipeline only: stop after owner-neutral shared acquisition.",
+    )
+    parser.add_argument(
         "--skip-application-planning",
         action="store_true",
         help="For live_pipeline only: do not append downstream application planning flags.",
@@ -967,6 +1027,7 @@ def main() -> int:
 
     options = {
         "planning_only": bool(args.planning_only),
+        "global_acquisition_only": bool(args.global_acquisition_only),
         "run_application_planning": not bool(args.skip_application_planning),
         "output_dir": _normalize_output_dir(args.output_dir),
         "job_limit": _normalize_non_negative_int(args.job_limit, "job_limit"),
@@ -984,6 +1045,24 @@ def main() -> int:
 
     definition = get_scheduled_job_definition(args.job)
     if definition["name"] == "live_pipeline":
+        explicitly_unsafe = [
+            name
+            for name, enabled in (
+                ("--planning-only", options["planning_only"]),
+                ("--generate-tailoring", options["generate_tailoring"]),
+                ("--generate-llm-tailoring", options["generate_llm_tailoring"]),
+                ("--refresh-llm-tailoring", options["refresh_llm_tailoring"]),
+                ("--generate-llm-fallback", options["generate_llm_fallback"]),
+            )
+            if enabled
+        ]
+        if explicitly_unsafe:
+            raise SystemExit(
+                "Scheduled live_pipeline is global acquisition only and cannot "
+                "be combined with " + ", ".join(explicitly_unsafe) + "."
+            )
+        options["global_acquisition_only"] = True
+        options["run_application_planning"] = False
         options["log_path"] = _derive_live_pipeline_log_path(options["output_dir"])
         options["status_path"] = _derive_live_pipeline_status_path(options["output_dir"])
 
@@ -1007,6 +1086,7 @@ def main() -> int:
         args.job,
         run_application_planning=options["run_application_planning"],
         planning_only=options["planning_only"],
+        global_acquisition_only=options["global_acquisition_only"],
         output_dir=options["output_dir"],
         job_limit=options["job_limit"],
         job_packet_limit=options["job_packet_limit"],

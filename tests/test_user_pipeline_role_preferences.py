@@ -837,8 +837,16 @@ def _install_drop_pct_collector_fakes(
             "schema_version": "test-v1",
         },
     )
-    monkeypatch.setattr(collector, "update_config", lambda **_kwargs: None)
-    monkeypatch.setattr(collector, "update_counts", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        collector,
+        "update_config",
+        lambda **kwargs: captured.setdefault("runtime_config", {}).update(kwargs),
+    )
+    monkeypatch.setattr(
+        collector,
+        "update_counts",
+        lambda **kwargs: captured.setdefault("runtime_counts", {}).update(kwargs),
+    )
     monkeypatch.setattr(collector, "start_stage", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         collector,
@@ -977,7 +985,16 @@ def _install_drop_pct_collector_fakes(
 
     def direct_dedupe(rows):
         captured["route_events"].append("direct_dedupe")
-        return list(rows)
+        captured["dedupe_inputs"] = list(rows)
+        seen = set()
+        deduped = []
+        for row in rows:
+            key = row.get("job_id")
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(row)
+        return deduped
 
     install_module("src.pipeline.dedupe", dedupe_jobs=direct_dedupe)
     install_module(
@@ -1022,10 +1039,17 @@ def _install_drop_pct_collector_fakes(
             or list(rows)
         ),
     )
-    install_module(
-        "src.rag.export_job_corpus",
-        export_job_corpus=lambda rows, _path: len(rows),
-    )
+    def export_job_corpus(rows, path, **kwargs):
+        captured.setdefault("corpus_exports", []).append(
+            {
+                "rows": [dict(row) for row in rows],
+                "path": path,
+                "kwargs": dict(kwargs),
+            }
+        )
+        return len(rows)
+
+    install_module("src.rag.export_job_corpus", export_job_corpus=export_job_corpus)
 
     scraper_modules = {
         "src.scrapers.workday_scraper": "scrape_all_workday",
@@ -1090,7 +1114,12 @@ def _install_drop_pct_collector_fakes(
         check_ats_failure=(
             global_metrics_not_allowed if user_pipeline else lambda *_args: None
         ),
-        check_ats_health=lambda _rows: None,
+        check_ats_health=lambda rows: captured.setdefault(
+            "ats_health_inputs", list(rows)
+        ),
+        enforce_source_health=lambda metrics: captured.setdefault(
+            "source_health_enforced", tuple(metrics)
+        ),
         check_pipeline_regression=check_pipeline_regression,
     )
     install_module(
@@ -1180,10 +1209,101 @@ def test_completed_collector_paths_share_defined_drop_pct(
         assert "current_metrics" not in captured
         assert "persisted_metrics" not in captured
         assert (tmp_path / "source_acquisition_metrics.json").is_file()
+        assert captured["corpus_exports"][-1]["kwargs"] == {
+            "persist_postgres": False
+        }
     else:
         assert captured["current_metrics"]["drop_pct"] == expected_drop_pct
         assert captured["persisted_metrics"]["drop_pct"] == expected_drop_pct
         assert not (tmp_path / "source_acquisition_metrics.json").exists()
+        assert captured["corpus_exports"][-1]["kwargs"] == {}
+
+
+def test_global_acquisition_only_stops_before_owner_pipeline_and_persists_shared_jobs(
+    monkeypatch,
+    tmp_path,
+):
+    jobs = [
+        {
+            "job_id": "shared-1",
+            "title": "Data Engineer",
+            "company": "Acme",
+            "location": "United States",
+            "ai_fit_score": 91,
+        },
+        {
+            "job_id": "shared-1",
+            "title": "Data Engineer",
+            "company": "Acme",
+            "location": "United States",
+            "ai_fit_score": 12,
+        },
+    ]
+    captured = _install_drop_pct_collector_fakes(
+        monkeypatch,
+        tmp_path,
+        jobs=jobs,
+        filtered_count=0,
+        graph_route=False,
+        user_pipeline=False,
+    )
+    monkeypatch.setattr(
+        collector,
+        "resolve_pipeline_preference_runtime",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("owner preferences must not be resolved")
+        ),
+    )
+    def downstream_not_allowed(*_args, **_kwargs):
+        raise AssertionError("owner/downstream stage must not execute")
+
+    for module_name, member_names in {
+        "src.pipeline.job_filter": ("filter_jobs",),
+        "src.pipeline.job_ranker": ("rank_jobs",),
+        "src.pipeline.job_details": ("enrich_job_details",),
+        "src.pipeline.embedding_prefilter": ("prefilter_jobs_by_embedding",),
+        "src.intelligence.job_intelligence": (
+            "build_job_intelligence",
+            "filter_jobs_for_ai_evaluation",
+        ),
+        "src.ai.job_fit_evaluator": ("evaluate_jobs",),
+        "src.ai.resume_matcher": ("match_resumes",),
+        "src.pipeline.application_scorer": ("score_jobs",),
+        "src.utils.job_cache": ("load_seen_job_ids", "filter_new_jobs"),
+        "src.ai.llm_client": ("get_provider_metrics", "reset_provider_metrics"),
+    }.items():
+        module = sys.modules[module_name]
+        for member_name in member_names:
+            monkeypatch.setattr(module, member_name, downstream_not_allowed)
+
+    result = asyncio.run(
+        collector.collect_all_jobs_async(global_acquisition_only=True)
+    )
+
+    assert [row["job_id"] for row in result] == ["shared-1"]
+    assert [row["job_id"] for row in captured["ats_health_inputs"]] == [
+        "shared-1",
+        "shared-1",
+    ]
+    assert "source_health_enforced" in captured
+    assert captured["route_events"] == ["direct_dedupe"]
+    assert "filter_inputs" not in captured
+    assert "ranking_inputs" not in captured
+    assert "detail_inputs" not in captured
+    assert "intelligence_inputs" not in captured
+    assert "persisted_metrics" not in captured
+    assert captured["runtime_config"]["global_acquisition_only"] is True
+    assert captured["runtime_counts"]["downstream_stages_executed"] is False
+    assert captured["corpus_exports"] == [
+        {
+            "rows": [dict(jobs[0])],
+            "path": "postgres://rag_job_documents",
+            "kwargs": {
+                "persist_postgres": True,
+                "owner_neutral": True,
+            },
+        }
+    ]
 
 
 def test_usajobs_rows_join_common_collector_filter_and_only_retained_rows_continue(

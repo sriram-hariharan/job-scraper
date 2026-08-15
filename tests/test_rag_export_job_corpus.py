@@ -5,6 +5,8 @@ import types
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
+
 class _FakeTqdm:
     def __call__(self, iterable=None, **kwargs):
         return iterable
@@ -110,6 +112,106 @@ def test_export_job_corpus_postgres_path_does_not_write_local_file():
     assert count == 42
     assert calls["count"] == 1
     assert not Path("postgres:/rag_job_documents").exists()
+
+
+def test_private_filesystem_export_does_not_upsert_shared_postgres():
+    original_upsert = exporter.upsert_rag_job_documents
+    exporter.upsert_rag_job_documents = lambda _docs: (_ for _ in ()).throw(
+        AssertionError("private corpus must not update shared Postgres")
+    )
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_path = Path(tmp_dir) / "private" / "corpus.jsonl"
+        try:
+            count = exporter.export_job_corpus(
+                [_job("private")],
+                str(output_path),
+                merge_existing=False,
+                persist_postgres=False,
+            )
+        finally:
+            exporter.upsert_rag_job_documents = original_upsert
+
+        rows = _read_jsonl(output_path)
+
+    assert count == 1
+    assert [row["job_id"] for row in rows] == ["private"]
+
+
+def test_owner_neutral_shared_export_clears_owner_derived_fields():
+    captured = {}
+    original_upsert = exporter.upsert_rag_job_documents
+    original_count = exporter.count_rag_job_documents
+    exporter.upsert_rag_job_documents = lambda docs: captured.setdefault(
+        "docs", deepcopy(list(docs))
+    )
+    exporter.count_rag_job_documents = lambda: 1
+    job = _job("shared")
+    job["ai_fit_reason"] = "Owner-specific reason"
+    job["resume_matches"] = [{"resume_id": "owner-resume"}]
+
+    try:
+        count = exporter.export_job_corpus(
+            [job],
+            "postgres://rag_job_documents",
+            owner_neutral=True,
+        )
+    finally:
+        exporter.upsert_rag_job_documents = original_upsert
+        exporter.count_rag_job_documents = original_count
+
+    assert count == 1
+    assert captured["docs"][0]["ai_fit_score"] is None
+    assert captured["docs"][0]["ai_fit_reason"] == ""
+    assert captured["docs"][0]["resume_matches"] == []
+    assert "Owner-specific reason" not in captured["docs"][0]["retrieval_text"]
+
+
+def test_owner_current_run_planning_corpus_does_not_upsert_shared_postgres():
+    original_upsert = exporter.upsert_rag_job_documents
+    exporter.upsert_rag_job_documents = lambda _docs: (_ for _ in ()).throw(
+        AssertionError("owner planning corpus must remain private")
+    )
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        try:
+            corpus_path = main._write_current_run_planning_corpus(
+                [_job("owner")],
+                tmp_dir,
+                persist_postgres=False,
+            )
+        finally:
+            exporter.upsert_rag_job_documents = original_upsert
+
+        rows = _read_jsonl(Path(corpus_path))
+
+    assert [row["job_id"] for row in rows] == ["owner"]
+
+
+def test_global_acquisition_only_is_default_off_and_rejects_planning():
+    defaults = {
+        "global_acquisition_only": False,
+        "run_application_planning": False,
+        "application_planning_only": False,
+        "application_planning_corpus_source": "filesystem",
+        "application_planning_generate_tailoring": False,
+        "application_planning_generate_llm_tailoring": False,
+        "application_planning_refresh_llm_tailoring": False,
+        "application_planning_generate_llm_fallback": False,
+        "application_planning_generate_llm_adjudication": False,
+        "delete_seen_data": "no",
+    }
+    main._validate_application_planning_only_args(types.SimpleNamespace(**defaults))
+
+    contradictory = dict(defaults)
+    contradictory.update(
+        global_acquisition_only=True,
+        run_application_planning=True,
+    )
+    with pytest.raises(SystemExit, match="cannot be combined"):
+        main._validate_application_planning_only_args(
+            types.SimpleNamespace(**contradictory)
+        )
 
 
 def test_write_current_run_planning_corpus_produces_accepted_file():

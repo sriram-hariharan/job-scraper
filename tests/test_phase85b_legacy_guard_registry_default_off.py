@@ -53,6 +53,7 @@ from tests.support.phase_guard_registry import (
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SMARTRECRUITERS_PAGINATION_FILES,
+    STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES,
     SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES,
     SOURCE_YIELD_UI_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
@@ -556,6 +557,19 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    assert STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES == {
+        "main.py",
+        "src/pipeline/collector.py",
+        "src/pipeline/scheduler.py",
+        "src/rag/export_job_corpus.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_rag_export_job_corpus.py",
+        "tests/test_scheduler_runtime_postgres_correctness.py",
+        "tests/test_user_pipeline_role_preferences.py",
+    }
+    assert not any(
+        "*" in path for path in STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
+    )
     smartrecruiters_pagination_profile = legacy_guard_allowlist(
         "smartrecruiters_pagination"
     )
@@ -1738,7 +1752,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }.isdisjoint(phase9_step12_compatibility_profile)
 
     assert current_milestone_guard_compatibility_allowlist() == (
-        smartrecruiters_pagination_profile
+        STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
+        | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile
         | himalayas_step6b2_profile

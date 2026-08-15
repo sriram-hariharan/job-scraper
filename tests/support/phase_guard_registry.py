@@ -507,6 +507,17 @@ SCRAPER_TRANSPORT_PAGINATION_HARDENING_FILES = {
     "tests/test_scraper_transport_pagination_hardening.py",
 }
 
+STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES = {
+    "main.py",
+    "src/pipeline/collector.py",
+    "src/pipeline/scheduler.py",
+    "src/rag/export_job_corpus.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_rag_export_job_corpus.py",
+    "tests/test_scheduler_runtime_postgres_correctness.py",
+    "tests/test_user_pipeline_role_preferences.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -2151,7 +2162,8 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
-        legacy_guard_allowlist("smartrecruiters_pagination")
+        STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
+        | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
         | legacy_guard_allowlist("himalayas_step6c1_pagination_repair")

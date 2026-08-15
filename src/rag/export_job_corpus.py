@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
-from src.rag.job_document_builder import build_job_document
+from src.rag.job_document_builder import build_job_document, build_retrieval_text
 from src.storage.rag_store import count_rag_job_documents, upsert_rag_job_documents
 
 
@@ -268,9 +268,19 @@ def export_job_corpus(
     output_path: str,
     *,
     merge_existing: bool = True,
+    persist_postgres: bool = True,
+    owner_neutral: bool = False,
 ) -> int:
     docs = [_build_rag_document_with_raw_identity(job) for job in jobs]
-    upsert_rag_job_documents(docs)
+    if owner_neutral:
+        for doc in docs:
+            doc["ai_fit_score"] = None
+            doc["ai_fit_reason"] = ""
+            doc["resume_matches"] = []
+            doc["retrieval_text"] = build_retrieval_text(doc)
+
+    if persist_postgres:
+        upsert_rag_job_documents(docs)
 
     if _is_filesystem_output_path(output_path):
         return _write_jsonl_documents(
@@ -279,4 +289,6 @@ def export_job_corpus(
             merge_existing=bool(merge_existing),
         )
 
+    if not persist_postgres:
+        raise ValueError("A non-filesystem corpus requires Postgres persistence.")
     return count_rag_job_documents()

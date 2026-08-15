@@ -83,6 +83,16 @@ def _parse_args():
         help="After the main pipeline finishes and exports the job corpus, run application planning as a downstream step.",
     )
     parser.add_argument(
+        "--global-acquisition-only",
+        action="store_true",
+        help="Run shared job acquisition and owner-neutral persistence only.",
+    )
+    parser.add_argument(
+        "--skip-application-planning",
+        action="store_true",
+        help="Explicitly record that downstream application planning is disabled.",
+    )
+    parser.add_argument(
         "--application-planning-job-limit",
         type=int,
         default=50,
@@ -190,9 +200,19 @@ def _run_cmd(cmd, *, redact_values=None):
         raise RuntimeError("application_planning_failed")
 
 
-def _write_current_run_planning_corpus(jobs, output_dir):
+def _write_current_run_planning_corpus(
+    jobs,
+    output_dir,
+    *,
+    persist_postgres=True,
+):
     path = Path(output_dir) / "current_run_job_corpus.jsonl"
-    exported_count = export_job_corpus(jobs, str(path), merge_existing=False)
+    exported_count = export_job_corpus(
+        jobs,
+        str(path),
+        merge_existing=False,
+        persist_postgres=bool(persist_postgres),
+    )
     logger.info(
         "Current-run planning corpus exported: %s documents at %s",
         exported_count,
@@ -276,6 +296,50 @@ def _corpus_has_job_records(path: str) -> bool:
 
 
 def _validate_application_planning_only_args(args) -> None:
+    if bool(getattr(args, "skip_application_planning", False)) and bool(
+        args.run_application_planning
+    ):
+        raise SystemExit(
+            "--skip-application-planning cannot be combined with "
+            "--run-application-planning."
+        )
+    if bool(getattr(args, "global_acquisition_only", False)):
+        contradictory = [
+            name
+            for name, enabled in (
+                ("--run-application-planning", args.run_application_planning),
+                ("--application-planning-only", args.application_planning_only),
+                (
+                    "--application-planning-generate-tailoring",
+                    args.application_planning_generate_tailoring,
+                ),
+                (
+                    "--application-planning-generate-llm-tailoring",
+                    args.application_planning_generate_llm_tailoring,
+                ),
+                (
+                    "--application-planning-refresh-llm-tailoring",
+                    args.application_planning_refresh_llm_tailoring,
+                ),
+                (
+                    "--application-planning-generate-llm-fallback",
+                    args.application_planning_generate_llm_fallback,
+                ),
+                (
+                    "--application-planning-generate-llm-adjudication",
+                    args.application_planning_generate_llm_adjudication,
+                ),
+            )
+            if bool(enabled)
+        ]
+        if str(getattr(args, "delete_seen_data", "ask") or "ask") != "no":
+            contradictory.append("--delete-seen-data must be no")
+        if contradictory:
+            raise SystemExit(
+                "--global-acquisition-only cannot be combined with "
+                + ", ".join(contradictory)
+                + "."
+            )
     if args.application_planning_only and not args.run_application_planning:
         raise SystemExit(
             "--application-planning-only requires --run-application-planning."
@@ -600,6 +664,9 @@ async def _main_async(
         generate_llm_fallback=bool(args.application_planning_generate_llm_fallback),
         generate_llm_adjudication=bool(args.application_planning_generate_llm_adjudication),
         delete_seen_data=delete_seen_data,
+        global_acquisition_only=bool(
+            getattr(args, "global_acquisition_only", False)
+        ),
     )
     update_config(corpus_source=corpus_source)
     if postgres_snapshot is not None:
@@ -650,7 +717,10 @@ async def _main_async(
 
         from src.pipeline.collector import collect_all_jobs_async
 
-        jobs = await collect_all_jobs_async()
+        if bool(getattr(args, "global_acquisition_only", False)):
+            jobs = await collect_all_jobs_async(global_acquisition_only=True)
+        else:
+            jobs = await collect_all_jobs_async()
 
     if args.run_application_planning:
         logger.info("")
@@ -664,6 +734,7 @@ async def _main_async(
             planning_corpus_path = _write_current_run_planning_corpus(
                 jobs,
                 args.application_planning_output_dir,
+                persist_postgres=not _is_user_pipeline_mode(),
             )
 
         if _corpus_has_job_records(planning_corpus_path):

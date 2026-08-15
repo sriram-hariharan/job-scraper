@@ -60,6 +60,67 @@ def test_launchd_plist_has_postgres_runtime_and_required_history_sync(
     assert environment["PATH"].split(":")[0] == "/opt/postgres/bin"
     assert "DATABASE_URL" not in environment
     assert not any("password" in str(value).lower() for value in environment.values())
+    if job_name == "live_pipeline":
+        assert "--global-acquisition-only" in command
+        assert "--skip-application-planning" in command
+        assert "JOB_STACK_OWNER_USER_ID" not in environment
+        assert "JOB_STACK_USER_PIPELINE_MODE" not in environment
+    else:
+        assert "--global-acquisition-only" not in command
+
+
+def test_global_acquisition_command_rejects_owner_downstream_options():
+    with pytest.raises(ValueError, match="cannot be combined"):
+        scheduler.build_live_pipeline_command(
+            global_acquisition_only=True,
+            run_application_planning=True,
+        )
+
+    command = scheduler.build_live_pipeline_command(
+        global_acquisition_only=True,
+        run_application_planning=False,
+    )
+    assert "--global-acquisition-only" in command
+    assert "--skip-application-planning" in command
+    assert "--run-application-planning" not in command
+
+
+def test_direct_live_scheduler_default_is_always_global_acquisition_only(
+    monkeypatch,
+    capsys,
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["scheduler", "--job", "live_pipeline", "--print-only"],
+    )
+
+    assert scheduler.main() == 0
+    command = capsys.readouterr().out.strip()
+
+    assert "--global-acquisition-only" in command
+    assert "--run-application-planning" not in command
+    assert "JOB_STACK_OWNER_USER_ID" not in command
+    assert "JOB_STACK_USER_PIPELINE_MODE" not in command
+
+
+def test_direct_live_scheduler_rejects_explicit_owner_downstream_flags(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "scheduler",
+            "--job",
+            "live_pipeline",
+            "--planning-only",
+            "--print-only",
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="global acquisition only"):
+        scheduler.main()
 
 
 def test_launchd_generation_fails_clearly_without_psql(monkeypatch):

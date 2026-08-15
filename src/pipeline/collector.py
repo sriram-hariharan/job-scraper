@@ -714,14 +714,25 @@ def _complete_rag_export_with_optional_himalayas_retention(
     corpus_path: str,
     *,
     export_owner: Callable[[List[Dict[str, Any]], str], int],
+    persist_postgres: bool = True,
     env: Dict[str, str] | None = None,
     retention_owner: Callable[..., Dict[str, Any]] | None = None,
     clock_owner: Callable[[], datetime] | None = None,
     stage_completer: Callable[..., None] | None = None,
 ) -> Dict[str, int]:
     corpus_file = Path(corpus_path)
+
+    def export(rows):
+        if persist_postgres:
+            return export_owner(rows, corpus_path)
+        return export_owner(
+            rows,
+            corpus_path,
+            persist_postgres=False,
+        )
+
     if scored_jobs:
-        rag_export_count = export_owner(scored_jobs, corpus_path)
+        rag_export_count = export(scored_jobs)
         logger.info("RAG corpus exported: %s documents", rag_export_count)
     elif corpus_file.exists() and corpus_file.stat().st_size > 0:
         rag_export_count = 0
@@ -730,7 +741,7 @@ def _complete_rag_export_with_optional_himalayas_retention(
             corpus_path,
         )
     else:
-        rag_export_count = export_owner(scored_jobs, corpus_path)
+        rag_export_count = export(scored_jobs)
         logger.info("RAG corpus exported: %s documents", rag_export_count)
 
     counts = {"rag_export_count": int(rag_export_count or 0)}
@@ -2691,7 +2702,10 @@ def log_company_hiring(jobs: List[Dict[str, Any]], logger) -> None:
     logger.info("")
 
 
-async def collect_all_jobs_async() -> List[Dict[str, Any]]:
+async def collect_all_jobs_async(
+    *,
+    global_acquisition_only: bool = False,
+) -> List[Dict[str, Any]]:
     from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
     from src.ai.llm_client import get_provider_metrics, reset_provider_metrics
     from src.ai.resume_matcher import match_resumes
@@ -2758,19 +2772,23 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.utils.pipeline_metrics import log_stage_metrics
     from src.utils import pipeline_metrics as source_health_metrics_owner
 
-    preference_runtime = resolve_pipeline_preference_runtime()
-    pipeline_preferences = preference_runtime["effective"]
-    selected_role_families = pipeline_preferences["selected_role_families"]
-    update_config(
-        preferences=pipeline_preferences,
-        selected_role_families=selected_role_families,
-        preference_runtime=preference_runtime,
-    )
-    logger.info(
-        "Effective preference hash attached to run sha256=%s schema_version=%s",
-        preference_runtime["effective_sha256"][:12],
-        preference_runtime["schema_version"],
-    )
+    update_config(global_acquisition_only=bool(global_acquisition_only))
+    pipeline_preferences: Dict[str, Any] = {}
+    selected_role_families: List[str] = []
+    if not global_acquisition_only:
+        preference_runtime = resolve_pipeline_preference_runtime()
+        pipeline_preferences = preference_runtime["effective"]
+        selected_role_families = pipeline_preferences["selected_role_families"]
+        update_config(
+            preferences=pipeline_preferences,
+            selected_role_families=selected_role_families,
+            preference_runtime=preference_runtime,
+        )
+        logger.info(
+            "Effective preference hash attached to run sha256=%s schema_version=%s",
+            preference_runtime["effective_sha256"][:12],
+            preference_runtime["schema_version"],
+        )
 
     scrapers = [
         ("workday", scrape_all_workday),
@@ -2787,20 +2805,20 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     ]
 
     all_jobs: List[Dict[str, Any]] = []
-    seen_job_ids = load_seen_job_ids()
     corpus_path = str(
         os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
         or "postgres://rag_job_documents"
     ).strip()
-    if selected_role_families:
-        logger.info(
-            "Using selected role families for title filtering/ranking: %s",
-            ", ".join(selected_role_families),
-        )
-    else:
-        logger.info("Using default data/AI title filtering/ranking behavior.")
-    logger.info(f"Loaded {len(seen_job_ids)} cached job IDs")
-
+    if not global_acquisition_only:
+        seen_job_ids = load_seen_job_ids()
+        if selected_role_families:
+            logger.info(
+                "Using selected role families for title filtering/ranking: %s",
+                ", ".join(selected_role_families),
+            )
+        else:
+            logger.info("Using default data/AI title filtering/ranking behavior.")
+        logger.info(f"Loaded {len(seen_job_ids)} cached job IDs")
     start_total = time.time()
     loop = asyncio.get_running_loop()
     reset_source_metrics = getattr(
@@ -2866,6 +2884,58 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         lambda _metrics: {},
     )
     enforce_source_health(acquisition_source_metrics)
+
+    if global_acquisition_only:
+        section("GLOBAL ACQUISITION", logger)
+        start_stage("dedupe", f"Deduplicating {len(all_jobs)} acquired jobs")
+        deduped_jobs = dedupe_jobs(all_jobs)
+        deduped_counts = log_stage_metrics("DEDUPED", deduped_jobs)
+        complete_stage(
+            "dedupe",
+            counts={
+                "deduped_jobs": len(deduped_jobs),
+                "duplicate_jobs_removed": len(all_jobs) - len(deduped_jobs),
+            },
+        )
+
+        start_stage(
+            "rag_export",
+            f"Persisting {len(deduped_jobs)} owner-neutral shared jobs",
+        )
+        shared_job_count = export_job_corpus(
+            deduped_jobs,
+            "postgres://rag_job_documents",
+            persist_postgres=True,
+            owner_neutral=True,
+        )
+        complete_stage(
+            "rag_export",
+            counts={"shared_job_documents": int(shared_job_count or 0)},
+        )
+        persist_discovered_companies()
+
+        pipeline_runtime = round(time.time() - start_total, 2)
+        update_counts(
+            acquired_jobs=len(all_jobs),
+            deduped_jobs=len(deduped_jobs),
+            duplicate_jobs_removed=len(all_jobs) - len(deduped_jobs),
+            shared_job_documents=int(shared_job_count or 0),
+            downstream_stages_executed=False,
+        )
+        logger.info(
+            "Global acquisition-only run completed | scraped=%s | deduped=%s "
+            "| shared_documents=%s | runtime=%ss",
+            len(all_jobs),
+            len(deduped_jobs),
+            shared_job_count,
+            pipeline_runtime,
+        )
+        logger.info(
+            "Full-pipeline metrics persistence skipped for acquisition-only run; "
+            "downstream stages were not executed. ATS counts=%s",
+            deduped_counts,
+        )
+        return deduped_jobs
 
     section("FILTER PIPELINE", logger)
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
@@ -3515,6 +3585,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         scored_jobs,
         corpus_path,
         export_owner=export_job_corpus,
+        persist_postgres=not _is_user_pipeline_mode(),
     )
 
     log_market_insights(detailed_jobs)

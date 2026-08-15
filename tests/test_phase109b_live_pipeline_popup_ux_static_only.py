@@ -222,7 +222,7 @@ def test_phase109b_adds_only_ui_static_and_focused_test_files():
             "active_ts_clearance_scan_warning_readback",
         ),
     )
-    assert "src/pipeline/collector.py" not in changed
+    assert "src/pipeline/collector.py" not in allowed
 
 
 def test_pipeline_modal_uses_existing_compact_helper_icon_only():

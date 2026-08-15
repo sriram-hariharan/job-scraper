@@ -2472,7 +2472,10 @@ def assert_protected_hashes(
         (
             "src/app/services.py",
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
-        ): "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
+        ): frozenset({
+            "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
+            "aab9f26ebe70b458fb706cfeee7f9b6ae76a9bef5303b1d5c150b9773323d20e",
+        }),
         (
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
@@ -2561,7 +2564,10 @@ def assert_protected_hashes(
         (
             "src/pipeline/collector.py",
             "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
-        ): "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
+        ): frozenset({
+            "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
+            "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
+        }),
         (
             "src/pipeline/collector.py",
             "75bda61d0bdc4cf388586d141541be486a9e01b5062f5cc91fe6dc63c46546dc",

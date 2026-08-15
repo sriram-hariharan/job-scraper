@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import json
 import sys
 import tempfile
@@ -929,7 +930,12 @@ def _install_drop_pct_collector_fakes(
     )
 
     def install_module(name, **members):
-        monkeypatch.setitem(sys.modules, name, types.SimpleNamespace(**members))
+        fake_module = types.SimpleNamespace(**members)
+        monkeypatch.setitem(sys.modules, name, fake_module)
+        if name == "src.utils.ats_health":
+            parent_package = sys.modules.get("src.utils")
+            if parent_package is not None and hasattr(parent_package, "ats_health"):
+                monkeypatch.setattr(parent_package, "ats_health", fake_module)
 
     install_module(
         "src.ai.job_fit_evaluator",
@@ -1251,6 +1257,7 @@ def test_global_acquisition_only_stops_before_owner_pipeline_and_persists_shared
     monkeypatch,
     tmp_path,
 ):
+    importlib.import_module("src.utils.ats_health")
     jobs = [
         {
             "job_id": "shared-1",

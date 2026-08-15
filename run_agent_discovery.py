@@ -1,9 +1,14 @@
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 from src.agents.company_discovery_agent import run_company_discovery_agent
 from src.pipeline.discovery_stage import run_discovery
+from src.storage.scheduler_artifacts_store import (
+    scheduler_artifact_ref,
+    upsert_scheduler_artifact,
+)
 from src.utils.logging import get_logger
 
 logger = get_logger("run_agent_discovery")
@@ -37,10 +42,20 @@ def main() -> int:
     }
     component_errors = {}
     discovery_summary = {}
+    company_discovery_summary = {}
 
     try:
-        run_company_discovery_agent()
-        component_statuses["company_discovery_agent"] = "succeeded"
+        company_discovery_summary = run_company_discovery_agent() or {}
+        company_status = str(
+            company_discovery_summary.get("status") or "succeeded"
+        ).strip().lower()
+        component_statuses["company_discovery_agent"] = (
+            company_status
+            if company_status in {"succeeded", "skipped"}
+            else "failed"
+        )
+        if component_statuses["company_discovery_agent"] == "failed":
+            failures.append("company_discovery_agent")
     except Exception as exc:
         logger.exception("Standalone company discovery agent failed")
         component_statuses["company_discovery_agent"] = "failed"
@@ -62,8 +77,12 @@ def main() -> int:
         else f"Discovery scheduler run completed with failures in: {', '.join(failures)}"
     )
 
+    scheduler_run_id = str(
+        os.environ.get("JOB_STACK_SCHEDULER_RUN_ID", "") or ""
+    ).strip()
     summary_payload = {
         "job_name": "agent_discovery",
+        "run_id": scheduler_run_id,
         "started_at": started_at,
         "finished_at": _utc_now(),
         "status": "succeeded" if not failures else "failed",
@@ -71,6 +90,7 @@ def main() -> int:
         "component_statuses": component_statuses,
         "failure_components": failures,
         "component_errors": component_errors,
+        "company_discovery_summary": company_discovery_summary,
         "discovery_summary": discovery_summary,
         "summary_message": summary_message,
         "error": "; ".join(
@@ -78,11 +98,28 @@ def main() -> int:
             for name in failures
             if name in component_errors
         ),
-        "summary_path": str(SUMMARY_PATH),
+        "summary_path": (
+            scheduler_artifact_ref(
+                run_id=scheduler_run_id,
+                artifact_kind="agent_discovery_summary",
+            )
+            if scheduler_run_id
+            else str(SUMMARY_PATH)
+        ),
     }
 
-    written_path = _write_summary(summary_payload)
-    logger.info("Wrote discovery run summary: %s", written_path)
+    if scheduler_run_id:
+        artifact = upsert_scheduler_artifact(
+            run_id=scheduler_run_id,
+            job_name="agent_discovery",
+            artifact_kind="agent_discovery_summary",
+            artifact_name="agent_discovery_summary",
+            payload_json=summary_payload,
+        )
+        logger.info("Wrote discovery run summary: %s", artifact["artifact_ref"])
+    else:
+        written_path = _write_summary(summary_payload)
+        logger.info("Wrote legacy discovery run summary: %s", written_path)
 
     if failures:
         raise RuntimeError(summary_message)

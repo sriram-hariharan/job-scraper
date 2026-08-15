@@ -41,7 +41,12 @@ def test_scheduler_retention_option_defaults_false(monkeypatch):
     assert scheduler._parse_args().enable_himalayas_active_retention is False
 
 
-def test_live_launchd_retention_flag_is_isolated_to_enabled_environment():
+def test_live_launchd_retention_flag_is_isolated_to_enabled_environment(monkeypatch):
+    monkeypatch.setattr(
+        scheduler.shutil,
+        "which",
+        lambda name: "/opt/postgres/bin/psql" if name == "psql" else None,
+    )
     disabled_payload = scheduler.build_scheduler_launchd_plist_payload(
         "live_pipeline"
     )
@@ -60,7 +65,10 @@ def test_live_launchd_retention_flag_is_isolated_to_enabled_environment():
     assert disabled_payload["himalayas_active_retention_enabled"] is False
     assert enabled_payload["himalayas_active_retention_enabled"] is True
     assert disabled.get("EnvironmentVariables", {}).get(RETENTION_FLAG) is None
-    assert enabled["EnvironmentVariables"] == {RETENTION_FLAG: "1"}
+    assert enabled["EnvironmentVariables"][RETENTION_FLAG] == "1"
+    assert enabled["EnvironmentVariables"]["PATH"].startswith(
+        "/opt/postgres/bin:"
+    )
     assert discovery.get("EnvironmentVariables", {}).get(RETENTION_FLAG) is None
 
     operational_fields = (

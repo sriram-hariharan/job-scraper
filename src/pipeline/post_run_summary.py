@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
-from src.storage.scheduler_artifacts_store import upsert_scheduler_artifact
+from src.storage.scheduler_artifacts_store import (
+    get_scheduler_artifact_payload,
+    scheduler_artifact_ref,
+    upsert_scheduler_artifact,
+)
 
 
 DEFAULT_AGENT_DISCOVERY_SUMMARY_PATH = Path(
@@ -149,10 +153,32 @@ def _build_agent_discovery_summary_payload(
     payload = _base_summary_payload(record)
 
     artifact_path = Path(str(agent_discovery_summary_path)).expanduser()
-    artifact, artifact_exists, artifact_parse_ok = _read_json_artifact(artifact_path)
+    run_id = _clean_text(record.get("run_id"))
+    artifact = {}
+    if run_id:
+        try:
+            artifact = get_scheduler_artifact_payload(
+                run_id=run_id,
+                artifact_kind="agent_discovery_summary",
+            )
+        except Exception:
+            artifact = {}
+
+    if artifact:
+        artifact_exists = True
+        artifact_parse_ok = True
+        artifact_path_value = scheduler_artifact_ref(
+            run_id=run_id,
+            artifact_kind="agent_discovery_summary",
+        )
+    else:
+        artifact, artifact_exists, artifact_parse_ok = _read_json_artifact(
+            artifact_path
+        )
+        artifact_path_value = str(artifact_path)
 
     payload["artifact_type"] = "agent_discovery_summary"
-    payload["artifact_path"] = str(artifact_path)
+    payload["artifact_path"] = artifact_path_value
     payload["artifact_exists"] = artifact_exists
     payload["artifact_parse_ok"] = artifact_parse_ok
 

@@ -40,16 +40,19 @@ DEFAULT_LAUNCHD_TARGET = f"gui/{os.getuid()}"
 class ScheduledJobDefinition:
     name: str
     description: str
+    launchd_interval_seconds: int
 
 
 _SUPPORTED_SCHEDULED_JOBS: Tuple[ScheduledJobDefinition, ...] = (
     ScheduledJobDefinition(
         name="agent_discovery",
         description="Run standalone company discovery agent.",
+        launchd_interval_seconds=86400,
     ),
     ScheduledJobDefinition(
         name="live_pipeline",
         description="Run main pipeline and optionally downstream application planning.",
+        launchd_interval_seconds=21600,
     ),
 )
 
@@ -63,8 +66,12 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _new_scheduler_run_id() -> str:
-    return datetime.now(timezone.utc).strftime("sched_%Y%m%dT%H%M%SZ")
+def _new_scheduler_run_id(job_name: Any) -> str:
+    normalized_job = _normalize_job_name(job_name)
+    if normalized_job not in _supported_job_names():
+        raise ValueError(f"Unsupported scheduler run id job={job_name!r}.")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return f"sched_{normalized_job}_{timestamp}"
 
 
 def _normalize_job_name(value: Any) -> str:
@@ -139,6 +146,29 @@ def _normalize_launchd_target(value: Any) -> str:
     return raw
 
 
+def _resolve_psql_executable(psql_bin: Any = "psql") -> str:
+    candidate = str(psql_bin or "psql").strip() or "psql"
+    resolved = shutil.which(candidate)
+    if not resolved:
+        raise ValueError(
+            f"psql executable not found for scheduled Postgres runtime: {candidate!r}. "
+            "Install psql or pass --psql-bin with a resolvable executable."
+        )
+    return str(Path(resolved))
+
+
+def _launchd_runtime_path(psql_executable: str) -> str:
+    directories = [
+        str(Path(psql_executable).parent),
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+    ]
+    return ":".join(dict.fromkeys(directories))
+
+
 def _launchd_service_target(target: str, label: str) -> str:
     return f"{target}/{label}"
 
@@ -188,8 +218,11 @@ def _build_scheduled_child_env(
     options: Dict[str, Any],
 ) -> Dict[str, str]:
     env = dict(os.environ)
+    normalized_job = get_scheduled_job_definition(job_name)["name"]
+    env["JOB_STACK_SCHEDULER_RUN_ID"] = str(run_id)
+    env["JOB_STACK_SCHEDULER_JOB_NAME"] = normalized_job
 
-    if _normalize_job_name(job_name) != "live_pipeline":
+    if normalized_job != "live_pipeline":
         return env
 
     env["JOB_APP_PIPELINE_STATUS_PATH"] = _derive_live_pipeline_status_path(
@@ -212,17 +245,18 @@ def _command_to_text(cmd: List[str]) -> str:
     return shlex.join([str(part) for part in cmd])
 
 
-def get_scheduled_job_definitions() -> List[Dict[str, str]]:
+def get_scheduled_job_definitions() -> List[Dict[str, Any]]:
     return [
         {
             "name": item.name,
             "description": item.description,
+            "launchd_interval_seconds": item.launchd_interval_seconds,
         }
         for item in _SUPPORTED_SCHEDULED_JOBS
     ]
 
 
-def get_scheduled_job_definition(job_name: Any) -> Dict[str, str]:
+def get_scheduled_job_definition(job_name: Any) -> Dict[str, Any]:
     normalized = _normalize_job_name(job_name)
 
     for item in _SUPPORTED_SCHEDULED_JOBS:
@@ -230,6 +264,7 @@ def get_scheduled_job_definition(job_name: Any) -> Dict[str, str]:
             return {
                 "name": item.name,
                 "description": item.description,
+                "launchd_interval_seconds": item.launchd_interval_seconds,
             }
 
     allowed = ", ".join(item.name for item in _SUPPORTED_SCHEDULED_JOBS)
@@ -335,6 +370,11 @@ def build_scheduler_wrapper_command(
     psql_bin: str = "psql",
     allow_contract_drift: bool = False,
 ) -> List[str]:
+    if require_postgres_run_history_sync and not sync_postgres_run_history:
+        raise ValueError(
+            "require_postgres_run_history_sync requires "
+            "sync_postgres_run_history=True."
+        )
     definition = get_scheduled_job_definition(job_name)
     normalized_job = definition["name"]
 
@@ -431,20 +471,31 @@ def build_scheduler_launchd_plist_payload(
     generate_llm_fallback: bool = False,
     delete_seen_data: Any = DEFAULT_DELETE_SEEN_DATA,
     history_path: Any = DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
-    sync_postgres_run_history: bool = False,
-    require_postgres_run_history_sync: bool = False,
+    sync_postgres_run_history: bool = True,
+    require_postgres_run_history_sync: bool = True,
     database_url: str = "",
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     allow_contract_drift: bool = False,
     himalayas_active_retention_enabled: bool = False,
-    launchd_interval_seconds: Any = DEFAULT_LAUNCHD_INTERVAL_SECONDS,
+    launchd_interval_seconds: Any = None,
     launchd_out_dir: Any = DEFAULT_LAUNCHD_OUT_DIR,
     launchd_log_dir: Any = DEFAULT_LAUNCHD_LOG_DIR,
     launchd_label_prefix: str = DEFAULT_LAUNCHD_LABEL_PREFIX,
 ) -> Dict[str, Any]:
+    definition = get_scheduled_job_definition(job_name)
+    if str(database_url or "").strip():
+        raise ValueError(
+            "Do not embed database_url in launchd configuration; use "
+            "database_url_env instead."
+        )
+    resolved_psql = _resolve_psql_executable(psql_bin)
     interval_seconds = _normalize_positive_int(
-        launchd_interval_seconds,
+        (
+            definition["launchd_interval_seconds"]
+            if launchd_interval_seconds is None
+            else launchd_interval_seconds
+        ),
         "launchd_interval_seconds",
     )
     label = build_scheduler_launchd_label(
@@ -470,11 +521,11 @@ def build_scheduler_launchd_plist_payload(
         generate_llm_fallback=generate_llm_fallback,
         delete_seen_data=delete_seen_data,
         history_path=history_path,
-        sync_postgres_run_history=sync_postgres_run_history,
-        require_postgres_run_history_sync=require_postgres_run_history_sync,
-        database_url=database_url,
+        sync_postgres_run_history=True,
+        require_postgres_run_history_sync=True,
+        database_url="",
         database_url_env=database_url_env,
-        psql_bin=psql_bin,
+        psql_bin=resolved_psql,
         allow_contract_drift=allow_contract_drift,
     )
 
@@ -482,6 +533,9 @@ def build_scheduler_launchd_plist_payload(
     stdout_log_path = launchd_log_dir_path / f"{label}.out.log"
     stderr_log_path = launchd_log_dir_path / f"{label}.err.log"
 
+    environment_variables = {
+        "PATH": _launchd_runtime_path(resolved_psql),
+    }
     plist_data = {
         "Label": label,
         "ProgramArguments": command,
@@ -492,14 +546,13 @@ def build_scheduler_launchd_plist_payload(
         "StandardErrorPath": str(stderr_log_path),
         "ProcessType": "Background",
         "AbandonProcessGroup": True,
+        "EnvironmentVariables": environment_variables,
     }
     if (
         get_scheduled_job_definition(job_name)["name"] == "live_pipeline"
         and himalayas_active_retention_enabled
     ):
-        plist_data["EnvironmentVariables"] = {
-            "APPLYLENS_HIMALAYAS_ACTIVE_RETENTION_ENABLED": "1",
-        }
+        environment_variables["APPLYLENS_HIMALAYAS_ACTIVE_RETENTION_ENABLED"] = "1"
     plist_xml = plistlib.dumps(
         plist_data,
         fmt=plistlib.FMT_XML,
@@ -519,6 +572,7 @@ def build_scheduler_launchd_plist_payload(
             "com.jobstack.scheduler",
         ),
         "launchd_interval_seconds": interval_seconds,
+        "psql_executable": resolved_psql,
         "working_directory": str(REPO_ROOT),
         "command": command,
         "command_text": _command_to_text(command),
@@ -856,8 +910,8 @@ def _parse_args():
     parser.add_argument(
         "--launchd-interval-seconds",
         type=int,
-        default=DEFAULT_LAUNCHD_INTERVAL_SECONDS,
-        help="launchd StartInterval value for plist generation.",
+        default=None,
+        help="Override the per-job launchd StartInterval default.",
     )
     parser.add_argument(
         "--launchd-out-dir",
@@ -904,6 +958,12 @@ def _parse_args():
 
 def main() -> int:
     args = _parse_args()
+
+    if args.require_postgres_run_history_sync and not args.sync_postgres_run_history:
+        raise SystemExit(
+            "--require-postgres-run-history-sync requires "
+            "--sync-postgres-run-history."
+        )
 
     options = {
         "planning_only": bool(args.planning_only),
@@ -987,6 +1047,9 @@ def main() -> int:
         "launchd_agent_dir": args.launchd_agent_dir,
         "launchd_target": args.launchd_target,
     }
+    launchd_plist_kwargs = dict(launchd_kwargs)
+    launchd_plist_kwargs.pop("launchd_agent_dir", None)
+    launchd_plist_kwargs.pop("launchd_target", None)
 
     if args.launchd_agent_status:
         launchd_payload = get_scheduler_launchd_agent_status(args.job, **launchd_kwargs)
@@ -1036,10 +1099,16 @@ def main() -> int:
 
     if args.emit_launchd_plist or args.write_launchd_plist:
         if args.write_launchd_plist:
-            launchd_payload = write_scheduler_launchd_plist(args.job, **launchd_kwargs)
+            launchd_payload = write_scheduler_launchd_plist(
+                args.job,
+                **launchd_plist_kwargs,
+            )
             print("launchd_plist_written=true")
         else:
-            launchd_payload = build_scheduler_launchd_plist_payload(args.job, **launchd_kwargs)
+            launchd_payload = build_scheduler_launchd_plist_payload(
+                args.job,
+                **launchd_plist_kwargs,
+            )
 
         print(f"launchd_label={launchd_payload['label']}")
         print(f"launchd_interval_seconds={launchd_payload['launchd_interval_seconds']}")
@@ -1059,7 +1128,7 @@ def main() -> int:
     if args.print_only:
         return 0
 
-    run_id = _new_scheduler_run_id()
+    run_id = _new_scheduler_run_id(definition["name"])
     started_at = _utc_now()
     finished_at = started_at
     return_code = 1

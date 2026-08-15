@@ -214,7 +214,14 @@ def run_company_discovery_agent():
     api_key = str(os.getenv("TAVILY_API_KEY", "") or "").strip()
     if not api_key:
         logger.info("Company discovery skipped: TAVILY_API_KEY is not configured")
-        return
+        return {
+            "status": "skipped",
+            "skip_reason": "tavily_api_key_not_configured",
+            "queries_attempted": 0,
+            "queries_failed": 0,
+            "candidate_counts_by_ats": {},
+            "total_candidate_count": 0,
+        }
 
     client = TavilyClient(api_key=api_key)
 
@@ -229,7 +236,11 @@ def run_company_discovery_agent():
         "recruitee": [],
     }
 
+    queries_attempted = 0
+    queries_failed = 0
+
     for query in tqdm(SEARCH_QUERIES, desc="Agent search queries"):
+        queries_attempted += 1
 
         try:
 
@@ -254,10 +265,12 @@ def run_company_discovery_agent():
                     discovered[ats].append(company)
 
         except Exception as e:
+            queries_failed += 1
 
             logger.warning(f"Agent search failed for query: {query} | {e}")
 
     total = 0
+    candidate_counts_by_ats = {}
 
     for ats, companies in discovered.items():
         if ats in {"jobvite", "recruitee"}:
@@ -314,8 +327,17 @@ def run_company_discovery_agent():
         logger.info(f"{ats} → {len(companies)} companies added")
 
         total += len(companies)
+        candidate_counts_by_ats[ats] = len(companies)
 
     logger.info(f"Agent discovered {total} companies")
+    return {
+        "status": "succeeded",
+        "skip_reason": "",
+        "queries_attempted": queries_attempted,
+        "queries_failed": queries_failed,
+        "candidate_counts_by_ats": candidate_counts_by_ats,
+        "total_candidate_count": total,
+    }
 
 
 def _resolve_ats_identity_from_page(url):

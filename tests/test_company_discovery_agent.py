@@ -53,7 +53,67 @@ def test_missing_tavily_key_is_default_off(monkeypatch, key):
         lambda *args, **kwargs: pytest.fail("persistence must not be called"),
     )
 
-    assert agent.run_company_discovery_agent() is None
+    assert agent.run_company_discovery_agent() == {
+        "status": "skipped",
+        "skip_reason": "tavily_api_key_not_configured",
+        "queries_attempted": 0,
+        "queries_failed": 0,
+        "candidate_counts_by_ats": {},
+        "total_candidate_count": 0,
+    }
+
+
+def test_company_discovery_result_reports_attempts_without_claiming_persisted_counts(
+    monkeypatch,
+):
+    client = _TavilyClient([])
+    monkeypatch.setenv("TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr(agent, "TavilyClient", lambda **_kwargs: client)
+    monkeypatch.setattr(agent, "tqdm", lambda values, **_kwargs: values)
+    monkeypatch.setattr(
+        agent,
+        "append_new_companies",
+        lambda *_args, **_kwargs: pytest.fail("no candidates should be persisted"),
+    )
+
+    result = agent.run_company_discovery_agent()
+
+    assert result == {
+        "status": "succeeded",
+        "skip_reason": "",
+        "queries_attempted": len(agent.SEARCH_QUERIES),
+        "queries_failed": 0,
+        "candidate_counts_by_ats": {},
+        "total_candidate_count": 0,
+    }
+    assert len(client.queries) == len(agent.SEARCH_QUERIES)
+
+
+def test_company_discovery_result_reports_validated_candidate_counts(monkeypatch):
+    client = _TavilyClient([{"url": "https://example.com/careers"}])
+    persisted = []
+    monkeypatch.setenv("TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr(agent, "TavilyClient", lambda **_kwargs: client)
+    monkeypatch.setattr(agent, "tqdm", lambda values, **_kwargs: values)
+    monkeypatch.setattr(
+        agent,
+        "_resolve_ats_identity_from_page",
+        lambda _url: ("greenhouse", "acme"),
+    )
+    monkeypatch.setattr(
+        agent,
+        "append_new_companies",
+        lambda path, companies: persisted.append((path, set(companies))),
+    )
+
+    result = agent.run_company_discovery_agent()
+
+    assert result["status"] == "succeeded"
+    assert result["queries_attempted"] == len(agent.SEARCH_QUERIES)
+    assert result["queries_failed"] == 0
+    assert result["candidate_counts_by_ats"] == {"greenhouse": 1}
+    assert result["total_candidate_count"] == 1
+    assert persisted == [("discovery://ats/greenhouse", {"acme"})]
 
 
 def test_extract_urls_retains_direct_recruitee_offers():

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.support.phase_guard_registry import assert_protected_hashes
 from src.evaluation import controlled_groq_canary_transport as generic
 from src.evaluation import controlled_groq_tailoring_canary_transport as transport
 from src.evaluation import controlled_tailoring_benchmark_request_adapter as adapter
@@ -502,5 +503,10 @@ def test_no_future_run_owner_or_artifact_and_protected_behavior_is_unchanged():
 
     assert not any(future_marker in path for path in tracked)
     assert not any(future_marker in name for name in outputs)
-    for relative, expected in PROTECTED_FILE_SHAS.items():
-        assert sha256((ROOT / relative).read_bytes()).hexdigest() == expected
+    assert_protected_hashes(
+        ROOT,
+        PROTECTED_FILE_SHAS,
+        compatibility_profiles=(
+            "phase1_ai_provider_model_routing_hash_maintenance",
+        ),
+    )

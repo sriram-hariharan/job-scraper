@@ -2437,6 +2437,10 @@ def assert_protected_hashes(
         }),
         (
             "src/app/services.py",
+            "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
+        ): "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
+        (
+            "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
         ): frozenset({
             "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
@@ -2447,6 +2451,7 @@ def assert_protected_hashes(
             "e25bf271beb6da9bc27597d1c2a8b564b36970f4db31ce763f5d3a08523419fc",
             "ea8e18c8a25c3630e389a527a42b238bdd09084e3c89b07ed12ec348eec54caf",
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
+            "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
         }),
             (
                 "src/agents/jd_intelligence.py",

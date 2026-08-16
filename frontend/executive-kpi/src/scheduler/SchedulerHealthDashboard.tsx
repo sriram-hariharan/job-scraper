@@ -40,6 +40,7 @@ import {
   formatClockTime,
   formatDateTime,
   isFailedStatus,
+  readAgentDiscoveryRunSummary,
   readSchedulerSummary,
   runAgentDiscoveryNow,
   runRowKey,
@@ -52,6 +53,8 @@ import {
   type SchedulerRuntimeJob,
   type SchedulerSummaryPayload,
   type ManualAgentDiscoveryResponse,
+  type AgentDiscoveryRunSummary,
+  AgentDiscoverySummaryUnavailableError,
 } from "./schedulerModel";
 
 /**
@@ -72,7 +75,14 @@ type RunsTab = "job_status" | "run_history";
 type SchedulerHealthDashboardProps = {
   readSummary?: () => Promise<SchedulerSummaryPayload>;
   runDiscoveryNow?: () => Promise<ManualAgentDiscoveryResponse>;
+  readDiscoverySummary?: (runId: string) => Promise<AgentDiscoveryRunSummary>;
 };
+
+type DiscoverySummaryLoadState =
+  | { kind: "loading" }
+  | { kind: "ready"; summary: AgentDiscoveryRunSummary }
+  | { kind: "unavailable" }
+  | { kind: "error"; message: string };
 
 function schedulerBadge(status: unknown) {
   const label = shown(status, "Unknown");
@@ -369,7 +379,31 @@ function RuntimeJobsPanel({
   );
 }
 
-function jobStatusColumns(): ColumnDef<SchedulerRun>[] {
+function schedulerRunJobCell(
+  run: SchedulerRun,
+  onViewDiscoverySummary: (run: SchedulerRun, trigger: HTMLButtonElement) => void,
+) {
+  return (
+    <div className="scheduler-run-history-job">
+      <strong>{shown(run.job_name, "Unnamed job")}</strong>
+      {clean(run.job_name) === "agent_discovery" && clean(run.run_id) ? (
+        <button
+          type="button"
+          className="scheduler-run-summary-view-btn"
+          onClick={(event) => onViewDiscoverySummary(run, event.currentTarget)}
+          aria-label={`View discovery summary for ${clean(run.run_id)}`}
+        >
+          <FileSearch size={13} aria-hidden="true" />
+          View
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function jobStatusColumns(
+  onViewDiscoverySummary: (run: SchedulerRun, trigger: HTMLButtonElement) => void,
+): ColumnDef<SchedulerRun>[] {
   return [
     {
       id: "job_name",
@@ -377,7 +411,7 @@ function jobStatusColumns(): ColumnDef<SchedulerRun>[] {
       accessorFn: (row) => clean(row.job_name),
       size: 220,
       enableSorting: false,
-      cell: ({ row }) => <strong>{shown(row.original.job_name, "Unnamed job")}</strong>,
+      cell: ({ row }) => schedulerRunJobCell(row.original, onViewDiscoverySummary),
     },
     {
       id: "status",
@@ -425,7 +459,9 @@ function jobStatusColumns(): ColumnDef<SchedulerRun>[] {
   ];
 }
 
-function runHistoryColumns(): ColumnDef<SchedulerRun>[] {
+function runHistoryColumns(
+  onViewDiscoverySummary: (run: SchedulerRun, trigger: HTMLButtonElement) => void,
+): ColumnDef<SchedulerRun>[] {
   return [
     {
       id: "job_name",
@@ -433,7 +469,7 @@ function runHistoryColumns(): ColumnDef<SchedulerRun>[] {
       accessorFn: (row) => clean(row.job_name),
       size: 200,
       enableSorting: false,
-      cell: ({ row }) => <strong>{shown(row.original.job_name, "Unnamed job")}</strong>,
+      cell: ({ row }) => schedulerRunJobCell(row.original, onViewDiscoverySummary),
     },
     {
       id: "status",
@@ -497,15 +533,21 @@ function SchedulerRunsCard({
   errorMessage,
   payload,
   onRetry,
+  readDiscoverySummary,
 }: {
   status: "loading" | "ready" | "error";
   errorMessage?: string;
   payload: SchedulerSummaryPayload | null;
   onRetry: () => void;
+  readDiscoverySummary: (runId: string) => Promise<AgentDiscoveryRunSummary>;
 }) {
   const [activeTab, setActiveTab] = useState<RunsTab>("job_status");
   const [jobFilter, setJobFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [selectedDiscoveryRun, setSelectedDiscoveryRun] = useState<SchedulerRun | null>(null);
+  const [discoverySummaryState, setDiscoverySummaryState] = useState<DiscoverySummaryLoadState | null>(null);
+  const discoverySummaryTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const discoverySummaryRequestRef = useRef(0);
 
   const jobStatusRows = useMemo(
     () => sortJobStatusRows(payload?.latest_runs_by_job || []),
@@ -532,8 +574,44 @@ function SchedulerRunsCard({
     return true;
   }), [allRunHistoryRows, jobFilter, statusFilter]);
 
-  const jobStatusColumnsMemo = useMemo(jobStatusColumns, []);
-  const runHistoryColumnsMemo = useMemo(runHistoryColumns, []);
+  const openDiscoverySummary = useCallback((run: SchedulerRun, trigger: HTMLButtonElement) => {
+    const runId = clean(run.run_id);
+    if (!runId) return;
+    discoverySummaryTriggerRef.current = trigger;
+    setSelectedDiscoveryRun(run);
+    setDiscoverySummaryState({ kind: "loading" });
+    const requestId = discoverySummaryRequestRef.current + 1;
+    discoverySummaryRequestRef.current = requestId;
+    void readDiscoverySummary(runId).then((summary) => {
+      if (discoverySummaryRequestRef.current === requestId) {
+        setDiscoverySummaryState({ kind: "ready", summary });
+      }
+    }).catch((error) => {
+      if (discoverySummaryRequestRef.current !== requestId) return;
+      if (error instanceof AgentDiscoverySummaryUnavailableError) {
+        setDiscoverySummaryState({ kind: "unavailable" });
+      } else {
+        setDiscoverySummaryState({
+          kind: "error",
+          message: error instanceof Error ? error.message : "Discovery summary could not be loaded.",
+        });
+      }
+    });
+  }, [readDiscoverySummary]);
+  const closeDiscoverySummary = useCallback(() => {
+    discoverySummaryRequestRef.current += 1;
+    setSelectedDiscoveryRun(null);
+    setDiscoverySummaryState(null);
+  }, []);
+
+  const jobStatusColumnsMemo = useMemo(
+    () => jobStatusColumns(openDiscoverySummary),
+    [openDiscoverySummary],
+  );
+  const runHistoryColumnsMemo = useMemo(
+    () => runHistoryColumns(openDiscoverySummary),
+    [openDiscoverySummary],
+  );
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "started_at", desc: true }]);
 
@@ -607,34 +685,43 @@ function SchedulerRunsCard({
 
   if (activeTab === "job_status") {
     return (
-      <SharedTableCard
-        className="scheduler-shared-table-card"
-        ariaLabel="Job status table"
-        title="Scheduler Runs"
-        subtitle="Latest recorded result for each scheduled job."
-        count={jobStatusRows.length}
-        table={jobStatusTable}
-        columns={jobStatusColumnsMemo}
-        status={status}
-        error={errorMessage}
-        headerActions={tabsNode}
-        pagination={jobStatusPagination}
-        paginationNoun="jobs"
-        paginationLabel="Job status"
-        stickyColumnId="run_id"
-        rowClassName={(row) => `scheduler-run-row ${isFailedStatus(row.original.status) ? "is-attention" : ""}`}
-        detailId={() => ""}
-        renderDetails={() => null}
-        empty={<div className="scheduler-empty"><strong>No scheduler jobs recorded yet.</strong></div>}
-        onPageChange={() => undefined}
-        onRetry={onRetry}
-        fillAvailableWidth
-      />
+      <>
+        <SharedTableCard
+          className="scheduler-shared-table-card"
+          ariaLabel="Job status table"
+          title="Scheduler Runs"
+          subtitle="Latest recorded result for each scheduled job."
+          count={jobStatusRows.length}
+          table={jobStatusTable}
+          columns={jobStatusColumnsMemo}
+          status={status}
+          error={errorMessage}
+          headerActions={tabsNode}
+          pagination={jobStatusPagination}
+          paginationNoun="jobs"
+          paginationLabel="Job status"
+          stickyColumnId="run_id"
+          rowClassName={(row) => `scheduler-run-row ${isFailedStatus(row.original.status) ? "is-attention" : ""}`}
+          detailId={() => ""}
+          renderDetails={() => null}
+          empty={<div className="scheduler-empty"><strong>No scheduler jobs recorded yet.</strong></div>}
+          onPageChange={() => undefined}
+          onRetry={onRetry}
+          fillAvailableWidth
+        />
+        <DiscoveryRunSummaryModal
+          run={selectedDiscoveryRun}
+          state={discoverySummaryState}
+          onClose={closeDiscoverySummary}
+          triggerRef={discoverySummaryTriggerRef}
+        />
+      </>
     );
   }
 
   return (
-    <SharedTableCard
+    <>
+      <SharedTableCard
       className="scheduler-shared-table-card"
       ariaLabel="Run history table"
       title="Scheduler Runs"
@@ -644,10 +731,8 @@ function SchedulerRunsCard({
       columns={runHistoryColumnsMemo}
       status={status}
       error={errorMessage}
-      headerActions={(
-        <div className="scheduler-runs-header-actions">
-          {tabsNode}
-          <div className="scheduler-runs-filters">
+      headingActions={(
+        <div className="scheduler-runs-filters">
             <SharedFilterSelect
               id="schedulerRunHistoryJobFilter"
               label="Job"
@@ -668,9 +753,9 @@ function SchedulerRunsCard({
               allLabel="All statuses"
               mode="single"
             />
-          </div>
         </div>
       )}
+      headerActions={tabsNode}
       pagination={runHistoryPagination}
       paginationNoun="runs"
       paginationLabel="Run history"
@@ -682,7 +767,292 @@ function SchedulerRunsCard({
       onPageChange={() => undefined}
       onRetry={onRetry}
       fillAvailableWidth
-    />
+      />
+      <DiscoveryRunSummaryModal
+        run={selectedDiscoveryRun}
+        state={discoverySummaryState}
+        onClose={closeDiscoverySummary}
+        triggerRef={discoverySummaryTriggerRef}
+      />
+    </>
+  );
+}
+
+const DISCOVERY_SOURCE_LABELS: Record<string, string> = {
+  domain_discovered: "Domain detection",
+  career_discovered: "Career pages",
+  network_discovered: "ATS network",
+  greenhouse_embed_discovered: "Greenhouse embed",
+  smartrecruiters_global_discovered: "SmartRecruiters global",
+  github_discovered: "GitHub",
+  sitemap_discovered: "Sitemap",
+};
+
+function summaryDateTime(value: unknown) {
+  const raw = clean(value);
+  if (!raw || Number.isNaN(new Date(raw).getTime())) return "—";
+  return formatDateTime(raw);
+}
+
+function summaryDuration(startedAt: unknown, finishedAt: unknown) {
+  const started = new Date(clean(startedAt));
+  const finished = new Date(clean(finishedAt));
+  const milliseconds = finished.getTime() - started.getTime();
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return "—";
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function summaryMetric(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "—";
+}
+
+function DiscoveryRunSummaryModal({
+  run,
+  state,
+  onClose,
+  triggerRef,
+}: {
+  run: SchedulerRun | null;
+  state: DiscoverySummaryLoadState | null;
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!run) return undefined;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeydown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !cardRef.current) return;
+      const controls = Array.from(
+        cardRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"),
+      );
+      if (!controls.length) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeydown);
+    return () => {
+      document.removeEventListener("keydown", handleKeydown);
+      document.body.style.overflow = previousBodyOverflow;
+      triggerRef.current?.focus();
+    };
+  }, [onClose, run, triggerRef]);
+
+  if (!run || !state) return null;
+  const summary = state.kind === "ready" ? state.summary : null;
+  const uniqueAts = Object.entries(summary?.discovery.run_unique_discovered_by_ats || {});
+  const candidateAts = Object.entries(summary?.company_discovery.candidate_counts_by_ats || {});
+  const sourceEntries = Object.entries(summary?.discovery.sources || {});
+  const uniqueTotal = uniqueAts.length
+    ? uniqueAts.reduce((total, [, count]) => total + count, 0)
+    : null;
+  const failedQueries = summary?.company_discovery.queries_failed;
+  const triggerLabel = summary?.trigger === "manual"
+    ? "Manual"
+    : summary?.trigger === "scheduled"
+      ? "Scheduled"
+      : "Unknown";
+  const startedLabel = summaryDateTime(summary?.started_at);
+  const finishedLabel = summaryDateTime(summary?.finished_at);
+
+  return (
+    <div
+      className="modal-backdrop scheduler-discovery-summary-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="modal-card scheduler-discovery-summary-modal"
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedulerDiscoverySummaryTitle"
+      >
+        <header className="scheduler-discovery-summary-header">
+          <div>
+            <div className="scheduler-discovery-summary-kicker"><FileSearch size={15} aria-hidden="true" /> Run analytics</div>
+            <h3 id="schedulerDiscoverySummaryTitle">Discovery Run Summary</h3>
+            <div className="scheduler-discovery-summary-subtitle">
+              <span>{triggerLabel}</span>
+              <span aria-hidden="true">•</span>
+              <span>{summaryDateTime(summary?.started_at || run.started_at)}</span>
+            </div>
+          </div>
+          <div className="scheduler-discovery-summary-header-actions">
+            {summary ? schedulerBadge(summary.status) : null}
+            <button
+              type="button"
+              className="scheduler-discovery-summary-close"
+              onClick={onClose}
+              ref={closeButtonRef}
+              aria-label="Close discovery run summary"
+            >
+              <X
+                size={20}
+                strokeWidth={3}
+                color="#ffffff"
+                className="scheduler-discovery-summary-close-icon"
+                style={{ width: 20, height: 20, color: "#ffffff", stroke: "#ffffff", display: "block", visibility: "visible", opacity: 1 }}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+        </header>
+
+        <div className="scheduler-discovery-summary-body">
+          {state.kind === "loading" ? (
+            <div className="scheduler-discovery-summary-state" role="status">
+              <RefreshCw size={24} className="is-spinning" aria-hidden="true" />
+              <strong>Loading discovery summary…</strong>
+              <span>Reading the persisted artifact for this exact run.</span>
+            </div>
+          ) : null}
+          {state.kind === "unavailable" ? (
+            <div className="scheduler-discovery-summary-state is-unavailable">
+              <FileSearch size={28} aria-hidden="true" />
+              <strong>Discovery summary unavailable</strong>
+              <span>This run does not have a persisted discovery summary.</span>
+            </div>
+          ) : null}
+          {state.kind === "error" ? (
+            <div className="scheduler-discovery-summary-state is-error" role="alert">
+              <AlertTriangle size={28} aria-hidden="true" />
+              <strong>Discovery summary could not be loaded</strong>
+              <span>{state.message}</span>
+            </div>
+          ) : null}
+          {summary ? (
+            <>
+              <div className="scheduler-discovery-kpi-grid">
+                {([
+                  ["Agent candidates", summary.company_discovery.total_candidate_count, "blue", Database],
+                  ["Unique ATS discoveries", uniqueTotal, "violet", Activity],
+                  ["Search queries", summary.company_discovery.queries_attempted, "cyan", FileSearch],
+                  ["Failed queries", failedQueries, failedQueries == null ? "neutral" : failedQueries === 0 ? "emerald" : "amber", AlertTriangle],
+                ] as const).map(([label, value, tone, Icon]) => (
+                  <div className={`scheduler-discovery-kpi is-${tone}`} key={label}>
+                    <span className="scheduler-discovery-kpi-icon"><Icon size={16} aria-hidden="true" /></span>
+                    <span>{label}</span>
+                    <strong>{summaryMetric(value)}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="scheduler-discovery-summary-columns">
+                <section className="scheduler-discovery-section" aria-labelledby="schedulerDiscoveryAtsTitle">
+                  <div className="scheduler-discovery-section-heading">
+                    <h4 id="schedulerDiscoveryAtsTitle">Discovery by ATS</h4>
+                    <span>Run-unique discoveries</span>
+                  </div>
+                  {uniqueAts.length ? (
+                    <div className="scheduler-discovery-ats-grid">
+                      {uniqueAts.map(([ats, count], index) => (
+                        <div className={`scheduler-discovery-ats-tile is-accent-${index % 4}`} key={ats}>
+                          <span className="scheduler-discovery-dot" aria-hidden="true" />
+                          <span>{jobDisplayName(ats)}</span>
+                          <strong>{count.toLocaleString()}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="scheduler-discovery-inline-empty">—</div>}
+                </section>
+
+                <section className="scheduler-discovery-section" aria-labelledby="schedulerDiscoverySourcesTitle">
+                  <div className="scheduler-discovery-section-heading">
+                    <h4 id="schedulerDiscoverySourcesTitle">Discovery sources</h4>
+                    <span>Candidate origins</span>
+                  </div>
+                  {sourceEntries.length ? (
+                    <div className="scheduler-discovery-source-list">
+                      {sourceEntries.map(([source, counts], index) => {
+                        const breakdown = Object.entries(counts)
+                          .map(([ats, count]) => `${jobDisplayName(ats)} ${count}`)
+                          .join(" · ");
+                        return (
+                          <div className={`scheduler-discovery-source-row is-accent-${index % 4}`} key={source}>
+                            <span>{DISCOVERY_SOURCE_LABELS[source] || "Discovery source"}</span>
+                            <small title={breakdown}>{breakdown}</small>
+                            <strong>{Object.values(counts).reduce((total, count) => total + count, 0).toLocaleString()}</strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : <div className="scheduler-discovery-inline-empty">—</div>}
+                </section>
+              </div>
+
+              {candidateAts.length ? (
+                <section className="scheduler-discovery-section scheduler-discovery-candidates" aria-labelledby="schedulerDiscoveryCandidatesTitle">
+                  <div className="scheduler-discovery-section-heading">
+                    <h4 id="schedulerDiscoveryCandidatesTitle">Agent search candidates</h4>
+                    <span>Candidate pool by ATS</span>
+                  </div>
+                  <div className="scheduler-discovery-candidate-chips">
+                    {candidateAts.map(([ats, count], index) => (
+                      <span className={`is-accent-${index % 5}`} key={ats}><span>{jobDisplayName(ats)}</span><strong>{count.toLocaleString()}</strong></span>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="scheduler-discovery-section" aria-labelledby="schedulerDiscoveryExecutionTitle">
+                <div className="scheduler-discovery-section-heading">
+                  <h4 id="schedulerDiscoveryExecutionTitle">Execution</h4>
+                  <span>Component outcomes</span>
+                </div>
+                <div className="scheduler-discovery-execution-grid">
+                  {Object.entries(summary.components).map(([component, componentStatus]) => {
+                    const label = component === "company_discovery_agent" ? "Company Discovery Agent" : "ATS Discovery Stage";
+                    const Icon = componentStatus === "succeeded" ? CheckCircle2 : componentStatus === "failed" ? XCircle : Clock;
+                    return (
+                      <div className={`scheduler-discovery-execution-item is-${componentStatus}`} key={component}>
+                        <Icon size={17} aria-hidden="true" />
+                        <span>{label}</span>
+                        <strong>{jobDisplayName(componentStatus)}</strong>
+                      </div>
+                    );
+                  })}
+                </div>
+                {summary.failure_components.length ? (
+                  <div className="scheduler-discovery-failure-note">
+                    <AlertTriangle size={14} aria-hidden="true" />
+                    {summary.failure_components.length} execution component{summary.failure_components.length === 1 ? "" : "s"} reported failure.
+                  </div>
+                ) : null}
+              </section>
+
+              <footer className="scheduler-discovery-metadata">
+                <div><span>Started</span><strong title={startedLabel === "—" ? undefined : startedLabel}>{startedLabel}</strong></div>
+                <div><span>Finished</span><strong title={finishedLabel === "—" ? undefined : finishedLabel}>{finishedLabel}</strong></div>
+                <div><span>Duration</span><strong>{summaryDuration(summary.started_at, summary.finished_at)}</strong></div>
+                <div><span>Return code</span><strong>{summary.return_code ?? "—"}</strong></div>
+                <div><span>Run ID</span><strong className="scheduler-run-id-cell" title={summary.run_id}>{summary.run_id}</strong></div>
+              </footer>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1020,6 +1390,7 @@ function DiagnosticsModal({
 export function SchedulerHealthDashboard({
   readSummary = readSchedulerSummary,
   runDiscoveryNow = runAgentDiscoveryNow,
+  readDiscoverySummary = readAgentDiscoveryRunSummary,
 }: SchedulerHealthDashboardProps) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [refreshing, setRefreshing] = useState(false);
@@ -1124,6 +1495,7 @@ export function SchedulerHealthDashboard({
         errorMessage={errorMessage}
         payload={payload}
         onRetry={() => void refresh(true)}
+        readDiscoverySummary={readDiscoverySummary}
       />
       <DiagnosticsModal
         open={diagnosticsOpen}

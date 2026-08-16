@@ -24564,21 +24564,21 @@ function QI({ header: e, sticky: t }) {
 		}) : null]
 	}, e.id);
 }
-function $I({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table: a, columns: o, status: s, error: c, headerActions: l, pagination: u, paginationNoun: d = "jobs", paginationLabel: f, stickyColumnId: p, rowClassName: m, detailId: h, renderDetails: g, empty: _, onPageChange: v, onRetry: y, fillAvailableWidth: b = !1, deferPaginationWhileLoading: x = !1 }) {
-	let S = (e) => x && s === "loading" ? /* @__PURE__ */ (0, Y.jsx)("div", {
+function $I({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table: a, columns: o, status: s, error: c, headingActions: l, headerActions: u, pagination: d, paginationNoun: f = "jobs", paginationLabel: p, stickyColumnId: m, rowClassName: h, detailId: g, renderDetails: _, empty: v, onPageChange: y, onRetry: b, fillAvailableWidth: x = !1, deferPaginationWhileLoading: S = !1 }) {
+	let C = (e) => S && s === "loading" ? /* @__PURE__ */ (0, Y.jsx)("div", {
 		className: "shared-table-pagination shared-table-pagination--loading",
 		role: "status",
 		children: /* @__PURE__ */ (0, Y.jsxs)("span", { children: [
 			"Loading ",
-			d,
+			f,
 			"..."
 		] })
 	}) : /* @__PURE__ */ (0, Y.jsx)(XI, {
-		pagination: u,
+		pagination: d,
 		visibleCount: a.getRowModel().rows.length,
-		noun: d,
-		ariaLabel: `${f} ${e} pagination`,
-		onPageChange: v
+		noun: f,
+		ariaLabel: `${p} ${e} pagination`,
+		onPageChange: y
 	});
 	return /* @__PURE__ */ (0, Y.jsxs)("section", {
 		className: `shared-table-card ${e}`,
@@ -24586,15 +24586,27 @@ function $I({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 		children: [
 			/* @__PURE__ */ (0, Y.jsxs)("header", {
 				className: "shared-table-header",
-				children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+				children: [/* @__PURE__ */ (0, Y.jsx)("div", {
 					className: "shared-table-heading",
-					children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+					children: l ? /* @__PURE__ */ (0, Y.jsxs)("div", {
+						className: "shared-table-heading-with-actions",
+						children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+							className: "shared-table-heading-copy",
+							children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+								className: "shared-table-title-line",
+								children: [/* @__PURE__ */ (0, Y.jsx)("h2", { children: n }), /* @__PURE__ */ (0, Y.jsx)("span", { children: S && s === "loading" ? "-" : i })]
+							}), /* @__PURE__ */ (0, Y.jsx)("p", { children: S && s === "loading" ? `Loading ${f}...` : r })]
+						}), /* @__PURE__ */ (0, Y.jsx)("div", {
+							className: "shared-table-heading-actions",
+							children: l
+						})]
+					}) : /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
 						className: "shared-table-title-line",
-						children: [/* @__PURE__ */ (0, Y.jsx)("h2", { children: n }), /* @__PURE__ */ (0, Y.jsx)("span", { children: x && s === "loading" ? "-" : i })]
-					}), /* @__PURE__ */ (0, Y.jsx)("p", { children: x && s === "loading" ? `Loading ${d}...` : r })]
+						children: [/* @__PURE__ */ (0, Y.jsx)("h2", { children: n }), /* @__PURE__ */ (0, Y.jsx)("span", { children: S && s === "loading" ? "-" : i })]
+					}), /* @__PURE__ */ (0, Y.jsx)("p", { children: S && s === "loading" ? `Loading ${f}...` : r })] })
 				}), /* @__PURE__ */ (0, Y.jsxs)("div", {
 					className: "shared-table-header-actions",
-					children: [l, S("top")]
+					children: [u, C("top")]
 				})]
 			}),
 			s === "error" ? /* @__PURE__ */ (0, Y.jsxs)("div", {
@@ -24603,7 +24615,7 @@ function $I({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 				children: [/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: "Table data is unavailable" }), /* @__PURE__ */ (0, Y.jsx)("span", { children: c || "Try the request again." })] }), /* @__PURE__ */ (0, Y.jsx)("button", {
 					type: "button",
 					className: WI,
-					onClick: y,
+					onClick: b,
 					children: "Retry"
 				})]
 			}) : /* @__PURE__ */ (0, Y.jsx)("div", {
@@ -24611,12 +24623,12 @@ function $I({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 				"aria-busy": s === "loading",
 				children: /* @__PURE__ */ (0, Y.jsxs)("table", {
 					style: {
-						width: b ? "100%" : a.getTotalSize(),
+						width: x ? "100%" : a.getTotalSize(),
 						minWidth: a.getTotalSize()
 					},
 					children: [/* @__PURE__ */ (0, Y.jsx)("thead", { children: a.getHeaderGroups().map((e) => /* @__PURE__ */ (0, Y.jsx)("tr", { children: e.headers.map((e) => /* @__PURE__ */ (0, Y.jsx)(QI, {
 						header: e,
-						sticky: e.column.id === p
+						sticky: e.column.id === m
 					}, e.id)) }, e.id)) }), /* @__PURE__ */ (0, Y.jsx)("tbody", { children: s === "loading" ? Array.from({ length: 5 }, (e, t) => /* @__PURE__ */ (0, Y.jsx)("tr", {
 						className: "shared-table-skeleton-row",
 						children: /* @__PURE__ */ (0, Y.jsx)("td", {
@@ -24624,26 +24636,26 @@ function $I({ className: e, ariaLabel: t, title: n, subtitle: r, count: i, table
 							children: /* @__PURE__ */ (0, Y.jsx)("span", {})
 						})
 					}, `skeleton-${t}`)) : a.getRowModel().rows.length ? a.getRowModel().rows.flatMap((e, t) => [/* @__PURE__ */ (0, Y.jsx)("tr", {
-						className: m(e, t),
+						className: h(e, t),
 						children: e.getVisibleCells().map((e) => /* @__PURE__ */ (0, Y.jsx)("td", {
 							style: { width: e.column.getSize() },
-							className: `shared-table-column--${e.column.id} ${e.column.id === p ? "is-sticky-action" : ""}`.trim(),
+							className: `shared-table-column--${e.column.id} ${e.column.id === m ? "is-sticky-action" : ""}`.trim(),
 							children: II(e.column.columnDef.cell, e.getContext())
 						}, e.id))
 					}, e.id), e.getIsExpanded() ? /* @__PURE__ */ (0, Y.jsx)("tr", {
 						className: "shared-table-detail-row",
-						id: h(e),
+						id: g(e),
 						children: /* @__PURE__ */ (0, Y.jsx)("td", {
 							colSpan: e.getVisibleCells().length,
-							children: g(e)
+							children: _(e)
 						})
 					}, `${e.id}-details`) : null]) : /* @__PURE__ */ (0, Y.jsx)("tr", { children: /* @__PURE__ */ (0, Y.jsx)("td", {
 						colSpan: o.length,
-						children: _
+						children: v
 					}) }) })]
 				})
 			}),
-			S("bottom")
+			C("bottom")
 		]
 	});
 }
@@ -25912,7 +25924,8 @@ function rR({ readStatus: e = WL, launchPipeline: t = GL, pollIntervalMs: n = wL
 }
 //#endregion
 //#region src/scheduler/schedulerModel.ts
-async function iR() {
+var iR = class extends Error {};
+async function aR() {
 	let e = await fetch("/scheduler/summary?limit=25", {
 		method: "GET",
 		credentials: "same-origin",
@@ -25921,7 +25934,7 @@ async function iR() {
 	if (!e.ok) throw Error((t == null ? void 0 : t.detail) || `Scheduler summary request failed (${e.status})`);
 	return t;
 }
-async function aR() {
+async function oR() {
 	let e = await fetch("/scheduler/jobs/agent_discovery/run-now", {
 		method: "POST",
 		credentials: "same-origin",
@@ -25934,39 +25947,53 @@ async function aR() {
 	}
 	return t;
 }
+async function sR(e) {
+	let t = await fetch(`/scheduler/runs/${encodeURIComponent(Q(e))}/agent-discovery-summary`, {
+		method: "GET",
+		credentials: "same-origin",
+		headers: { Accept: "application/json" }
+	}), n = await t.json().catch(() => ({}));
+	if (t.status === 404) throw new iR("Discovery summary unavailable");
+	if (!t.ok) {
+		var r;
+		let e = typeof n.detail == "string" ? n.detail : (r = n.detail) == null ? void 0 : r.message;
+		throw Error(e || `Discovery summary request failed (${t.status})`);
+	}
+	return n;
+}
 function Q(e) {
 	return String(e == null ? "" : e).trim();
 }
-function oR(e, t = "Unavailable") {
+function cR(e, t = "Unavailable") {
 	return Q(e) || t;
 }
-function sR(e) {
+function lR(e) {
 	return Q(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown";
 }
-var cR = new Intl.DateTimeFormat(void 0, {
+var uR = new Intl.DateTimeFormat(void 0, {
 	month: "short",
 	day: "numeric",
 	year: "numeric"
-}), lR = new Intl.DateTimeFormat(void 0, {
+}), dR = new Intl.DateTimeFormat(void 0, {
 	hour: "numeric",
 	minute: "2-digit"
-}), uR = new Intl.DateTimeFormat(void 0, {
+}), fR = new Intl.DateTimeFormat(void 0, {
 	hour: "numeric",
 	minute: "2-digit"
 });
-function dR(e) {
+function pR(e) {
 	let t = Q(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
-	return Number.isNaN(n.getTime()) ? t : `${cR.format(n)}, ${lR.format(n)}`;
+	return Number.isNaN(n.getTime()) ? t : `${uR.format(n)}, ${dR.format(n)}`;
 }
-function fR(e) {
+function mR(e) {
 	let t = Q(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
-	return Number.isNaN(n.getTime()) ? "Unavailable" : `${cR.format(n)} · ${lR.format(n)}`;
+	return Number.isNaN(n.getTime()) ? "Unavailable" : `${uR.format(n)} · ${dR.format(n)}`;
 }
-function pR(e, t) {
+function hR(e, t) {
 	if (e.manual_run_active === !0 || e.runtime_state === "running") return {
 		tone: "running",
 		label: "RUNNING NOW"
@@ -25988,7 +26015,7 @@ function pR(e, t) {
 		tone: "awaiting",
 		label: "SCHEDULED · AWAITING FIRST RUN"
 	};
-	let r = fR(e.expected_next_run_at);
+	let r = mR(e.expected_next_run_at);
 	return t.getTime() > n.getTime() ? {
 		tone: "overdue",
 		label: `EXPECTED RUN OVERDUE · ${r}`
@@ -25997,17 +26024,17 @@ function pR(e, t) {
 		label: `EXPECTED NEXT · ${r}`
 	};
 }
-function mR(e) {
+function gR(e) {
 	let t = Q(e).toLowerCase();
 	return t === "external_scheduler_wrapper" ? "Scheduled" : t === "manual_admin" ? "Manual" : "Unknown";
 }
-function hR(e) {
-	return uR.format(e);
+function _R(e) {
+	return fR.format(e);
 }
-function gR(e) {
+function vR(e) {
 	return Q(e).toLowerCase() === "failed";
 }
-function _R(e) {
+function yR(e) {
 	let t = Number(e);
 	if (!Number.isFinite(t) || t <= 0) return "Unavailable";
 	if (t % 3600 == 0) {
@@ -26016,15 +26043,15 @@ function _R(e) {
 	}
 	return `Every ${t} seconds`;
 }
-function vR(e) {
+function bR(e) {
 	return [...e].sort((e, t) => {
-		let n = +!gR(e.status), r = +!gR(t.status);
+		let n = +!vR(e.status), r = +!vR(t.status);
 		if (n !== r) return n - r;
 		let i = Date.parse(Q(e.started_at)) || 0;
 		return (Date.parse(Q(t.started_at)) || 0) - i;
 	});
 }
-function yR(e, t) {
+function xR(e, t) {
 	return Q(e.run_id) || [
 		Q(e.job_name),
 		Q(e.started_at),
@@ -26033,29 +26060,29 @@ function yR(e, t) {
 }
 //#endregion
 //#region src/scheduler/SchedulerHealthDashboard.tsx
-function bR(e) {
-	let t = oR(e, "Unknown");
+function SR(e) {
+	let t = cR(e, "Unknown");
 	return /* @__PURE__ */ (0, Y.jsx)("span", {
-		className: `scheduler-badge scheduler-badge--${sR(e)}`,
+		className: `scheduler-badge scheduler-badge--${lR(e)}`,
 		children: t
 	});
 }
-function xR(e) {
+function CR(e) {
 	return Q(e).split("_").filter(Boolean).map((e) => `${e.charAt(0).toUpperCase()}${e.slice(1)}`).join(" ") || "Unnamed job";
 }
-function SR(e) {
+function wR(e) {
 	return e.manual_run_active === !0 ? "Running" : e.runtime_state === "not_installed" ? "Not installed" : e.runtime_state === "unloaded" ? "Unloaded" : e.runtime_state === "unavailable" ? "Unavailable" : e.runtime_state === "running" ? "Running" : "Idle";
 }
-function CR(e) {
+function TR(e) {
 	return e.armed === !0 ? "Armed" : e.enabled === !1 ? "Disabled" : e.loaded === !1 ? "Unloaded" : "Armed unknown";
 }
-function wR(e) {
+function ER(e) {
 	return e.manual_run_active === !0 || e.runtime_state === "running" ? "running" : e.runtime_state === "idle" && e.armed === !0 ? "succeeded" : e.runtime_state === "unavailable" || e.armed === null ? "unknown" : "failed";
 }
-function TR(e) {
+function DR(e) {
 	return e === !0 ? "Yes" : e === !1 ? "No" : "Unknown";
 }
-function ER(e) {
+function OR(e) {
 	if (e.manual_run_active === !0) return {
 		enabled: !1,
 		reason: "Agent Discovery is already running."
@@ -26070,7 +26097,7 @@ function ER(e) {
 		reason: t ? "Run Agent Discovery once without changing its schedule." : "Agent Discovery is unavailable until its scheduler is installed, loaded, enabled, armed, and idle."
 	};
 }
-function DR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
+function kR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("header", {
 		className: "scheduler-health-header app-page-header",
 		children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
@@ -26092,7 +26119,7 @@ function DR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 			className: "scheduler-health-header-actions app-page-header__actions",
 			children: [/* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "scheduler-last-refreshed",
-				children: n ? `Last refreshed at ${hR(new Date(n))}` : "Not refreshed yet"
+				children: n ? `Last refreshed at ${_R(new Date(n))}` : "Not refreshed yet"
 			}), /* @__PURE__ */ (0, Y.jsxs)("button", {
 				type: "button",
 				className: "scheduler-refresh-btn",
@@ -26108,7 +26135,7 @@ function DR({ onRefresh: e, refreshing: t, lastRefreshedAt: n }) {
 		})]
 	});
 }
-function OR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRef: r }) {
+function AR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRef: r }) {
 	var i, a, o, s, c, l, u, d, f;
 	let p = !!(!(e == null || (i = e.contract_health) == null) && i.all_checks_pass), m = (e == null ? void 0 : e.runtime_jobs) || [], h = m.length === 2 && m.every((e) => e.installed !== null && e.loaded !== null && e.armed !== null && e.running !== null && e.runtime_state !== "unavailable"), g = h && m.every((e) => e.installed === !0 && e.loaded === !0 && e.armed === !0 && (e.runtime_state === "idle" || e.runtime_state === "running")), _ = !!e && p && g, v = !!e && p && !h, y = [];
 	e && !p && y.push("configuration integrity"), e && h && !g && y.push("scheduler runtime");
@@ -26176,7 +26203,7 @@ function OR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRe
 		]
 	});
 }
-function kR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscovery: r, manualDiscoveryTriggerRef: i }) {
+function jR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscovery: r, manualDiscoveryTriggerRef: i }) {
 	let a = (e == null ? void 0 : e.runtime_jobs) || [];
 	return /* @__PURE__ */ (0, Y.jsxs)("section", {
 		className: "scheduler-runtime-section",
@@ -26190,16 +26217,16 @@ function kR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscov
 		}), a.length ? /* @__PURE__ */ (0, Y.jsx)("div", {
 			className: "scheduler-runtime-grid",
 			children: a.map((e) => {
-				let t = e.last_run, a = Q(t == null ? void 0 : t.status) || "Never run", o = wR(e), s = pR(e, new Date(Date.now())), c = ER(e);
+				let t = e.last_run, a = Q(t == null ? void 0 : t.status) || "Never run", o = ER(e), s = hR(e, new Date(Date.now())), c = OR(e);
 				return /* @__PURE__ */ (0, Y.jsxs)("article", {
-					className: `scheduler-runtime-card ${o === "failed" || gR(a) ? "is-attention" : ""}`,
+					className: `scheduler-runtime-card ${o === "failed" || vR(a) ? "is-attention" : ""}`,
 					"data-job-name": e.job_name,
 					children: [
 						/* @__PURE__ */ (0, Y.jsxs)("div", {
 							className: "scheduler-runtime-card-heading",
 							children: [/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
 								className: "scheduler-runtime-card-title-row",
-								children: [/* @__PURE__ */ (0, Y.jsx)("h3", { children: xR(e.job_name) }), e.job_name === "agent_discovery" ? /* @__PURE__ */ (0, Y.jsxs)("button", {
+								children: [/* @__PURE__ */ (0, Y.jsx)("h3", { children: CR(e.job_name) }), e.job_name === "agent_discovery" ? /* @__PURE__ */ (0, Y.jsxs)("button", {
 									type: "button",
 									className: "scheduler-manual-discovery-btn",
 									disabled: !c.enabled || n,
@@ -26215,24 +26242,24 @@ function kR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscov
 								className: "scheduler-runtime-card-badges",
 								children: [/* @__PURE__ */ (0, Y.jsx)("span", {
 									className: `scheduler-badge scheduler-badge--${o}`,
-									children: SR(e)
+									children: wR(e)
 								}), /* @__PURE__ */ (0, Y.jsx)("span", {
 									className: `scheduler-badge scheduler-badge--${e.armed === !0 ? "succeeded" : e.armed === null ? "unknown" : "failed"}`,
-									children: CR(e)
+									children: TR(e)
 								})]
 							})]
 						}),
 						/* @__PURE__ */ (0, Y.jsxs)("dl", {
 							className: "scheduler-runtime-details",
 							children: [
-								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Schedule" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: _R(e.cadence_seconds) })] }),
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Schedule" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: yR(e.cadence_seconds) })] }),
 								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Last run" }), /* @__PURE__ */ (0, Y.jsx)("dd", {
 									className: "scheduler-runtime-last-run",
-									title: t ? dR(t.started_at) : void 0,
-									children: t ? dR(t.started_at) : "Never run"
+									title: t ? pR(t.started_at) : void 0,
+									children: t ? pR(t.started_at) : "Never run"
 								})] }),
-								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Last result" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: bR(a) })] }),
-								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Return code" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: t ? oR(t.return_code, "-") : "-" })] })
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Last result" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: SR(a) })] }),
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Return code" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: t ? cR(t.return_code, "-") : "-" })] })
 							]
 						}),
 						/* @__PURE__ */ (0, Y.jsxs)("div", {
@@ -26265,7 +26292,22 @@ function kR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscov
 		})]
 	});
 }
-function AR() {
+function MR(e, t) {
+	return /* @__PURE__ */ (0, Y.jsxs)("div", {
+		className: "scheduler-run-history-job",
+		children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: cR(e.job_name, "Unnamed job") }), Q(e.job_name) === "agent_discovery" && Q(e.run_id) ? /* @__PURE__ */ (0, Y.jsxs)("button", {
+			type: "button",
+			className: "scheduler-run-summary-view-btn",
+			onClick: (n) => t(e, n.currentTarget),
+			"aria-label": `View discovery summary for ${Q(e.run_id)}`,
+			children: [/* @__PURE__ */ (0, Y.jsx)(ce, {
+				size: 13,
+				"aria-hidden": "true"
+			}), "View"]
+		}) : null]
+	});
+}
+function NR(e) {
 	return [
 		{
 			id: "job_name",
@@ -26273,7 +26315,7 @@ function AR() {
 			accessorFn: (e) => Q(e.job_name),
 			size: 220,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("strong", { children: oR(e.original.job_name, "Unnamed job") })
+			cell: ({ row: t }) => MR(t.original, e)
 		},
 		{
 			id: "status",
@@ -26281,7 +26323,7 @@ function AR() {
 			accessorFn: (e) => Q(e.status),
 			size: 130,
 			enableSorting: !1,
-			cell: ({ row: e }) => bR(e.original.status)
+			cell: ({ row: e }) => SR(e.original.status)
 		},
 		{
 			id: "started_at",
@@ -26289,7 +26331,7 @@ function AR() {
 			accessorFn: (e) => Q(e.started_at),
 			size: 190,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: dR(e.original.started_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: pR(e.original.started_at) })
 		},
 		{
 			id: "finished_at",
@@ -26297,7 +26339,7 @@ function AR() {
 			accessorFn: (e) => Q(e.finished_at),
 			size: 190,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: dR(e.original.finished_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: pR(e.original.finished_at) })
 		},
 		{
 			id: "return_code",
@@ -26305,7 +26347,7 @@ function AR() {
 			accessorFn: (e) => Q(e.return_code),
 			size: 110,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: oR(e.original.return_code, "-") })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: cR(e.original.return_code, "-") })
 		},
 		{
 			id: "run_id",
@@ -26314,7 +26356,7 @@ function AR() {
 			size: 160,
 			enableSorting: !1,
 			cell: ({ row: e }) => {
-				let t = oR(e.original.run_id, "-");
+				let t = cR(e.original.run_id, "-");
 				return /* @__PURE__ */ (0, Y.jsx)("span", {
 					className: "scheduler-run-id-cell",
 					title: t,
@@ -26324,7 +26366,7 @@ function AR() {
 		}
 	];
 }
-function jR() {
+function PR(e) {
 	return [
 		{
 			id: "job_name",
@@ -26332,7 +26374,7 @@ function jR() {
 			accessorFn: (e) => Q(e.job_name),
 			size: 200,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("strong", { children: oR(e.original.job_name, "Unnamed job") })
+			cell: ({ row: t }) => MR(t.original, e)
 		},
 		{
 			id: "status",
@@ -26340,7 +26382,7 @@ function jR() {
 			accessorFn: (e) => Q(e.status),
 			size: 130,
 			enableSorting: !1,
-			cell: ({ row: e }) => bR(e.original.status)
+			cell: ({ row: e }) => SR(e.original.status)
 		},
 		{
 			id: "trigger_source",
@@ -26349,7 +26391,7 @@ function jR() {
 			size: 110,
 			enableSorting: !1,
 			cell: ({ row: e }) => {
-				let t = mR(e.original.trigger_source);
+				let t = gR(e.original.trigger_source);
 				return /* @__PURE__ */ (0, Y.jsx)("span", {
 					className: `scheduler-trigger-badge is-${t.toLowerCase()}`,
 					children: t
@@ -26362,7 +26404,7 @@ function jR() {
 			accessorFn: (e) => Q(e.started_at),
 			size: 190,
 			enableSorting: !0,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: dR(e.original.started_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: pR(e.original.started_at) })
 		},
 		{
 			id: "finished_at",
@@ -26370,7 +26412,7 @@ function jR() {
 			accessorFn: (e) => Q(e.finished_at),
 			size: 190,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: dR(e.original.finished_at) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: pR(e.original.finished_at) })
 		},
 		{
 			id: "return_code",
@@ -26378,7 +26420,7 @@ function jR() {
 			accessorFn: (e) => Q(e.return_code),
 			size: 110,
 			enableSorting: !1,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: oR(e.original.return_code, "-") })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", { children: cR(e.original.return_code, "-") })
 		},
 		{
 			id: "run_id",
@@ -26387,7 +26429,7 @@ function jR() {
 			size: 160,
 			enableSorting: !1,
 			cell: ({ row: e }) => {
-				let t = oR(e.original.run_id, "-");
+				let t = cR(e.original.run_id, "-");
 				return /* @__PURE__ */ (0, Y.jsx)("span", {
 					className: "scheduler-run-id-cell",
 					title: t,
@@ -26397,88 +26439,106 @@ function jR() {
 		}
 	];
 }
-function MR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
-	let [i, a] = (0, C.useState)("job_status"), [o, s] = (0, C.useState)([]), [c, l] = (0, C.useState)([]), u = (0, C.useMemo)(() => vR((n == null ? void 0 : n.latest_runs_by_job) || []), [n]), d = (0, C.useMemo)(() => (n == null ? void 0 : n.recent_postgres_runs) || [], [n]), f = (0, C.useMemo)(() => Array.from(new Set(d.map((e) => Q(e.job_name)).filter(Boolean))).sort().map((e) => ({
+function FR({ status: e, errorMessage: t, payload: n, onRetry: r, readDiscoverySummary: i }) {
+	let [a, o] = (0, C.useState)("job_status"), [s, c] = (0, C.useState)([]), [l, u] = (0, C.useState)([]), [d, f] = (0, C.useState)(null), [p, m] = (0, C.useState)(null), h = (0, C.useRef)(null), g = (0, C.useRef)(0), _ = (0, C.useMemo)(() => bR((n == null ? void 0 : n.latest_runs_by_job) || []), [n]), v = (0, C.useMemo)(() => (n == null ? void 0 : n.recent_postgres_runs) || [], [n]), y = (0, C.useMemo)(() => Array.from(new Set(v.map((e) => Q(e.job_name)).filter(Boolean))).sort().map((e) => ({
 		value: e,
 		label: e
-	})), [d]), p = (0, C.useMemo)(() => Array.from(new Set(d.map((e) => Q(e.status)).filter(Boolean))).sort().map((e) => ({
+	})), [v]), b = (0, C.useMemo)(() => Array.from(new Set(v.map((e) => Q(e.status)).filter(Boolean))).sort().map((e) => ({
 		value: e,
 		label: e
-	})), [d]), m = (0, C.useMemo)(() => d.filter((e) => !(o.length && !o.includes(Q(e.job_name)) || c.length && !c.includes(Q(e.status)))), [
-		d,
-		o,
-		c
-	]), h = (0, C.useMemo)(AR, []), g = (0, C.useMemo)(jR, []), [_, v] = (0, C.useState)([{
+	})), [v]), x = (0, C.useMemo)(() => v.filter((e) => !(s.length && !s.includes(Q(e.job_name)) || l.length && !l.includes(Q(e.status)))), [
+		v,
+		s,
+		l
+	]), S = (0, C.useCallback)((e, t) => {
+		let n = Q(e.run_id);
+		if (!n) return;
+		h.current = t, f(e), m({ kind: "loading" });
+		let r = g.current + 1;
+		g.current = r, i(n).then((e) => {
+			g.current === r && m({
+				kind: "ready",
+				summary: e
+			});
+		}).catch((e) => {
+			g.current === r && (e instanceof iR ? m({ kind: "unavailable" }) : m({
+				kind: "error",
+				message: e instanceof Error ? e.message : "Discovery summary could not be loaded."
+			}));
+		});
+	}, [i]), w = (0, C.useCallback)(() => {
+		g.current += 1, f(null), m(null);
+	}, []), T = (0, C.useMemo)(() => NR(S), [S]), E = (0, C.useMemo)(() => PR(S), [S]), [D, O] = (0, C.useState)([{
 		id: "started_at",
 		desc: !0
-	}]), y = BI({
-		data: u,
-		columns: h,
-		getRowId: yR,
+	}]), k = BI({
+		data: _,
+		columns: T,
+		getRowId: xR,
 		getCoreRowModel: PI()
-	}), b = BI({
-		data: m,
-		columns: g,
-		state: { sorting: _ },
-		getRowId: yR,
+	}), A = BI({
+		data: x,
+		columns: E,
+		state: { sorting: D },
+		getRowId: xR,
 		getCoreRowModel: PI(),
 		getSortedRowModel: FI(),
 		enableSortingRemoval: !1,
-		onSortingChange: v
-	}), x = (e) => a(e), S = (e, t) => {
-		e.key !== "ArrowLeft" && e.key !== "ArrowRight" || (e.preventDefault(), x(t === "job_status" ? "run_history" : "job_status"));
-	}, w = (e) => `${WI} scheduler-runs-tab ${e ? "is-active" : "is-inactive"}`, T = {
+		onSortingChange: O
+	}), j = (e) => o(e), M = (e, t) => {
+		e.key !== "ArrowLeft" && e.key !== "ArrowRight" || (e.preventDefault(), j(t === "job_status" ? "run_history" : "job_status"));
+	}, N = (e) => `${WI} scheduler-runs-tab ${e ? "is-active" : "is-inactive"}`, P = {
 		page: 1,
-		pageSize: Math.max(u.length, 1),
-		totalCount: u.length,
+		pageSize: Math.max(_.length, 1),
+		totalCount: _.length,
 		totalPages: 1,
 		hasPrevPage: !1,
 		hasNextPage: !1
-	}, E = {
+	}, F = {
 		page: 1,
-		pageSize: Math.max(m.length, 1),
-		totalCount: m.length,
+		pageSize: Math.max(x.length, 1),
+		totalCount: x.length,
 		totalPages: 1,
 		hasPrevPage: !1,
 		hasNextPage: !1
-	}, D = /* @__PURE__ */ (0, Y.jsxs)("div", {
+	}, ee = /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "scheduler-runs-tabs",
 		role: "tablist",
 		"aria-label": "Scheduler runs view",
 		children: [/* @__PURE__ */ (0, Y.jsx)("button", {
 			role: "tab",
-			"aria-selected": i === "job_status",
-			tabIndex: i === "job_status" ? 0 : -1,
-			className: w(i === "job_status"),
-			onKeyDown: (e) => S(e, "job_status"),
-			onClick: () => x("job_status"),
+			"aria-selected": a === "job_status",
+			tabIndex: a === "job_status" ? 0 : -1,
+			className: N(a === "job_status"),
+			onKeyDown: (e) => M(e, "job_status"),
+			onClick: () => j("job_status"),
 			children: "Job Status"
 		}), /* @__PURE__ */ (0, Y.jsx)("button", {
 			role: "tab",
-			"aria-selected": i === "run_history",
-			tabIndex: i === "run_history" ? 0 : -1,
-			className: w(i === "run_history"),
-			onKeyDown: (e) => S(e, "run_history"),
-			onClick: () => x("run_history"),
+			"aria-selected": a === "run_history",
+			tabIndex: a === "run_history" ? 0 : -1,
+			className: N(a === "run_history"),
+			onKeyDown: (e) => M(e, "run_history"),
+			onClick: () => j("run_history"),
 			children: "Run History"
 		})]
 	});
-	return i === "job_status" ? /* @__PURE__ */ (0, Y.jsx)($I, {
+	return a === "job_status" ? /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [/* @__PURE__ */ (0, Y.jsx)($I, {
 		className: "scheduler-shared-table-card",
 		ariaLabel: "Job status table",
 		title: "Scheduler Runs",
 		subtitle: "Latest recorded result for each scheduled job.",
-		count: u.length,
-		table: y,
-		columns: h,
+		count: _.length,
+		table: k,
+		columns: T,
 		status: e,
 		error: t,
-		headerActions: D,
-		pagination: T,
+		headerActions: ee,
+		pagination: P,
 		paginationNoun: "jobs",
 		paginationLabel: "Job status",
 		stickyColumnId: "run_id",
-		rowClassName: (e) => `scheduler-run-row ${gR(e.original.status) ? "is-attention" : ""}`,
+		rowClassName: (e) => `scheduler-run-row ${vR(e.original.status) ? "is-attention" : ""}`,
 		detailId: () => "",
 		renderDetails: () => null,
 		empty: /* @__PURE__ */ (0, Y.jsx)("div", {
@@ -26488,58 +26548,408 @@ function MR({ status: e, errorMessage: t, payload: n, onRetry: r }) {
 		onPageChange: () => void 0,
 		onRetry: r,
 		fillAvailableWidth: !0
-	}) : /* @__PURE__ */ (0, Y.jsx)($I, {
+	}), /* @__PURE__ */ (0, Y.jsx)(BR, {
+		run: d,
+		state: p,
+		onClose: w,
+		triggerRef: h
+	})] }) : /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [/* @__PURE__ */ (0, Y.jsx)($I, {
 		className: "scheduler-shared-table-card",
 		ariaLabel: "Run history table",
 		title: "Scheduler Runs",
 		subtitle: "Persisted scheduler run history from Postgres.",
-		count: m.length,
-		table: b,
-		columns: g,
+		count: x.length,
+		table: A,
+		columns: E,
 		status: e,
 		error: t,
-		headerActions: /* @__PURE__ */ (0, Y.jsxs)("div", {
-			className: "scheduler-runs-header-actions",
-			children: [D, /* @__PURE__ */ (0, Y.jsxs)("div", {
-				className: "scheduler-runs-filters",
-				children: [/* @__PURE__ */ (0, Y.jsx)(UI, {
-					id: "schedulerRunHistoryJobFilter",
-					label: "Job",
-					options: f,
-					values: o,
-					onChange: s,
-					placeholder: "All jobs",
-					allLabel: "All jobs",
-					mode: "single"
-				}), /* @__PURE__ */ (0, Y.jsx)(UI, {
-					id: "schedulerRunHistoryStatusFilter",
-					label: "Status",
-					options: p,
-					values: c,
-					onChange: l,
-					placeholder: "All statuses",
-					allLabel: "All statuses",
-					mode: "single"
-				})]
+		headingActions: /* @__PURE__ */ (0, Y.jsxs)("div", {
+			className: "scheduler-runs-filters",
+			children: [/* @__PURE__ */ (0, Y.jsx)(UI, {
+				id: "schedulerRunHistoryJobFilter",
+				label: "Job",
+				options: y,
+				values: s,
+				onChange: c,
+				placeholder: "All jobs",
+				allLabel: "All jobs",
+				mode: "single"
+			}), /* @__PURE__ */ (0, Y.jsx)(UI, {
+				id: "schedulerRunHistoryStatusFilter",
+				label: "Status",
+				options: b,
+				values: l,
+				onChange: u,
+				placeholder: "All statuses",
+				allLabel: "All statuses",
+				mode: "single"
 			})]
 		}),
-		pagination: E,
+		headerActions: ee,
+		pagination: F,
 		paginationNoun: "runs",
 		paginationLabel: "Run history",
 		stickyColumnId: "run_id",
-		rowClassName: (e) => `scheduler-run-row ${gR(e.original.status) ? "is-attention" : ""}`,
+		rowClassName: (e) => `scheduler-run-row ${vR(e.original.status) ? "is-attention" : ""}`,
 		detailId: () => "",
 		renderDetails: () => null,
 		empty: /* @__PURE__ */ (0, Y.jsx)("div", {
 			className: "scheduler-empty",
-			children: /* @__PURE__ */ (0, Y.jsx)("strong", { children: d.length ? "No runs match the selected filters." : "No run history recorded yet." })
+			children: /* @__PURE__ */ (0, Y.jsx)("strong", { children: v.length ? "No runs match the selected filters." : "No run history recorded yet." })
 		}),
 		onPageChange: () => void 0,
 		onRetry: r,
 		fillAvailableWidth: !0
+	}), /* @__PURE__ */ (0, Y.jsx)(BR, {
+		run: d,
+		state: p,
+		onClose: w,
+		triggerRef: h
+	})] });
+}
+var IR = {
+	domain_discovered: "Domain detection",
+	career_discovered: "Career pages",
+	network_discovered: "ATS network",
+	greenhouse_embed_discovered: "Greenhouse embed",
+	smartrecruiters_global_discovered: "SmartRecruiters global",
+	github_discovered: "GitHub",
+	sitemap_discovered: "Sitemap"
+};
+function LR(e) {
+	let t = Q(e);
+	return !t || Number.isNaN(new Date(t).getTime()) ? "—" : pR(t);
+}
+function RR(e, t) {
+	let n = new Date(Q(e)), r = new Date(Q(t)).getTime() - n.getTime();
+	if (!Number.isFinite(r) || r < 0) return "—";
+	let i = Math.floor(r / 1e3), a = Math.floor(i / 60), o = i % 60;
+	return a ? `${a}m ${o}s` : `${o}s`;
+}
+function zR(e) {
+	return typeof e == "number" && Number.isFinite(e) ? e.toLocaleString() : "—";
+}
+function BR({ run: e, state: t, onClose: n, triggerRef: r }) {
+	var i;
+	let a = (0, C.useRef)(null), o = (0, C.useRef)(null);
+	if ((0, C.useEffect)(() => {
+		if (!e) return;
+		let t = document.body.style.overflow;
+		document.body.style.overflow = "hidden", window.requestAnimationFrame(() => {
+			var e;
+			return (e = o.current) == null ? void 0 : e.focus();
+		});
+		let i = (e) => {
+			if (e.key === "Escape") {
+				e.preventDefault(), n();
+				return;
+			}
+			if (e.key !== "Tab" || !a.current) return;
+			let t = Array.from(a.current.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
+			if (!t.length) return;
+			let r = t[0], i = t[t.length - 1];
+			e.shiftKey && document.activeElement === r ? (e.preventDefault(), i.focus()) : !e.shiftKey && document.activeElement === i && (e.preventDefault(), r.focus());
+		};
+		return document.addEventListener("keydown", i), () => {
+			var e;
+			document.removeEventListener("keydown", i), document.body.style.overflow = t, (e = r.current) == null || e.focus();
+		};
+	}, [
+		n,
+		e,
+		r
+	]), !e || !t) return null;
+	let s = t.kind === "ready" ? t.summary : null, c = Object.entries((s == null ? void 0 : s.discovery.run_unique_discovered_by_ats) || {}), l = Object.entries((s == null ? void 0 : s.company_discovery.candidate_counts_by_ats) || {}), u = Object.entries((s == null ? void 0 : s.discovery.sources) || {}), d = c.length ? c.reduce((e, [, t]) => e + t, 0) : null, f = s == null ? void 0 : s.company_discovery.queries_failed, p = (s == null ? void 0 : s.trigger) === "manual" ? "Manual" : (s == null ? void 0 : s.trigger) === "scheduled" ? "Scheduled" : "Unknown", m = LR(s == null ? void 0 : s.started_at), h = LR(s == null ? void 0 : s.finished_at);
+	return /* @__PURE__ */ (0, Y.jsx)("div", {
+		className: "modal-backdrop scheduler-discovery-summary-backdrop",
+		onClick: (e) => {
+			e.target === e.currentTarget && n();
+		},
+		children: /* @__PURE__ */ (0, Y.jsxs)("div", {
+			className: "modal-card scheduler-discovery-summary-modal",
+			ref: a,
+			role: "dialog",
+			"aria-modal": "true",
+			"aria-labelledby": "schedulerDiscoverySummaryTitle",
+			children: [/* @__PURE__ */ (0, Y.jsxs)("header", {
+				className: "scheduler-discovery-summary-header",
+				children: [/* @__PURE__ */ (0, Y.jsxs)("div", { children: [
+					/* @__PURE__ */ (0, Y.jsxs)("div", {
+						className: "scheduler-discovery-summary-kicker",
+						children: [/* @__PURE__ */ (0, Y.jsx)(ce, {
+							size: 15,
+							"aria-hidden": "true"
+						}), " Run analytics"]
+					}),
+					/* @__PURE__ */ (0, Y.jsx)("h3", {
+						id: "schedulerDiscoverySummaryTitle",
+						children: "Discovery Run Summary"
+					}),
+					/* @__PURE__ */ (0, Y.jsxs)("div", {
+						className: "scheduler-discovery-summary-subtitle",
+						children: [
+							/* @__PURE__ */ (0, Y.jsx)("span", { children: p }),
+							/* @__PURE__ */ (0, Y.jsx)("span", {
+								"aria-hidden": "true",
+								children: "•"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("span", { children: LR((s == null ? void 0 : s.started_at) || e.started_at) })
+						]
+					})
+				] }), /* @__PURE__ */ (0, Y.jsxs)("div", {
+					className: "scheduler-discovery-summary-header-actions",
+					children: [s ? SR(s.status) : null, /* @__PURE__ */ (0, Y.jsx)("button", {
+						type: "button",
+						className: "scheduler-discovery-summary-close",
+						onClick: n,
+						ref: o,
+						"aria-label": "Close discovery run summary",
+						children: /* @__PURE__ */ (0, Y.jsx)(De, {
+							size: 20,
+							strokeWidth: 3,
+							color: "#ffffff",
+							className: "scheduler-discovery-summary-close-icon",
+							style: {
+								width: 20,
+								height: 20,
+								color: "#ffffff",
+								stroke: "#ffffff",
+								display: "block",
+								visibility: "visible",
+								opacity: 1
+							},
+							"aria-hidden": "true"
+						})
+					})]
+				})]
+			}), /* @__PURE__ */ (0, Y.jsxs)("div", {
+				className: "scheduler-discovery-summary-body",
+				children: [
+					t.kind === "loading" ? /* @__PURE__ */ (0, Y.jsxs)("div", {
+						className: "scheduler-discovery-summary-state",
+						role: "status",
+						children: [
+							/* @__PURE__ */ (0, Y.jsx)(_e, {
+								size: 24,
+								className: "is-spinning",
+								"aria-hidden": "true"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("strong", { children: "Loading discovery summary…" }),
+							/* @__PURE__ */ (0, Y.jsx)("span", { children: "Reading the persisted artifact for this exact run." })
+						]
+					}) : null,
+					t.kind === "unavailable" ? /* @__PURE__ */ (0, Y.jsxs)("div", {
+						className: "scheduler-discovery-summary-state is-unavailable",
+						children: [
+							/* @__PURE__ */ (0, Y.jsx)(ce, {
+								size: 28,
+								"aria-hidden": "true"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("strong", { children: "Discovery summary unavailable" }),
+							/* @__PURE__ */ (0, Y.jsx)("span", { children: "This run does not have a persisted discovery summary." })
+						]
+					}) : null,
+					t.kind === "error" ? /* @__PURE__ */ (0, Y.jsxs)("div", {
+						className: "scheduler-discovery-summary-state is-error",
+						role: "alert",
+						children: [
+							/* @__PURE__ */ (0, Y.jsx)(Ce, {
+								size: 28,
+								"aria-hidden": "true"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("strong", { children: "Discovery summary could not be loaded" }),
+							/* @__PURE__ */ (0, Y.jsx)("span", { children: t.message })
+						]
+					}) : null,
+					s ? /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [
+						/* @__PURE__ */ (0, Y.jsx)("div", {
+							className: "scheduler-discovery-kpi-grid",
+							children: [
+								[
+									"Agent candidates",
+									s.company_discovery.total_candidate_count,
+									"blue",
+									oe
+								],
+								[
+									"Unique ATS discoveries",
+									d,
+									"violet",
+									O
+								],
+								[
+									"Search queries",
+									s.company_discovery.queries_attempted,
+									"cyan",
+									ce
+								],
+								[
+									"Failed queries",
+									f,
+									f == null ? "neutral" : f === 0 ? "emerald" : "amber",
+									Ce
+								]
+							].map(([e, t, n, r]) => /* @__PURE__ */ (0, Y.jsxs)("div", {
+								className: `scheduler-discovery-kpi is-${n}`,
+								children: [
+									/* @__PURE__ */ (0, Y.jsx)("span", {
+										className: "scheduler-discovery-kpi-icon",
+										children: /* @__PURE__ */ (0, Y.jsx)(r, {
+											size: 16,
+											"aria-hidden": "true"
+										})
+									}),
+									/* @__PURE__ */ (0, Y.jsx)("span", { children: e }),
+									/* @__PURE__ */ (0, Y.jsx)("strong", { children: zR(t) })
+								]
+							}, e))
+						}),
+						/* @__PURE__ */ (0, Y.jsxs)("div", {
+							className: "scheduler-discovery-summary-columns",
+							children: [/* @__PURE__ */ (0, Y.jsxs)("section", {
+								className: "scheduler-discovery-section",
+								"aria-labelledby": "schedulerDiscoveryAtsTitle",
+								children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+									className: "scheduler-discovery-section-heading",
+									children: [/* @__PURE__ */ (0, Y.jsx)("h4", {
+										id: "schedulerDiscoveryAtsTitle",
+										children: "Discovery by ATS"
+									}), /* @__PURE__ */ (0, Y.jsx)("span", { children: "Run-unique discoveries" })]
+								}), c.length ? /* @__PURE__ */ (0, Y.jsx)("div", {
+									className: "scheduler-discovery-ats-grid",
+									children: c.map(([e, t], n) => /* @__PURE__ */ (0, Y.jsxs)("div", {
+										className: `scheduler-discovery-ats-tile is-accent-${n % 4}`,
+										children: [
+											/* @__PURE__ */ (0, Y.jsx)("span", {
+												className: "scheduler-discovery-dot",
+												"aria-hidden": "true"
+											}),
+											/* @__PURE__ */ (0, Y.jsx)("span", { children: CR(e) }),
+											/* @__PURE__ */ (0, Y.jsx)("strong", { children: t.toLocaleString() })
+										]
+									}, e))
+								}) : /* @__PURE__ */ (0, Y.jsx)("div", {
+									className: "scheduler-discovery-inline-empty",
+									children: "—"
+								})]
+							}), /* @__PURE__ */ (0, Y.jsxs)("section", {
+								className: "scheduler-discovery-section",
+								"aria-labelledby": "schedulerDiscoverySourcesTitle",
+								children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+									className: "scheduler-discovery-section-heading",
+									children: [/* @__PURE__ */ (0, Y.jsx)("h4", {
+										id: "schedulerDiscoverySourcesTitle",
+										children: "Discovery sources"
+									}), /* @__PURE__ */ (0, Y.jsx)("span", { children: "Candidate origins" })]
+								}), u.length ? /* @__PURE__ */ (0, Y.jsx)("div", {
+									className: "scheduler-discovery-source-list",
+									children: u.map(([e, t], n) => {
+										let r = Object.entries(t).map(([e, t]) => `${CR(e)} ${t}`).join(" · ");
+										return /* @__PURE__ */ (0, Y.jsxs)("div", {
+											className: `scheduler-discovery-source-row is-accent-${n % 4}`,
+											children: [
+												/* @__PURE__ */ (0, Y.jsx)("span", { children: IR[e] || "Discovery source" }),
+												/* @__PURE__ */ (0, Y.jsx)("small", {
+													title: r,
+													children: r
+												}),
+												/* @__PURE__ */ (0, Y.jsx)("strong", { children: Object.values(t).reduce((e, t) => e + t, 0).toLocaleString() })
+											]
+										}, e);
+									})
+								}) : /* @__PURE__ */ (0, Y.jsx)("div", {
+									className: "scheduler-discovery-inline-empty",
+									children: "—"
+								})]
+							})]
+						}),
+						l.length ? /* @__PURE__ */ (0, Y.jsxs)("section", {
+							className: "scheduler-discovery-section scheduler-discovery-candidates",
+							"aria-labelledby": "schedulerDiscoveryCandidatesTitle",
+							children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+								className: "scheduler-discovery-section-heading",
+								children: [/* @__PURE__ */ (0, Y.jsx)("h4", {
+									id: "schedulerDiscoveryCandidatesTitle",
+									children: "Agent search candidates"
+								}), /* @__PURE__ */ (0, Y.jsx)("span", { children: "Candidate pool by ATS" })]
+							}), /* @__PURE__ */ (0, Y.jsx)("div", {
+								className: "scheduler-discovery-candidate-chips",
+								children: l.map(([e, t], n) => /* @__PURE__ */ (0, Y.jsxs)("span", {
+									className: `is-accent-${n % 5}`,
+									children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: CR(e) }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: t.toLocaleString() })]
+								}, e))
+							})]
+						}) : null,
+						/* @__PURE__ */ (0, Y.jsxs)("section", {
+							className: "scheduler-discovery-section",
+							"aria-labelledby": "schedulerDiscoveryExecutionTitle",
+							children: [
+								/* @__PURE__ */ (0, Y.jsxs)("div", {
+									className: "scheduler-discovery-section-heading",
+									children: [/* @__PURE__ */ (0, Y.jsx)("h4", {
+										id: "schedulerDiscoveryExecutionTitle",
+										children: "Execution"
+									}), /* @__PURE__ */ (0, Y.jsx)("span", { children: "Component outcomes" })]
+								}),
+								/* @__PURE__ */ (0, Y.jsx)("div", {
+									className: "scheduler-discovery-execution-grid",
+									children: Object.entries(s.components).map(([e, t]) => {
+										let n = e === "company_discovery_agent" ? "Company Discovery Agent" : "ATS Discovery Stage", r = t === "succeeded" ? F : t === "failed" ? ee : ae;
+										return /* @__PURE__ */ (0, Y.jsxs)("div", {
+											className: `scheduler-discovery-execution-item is-${t}`,
+											children: [
+												/* @__PURE__ */ (0, Y.jsx)(r, {
+													size: 17,
+													"aria-hidden": "true"
+												}),
+												/* @__PURE__ */ (0, Y.jsx)("span", { children: n }),
+												/* @__PURE__ */ (0, Y.jsx)("strong", { children: CR(t) })
+											]
+										}, e);
+									})
+								}),
+								s.failure_components.length ? /* @__PURE__ */ (0, Y.jsxs)("div", {
+									className: "scheduler-discovery-failure-note",
+									children: [
+										/* @__PURE__ */ (0, Y.jsx)(Ce, {
+											size: 14,
+											"aria-hidden": "true"
+										}),
+										s.failure_components.length,
+										" execution component",
+										s.failure_components.length === 1 ? "" : "s",
+										" reported failure."
+									]
+								}) : null
+							]
+						}),
+						/* @__PURE__ */ (0, Y.jsxs)("footer", {
+							className: "scheduler-discovery-metadata",
+							children: [
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Started" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
+									title: m === "—" ? void 0 : m,
+									children: m
+								})] }),
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Finished" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
+									title: h === "—" ? void 0 : h,
+									children: h
+								})] }),
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Duration" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: RR(s.started_at, s.finished_at) })] }),
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Return code" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: (i = s.return_code) == null ? "—" : i })] }),
+								/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Run ID" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
+									className: "scheduler-run-id-cell",
+									title: s.run_id,
+									children: s.run_id
+								})] })
+							]
+						})
+					] }) : null
+				]
+			})]
+		})
 	});
 }
-function NR({ open: e, confirming: t, onClose: n, onConfirm: r, triggerRef: i }) {
+function VR({ open: e, confirming: t, onClose: n, onConfirm: r, triggerRef: i }) {
 	let a = (0, C.useRef)(null), o = (0, C.useRef)(null);
 	return (0, C.useEffect)(() => {
 		if (!e) return;
@@ -26608,7 +27018,7 @@ function NR({ open: e, confirming: t, onClose: n, onConfirm: r, triggerRef: i })
 		})
 	}) : null;
 }
-function PR({ icon: e, label: t, ok: n, explanation: r }) {
+function HR({ icon: e, label: t, ok: n, explanation: r }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("li", {
 		className: `scheduler-config-row ${n ? "is-ok" : "is-issue"}`,
 		children: [
@@ -26631,7 +27041,7 @@ function PR({ icon: e, label: t, ok: n, explanation: r }) {
 		]
 	});
 }
-function FR({ rows: e, emptyMessage: t }) {
+function UR({ rows: e, emptyMessage: t }) {
 	return e.length ? /* @__PURE__ */ (0, Y.jsx)("div", {
 		className: "scheduler-diagnostics-table-viewport",
 		children: /* @__PURE__ */ (0, Y.jsxs)("table", { children: [/* @__PURE__ */ (0, Y.jsx)("thead", { children: /* @__PURE__ */ (0, Y.jsxs)("tr", { children: [
@@ -26643,14 +27053,14 @@ function FR({ rows: e, emptyMessage: t }) {
 			/* @__PURE__ */ (0, Y.jsx)("th", { children: "Return code" }),
 			/* @__PURE__ */ (0, Y.jsx)("th", { children: "Run ID" })
 		] }) }), /* @__PURE__ */ (0, Y.jsx)("tbody", { children: e.map((e, t) => {
-			let n = oR(e.job_name, "Unnamed job"), r = dR(e.started_at), i = dR(e.finished_at), a = oR(e.run_id, "-");
+			let n = cR(e.job_name, "Unnamed job"), r = pR(e.started_at), i = pR(e.finished_at), a = cR(e.run_id, "-");
 			return /* @__PURE__ */ (0, Y.jsxs)("tr", { children: [
 				/* @__PURE__ */ (0, Y.jsx)("td", {
 					title: n,
 					children: n
 				}),
-				/* @__PURE__ */ (0, Y.jsx)("td", { children: bR(e.status) }),
-				/* @__PURE__ */ (0, Y.jsx)("td", { children: mR(e.trigger_source) }),
+				/* @__PURE__ */ (0, Y.jsx)("td", { children: SR(e.status) }),
+				/* @__PURE__ */ (0, Y.jsx)("td", { children: gR(e.trigger_source) }),
 				/* @__PURE__ */ (0, Y.jsx)("td", {
 					title: r,
 					children: r
@@ -26659,20 +27069,20 @@ function FR({ rows: e, emptyMessage: t }) {
 					title: i,
 					children: i
 				}),
-				/* @__PURE__ */ (0, Y.jsx)("td", { children: oR(e.return_code, "-") }),
+				/* @__PURE__ */ (0, Y.jsx)("td", { children: cR(e.return_code, "-") }),
 				/* @__PURE__ */ (0, Y.jsx)("td", {
 					className: "scheduler-run-id-cell",
 					title: a,
 					children: a
 				})
-			] }, yR(e, t));
+			] }, xR(e, t));
 		}) })] })
 	}) : /* @__PURE__ */ (0, Y.jsx)("div", {
 		className: "scheduler-empty scheduler-empty--compact",
 		children: t
 	});
 }
-function IR({ open: e, payload: t, onClose: n, triggerRef: r }) {
+function WR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 	var i, a;
 	let [o, s] = (0, C.useState)("runtime"), c = (0, C.useRef)(null), l = (0, C.useRef)(null);
 	if ((0, C.useEffect)(() => {
@@ -26763,15 +27173,15 @@ function IR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 								className: "scheduler-runtime-diagnostic-card",
 								children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
 									className: "scheduler-runtime-diagnostic-heading",
-									children: [/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("h4", { children: xR(e.job_name) }), /* @__PURE__ */ (0, Y.jsx)("span", { children: _R(e.cadence_seconds) })] }), /* @__PURE__ */ (0, Y.jsx)("span", {
-										className: `scheduler-badge scheduler-badge--${wR(e)}`,
-										children: SR(e)
+									children: [/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("h4", { children: CR(e.job_name) }), /* @__PURE__ */ (0, Y.jsx)("span", { children: yR(e.cadence_seconds) })] }), /* @__PURE__ */ (0, Y.jsx)("span", {
+										className: `scheduler-badge scheduler-badge--${ER(e)}`,
+										children: wR(e)
 									})]
 								}), /* @__PURE__ */ (0, Y.jsxs)("dl", { children: [
-									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Installed" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: TR(e.installed) })] }),
-									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Loaded" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: TR(e.loaded) })] }),
-									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Armed" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: TR(e.armed) })] }),
-									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Running" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: TR(e.running) })] }),
+									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Installed" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: DR(e.installed) })] }),
+									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Loaded" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: DR(e.loaded) })] }),
+									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Armed" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: DR(e.armed) })] }),
+									/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Running" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: DR(e.running) })] }),
 									e.job_name === "agent_discovery" ? /* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("dt", { children: "Manual run" }), /* @__PURE__ */ (0, Y.jsx)("dd", { children: e.manual_run_active === !0 ? "Active" : "Inactive" })] }) : null
 								] })]
 							}, e.job_name))
@@ -26779,19 +27189,19 @@ function IR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 						o === "configuration" ? /* @__PURE__ */ (0, Y.jsxs)("ul", {
 							className: "scheduler-config-list",
 							children: [
-								/* @__PURE__ */ (0, Y.jsx)(PR, {
+								/* @__PURE__ */ (0, Y.jsx)(HR, {
 									icon: d ? Se : Ce,
 									label: "Overall configuration integrity",
 									ok: d,
 									explanation: d ? "All configuration checks pass." : "One or more configuration checks failed."
 								}),
-								/* @__PURE__ */ (0, Y.jsx)(PR, {
+								/* @__PURE__ */ (0, Y.jsx)(HR, {
 									icon: u.seed_sql_matches_artifact ? F : ee,
 									label: "Seed SQL artifact match",
 									ok: !!u.seed_sql_matches_artifact,
 									explanation: "Generated seed SQL matches the committed artifact."
 								}),
-								/* @__PURE__ */ (0, Y.jsx)(PR, {
+								/* @__PURE__ */ (0, Y.jsx)(HR, {
 									icon: u.init_sql_matches_artifact ? F : ee,
 									label: "Init SQL artifact match",
 									ok: !!u.init_sql_matches_artifact,
@@ -26805,7 +27215,7 @@ function IR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 								size: 13,
 								"aria-hidden": "true"
 							}), " Recent scheduler runs currently mirrored into Postgres."]
-						}), /* @__PURE__ */ (0, Y.jsx)(FR, {
+						}), /* @__PURE__ */ (0, Y.jsx)(UR, {
 							rows: (t == null ? void 0 : t.recent_postgres_runs) || [],
 							emptyMessage: "No Postgres run rows recorded yet."
 						})] }) : null
@@ -26815,30 +27225,30 @@ function IR({ open: e, payload: t, onClose: n, triggerRef: r }) {
 		})
 	});
 }
-function LR({ readSummary: e = iR, runDiscoveryNow: t = aR }) {
-	let [n, r] = (0, C.useState)({ kind: "loading" }), [i, a] = (0, C.useState)(!1), [o, s] = (0, C.useState)(!1), [c, l] = (0, C.useState)(!1), [u, d] = (0, C.useState)(!1), [f, p] = (0, C.useState)(""), m = (0, C.useRef)(null), h = (0, C.useRef)(null), g = (0, C.useCallback)(async (t = !1) => {
-		t && a(!0);
+function GR({ readSummary: e = aR, runDiscoveryNow: t = oR, readDiscoverySummary: n = sR }) {
+	let [r, i] = (0, C.useState)({ kind: "loading" }), [a, o] = (0, C.useState)(!1), [s, c] = (0, C.useState)(!1), [l, u] = (0, C.useState)(!1), [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(""), h = (0, C.useRef)(null), g = (0, C.useRef)(null), _ = (0, C.useCallback)(async (t = !1) => {
+		t && o(!0);
 		try {
 			let t = await e();
-			r({
+			i({
 				kind: "ready",
 				payload: t,
 				checkedAt: Date.now()
 			});
 		} catch (e) {
-			r({
+			i({
 				kind: "error",
 				message: e instanceof Error ? e.message : "Scheduler summary is unavailable."
 			});
 		} finally {
-			t && a(!1);
+			t && o(!1);
 		}
-	}, [e]), _ = (0, C.useCallback)(async () => {
-		d(!0), p("");
+	}, [e]), v = (0, C.useCallback)(async () => {
+		f(!0), m("");
 		try {
 			let e = await t();
 			if (!e.accepted || e.job_name !== "agent_discovery") throw Error("Manual Agent Discovery was not accepted.");
-			r((e) => {
+			i((e) => {
 				var t;
 				return e.kind === "ready" ? {
 					...e,
@@ -26851,78 +27261,79 @@ function LR({ readSummary: e = iR, runDiscoveryNow: t = aR }) {
 						} : e)
 					}
 				} : e;
-			}), l(!1);
+			}), u(!1);
 		} catch (e) {
-			p(e instanceof Error ? e.message : "Manual Agent Discovery could not be started.");
+			m(e instanceof Error ? e.message : "Manual Agent Discovery could not be started.");
 		} finally {
-			d(!1);
+			f(!1);
 		}
-	}, [t]), v = (0, C.useCallback)(() => {
-		l(!1);
-	}, []), y = (0, C.useCallback)(() => {
-		p(""), l(!0);
+	}, [t]), y = (0, C.useCallback)(() => {
+		u(!1);
+	}, []), b = (0, C.useCallback)(() => {
+		m(""), u(!0);
 	}, []);
 	(0, C.useEffect)(() => {
-		g();
+		_();
 	}, []);
-	let b = n.kind === "ready" ? n.payload : null, x = n.kind, S = n.kind === "error" ? n.message : void 0, w = n.kind === "ready" ? n.checkedAt : null;
+	let x = r.kind === "ready" ? r.payload : null, S = r.kind, w = r.kind === "error" ? r.message : void 0, T = r.kind === "ready" ? r.checkedAt : null;
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "scheduler-health-dashboard",
-		"aria-busy": n.kind === "loading",
+		"aria-busy": r.kind === "loading",
 		children: [
-			/* @__PURE__ */ (0, Y.jsx)(DR, {
-				onRefresh: () => void g(!0),
-				refreshing: i,
-				lastRefreshedAt: w
-			}),
-			n.kind === "error" ? /* @__PURE__ */ (0, Y.jsx)("div", {
-				className: "scheduler-error-banner",
-				role: "alert",
-				children: n.message
-			}) : null,
-			f ? /* @__PURE__ */ (0, Y.jsx)("div", {
-				className: "scheduler-error-banner",
-				role: "alert",
-				children: f
-			}) : null,
-			/* @__PURE__ */ (0, Y.jsx)(OR, {
-				payload: b,
-				loading: n.kind === "loading",
-				onOpenDiagnostics: () => s(!0),
-				diagnosticsTriggerRef: m
-			}),
 			/* @__PURE__ */ (0, Y.jsx)(kR, {
-				payload: b,
-				loading: n.kind === "loading",
-				manualSubmitting: u,
-				onRequestManualDiscovery: y,
-				manualDiscoveryTriggerRef: h
+				onRefresh: () => void _(!0),
+				refreshing: a,
+				lastRefreshedAt: T
 			}),
-			/* @__PURE__ */ (0, Y.jsx)(MR, {
-				status: x,
-				errorMessage: S,
-				payload: b,
-				onRetry: () => void g(!0)
+			r.kind === "error" ? /* @__PURE__ */ (0, Y.jsx)("div", {
+				className: "scheduler-error-banner",
+				role: "alert",
+				children: r.message
+			}) : null,
+			p ? /* @__PURE__ */ (0, Y.jsx)("div", {
+				className: "scheduler-error-banner",
+				role: "alert",
+				children: p
+			}) : null,
+			/* @__PURE__ */ (0, Y.jsx)(AR, {
+				payload: x,
+				loading: r.kind === "loading",
+				onOpenDiagnostics: () => c(!0),
+				diagnosticsTriggerRef: h
 			}),
-			/* @__PURE__ */ (0, Y.jsx)(IR, {
-				open: o,
-				payload: b,
-				onClose: () => s(!1),
-				triggerRef: m
+			/* @__PURE__ */ (0, Y.jsx)(jR, {
+				payload: x,
+				loading: r.kind === "loading",
+				manualSubmitting: d,
+				onRequestManualDiscovery: b,
+				manualDiscoveryTriggerRef: g
 			}),
-			/* @__PURE__ */ (0, Y.jsx)(NR, {
-				open: c,
-				confirming: u,
-				onClose: v,
-				onConfirm: () => void _(),
+			/* @__PURE__ */ (0, Y.jsx)(FR, {
+				status: S,
+				errorMessage: w,
+				payload: x,
+				onRetry: () => void _(!0),
+				readDiscoverySummary: n
+			}),
+			/* @__PURE__ */ (0, Y.jsx)(WR, {
+				open: s,
+				payload: x,
+				onClose: () => c(!1),
 				triggerRef: h
+			}),
+			/* @__PURE__ */ (0, Y.jsx)(VR, {
+				open: l,
+				confirming: d,
+				onClose: y,
+				onConfirm: () => void v(),
+				triggerRef: g
 			})
 		]
 	});
 }
 //#endregion
 //#region src/diagnostics/AdvancedDiagnosticsDashboard.tsx
-var RR = {
+var KR = {
 	mode: "empty",
 	savedScanOptions: [],
 	selectedScanId: "",
@@ -26931,7 +27342,7 @@ var RR = {
 		advancedDiagnostics: "/advanced-diagnostics",
 		scanWorkspace: "/scan-workspace"
 	}
-}, zR = [
+}, qR = [
 	{
 		sectionId: "advancedDiagnosticsSectionGeneration",
 		navLabel: "Generation",
@@ -27174,7 +27585,7 @@ var RR = {
 			}
 		]
 	}
-], BR = "advancedDiagnosticsSectionReadbacks", VR = [
+], JR = "advancedDiagnosticsSectionReadbacks", YR = [
 	{
 		id: "scanWorkspaceJdLlmReadback",
 		label: "Live JD LLM",
@@ -27252,16 +27663,16 @@ var RR = {
 		tone: "waiting",
 		ariaLabel: "Demo readiness: backend checkpoint readback waiting for existing data"
 	}
-], HR = VR.filter((e) => e.tone === "default").length, UR = VR.filter((e) => e.tone === "waiting").length, WR = [...zR.map((e) => ({
+], XR = YR.filter((e) => e.tone === "default").length, ZR = YR.filter((e) => e.tone === "waiting").length, QR = [...qR.map((e) => ({
 	sectionId: e.sectionId,
 	label: e.navLabel
 })), {
-	sectionId: BR,
+	sectionId: JR,
 	label: "Readback status"
 }];
-function GR() {
+function $R() {
 	let e = {}, t = {}, n = {};
-	for (let r of zR) {
+	for (let r of qR) {
 		for (let t of r.standaloneCheckboxes || []) e[t.id] = !1;
 		for (let i of r.checkboxGroups) {
 			e[i.checkbox.id] = !1;
@@ -27275,7 +27686,7 @@ function GR() {
 		selects: n
 	};
 }
-function KR({ id: e, label: t, checked: n, onChange: r }) {
+function ez({ id: e, label: t, checked: n, onChange: r }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("label", {
 		className: "advanced-diagnostics-checkbox-field",
 		htmlFor: e,
@@ -27287,7 +27698,7 @@ function KR({ id: e, label: t, checked: n, onChange: r }) {
 		}), /* @__PURE__ */ (0, Y.jsx)("span", { children: t })]
 	});
 }
-function qR({ field: e, value: t, onChange: n, nested: r }) {
+function tz({ field: e, value: t, onChange: n, nested: r }) {
 	return /* @__PURE__ */ (0, Y.jsx)("input", {
 		type: "text",
 		id: e.id,
@@ -27298,7 +27709,7 @@ function qR({ field: e, value: t, onChange: n, nested: r }) {
 		onChange: (e) => n(e.target.value)
 	});
 }
-function JR({ field: e, value: t, onChange: n, nested: r }) {
+function nz({ field: e, value: t, onChange: n, nested: r }) {
 	return /* @__PURE__ */ (0, Y.jsx)("select", {
 		id: e.id,
 		className: `advanced-diagnostics-select-field ${r ? "is-nested" : ""}`,
@@ -27311,7 +27722,7 @@ function JR({ field: e, value: t, onChange: n, nested: r }) {
 		}, e.value || "__blank__"))
 	});
 }
-function YR({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSelectChange: i }) {
+function rz({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSelectChange: i }) {
 	let a = e.icon;
 	return /* @__PURE__ */ (0, Y.jsxs)("section", {
 		className: "advanced-diagnostics-card",
@@ -27340,26 +27751,26 @@ function YR({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSel
 			]
 		}), /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "advanced-diagnostics-card-fields",
-			children: [(e.standaloneCheckboxes || []).map((e) => /* @__PURE__ */ (0, Y.jsx)(KR, {
+			children: [(e.standaloneCheckboxes || []).map((e) => /* @__PURE__ */ (0, Y.jsx)(ez, {
 				id: e.id,
 				label: e.label,
 				checked: !!t.checkboxes[e.id],
 				onChange: (t) => n(e.id, t)
 			}, e.id)), e.checkboxGroups.map((e) => /* @__PURE__ */ (0, Y.jsxs)("div", {
 				className: "advanced-diagnostics-field-group",
-				children: [/* @__PURE__ */ (0, Y.jsx)(KR, {
+				children: [/* @__PURE__ */ (0, Y.jsx)(ez, {
 					id: e.checkbox.id,
 					label: e.checkbox.label,
 					checked: !!t.checkboxes[e.checkbox.id],
 					onChange: (t) => n(e.checkbox.id, t)
 				}), /* @__PURE__ */ (0, Y.jsxs)("div", {
 					className: "advanced-diagnostics-field-group-nested",
-					children: [(e.texts || []).map((e) => /* @__PURE__ */ (0, Y.jsx)(qR, {
+					children: [(e.texts || []).map((e) => /* @__PURE__ */ (0, Y.jsx)(tz, {
 						field: e,
 						value: t.texts[e.id] || "",
 						onChange: (t) => r(e.id, t),
 						nested: !0
-					}, e.id)), (e.selects || []).map((e) => /* @__PURE__ */ (0, Y.jsx)(JR, {
+					}, e.id)), (e.selects || []).map((e) => /* @__PURE__ */ (0, Y.jsx)(nz, {
 						field: e,
 						value: t.selects[e.id] || "",
 						onChange: (t) => i(e.id, t),
@@ -27370,7 +27781,7 @@ function YR({ group: e, controls: t, onCheckboxChange: n, onTextChange: r, onSel
 		})]
 	});
 }
-function XR({ row: e }) {
+function iz({ row: e }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: `advanced-diagnostics-readback-row advanced-diagnostics-readback-row--${e.tone}`,
 		id: e.id,
@@ -27385,21 +27796,21 @@ function XR({ row: e }) {
 		})]
 	});
 }
-function ZR({ activeSection: e }) {
+function az({ activeSection: e }) {
 	return /* @__PURE__ */ (0, Y.jsxs)(Y.Fragment, { children: [/* @__PURE__ */ (0, Y.jsxs)("nav", {
 		className: "advanced-diagnostics-section-rail",
 		"aria-label": "Diagnostics sections",
 		children: [/* @__PURE__ */ (0, Y.jsxs)("p", {
 			className: "advanced-diagnostics-section-rail-summary",
 			children: [
-				VR.length,
+				YR.length,
 				" readbacks · ",
-				HR,
+				XR,
 				" default-off · ",
-				UR,
+				ZR,
 				" waiting"
 			]
-		}), /* @__PURE__ */ (0, Y.jsx)("ul", { children: WR.map((t) => /* @__PURE__ */ (0, Y.jsx)("li", { children: /* @__PURE__ */ (0, Y.jsx)("a", {
+		}), /* @__PURE__ */ (0, Y.jsx)("ul", { children: QR.map((t) => /* @__PURE__ */ (0, Y.jsx)("li", { children: /* @__PURE__ */ (0, Y.jsx)("a", {
 			href: `#${t.sectionId}`,
 			className: e === t.sectionId ? "is-active" : "",
 			children: t.label
@@ -27407,14 +27818,14 @@ function ZR({ activeSection: e }) {
 	}), /* @__PURE__ */ (0, Y.jsx)("nav", {
 		className: "advanced-diagnostics-section-shortcuts",
 		"aria-label": "Diagnostics sections",
-		children: WR.map((t) => /* @__PURE__ */ (0, Y.jsx)("a", {
+		children: QR.map((t) => /* @__PURE__ */ (0, Y.jsx)("a", {
 			href: `#${t.sectionId}`,
 			className: e === t.sectionId ? "is-active" : "",
 			children: t.label
 		}, t.sectionId))
 	})] });
 }
-function QR() {
+function oz() {
 	return /* @__PURE__ */ (0, Y.jsx)("header", {
 		className: "advanced-diagnostics-header app-page-header",
 		children: /* @__PURE__ */ (0, Y.jsxs)("div", {
@@ -27449,7 +27860,7 @@ function QR() {
 		})
 	});
 }
-function $R({ options: e, hrefs: t, navigate: n }) {
+function sz({ options: e, hrefs: t, navigate: n }) {
 	let [r, i] = (0, C.useState)([]), a = (0, C.useMemo)(() => e.map((e) => ({
 		value: e.scanId,
 		label: e.secondary ? `${e.primary} — ${e.secondary}` : e.primary
@@ -27488,7 +27899,7 @@ function $R({ options: e, hrefs: t, navigate: n }) {
 		]
 	});
 }
-function ez({ hrefs: e }) {
+function cz({ hrefs: e }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-empty-card",
 		children: [
@@ -27510,7 +27921,7 @@ function ez({ hrefs: e }) {
 		]
 	});
 }
-function tz({ hrefs: e }) {
+function lz({ hrefs: e }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-invalid-card",
 		children: [
@@ -27532,7 +27943,7 @@ function tz({ hrefs: e }) {
 		]
 	});
 }
-function nz({ context: e, hrefs: t }) {
+function uz({ context: e, hrefs: t }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-context-hero",
 		children: [
@@ -27588,7 +27999,7 @@ function nz({ context: e, hrefs: t }) {
 		]
 	});
 }
-function rz() {
+function dz() {
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "advanced-diagnostics-safety-callout",
 		role: "note",
@@ -27598,7 +28009,7 @@ function rz() {
 		}), /* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: "Selections are review-only" }), /* @__PURE__ */ (0, Y.jsx)("p", { children: "Selecting diagnostics does not run them. These do not apply to jobs automatically. Diagnostics never apply to jobs automatically." })] })]
 	});
 }
-function iz({ onClear: e }) {
+function fz({ onClear: e }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "advanced-diagnostics-action-bar",
 		children: [/* @__PURE__ */ (0, Y.jsx)("p", {
@@ -27621,10 +28032,10 @@ function iz({ onClear: e }) {
 		})]
 	});
 }
-function az({ state: e = RR, navigate: t = (e) => {
+function pz({ state: e = KR, navigate: t = (e) => {
 	window.location.href = e;
 } }) {
-	let [n, r] = (0, C.useState)(() => GR()), [i, a] = (0, C.useState)(WR[0].sectionId);
+	let [n, r] = (0, C.useState)(() => $R()), [i, a] = (0, C.useState)(QR[0].sectionId);
 	(0, C.useEffect)(() => {
 		if (typeof IntersectionObserver > "u") return;
 		let e = new IntersectionObserver((e) => {
@@ -27632,7 +28043,7 @@ function az({ state: e = RR, navigate: t = (e) => {
 			let n = e.filter((e) => e.isIntersecting).sort((e, t) => t.intersectionRatio - e.intersectionRatio)[0];
 			!(n == null || (t = n.target) == null) && t.id && a(n.target.id);
 		}, { rootMargin: "-35% 0px -45% 0px" });
-		for (let t of WR) {
+		for (let t of QR) {
 			let n = document.getElementById(t.sectionId);
 			n && e.observe(n);
 		}
@@ -27662,19 +28073,19 @@ function az({ state: e = RR, navigate: t = (e) => {
 				[e]: t
 			}
 		}));
-	}, l = () => r(GR()), u = e.mode === "context";
+	}, l = () => r($R()), u = e.mode === "context";
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "advanced-diagnostics-dashboard",
 		children: [
-			/* @__PURE__ */ (0, Y.jsx)(QR, {}),
-			e.mode === "hub" ? /* @__PURE__ */ (0, Y.jsx)($R, {
+			/* @__PURE__ */ (0, Y.jsx)(oz, {}),
+			e.mode === "hub" ? /* @__PURE__ */ (0, Y.jsx)(sz, {
 				options: e.savedScanOptions,
 				hrefs: e.hrefs,
 				navigate: t
 			}) : null,
-			e.mode === "empty" ? /* @__PURE__ */ (0, Y.jsx)(ez, { hrefs: e.hrefs }) : null,
-			e.mode === "invalid" ? /* @__PURE__ */ (0, Y.jsx)(tz, { hrefs: e.hrefs }) : null,
-			e.mode === "context" && e.context ? /* @__PURE__ */ (0, Y.jsx)(nz, {
+			e.mode === "empty" ? /* @__PURE__ */ (0, Y.jsx)(cz, { hrefs: e.hrefs }) : null,
+			e.mode === "invalid" ? /* @__PURE__ */ (0, Y.jsx)(lz, { hrefs: e.hrefs }) : null,
+			e.mode === "context" && e.context ? /* @__PURE__ */ (0, Y.jsx)(uz, {
 				context: e.context,
 				hrefs: e.hrefs
 			}) : null,
@@ -27682,12 +28093,12 @@ function az({ state: e = RR, navigate: t = (e) => {
 				className: "advanced-diagnostics-body",
 				id: "scanWorkspaceAdvancedDiagnostics",
 				children: [
-					/* @__PURE__ */ (0, Y.jsx)(rz, {}),
+					/* @__PURE__ */ (0, Y.jsx)(dz, {}),
 					/* @__PURE__ */ (0, Y.jsxs)("div", {
 						className: "advanced-diagnostics-layout",
-						children: [/* @__PURE__ */ (0, Y.jsx)(ZR, { activeSection: i }), /* @__PURE__ */ (0, Y.jsxs)("div", {
+						children: [/* @__PURE__ */ (0, Y.jsx)(az, { activeSection: i }), /* @__PURE__ */ (0, Y.jsxs)("div", {
 							className: "advanced-diagnostics-groups",
-							children: [zR.map((e) => /* @__PURE__ */ (0, Y.jsx)(YR, {
+							children: [qR.map((e) => /* @__PURE__ */ (0, Y.jsx)(rz, {
 								group: e,
 								controls: n,
 								onCheckboxChange: o,
@@ -27696,8 +28107,8 @@ function az({ state: e = RR, navigate: t = (e) => {
 							}, e.sectionId)), /* @__PURE__ */ (0, Y.jsxs)("section", {
 								className: "advanced-diagnostics-card",
 								"data-tone": "slate",
-								id: BR,
-								"aria-labelledby": `${BR}Heading`,
+								id: JR,
+								"aria-labelledby": `${JR}Heading`,
 								children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
 									className: "advanced-diagnostics-card-heading",
 									children: [/* @__PURE__ */ (0, Y.jsx)("span", {
@@ -27705,7 +28116,7 @@ function az({ state: e = RR, navigate: t = (e) => {
 										"aria-hidden": "true",
 										children: /* @__PURE__ */ (0, Y.jsx)(ne, { size: 17 })
 									}), /* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("h3", {
-										id: `${BR}Heading`,
+										id: `${JR}Heading`,
 										children: "Readback status"
 									}), /* @__PURE__ */ (0, Y.jsx)("p", {
 										className: "advanced-diagnostics-card-description",
@@ -27714,12 +28125,12 @@ function az({ state: e = RR, navigate: t = (e) => {
 								}), /* @__PURE__ */ (0, Y.jsx)("div", {
 									className: "advanced-diagnostics-readbacks",
 									"aria-label": "Advanced diagnostic readbacks",
-									children: VR.map((e) => /* @__PURE__ */ (0, Y.jsx)(XR, { row: e }, e.id))
+									children: YR.map((e) => /* @__PURE__ */ (0, Y.jsx)(iz, { row: e }, e.id))
 								})]
 							})]
 						})]
 					}),
-					/* @__PURE__ */ (0, Y.jsx)(iz, { onClear: l })
+					/* @__PURE__ */ (0, Y.jsx)(fz, { onClear: l })
 				]
 			}) : null
 		]
@@ -27727,7 +28138,7 @@ function az({ state: e = RR, navigate: t = (e) => {
 }
 //#endregion
 //#region src/PlanningWorklist.tsx
-var oz = "applylens:planning-worklist-state", sz = "applylens:planning-worklist-action", cz = "applylens.planning.columnWidths.v1", lz = {
+var mz = "applylens:planning-worklist-state", hz = "applylens:planning-worklist-action", gz = "applylens.planning.columnWidths.v1", _z = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Planning view · loading",
@@ -27759,7 +28170,7 @@ var oz = "applylens:planning-worklist-state", sz = "applylens:planning-worklist-
 		limit: 15
 	},
 	preferenceOptions: []
-}, uz = [
+}, vz = [
 	{
 		value: "APPLY",
 		label: "Ready for review",
@@ -27780,7 +28191,7 @@ var oz = "applylens:planning-worklist-state", sz = "applylens:planning-worklist-
 		label: "Review later",
 		tone: "later"
 	}
-], dz = [
+], yz = [
 	{
 		value: "strong",
 		label: "Excellent match",
@@ -27806,7 +28217,7 @@ var oz = "applylens:planning-worklist-state", sz = "applylens:planning-worklist-
 		label: "No credible match",
 		tone: "unavailable"
 	}
-], fz = [
+], bz = [
 	{
 		value: "ready",
 		label: "Ready",
@@ -27827,7 +28238,7 @@ var oz = "applylens:planning-worklist-state", sz = "applylens:planning-worklist-
 		label: "Unavailable",
 		tone: "unavailable"
 	}
-], pz = {
+], xz = {
 	queue_rank: {
 		min: 72,
 		max: 110
@@ -27857,25 +28268,25 @@ var oz = "applylens:planning-worklist-state", sz = "applylens:planning-worklist-
 		max: 280
 	}
 };
-function mz(e) {
-	window.dispatchEvent(new CustomEvent(sz, { detail: e }));
+function Sz(e) {
+	window.dispatchEvent(new CustomEvent(hz, { detail: e }));
 }
-function hz(e) {
+function Cz(e) {
 	return String(e == null ? "" : e).trim();
 }
-function gz(e) {
-	let t = hz(e).replace(/_/g, " ");
+function wz(e) {
+	let t = Cz(e).replace(/_/g, " ");
 	return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Unavailable";
 }
-function _z(e) {
-	let t = hz(e);
+function Tz(e) {
+	let t = Cz(e);
 	return t ? t.replace(/\.pdf$/i, "").replace(/_/g, " ") : "Not selected";
 }
-function vz(e) {
-	return hz(e.operator_selected_resume || e.selected_resume || e.winner_resume);
+function Ez(e) {
+	return Cz(e.operator_selected_resume || e.selected_resume || e.winner_resume);
 }
-function yz(e) {
-	let t = hz(e);
+function Dz(e) {
+	let t = Cz(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
 	return Number.isNaN(n.getTime()) ? t : new Intl.DateTimeFormat(void 0, {
@@ -27884,7 +28295,7 @@ function yz(e) {
 		year: "numeric"
 	}).format(n);
 }
-function bz(e) {
+function Oz(e) {
 	return {
 		APPLY: {
 			label: "Ready for review",
@@ -27902,13 +28313,13 @@ function bz(e) {
 			label: "Review later",
 			tone: "later"
 		}
-	}[hz(e.action).toUpperCase()] || {
-		label: hz(e.action) || "Unavailable",
+	}[Cz(e.action).toUpperCase()] || {
+		label: Cz(e.action) || "Unavailable",
 		tone: "unavailable"
 	};
 }
-function xz(e) {
-	let t = hz(e).toLowerCase();
+function kz(e) {
+	let t = Cz(e).toLowerCase();
 	return [
 		"true",
 		"1",
@@ -27923,31 +28334,31 @@ function xz(e) {
 		"off"
 	].includes(t) ? "No packet" : "Packet unavailable";
 }
-function Sz() {
+function Az() {
 	try {
 		let e = JSON.parse(localStorage.getItem("applylens.planning.columnWidths.v1") || "{}");
 		if (!e || typeof e != "object" || Array.isArray(e)) return {};
 		let t = "version" in e && e.version === 1 ? e.widths : e;
 		return !t || typeof t != "object" || Array.isArray(t) ? {} : Object.fromEntries(Object.entries(t).flatMap(([e, t]) => {
-			let n = pz[e], r = Number(t);
+			let n = xz[e], r = Number(t);
 			return !n || !Number.isFinite(r) ? [] : [[e, Math.min(n.max, Math.max(n.min, r))]];
 		}));
 	} catch (e) {
 		return {};
 	}
 }
-function Cz(e) {
-	localStorage.setItem(cz, JSON.stringify({
+function jz(e) {
+	localStorage.setItem(gz, JSON.stringify({
 		version: 1,
 		widths: e
 	}));
 }
-function wz(e, t) {
-	return hz(e.job_doc_id || e.job_url || e.queue_rank) || `planning-row-${t}`;
+function Mz(e, t) {
+	return Cz(e.job_doc_id || e.job_url || e.queue_rank) || `planning-row-${t}`;
 }
-function Tz(e) {
+function Nz(e) {
 	if (e && typeof e == "object" && !Array.isArray(e)) return e;
-	let t = hz(e);
+	let t = Cz(e);
 	if (!t) return null;
 	try {
 		let e = JSON.parse(t);
@@ -27956,14 +28367,14 @@ function Tz(e) {
 		return null;
 	}
 }
-function Ez({ row: e }) {
-	let t = Tz(e.llm_adjudicator_readback), n = hz((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map(hz).filter(Boolean).join(", ") : "", i = [
-		["Status", gz(n)],
-		["Provider", hz((t == null ? void 0 : t.provider_used) || (t == null ? void 0 : t.provider_requested))],
-		["Model", hz((t == null ? void 0 : t.model_used) || (t == null ? void 0 : t.model_requested))],
+function Pz({ row: e }) {
+	let t = Nz(e.llm_adjudicator_readback), n = Cz((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map(Cz).filter(Boolean).join(", ") : "", i = [
+		["Status", wz(n)],
+		["Provider", Cz((t == null ? void 0 : t.provider_used) || (t == null ? void 0 : t.provider_requested))],
+		["Model", Cz((t == null ? void 0 : t.model_used) || (t == null ? void 0 : t.model_requested))],
 		["Candidates", r],
-		["Recommendation", hz(t == null ? void 0 : t.adjudicator_recommendation_label)],
-		["Summary", hz(t == null ? void 0 : t.adjudicator_summary)]
+		["Recommendation", Cz(t == null ? void 0 : t.adjudicator_recommendation_label)],
+		["Summary", Cz(t == null ? void 0 : t.adjudicator_summary)]
 	].filter((e) => e[1]);
 	return /* @__PURE__ */ (0, Y.jsxs)("details", {
 		className: "planning-react-ai-review",
@@ -27974,29 +28385,29 @@ function Ez({ row: e }) {
 		]
 	});
 }
-function Dz({ row: e }) {
+function Fz({ row: e }) {
 	let t = [
 		"true",
 		"1",
 		"yes",
 		"on"
-	].includes(hz(e.llm_adjudicator_readback_enabled).toLowerCase());
+	].includes(Cz(e.llm_adjudicator_readback_enabled).toLowerCase());
 	return /* @__PURE__ */ (0, Y.jsxs)(YI, { children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "planning-react-details-grid",
 		children: [
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Full location" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: hz(e.job_location) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: gz(e.selection_signal) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: gz(e.llm_adjudicator_readback_status) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: _z(e.runner_up_resume || e.runnerup_resume) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up score" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: hz(e.runner_up_score) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: hz(e.score_gap) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: gz(e.operator_decision || "Not decided") })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: hz(e.queue_priority_reason) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: hz(e.missing_requirement_count) || "0" })] })
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Full location" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Cz(e.job_location) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: wz(e.selection_signal) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: wz(e.llm_adjudicator_readback_status) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Tz(e.runner_up_resume || e.runnerup_resume) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up score" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Cz(e.runner_up_score) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Cz(e.score_gap) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: wz(e.operator_decision || "Not decided") })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Cz(e.queue_priority_reason) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Cz(e.missing_requirement_count) || "0" })] })
 		]
-	}), t ? /* @__PURE__ */ (0, Y.jsx)(Ez, { row: e }) : null] });
+	}), t ? /* @__PURE__ */ (0, Y.jsx)(Pz, { row: e }) : null] });
 }
-function Oz() {
+function Iz() {
 	return [
 		{
 			id: "expand",
@@ -28008,7 +28419,7 @@ function Oz() {
 			enableResizing: !1,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)(GI, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} planning details for ${hz(e.original.job_title) || "job"}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} planning details for ${Cz(e.original.job_title) || "job"}`,
 				controls: `planning-react-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			})
@@ -28026,9 +28437,9 @@ function Oz() {
 			size: 270,
 			minSize: 210,
 			maxSize: 420,
-			accessorFn: (e) => hz(e.job_title),
+			accessorFn: (e) => Cz(e.job_title),
 			cell: ({ row: e }) => {
-				let t = hz(e.original.job_title) || "Untitled job", n = hz(e.original.job_company) || "Company unavailable", r = hz(e.original.job_location) || "Location unavailable", i = hz(e.original.job_url || e.original.job_doc_id);
+				let t = Cz(e.original.job_title) || "Untitled job", n = Cz(e.original.job_company) || "Company unavailable", r = Cz(e.original.job_location) || "Location unavailable", i = Cz(e.original.job_url || e.original.job_doc_id);
 				return /* @__PURE__ */ (0, Y.jsx)(JI, {
 					title: t,
 					location: r,
@@ -28057,8 +28468,8 @@ function Oz() {
 			accessorFn: (e) => e.posted_at ? new Date(e.posted_at).getTime() : null,
 			sortUndefined: "last",
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", {
-				dateTime: hz(e.original.posted_at),
-				children: yz(e.original.posted_at)
+				dateTime: Cz(e.original.posted_at),
+				children: Dz(e.original.posted_at)
 			})
 		},
 		{
@@ -28067,14 +28478,14 @@ function Oz() {
 			size: 184,
 			minSize: 150,
 			maxSize: 260,
-			accessorFn: (e) => bz(e).label,
+			accessorFn: (e) => Oz(e).label,
 			cell: ({ row: e }) => {
-				let t = bz(e.original), n = [
+				let t = Oz(e.original), n = [
 					"true",
 					"1",
 					"yes",
 					"on"
-				].includes(hz(e.original.llm_adjudicator_readback_enabled).toLowerCase());
+				].includes(Cz(e.original.llm_adjudicator_readback_enabled).toLowerCase());
 				return /* @__PURE__ */ (0, Y.jsxs)("span", {
 					className: "planning-react-readiness",
 					children: [/* @__PURE__ */ (0, Y.jsx)("span", {
@@ -28097,7 +28508,7 @@ function Oz() {
 			sortUndefined: "last",
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)(KI, {
 				value: e.original.winner_score,
-				strength: gz(e.original.winner_bucket)
+				strength: wz(e.original.winner_bucket)
 			})
 		},
 		{
@@ -28106,11 +28517,11 @@ function Oz() {
 			size: 230,
 			minSize: 200,
 			maxSize: 360,
-			accessorFn: vz,
+			accessorFn: Ez,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "planning-react-resume",
-				title: vz(e.original),
-				children: _z(vz(e.original))
+				title: Ez(e.original),
+				children: Tz(Ez(e.original))
 			})
 		},
 		{
@@ -28125,13 +28536,13 @@ function Oz() {
 			size: 188,
 			minSize: 160,
 			maxSize: 280,
-			accessorFn: (e) => xz(e.packet_generation_allowed),
+			accessorFn: (e) => kz(e.packet_generation_allowed),
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsxs)("span", {
 				className: "planning-react-status-stack",
 				children: [/* @__PURE__ */ (0, Y.jsx)("span", {
-					className: `planning-react-badge ${xz(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
-					children: xz(e.original.packet_generation_allowed)
-				}), /* @__PURE__ */ (0, Y.jsx)("span", { children: gz(e.original.tailoring_workspace_state || "Workspace unavailable") })]
+					className: `planning-react-badge ${kz(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
+					children: kz(e.original.packet_generation_allowed)
+				}), /* @__PURE__ */ (0, Y.jsx)("span", { children: wz(e.original.tailoring_workspace_state || "Workspace unavailable") })]
 			})
 		},
 		{
@@ -28154,7 +28565,7 @@ function Oz() {
 					className: `planning-react-next-step ${t.kind === "generate_suggestions" ? "is-primary" : ""}`,
 					disabled: t.disabled,
 					title: t.title,
-					onClick: () => mz({
+					onClick: () => Sz({
 						type: "next_step",
 						row: e.original
 					}),
@@ -28164,11 +28575,11 @@ function Oz() {
 		}
 	];
 }
-function kz({ state: e }) {
+function Lz({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (e) => {
-		n(e), mz({
+		n(e), Sz({
 			type: "filters_change",
 			filters: e
 		});
@@ -28183,7 +28594,7 @@ function kz({ state: e }) {
 			/* @__PURE__ */ (0, Y.jsx)(UI, {
 				id: "planningActionFilter",
 				label: "Action",
-				options: uz,
+				options: vz,
 				values: t.actions,
 				onChange: (e) => r({
 					...t,
@@ -28209,7 +28620,7 @@ function kz({ state: e }) {
 			/* @__PURE__ */ (0, Y.jsx)(UI, {
 				id: "planningWinnerBucket",
 				label: "Match Strength",
-				options: dz,
+				options: yz,
 				values: t.winnerBuckets,
 				onChange: (e) => r({
 					...t,
@@ -28221,7 +28632,7 @@ function kz({ state: e }) {
 			/* @__PURE__ */ (0, Y.jsx)(UI, {
 				id: "planningTailoringFilter",
 				label: "Tailoring",
-				options: fz,
+				options: bz,
 				values: t.tailoringStates,
 				onChange: (e) => r({
 					...t,
@@ -28278,7 +28689,7 @@ function kz({ state: e }) {
 					type: "button",
 					className: "planning-filter-apply",
 					id: "planningApplyFiltersBtn",
-					onClick: () => mz({
+					onClick: () => Sz({
 						type: "apply_filters",
 						filters: t
 					}),
@@ -28287,15 +28698,15 @@ function kz({ state: e }) {
 					type: "button",
 					className: "planning-filter-clear",
 					id: "planningClearFiltersBtn",
-					onClick: () => mz({ type: "clear_filters" }),
+					onClick: () => Sz({ type: "clear_filters" }),
 					children: "Clear"
 				})]
 			})
 		]
 	});
 }
-function Az({ state: e }) {
-	let [t, n] = (0, C.useState)(Sz), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(Oz, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
+function Rz({ state: e }) {
+	let [t, n] = (0, C.useState)(Az), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(Iz, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
 		id: e.sort.key,
 		desc: e.sort.direction === "desc"
 	}] : [], [e.sort]);
@@ -28313,10 +28724,10 @@ function Az({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: wz,
+		getRowId: Mz,
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(s) : e)[0];
-			t && (i(""), mz({
+			t && (i(""), Sz({
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -28325,7 +28736,7 @@ function Az({ state: e }) {
 		onColumnSizingChange: (e) => {
 			n((t) => {
 				let n = typeof e == "function" ? e(t) : e;
-				return Cz(n), n;
+				return jz(n), n;
 			});
 		},
 		onExpandedChange: (e) => {
@@ -28353,7 +28764,7 @@ function Az({ state: e }) {
 		stickyColumnId: "next_step",
 		rowClassName: (e, t) => `planning-react-row ${t % 2 ? "is-alternate" : ""} ${e.getIsExpanded() ? "is-expanded" : ""}`.trim(),
 		detailId: (e) => `planning-react-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(Dz, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(Fz, { row: e.original }),
 		empty: /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "planning-react-empty",
 			children: [
@@ -28362,19 +28773,19 @@ function Az({ state: e }) {
 				/* @__PURE__ */ (0, Y.jsx)("button", {
 					type: "button",
 					className: WI,
-					onClick: () => mz({ type: "clear_filters" }),
+					onClick: () => Sz({ type: "clear_filters" }),
 					children: "Clear filters"
 				})
 			]
 		}),
-		onPageChange: (e) => mz({
+		onPageChange: (e) => Sz({
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => mz({ type: "retry" })
+		onRetry: () => Sz({ type: "retry" })
 	});
 }
-var jz = [
+var zz = [
 	{
 		key: "total",
 		label: "Total results",
@@ -28404,11 +28815,11 @@ var jz = [
 		icon: we
 	}
 ];
-function Mz({ state: e }) {
+function Bz({ state: e }) {
 	return /* @__PURE__ */ (0, Y.jsx)("section", {
 		className: "planning-react-summary-grid",
 		"aria-label": "Planning summary",
-		children: jz.map((t) => {
+		children: zz.map((t) => {
 			let n = t.icon;
 			return /* @__PURE__ */ (0, Y.jsxs)("article", {
 				className: `planning-react-summary-card planning-react-summary-card--${t.key}`,
@@ -28435,7 +28846,7 @@ function Mz({ state: e }) {
 }
 //#endregion
 //#region src/OperationalDashboards.tsx
-var Nz = "applylens:decisions-dashboard-state", Pz = "applylens:decisions-dashboard-action", Fz = "applylens:decisions-dashboard-ready", Iz = "applylens:applications-dashboard-state", Lz = "applylens:applications-dashboard-action", Rz = "applylens:applications-dashboard-ready", zz = "applylens.decisions.columnWidths.v1", Bz = "applylens.applications.columnWidths.v1", Vz = {
+var Vz = "applylens:decisions-dashboard-state", Hz = "applylens:decisions-dashboard-action", Uz = "applylens:decisions-dashboard-ready", Wz = "applylens:applications-dashboard-state", Gz = "applylens:applications-dashboard-action", Kz = "applylens:applications-dashboard-ready", qz = "applylens.decisions.columnWidths.v1", Jz = "applylens.applications.columnWidths.v1", Yz = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -28457,7 +28868,7 @@ var Nz = "applylens:decisions-dashboard-state", Pz = "applylens:decisions-dashbo
 		companyContains: "",
 		limit: 15
 	}
-}, Hz = {
+}, Xz = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -28480,7 +28891,7 @@ var Nz = "applylens:decisions-dashboard-state", Pz = "applylens:decisions-dashbo
 		titleContains: "",
 		limit: 15
 	}
-}, Uz = [
+}, Zz = [
 	"APPLY",
 	"TAILOR",
 	"SKIP",
@@ -28488,7 +28899,7 @@ var Nz = "applylens:decisions-dashboard-state", Pz = "applylens:decisions-dashbo
 ].map((e) => ({
 	value: e,
 	label: e
-})), $ = (e) => String(e == null ? "" : e).trim(), Wz = (e, t = "Unavailable") => $(e) || t, Gz = (e) => {
+})), $ = (e) => String(e == null ? "" : e).trim(), Qz = (e, t = "Unavailable") => $(e) || t, $z = (e) => {
 	let t = $(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
@@ -28499,19 +28910,19 @@ var Nz = "applylens:decisions-dashboard-state", Pz = "applylens:decisions-dashbo
 		hour: "numeric",
 		minute: "2-digit"
 	}).format(n);
-}, Kz = (e, t) => $(e.action_key) || [
+}, eB = (e, t) => $(e.action_key) || [
 	$(e.decision_timestamp || e.action_timestamp),
 	$(e.job_doc_id || e.job_url),
 	$(e.decision || e.application_status),
 	t
-].join("|"), qz = (e) => e.key ? [{
+].join("|"), tB = (e) => e.key ? [{
 	id: e.key,
 	desc: e.direction === "desc"
 }] : [];
-function Jz(e, t) {
+function nB(e, t) {
 	window.dispatchEvent(new CustomEvent(e, { detail: t }));
 }
-function Yz(e) {
+function rB(e) {
 	try {
 		let t = JSON.parse(localStorage.getItem(e) || "{}"), n = (t == null ? void 0 : t.version) === 1 ? t.widths : t;
 		return n && typeof n == "object" && !Array.isArray(n) ? n : {};
@@ -28519,20 +28930,20 @@ function Yz(e) {
 		return {};
 	}
 }
-function Xz(e, t) {
+function iB(e, t) {
 	localStorage.setItem(e, JSON.stringify({
 		version: 1,
 		widths: t
 	}));
 }
-function Zz(e, t) {
-	let n = Wz(e);
+function aB(e, t) {
+	let n = Qz(e);
 	return /* @__PURE__ */ (0, Y.jsx)("span", {
 		className: `${t}-badge ${t}-badge--${$(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown"}`,
 		children: n
 	});
 }
-function Qz({ cards: e, label: t, loading: n = !1 }) {
+function oB({ cards: e, label: t, loading: n = !1 }) {
 	return /* @__PURE__ */ (0, Y.jsx)("section", {
 		className: "operational-summary-grid",
 		"aria-label": t,
@@ -28552,7 +28963,7 @@ function Qz({ cards: e, label: t, loading: n = !1 }) {
 		}, e))
 	});
 }
-function $z({ state: e }) {
+function sB({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	return (0, C.useEffect)(() => n(e.filters), [e.filters]), /* @__PURE__ */ (0, Y.jsx)("section", {
 		className: "operational-filter-card",
@@ -28563,7 +28974,7 @@ function $z({ state: e }) {
 				/* @__PURE__ */ (0, Y.jsx)(UI, {
 					id: "decisionFilter",
 					label: "Decision",
-					options: Uz,
+					options: Zz,
 					values: t.decisions,
 					onChange: (e) => n({
 						...t,
@@ -28598,7 +29009,7 @@ function $z({ state: e }) {
 					children: [/* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "decisionApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => Jz(Pz, {
+						onClick: () => nB(Hz, {
 							type: "apply_filters",
 							filters: t
 						}),
@@ -28606,7 +29017,7 @@ function $z({ state: e }) {
 					}), /* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "decisionClearFiltersBtn",
 						className: `${WI} operational-secondary-action`,
-						onClick: () => Jz(Pz, { type: "clear_filters" }),
+						onClick: () => nB(Hz, { type: "clear_filters" }),
 						children: "Clear"
 					})]
 				})
@@ -28614,29 +29025,29 @@ function $z({ state: e }) {
 		})
 	});
 }
-function eB({ row: e }) {
+function cB({ row: e }) {
 	return /* @__PURE__ */ (0, Y.jsx)(YI, { children: /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Wz(e.queue_rank) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Gz(e.posted_at) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Qz(e.queue_rank) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: $z(e.posted_at) })] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Winner resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
 				title: $(e.winner_resume),
-				children: Wz(e.winner_resume)
+				children: Qz(e.winner_resume)
 			})] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
 				title: $(e.runner_up_resume),
-				children: Wz(e.runner_up_resume)
+				children: Qz(e.runner_up_resume)
 			})] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Selected resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
 				title: $(e.selected_resume),
-				children: Wz(e.selected_resume)
+				children: Qz(e.selected_resume)
 			})] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Wz(e.note, "No note recorded") })] })
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Qz(e.note, "No note recorded") })] })
 		]
 	}) });
 }
-function tB() {
+function lB() {
 	return [
 		{
 			id: "expand",
@@ -28648,7 +29059,7 @@ function tB() {
 			enableResizing: !1,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)(GI, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${Wz(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${Qz(e.original.job_title, "job")}`,
 				controls: `decision-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			})
@@ -28660,7 +29071,7 @@ function tB() {
 			size: 156,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", {
 				dateTime: $(e.original.decision_timestamp),
-				children: Gz(e.original.decision_timestamp)
+				children: $z(e.original.decision_timestamp)
 			})
 		},
 		{
@@ -28668,7 +29079,7 @@ function tB() {
 			header: "Decision",
 			accessorFn: (e) => $(e.decision),
 			size: 118,
-			cell: ({ row: e }) => Zz(e.original.decision, "operational")
+			cell: ({ row: e }) => aB(e.original.decision, "operational")
 		},
 		{
 			id: "job",
@@ -28677,7 +29088,7 @@ function tB() {
 			size: 270,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: Wz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: Wz(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: Qz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: Qz(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
@@ -28685,7 +29096,7 @@ function tB() {
 			header: "Planning action",
 			accessorFn: (e) => $(e.planning_action),
 			size: 150,
-			cell: ({ row: e }) => Wz(e.original.planning_action)
+			cell: ({ row: e }) => Qz(e.original.planning_action)
 		},
 		{
 			id: "selected_resume",
@@ -28695,7 +29106,7 @@ function tB() {
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "operational-truncate",
 				title: $(e.original.selected_resume),
-				children: Wz(e.original.selected_resume)
+				children: Qz(e.original.selected_resume)
 			})
 		},
 		{
@@ -28712,7 +29123,7 @@ function tB() {
 				children: "Applied"
 			}) : /* @__PURE__ */ (0, Y.jsx)("button", {
 				className: "operational-row-action",
-				onClick: () => Jz(Pz, {
+				onClick: () => nB(Hz, {
 					type: "open_application",
 					row: e.original
 				}),
@@ -28721,8 +29132,8 @@ function tB() {
 		}
 	];
 }
-function nB({ state: e }) {
-	let [t, n] = (0, C.useState)(() => Yz(zz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(tB, []), o = (0, C.useMemo)(() => qz(e.sort), [e.sort]);
+function uB({ state: e }) {
+	let [t, n] = (0, C.useState)(() => rB(qz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(lB, []), o = (0, C.useMemo)(() => tB(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.pagination.page,
@@ -28736,7 +29147,7 @@ function nB({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: Kz,
+		getRowId: eB,
 		getCoreRowModel: PI(),
 		getSortedRowModel: FI(),
 		getRowCanExpand: () => !0,
@@ -28744,7 +29155,7 @@ function nB({ state: e }) {
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && Jz(Pz, {
+			t && nB(Hz, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -28752,7 +29163,7 @@ function nB({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return Xz(zz, n), n;
+			return iB(qz, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
@@ -28775,30 +29186,30 @@ function nB({ state: e }) {
 		stickyColumnId: "application_action",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `decision-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(eB, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(cB, { row: e.original }),
 		empty: /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: "No operator decisions match the current filters." }), /* @__PURE__ */ (0, Y.jsx)("button", {
 				className: WI,
-				onClick: () => Jz(Pz, { type: "clear_filters" }),
+				onClick: () => nB(Hz, { type: "clear_filters" }),
 				children: "Clear filters"
 			})]
 		}),
-		onPageChange: (e) => Jz(Pz, {
+		onPageChange: (e) => nB(Hz, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => Jz(Pz, { type: "retry" }),
+		onRetry: () => nB(Hz, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function rB({ state: e }) {
+function dB({ state: e }) {
 	let t = e.rows, n = new Set(t.map((e) => $(e.job_doc_id || e.job_url || `${e.job_company}|${e.job_title}`)).filter(Boolean));
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, Y.jsx)(Qz, {
+			/* @__PURE__ */ (0, Y.jsx)(oB, {
 				cards: [
 					{
 						label: "Total decisions",
@@ -28832,16 +29243,16 @@ function rB({ state: e }) {
 				label: "Decision summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, Y.jsx)($z, { state: e }),
-			/* @__PURE__ */ (0, Y.jsx)(nB, { state: e })
+			/* @__PURE__ */ (0, Y.jsx)(sB, { state: e }),
+			/* @__PURE__ */ (0, Y.jsx)(uB, { state: e })
 		]
 	});
 }
-function iB({ state: e }) {
+function fB({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (t) => {
-		t !== e.activeTab && Jz(Lz, {
+		t !== e.activeTab && nB(Gz, {
 			type: "tab_change",
 			tab: t
 		});
@@ -28906,7 +29317,7 @@ function iB({ state: e }) {
 					children: [/* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "applicationApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => Jz(Lz, {
+						onClick: () => nB(Gz, {
 							type: "apply_filters",
 							filters: t
 						}),
@@ -28914,7 +29325,7 @@ function iB({ state: e }) {
 					}), /* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "applicationClearFiltersBtn",
 						className: `${WI} operational-secondary-action`,
-						onClick: () => Jz(Lz, { type: "clear_filters" }),
+						onClick: () => nB(Gz, { type: "clear_filters" }),
 						children: "Clear"
 					})]
 				})
@@ -28922,20 +29333,20 @@ function iB({ state: e }) {
 		})]
 	});
 }
-function aB({ row: e }) {
+function pB({ row: e }) {
 	return /* @__PURE__ */ (0, Y.jsx)(YI, { children: /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Gz(e.action_timestamp) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Wz(e.source_view) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: $z(e.action_timestamp) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Qz(e.source_view) })] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", {
 				className: "is-wide",
-				children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Wz(e.note, "No note recorded") })]
+				children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: Qz(e.note, "No note recorded") })]
 			})
 		]
 	}) });
 }
-function oB() {
+function mB() {
 	return [
 		{
 			id: "expand",
@@ -28947,7 +29358,7 @@ function oB() {
 			enableResizing: !1,
 			cell: ({ row: e }) => e.getCanExpand() ? /* @__PURE__ */ (0, Y.jsx)(GI, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${Wz(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${Qz(e.original.job_title, "job")}`,
 				controls: `application-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			}) : null
@@ -28957,7 +29368,7 @@ function oB() {
 			header: "Date / time",
 			accessorFn: (e) => $(e.action_timestamp),
 			size: 156,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", { children: Gz(e.original.action_timestamp) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", { children: $z(e.original.action_timestamp) })
 		},
 		{
 			id: "job",
@@ -28966,7 +29377,7 @@ function oB() {
 			size: 300,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: Wz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: Wz(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: Qz(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: Qz(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
@@ -28974,14 +29385,14 @@ function oB() {
 			header: "Status",
 			accessorFn: (e) => $(e.application_status),
 			size: 130,
-			cell: ({ row: e }) => Zz(e.original.application_status, "application")
+			cell: ({ row: e }) => aB(e.original.application_status, "application")
 		},
 		{
 			id: "source_view",
 			header: "Source view",
 			accessorFn: (e) => $(e.source_view),
 			size: 140,
-			cell: ({ row: e }) => Wz(e.original.source_view)
+			cell: ({ row: e }) => Qz(e.original.source_view)
 		},
 		{
 			id: "note",
@@ -28991,7 +29402,7 @@ function oB() {
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "operational-truncate",
 				title: $(e.original.note),
-				children: Wz(e.original.note, "No note")
+				children: Qz(e.original.note, "No note")
 			})
 		},
 		{
@@ -29019,8 +29430,8 @@ function oB() {
 		}
 	];
 }
-function sB({ state: e }) {
-	let [t, n] = (0, C.useState)(() => Yz(Bz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(oB, []), o = (0, C.useMemo)(() => qz(e.sort), [e.sort]);
+function hB({ state: e }) {
+	let [t, n] = (0, C.useState)(() => rB(Jz)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(mB, []), o = (0, C.useMemo)(() => tB(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.activeTab,
@@ -29035,7 +29446,7 @@ function sB({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: Kz,
+		getRowId: eB,
 		getCoreRowModel: PI(),
 		getSortedRowModel: FI(),
 		getRowCanExpand: (e) => !!$(e.original.note),
@@ -29043,7 +29454,7 @@ function sB({ state: e }) {
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && Jz(Lz, {
+			t && nB(Gz, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -29051,7 +29462,7 @@ function sB({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return Xz(Bz, n), n;
+			return iB(Jz, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
@@ -29073,25 +29484,25 @@ function sB({ state: e }) {
 		stickyColumnId: "open",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `application-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(aB, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(pB, { row: e.original }),
 		empty: /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: l }), /* @__PURE__ */ (0, Y.jsx)("span", { children: e.activeTab === "APPLIED" ? "Applied jobs will appear after an explicit manual status update." : "Jobs explicitly saved for later will appear here." })]
 		}),
-		onPageChange: (e) => Jz(Lz, {
+		onPageChange: (e) => nB(Gz, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => Jz(Lz, { type: "retry" }),
+		onRetry: () => nB(Gz, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function cB({ state: e }) {
+function gB({ state: e }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, Y.jsx)(Qz, {
+			/* @__PURE__ */ (0, Y.jsx)(oB, {
 				cards: [
 					{
 						label: "Current view",
@@ -29125,15 +29536,15 @@ function cB({ state: e }) {
 				label: "Application summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, Y.jsx)(iB, { state: e }),
-			/* @__PURE__ */ (0, Y.jsx)(sB, { state: e })
+			/* @__PURE__ */ (0, Y.jsx)(fB, { state: e }),
+			/* @__PURE__ */ (0, Y.jsx)(hB, { state: e })
 		]
 	});
 }
 //#endregion
 //#region src/main.tsx
-var lB = "applylens:executive-kpi-state", uB = { status: "loading" };
-function dB() {
+var _B = "applylens:executive-kpi-state", vB = { status: "loading" };
+function yB() {
 	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_SOURCE_YIELD_STATE__ || cF);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
@@ -29143,17 +29554,17 @@ function dB() {
 		return window.addEventListener(sF, e), () => window.removeEventListener(sF, e);
 	}, []), /* @__PURE__ */ (0, Y.jsx)(yF, { state: e });
 }
-function fB() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || uB);
+function bB() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || vB);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let n = e.detail;
 			n != null && n.status && t(n);
 		};
-		return window.addEventListener(lB, e), () => window.removeEventListener(lB, e);
+		return window.addEventListener(_B, e), () => window.removeEventListener(_B, e);
 	}, []), /* @__PURE__ */ (0, Y.jsx)(oF, { state: e });
 }
-function pB() {
+function xB() {
 	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ || iL);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
@@ -29163,50 +29574,50 @@ function pB() {
 		return window.addEventListener(eL, e), () => window.removeEventListener(eL, e);
 	}, []), /* @__PURE__ */ (0, Y.jsx)(CL, { state: e });
 }
-function mB({ view: e }) {
-	let [t, n] = (0, C.useState)(() => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || lz);
+function SB({ view: e }) {
+	let [t, n] = (0, C.useState)(() => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || _z);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let t = e.detail;
 			t != null && t.status && n(t);
 		};
-		return window.addEventListener(oz, e), () => window.removeEventListener(oz, e);
-	}, []), e === "filters" ? /* @__PURE__ */ (0, Y.jsx)(kz, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, Y.jsx)(Mz, { state: t }) : /* @__PURE__ */ (0, Y.jsx)(Az, { state: t });
+		return window.addEventListener(mz, e), () => window.removeEventListener(mz, e);
+	}, []), e === "filters" ? /* @__PURE__ */ (0, Y.jsx)(Lz, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, Y.jsx)(Bz, { state: t }) : /* @__PURE__ */ (0, Y.jsx)(Rz, { state: t });
 }
-function hB() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || Vz);
+function CB() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || Yz);
 	return (0, C.useEffect)(() => {
 		let e = (e) => t(e.detail);
-		return window.addEventListener(Nz, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(Fz)), () => window.removeEventListener(Nz, e);
-	}, []), /* @__PURE__ */ (0, Y.jsx)(rB, { state: e });
+		return window.addEventListener(Vz, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(Uz)), () => window.removeEventListener(Vz, e);
+	}, []), /* @__PURE__ */ (0, Y.jsx)(dB, { state: e });
 }
-function gB() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || Hz);
+function wB() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || Xz);
 	return (0, C.useEffect)(() => {
 		let e = (e) => t(e.detail);
-		return window.addEventListener(Iz, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent(Rz)), () => window.removeEventListener(Iz, e);
-	}, []), /* @__PURE__ */ (0, Y.jsx)(cB, { state: e });
+		return window.addEventListener(Wz, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent(Kz)), () => window.removeEventListener(Wz, e);
+	}, []), /* @__PURE__ */ (0, Y.jsx)(gB, { state: e });
 }
-var _B = document.getElementById("executiveKpiRoot");
-_B && (0, QP.createRoot)(_B).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(fB, {}) }));
-var vB = document.getElementById("executiveQueueRoot");
-vB && (0, QP.createRoot)(vB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(pB, {}) }));
-var yB = document.getElementById("sourceYieldRoot");
-yB && (0, QP.createRoot)(yB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(dB, {}) }));
-var bB = document.getElementById("pipelineDashboardRoot");
-bB && (0, QP.createRoot)(bB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(rR, {}) }));
-var xB = document.getElementById("planningSummaryRoot");
-xB && (0, QP.createRoot)(xB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(mB, { view: "summary" }) }));
-var SB = document.getElementById("planningFiltersRoot");
-SB && (0, QP.createRoot)(SB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(mB, { view: "filters" }) }));
-var CB = document.getElementById("planningWorklistRoot");
-CB && (0, QP.createRoot)(CB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(mB, { view: "worklist" }) }));
-var wB = document.getElementById("decisionsDashboardRoot");
-wB && (0, QP.createRoot)(wB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(hB, {}) }));
-var TB = document.getElementById("applicationsDashboardRoot");
-TB && (0, QP.createRoot)(TB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(gB, {}) }));
-var EB = document.getElementById("schedulerHealthDashboardRoot");
-EB && (0, QP.createRoot)(EB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(LR, {}) }));
-var DB = document.getElementById("advancedDiagnosticsRoot");
-DB && (0, QP.createRoot)(DB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(az, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || RR }) }));
+var TB = document.getElementById("executiveKpiRoot");
+TB && (0, QP.createRoot)(TB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(bB, {}) }));
+var EB = document.getElementById("executiveQueueRoot");
+EB && (0, QP.createRoot)(EB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(xB, {}) }));
+var DB = document.getElementById("sourceYieldRoot");
+DB && (0, QP.createRoot)(DB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(yB, {}) }));
+var OB = document.getElementById("pipelineDashboardRoot");
+OB && (0, QP.createRoot)(OB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(rR, {}) }));
+var kB = document.getElementById("planningSummaryRoot");
+kB && (0, QP.createRoot)(kB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(SB, { view: "summary" }) }));
+var AB = document.getElementById("planningFiltersRoot");
+AB && (0, QP.createRoot)(AB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(SB, { view: "filters" }) }));
+var jB = document.getElementById("planningWorklistRoot");
+jB && (0, QP.createRoot)(jB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(SB, { view: "worklist" }) }));
+var MB = document.getElementById("decisionsDashboardRoot");
+MB && (0, QP.createRoot)(MB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(CB, {}) }));
+var NB = document.getElementById("applicationsDashboardRoot");
+NB && (0, QP.createRoot)(NB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(wB, {}) }));
+var PB = document.getElementById("schedulerHealthDashboardRoot");
+PB && (0, QP.createRoot)(PB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(GR, {}) }));
+var FB = document.getElementById("advancedDiagnosticsRoot");
+FB && (0, QP.createRoot)(FB).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(pz, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || KR }) }));
 //#endregion

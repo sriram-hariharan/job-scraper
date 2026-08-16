@@ -3113,6 +3113,23 @@ def scheduler_run_agent_discovery_now(http_request: Request):
             },
         ) from exc
 
+
+@app.get("/scheduler/runs/{run_id}/agent-discovery-summary")
+def scheduler_agent_discovery_run_summary(run_id: str, http_request: Request):
+    _require_admin_user(http_request)
+    try:
+        return services.agent_discovery_run_summary_payload(run_id)
+    except services.AgentDiscoverySummaryUnavailable as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "ok": False,
+                "available": False,
+                "run_id": str(run_id or "")[:200],
+                "message": "Discovery summary unavailable",
+            },
+        ) from exc
+
 @app.get("/notifications")
 def notifications(
     notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),

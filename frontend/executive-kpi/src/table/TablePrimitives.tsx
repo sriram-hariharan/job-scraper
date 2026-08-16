@@ -296,6 +296,7 @@ export function SharedTableCard<T>({
   columns,
   status,
   error,
+  headingActions,
   headerActions,
   pagination,
   paginationNoun = "jobs",
@@ -319,6 +320,7 @@ export function SharedTableCard<T>({
   columns: ColumnDef<T>[];
   status: "loading" | "ready" | "error";
   error?: string;
+  headingActions?: ReactNode;
   headerActions?: ReactNode;
   pagination: SharedPaginationState;
   paginationNoun?: string;
@@ -351,8 +353,20 @@ export function SharedTableCard<T>({
     <section className={`shared-table-card ${className}`} aria-label={ariaLabel}>
       <header className="shared-table-header">
         <div className="shared-table-heading">
-          <div className="shared-table-title-line"><h2>{title}</h2><span>{deferPaginationWhileLoading && status === "loading" ? "-" : count}</span></div>
-          <p>{deferPaginationWhileLoading && status === "loading" ? `Loading ${paginationNoun}...` : subtitle}</p>
+          {headingActions ? (
+            <div className="shared-table-heading-with-actions">
+              <div className="shared-table-heading-copy">
+                <div className="shared-table-title-line"><h2>{title}</h2><span>{deferPaginationWhileLoading && status === "loading" ? "-" : count}</span></div>
+                <p>{deferPaginationWhileLoading && status === "loading" ? `Loading ${paginationNoun}...` : subtitle}</p>
+              </div>
+              <div className="shared-table-heading-actions">{headingActions}</div>
+            </div>
+          ) : (
+            <>
+              <div className="shared-table-title-line"><h2>{title}</h2><span>{deferPaginationWhileLoading && status === "loading" ? "-" : count}</span></div>
+              <p>{deferPaginationWhileLoading && status === "loading" ? `Loading ${paginationNoun}...` : subtitle}</p>
+            </>
+          )}
         </div>
         <div className="shared-table-header-actions">
           {headerActions}

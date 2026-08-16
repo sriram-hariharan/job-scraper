@@ -81,6 +81,34 @@ export type ManualAgentDiscoveryResponse = {
   trigger_source: "manual_admin";
 };
 
+export type AgentDiscoveryRunSummary = {
+  ok: boolean;
+  available: boolean;
+  run_id: string;
+  job_name: "agent_discovery";
+  status: "succeeded" | "failed" | "unknown";
+  trigger: "manual" | "scheduled" | "unknown";
+  started_at: string;
+  finished_at: string;
+  return_code: number | null;
+  summary_message: string;
+  company_discovery: {
+    status: "succeeded" | "failed" | "skipped" | "unknown";
+    queries_attempted: number | null;
+    queries_failed: number | null;
+    total_candidate_count: number | null;
+    candidate_counts_by_ats: Record<string, number>;
+  };
+  discovery: {
+    run_unique_discovered_by_ats: Record<string, number>;
+    sources: Record<string, Record<string, number>>;
+  };
+  components: Record<string, "succeeded" | "failed" | "skipped" | "unknown">;
+  failure_components: string[];
+};
+
+export class AgentDiscoverySummaryUnavailableError extends Error {}
+
 export async function readSchedulerSummary(): Promise<SchedulerSummaryPayload> {
   const response = await fetch("/scheduler/summary?limit=25", {
     method: "GET",
@@ -110,6 +138,30 @@ export async function runAgentDiscoveryNow(): Promise<ManualAgentDiscoveryRespon
     throw new Error(detail || `Manual Agent Discovery request failed (${response.status})`);
   }
   return payload as ManualAgentDiscoveryResponse;
+}
+
+export async function readAgentDiscoveryRunSummary(
+  runId: string,
+): Promise<AgentDiscoveryRunSummary> {
+  const response = await fetch(
+    `/scheduler/runs/${encodeURIComponent(clean(runId))}/agent-discovery-summary`,
+    {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    },
+  );
+  const payload = (await response.json().catch(() => ({}))) as AgentDiscoveryRunSummary & {
+    detail?: string | { message?: string };
+  };
+  if (response.status === 404) {
+    throw new AgentDiscoverySummaryUnavailableError("Discovery summary unavailable");
+  }
+  if (!response.ok) {
+    const detail = typeof payload.detail === "string" ? payload.detail : payload.detail?.message;
+    throw new Error(detail || `Discovery summary request failed (${response.status})`);
+  }
+  return payload;
 }
 
 export function clean(value: unknown): string {

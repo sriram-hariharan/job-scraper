@@ -4,9 +4,83 @@ import { SchedulerHealthDashboard } from "./SchedulerHealthDashboard";
 import {
   formatDateTime,
   formatExpectedRunDateTime,
+  readAgentDiscoveryRunSummary,
   runAgentDiscoveryNow,
+  AgentDiscoverySummaryUnavailableError,
+  type AgentDiscoveryRunSummary,
   type SchedulerSummaryPayload,
 } from "./schedulerModel";
+
+const DISCOVERY_SUMMARY: AgentDiscoveryRunSummary = {
+  ok: true,
+  available: true,
+  run_id: "run-agent-exact-1",
+  job_name: "agent_discovery",
+  status: "succeeded",
+  trigger: "manual",
+  started_at: "2026-07-20T02:00:00Z",
+  finished_at: "2026-07-20T02:05:30Z",
+  return_code: 0,
+  summary_message: "Discovery scheduler run completed successfully",
+  company_discovery: {
+    status: "succeeded",
+    queries_attempted: 22,
+    queries_failed: 0,
+    total_candidate_count: 155,
+    candidate_counts_by_ats: { greenhouse: 70, lever: 85 },
+  },
+  discovery: {
+    run_unique_discovered_by_ats: { greenhouse: 53, lever: 128, ashby: 109 },
+    sources: {
+      domain_discovered: { greenhouse: 20, lever: 30 },
+      github_discovered: { ashby: 4 },
+    },
+  },
+  components: {
+    company_discovery_agent: "succeeded",
+    discovery_stage: "succeeded",
+  },
+  failure_components: [],
+};
+
+function payloadWithDiscoveryHistory(): SchedulerSummaryPayload {
+  return {
+    ...READY_PAYLOAD,
+    latest_runs_by_job: [
+      {
+        run_id: "run-agent-exact-1",
+        job_name: "agent_discovery",
+        status: "succeeded",
+        return_code: 0,
+        started_at: "2026-07-20T02:00:00Z",
+        finished_at: "2026-07-20T02:05:30Z",
+        trigger_source: "manual_admin",
+      },
+      ...(READY_PAYLOAD.latest_runs_by_job || []).filter((run) => run.job_name === "live_pipeline"),
+    ],
+    recent_postgres_runs: [
+      {
+        run_id: "run-agent-exact-1",
+        job_name: "agent_discovery",
+        status: "succeeded",
+        return_code: 0,
+        started_at: "2026-07-20T02:00:00Z",
+        finished_at: "2026-07-20T02:05:30Z",
+        trigger_source: "manual_admin",
+      },
+      {
+        run_id: "run-agent-exact-2",
+        job_name: "agent_discovery",
+        status: "failed",
+        return_code: 1,
+        started_at: "2026-07-19T02:00:00Z",
+        finished_at: "2026-07-19T02:01:00Z",
+        trigger_source: "external_scheduler_wrapper",
+      },
+      ...(READY_PAYLOAD.recent_postgres_runs || []),
+    ],
+  };
+}
 
 const READY_PAYLOAD: SchedulerSummaryPayload = {
   ok: true,
@@ -134,6 +208,217 @@ afterEach(() => {
 });
 
 describe("SchedulerHealthDashboard", () => {
+  it("GETs the exact URL-encoded discovery run id only on demand", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => DISCOVERY_SUMMARY,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(readAgentDiscoveryRunSummary("run/agent exact")).resolves.toEqual(DISCOVERY_SUMMARY);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/scheduler/runs/run%2Fagent%20exact/agent-discovery-summary",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("shows View only for Agent Discovery in both tables and does not preload", async () => {
+    const readDiscoverySummary = vi.fn(async () => DISCOVERY_SUMMARY);
+    render(
+      <SchedulerHealthDashboard
+        readSummary={async () => payloadWithDiscoveryHistory()}
+        readDiscoverySummary={readDiscoverySummary}
+      />,
+    );
+    await screen.findByText("Healthy");
+    const jobStatus = screen.getByRole("region", { name: "Job status table" });
+    const jobStatusView = within(jobStatus).getByRole("button", { name: "View discovery summary for run-agent-exact-1" });
+    const jobStatusAgentCell = jobStatusView.closest("td");
+    expect(jobStatusAgentCell).not.toBeNull();
+    expect(within(jobStatusAgentCell as HTMLElement).getByText("agent_discovery")).toBeInTheDocument();
+    expect(within(jobStatusAgentCell as HTMLElement).getAllByText("View")).toHaveLength(1);
+    const jobStatusLiveCell = within(jobStatus).getByText("live_pipeline").closest("td");
+    expect(within(jobStatusLiveCell as HTMLElement).queryByText("View")).not.toBeInTheDocument();
+    expect(within(jobStatus).getAllByRole("button", { name: /View discovery summary/ })).toHaveLength(1);
+    expect(readDiscoverySummary).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Run History" }));
+    const history = screen.getByRole("region", { name: "Run history table" });
+    const firstView = within(history).getByRole("button", { name: "View discovery summary for run-agent-exact-1" });
+    const firstAgent = firstView.closest("td");
+    expect(firstAgent).not.toBeNull();
+    expect(within(firstAgent as HTMLElement).getByRole("button", { name: "View discovery summary for run-agent-exact-1" })).toBeInTheDocument();
+    expect(within(firstAgent as HTMLElement).getByText("View")).toBeInTheDocument();
+    expect(within(history).queryByRole("columnheader", { name: "Actions" })).not.toBeInTheDocument();
+
+    const liveCell = within(history).getByText("live_pipeline").closest("td");
+    expect(within(liveCell as HTMLElement).queryByText("View")).not.toBeInTheDocument();
+    expect(readDiscoverySummary).not.toHaveBeenCalled();
+  });
+
+  it("uses the exact Job Status row run id in the shared summary modal", async () => {
+    const readDiscoverySummary = vi.fn(async (runId: string) => ({
+      ...DISCOVERY_SUMMARY,
+      run_id: runId,
+    }));
+    render(
+      <SchedulerHealthDashboard
+        readSummary={async () => payloadWithDiscoveryHistory()}
+        readDiscoverySummary={readDiscoverySummary}
+      />,
+    );
+    await screen.findByText("Healthy");
+    const trigger = screen.getByRole("button", { name: "View discovery summary for run-agent-exact-1" });
+    expect(readDiscoverySummary).not.toHaveBeenCalled();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "Discovery Run Summary" });
+    expect(readDiscoverySummary).toHaveBeenCalledTimes(1);
+    expect(readDiscoverySummary).toHaveBeenCalledWith("run-agent-exact-1");
+    expect(await within(dialog).findByTitle("run-agent-exact-1")).toHaveTextContent("run-agent-exact-1");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close discovery run summary" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Discovery Run Summary" })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it("loads and renders the bright exact-run analytics summary", async () => {
+    let resolveSummary!: (summary: AgentDiscoveryRunSummary) => void;
+    const readDiscoverySummary = vi.fn(() => new Promise<AgentDiscoveryRunSummary>((resolve) => {
+      resolveSummary = resolve;
+    }));
+    const { container } = render(
+      <SchedulerHealthDashboard
+        readSummary={async () => payloadWithDiscoveryHistory()}
+        readDiscoverySummary={readDiscoverySummary}
+      />,
+    );
+    await screen.findByText("Healthy");
+    fireEvent.click(screen.getByRole("tab", { name: "Run History" }));
+    const trigger = screen.getByRole("button", { name: "View discovery summary for run-agent-exact-1" });
+    fireEvent.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "Discovery Run Summary" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(within(dialog).getByText("Loading discovery summary…")).toBeInTheDocument();
+    expect(readDiscoverySummary).toHaveBeenCalledWith("run-agent-exact-1");
+
+    resolveSummary(DISCOVERY_SUMMARY);
+    expect(await within(dialog).findByText("Agent candidates")).toBeInTheDocument();
+    expect(within(dialog).getByText("155")).toBeInTheDocument();
+    expect(within(dialog).getByText("Unique ATS discoveries")).toBeInTheDocument();
+    expect(within(dialog).getByText("290")).toBeInTheDocument();
+    expect(within(dialog).getByText("Search queries")).toBeInTheDocument();
+    expect(within(dialog).getByText("22")).toBeInTheDocument();
+    expect(within(dialog).getByText("Failed queries")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("0").length).toBeGreaterThan(0);
+    expect(within(dialog).getByText("Manual")).toBeInTheDocument();
+    expect(within(dialog).getByText("Discovery by ATS")).toBeInTheDocument();
+    expect(within(dialog).getByText("Discovery sources")).toBeInTheDocument();
+    expect(within(dialog).getByText("Domain detection")).toBeInTheDocument();
+    expect(within(dialog).getByText("Agent search candidates")).toBeInTheDocument();
+    expect(within(dialog).getByText("Company Discovery Agent")).toBeInTheDocument();
+    expect(within(dialog).getByText("ATS Discovery Stage")).toBeInTheDocument();
+    const closeButton = within(dialog).getByRole("button", { name: "Close discovery run summary" });
+    expect(closeButton).toHaveClass("scheduler-discovery-summary-close");
+    expect(closeButton).not.toHaveClass("ghost-btn");
+    expect(closeButton).toHaveAttribute("aria-label", "Close discovery run summary");
+    const closeIcon = closeButton.querySelector(".lucide-x");
+    expect(closeIcon).not.toBeNull();
+    expect(closeIcon).toHaveClass("scheduler-discovery-summary-close-icon");
+    expect(closeIcon).toHaveStyle({ width: "20px", height: "20px", color: "rgb(255, 255, 255)", stroke: "#ffffff", display: "block", visibility: "visible", opacity: "1" });
+    expect(closeIcon).toHaveAttribute("stroke", "#ffffff");
+    expect(closeIcon).toHaveAttribute("stroke-width", "3");
+    expect(closeIcon?.querySelectorAll("path")).toHaveLength(2);
+    expect(closeIcon?.getAttribute("class")).not.toMatch(/opacity-0|invisible|transparent/);
+    expect(within(dialog).getByTitle("Greenhouse 20 · Lever 30")).toHaveTextContent("Greenhouse 20 · Lever 30");
+    expect(within(dialog).getByTitle(formatDateTime(DISCOVERY_SUMMARY.started_at))).toHaveTextContent(formatDateTime(DISCOVERY_SUMMARY.started_at));
+    expect(within(dialog).getByTitle(formatDateTime(DISCOVERY_SUMMARY.finished_at))).toHaveTextContent(formatDateTime(DISCOVERY_SUMMARY.finished_at));
+    expect(within(dialog).getByTitle("run-agent-exact-1")).toHaveTextContent("run-agent-exact-1");
+    const candidateChips = container.querySelectorAll(".scheduler-discovery-candidate-chips > span");
+    expect(candidateChips).toHaveLength(2);
+    expect(candidateChips[0]).toHaveClass("is-accent-0");
+    expect(candidateChips[1]).toHaveClass("is-accent-1");
+    expect(candidateChips[0]).toHaveTextContent("Greenhouse70");
+    expect(candidateChips[1]).toHaveTextContent("Lever85");
+    expect(container.querySelector(".scheduler-discovery-kpi.is-blue")).not.toBeNull();
+    expect(container.querySelector(".scheduler-discovery-kpi.is-violet")).not.toBeNull();
+    expect(container.querySelector(".scheduler-discovery-kpi.is-cyan")).not.toBeNull();
+    expect(container.querySelector(".scheduler-discovery-kpi.is-emerald")).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Discovery Run Summary" })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it("shows missing values and bounded unavailable/error states without closing the modal", async () => {
+    const missingSummary: AgentDiscoveryRunSummary = {
+      ...DISCOVERY_SUMMARY,
+      company_discovery: {
+        ...DISCOVERY_SUMMARY.company_discovery,
+        queries_attempted: null,
+        queries_failed: null,
+        total_candidate_count: null,
+        candidate_counts_by_ats: {},
+      },
+      discovery: { run_unique_discovered_by_ats: {}, sources: {} },
+    };
+    const { rerender } = render(
+      <SchedulerHealthDashboard
+        readSummary={async () => payloadWithDiscoveryHistory()}
+        readDiscoverySummary={async () => missingSummary}
+      />,
+    );
+    await screen.findByText("Healthy");
+    fireEvent.click(screen.getByRole("tab", { name: "Run History" }));
+    fireEvent.click(screen.getByRole("button", { name: "View discovery summary for run-agent-exact-1" }));
+    const dialog = await screen.findByRole("dialog", { name: "Discovery Run Summary" });
+    await waitFor(() => expect(within(dialog).getAllByText("—").length).toBeGreaterThanOrEqual(4));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close discovery run summary" }));
+
+    rerender(
+      <SchedulerHealthDashboard
+        readSummary={async () => payloadWithDiscoveryHistory()}
+        readDiscoverySummary={async () => { throw new AgentDiscoverySummaryUnavailableError(); }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "View discovery summary for run-agent-exact-1" }));
+    expect(await screen.findByText("Discovery summary unavailable")).toBeInTheDocument();
+    expect(screen.getByText("This run does not have a persisted discovery summary.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close discovery run summary" }));
+
+    rerender(
+      <SchedulerHealthDashboard
+        readSummary={async () => payloadWithDiscoveryHistory()}
+        readDiscoverySummary={async () => { throw new Error("Bounded read failure"); }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "View discovery summary for run-agent-exact-1" }));
+    expect(await screen.findByText("Discovery summary could not be loaded")).toBeInTheDocument();
+    expect(screen.getByText("Bounded read failure")).toBeInTheDocument();
+  });
+
+  it("uses the second discovery row's exact run id without substituting the latest", async () => {
+    const readDiscoverySummary = vi.fn(async (runId: string) => ({
+      ...DISCOVERY_SUMMARY,
+      run_id: runId,
+      trigger: "scheduled" as const,
+    }));
+    render(
+      <SchedulerHealthDashboard
+        readSummary={async () => payloadWithDiscoveryHistory()}
+        readDiscoverySummary={readDiscoverySummary}
+      />,
+    );
+    await screen.findByText("Healthy");
+    fireEvent.click(screen.getByRole("tab", { name: "Run History" }));
+    fireEvent.click(screen.getByRole("button", { name: "View discovery summary for run-agent-exact-2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Discovery Run Summary" });
+    expect(await within(dialog).findByTitle("run-agent-exact-2")).toHaveTextContent("run-agent-exact-2");
+    expect(readDiscoverySummary).toHaveBeenCalledTimes(1);
+    expect(readDiscoverySummary).toHaveBeenCalledWith("run-agent-exact-2");
+    expect(within(dialog).getByText("Scheduled")).toBeInTheDocument();
+  });
+
   it("POSTs only the narrow manual Agent Discovery endpoint", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -648,8 +933,8 @@ describe("SchedulerHealthDashboard", () => {
     expect(refreshButtons[0].closest("header.scheduler-health-header")).not.toBeNull();
   });
 
-  it("shows Run History filters only on the Run History view", async () => {
-    render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+  it("places functional Run History filters beside the heading while tabs remain right-aligned", async () => {
+    render(<SchedulerHealthDashboard readSummary={async () => payloadWithDiscoveryHistory()} />);
     await screen.findByText("Healthy");
 
     // Job Status is the default view; its filters must not be present.
@@ -659,6 +944,34 @@ describe("SchedulerHealthDashboard", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Run History" }));
     expect(await screen.findByText("All jobs")).toBeInTheDocument();
     expect(screen.getByText("All statuses")).toBeInTheDocument();
+
+    const history = screen.getByRole("region", { name: "Run history table" });
+    const headingActions = history.querySelector(".shared-table-heading-actions");
+    const headingCopy = history.querySelector(".shared-table-heading-copy");
+    const headerActions = history.querySelector(".shared-table-header-actions");
+    const filters = history.querySelector(".scheduler-runs-filters");
+    const tabs = within(history).getByRole("tablist", { name: "Scheduler runs view" });
+    expect(headingActions).not.toBeNull();
+    expect(headingCopy).toContainElement(within(history).getByText("Persisted scheduler run history from Postgres."));
+    expect(headingActions).toContainElement(filters as HTMLElement);
+    expect(headerActions).toContainElement(tabs);
+    expect(headerActions).not.toContainElement(filters as HTMLElement);
+
+    const rowsBeforeSort = within(history).getAllByRole("row").slice(1);
+    expect(within(rowsBeforeSort[0]).getByText("run-agent-exact-1")).toBeInTheDocument();
+    fireEvent.click(within(history).getByRole("button", { name: "Started" }));
+    const rowsAfterSort = within(history).getAllByRole("row").slice(1);
+    expect(within(rowsAfterSort[0]).getByText("run-agent-exact-2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Job All jobs" }));
+    fireEvent.click(await screen.findByRole("option", { name: "agent_discovery" }));
+    await waitFor(() => expect(within(history).queryByText("live_pipeline")).not.toBeInTheDocument());
+    expect(within(within(history).getByRole("table")).getAllByText("agent_discovery")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Status All statuses" }));
+    fireEvent.click(await screen.findByRole("option", { name: "failed" }));
+    await waitFor(() => expect(within(history).getByText("run-agent-exact-2")).toBeInTheDocument());
+    expect(within(history).queryByText("run-agent-exact-1")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Job Status" }));
     expect(screen.queryByText("All jobs")).not.toBeInTheDocument();

@@ -215,6 +215,7 @@ from src.storage.scheduler.contract import (
 from src.storage.scheduler.read_postgres import (
     get_scheduler_postgres_status_payload,
 )
+from src.storage.scheduler_artifacts_store import get_scheduler_artifact_payload
 from src.storage.scheduler.contract import (
     scheduler_contract_health_payload,
 )
@@ -240,6 +241,10 @@ class ManualAgentDiscoveryStartError(RuntimeError):
     def __init__(self, category: str):
         self.category = str(category)
         super().__init__(self.category)
+
+
+class AgentDiscoverySummaryUnavailable(RuntimeError):
+    """Bounded failure for an unavailable or invalid discovery run summary."""
 
 
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
@@ -8254,6 +8259,206 @@ def scheduler_jobs_payload() -> Dict[str, Any]:
     return {
         "ok": True,
         "jobs": get_scheduled_job_definitions(),
+    }
+
+
+_DISCOVERY_SUMMARY_ATS_ORDER = (
+    "greenhouse",
+    "lever",
+    "ashby",
+    "workday",
+    "workable",
+    "jobvite",
+    "recruitee",
+    "smartrecruiters",
+)
+_DISCOVERY_SUMMARY_SOURCE_KEYS = (
+    "domain_discovered",
+    "career_discovered",
+    "network_discovered",
+    "greenhouse_embed_discovered",
+    "smartrecruiters_global_discovered",
+    "github_discovered",
+    "sitemap_discovered",
+)
+_DISCOVERY_SUMMARY_COMPONENT_KEYS = (
+    "company_discovery_agent",
+    "discovery_stage",
+)
+
+
+def _discovery_summary_count(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return count if count >= 0 else None
+
+
+def _bounded_discovery_counts(value: Any) -> Dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: Dict[str, int] = {}
+    for raw_key, raw_count in value.items():
+        key = re.sub(r"[^a-z0-9_]+", "_", str(raw_key or "").strip().lower())[:48]
+        count = _discovery_summary_count(raw_count)
+        if key and count is not None:
+            normalized[key] = count
+    ordered_keys = [key for key in _DISCOVERY_SUMMARY_ATS_ORDER if key in normalized]
+    ordered_keys.extend(
+        sorted(key for key in normalized if key not in _DISCOVERY_SUMMARY_ATS_ORDER)[:8]
+    )
+    return {key: normalized[key] for key in ordered_keys}
+
+
+def _bounded_discovery_sources(value: Any) -> Dict[str, Dict[str, int]]:
+    if not isinstance(value, dict):
+        return {}
+    sources: Dict[str, Dict[str, int]] = {}
+    for key in _DISCOVERY_SUMMARY_SOURCE_KEYS:
+        counts = _bounded_discovery_counts(value.get(key))
+        if counts:
+            sources[key] = counts
+    return sources
+
+
+def _discovery_summary_status(value: Any, *, allow_skipped: bool = False) -> str:
+    status = str(value or "").strip().lower()
+    allowed = {"succeeded", "failed"}
+    if allow_skipped:
+        allowed.add("skipped")
+    return status if status in allowed else "unknown"
+
+
+def _discovery_summary_trigger(value: Any) -> str:
+    trigger = str(value or "").strip().lower()
+    if trigger == "manual_admin":
+        return "manual"
+    if trigger == "external_scheduler_wrapper":
+        return "scheduled"
+    return "unknown"
+
+
+def _discovery_summary_timestamp(value: Any) -> str:
+    timestamp = str(value or "").strip()
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return ""
+    return timestamp[:64]
+
+
+def _safe_discovery_summary_message(value: Any, status: str) -> str:
+    message = " ".join(str(value or "").split())[:240]
+    dangerous = (
+        "database_url",
+        "postgres://",
+        "postgresql://",
+        "password",
+        "command_text",
+        "log_path",
+    )
+    if not message or any(token in message.lower() for token in dangerous):
+        return (
+            "Discovery run completed successfully."
+            if status == "succeeded"
+            else "Discovery run completed with failures."
+            if status == "failed"
+            else "Discovery run status is unavailable."
+        )
+    return message
+
+
+def agent_discovery_run_summary_payload(run_id: str) -> Dict[str, Any]:
+    """Compose one exact discovery artifact into a bounded browser contract."""
+    requested_run_id = str(run_id or "").strip()
+    if not requested_run_id or len(requested_run_id) > 200:
+        raise AgentDiscoverySummaryUnavailable()
+
+    artifact = get_scheduler_artifact_payload(
+        run_id=requested_run_id,
+        artifact_kind="agent_discovery_summary",
+        initialize=False,
+    )
+    if not artifact:
+        raise AgentDiscoverySummaryUnavailable()
+    if str(artifact.get("run_id") or "").strip() != requested_run_id:
+        raise AgentDiscoverySummaryUnavailable()
+    if str(artifact.get("job_name") or "").strip() != "agent_discovery":
+        raise AgentDiscoverySummaryUnavailable()
+
+    post_run = get_scheduler_artifact_payload(
+        run_id=requested_run_id,
+        artifact_kind="post_run_summary",
+        initialize=False,
+    )
+    post_run_valid = bool(
+        post_run
+        and str(post_run.get("run_id") or "").strip() == requested_run_id
+        and str(post_run.get("job_name") or "").strip() == "agent_discovery"
+    )
+
+    company = artifact.get("company_discovery_summary")
+    company = company if isinstance(company, dict) else {}
+    discovery = artifact.get("discovery_summary")
+    discovery = discovery if isinstance(discovery, dict) else {}
+    component_statuses = artifact.get("component_statuses")
+    component_statuses = component_statuses if isinstance(component_statuses, dict) else {}
+    status = _discovery_summary_status(artifact.get("status"))
+    return_code = _discovery_summary_count(artifact.get("return_code"))
+
+    return {
+        "ok": True,
+        "available": True,
+        "run_id": requested_run_id,
+        "job_name": "agent_discovery",
+        "status": status,
+        "trigger": _discovery_summary_trigger(
+            post_run.get("trigger_source") if post_run_valid else None
+        ),
+        "started_at": _discovery_summary_timestamp(artifact.get("started_at")),
+        "finished_at": _discovery_summary_timestamp(artifact.get("finished_at")),
+        "return_code": return_code,
+        "summary_message": _safe_discovery_summary_message(
+            artifact.get("summary_message"), status
+        ),
+        "company_discovery": {
+            "status": _discovery_summary_status(
+                company.get("status"), allow_skipped=True
+            ),
+            "queries_attempted": _discovery_summary_count(
+                company.get("queries_attempted")
+            ),
+            "queries_failed": _discovery_summary_count(company.get("queries_failed")),
+            "total_candidate_count": _discovery_summary_count(
+                company.get("total_candidate_count")
+            ),
+            "candidate_counts_by_ats": _bounded_discovery_counts(
+                company.get("candidate_counts_by_ats")
+            ),
+        },
+        "discovery": {
+            "run_unique_discovered_by_ats": _bounded_discovery_counts(
+                discovery.get("run_unique_discovered_by_ats")
+            ),
+            "sources": _bounded_discovery_sources(discovery.get("sources")),
+        },
+        "components": {
+            key: _discovery_summary_status(
+                component_statuses.get(key), allow_skipped=True
+            )
+            for key in _DISCOVERY_SUMMARY_COMPONENT_KEYS
+        },
+        "failure_components": [
+            key
+            for key in _DISCOVERY_SUMMARY_COMPONENT_KEYS
+            if isinstance(artifact.get("failure_components"), list)
+            and key in artifact["failure_components"]
+        ],
     }
 
 

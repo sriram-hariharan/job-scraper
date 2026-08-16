@@ -495,12 +495,14 @@ def test_no_new_scheduler_write_or_control_action_introduced() -> None:
         assert forbidden not in SCHEDULER_DASHBOARD_TSX
 
 
-def test_react_island_owns_only_summary_and_manual_discovery_requests() -> None:
-    # The scheduler model owns one summary GET and one explicit admin manual
-    # discovery POST; the classic page source has no competing request owner.
-    assert SCHEDULER_MODEL_TS.count("fetch(") == 2
+def test_react_island_owns_only_bounded_scheduler_requests() -> None:
+    # The scheduler model owns the summary GET, explicit manual-discovery POST,
+    # and exact-run discovery-summary GET; classic JS does not compete.
+    assert SCHEDULER_MODEL_TS.count("fetch(") == 3
     assert '"/scheduler/summary?limit=25"' in SCHEDULER_MODEL_TS
     assert '"/scheduler/jobs/agent_discovery/run-now"' in SCHEDULER_MODEL_TS
+    assert 'encodeURIComponent(clean(runId))' in SCHEDULER_MODEL_TS
+    assert '/agent-discovery-summary`' in SCHEDULER_MODEL_TS
     assert "fetch(" not in SCHEDULER_DASHBOARD_TSX
     scheduler_route = UI_SOURCE[UI_SOURCE.index('@router.get("/scheduler"'):]
     assert "fetch(" not in scheduler_route
@@ -650,9 +652,10 @@ def test_one_page_results_hide_duplicate_prev_next_controls() -> None:
 
 
 def test_run_history_filters_are_scoped_to_the_run_history_branch_only() -> None:
+    branch_start = SCHEDULER_DASHBOARD_TSX.index('if (activeTab === "job_status") {')
     job_status_branch = SCHEDULER_DASHBOARD_TSX[
-        SCHEDULER_DASHBOARD_TSX.index('if (activeTab === "job_status") {'):
-        SCHEDULER_DASHBOARD_TSX.index('return (\n    <SharedTableCard', SCHEDULER_DASHBOARD_TSX.index('if (activeTab === "job_status") {'))
+        branch_start:
+        SCHEDULER_DASHBOARD_TSX.index('return (\n    <>', branch_start)
     ]
     assert "SharedFilterSelect" not in job_status_branch
 

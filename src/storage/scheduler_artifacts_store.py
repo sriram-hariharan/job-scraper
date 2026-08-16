@@ -207,8 +207,10 @@ def get_scheduler_artifact_payload(
     *,
     run_id: str,
     artifact_kind: str,
+    initialize: bool = True,
 ) -> Dict[str, Any]:
-    init_scheduler_artifacts_store()
+    if initialize:
+        init_scheduler_artifacts_store()
 
     safe_run_id = _clean_text(run_id)
     safe_kind = _clean_text(artifact_kind)

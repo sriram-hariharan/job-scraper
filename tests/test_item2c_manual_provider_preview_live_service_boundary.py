@@ -91,13 +91,31 @@ def _eligible(monkeypatch) -> None:
     )
 
 
+def _valid_content() -> dict:
+    return {
+        "preview_status": "advisory",
+        "manual_only": True,
+        "suggestions": [
+            {
+                "suggestion_id": "suggestion-1",
+                "source_evidence_ids": ["evidence-1"],
+                "preview_text": "Built Python and SQL data pipelines.",
+                "claims": ["Built Python and SQL data pipelines."],
+                "rationale": "Uses the authorized pipeline evidence.",
+                "risk_flags": [],
+            }
+        ],
+        "resume_mutation_authorized": False,
+        "automatic_acceptance_authorized": False,
+        "application_mutation_authorized": False,
+        "auto_apply_authorized": False,
+        "auto_submit_authorized": False,
+    }
+
+
 def _runtime_success() -> dict:
     return {
-        "content": {
-            "preview_status": "advisory",
-            "manual_only": True,
-            "suggestions": [],
-        },
+        "content": _valid_content(),
         "provider": "synthetic",
         "model": "qualified-model",
         "fallback_used": False,
@@ -369,8 +387,9 @@ def test_eligible_request_uses_canonical_contract_and_runtime_exactly_once(monke
         "model": "qualified-model",
         "fallback_used": False,
     }
-    assert result["provider_response_candidate"] == _runtime_success()["content"]
-    assert result["normalized_preview"] is False
+    assert result["suggestions"] == _valid_content()["suggestions"]
+    assert "provider_response_candidate" not in result
+    assert result["normalized_preview"] is True
     assert result["persisted"] is False
     assert result["resume_mutation_authorized"] is False
     assert result["application_mutation_authorized"] is False
@@ -383,7 +402,7 @@ def test_eligible_request_uses_canonical_contract_and_runtime_exactly_once(monke
         ({"content": "not parsed", "provider": "x", "model": "y", "fallback_used": False}, "malformed_provider_response"),
         ({"content": {"reasoning": "hidden"}, "provider": "x", "model": "y", "fallback_used": False}, "unsafe_provider_response"),
         ({"content": {"text": "x" * 33_000}, "provider": "x", "model": "y", "fallback_used": False}, "provider_response_too_large"),
-        ({"content": {"preview_status": "advisory"}, "provider": "x", "model": "y", "fallback_used": True}, "unsafe_provider_metadata"),
+        ({**_runtime_success(), "fallback_used": True}, "unsafe_provider_metadata"),
     ),
 )
 def test_provider_failure_or_malformed_unsafe_unbounded_response_never_retries(

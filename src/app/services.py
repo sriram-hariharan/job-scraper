@@ -236,8 +236,11 @@ from src.agents.jd_intelligence_planning_artifact_enricher_default_off import (
     build_jd_intelligence_planning_artifact_enricher_default_off,
 )
 from src.agents.manual_provider_preview_production_task_contract import (
+    ManualProviderPreviewResponseError,
     build_manual_provider_preview_production_messages,
     build_manual_provider_preview_production_task_contract_material,
+    normalize_manual_provider_preview_production_response,
+    validate_manual_provider_preview_production_response,
 )
 from src.evaluation.production_task_contract_fingerprints import (
     production_task_contract_sha256,
@@ -23539,6 +23542,24 @@ def manual_provider_preview_live_candidate_payload(
     if len(serialized_content) > _MANUAL_PROVIDER_PREVIEW_RESPONSE_MAX_CHARACTERS:
         raise ManualProviderPreviewLiveError("provider_response_too_large")
 
+    try:
+        validated_content = validate_manual_provider_preview_production_response(
+            content,
+            bounded_resume_evidence_context=contexts[
+                "bounded_resume_evidence_context"
+            ],
+        )
+        normalized_content = normalize_manual_provider_preview_production_response(
+            validated_content,
+            bounded_resume_evidence_context=contexts[
+                "bounded_resume_evidence_context"
+            ],
+        )
+    except ManualProviderPreviewResponseError as exc:
+        raise ManualProviderPreviewLiveError(exc.category) from None
+    except Exception:
+        raise ManualProviderPreviewLiveError("normalization_failure") from None
+
     provider = _manual_provider_preview_text(result.get("provider"), 100)
     model = _manual_provider_preview_text(result.get("model"), 200)
     if not provider or not model or result.get("fallback_used") is not False:
@@ -23546,24 +23567,33 @@ def manual_provider_preview_live_candidate_payload(
 
     return {
         "ok": True,
-        "status": "provider_response_candidate_received",
+        "status": "manual_provider_preview_ready",
         "workload_id": "manual_provider_preview",
         "production_task_contract_sha256": task_contract_sha256,
         "pipeline_run_id": safe_run_id,
         "job_id": safe_job_id,
-        "provider_response_candidate": content,
+        "preview_status": normalized_content["preview_status"],
+        "manual_only": normalized_content["manual_only"],
+        "suggestions": normalized_content["suggestions"],
         "provider_metadata": {
             "provider": provider,
             "model": model,
             "fallback_used": False,
         },
         "manual_review_required": True,
-        "normalized_preview": False,
+        "normalized_preview": True,
         "persisted": False,
-        "resume_mutation_authorized": False,
-        "application_mutation_authorized": False,
-        "auto_apply_authorized": False,
-        "auto_submit_authorized": False,
+        "resume_mutation_authorized": normalized_content[
+            "resume_mutation_authorized"
+        ],
+        "automatic_acceptance_authorized": normalized_content[
+            "automatic_acceptance_authorized"
+        ],
+        "application_mutation_authorized": normalized_content[
+            "application_mutation_authorized"
+        ],
+        "auto_apply_authorized": normalized_content["auto_apply_authorized"],
+        "auto_submit_authorized": normalized_content["auto_submit_authorized"],
     }
 
 

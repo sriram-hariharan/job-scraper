@@ -69,25 +69,29 @@ def _sql_jsonb(value: Any) -> str:
     )
 
 
+def _run_psql(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        redacted_cmd = list(cmd)
+        redacted_cmd[1] = "[DATABASE_URL_REDACTED]"
+        exc.cmd = redacted_cmd
+        raise
+
+
 def _run_psql_statement(sql: str) -> None:
-    subprocess.run(
-        [
-            "psql",
-            _database_url(),
-            "-X",
-            "-v",
-            "ON_ERROR_STOP=1",
-            "-c",
-            sql,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
+    _run_psql(
+        ["psql", _database_url(), "-X", "-v", "ON_ERROR_STOP=1", "-c", sql]
     )
 
 
 def _run_psql_json_query(sql: str) -> Dict[str, Any]:
-    completed = subprocess.run(
+    completed = _run_psql(
         [
             "psql",
             _database_url(),
@@ -98,10 +102,7 @@ def _run_psql_json_query(sql: str) -> Dict[str, Any]:
             "ON_ERROR_STOP=1",
             "-c",
             sql,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
+        ]
     )
 
     lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]

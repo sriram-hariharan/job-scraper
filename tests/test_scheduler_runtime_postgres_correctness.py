@@ -10,6 +10,7 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from src.pipeline import post_run_summary, scheduler
+from src.storage import scheduler_artifacts_store
 from src.storage.admin_tools.scheduler import sync_run_history
 
 
@@ -71,20 +72,51 @@ def test_launchd_plist_has_postgres_runtime_and_required_history_sync(
         assert "--global-acquisition-only" not in command
 
 
-def test_global_acquisition_command_rejects_owner_downstream_options():
+def test_global_acquisition_command_rejects_owner_downstream_options(monkeypatch):
     with pytest.raises(ValueError, match="cannot be combined"):
         scheduler.build_live_pipeline_command(
             global_acquisition_only=True,
             run_application_planning=True,
+        )
+    with pytest.raises(ValueError, match="requires delete_seen_data='no'"):
+        scheduler.build_live_pipeline_command(
+            global_acquisition_only=True,
+            delete_seen_data="yes",
         )
 
     command = scheduler.build_live_pipeline_command(
         global_acquisition_only=True,
         run_application_planning=False,
     )
+    assert command.count("--delete-seen-data") == 1
+    assert command[command.index("--delete-seen-data") + 1] == "no"
     assert "--global-acquisition-only" in command
     assert "--skip-application-planning" in command
-    assert "--run-application-planning" not in command
+    for forbidden_flag in (
+        "--run-application-planning",
+        "--application-planning-only",
+        "--application-planning-generate-tailoring",
+        "--application-planning-generate-llm-tailoring",
+        "--application-planning-refresh-llm-tailoring",
+        "--application-planning-generate-llm-fallback",
+        "--application-planning-generate-llm-adjudication",
+    ):
+        assert forbidden_flag not in command
+
+    import main as pipeline_main
+
+    monkeypatch.setattr(sys, "argv", command[2:])
+    parsed_args = pipeline_main._parse_args()
+    pipeline_main._validate_application_planning_only_args(parsed_args)
+    assert parsed_args.global_acquisition_only is True
+    assert parsed_args.skip_application_planning is True
+    assert parsed_args.delete_seen_data == "no"
+
+    assert scheduler.build_scheduled_job_command("agent_discovery") == [
+        sys.executable,
+        "-u",
+        "run_agent_discovery.py",
+    ]
 
 
 def test_direct_live_scheduler_default_is_always_global_acquisition_only(
@@ -100,6 +132,8 @@ def test_direct_live_scheduler_default_is_always_global_acquisition_only(
     assert scheduler.main() == 0
     command = capsys.readouterr().out.strip()
 
+    assert command.count("--delete-seen-data") == 1
+    assert "--delete-seen-data no" in command
     assert "--global-acquisition-only" in command
     assert "--run-application-planning" not in command
     assert "JOB_STACK_OWNER_USER_ID" not in command
@@ -309,6 +343,72 @@ def test_postgres_sync_failure_preserves_exception_with_redacted_command(
     rendered_error = repr(exc_info.value)
     for secret in (database_url, "scheduler-user", "p@ssword", "p%40ssword"):
         assert secret not in rendered_error
+
+
+@pytest.mark.parametrize("operation", ["statement", "query"])
+def test_scheduler_artifact_psql_executes_exact_database_url(
+    monkeypatch,
+    operation,
+):
+    database_url = (
+        "postgresql://scheduler-user:p%40ssword@example.invalid/scheduler"
+    )
+    captured = {}
+    monkeypatch.setenv("DATABASE_URL", database_url)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = list(cmd)
+        captured["kwargs"] = dict(kwargs)
+        return SimpleNamespace(stdout='{"ok":true}\n', returncode=0)
+
+    monkeypatch.setattr(scheduler_artifacts_store.subprocess, "run", fake_run)
+
+    if operation == "statement":
+        scheduler_artifacts_store._run_psql_statement("SELECT 1")
+    else:
+        assert scheduler_artifacts_store._run_psql_json_query("SELECT 1") == {
+            "ok": True
+        }
+
+    assert captured["cmd"][1] == database_url
+    assert "[DATABASE_URL_REDACTED]" not in captured["cmd"]
+    assert captured["kwargs"] == {
+        "check": True,
+        "capture_output": True,
+        "text": True,
+    }
+
+
+@pytest.mark.parametrize("operation", ["statement", "query"])
+def test_scheduler_artifact_psql_failure_redacts_database_url(
+    monkeypatch,
+    operation,
+):
+    database_url = (
+        "postgresql://scheduler-user:p%40ssword@example.invalid/scheduler"
+    )
+    captured = {}
+    monkeypatch.setenv("DATABASE_URL", database_url)
+
+    def fail_run(cmd, **_kwargs):
+        captured["cmd"] = list(cmd)
+        raise subprocess.CalledProcessError(returncode=9, cmd=cmd)
+
+    monkeypatch.setattr(scheduler_artifacts_store.subprocess, "run", fail_run)
+
+    with pytest.raises(subprocess.CalledProcessError) as exc_info:
+        if operation == "statement":
+            scheduler_artifacts_store._run_psql_statement("SELECT 1")
+        else:
+            scheduler_artifacts_store._run_psql_json_query("SELECT 1")
+
+    assert captured["cmd"][1] == database_url
+    assert exc_info.value.returncode == 9
+    assert exc_info.value.cmd[1] == "[DATABASE_URL_REDACTED]"
+    rendered_failure = repr(exc_info.value)
+    for secret in (database_url, "scheduler-user", "p@ssword", "p%40ssword"):
+        assert all(secret not in part for part in exc_info.value.cmd)
+        assert secret not in rendered_failure
 
 
 def test_scheduler_stdout_redacts_postgres_sync_database_url(

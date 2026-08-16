@@ -325,7 +325,12 @@ def build_live_pipeline_command(
     cmd = ja._build_main_cmd(args, planning_only=bool(planning_only))
     if global_acquisition_only:
         cmd.extend(
-            ["--global-acquisition-only", "--skip-application-planning"]
+            [
+                "--global-acquisition-only",
+                "--skip-application-planning",
+                "--delete-seen-data",
+                "no",
+            ]
         )
     return cmd
 

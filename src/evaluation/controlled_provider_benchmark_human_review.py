@@ -146,6 +146,12 @@ _SUBJECTIVE_RUBRIC_CRITERIA = {
         ("scan_usefulness", "Options are concise and useful for manual scanning."),
         ("factual_grounding", "Options introduce no unsupported claims."),
     ),
+    "manual_provider_preview": (
+        ("evidence_grounding", "Each preview suggestion remains grounded in the bounded authorized resume evidence."),
+        ("source_fact_preservation", "Preview wording preserves supported source facts and meaning without inventing achievements, tools, metrics, or scope."),
+        ("job_relevance", "Suggestions address the bounded selected job and tailoring request rather than offering generic rewriting."),
+        ("manual_preview_usefulness_and_safety", "Suggestions are specific enough for manual review, remain advisory, and grant no automatic acceptance, resume or application mutation, auto-apply, or submission authority."),
+    ),
 }
 
 _REVIEW_INSTRUCTIONS = (

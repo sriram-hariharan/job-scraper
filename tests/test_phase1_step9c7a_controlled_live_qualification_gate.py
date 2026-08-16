@@ -959,6 +959,111 @@ def test_successful_subjective_cell_persists_bounded_review_packet(
             )
 
 
+def test_manual_preview_builds_and_validates_standard_subjective_review_packet(
+    tmp_path,
+    plan,
+    universe,
+):
+    row = _eligible(
+        universe,
+        provider="groq",
+        workload="manual_provider_preview",
+    )
+    authorization, pricing = _valid_inputs(plan, [row])
+    dispatcher = RecordingDispatcher(plan)
+    dispatcher.outputs[row["case_alias"]] = {
+        "preview_status": "advisory",
+        "manual_only": True,
+        "suggestions": [
+            {
+                "suggestion_id": "suggestion-alpha",
+                "source_evidence_ids": ["evidence_alpha"],
+                "preview_text": "Delivered python through bounded synthetic work.",
+                "claims": ["python"],
+                "rationale": "Uses the bounded authorized evidence.",
+                "risk_flags": [],
+            }
+        ],
+        "resume_mutation_authorized": False,
+        "automatic_acceptance_authorized": False,
+        "application_mutation_authorized": False,
+        "auto_apply_authorized": False,
+        "auto_submit_authorized": False,
+    }
+    evidence_target = (
+        tmp_path / live.APPROVED_EVIDENCE_DIRECTORY / "manual-preview.json"
+    )
+    context_target = (
+        tmp_path
+        / live.APPROVED_EVIDENCE_DIRECTORY
+        / "manual-preview.validation-context.json"
+    )
+    packet_target = (
+        tmp_path
+        / review.APPROVED_REVIEW_DIRECTORY
+        / "subjective-review-packet-manual-provider-preview.json"
+    )
+
+    evidence = _execute(
+        plan,
+        [row],
+        dispatcher=dispatcher,
+        authorization=authorization,
+        pricing=pricing,
+        evidence_target=evidence_target,
+        validation_context_target=context_target,
+        review_packet_target=packet_target,
+        repository_root=tmp_path,
+    )
+    packet = json.loads(packet_target.read_text(encoding="utf-8"))
+    serialized = json.dumps(
+        packet,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+    assert packet["workload_id"] == "manual_provider_preview"
+    assert packet["schedule_key"] == row["schedule_key"]
+    assert packet["provider"] == row["provider"]
+    assert packet["model"] == row["model"]
+    assert packet["evidence_sha256"] == live.live_qualification_evidence_sha256(
+        evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    assert packet["production_task_contract_sha256"] == row[
+        "production_task_contract_sha256"
+    ]
+    assert packet["rubric"] == review.build_subjective_qualification_rubric(
+        "manual_provider_preview"
+    )
+    assert len(serialized.encode("utf-8")) <= review.MAXIMUM_REVIEW_PACKET_BYTES
+    assert review.validate_subjective_qualification_review_packet(
+        packet,
+        evidence=evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    lowered = serialized.lower()
+    assert OPERATOR_SECRET.lower() not in lowered
+    for prohibited in (
+        '"api_key"',
+        '"credential"',
+        '"headers"',
+        '"messages"',
+        '"prompt"',
+        '"raw_provider"',
+        '"raw_request"',
+        '"raw_response"',
+        '"reasoning"',
+        '"request_id"',
+    ):
+        assert prohibited not in lowered
+
+
 def test_review_packet_rejects_no_review_workload_before_dispatch(
     tmp_path,
     plan,

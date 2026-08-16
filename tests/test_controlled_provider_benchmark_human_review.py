@@ -40,6 +40,56 @@ REVIEW_NOT_REQUIRED = {
     "job_fit_evaluation",
     "grounded_rag_answer",
 }
+PRIOR_SUBJECTIVE_RUBRIC_CRITERION_IDS = {
+    "jd_intelligence": {
+        "factual_grounding",
+        "semantic_correctness",
+        "completeness",
+        "instruction_adherence",
+    },
+    "resume_fallback_ranking": {
+        "ranking_consistency",
+        "relevance",
+        "factual_grounding",
+        "usefulness",
+    },
+    "ambiguous_resume_adjudication": {
+        "evidence_preservation",
+        "recommendation_consistency",
+        "uncertainty_handling",
+        "factual_grounding",
+    },
+    "critic_evaluation": {
+        "evidence_support",
+        "decision_correctness",
+        "reason_relevance",
+        "factual_grounding",
+    },
+    "tailoring_generation": {
+        "source_fact_preservation",
+        "relevance",
+        "semantic_correctness",
+        "usefulness",
+    },
+    "tailoring_refinement": {
+        "meaning_preservation",
+        "factual_grounding",
+        "instruction_adherence",
+        "usefulness",
+    },
+    "tailoring_judge": {
+        "winner_consistency",
+        "evidence_based_judgment",
+        "semantic_correctness",
+        "factual_grounding",
+    },
+    "manual_scan_phrase": {
+        "phrase_relevance",
+        "source_fact_preservation",
+        "scan_usefulness",
+        "factual_grounding",
+    },
+}
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -218,20 +268,71 @@ def test_exact_canonical_human_review_requirement_split():
     assert len(requirements) == 12
 
 
-def test_subjective_rubrics_cover_exactly_the_eight_reviewable_live_workloads():
-    subjective = REVIEW_REQUIRED - {"manual_provider_preview"}
-
-    for workload_id in subjective:
+def test_subjective_rubrics_cover_exactly_the_reviewable_live_workloads():
+    for workload_id in REVIEW_REQUIRED:
         first = review.build_subjective_qualification_rubric(workload_id)
         second = review.build_subjective_qualification_rubric(workload_id)
 
         assert first == second
+        assert first["rubric_version"] == review.SUBJECTIVE_REVIEW_RUBRIC_VERSION
         assert first["workload_id"] == workload_id
         assert len(first["criteria"]) == 4
         assert len({row["criterion_id"] for row in first["criteria"]}) == 4
-    for workload_id in REVIEW_NOT_REQUIRED | {"manual_provider_preview"}:
+    for workload_id in REVIEW_NOT_REQUIRED:
         with pytest.raises(ValueError, match="rubric is unavailable"):
             review.build_subjective_qualification_rubric(workload_id)
+    with pytest.raises(ValueError, match="rubric is unavailable"):
+        review.build_subjective_qualification_rubric("unknown_workload")
+
+
+def test_manual_provider_preview_rubric_covers_bounded_review_semantics():
+    rubric = review.build_subjective_qualification_rubric(
+        "manual_provider_preview"
+    )
+    criterion_ids = [row["criterion_id"] for row in rubric["criteria"]]
+    rubric_text = " ".join(
+        f"{row['criterion_id']} {row['instruction']}"
+        for row in rubric["criteria"]
+    ).lower()
+
+    assert rubric == review.build_subjective_qualification_rubric(
+        "manual_provider_preview"
+    )
+    assert rubric["rubric_version"] == review.SUBJECTIVE_REVIEW_RUBRIC_VERSION
+    assert rubric["workload_id"] == "manual_provider_preview"
+    assert criterion_ids == [
+        "evidence_grounding",
+        "source_fact_preservation",
+        "job_relevance",
+        "manual_preview_usefulness_and_safety",
+    ]
+    assert len(criterion_ids) == len(set(criterion_ids)) == 4
+    for concern in (
+        "ground",
+        "source facts and meaning",
+        "job",
+        "manual review",
+        "advisory",
+        "no automatic acceptance",
+        "mutation",
+        "auto-apply",
+        "submission authority",
+    ):
+        assert concern in rubric_text
+
+
+def test_existing_subjective_rubric_criterion_ids_remain_unchanged():
+    observed = {
+        workload_id: {
+            row["criterion_id"]
+            for row in review.build_subjective_qualification_rubric(
+                workload_id
+            )["criteria"]
+        }
+        for workload_id in PRIOR_SUBJECTIVE_RUBRIC_CRITERION_IDS
+    }
+
+    assert observed == PRIOR_SUBJECTIVE_RUBRIC_CRITERION_IDS
 
 
 def test_requirement_is_derived_without_caller_boolean():
@@ -470,6 +571,41 @@ def test_approval_cannot_override_grading_or_safety_failures(
 
     with pytest.raises(ValueError, match=message):
         _record(controlled_inputs, unsafe_evidence)
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "message"),
+    [
+        ("hard_failure_present", True, "hard failure"),
+        ("schedule_completed", False, "did not complete"),
+        ("contract_valid", False, "valid production contract"),
+        ("normalization_succeeded", False, "successful normalization"),
+        ("quality_gate_passed", False, "quality gate"),
+        ("provider_outcome_category", "definitive_failure", "provider outcome"),
+        ("provider_call_count", 0, "provider outcome"),
+        ("authority_safety_valid", False, "authority invariant"),
+    ],
+)
+def test_approval_safety_guard_rejects_every_unsafe_observation(
+    field,
+    replacement,
+    message,
+):
+    observation = {
+        "evidence_kind": "controlled_live_qualification_evidence",
+        "hard_failure_present": False,
+        "schedule_completed": True,
+        "contract_valid": True,
+        "normalization_succeeded": None,
+        "quality_gate_passed": True,
+        "provider_outcome_category": "success",
+        "provider_call_count": 1,
+        "authority_safety_valid": True,
+    }
+    observation[field] = replacement
+
+    with pytest.raises(ValueError, match=message):
+        review._require_approval_safe(observation)
 
 
 def test_reviewer_and_time_are_normalized_once_and_deterministically(

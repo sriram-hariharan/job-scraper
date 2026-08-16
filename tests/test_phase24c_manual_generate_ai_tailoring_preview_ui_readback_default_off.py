@@ -282,34 +282,39 @@ def test_fetch_is_gated_get_only_and_fail_closed():
     assert "application_submission_performed: false" in fetch
 
 
-def test_ui_adds_only_the_phase24b_manual_preview_endpoint_url():
+def test_ui_uses_only_the_explicitly_approved_manual_preview_endpoint_universe():
     js = _source()
     related_endpoint_lines = [
         line.strip()
         for line in js.splitlines()
         if "/api/" in line and "manual-generate-ai-tailoring" in line
     ]
+    approved_endpoints = {
+        ENDPOINT,
+        "/api/manual-generate-ai-tailoring-preview-request-packet-contract",
+        "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract",
+        "/api/manual-generate-ai-tailoring-preview-provider-request-envelope-contract",
+        "/api/manual-generate-ai-tailoring-preview-provider-call-boundary-contract",
+        "/api/manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-contract",
+        "/api/manual-generate-ai-tailoring-preview-provider-response-validation-contract",
+        "/api/manual-generate-ai-tailoring-preview-provider-response-normalization-contract",
+        "/api/manual-generate-ai-tailoring-preview-live",
+    }
+    actual_endpoints = []
+    for line in related_endpoint_lines:
+        quoted_endpoints = [
+            value
+            for value in line.split('"')
+            if value.startswith("/api/")
+            and "manual-generate-ai-tailoring" in value
+        ]
+        assert len(quoted_endpoints) == 1
+        actual_endpoints.extend(quoted_endpoints)
 
     assert related_endpoint_lines
     assert ENDPOINT in js
-    assert all(
-        ENDPOINT in line
-            or "/api/manual-generate-ai-tailoring-preview-request-packet-contract"
-            in line
-                or "/api/manual-generate-ai-tailoring-preview-dispatch-boundary-contract"
-                in line
-                    or "/api/manual-generate-ai-tailoring-preview-provider-request-envelope-contract"
-                    in line
-                    or "/api/manual-generate-ai-tailoring-preview-provider-call-boundary-contract"
-                    in line
-                    or "/api/manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-contract"
-                    in line
-                    or "/api/manual-generate-ai-tailoring-preview-provider-response-validation-contract"
-                    in line
-                    or "/api/manual-generate-ai-tailoring-preview-provider-response-normalization-contract"
-                    in line
-                for line in related_endpoint_lines
-            )
+    assert set(actual_endpoints) == approved_endpoints
+    assert len(actual_endpoints) == len(approved_endpoints)
 
 
 def test_css_contains_passive_panel_classes():

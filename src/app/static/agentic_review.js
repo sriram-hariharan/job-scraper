@@ -19,6 +19,77 @@ const AGENTIC_REVIEW_FEEDBACK_EVENTS = {
   not_helpful: "agentic_review_not_helpful",
 };
 
+const MANUAL_PROVIDER_PREVIEW_ENDPOINT = "/api/manual-generate-ai-tailoring-preview-live";
+const MANUAL_PROVIDER_PREVIEW_WORKLOAD = "manual_provider_preview";
+const manualProviderPreviewState = {
+  readiness: "unknown",
+  route: null,
+  inFlight: false,
+  pendingJobId: "",
+  activeTrigger: null,
+  tailoringRows: [],
+  results: new Map(),
+};
+
+const MANUAL_PROVIDER_PREVIEW_ERROR_MESSAGES = Object.freeze({
+  activation_disabled: "AI preview is not enabled for this environment.",
+  route_unavailable: "The provider route is not ready for AI preview.",
+  blocked_non_live: "The provider route is not ready for AI preview.",
+  credential_not_configured: "The selected provider needs a configured credential.",
+  credential_unavailable: "The provider credential is temporarily unavailable.",
+  settings_unavailable: "Provider settings are temporarily unavailable.",
+  client_construction_failed: "The provider connection could not be prepared.",
+  provider_configuration_unavailable: "The provider configuration is unavailable.",
+  provider_failure: "The AI provider could not generate this preview.",
+  malformed_provider_response: "The provider returned an invalid preview.",
+  schema_invalid: "The provider returned an invalid preview.",
+  unsupported_provider_response_field: "The provider returned an unsupported preview.",
+  mutation_authority_requested: "The provider response requested an unsafe action and was blocked.",
+  ungrounded_evidence_reference: "The preview referenced evidence outside this job and was blocked.",
+  ungrounded_claim: "The preview included an unsupported claim and was blocked.",
+  authorized_evidence_unavailable: "Authorized evidence is unavailable for this job.",
+  provider_response_contract_bound_exceeded: "The provider preview exceeded its safety limits.",
+  provider_response_too_large: "The provider preview was too large to display safely.",
+  normalization_failure: "The provider preview could not be prepared safely.",
+  unsafe_provider_response: "The provider response did not pass the preview safety checks.",
+  unsafe_provider_metadata: "The provider response metadata did not pass safety checks.",
+});
+
+function manualProviderPreviewReadiness(payload = {}) {
+  const workloads = Array.isArray(payload?.workloads) ? payload.workloads : [];
+  const route = workloads.find((item) => item?.workload_id === MANUAL_PROVIDER_PREVIEW_WORKLOAD);
+  if (!route || typeof route !== "object") return { state: "unknown", route: null };
+  const selection = route.effective_selection;
+  const qualified = Array.isArray(route.qualified_options) ? route.qualified_options : [];
+  const selectionIsQualified = selection && typeof selection === "object"
+    && qualified.some((option) => option?.provider === selection.provider && option?.model === selection.model);
+  if (route.recommendation_status === "recommended"
+    && route.execution_mode === "qualified_provider_model"
+    && selectionIsQualified) {
+    return { state: "eligible", route };
+  }
+  if (route.recommendation_status === "blocked_non_live"
+    || route.execution_mode === "blocked_non_live"
+    || route.recommendation_status === "fail_closed_zero_qualified") {
+    return { state: "blocked", route };
+  }
+  return { state: "unknown", route };
+}
+
+function manualProviderPreviewRequestBody(pipelineRunId, jobId) {
+  return {
+    pipeline_run_id: String(pipelineRunId || "").trim(),
+    job_id: String(jobId || "").trim(),
+    manual_triggered: true,
+    operator_confirmed: true,
+  };
+}
+
+function manualProviderPreviewErrorMessage(category) {
+  return MANUAL_PROVIDER_PREVIEW_ERROR_MESSAGES[String(category || "").trim()]
+    || "AI preview is temporarily unavailable. Please try again later.";
+}
+
 function getWorkflowSummary(payload = {}) {
   const summary = payload?.agentic_workflow_summary?.summary_json;
   return summary && typeof summary === "object" ? summary : {};
@@ -147,10 +218,134 @@ function countBy(rows, field) {
 
 function renderAgenticReviewCell(row, column) {
   const value = row?.[column.key];
+  if (column.type === "manual_provider_preview_action") {
+    return renderManualProviderPreviewAction(row);
+  }
   if (column.type === "pill") return renderReviewPill(value);
   if (column.type === "reasons") return renderReasonChips(value);
   if (column.type === "boolean") return renderReviewPill(String(value || "").toLowerCase() === "true" || value === true ? "yes" : "no");
   return escapeHtml(value || "-");
+}
+
+function renderManualProviderPreviewAction(row = {}) {
+  const jobId = String(row?.job_id || "").trim();
+  const routeReady = manualProviderPreviewState.readiness === "eligible";
+  const disabled = !jobId || !routeReady || manualProviderPreviewState.inFlight;
+  const stateLabel = !jobId
+    ? "Job identifier unavailable"
+    : manualProviderPreviewState.readiness === "blocked"
+      ? "Provider route not ready"
+      : manualProviderPreviewState.readiness === "unknown"
+        ? "Preview readiness unavailable"
+        : manualProviderPreviewState.inFlight
+          ? "Generating preview…"
+          : "Ready for manual preview";
+  return `
+    <div class="manual-provider-preview-action-cell">
+      <button
+        type="button"
+        class="agentic-feedback-action manual-provider-preview-action"
+        data-manual-provider-preview-action
+        data-job-id="${escapeHtml(jobId)}"
+        ${disabled ? "disabled" : ""}
+      >Generate AI Preview</button>
+      <span class="manual-provider-preview-readiness is-${escapeHtml(manualProviderPreviewState.readiness)}" data-manual-provider-preview-readiness>
+        ${escapeHtml(stateLabel)}
+      </span>
+    </div>
+  `;
+}
+
+function safeManualProviderPreviewStringList(value, limit = 12) {
+  return Array.isArray(value)
+    ? value.slice(0, limit).map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+}
+
+function validateManualProviderPreviewResponse(payload = {}) {
+  if (!payload || payload.ok !== true
+    || payload.status !== "manual_provider_preview_ready"
+    || payload.preview_status !== "advisory"
+    || payload.manual_only !== true
+    || payload.manual_review_required !== true
+    || payload.normalized_preview !== true
+    || !Array.isArray(payload.suggestions)
+    || !payload.suggestions.length) {
+    throw new Error("invalid_preview_response");
+  }
+  const authorityFields = [
+    "resume_mutation_authorized",
+    "automatic_acceptance_authorized",
+    "application_mutation_authorized",
+    "auto_apply_authorized",
+    "auto_submit_authorized",
+  ];
+  if (authorityFields.some((field) => payload[field] !== false)) {
+    throw new Error("unsafe_preview_response");
+  }
+  const suggestions = payload.suggestions.slice(0, 3).map((suggestion) => {
+    if (!suggestion || typeof suggestion !== "object") throw new Error("invalid_preview_response");
+    const previewText = String(suggestion.preview_text || "").trim();
+    const rationale = String(suggestion.rationale || "").trim();
+    const evidenceIds = safeManualProviderPreviewStringList(suggestion.source_evidence_ids, 12);
+    if (!previewText || !rationale || !evidenceIds.length) throw new Error("invalid_preview_response");
+    return {
+      suggestionId: String(suggestion.suggestion_id || "").trim(),
+      previewText,
+      rationale,
+      evidenceIds,
+      claims: safeManualProviderPreviewStringList(suggestion.claims, 12),
+      riskFlags: safeManualProviderPreviewStringList(suggestion.risk_flags, 8),
+    };
+  });
+  const metadata = payload.provider_metadata && typeof payload.provider_metadata === "object"
+    ? payload.provider_metadata
+    : {};
+  return {
+    previewStatus: "advisory",
+    manualReviewRequired: true,
+    suggestions,
+    provider: String(metadata.provider || "").trim().slice(0, 100),
+    model: String(metadata.model || "").trim().slice(0, 200),
+  };
+}
+
+function renderManualProviderPreviewResult(result) {
+  if (!result) return "";
+  if (result.kind === "error") {
+    return `
+      <article class="manual-provider-preview-result is-error" role="alert">
+        <strong>AI preview unavailable</strong>
+        <p>${escapeHtml(manualProviderPreviewErrorMessage(result.category))}</p>
+      </article>
+    `;
+  }
+  const preview = result.preview;
+  return `
+    <article class="manual-provider-preview-result" aria-label="Live AI tailoring preview for manual review">
+      <div class="manual-provider-preview-result__header">
+        <div>
+          <span class="agentic-review-pill is-review">Preview · Manual review</span>
+          <h3>AI tailoring suggestions</h3>
+          <p>Ephemeral guidance only. Nothing was applied to your resume or submitted to an employer.</p>
+        </div>
+        ${preview.provider && preview.model ? `<span class="manual-provider-preview-provider">${escapeHtml(preview.provider)} · ${escapeHtml(preview.model)}</span>` : ""}
+      </div>
+      <div class="manual-provider-preview-suggestions">
+        ${preview.suggestions.map((suggestion, index) => `
+          <section class="manual-provider-preview-suggestion">
+            <h4>Suggestion ${escapeHtml(String(index + 1))}</h4>
+            <p class="manual-provider-preview-text">${escapeHtml(suggestion.previewText)}</p>
+            <dl>
+              <div><dt>Evidence IDs</dt><dd>${renderReasonChips(suggestion.evidenceIds)}</dd></div>
+              <div><dt>Rationale</dt><dd>${escapeHtml(suggestion.rationale)}</dd></div>
+              <div><dt>Risk flags</dt><dd>${renderReasonChips(suggestion.riskFlags)}</dd></div>
+            </dl>
+          </section>
+        `).join("")}
+      </div>
+    </article>
+  `;
 }
 
 function recommendationExplainerValues(value) {
@@ -246,7 +441,7 @@ function renderRecommendationExplainer(row = {}) {
   `;
 }
 
-function renderAgenticReviewRows(rows, columns) {
+function renderAgenticReviewRows(rows, columns, options = {}) {
   const items = Array.isArray(rows) ? rows.slice(0, 50) : [];
   if (!items.length) {
     return `<div class="pipeline-runs-empty-cell">No advisory rows recorded for this run.</div>`;
@@ -265,6 +460,13 @@ function renderAgenticReviewRows(rows, columns) {
             <tr class="agentic-review-explainer-row">
               <td colspan="${escapeHtml(String(columns.length || 1))}">${renderRecommendationExplainer(row)}</td>
             </tr>
+            ${options.manualProviderPreview ? `
+              <tr class="manual-provider-preview-row ${manualProviderPreviewState.results.has(String(row?.job_id || "").trim()) ? "" : "hidden"}">
+                <td colspan="${escapeHtml(String(columns.length || 1))}" data-manual-provider-preview-result="${escapeHtml(String(row?.job_id || "").trim())}">
+                  ${renderManualProviderPreviewResult(manualProviderPreviewState.results.get(String(row?.job_id || "").trim()))}
+                </td>
+              </tr>
+            ` : ""}
           `).join("")}
         </tbody>
       </table>
@@ -272,7 +474,7 @@ function renderAgenticReviewRows(rows, columns) {
   `;
 }
 
-function renderAgenticReviewAdvisoryPanel(panelId, title, description, rows, countField, columns) {
+function renderAgenticReviewAdvisoryPanel(panelId, title, description, rows, countField, columns, options = {}) {
   const panel = qs(panelId);
   if (!panel) return;
   const safeRows = Array.isArray(rows) ? rows : [];
@@ -289,7 +491,7 @@ function renderAgenticReviewAdvisoryPanel(panelId, title, description, rows, cou
       <strong>${escapeHtml(countField.replaceAll("_", " "))}</strong>
       <span>${renderReasonChips(Object.entries(counts).map(([key, value]) => `${key}:${value}`))}</span>
     </div>
-    ${renderAgenticReviewRows(safeRows, columns)}
+    ${renderAgenticReviewRows(safeRows, columns, options)}
   `;
 }
 
@@ -10263,6 +10465,9 @@ function renderAgenticReviewData(payload, tracePayload) {
     ],
   );
 
+  manualProviderPreviewState.tailoringRows = Array.isArray(payload.tailoring_decision_rows)
+    ? payload.tailoring_decision_rows
+    : [];
   renderAgenticReviewAdvisoryPanel(
     "agenticReviewTailoringPanel",
     "Tailoring Decision",
@@ -10276,7 +10481,9 @@ function renderAgenticReviewData(payload, tracePayload) {
       { key: "advisory_priority", label: "Priority", type: "pill" },
       { key: "tailoring_decision", label: "Tailoring decision", type: "pill" },
       { key: "tailoring_reason_codes", label: "Reasons", type: "reasons" },
+      { key: "job_id", label: "AI preview", type: "manual_provider_preview_action" },
     ],
+    { manualProviderPreview: true },
   );
 
   renderAgenticReviewAdvisoryPanel(
@@ -10330,6 +10537,149 @@ function activateAgenticReviewPanel(buttonSelector, panelSelector, activeButton,
   });
   document.querySelectorAll(panelSelector).forEach((panel) => {
     panel.classList.toggle("hidden", panel.id !== targetId);
+  });
+}
+
+function rerenderManualProviderPreviewWorkspace() {
+  renderAgenticReviewAdvisoryPanel(
+    "agenticReviewTailoringPanel",
+    "Tailoring Decision",
+    "Advisory tailoring decisions, separate from actual tailoring generation.",
+    manualProviderPreviewState.tailoringRows,
+    "tailoring_decision",
+    [
+      { key: "company", label: "Company" },
+      { key: "title", label: "Title" },
+      { key: "existing_action", label: "Existing action" },
+      { key: "advisory_priority", label: "Priority", type: "pill" },
+      { key: "tailoring_decision", label: "Tailoring decision", type: "pill" },
+      { key: "tailoring_reason_codes", label: "Reasons", type: "reasons" },
+      { key: "job_id", label: "AI preview", type: "manual_provider_preview_action" },
+    ],
+    { manualProviderPreview: true },
+  );
+}
+
+async function loadManualProviderPreviewReadiness() {
+  try {
+    const response = await window.fetch("/ai/settings/recommended-routes", {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok !== true) throw new Error("readiness_unavailable");
+    const readiness = manualProviderPreviewReadiness(payload);
+    manualProviderPreviewState.readiness = readiness.state;
+    manualProviderPreviewState.route = readiness.route;
+  } catch (_error) {
+    manualProviderPreviewState.readiness = "unknown";
+    manualProviderPreviewState.route = null;
+  }
+  if (manualProviderPreviewState.tailoringRows.length) rerenderManualProviderPreviewWorkspace();
+}
+
+function openManualProviderPreviewConfirmation(button) {
+  if (manualProviderPreviewState.readiness !== "eligible" || manualProviderPreviewState.inFlight) return;
+  const jobId = String(button?.dataset?.jobId || "").trim();
+  if (!jobId) return;
+  const modal = qs("manualProviderPreviewConfirmModal");
+  if (!modal) return;
+  manualProviderPreviewState.pendingJobId = jobId;
+  manualProviderPreviewState.activeTrigger = button;
+  modal.classList.remove("hidden");
+  qs("manualProviderPreviewConfirmBtn")?.focus();
+}
+
+function closeManualProviderPreviewConfirmation({ restoreFocus = true } = {}) {
+  const modal = qs("manualProviderPreviewConfirmModal");
+  if (modal) modal.classList.add("hidden");
+  if (restoreFocus) manualProviderPreviewState.activeTrigger?.focus?.();
+  manualProviderPreviewState.pendingJobId = "";
+  manualProviderPreviewState.activeTrigger = null;
+}
+
+function manualProviderPreviewErrorCategory(payload = {}) {
+  const detail = payload && typeof payload.detail === "object" ? payload.detail : {};
+  return typeof detail.error_category === "string" ? detail.error_category : "request_failed";
+}
+
+async function submitManualProviderPreview() {
+  if (manualProviderPreviewState.readiness !== "eligible" || manualProviderPreviewState.inFlight) return;
+  const runId = getAgenticReviewRunId();
+  const jobId = manualProviderPreviewState.pendingJobId;
+  if (!runId || !jobId) return;
+  manualProviderPreviewState.inFlight = true;
+  const confirmButton = qs("manualProviderPreviewConfirmBtn");
+  const cancelButton = qs("manualProviderPreviewCancelBtn");
+  if (confirmButton) {
+    confirmButton.disabled = true;
+    confirmButton.textContent = "Generating preview…";
+  }
+  if (cancelButton) cancelButton.disabled = true;
+  rerenderManualProviderPreviewWorkspace();
+  try {
+    const response = await window.fetch(MANUAL_PROVIDER_PREVIEW_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(manualProviderPreviewRequestBody(runId, jobId)),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      manualProviderPreviewState.results.set(jobId, {
+        kind: "error",
+        category: manualProviderPreviewErrorCategory(payload),
+      });
+    } else {
+      try {
+        manualProviderPreviewState.results.set(jobId, {
+          kind: "success",
+          preview: validateManualProviderPreviewResponse(payload),
+        });
+      } catch (_error) {
+        manualProviderPreviewState.results.set(jobId, {
+          kind: "error",
+          category: "malformed_provider_response",
+        });
+      }
+    }
+  } catch (_error) {
+    manualProviderPreviewState.results.set(jobId, { kind: "error", category: "request_failed" });
+  } finally {
+    manualProviderPreviewState.inFlight = false;
+    if (confirmButton) {
+      confirmButton.disabled = false;
+      confirmButton.textContent = "Generate preview";
+    }
+    if (cancelButton) cancelButton.disabled = false;
+    closeManualProviderPreviewConfirmation({ restoreFocus: false });
+    rerenderManualProviderPreviewWorkspace();
+    const escapedJobId = window.CSS?.escape ? window.CSS.escape(jobId) : jobId.replaceAll('"', '\\"');
+    document.querySelector(`[data-manual-provider-preview-action][data-job-id="${escapedJobId}"]`)?.focus();
+  }
+}
+
+function bindManualProviderPreviewControls() {
+  document.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-manual-provider-preview-action]");
+    if (action) openManualProviderPreviewConfirmation(action);
+  });
+  qs("manualProviderPreviewCancelBtn")?.addEventListener("click", () => {
+    if (!manualProviderPreviewState.inFlight) closeManualProviderPreviewConfirmation();
+  });
+  qs("manualProviderPreviewConfirmBtn")?.addEventListener("click", submitManualProviderPreview);
+  qs("manualProviderPreviewConfirmModal")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget && !manualProviderPreviewState.inFlight) {
+      closeManualProviderPreviewConfirmation();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !manualProviderPreviewState.inFlight
+      && !qs("manualProviderPreviewConfirmModal")?.classList.contains("hidden")) {
+      closeManualProviderPreviewConfirmation();
+    }
   });
 }
 
@@ -13116,8 +13466,10 @@ function bindAgenticReviewTabs() {
 
 async function initAgenticReviewPage() {
   bindAgenticReviewTabs();
+  bindManualProviderPreviewControls();
   const runId = getAgenticReviewRunId();
   if (!runId) return;
+  loadManualProviderPreviewReadiness();
   try {
     const [payload, feedbackPayload] = await Promise.all([
       fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review-data`),

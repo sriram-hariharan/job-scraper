@@ -529,7 +529,7 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
   <title>Agentic Review</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=agentic_review_v1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2e_manual_provider_preview_r1" />
   <link rel="stylesheet" href="/static/agentic_review.css?v=agentic_review_v1" />
 </head>
 <body>
@@ -616,9 +616,31 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
     </main>
   </div>
 
+  <section class="modal-backdrop manual-provider-preview-modal hidden" id="manualProviderPreviewConfirmModal" role="dialog" aria-modal="true" aria-labelledby="manualProviderPreviewConfirmTitle">
+    <div class="modal-card manual-provider-preview-modal-card">
+      <div class="modal-header">
+        <div>
+          <p class="agentic-review-kicker">Manual AI preview</p>
+          <h3 id="manualProviderPreviewConfirmTitle">Generate AI tailoring preview?</h3>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p>This makes one call to your currently qualified AI provider.</p>
+        <div class="manual-provider-preview-confirmation-note">
+          <strong>Preview only</strong>
+          <span>Suggestions are shown for manual review. Nothing is automatically applied to your resume, and nothing is submitted to an employer.</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" id="manualProviderPreviewCancelBtn">Cancel</button>
+        <button type="button" class="agentic-feedback-action manual-provider-preview-confirm-btn" id="manualProviderPreviewConfirmBtn">Generate preview</button>
+      </div>
+    </div>
+  </section>
+
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/profile.js?v=agentic_review_v1"></script>
-  <script src="/static/agentic_review.js?v=agentic_review_v1"></script>
+  <script src="/static/agentic_review.js?v=item2e_manual_provider_preview_r1"></script>
 </body>
 </html>
     """.strip()

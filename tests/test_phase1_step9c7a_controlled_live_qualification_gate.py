@@ -245,33 +245,41 @@ def test_import_build_and_validation_are_offline_and_default_off(
     }
 
 
-def test_live_universe_is_40_of_the_unchanged_44_cells(universe):
+def test_live_universe_contains_all_44_contract_resolved_cells(universe):
     eligible = [row for row in universe if row["live_qualification_eligible"]]
     blocked = [row for row in universe if not row["live_qualification_eligible"]]
 
     assert len(universe) == 44
-    assert len(eligible) == 40
-    assert len(blocked) == 4
-    assert {row["workload_id"] for row in blocked} == {
-        "manual_provider_preview"
-    }
-    assert all(row["production_task_contract_sha256"] is None for row in blocked)
+    assert len(eligible) == 44
+    assert blocked == []
     assert all(row["production_task_contract_sha256"] for row in eligible)
-    assert tuple(dict.fromkeys(row["workload_id"] for row in eligible)) == tuple(
-        workload
-        for workload in WORKLOAD_ORDER
-        if workload != "manual_provider_preview"
+    assert tuple(dict.fromkeys(row["workload_id"] for row in eligible)) == (
+        WORKLOAD_ORDER
     )
 
 
-def test_manual_preview_schedule_cannot_enter_live_authorization(plan, universe):
-    blocked = next(row for row in universe if not row["live_qualification_eligible"])
+def test_manual_preview_can_enter_only_default_off_authorization(plan, universe):
+    preview = next(
+        row
+        for row in universe
+        if row["workload_id"] == "manual_provider_preview"
+    )
+    authorization = live.build_live_authorization_template(
+        approved_schedule_keys=[preview["schedule_key"]],
+        plan=plan,
+    )
 
-    with pytest.raises(ValueError, match="live-blocked"):
-        live.build_live_authorization_template(
-            approved_schedule_keys=[blocked["schedule_key"]],
-            plan=plan,
-        )
+    assert authorization["approved_workload_ids"] == [
+        "manual_provider_preview"
+    ]
+    assert authorization["production_task_contract_fingerprints"] == {
+        "manual_provider_preview": preview[
+            "production_task_contract_sha256"
+        ]
+    }
+    assert authorization["operator_approved"] is False
+    assert authorization["maximum_request_count"] == 0
+    assert authorization["maximum_total_cost"] == 0
 
 
 @pytest.mark.parametrize(

@@ -774,17 +774,19 @@ def test_live_authority_tampering_fails_native_validation(plan, live_skill):
         )
 
 
-def test_manual_preview_stays_blocked_and_universes_stay_fixed(plan):
+def test_manual_preview_is_contract_eligible_without_granting_execution(plan):
     universe = live.build_live_qualification_universe(plan)
     blocked = [row for row in universe if not row["live_qualification_eligible"]]
+    preview = [
+        row for row in universe if row["workload_id"] == "manual_provider_preview"
+    ]
     assert len(universe) == 44
-    assert sum(row["live_qualification_eligible"] for row in universe) == 40
-    assert {row["workload_id"] for row in blocked} == {"manual_provider_preview"}
-    with pytest.raises(ValueError, match="live-blocked"):
-        live.build_live_authorization_template(
-            approved_schedule_keys=[blocked[0]["schedule_key"]],
-            plan=plan,
-        )
+    assert sum(row["live_qualification_eligible"] for row in universe) == 44
+    assert blocked == []
+    assert len(preview) == 4
+    assert all(row["production_task_contract_sha256"] for row in preview)
+    assert all(row["live_qualification_eligible"] is True for row in preview)
+    assert all(row["live_block_reason"] is None for row in preview)
 
 
 def test_adapter_and_integrations_are_offline_and_do_not_persist(

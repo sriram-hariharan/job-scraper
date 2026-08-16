@@ -299,8 +299,14 @@ def test_new_readback_fingerprint_alone_leaves_ambiguous_cells_pending(
         "task_contract_missing" not in cell["status_reasons"]
         for cell in ambiguous
     )
-    assert all(cell["current_task_contract_sha256"] is None for cell in preview)
-    assert all("task_contract_missing" in cell["status_reasons"] for cell in preview)
+    assert all(cell["current_task_contract_sha256"] for cell in preview)
+    assert all(cell["status"] == "pending" for cell in preview)
+    assert all("evidence_missing" in cell["status_reasons"] for cell in preview)
+    assert all("review_missing" in cell["status_reasons"] for cell in preview)
+    assert all(
+        "task_contract_missing" not in cell["status_reasons"]
+        for cell in preview
+    )
 
 
 def test_registry_universe_matches_current_plan_order(controlled_inputs):

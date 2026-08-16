@@ -32,10 +32,9 @@ FINGERPRINTED_WORKLOADS = (
     "tailoring_refinement",
     "tailoring_judge",
     "manual_scan_phrase",
-)
-UNRESOLVED_WORKLOADS = (
     "manual_provider_preview",
 )
+UNRESOLVED_WORKLOADS = ()
 PRE_FIX_CRITIC_FINGERPRINT = (
     "7bd17e2bbc832e665f3e2d29a872059104b9aa170ec0fa778b37b6cf8c14b5cf"
 )
@@ -149,10 +148,94 @@ def test_tailoring_schema_changes_only_tailoring_generation_fingerprint(
     } == {"tailoring_generation"}
 
 
-@pytest.mark.parametrize("workload_id", UNRESOLVED_WORKLOADS)
-def test_unresolved_or_benchmark_only_workload_has_no_production_contract(workload_id):
-    assert fingerprints.build_production_task_contract(workload_id) is None
-    assert fingerprints.production_task_contract_sha256(workload_id) is None
+def test_manual_provider_preview_has_an_authoritative_bounded_contract():
+    contract = fingerprints.build_production_task_contract(
+        "manual_provider_preview"
+    )
+
+    assert contract["workload_id"] == "manual_provider_preview"
+    assert contract["input_contract"]["fields"] == [
+        "authorized_job_context",
+        "bounded_resume_evidence_context",
+        "selected_tailoring_request",
+        "manual_trigger_context",
+    ]
+    schema = contract["output_contract"]["schema"]
+    assert contract["output_contract"]["strict"] is True
+    assert schema["properties"]["suggestions"]["maxItems"] == 3
+    assert contract["input_contract"]["maximum_characters"] == {
+        "authorized_job_context": 6000,
+        "bounded_resume_evidence_context": 12000,
+        "selected_tailoring_request": 4000,
+        "manual_trigger_context": 1000,
+    }
+    assert schema["properties"]["preview_status"]["enum"] == ["advisory"]
+    for field in (
+        "resume_mutation_authorized",
+        "automatic_acceptance_authorized",
+        "application_mutation_authorized",
+        "auto_apply_authorized",
+        "auto_submit_authorized",
+    ):
+        assert schema["properties"][field]["const"] is False
+    safety = contract["deterministic_transformation_contract"]
+    assert safety["preview_only"] is True
+    assert safety["manual_review_required"] is True
+    assert safety["scoring_or_ranking_authority"] is False
+
+
+def test_manual_provider_preview_contract_is_deterministic_and_secret_free():
+    first = fingerprints.build_production_task_contract(
+        "manual_provider_preview"
+    )
+    second = fingerprints.build_production_task_contract(
+        "manual_provider_preview"
+    )
+    first_digest = fingerprints.production_task_contract_sha256(
+        "manual_provider_preview"
+    )
+    second_digest = fingerprints.production_task_contract_sha256(
+        "manual_provider_preview"
+    )
+    serialized = json.dumps(first, sort_keys=True).lower()
+
+    assert first == second
+    assert first_digest == second_digest
+    assert re.fullmatch(r"[0-9a-f]{64}", first_digest)
+    for forbidden in (
+        "api_key",
+        "credential",
+        "database_url",
+        "password",
+        "timestamp",
+        "random",
+        "/users/",
+        "scoring_authorized",
+        "ranking_authorized",
+    ):
+        assert forbidden not in serialized
+
+
+def test_manual_provider_preview_semantic_change_changes_only_its_fingerprint(
+    monkeypatch,
+):
+    from src.agents import manual_provider_preview_production_task_contract as owner
+
+    baseline = fingerprints.build_all_production_task_contract_fingerprints()
+    changed_schema = deepcopy(owner.RESPONSE_SCHEMA)
+    changed_schema["properties"]["suggestions"]["maxItems"] = 2
+    monkeypatch.setattr(
+        owner,
+        "RESPONSE_SCHEMA",
+        changed_schema,
+    )
+    changed = fingerprints.build_all_production_task_contract_fingerprints()
+
+    assert {
+        workload_id
+        for workload_id in baseline
+        if baseline[workload_id] != changed[workload_id]
+    } == {"manual_provider_preview"}
 
 
 def test_unknown_workload_fails_closed():
@@ -345,6 +428,17 @@ def test_provider_model_credentials_runtime_and_operational_state_are_excluded(
                 "structured_response_mime_type": "application/json",
                 "structured_return_parsed": True,
                 "plain_retry_return_parsed": False,
+            },
+        ),
+        (
+            "manual_provider_preview",
+            {
+                "temperature": 0,
+                "max_tokens": 700,
+                "thinking_budget": 0,
+                "response_mime_type": "application/json",
+                "return_parsed": True,
+                "fallback_enabled": False,
             },
         ),
     ],

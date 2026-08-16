@@ -50,6 +50,7 @@ _RESPONSE_MODES = {
     "tailoring_refinement": "plain_text",
     "tailoring_judge": "plain_text",
     "manual_scan_phrase": "structured_json",
+    "manual_provider_preview": "structured_json",
 }
 _PROMPT_KEYS = {
     "skill_extraction": ("system", "primary_user_template"),
@@ -62,6 +63,7 @@ _PROMPT_KEYS = {
     "tailoring_refinement": ("system", "user_template"),
     "tailoring_judge": ("system", "user_template"),
     "manual_scan_phrase": ("system", "user_template"),
+    "manual_provider_preview": ("system", "user_template"),
 }
 _PARITY_REQUEST_FIELDS = {
     "parity_adapter_version",
@@ -391,6 +393,26 @@ def _synthetic_material(
             "<supported_term>": ", ".join(supported),
         }
         context = {"current_bullet": current, "supported_terms": supported}
+    elif workload_id == "manual_provider_preview":
+        evidence_id = "evidence_alpha"
+        replacements = {
+            "<authorized_job_context>": (
+                "Synthetic role requires " + ", ".join(evidence)
+            ),
+            "<bounded_resume_evidence_context>": (
+                f"{evidence_id}: Delivered {', '.join(evidence)}."
+            ),
+            "<selected_tailoring_request>": (
+                f"Clarify the supported {_first(evidence, 'python')} evidence."
+            ),
+            "<manual_trigger_context>": (
+                "explicit_user_trigger=true; operator_confirmed=true"
+            ),
+        }
+        context = {
+            "authorized_evidence_ids": [evidence_id],
+            "evidence_tokens": evidence,
+        }
     else:
         raise ProductionParityBlocked("production parity contract is unresolved")
 
@@ -798,6 +820,59 @@ def _normalize_production_response(
         _require(bool(normalized), "scan phrase response has no valid options")
         return {"options": normalized}
 
+    if workload_id == "manual_provider_preview":
+        parsed = _parse_json_object(raw_response, json.loads)
+        required = {
+            "preview_status",
+            "manual_only",
+            "suggestions",
+            "resume_mutation_authorized",
+            "automatic_acceptance_authorized",
+            "application_mutation_authorized",
+            "auto_apply_authorized",
+            "auto_submit_authorized",
+        }
+        _require(set(parsed) == required, "manual preview response fields are invalid")
+        suggestions = parsed.get("suggestions")
+        _require(
+            parsed.get("preview_status") == "advisory"
+            and parsed.get("manual_only") is True
+            and isinstance(suggestions, list)
+            and 1 <= len(suggestions) <= 3,
+            "manual preview response is not bounded and advisory",
+        )
+        _require(
+            all(parsed.get(field) is False for field in required if field.endswith("_authorized")),
+            "manual preview response grants mutation or action authority",
+        )
+        allowed_ids = set(context["authorized_evidence_ids"])
+        normalized = []
+        suggestion_fields = {
+            "suggestion_id",
+            "source_evidence_ids",
+            "preview_text",
+            "claims",
+            "rationale",
+            "risk_flags",
+        }
+        for suggestion in suggestions:
+            _require(
+                isinstance(suggestion, dict) and set(suggestion) == suggestion_fields,
+                "manual preview suggestion fields are invalid",
+            )
+            source_ids = _strings(suggestion.get("source_evidence_ids"))
+            claims = _strings(suggestion.get("claims"))
+            _require(
+                bool(_clean(suggestion.get("suggestion_id")))
+                and bool(source_ids)
+                and set(source_ids).issubset(allowed_ids)
+                and bool(_clean(suggestion.get("preview_text")))
+                and bool(_clean(suggestion.get("rationale"))),
+                "manual preview suggestion is ungrounded or incomplete",
+            )
+            normalized.append({**deepcopy(suggestion), "claims": claims})
+        return {**deepcopy(parsed), "suggestions": normalized}
+
     raise ProductionParityBlocked("production parity contract is unresolved")
 
 
@@ -950,6 +1025,24 @@ def _benchmark_projection(
             ],
             "manual_only": True,
             "can_accept_directly": False,
+        }
+    if workload_id == "manual_provider_preview":
+        claims = _unique(
+            [
+                claim
+                for suggestion in normalized.get("suggestions") or []
+                for claim in _strings(
+                    suggestion.get("claims") if isinstance(suggestion, dict) else []
+                )
+            ]
+        )
+        return {
+            "preview_status": "advisory",
+            "manual_only": True,
+            "claims": claims,
+            "mutation_authorized": False,
+            "application_authorized": False,
+            "ats_authorized": False,
         }
     return {}
 

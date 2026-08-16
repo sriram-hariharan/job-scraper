@@ -41,10 +41,9 @@ RUNNABLE = (
     "tailoring_refinement",
     "tailoring_judge",
     "manual_scan_phrase",
-)
-BLOCKED = (
     "manual_provider_preview",
 )
+BLOCKED = ()
 EXPECTED_MODES = {
     "skill_extraction": "json_text",
     "job_fit_evaluation": "json_text",
@@ -57,6 +56,7 @@ EXPECTED_MODES = {
     "tailoring_refinement": "plain_text",
     "tailoring_judge": "plain_text",
     "manual_scan_phrase": "structured_json",
+    "manual_provider_preview": "structured_json",
 }
 
 
@@ -239,10 +239,31 @@ def _valid_response(workload_id):
                 }
             ]
         },
+        "manual_provider_preview": {
+            "preview_status": "advisory",
+            "manual_only": True,
+            "suggestions": [
+                {
+                    "suggestion_id": "suggestion_alpha",
+                    "source_evidence_ids": ["evidence_alpha"],
+                    "preview_text": (
+                        "Delivered python evidence in the bounded synthetic context."
+                    ),
+                    "claims": ["python"],
+                    "rationale": "Uses only the authorized synthetic evidence.",
+                    "risk_flags": [],
+                }
+            ],
+            "resume_mutation_authorized": False,
+            "automatic_acceptance_authorized": False,
+            "application_mutation_authorized": False,
+            "auto_apply_authorized": False,
+            "auto_submit_authorized": False,
+        },
     }[workload_id]
 
 
-def test_exact_eleven_workloads_are_runnable_and_one_is_blocked():
+def test_all_twelve_workloads_are_production_parity_runnable():
     runnability = parity.build_production_parity_runnability()
 
     assert len(WORKLOAD_ORDER) == len(runnability) == 12
@@ -259,6 +280,50 @@ def test_exact_eleven_workloads_are_runnable_and_one_is_blocked():
         for key, value in runnability.items()
         if value["status"] == "blocked_pending_contract_resolution"
     ) == BLOCKED
+
+
+def test_manual_preview_parity_is_bounded_grounded_and_preview_only(plan):
+    request = _request(plan, "manual_provider_preview")
+    result = parity.validate_and_grade_production_parity_response(
+        request,
+        _valid_response("manual_provider_preview"),
+        plan=plan,
+    )
+
+    assert request["response_contract"]["mode"] == "structured_json"
+    assert request["fallback"] is False
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_quality"]["quality_gate_passed"] is True
+    assert result["benchmark_projection"] == {
+        "preview_status": "advisory",
+        "manual_only": True,
+        "claims": ["python"],
+        "mutation_authorized": False,
+        "application_authorized": False,
+        "ats_authorized": False,
+    }
+    assert result["authority_invariants"]["provider_call_count"] == 0
+    assert result["authority_invariants"]["qualification_status_promoted"] is False
+
+
+def test_manual_preview_parity_rejects_stale_fingerprint_and_action_authority(
+    plan,
+):
+    request = _request(plan, "manual_provider_preview")
+    stale = deepcopy(request)
+    stale["production_task_contract_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="stale or mismatched"):
+        parity.validate_production_parity_request(stale, plan=plan)
+
+    unsafe = _valid_response("manual_provider_preview")
+    unsafe["auto_apply_authorized"] = True
+    result = parity.validate_and_grade_production_parity_response(
+        request,
+        unsafe,
+        plan=plan,
+    )
+    assert result["production_contract_valid"] is False
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
 
 
 def test_ambiguous_parity_uses_exact_readback_prompt_and_candidate_payload(plan):

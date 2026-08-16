@@ -591,7 +591,7 @@ def test_context_target_requires_matching_evidence_before_dispatch(
     assert dispatcher.calls == []
 
 
-def test_real_9c7b_artifact_and_live_universe_remain_unchanged(plan):
+def test_real_9c7b_artifact_is_unchanged_and_contract_universe_is_current(plan):
     artifact_bytes = REAL_9C7B.read_bytes()
     universe = live.build_live_qualification_universe(plan)
     eligible = [item for item in universe if item["live_qualification_eligible"]]
@@ -604,13 +604,8 @@ def test_real_9c7b_artifact_and_live_universe_remain_unchanged(plan):
     assert stat.S_IMODE(REAL_9C7B.stat().st_mode) == 0o600
     assert not fake_context.exists()
     assert len(universe) == 44
-    assert len(eligible) == 40
-    assert len(blocked) == 4
-    assert {item["workload_id"] for item in blocked} == {
-        "manual_provider_preview"
-    }
-    assert tuple(dict.fromkeys(item["workload_id"] for item in eligible)) == tuple(
-        workload
-        for workload in WORKLOAD_ORDER
-        if workload != "manual_provider_preview"
+    assert len(eligible) == 44
+    assert blocked == []
+    assert tuple(dict.fromkeys(item["workload_id"] for item in eligible)) == (
+        WORKLOAD_ORDER
     )

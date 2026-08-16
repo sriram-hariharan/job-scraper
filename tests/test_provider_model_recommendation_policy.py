@@ -65,6 +65,22 @@ def _synthetic_registry():
                     "review_sha256": None,
                 }
             )
+        elif workload_id in policy._QUALIFICATION_GATED_WORKLOADS:
+            for index in range(4):
+                cells.append(
+                    {
+                        "workload_id": workload_id,
+                        "provider": "synthetic",
+                        "model": f"gated-{index}",
+                        "status": "pending",
+                        "status_reasons": ["evidence_missing"],
+                        "current_task_contract_sha256": None,
+                        "tested_task_contract_sha256": None,
+                        "qualification_binding_sha256": "d" * 64,
+                        "evidence_sha256": None,
+                        "review_sha256": None,
+                    }
+                )
         elif workload_id in policy._BLOCKED_NON_LIVE_WORKLOADS:
             for index in range(4):
                 cells.append(
@@ -255,7 +271,7 @@ def test_fail_closed_workload_cannot_auto_promote_new_model():
         policy.build_provider_model_recommendation_policy(payload)
 
 
-def test_blocked_non_live_workload_cannot_gain_evidence_silently():
+def test_qualification_gated_workload_rejects_stale_qualified_binding():
     payload = _synthetic_registry()
 
     target = next(
@@ -263,12 +279,99 @@ def test_blocked_non_live_workload_cannot_gain_evidence_silently():
         for cell in payload["cells"]
         if cell["workload_id"] == "manual_provider_preview"
     )
-    target["evidence_sha256"] = "1" * 64
+    target.update(
+        {
+            "status": "qualified",
+            "status_reasons": ["qualification_requirements_satisfied"],
+            "current_task_contract_sha256": "0" * 64,
+            "tested_task_contract_sha256": "0" * 64,
+            "evidence_sha256": "1" * 64,
+            "review_sha256": "2" * 64,
+        }
+    )
 
     with pytest.raises(
         ValueError,
-        match="unexpectedly contains qualification evidence",
+        match="task-contract binding is stale",
     ):
+        policy.build_provider_model_recommendation_policy(payload)
+
+
+def test_qualification_gated_workload_is_blocked_without_evidence():
+    result = policy.read_provider_model_recommendation(
+        _synthetic_registry(),
+        "manual_provider_preview",
+    )
+
+    assert result["recommendation_status"] == "blocked_non_live"
+    assert result["provider"] is None
+    assert result["model"] is None
+    assert result["evidence_sha256"] is None
+    assert result["review_sha256"] is None
+
+
+def test_valid_current_reviewed_qualification_becomes_eligible():
+    payload = _synthetic_registry()
+    digest = policy.production_task_contract_sha256(
+        "manual_provider_preview"
+    )
+    target = next(
+        cell
+        for cell in payload["cells"]
+        if cell["workload_id"] == "manual_provider_preview"
+    )
+    target.update(
+        {
+            "status": "qualified",
+            "status_reasons": ["qualification_requirements_satisfied"],
+            "current_task_contract_sha256": digest,
+            "tested_task_contract_sha256": digest,
+            "qualification_binding_sha256": "3" * 64,
+            "evidence_sha256": "4" * 64,
+            "review_sha256": "5" * 64,
+        }
+    )
+
+    result = policy.read_provider_model_recommendation(
+        payload,
+        "manual_provider_preview",
+    )
+
+    assert result == {
+        "workload_id": "manual_provider_preview",
+        "recommendation_status": "recommended",
+        "provider": "synthetic",
+        "model": "gated-0",
+        "selection_basis": "sole_qualified_candidate",
+        "task_contract_sha256": digest,
+        "qualification_binding_sha256": "3" * 64,
+        "evidence_sha256": "4" * 64,
+        "review_sha256": "5" * 64,
+    }
+
+
+def test_qualified_manual_preview_requires_evidence_and_human_review():
+    payload = _synthetic_registry()
+    digest = policy.production_task_contract_sha256(
+        "manual_provider_preview"
+    )
+    target = next(
+        cell
+        for cell in payload["cells"]
+        if cell["workload_id"] == "manual_provider_preview"
+    )
+    target.update(
+        {
+            "status": "qualified",
+            "status_reasons": ["qualification_requirements_satisfied"],
+            "current_task_contract_sha256": digest,
+            "tested_task_contract_sha256": digest,
+            "evidence_sha256": None,
+            "review_sha256": None,
+        }
+    )
+
+    with pytest.raises(ValueError, match="qualified evidence is missing"):
         policy.build_provider_model_recommendation_policy(payload)
 
 

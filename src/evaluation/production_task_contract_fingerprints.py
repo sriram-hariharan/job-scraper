@@ -15,9 +15,7 @@ from src.evaluation.provider_benchmark_contract import WORKLOAD_ORDER
 PRODUCTION_TASK_CONTRACT_FINGERPRINT_VERSION = (
     "production-task-contract-fingerprints-v1"
 )
-UNRESOLVED_PRODUCTION_WORKLOADS = (
-    "manual_provider_preview",
-)
+UNRESOLVED_PRODUCTION_WORKLOADS: tuple[str, ...] = ()
 FINGERPRINTED_PRODUCTION_WORKLOADS = tuple(
     workload_id
     for workload_id in WORKLOAD_ORDER
@@ -77,6 +75,10 @@ _OWNER_BUILDERS = {
     "manual_scan_phrase": (
         "src.app.services",
         "build_manual_scan_phrase_production_task_contract_material",
+    ),
+    "manual_provider_preview": (
+        "src.agents.manual_provider_preview_production_task_contract",
+        "build_manual_provider_preview_production_task_contract_material",
     ),
 }
 

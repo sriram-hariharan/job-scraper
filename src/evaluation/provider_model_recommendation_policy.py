@@ -15,6 +15,9 @@ from copy import deepcopy
 from typing import Any, Dict, Mapping
 
 from src.evaluation import controlled_provider_qualification_registry as qualification_registry
+from src.evaluation.production_task_contract_fingerprints import (
+    production_task_contract_sha256,
+)
 
 
 RECOMMENDATION_POLICY_VERSION = "provider-model-recommendation-policy-v1"
@@ -167,11 +170,8 @@ _FAIL_CLOSED_WORKLOADS = frozenset(
     }
 )
 
-_BLOCKED_NON_LIVE_WORKLOADS = frozenset(
-    {
-        "manual_provider_preview",
-    }
-)
+_QUALIFICATION_GATED_WORKLOADS = frozenset({"manual_provider_preview"})
+_BLOCKED_NON_LIVE_WORKLOADS: frozenset[str] = frozenset()
 
 
 def _require(condition: bool, message: str) -> None:
@@ -314,6 +314,48 @@ def validate_provider_model_recommendation_policy_source(
             f"{workload_id} unexpectedly has a live task contract",
         )
 
+    for workload_id in _QUALIFICATION_GATED_WORKLOADS:
+        cells = _cells_for_workload(payload, workload_id)
+        _require(
+            len(cells) == 4,
+            f"{workload_id} qualification universe changed",
+        )
+        current_digest = production_task_contract_sha256(workload_id)
+        _require(
+            current_digest is not None,
+            f"{workload_id} production task contract is unavailable",
+        )
+        qualified_cells = [
+            cell for cell in cells if cell["status"] == "qualified"
+        ]
+        for cell in qualified_cells:
+            _require(
+                cell["status_reasons"]
+                == ["qualification_requirements_satisfied"],
+                f"{workload_id} qualified status is invalid",
+            )
+            _require(
+                cell["current_task_contract_sha256"] == current_digest
+                and cell["tested_task_contract_sha256"] == current_digest,
+                f"{workload_id} qualified task-contract binding is stale",
+            )
+            _require(
+                cell["qualification_binding_sha256"] is not None
+                and cell["evidence_sha256"] is not None,
+                f"{workload_id} qualified evidence is missing",
+            )
+            _require(
+                cell["review_sha256"] is not None,
+                f"{workload_id} qualified human review is missing",
+            )
+        _require(
+            len(qualified_cells) <= 1,
+            (
+                f"{workload_id} has multiple qualified candidates; "
+                "explicit recommendation review required"
+            ),
+        )
+
     return True
 
 
@@ -379,6 +421,47 @@ def build_provider_model_recommendation_policy(
                     "review_sha256": None,
                 }
             )
+        elif workload_id in _QUALIFICATION_GATED_WORKLOADS:
+            qualified_cells = [
+                cell
+                for cell in _cells_for_workload(payload, workload_id)
+                if cell["status"] == "qualified"
+            ]
+            if qualified_cells:
+                cell = qualified_cells[0]
+                entries.append(
+                    {
+                        "workload_id": workload_id,
+                        "recommendation_status": "recommended",
+                        "provider": cell["provider"],
+                        "model": cell["model"],
+                        "selection_basis": "sole_qualified_candidate",
+                        "task_contract_sha256": cell[
+                            "current_task_contract_sha256"
+                        ],
+                        "qualification_binding_sha256": cell[
+                            "qualification_binding_sha256"
+                        ],
+                        "evidence_sha256": cell["evidence_sha256"],
+                        "review_sha256": cell["review_sha256"],
+                    }
+                )
+            else:
+                entries.append(
+                    {
+                        "workload_id": workload_id,
+                        "recommendation_status": "blocked_non_live",
+                        "provider": None,
+                        "model": None,
+                        "selection_basis": "blocked_non_live",
+                        "task_contract_sha256": (
+                            production_task_contract_sha256(workload_id)
+                        ),
+                        "qualification_binding_sha256": None,
+                        "evidence_sha256": None,
+                        "review_sha256": None,
+                    }
+                )
         else:
             raise ValueError(
                 f"{workload_id} has no frozen recommendation policy"

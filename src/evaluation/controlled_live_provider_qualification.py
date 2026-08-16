@@ -367,7 +367,7 @@ def build_live_qualification_universe(
         )
     _require(len(rows) == 44, "canonical historical plan size changed")
     _require(
-        sum(row["live_qualification_eligible"] for row in rows) == 40,
+        sum(row["live_qualification_eligible"] for row in rows) == 44,
         "production-qualifiable universe size changed",
     )
     _require(

@@ -129,8 +129,9 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
             "job_name": "agent_discovery",
             "status": "succeeded",
             "return_code": 0,
-            "started_at": "2026-08-16T01:00:00Z",
-            "finished_at": "2026-08-16T01:05:00Z",
+            "started_at": "2026-08-16T20:00:00Z",
+            "finished_at": "2026-08-16T20:05:00Z",
+            "trigger_source": "manual_admin",
         },
         {
             "run_id": "run-live",
@@ -139,7 +140,18 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
             "return_code": 7,
             "started_at": "2026-08-16T02:00:00Z",
             "finished_at": "2026-08-16T02:05:00Z",
+            "trigger_source": "external_scheduler_wrapper",
         },
+    ]
+    latest_scheduled_runs = [
+        {
+            **latest_runs[0],
+            "run_id": "run-agent-scheduled",
+            "started_at": "2026-08-16T01:00:00Z",
+            "finished_at": "2026-08-16T01:05:00Z",
+            "trigger_source": "external_scheduler_wrapper",
+        },
+        latest_runs[1],
     ]
     monkeypatch.setattr(
         services,
@@ -156,6 +168,7 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
             "postgres_command_text": "psql [DATABASE_URL_REDACTED]",
             "postgres": {
                 "latest_runs_by_job": latest_runs,
+                "latest_scheduled_runs_by_job": latest_scheduled_runs,
                 "recent_runs": latest_runs,
             },
         },
@@ -198,6 +211,13 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
     ]
     assert payload["runtime_jobs"][0]["last_run"] == latest_runs[0]
     assert payload["runtime_jobs"][1]["last_run"] == latest_runs[1]
+    assert payload["runtime_jobs"][0]["expected_next_run_at"] == (
+        "2026-08-17T01:00:00+00:00"
+    )
+    assert payload["runtime_jobs"][1]["expected_next_run_at"] == (
+        "2026-08-16T08:00:00+00:00"
+    )
+    assert payload["latest_scheduled_runs_by_job"] == latest_scheduled_runs
     serialized = json.dumps(payload)
     for forbidden in (
         "DATABASE_URL=",
@@ -207,6 +227,82 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
         "EnvironmentVariables",
     ):
         assert forbidden not in serialized
+
+
+def test_scheduler_expected_next_run_uses_started_at_and_fails_closed() -> None:
+    assert services._scheduler_expected_next_run_at(
+        {
+            "started_at": "2026-08-16T02:00:00Z",
+            "finished_at": "2040-01-01T00:00:00Z",
+        },
+        21600,
+    ) == "2026-08-16T08:00:00+00:00"
+    assert services._scheduler_expected_next_run_at(None, 21600) is None
+    assert services._scheduler_expected_next_run_at({}, 21600) is None
+    assert services._scheduler_expected_next_run_at(
+        {"started_at": "malformed"},
+        21600,
+    ) is None
+    assert services._scheduler_expected_next_run_at(
+        {"started_at": "2026-08-16T02:00:00"},
+        21600,
+    ) is None
+
+
+def test_scheduler_expected_next_run_uses_only_postgres_last_run(monkeypatch) -> None:
+    monkeypatch.setattr(
+        services,
+        "scheduler_contract_health_payload",
+        lambda: {"all_checks_pass": True},
+    )
+    monkeypatch.setattr(
+        services,
+        "scheduler_postgres_status_payload",
+        lambda **_kwargs: {
+            "history_jsonl_row_count": 2,
+            "history_postgres_row_count": 1,
+            "history_count_matches_jsonl": False,
+            "postgres_command_text": "psql [DATABASE_URL_REDACTED]",
+            "postgres": {
+                "latest_runs_by_job": [
+                    {
+                        "job_name": "live_pipeline",
+                        "started_at": "malformed",
+                        "trigger_source": "manual_admin",
+                    }
+                ],
+                "latest_scheduled_runs_by_job": [],
+                "recent_runs": [],
+            },
+        },
+    )
+    monkeypatch.setattr(
+        services,
+        "_load_scheduler_history_rows",
+        lambda *_args: [
+            {"job_name": "agent_discovery", "started_at": "2026-08-16T01:00:00Z"},
+            {"job_name": "live_pipeline", "started_at": "2026-08-16T02:00:00Z"},
+        ],
+    )
+    monkeypatch.setattr(
+        services,
+        "get_scheduler_runtime_jobs_status",
+        lambda: [
+            {"job_name": "agent_discovery", "cadence_seconds": 86400},
+            {"job_name": "live_pipeline", "cadence_seconds": 21600},
+        ],
+    )
+
+    payload = services.scheduler_operator_summary_payload(limit=25)
+
+    assert [job["job_name"] for job in payload["runtime_jobs"]] == [
+        "agent_discovery",
+        "live_pipeline",
+    ]
+    assert payload["runtime_jobs"][0]["last_run"] is None
+    assert payload["runtime_jobs"][0]["expected_next_run_at"] is None
+    assert payload["runtime_jobs"][1]["last_run"]["started_at"] == "malformed"
+    assert payload["runtime_jobs"][1]["expected_next_run_at"] is None
 
 
 def test_non_admin_receives_existing_admin_forbidden_api_response(monkeypatch) -> None:
@@ -319,6 +415,7 @@ def test_existing_payload_keys_remain_available_in_service_and_react_model() -> 
         "contract_health",
         "history",
         "latest_runs_by_job",
+        "latest_scheduled_runs_by_job",
         "recent_postgres_runs",
         "recent_jsonl_runs",
         "postgres_summary",
@@ -398,11 +495,12 @@ def test_no_new_scheduler_write_or_control_action_introduced() -> None:
         assert forbidden not in SCHEDULER_DASHBOARD_TSX
 
 
-def test_react_island_is_the_sole_scheduler_summary_request_owner() -> None:
-    # Exactly one fetch() call anywhere in the scheduler React module, and the
-    # classic page source no longer performs its own competing fetch.
-    assert SCHEDULER_MODEL_TS.count("fetch(") == 1
+def test_react_island_owns_only_summary_and_manual_discovery_requests() -> None:
+    # The scheduler model owns one summary GET and one explicit admin manual
+    # discovery POST; the classic page source has no competing request owner.
+    assert SCHEDULER_MODEL_TS.count("fetch(") == 2
     assert '"/scheduler/summary?limit=25"' in SCHEDULER_MODEL_TS
+    assert '"/scheduler/jobs/agent_discovery/run-now"' in SCHEDULER_MODEL_TS
     assert "fetch(" not in SCHEDULER_DASHBOARD_TSX
     scheduler_route = UI_SOURCE[UI_SOURCE.index('@router.get("/scheduler"'):]
     assert "fetch(" not in scheduler_route

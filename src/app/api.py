@@ -867,6 +867,12 @@ async def lifespan(app: FastAPI):
             services.stop_live_pipeline_for_server_shutdown()
         except Exception:
             logger.exception("Failed to stop live pipeline during API shutdown")
+        try:
+            services.stop_manual_agent_discovery_for_server_shutdown()
+        except Exception:
+            logger.exception(
+                "Failed to stop manual Agent Discovery during API shutdown"
+            )
 
 app = FastAPI(
     title="Job Operator API",
@@ -3085,6 +3091,27 @@ def scheduler_summary(
         )
     except (ValueError, SystemExit) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/scheduler/jobs/agent_discovery/run-now", status_code=202)
+def scheduler_run_agent_discovery_now(http_request: Request):
+    _require_admin_user(http_request)
+    try:
+        return services.start_manual_agent_discovery_payload()
+    except services.ManualAgentDiscoveryStartError as exc:
+        status_code = (
+            503
+            if exc.category == "agent_discovery_launch_failed"
+            else 409
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "ok": False,
+                "error_category": exc.category,
+                "job_name": "agent_discovery",
+            },
+        ) from exc
 
 @app.get("/notifications")
 def notifications(

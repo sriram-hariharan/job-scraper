@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import shutil
+import signal
 
 from src.ai.user_provider_runtime import (
     run_user_chat_completion_with_metadata,
@@ -190,12 +191,16 @@ from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_LOG_DIR,
     DEFAULT_LAUNCHD_OUT_DIR,
     DEFAULT_LAUNCHD_TARGET,
+    REPO_ROOT,
     build_scheduled_job_command,
+    build_scheduler_wrapper_command,
     build_scheduler_launchd_plist_payload,
     get_scheduled_job_definition,
     get_scheduled_job_definitions,
     get_scheduler_launchd_agent_status,
+    get_scheduler_runtime_job_status,
     get_scheduler_runtime_jobs_status,
+    resolve_scheduler_psql_executable,
 )
 from src.storage.scheduler.contract import (
     scheduler_init_sql_generation_payload,
@@ -227,6 +232,14 @@ _PROCESS_IDENTITY_POPEN = subprocess.Popen
 
 class SelectedResumeRegenerationError(RuntimeError):
     """Bounded failure raised by targeted resume-regeneration subprocesses."""
+
+
+class ManualAgentDiscoveryStartError(RuntimeError):
+    """Bounded admission or launch failure for admin manual discovery."""
+
+    def __init__(self, category: str):
+        self.category = str(category)
+        super().__init__(self.category)
 
 
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
@@ -267,6 +280,16 @@ _PIPELINE_ACTIVE_RUNS: Dict[str, Dict[str, Any]] = {}
 _PIPELINE_ACTIVE_RUNS_LOCK = threading.RLock()
 _PIPELINE_RECONCILIATION_DECISIONS: Dict[str, Dict[str, Any]] = {}
 _PIPELINE_RECONCILIATION_DECISIONS_LOCK = threading.RLock()
+
+_MANUAL_AGENT_DISCOVERY_LOCK = threading.RLock()
+_MANUAL_AGENT_DISCOVERY_STATE: Dict[str, Any] = {
+    "process": None,
+    "log_handle": None,
+    "started_at": None,
+}
+_MANUAL_AGENT_DISCOVERY_LOG_PATH = (
+    DEFAULT_LAUNCHD_LOG_DIR / "agent_discovery_manual.out.log"
+)
 
 _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS: set[str] = set()
 _PIPELINE_ARTIFACT_MAX_BYTES = int(
@@ -8458,6 +8481,176 @@ def scheduler_launchd_agent_status_payload(
         "items": items,
     }
 
+
+def build_manual_agent_discovery_wrapper_command(
+    *,
+    psql_bin: str = "psql",
+) -> List[str]:
+    resolved_psql = resolve_scheduler_psql_executable(psql_bin)
+    return build_scheduler_wrapper_command(
+        "agent_discovery",
+        history_path=DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
+        sync_postgres_run_history=True,
+        require_postgres_run_history_sync=True,
+        psql_bin=resolved_psql,
+        trigger_source="manual_admin",
+    )
+
+
+def _reconcile_manual_agent_discovery_process_locked() -> Dict[str, Any]:
+    process = _MANUAL_AGENT_DISCOVERY_STATE.get("process")
+    log_handle = _MANUAL_AGENT_DISCOVERY_STATE.get("log_handle")
+    active = False
+    if process is not None:
+        try:
+            active = process.poll() is None
+        except Exception:
+            active = False
+        if not active:
+            if log_handle is not None:
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
+            _MANUAL_AGENT_DISCOVERY_STATE.update(
+                {"process": None, "log_handle": None, "started_at": None}
+            )
+    return {
+        "manual_run_active": active,
+        "manual_run_started_at": (
+            _MANUAL_AGENT_DISCOVERY_STATE.get("started_at") if active else None
+        ),
+    }
+
+
+def manual_agent_discovery_status_payload() -> Dict[str, Any]:
+    with _MANUAL_AGENT_DISCOVERY_LOCK:
+        return _reconcile_manual_agent_discovery_process_locked()
+
+
+def start_manual_agent_discovery_payload(
+    *,
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    with _MANUAL_AGENT_DISCOVERY_LOCK:
+        manual_status = _reconcile_manual_agent_discovery_process_locked()
+        if manual_status["manual_run_active"]:
+            raise ManualAgentDiscoveryStartError(
+                "agent_discovery_already_running"
+            )
+
+        runtime = get_scheduler_runtime_job_status("agent_discovery")
+        if runtime.get("running") is True or runtime.get("runtime_state") == "running":
+            raise ManualAgentDiscoveryStartError(
+                "agent_discovery_already_running"
+            )
+        eligible = (
+            runtime.get("installed") is True
+            and runtime.get("loaded") is True
+            and runtime.get("enabled") is True
+            and runtime.get("armed") is True
+            and runtime.get("running") is False
+            and runtime.get("runtime_state") == "idle"
+        )
+        if not eligible:
+            raise ManualAgentDiscoveryStartError(
+                "agent_discovery_runtime_unavailable"
+            )
+
+        try:
+            command = build_manual_agent_discovery_wrapper_command(
+                psql_bin=psql_bin,
+            )
+            _MANUAL_AGENT_DISCOVERY_LOG_PATH.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            log_handle = _MANUAL_AGENT_DISCOVERY_LOG_PATH.open(
+                "a",
+                encoding="utf-8",
+                buffering=1,
+            )
+            child_env = _pipeline_child_env()
+            process = subprocess.Popen(
+                command,
+                cwd=str(REPO_ROOT),
+                env=child_env,
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                shell=False,
+                start_new_session=True,
+            )
+        except Exception as exc:
+            if "log_handle" in locals():
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
+            logger.exception(
+                "Failed to launch admin manual Agent Discovery wrapper"
+            )
+            raise ManualAgentDiscoveryStartError(
+                "agent_discovery_launch_failed"
+            ) from exc
+
+        _MANUAL_AGENT_DISCOVERY_STATE.update(
+            {
+                "process": process,
+                "log_handle": log_handle,
+                "started_at": _utc_now(),
+            }
+        )
+        return {
+            "ok": True,
+            "accepted": True,
+            "job_name": "agent_discovery",
+            "trigger_source": "manual_admin",
+        }
+
+
+def stop_manual_agent_discovery_for_server_shutdown() -> Dict[str, Any]:
+    with _MANUAL_AGENT_DISCOVERY_LOCK:
+        process = _MANUAL_AGENT_DISCOVERY_STATE.get("process")
+        log_handle = _MANUAL_AGENT_DISCOVERY_STATE.get("log_handle")
+        if process is None:
+            if log_handle is not None:
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
+            _MANUAL_AGENT_DISCOVERY_STATE.update(
+                {"process": None, "log_handle": None, "started_at": None}
+            )
+            return {"ok": True, "stopped": False}
+
+        running = process.poll() is None
+        if running:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+            except (AttributeError, OSError, ProcessLookupError):
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
+        if log_handle is not None:
+            try:
+                log_handle.close()
+            except Exception:
+                pass
+        _MANUAL_AGENT_DISCOVERY_STATE.update(
+            {"process": None, "log_handle": None, "started_at": None}
+        )
+        return {"ok": True, "stopped": running}
+
+
 def scheduler_postgres_status_payload(
     *,
     limit: int = 10,
@@ -8487,6 +8680,24 @@ def scheduler_postgres_status_payload(
         "postgres": postgres_block,
     }
 
+
+def _scheduler_expected_next_run_at(
+    last_run: Any,
+    cadence_seconds: Any,
+) -> Optional[str]:
+    if not isinstance(last_run, dict):
+        return None
+    started_at = str(last_run.get("started_at", "") or "").strip()
+    try:
+        cadence = int(cadence_seconds)
+        started = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        if cadence <= 0 or started.tzinfo is None or started.utcoffset() is None:
+            return None
+        return (started + timedelta(seconds=cadence)).isoformat()
+    except (OverflowError, TypeError, ValueError):
+        return None
+
+
 def scheduler_operator_summary_payload(
     *,
     limit: int = 5,
@@ -8512,13 +8723,42 @@ def scheduler_operator_summary_payload(
         for row in latest_runs_by_job
         if isinstance(row, dict)
     }
-    runtime_jobs = [
-        {
-            **runtime_job,
-            "last_run": latest_run_lookup.get(runtime_job["job_name"]),
-        }
-        for runtime_job in get_scheduler_runtime_jobs_status()
-    ]
+    latest_scheduled_runs_by_job = list(
+        postgres_block.get("latest_scheduled_runs_by_job", []) or []
+    )
+    latest_scheduled_run_lookup = {
+        str(row.get("job_name", "") or ""): dict(row)
+        for row in latest_scheduled_runs_by_job
+        if isinstance(row, dict)
+    }
+    manual_discovery = manual_agent_discovery_status_payload()
+    runtime_jobs = []
+    for runtime_job in get_scheduler_runtime_jobs_status():
+        last_run = latest_run_lookup.get(runtime_job["job_name"])
+        scheduled_last_run = latest_scheduled_run_lookup.get(
+            runtime_job["job_name"]
+        )
+        is_agent_discovery = runtime_job["job_name"] == "agent_discovery"
+        runtime_jobs.append(
+            {
+                **runtime_job,
+                "last_run": last_run,
+                "expected_next_run_at": _scheduler_expected_next_run_at(
+                    scheduled_last_run,
+                    runtime_job.get("cadence_seconds"),
+                ),
+                "manual_run_active": (
+                    bool(manual_discovery["manual_run_active"])
+                    if is_agent_discovery
+                    else False
+                ),
+                "manual_run_started_at": (
+                    manual_discovery["manual_run_started_at"]
+                    if is_agent_discovery
+                    else None
+                ),
+            }
+        )
 
     return {
         "ok": True,
@@ -8531,6 +8771,7 @@ def scheduler_operator_summary_payload(
             "count_matches": postgres_payload["history_count_matches_jsonl"],
         },
         "latest_runs_by_job": latest_runs_by_job,
+        "latest_scheduled_runs_by_job": latest_scheduled_runs_by_job,
         "runtime_jobs": runtime_jobs,
         "recent_postgres_runs": postgres_block.get("recent_runs", []),
         "recent_jsonl_runs": latest_jsonl_rows,

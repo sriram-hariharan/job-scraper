@@ -10,8 +10,10 @@ import {
   Activity,
   CheckCircle2,
   CircleCheck,
+  Clock,
   Database,
   FileSearch,
+  Play,
   Power,
   RefreshCw,
   ShieldCheck,
@@ -39,13 +41,17 @@ import {
   formatDateTime,
   isFailedStatus,
   readSchedulerSummary,
+  runAgentDiscoveryNow,
   runRowKey,
+  schedulerNextRunPresentation,
+  schedulerTriggerLabel,
   shown,
   sortJobStatusRows,
   statusSlug,
   type SchedulerRun,
   type SchedulerRuntimeJob,
   type SchedulerSummaryPayload,
+  type ManualAgentDiscoveryResponse,
 } from "./schedulerModel";
 
 /**
@@ -65,6 +71,7 @@ type RunsTab = "job_status" | "run_history";
 
 type SchedulerHealthDashboardProps = {
   readSummary?: () => Promise<SchedulerSummaryPayload>;
+  runDiscoveryNow?: () => Promise<ManualAgentDiscoveryResponse>;
 };
 
 function schedulerBadge(status: unknown) {
@@ -82,6 +89,7 @@ function jobDisplayName(jobName: unknown) {
 }
 
 function runtimeLabel(job: SchedulerRuntimeJob) {
+  if (job.manual_run_active === true) return "Running";
   if (job.runtime_state === "not_installed") return "Not installed";
   if (job.runtime_state === "unloaded") return "Unloaded";
   if (job.runtime_state === "unavailable") return "Unavailable";
@@ -97,6 +105,7 @@ function armedLabel(job: SchedulerRuntimeJob) {
 }
 
 function runtimeTone(job: SchedulerRuntimeJob) {
+  if (job.manual_run_active === true) return "running";
   if (job.runtime_state === "running") return "running";
   if (job.runtime_state === "idle" && job.armed === true) return "succeeded";
   if (job.runtime_state === "unavailable" || job.armed === null) return "unknown";
@@ -107,6 +116,29 @@ function truthLabel(value: boolean | null) {
   if (value === true) return "Yes";
   if (value === false) return "No";
   return "Unknown";
+}
+
+function manualDiscoveryEligibility(job: SchedulerRuntimeJob) {
+  if (job.manual_run_active === true) {
+    return { enabled: false, reason: "Agent Discovery is already running." };
+  }
+  if (job.running === true || job.runtime_state === "running") {
+    return { enabled: false, reason: "Scheduled Agent Discovery is already running." };
+  }
+  const enabled = (
+    job.installed === true
+    && job.loaded === true
+    && job.enabled === true
+    && job.armed === true
+    && job.running === false
+    && job.runtime_state === "idle"
+  );
+  return {
+    enabled,
+    reason: enabled
+      ? "Run Agent Discovery once without changing its schedule."
+      : "Agent Discovery is unavailable until its scheduler is installed, loaded, enabled, armed, and idle.",
+  };
 }
 
 function DashboardHeader({
@@ -232,7 +264,19 @@ function OverviewPanel({
   );
 }
 
-function RuntimeJobsPanel({ payload, loading }: { payload: SchedulerSummaryPayload | null; loading: boolean }) {
+function RuntimeJobsPanel({
+  payload,
+  loading,
+  manualSubmitting,
+  onRequestManualDiscovery,
+  manualDiscoveryTriggerRef,
+}: {
+  payload: SchedulerSummaryPayload | null;
+  loading: boolean;
+  manualSubmitting: boolean;
+  onRequestManualDiscovery: () => void;
+  manualDiscoveryTriggerRef: React.RefObject<HTMLButtonElement>;
+}) {
   const jobs = payload?.runtime_jobs || [];
   return (
     <section className="scheduler-runtime-section" aria-label="Scheduler runtime jobs">
@@ -249,6 +293,8 @@ function RuntimeJobsPanel({ payload, loading }: { payload: SchedulerSummaryPaylo
             const lastRun = job.last_run;
             const lastStatus = clean(lastRun?.status) || "Never run";
             const tone = runtimeTone(job);
+            const nextRun = schedulerNextRunPresentation(job, new Date(Date.now()));
+            const manualEligibility = manualDiscoveryEligibility(job);
             return (
               <article
                 className={`scheduler-runtime-card ${tone === "failed" || isFailedStatus(lastStatus) ? "is-attention" : ""}`}
@@ -257,7 +303,24 @@ function RuntimeJobsPanel({ payload, loading }: { payload: SchedulerSummaryPaylo
               >
                 <div className="scheduler-runtime-card-heading">
                   <div>
-                    <h3>{jobDisplayName(job.job_name)}</h3>
+                    <div className="scheduler-runtime-card-title-row">
+                      <h3>{jobDisplayName(job.job_name)}</h3>
+                      {job.job_name === "agent_discovery" ? (
+                        <button
+                          type="button"
+                          className="scheduler-manual-discovery-btn"
+                          disabled={!manualEligibility.enabled || manualSubmitting}
+                          onClick={onRequestManualDiscovery}
+                          ref={manualDiscoveryTriggerRef}
+                          title={manualEligibility.reason}
+                        >
+                          <Play size={12} aria-hidden="true" />
+                          {job.manual_run_active === true || manualSubmitting
+                            ? "Discovery running…"
+                            : "Run discovery now"}
+                        </button>
+                      ) : null}
+                    </div>
                     <p>{job.description}</p>
                   </div>
                   <div className="scheduler-runtime-card-badges">
@@ -269,13 +332,31 @@ function RuntimeJobsPanel({ payload, loading }: { payload: SchedulerSummaryPaylo
                 </div>
                 <dl className="scheduler-runtime-details">
                   <div><dt>Schedule</dt><dd>{formatCadence(job.cadence_seconds)}</dd></div>
-                  <div><dt>Last run</dt><dd>{lastRun ? formatDateTime(lastRun.started_at) : "Never run"}</dd></div>
+                  <div>
+                    <dt>Last run</dt>
+                    <dd
+                      className="scheduler-runtime-last-run"
+                      title={lastRun ? formatDateTime(lastRun.started_at) : undefined}
+                    >
+                      {lastRun ? formatDateTime(lastRun.started_at) : "Never run"}
+                    </dd>
+                  </div>
                   <div><dt>Last result</dt><dd>{schedulerBadge(lastStatus)}</dd></div>
                   <div><dt>Return code</dt><dd>{lastRun ? shown(lastRun.return_code, "-") : "-"}</dd></div>
                 </dl>
                 <div className="scheduler-runtime-card-footer">
-                  <span><CheckCircle2 size={13} aria-hidden="true" />{job.installed === true ? "Installed" : job.installed === false ? "Not installed" : "Install unknown"}</span>
-                  <span><Power size={13} aria-hidden="true" />{job.loaded === true ? "Loaded" : job.loaded === false ? "Unloaded" : "Load unknown"}</span>
+                  <div className="scheduler-runtime-card-footer-state">
+                    <span><CheckCircle2 size={13} aria-hidden="true" />{job.installed === true ? "Installed" : job.installed === false ? "Not installed" : "Install unknown"}</span>
+                    <span><Power size={13} aria-hidden="true" />{job.loaded === true ? "Loaded" : job.loaded === false ? "Unloaded" : "Load unknown"}</span>
+                  </div>
+                  <span
+                    className={`scheduler-next-run-pill is-${nextRun.tone}`}
+                    aria-label={nextRun.tone === "awaiting" ? "No scheduled run has been recorded yet." : undefined}
+                    title={nextRun.tone === "awaiting" ? "No scheduled run has been recorded yet." : undefined}
+                  >
+                    <Clock size={13} aria-hidden="true" />
+                    {nextRun.label}
+                  </span>
                 </div>
               </article>
             );
@@ -336,7 +417,10 @@ function jobStatusColumns(): ColumnDef<SchedulerRun>[] {
       accessorFn: (row) => clean(row.run_id),
       size: 160,
       enableSorting: false,
-      cell: ({ row }) => <span className="scheduler-run-id-cell">{shown(row.original.run_id, "-")}</span>,
+      cell: ({ row }) => {
+        const runId = shown(row.original.run_id, "-");
+        return <span className="scheduler-run-id-cell" title={runId}>{runId}</span>;
+      },
     },
   ];
 }
@@ -358,6 +442,17 @@ function runHistoryColumns(): ColumnDef<SchedulerRun>[] {
       size: 130,
       enableSorting: false,
       cell: ({ row }) => schedulerBadge(row.original.status),
+    },
+    {
+      id: "trigger_source",
+      header: "Trigger",
+      accessorFn: (row) => clean(row.trigger_source),
+      size: 110,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const label = schedulerTriggerLabel(row.original.trigger_source);
+        return <span className={`scheduler-trigger-badge is-${label.toLowerCase()}`}>{label}</span>;
+      },
     },
     {
       id: "started_at",
@@ -389,7 +484,10 @@ function runHistoryColumns(): ColumnDef<SchedulerRun>[] {
       accessorFn: (row) => clean(row.run_id),
       size: 160,
       enableSorting: false,
-      cell: ({ row }) => <span className="scheduler-run-id-cell">{shown(row.original.run_id, "-")}</span>,
+      cell: ({ row }) => {
+        const runId = shown(row.original.run_id, "-");
+        return <span className="scheduler-run-id-cell" title={runId}>{runId}</span>;
+      },
     },
   ];
 }
@@ -590,6 +688,101 @@ function SchedulerRunsCard({
 
 type DiagnosticsTab = "runtime" | "configuration" | "database_history";
 
+function ManualDiscoveryConfirmDialog({
+  open,
+  confirming,
+  onClose,
+  onConfirm,
+  triggerRef,
+}: {
+  open: boolean;
+  confirming: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  triggerRef: React.RefObject<HTMLButtonElement>;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    window.requestAnimationFrame(() => cancelRef.current?.focus());
+    const handleKeydown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !cardRef.current) return;
+      const buttons = Array.from(
+        cardRef.current.querySelectorAll<HTMLButtonElement>("button:not([disabled])"),
+      );
+      if (!buttons.length) return;
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeydown);
+    return () => {
+      document.removeEventListener("keydown", handleKeydown);
+      triggerRef.current?.focus();
+    };
+  }, [onClose, open, triggerRef]);
+
+  if (!open) return null;
+  return (
+    <div
+      className="modal-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="modal-card scheduler-manual-discovery-modal"
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedulerManualDiscoveryTitle"
+        aria-describedby="schedulerManualDiscoveryDescription"
+      >
+        <div className="modal-header">
+          <div>
+            <h3 id="schedulerManualDiscoveryTitle">Run discovery now?</h3>
+            <div className="subtext" id="schedulerManualDiscoveryDescription">
+              Runs the global discovery job once immediately. This does not change the existing 24-hour schedule.
+            </div>
+          </div>
+        </div>
+        <div className="scheduler-manual-discovery-actions">
+          <button
+            type="button"
+            className="scheduler-confirm-secondary"
+            disabled={confirming}
+            onClick={onClose}
+            ref={cancelRef}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="scheduler-confirm-primary"
+            disabled={confirming}
+            onClick={onConfirm}
+          >
+            {confirming ? "Starting discovery…" : "Run discovery"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConfigStatusRow({
   icon: Icon,
   label,
@@ -624,6 +817,7 @@ function CompactRunsTable({ rows, emptyMessage }: { rows: SchedulerRun[]; emptyM
           <tr>
             <th>Job</th>
             <th>Status</th>
+            <th>Trigger</th>
             <th>Started</th>
             <th>Finished</th>
             <th>Return code</th>
@@ -640,6 +834,7 @@ function CompactRunsTable({ rows, emptyMessage }: { rows: SchedulerRun[]; emptyM
               <tr key={runRowKey(row, index)}>
                 <td title={jobName}>{jobName}</td>
                 <td>{schedulerBadge(row.status)}</td>
+                <td>{schedulerTriggerLabel(row.trigger_source)}</td>
                 <td title={started}>{started}</td>
                 <td title={finished}>{finished}</td>
                 <td>{shown(row.return_code, "-")}</td>
@@ -778,6 +973,9 @@ function DiagnosticsModal({
                     <div><dt>Loaded</dt><dd>{truthLabel(job.loaded)}</dd></div>
                     <div><dt>Armed</dt><dd>{truthLabel(job.armed)}</dd></div>
                     <div><dt>Running</dt><dd>{truthLabel(job.running)}</dd></div>
+                    {job.job_name === "agent_discovery" ? (
+                      <div><dt>Manual run</dt><dd>{job.manual_run_active === true ? "Active" : "Inactive"}</dd></div>
+                    ) : null}
                   </dl>
                 </section>
               ))}
@@ -821,11 +1019,16 @@ function DiagnosticsModal({
 
 export function SchedulerHealthDashboard({
   readSummary = readSchedulerSummary,
+  runDiscoveryNow = runAgentDiscoveryNow,
 }: SchedulerHealthDashboardProps) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [refreshing, setRefreshing] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [manualConfirmOpen, setManualConfirmOpen] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualActionError, setManualActionError] = useState("");
   const diagnosticsTriggerRef = useRef<HTMLButtonElement>(null);
+  const manualDiscoveryTriggerRef = useRef<HTMLButtonElement>(null);
 
   const refresh = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true);
@@ -838,6 +1041,51 @@ export function SchedulerHealthDashboard({
       if (showSpinner) setRefreshing(false);
     }
   }, [readSummary]);
+
+  const confirmManualDiscovery = useCallback(async () => {
+    setManualSubmitting(true);
+    setManualActionError("");
+    try {
+      const result = await runDiscoveryNow();
+      if (!result.accepted || result.job_name !== "agent_discovery") {
+        throw new Error("Manual Agent Discovery was not accepted.");
+      }
+      setState((current) => {
+        if (current.kind !== "ready") return current;
+        return {
+          ...current,
+          payload: {
+            ...current.payload,
+            runtime_jobs: current.payload.runtime_jobs?.map((job) => (
+              job.job_name === "agent_discovery"
+                ? {
+                    ...job,
+                    manual_run_active: true,
+                    manual_run_started_at: new Date(Date.now()).toISOString(),
+                  }
+                : job
+            )),
+          },
+        };
+      });
+      setManualConfirmOpen(false);
+    } catch (error) {
+      setManualActionError(
+        error instanceof Error
+          ? error.message
+          : "Manual Agent Discovery could not be started.",
+      );
+    } finally {
+      setManualSubmitting(false);
+    }
+  }, [runDiscoveryNow]);
+  const closeManualDiscoveryConfirm = useCallback(() => {
+    setManualConfirmOpen(false);
+  }, []);
+  const openManualDiscoveryConfirm = useCallback(() => {
+    setManualActionError("");
+    setManualConfirmOpen(true);
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -855,13 +1103,22 @@ export function SchedulerHealthDashboard({
       {state.kind === "error" ? (
         <div className="scheduler-error-banner" role="alert">{state.message}</div>
       ) : null}
+      {manualActionError ? (
+        <div className="scheduler-error-banner" role="alert">{manualActionError}</div>
+      ) : null}
       <OverviewPanel
         payload={payload}
         loading={state.kind === "loading"}
         onOpenDiagnostics={() => setDiagnosticsOpen(true)}
         diagnosticsTriggerRef={diagnosticsTriggerRef}
       />
-      <RuntimeJobsPanel payload={payload} loading={state.kind === "loading"} />
+      <RuntimeJobsPanel
+        payload={payload}
+        loading={state.kind === "loading"}
+        manualSubmitting={manualSubmitting}
+        onRequestManualDiscovery={openManualDiscoveryConfirm}
+        manualDiscoveryTriggerRef={manualDiscoveryTriggerRef}
+      />
       <SchedulerRunsCard
         status={status}
         errorMessage={errorMessage}
@@ -873,6 +1130,13 @@ export function SchedulerHealthDashboard({
         payload={payload}
         onClose={() => setDiagnosticsOpen(false)}
         triggerRef={diagnosticsTriggerRef}
+      />
+      <ManualDiscoveryConfirmDialog
+        open={manualConfirmOpen}
+        confirming={manualSubmitting}
+        onClose={closeManualDiscoveryConfirm}
+        onConfirm={() => void confirmManualDiscovery()}
+        triggerRef={manualDiscoveryTriggerRef}
       />
     </div>
   );

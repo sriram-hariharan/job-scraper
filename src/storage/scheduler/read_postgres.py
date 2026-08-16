@@ -107,8 +107,22 @@ WITH latest_rows AS (
         status,
         return_code,
         started_at,
-        finished_at
+        finished_at,
+        trigger_source
     FROM scheduler_run_history
+    ORDER BY job_name, started_at DESC
+),
+latest_scheduled_rows AS (
+    SELECT DISTINCT ON (job_name)
+        run_id,
+        job_name,
+        status,
+        return_code,
+        started_at,
+        finished_at,
+        trigger_source
+    FROM scheduler_run_history
+    WHERE trigger_source = 'external_scheduler_wrapper'
     ORDER BY job_name, started_at DESC
 ),
 recent_rows AS (
@@ -118,7 +132,8 @@ recent_rows AS (
         status,
         return_code,
         started_at,
-        finished_at
+        finished_at,
+        trigger_source
     FROM scheduler_run_history
     ORDER BY started_at DESC
     LIMIT {limit}
@@ -132,6 +147,11 @@ SELECT json_build_object(
     'latest_runs_by_job',
         COALESCE(
             (SELECT json_agg(row_to_json(latest_rows) ORDER BY latest_rows.job_name) FROM latest_rows),
+            '[]'::json
+        ),
+    'latest_scheduled_runs_by_job',
+        COALESCE(
+            (SELECT json_agg(row_to_json(latest_scheduled_rows) ORDER BY latest_scheduled_rows.job_name) FROM latest_scheduled_rows),
             '[]'::json
         ),
     'recent_runs',

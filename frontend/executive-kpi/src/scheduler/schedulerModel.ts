@@ -5,6 +5,7 @@ export type SchedulerRun = {
   return_code?: number | string | null;
   started_at?: string;
   finished_at?: string;
+  trigger_source?: string;
 };
 
 export type SchedulerContractHealth = {
@@ -49,6 +50,14 @@ export type SchedulerRuntimeJob = {
   running: boolean | null;
   runtime_state: SchedulerRuntimeState;
   last_run?: SchedulerRun | null;
+  expected_next_run_at?: string | null;
+  manual_run_active?: boolean;
+  manual_run_started_at?: string | null;
+};
+
+export type SchedulerNextRunPresentation = {
+  tone: "scheduled" | "running" | "awaiting" | "unavailable" | "unknown" | "overdue";
+  label: string;
 };
 
 export type SchedulerSummaryPayload = {
@@ -57,11 +66,19 @@ export type SchedulerSummaryPayload = {
   contract_health?: SchedulerContractHealth;
   history?: SchedulerHistorySummary;
   latest_runs_by_job?: SchedulerRun[];
+  latest_scheduled_runs_by_job?: SchedulerRun[];
   recent_postgres_runs?: SchedulerRun[];
   recent_jsonl_runs?: SchedulerRun[];
   runtime_jobs?: SchedulerRuntimeJob[];
   postgres_summary?: SchedulerPostgresSummary;
   postgres_command_text?: string;
+};
+
+export type ManualAgentDiscoveryResponse = {
+  ok: boolean;
+  accepted: boolean;
+  job_name: "agent_discovery";
+  trigger_source: "manual_admin";
 };
 
 export async function readSchedulerSummary(): Promise<SchedulerSummaryPayload> {
@@ -75,6 +92,24 @@ export async function readSchedulerSummary(): Promise<SchedulerSummaryPayload> {
     throw new Error(payload?.detail || `Scheduler summary request failed (${response.status})`);
   }
   return payload;
+}
+
+export async function runAgentDiscoveryNow(): Promise<ManualAgentDiscoveryResponse> {
+  const response = await fetch("/scheduler/jobs/agent_discovery/run-now", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  const payload = (await response.json().catch(() => ({}))) as Partial<ManualAgentDiscoveryResponse> & {
+    detail?: string | { error_category?: string };
+  };
+  if (!response.ok) {
+    const detail = typeof payload.detail === "string"
+      ? payload.detail
+      : clean(payload.detail?.error_category).replace(/_/g, " ");
+    throw new Error(detail || `Manual Agent Discovery request failed (${response.status})`);
+  }
+  return payload as ManualAgentDiscoveryResponse;
 }
 
 export function clean(value: unknown): string {
@@ -111,6 +146,68 @@ export function formatDateTime(value: unknown): string {
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return raw;
   return `${DATE_ONLY_FORMATTER.format(parsed)}, ${TIME_ONLY_FORMATTER.format(parsed)}`;
+}
+
+export function formatExpectedRunDateTime(value: unknown): string {
+  const raw = clean(value);
+  if (!raw) return "Unavailable";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "Unavailable";
+  return `${DATE_ONLY_FORMATTER.format(parsed)} · ${TIME_ONLY_FORMATTER.format(parsed)}`;
+}
+
+export function schedulerNextRunPresentation(
+  job: SchedulerRuntimeJob,
+  now: Date,
+): SchedulerNextRunPresentation {
+  if (job.manual_run_active === true) {
+    return { tone: "running", label: "RUNNING NOW" };
+  }
+  if (job.runtime_state === "running") {
+    return { tone: "running", label: "RUNNING NOW" };
+  }
+  if (job.runtime_state === "unavailable") {
+    return { tone: "unknown", label: "SCHEDULE UNKNOWN" };
+  }
+  if (
+    job.installed === false
+    || job.loaded === false
+    || job.enabled === false
+    || job.armed === false
+    || job.runtime_state === "not_installed"
+    || job.runtime_state === "unloaded"
+  ) {
+    return { tone: "unavailable", label: "NEXT RUN UNAVAILABLE" };
+  }
+  if (
+    job.installed === null
+    || job.loaded === null
+    || job.enabled === null
+    || job.armed === null
+    || job.running === null
+  ) {
+    return { tone: "unknown", label: "SCHEDULE UNKNOWN" };
+  }
+
+  const expected = new Date(clean(job.expected_next_run_at));
+  if (!job.expected_next_run_at || Number.isNaN(expected.getTime())) {
+    return { tone: "awaiting", label: "SCHEDULED · AWAITING FIRST RUN" };
+  }
+  const formatted = formatExpectedRunDateTime(job.expected_next_run_at);
+  if (now.getTime() > expected.getTime()) {
+    return {
+      tone: "overdue",
+      label: `EXPECTED RUN OVERDUE · ${formatted}`,
+    };
+  }
+  return { tone: "scheduled", label: `EXPECTED NEXT · ${formatted}` };
+}
+
+export function schedulerTriggerLabel(value: unknown): string {
+  const trigger = clean(value).toLowerCase();
+  if (trigger === "external_scheduler_wrapper") return "Scheduled";
+  if (trigger === "manual_admin") return "Manual";
+  return "Unknown";
 }
 
 export function formatClockTime(date: Date): string {

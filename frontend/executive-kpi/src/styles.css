@@ -2640,6 +2640,7 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 }
 .scheduler-runtime-card.is-attention { box-shadow: inset 3px 0 0 var(--scheduler-red), 0 8px 22px rgba(15, 23, 42, 0.05); }
 .scheduler-runtime-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.scheduler-runtime-card-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .scheduler-runtime-card-heading h3 { margin: 0; color: var(--scheduler-ink); font-size: 16px; }
 .scheduler-runtime-card-heading p { margin: 4px 0 0; color: var(--scheduler-muted); font-size: 12px; line-height: 1.45; }
 .scheduler-runtime-card-badges { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
@@ -2648,8 +2649,69 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 .scheduler-runtime-details > div:first-child { padding-left: 0; border-left: 0; }
 .scheduler-runtime-details dt { color: var(--scheduler-muted); font-size: 10px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
 .scheduler-runtime-details dd { margin: 5px 0 0; overflow: hidden; color: var(--scheduler-ink); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.scheduler-runtime-card-footer { display: flex; align-items: center; gap: 16px; padding-top: 12px; border-top: 1px solid var(--scheduler-border); color: var(--scheduler-muted); font-size: 11px; font-weight: 700; }
-.scheduler-runtime-card-footer span { display: inline-flex; align-items: center; gap: 5px; }
+.scheduler-runtime-last-run[title],
+.scheduler-run-id-cell[title] { cursor: help; }
+.scheduler-runtime-card-footer { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--scheduler-border); color: var(--scheduler-muted); font-size: 11px; font-weight: 700; }
+.scheduler-runtime-card-footer-state { display: flex; align-items: center; gap: 16px; }
+.scheduler-runtime-card-footer-state span,
+.scheduler-next-run-pill { display: inline-flex; align-items: center; gap: 5px; }
+.scheduler-next-run-pill {
+  min-height: 24px;
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.scheduler-next-run-pill.is-scheduled { background: var(--scheduler-green-soft); color: var(--scheduler-green); }
+.scheduler-next-run-pill.is-running { background: var(--scheduler-blue-soft); color: var(--scheduler-blue); }
+.scheduler-next-run-pill.is-overdue { background: var(--scheduler-amber-soft); color: var(--scheduler-amber); }
+.scheduler-next-run-pill.is-awaiting,
+.scheduler-next-run-pill.is-unavailable,
+.scheduler-next-run-pill.is-unknown { background: var(--scheduler-surface-muted); color: var(--scheduler-muted); }
+.scheduler-confirm-secondary,
+.scheduler-confirm-primary {
+  min-height: 30px;
+  border: 1px solid var(--scheduler-border);
+  border-radius: 8px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.scheduler-confirm-secondary { background: var(--scheduler-surface); color: var(--scheduler-ink); }
+.scheduler-confirm-secondary:hover:not(:disabled) { background: var(--scheduler-surface-muted); }
+.scheduler-manual-discovery-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  border: 1px solid color-mix(in srgb, var(--scheduler-blue) 34%, var(--scheduler-border));
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: var(--scheduler-blue-soft);
+  color: var(--scheduler-blue);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.scheduler-manual-discovery-btn:hover:not(:disabled) {
+  border-color: var(--scheduler-blue);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--scheduler-blue) 18%, transparent);
+  transform: translateY(-1px);
+}
+.scheduler-confirm-primary { border-color: var(--scheduler-blue); background: var(--scheduler-blue); color: #fff; }
+.scheduler-confirm-primary:hover:not(:disabled) { filter: brightness(0.95); }
+.scheduler-manual-discovery-btn:disabled,
+.scheduler-confirm-secondary:disabled,
+.scheduler-confirm-primary:disabled { cursor: not-allowed; opacity: 0.58; }
 .scheduler-runtime-empty { display: grid; min-height: 112px; place-content: center; border: 1px dashed var(--scheduler-border); border-radius: 14px; color: var(--scheduler-muted); font-size: 13px; }
 
 /* --- Scheduler Runs — one premium card-container table with segmented tabs.
@@ -2665,6 +2727,9 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
   background: var(--queue-row-default);
 }
 .scheduler-run-id-cell { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+.scheduler-trigger-badge { display: inline-flex; align-items: center; min-height: 22px; border-radius: 999px; padding: 2px 9px; background: var(--scheduler-surface-muted); color: var(--scheduler-muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.scheduler-trigger-badge.is-manual { background: var(--scheduler-blue-soft); color: var(--scheduler-blue); }
+.scheduler-trigger-badge.is-scheduled { background: var(--scheduler-green-soft); color: var(--scheduler-green); }
 .scheduler-run-row.is-attention { box-shadow: inset 3px 0 0 var(--scheduler-red); }
 .scheduler-empty { display: grid; min-height: 132px; place-content: center; justify-items: center; gap: 8px; padding: 20px; color: var(--scheduler-muted); text-align: center; }
 .scheduler-empty strong { color: var(--scheduler-ink); }
@@ -2688,6 +2753,8 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 
 /* --- Diagnostics modal: reuses global .modal-backdrop/.modal-card --------- */
 .scheduler-diagnostics-modal-card { width: min(820px, calc(100vw - 48px)); max-height: min(680px, calc(100vh - 96px)); display: flex; flex-direction: column; }
+.scheduler-manual-discovery-modal { width: min(460px, calc(100vw - 32px)); }
+.scheduler-manual-discovery-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 20px 20px; }
 .scheduler-diagnostics-tabs { display: flex; gap: 6px; padding: 0 20px; border-bottom: 1px solid var(--scheduler-border, #dbe3ef); }
 .scheduler-diagnostics-tabs .scheduler-diagnostics-tab { padding: 8px 4px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--scheduler-muted, #667085); font-size: 13px; font-weight: 700; cursor: pointer; }
 .scheduler-diagnostics-tabs .scheduler-diagnostics-tab.is-active { border-bottom-color: var(--scheduler-blue, #2563eb); color: var(--scheduler-ink, #101828); }

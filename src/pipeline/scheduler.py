@@ -35,6 +35,12 @@ DEFAULT_LAUNCHD_LABEL_PREFIX = "com.jobstack.scheduler"
 DEFAULT_LAUNCHD_INTERVAL_SECONDS = 21600
 DEFAULT_LAUNCHD_AGENT_DIR = Path("~/Library/LaunchAgents").expanduser()
 DEFAULT_LAUNCHD_TARGET = f"gui/{os.getuid()}"
+DEFAULT_SCHEDULER_TRIGGER_SOURCE = "external_scheduler_wrapper"
+MANUAL_ADMIN_TRIGGER_SOURCE = "manual_admin"
+SUPPORTED_SCHEDULER_TRIGGER_SOURCES = (
+    DEFAULT_SCHEDULER_TRIGGER_SOURCE,
+    MANUAL_ADMIN_TRIGGER_SOURCE,
+)
 
 @dataclass(frozen=True)
 class ScheduledJobDefinition:
@@ -155,6 +161,20 @@ def _resolve_psql_executable(psql_bin: Any = "psql") -> str:
             "Install psql or pass --psql-bin with a resolvable executable."
         )
     return str(Path(resolved))
+
+
+def resolve_scheduler_psql_executable(psql_bin: Any = "psql") -> str:
+    return _resolve_psql_executable(psql_bin)
+
+
+def _normalize_scheduler_trigger_source(value: Any) -> str:
+    normalized = str(value or DEFAULT_SCHEDULER_TRIGGER_SOURCE).strip().lower()
+    if normalized not in SUPPORTED_SCHEDULER_TRIGGER_SOURCES:
+        allowed = ", ".join(SUPPORTED_SCHEDULER_TRIGGER_SOURCES)
+        raise ValueError(
+            f"Unsupported scheduler trigger_source={value!r}. Allowed: {allowed}"
+        )
+    return normalized
 
 
 def _launchd_runtime_path(psql_executable: str) -> str:
@@ -397,6 +417,7 @@ def build_scheduler_wrapper_command(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     allow_contract_drift: bool = False,
+    trigger_source: Any = DEFAULT_SCHEDULER_TRIGGER_SOURCE,
 ) -> List[str]:
     if require_postgres_run_history_sync and not sync_postgres_run_history:
         raise ValueError(
@@ -405,6 +426,7 @@ def build_scheduler_wrapper_command(
         )
     definition = get_scheduled_job_definition(job_name)
     normalized_job = definition["name"]
+    normalized_trigger_source = _normalize_scheduler_trigger_source(trigger_source)
     if normalized_job == "live_pipeline":
         global_acquisition_only = True
         run_application_planning = False
@@ -482,6 +504,8 @@ def build_scheduler_wrapper_command(
         cmd.extend(["--psql-bin", str(psql_bin).strip()])
     if allow_contract_drift:
         cmd.append("--allow-contract-drift")
+    if normalized_trigger_source != DEFAULT_SCHEDULER_TRIGGER_SOURCE:
+        cmd.extend(["--trigger-source", normalized_trigger_source])
 
     return cmd
 
@@ -931,6 +955,7 @@ def build_scheduler_run_record(
     return_code: int,
     options: Dict[str, Any],
     error: str = "",
+    trigger_source: Any = DEFAULT_SCHEDULER_TRIGGER_SOURCE,
 ) -> Dict[str, Any]:
     return {
         "run_id": str(run_id),
@@ -943,7 +968,7 @@ def build_scheduler_run_record(
         "command": [str(part) for part in command],
         "command_text": _command_to_text(command),
         "options": dict(options),
-        "trigger_source": "external_scheduler_wrapper",
+        "trigger_source": _normalize_scheduler_trigger_source(trigger_source),
         "error": str(error or ""),
     }
 
@@ -1074,6 +1099,12 @@ def _parse_args():
         "--allow-contract-drift",
         action="store_true",
         help="For optional Postgres run-history sync: allow sync even if scheduler SQL artifact drift checks fail.",
+    )
+    parser.add_argument(
+        "--trigger-source",
+        choices=SUPPORTED_SCHEDULER_TRIGGER_SOURCES,
+        default=DEFAULT_SCHEDULER_TRIGGER_SOURCE,
+        help="Bounded scheduler invocation source recorded in run history.",
     )
     parser.add_argument(
         "--enable-himalayas-active-retention",
@@ -1367,6 +1398,7 @@ def main() -> int:
         return_code=return_code,
         options=options,
         error=error,
+        trigger_source=args.trigger_source,
     )
 
     post_run_summary_payload = {}

@@ -306,6 +306,58 @@ def test_manual_preview_parity_is_bounded_grounded_and_preview_only(plan):
     assert result["authority_invariants"]["qualification_status_promoted"] is False
 
 
+def test_manual_preview_parity_projects_grounded_natural_language_claims(
+    plan,
+):
+    request = _request(plan, "manual_provider_preview")
+    response = _valid_response("manual_provider_preview")
+    response["suggestions"][0]["claims"] = [
+        "Delivered python"
+    ]
+
+    result = parity.validate_and_grade_production_parity_response(
+        request,
+        response,
+        plan=plan,
+    )
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_projection"]["claims"] == ["python"]
+    assert result["benchmark_quality"]["unsupported_claim_count"] == 0
+    assert result["benchmark_quality"]["quality_gate_passed"] is True
+
+
+def test_manual_preview_parity_preserves_unsupported_benchmark_claim_tokens(
+    plan,
+):
+    request = _request(plan, "manual_provider_preview")
+    response = _valid_response("manual_provider_preview")
+    response["suggestions"][0]["claims"] = [
+        "Delivered python with kubernetes"
+    ]
+
+    result = parity.validate_and_grade_production_parity_response(
+        request,
+        response,
+        plan=plan,
+    )
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_projection"]["claims"] == [
+        "python",
+        "kubernetes",
+    ]
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
+    assert (
+        result["benchmark_quality"]["hard_failures"]["unsupported_claim"]
+        == 1
+    )
+    assert (
+        result["benchmark_quality"]["hard_failures"]["hallucination"]
+        == 1
+    )
+
+
 def test_manual_preview_parity_rejects_stale_fingerprint_and_action_authority(
     plan,
 ):

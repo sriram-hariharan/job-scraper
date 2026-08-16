@@ -1036,10 +1036,11 @@ def _benchmark_projection(
                 )
             ]
         )
+        claim_tokens = _claim_tokens(" ".join(claims))
         return {
             "preview_status": "advisory",
             "manual_only": True,
-            "claims": claims,
+            "claims": claim_tokens,
             "mutation_authorized": False,
             "application_authorized": False,
             "ats_authorized": False,

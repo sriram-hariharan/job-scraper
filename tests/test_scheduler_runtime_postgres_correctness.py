@@ -3,12 +3,14 @@ from __future__ import annotations
 import importlib
 import plistlib
 import re
+import subprocess
 import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
 from src.pipeline import post_run_summary, scheduler
+from src.storage.admin_tools.scheduler import sync_run_history
 
 
 def _install_psql(monkeypatch, path="/opt/postgres/bin/psql"):
@@ -227,6 +229,145 @@ def test_required_postgres_history_failure_is_visible(monkeypatch, tmp_path):
 
     with pytest.raises(RuntimeError, match="postgres unavailable"):
         scheduler.main()
+
+
+def test_postgres_sync_executes_raw_url_but_returns_redacted_command(
+    monkeypatch,
+    tmp_path,
+):
+    database_url = (
+        "postgresql://scheduler-user:p%40ssword@example.invalid/scheduler"
+    )
+    captured = {}
+
+    monkeypatch.setattr(
+        sync_run_history.shutil,
+        "which",
+        lambda _name: "/opt/postgres/bin/psql",
+    )
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = list(cmd)
+        captured["kwargs"] = dict(kwargs)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(sync_run_history.subprocess, "run", fake_run)
+
+    payload = sync_run_history._sync_normalized_rows_to_postgres(
+        rows=[{"run_id": "synthetic-scheduler-run"}],
+        history_path=tmp_path / "history.jsonl",
+        database_url=database_url,
+        psql_bin="/opt/postgres/bin/psql",
+    )
+
+    assert captured["cmd"][1] == database_url
+    assert captured["cmd"][2:] == [
+        "-X",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-1",
+        "-f",
+        payload["sql_path"],
+    ]
+    assert captured["kwargs"] == {"check": True}
+    assert payload["command"][1] == "[DATABASE_URL_REDACTED]"
+    assert "[DATABASE_URL_REDACTED]" in payload["command_text"]
+    for secret in (database_url, "scheduler-user", "p@ssword", "p%40ssword"):
+        assert secret not in payload["command_text"]
+        assert all(secret not in part for part in payload["command"])
+
+
+def test_postgres_sync_failure_preserves_exception_with_redacted_command(
+    monkeypatch,
+    tmp_path,
+):
+    database_url = (
+        "postgresql://scheduler-user:p%40ssword@example.invalid/scheduler"
+    )
+
+    monkeypatch.setattr(
+        sync_run_history.shutil,
+        "which",
+        lambda _name: "/opt/postgres/bin/psql",
+    )
+
+    def fail_run(cmd, **_kwargs):
+        raise subprocess.CalledProcessError(returncode=7, cmd=cmd)
+
+    monkeypatch.setattr(sync_run_history.subprocess, "run", fail_run)
+
+    with pytest.raises(subprocess.CalledProcessError) as exc_info:
+        sync_run_history._sync_normalized_rows_to_postgres(
+            rows=[{"run_id": "synthetic-scheduler-run"}],
+            history_path=tmp_path / "history.jsonl",
+            database_url=database_url,
+            psql_bin="/opt/postgres/bin/psql",
+        )
+
+    assert exc_info.value.returncode == 7
+    assert exc_info.value.cmd[1] == "[DATABASE_URL_REDACTED]"
+    rendered_error = repr(exc_info.value)
+    for secret in (database_url, "scheduler-user", "p@ssword", "p%40ssword"):
+        assert secret not in rendered_error
+
+
+def test_scheduler_stdout_redacts_postgres_sync_database_url(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    database_url = (
+        "postgresql://scheduler-user:p%40ssword@example.invalid/scheduler"
+    )
+    executed_commands = []
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "scheduler",
+            "--job",
+            "agent_discovery",
+            "--history-path",
+            str(tmp_path / "history.jsonl"),
+            "--sync-postgres-run-history",
+            "--require-postgres-run-history-sync",
+            "--database-url",
+            database_url,
+            "--psql-bin",
+            "/opt/postgres/bin/psql",
+        ],
+    )
+    monkeypatch.setattr(
+        sync_run_history.shutil,
+        "which",
+        lambda _name: "/opt/postgres/bin/psql",
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "write_post_run_summary_artifact",
+        lambda _record: {},
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "append_scheduler_run_record",
+        lambda *_args, **_kwargs: tmp_path / "history.jsonl",
+    )
+
+    def fake_run(cmd, **_kwargs):
+        executed_commands.append(list(cmd))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(sync_run_history.subprocess, "run", fake_run)
+
+    assert scheduler.main() == 0
+    output = capsys.readouterr().out
+
+    assert any(cmd[1] == database_url for cmd in executed_commands)
+    assert "postgres_sync_command=" in output
+    assert "[DATABASE_URL_REDACTED]" in output
+    for secret in (database_url, "scheduler-user", "p@ssword", "p%40ssword"):
+        assert secret not in output
 
 
 def test_emit_and_write_paths_strip_agent_only_kwargs(monkeypatch, tmp_path, capsys):

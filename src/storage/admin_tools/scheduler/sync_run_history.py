@@ -247,6 +247,13 @@ def _build_psql_cmd(
         str(sql_path),
     ]
 
+
+def _redact_psql_cmd(cmd: List[str]) -> List[str]:
+    redacted_cmd = list(cmd)
+    redacted_cmd[1] = "[DATABASE_URL_REDACTED]"
+    return redacted_cmd
+
+
 def _sync_normalized_rows_to_postgres(
     *,
     rows: List[Dict[str, Any]],
@@ -286,11 +293,12 @@ def _sync_normalized_rows_to_postgres(
             database_url=database_url_value,
             sql_path=sql_path,
         )
+        redacted_cmd = _redact_psql_cmd(cmd)
 
         payload["staged_csv_path"] = str(csv_path)
         payload["sql_path"] = str(sql_path)
-        payload["command"] = cmd
-        payload["command_text"] = shlex.join(cmd)
+        payload["command"] = redacted_cmd
+        payload["command_text"] = shlex.join(redacted_cmd)
 
         if print_only:
             return payload
@@ -301,7 +309,11 @@ def _sync_normalized_rows_to_postgres(
                 "Install psql or pass --psql-bin with the correct executable path."
             )
 
-        subprocess.run(cmd, check=True)
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as exc:
+            exc.cmd = redacted_cmd
+            raise
         return payload
     finally:
         try:

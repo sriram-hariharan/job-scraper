@@ -22,6 +22,7 @@ import shutil
 import signal
 
 from src.ai.user_provider_runtime import (
+    UserProviderRuntimeConfigurationError,
     run_user_chat_completion_with_metadata,
 )
 from src.app.user_ai_settings_service import (
@@ -31,6 +32,14 @@ from src.app.user_ai_settings_service import (
 resolve_effective_user_provider_route = getattr(
     importlib.import_module("src.app.provider_model_" "routing_service"),
     "resolve_effective_user_provider_route",
+)
+run_effective_user_chat_completion_with_metadata = getattr(
+    importlib.import_module("src.app.provider_model_" "routing_service"),
+    "run_effective_user_chat_completion_with_metadata",
+)
+EffectiveProviderRoutingUnavailableError = getattr(
+    importlib.import_module("src.app.provider_model_" "routing_service"),
+    "EffectiveProviderRoutingUnavailableError",
 )
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
@@ -226,6 +235,13 @@ from src.tailoring.score_utils import (
 from src.agents.jd_intelligence_planning_artifact_enricher_default_off import (
     build_jd_intelligence_planning_artifact_enricher_default_off,
 )
+from src.agents.manual_provider_preview_production_task_contract import (
+    build_manual_provider_preview_production_messages,
+    build_manual_provider_preview_production_task_contract_material,
+)
+from src.evaluation.production_task_contract_fingerprints import (
+    production_task_contract_sha256,
+)
 
 logger = logging.getLogger(__name__)
 _PROCESS_IDENTITY_POPEN = subprocess.Popen
@@ -247,6 +263,15 @@ class AgentDiscoverySummaryUnavailable(RuntimeError):
     """Bounded failure for an unavailable or invalid discovery run summary."""
 
 
+class ManualProviderPreviewLiveError(RuntimeError):
+    """Bounded live-preview failure safe for API classification."""
+
+    def __init__(self, category: str, state: str = "") -> None:
+        self.category = str(category or "manual_provider_preview_failed")
+        self.state = str(state or "")
+        super().__init__(self.category)
+
+
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
 AGENT_FEEDBACK_SUMMARY_MAX_LIMIT = 1000
 AGENT_FEEDBACK_EXPORT_MAX_LIMIT = 5000
@@ -263,6 +288,9 @@ DEFAULT_PIPELINE_SCRATCH_DIR = Path(
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
 CRITIC_ADVISORY_ENABLED_ENV = "APPLYLENS_CRITIC_ADVISORY_ENABLED"
+MANUAL_PROVIDER_PREVIEW_LIVE_ENABLED_ENV = (
+    "APPLYLENS_MANUAL_PROVIDER_PREVIEW_LIVE_ENABLED"
+)
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
@@ -23216,6 +23244,327 @@ def _artifact_json_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> Di
     except Exception:
         return {}
     return dict(parsed) if isinstance(parsed, dict) else {}
+
+
+_MANUAL_PROVIDER_PREVIEW_RESPONSE_MAX_CHARACTERS = 32_000
+_MANUAL_PROVIDER_PREVIEW_FORBIDDEN_RESPONSE_KEYS = {
+    "api_key",
+    "authorization",
+    "credential",
+    "credentials",
+    "database_url",
+    "environment",
+    "headers",
+    "hidden_reasoning",
+    "password",
+    "reasoning",
+    "request_body",
+    "system_prompt",
+}
+
+
+def _manual_provider_preview_text(value: Any, maximum: int) -> str:
+    return _clean_text(value)[:maximum]
+
+
+def _manual_provider_preview_string_list(
+    value: Any,
+    *,
+    maximum_items: int,
+    maximum_characters: int = 160,
+) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [
+        text
+        for text in (
+            _manual_provider_preview_text(item, maximum_characters)
+            for item in value[:maximum_items]
+        )
+        if text
+    ]
+
+
+def _manual_provider_preview_artifact_object(row: Dict[str, Any]) -> Dict[str, Any]:
+    content_json = row.get("content_json")
+    if isinstance(content_json, dict):
+        return dict(content_json)
+    content_text = _clean_text(row.get("content_text"))
+    if not content_text:
+        return {}
+    try:
+        value = json.loads(content_text)
+    except (TypeError, ValueError):
+        return {}
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _manual_provider_preview_job_packet(
+    artifacts: List[Dict[str, Any]],
+    job_id: str,
+) -> Dict[str, Any]:
+    matches: List[Dict[str, Any]] = []
+    for row in artifacts:
+        if _clean_text(row.get("artifact_kind")) != "job_packet_json":
+            continue
+        packet = _manual_provider_preview_artifact_object(row)
+        job_snapshot = packet.get("job_snapshot")
+        if not isinstance(job_snapshot, dict):
+            continue
+        if _clean_text(job_snapshot.get("job_id")) == job_id:
+            matches.append(packet)
+    if len(matches) != 1:
+        raise ManualProviderPreviewLiveError(
+            "authorized_context_unavailable",
+            "job_packet_not_found" if not matches else "ambiguous_job_packet",
+        )
+    return matches[0]
+
+
+def _manual_provider_preview_contexts(
+    *,
+    artifacts: List[Dict[str, Any]],
+    pipeline_run_id: str,
+    job_id: str,
+) -> Dict[str, Dict[str, Any]]:
+    packet = _manual_provider_preview_job_packet(artifacts, job_id)
+    job = dict(packet.get("job_snapshot") or {})
+    selection = dict(packet.get("selection") or {})
+    summary = dict(packet.get("summary") or {})
+
+    evidence_rows: List[Dict[str, str]] = []
+    raw_evidence = packet.get("top_relevant_evidence_units")
+    if not isinstance(raw_evidence, list):
+        raw_evidence = packet.get("top_relevant_bullets")
+    for row in list(raw_evidence or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        evidence_id = _manual_provider_preview_text(
+            row.get("bullet_id") or row.get("entry_id"),
+            128,
+        )
+        evidence_text = _manual_provider_preview_text(
+            row.get("clause_text") or row.get("text"),
+            700,
+        )
+        if evidence_id and evidence_text:
+            evidence_rows.append(
+                {
+                    "source_evidence_id": evidence_id,
+                    "text": evidence_text,
+                }
+            )
+    if not evidence_rows or not _clean_text(selection.get("selected_resume")):
+        raise ManualProviderPreviewLiveError(
+            "authorized_context_unavailable",
+            "resume_evidence_not_found",
+        )
+
+    tailoring_rows = [
+        row
+        for row in _csv_rows_from_text(
+            _artifact_text_by_name(
+                artifacts,
+                "tailoring_decision_recommendations.csv",
+            )
+        )
+        if _clean_text(row.get("job_id")) == job_id
+    ]
+    if len(tailoring_rows) != 1:
+        raise ManualProviderPreviewLiveError(
+            "authorized_context_unavailable",
+            "tailoring_request_not_found" if not tailoring_rows else "ambiguous_tailoring_request",
+        )
+    tailoring_row = tailoring_rows[0]
+
+    return {
+        "authorized_job_context": {
+            "job_id": job_id,
+            "company": _manual_provider_preview_text(job.get("company"), 200),
+            "title": _manual_provider_preview_text(job.get("title"), 300),
+            "location": _manual_provider_preview_text(job.get("location"), 200),
+            "source": _manual_provider_preview_text(job.get("source"), 100),
+            "description": _manual_provider_preview_text(job.get("description"), 3000),
+            "required_skills": _manual_provider_preview_string_list(
+                job.get("required_skills"),
+                maximum_items=30,
+            ),
+            "preferred_skills": _manual_provider_preview_string_list(
+                job.get("preferred_skills"),
+                maximum_items=20,
+            ),
+        },
+        "bounded_resume_evidence_context": {
+            "selected_resume_id": _manual_provider_preview_text(
+                selection.get("selected_resume"),
+                300,
+            ),
+            "evidence": evidence_rows,
+        },
+        "selected_tailoring_request": {
+            "job_id": job_id,
+            "tailoring_decision": _manual_provider_preview_text(
+                tailoring_row.get("tailoring_decision"),
+                100,
+            ),
+            "tailoring_reason_codes": _manual_provider_preview_text(
+                tailoring_row.get("tailoring_reason_codes"),
+                1000,
+            ),
+            "missing_requirements": _manual_provider_preview_string_list(
+                summary.get("missing_required"),
+                maximum_items=20,
+            ),
+            "matched_terms": _manual_provider_preview_string_list(
+                summary.get("matched_terms"),
+                maximum_items=30,
+            ),
+        },
+        "manual_trigger_context": {
+            "pipeline_run_id": pipeline_run_id,
+            "job_id": job_id,
+            "manual_triggered": True,
+            "operator_confirmed": True,
+            "preview_only": True,
+        },
+    }
+
+
+def _manual_provider_preview_contains_forbidden_key(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            normalized_key = _clean_text(key).lower()
+            if normalized_key in _MANUAL_PROVIDER_PREVIEW_FORBIDDEN_RESPONSE_KEYS:
+                return True
+            if _manual_provider_preview_contains_forbidden_key(nested):
+                return True
+    elif isinstance(value, list):
+        return any(
+            _manual_provider_preview_contains_forbidden_key(item)
+            for item in value
+        )
+    return False
+
+
+def manual_provider_preview_live_candidate_payload(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str,
+    job_id: str,
+    manual_triggered: bool,
+    operator_confirmed: bool,
+) -> Dict[str, Any]:
+    """Run one qualified owner-scoped preview call without mutation or persistence."""
+
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(pipeline_run_id)
+    safe_job_id = _clean_text(job_id)
+    if not owner or not safe_run_id or not safe_job_id:
+        raise ManualProviderPreviewLiveError("invalid_request")
+    if manual_triggered is not True:
+        raise ManualProviderPreviewLiveError("manual_trigger_required")
+    if operator_confirmed is not True:
+        raise ManualProviderPreviewLiveError("operator_confirmation_required")
+    if not _env_flag_enabled(MANUAL_PROVIDER_PREVIEW_LIVE_ENABLED_ENV):
+        raise ManualProviderPreviewLiveError("activation_disabled")
+
+    try:
+        _run, artifacts = _user_pipeline_run_and_artifacts(owner, safe_run_id)
+    except (SystemExit, ValueError):
+        raise ManualProviderPreviewLiveError(
+            "authorized_context_not_found"
+        ) from None
+
+    contexts = _manual_provider_preview_contexts(
+        artifacts=artifacts,
+        pipeline_run_id=safe_run_id,
+        job_id=safe_job_id,
+    )
+    contract = build_manual_provider_preview_production_task_contract_material()
+    task_contract_sha256 = production_task_contract_sha256(
+        "manual_provider_preview"
+    )
+    if not task_contract_sha256:
+        raise ManualProviderPreviewLiveError("route_unavailable", "contract_unavailable")
+    try:
+        messages = build_manual_provider_preview_production_messages(**contexts)
+    except ValueError:
+        raise ManualProviderPreviewLiveError(
+            "authorized_context_unavailable",
+            "production_context_bound_exceeded",
+        ) from None
+
+    parameters = contract["task_parameters"]
+    try:
+        result = run_effective_user_chat_completion_with_metadata(
+            owner,
+            "manual_provider_preview",
+            messages,
+            temperature=parameters["temperature"],
+            max_tokens=parameters["max_tokens"],
+            response_mime_type=parameters["response_mime_type"],
+            response_schema=contract["output_contract"]["schema"],
+            return_parsed=parameters["return_parsed"],
+            thinking_budget=parameters["thinking_budget"],
+        )
+    except EffectiveProviderRoutingUnavailableError as exc:
+        raise ManualProviderPreviewLiveError(
+            "route_unavailable",
+            _manual_provider_preview_text(exc.routing_status, 100),
+        ) from None
+    except UserProviderRuntimeConfigurationError as exc:
+        raise ManualProviderPreviewLiveError(
+            _manual_provider_preview_text(exc.category, 100)
+            or "provider_configuration_unavailable"
+        ) from None
+    except Exception:
+        raise ManualProviderPreviewLiveError("provider_failure") from None
+
+    if not isinstance(result, dict):
+        raise ManualProviderPreviewLiveError("malformed_provider_response")
+    content = result.get("content")
+    if not isinstance(content, dict) or not content:
+        raise ManualProviderPreviewLiveError("malformed_provider_response")
+    if _manual_provider_preview_contains_forbidden_key(content):
+        raise ManualProviderPreviewLiveError("unsafe_provider_response")
+    try:
+        serialized_content = json.dumps(
+            content,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError):
+        raise ManualProviderPreviewLiveError("malformed_provider_response") from None
+    if len(serialized_content) > _MANUAL_PROVIDER_PREVIEW_RESPONSE_MAX_CHARACTERS:
+        raise ManualProviderPreviewLiveError("provider_response_too_large")
+
+    provider = _manual_provider_preview_text(result.get("provider"), 100)
+    model = _manual_provider_preview_text(result.get("model"), 200)
+    if not provider or not model or result.get("fallback_used") is not False:
+        raise ManualProviderPreviewLiveError("unsafe_provider_metadata")
+
+    return {
+        "ok": True,
+        "status": "provider_response_candidate_received",
+        "workload_id": "manual_provider_preview",
+        "production_task_contract_sha256": task_contract_sha256,
+        "pipeline_run_id": safe_run_id,
+        "job_id": safe_job_id,
+        "provider_response_candidate": content,
+        "provider_metadata": {
+            "provider": provider,
+            "model": model,
+            "fallback_used": False,
+        },
+        "manual_review_required": True,
+        "normalized_preview": False,
+        "persisted": False,
+        "resume_mutation_authorized": False,
+        "application_mutation_authorized": False,
+        "auto_apply_authorized": False,
+        "auto_submit_authorized": False,
+    }
 
 
 GUARDED_APPROVAL_STATUS_TRANSITION_STORAGE_STATUS = {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from typing import Any
 
 
@@ -168,3 +169,45 @@ def build_manual_provider_preview_production_task_contract_material(
             "fallback_enabled": False,
         },
     }
+
+
+def build_manual_provider_preview_production_messages(
+    *,
+    authorized_job_context: dict[str, Any],
+    bounded_resume_evidence_context: dict[str, Any],
+    selected_tailoring_request: dict[str, Any],
+    manual_trigger_context: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Materialize the current contract prompts from bounded server context."""
+
+    contract = build_manual_provider_preview_production_task_contract_material()
+    values = {
+        "authorized_job_context": authorized_job_context,
+        "bounded_resume_evidence_context": bounded_resume_evidence_context,
+        "selected_tailoring_request": selected_tailoring_request,
+        "manual_trigger_context": manual_trigger_context,
+    }
+    limits = contract["input_contract"]["maximum_characters"]
+    serialized: dict[str, str] = {}
+    for field_name in contract["input_contract"]["fields"]:
+        value = values[field_name]
+        if not isinstance(value, dict) or not value:
+            raise ValueError(f"{field_name} is required")
+        text = json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if len(text) > int(limits[field_name]):
+            raise ValueError(f"{field_name} exceeds its production bound")
+        serialized[field_name] = text
+
+    user_prompt = contract["prompt_contract"]["user_template"]
+    for field_name, text in serialized.items():
+        user_prompt = user_prompt.replace(f"<{field_name}>", text)
+
+    return [
+        {"role": "system", "content": contract["prompt_contract"]["system"]},
+        {"role": "user", "content": user_prompt},
+    ]

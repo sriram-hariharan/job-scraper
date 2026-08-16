@@ -1679,7 +1679,7 @@ def test_bridge_import_boundary_has_no_provider_sdk_or_direct_transport():
     assert "os.environ" not in source
 
 
-def test_effective_bridge_has_zero_production_task_owner_callsites():
+def test_effective_bridge_has_only_approved_production_task_owner_callsites():
     references = []
     symbol = "run_effective_user_chat_completion_with_metadata"
 
@@ -1689,7 +1689,9 @@ def test_effective_bridge_has_zero_production_task_owner_callsites():
         if symbol in path.read_text(encoding="utf-8"):
             references.append(path.relative_to(ROOT).as_posix())
 
-    assert references == []
+    assert sorted(references) == [
+        "src/app/services.py",
+    ]
 
 
 def test_only_approved_api_consumes_bridge():

@@ -267,6 +267,15 @@ class UserAiTaskRouteRequest(BaseModel):
     model: str
 
 
+class ManualProviderPreviewLiveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline_run_id: str = Field(min_length=1, max_length=256)
+    job_id: str = Field(min_length=1, max_length=512)
+    manual_triggered: bool
+    operator_confirmed: bool
+
+
 class CriticEvaluatorReadonlyRequest(BaseModel):
     trace_payload: dict[str, Any] | list[dict[str, Any]] = Field(default_factory=dict)
     trace_payload_source: str = "request_body"
@@ -961,6 +970,37 @@ def _raise_recommended_provider_routing_http_error(
             "recommendation_status": exc.recommendation_status,
         },
     ) from None
+
+
+def _raise_manual_provider_preview_live_http_error(
+    exc: services.ManualProviderPreviewLiveError,
+) -> None:
+    status_code = {
+        "invalid_request": 400,
+        "manual_trigger_required": 400,
+        "operator_confirmation_required": 400,
+        "authorized_context_not_found": 404,
+        "authorized_context_unavailable": 409,
+        "activation_disabled": 409,
+        "route_unavailable": 409,
+        "credential_not_configured": 409,
+        "credential_unavailable": 503,
+        "settings_unavailable": 503,
+        "client_construction_failed": 503,
+        "provider_configuration_unavailable": 503,
+        "provider_failure": 502,
+        "malformed_provider_response": 502,
+        "unsafe_provider_response": 502,
+        "provider_response_too_large": 502,
+        "unsafe_provider_metadata": 502,
+    }.get(exc.category, 400)
+    detail = {
+        "ok": False,
+        "error_category": exc.category,
+    }
+    if exc.state:
+        detail["state"] = exc.state
+    raise HTTPException(status_code=status_code, detail=detail) from None
 
 
 def _auth_owner_email(request: Request) -> str:
@@ -5348,6 +5388,24 @@ def generate_ai_tailoring_action_boundary_api(
         generation_context=request_payload.get("generation_context"),
         operator_context=request_payload.get("operator_context"),
     )
+
+
+@app.post("/api/manual-generate-ai-tailoring-preview-live")
+def manual_generate_ai_tailoring_preview_live_api(
+    request: ManualProviderPreviewLiveRequest,
+    http_request: Request,
+):
+    owner_user_id = _require_auth_owner_user_id(http_request)
+    try:
+        return services.manual_provider_preview_live_candidate_payload(
+            owner_user_id=owner_user_id,
+            pipeline_run_id=request.pipeline_run_id,
+            job_id=request.job_id,
+            manual_triggered=request.manual_triggered,
+            operator_confirmed=request.operator_confirmed,
+        )
+    except services.ManualProviderPreviewLiveError as exc:
+        _raise_manual_provider_preview_live_http_error(exc)
 
 
 @app.get("/api/manual-generate-ai-tailoring-preview-contract")

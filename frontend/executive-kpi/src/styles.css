@@ -2613,6 +2613,45 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 }
 .scheduler-diagnostics-link:hover { background: var(--scheduler-surface-muted); }
 
+/* --- Read-only launchd runtime cards ------------------------------------ */
+.scheduler-runtime-section {
+  display: grid;
+  gap: 12px;
+}
+.scheduler-runtime-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 2px;
+}
+.scheduler-runtime-section-heading h2 { margin: 3px 0 0; color: var(--scheduler-ink); font-size: 18px; }
+.scheduler-runtime-section-heading > span { color: var(--scheduler-muted); font-size: 12px; font-weight: 700; }
+.scheduler-runtime-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.scheduler-runtime-card {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--scheduler-border);
+  border-radius: 14px;
+  background: var(--scheduler-surface);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+.scheduler-runtime-card.is-attention { box-shadow: inset 3px 0 0 var(--scheduler-red), 0 8px 22px rgba(15, 23, 42, 0.05); }
+.scheduler-runtime-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.scheduler-runtime-card-heading h3 { margin: 0; color: var(--scheduler-ink); font-size: 16px; }
+.scheduler-runtime-card-heading p { margin: 4px 0 0; color: var(--scheduler-muted); font-size: 12px; line-height: 1.45; }
+.scheduler-runtime-card-badges { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.scheduler-runtime-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.scheduler-runtime-details > div { min-width: 0; padding-left: 12px; border-left: 1px solid var(--scheduler-border); }
+.scheduler-runtime-details > div:first-child { padding-left: 0; border-left: 0; }
+.scheduler-runtime-details dt { color: var(--scheduler-muted); font-size: 10px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
+.scheduler-runtime-details dd { margin: 5px 0 0; overflow: hidden; color: var(--scheduler-ink); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.scheduler-runtime-card-footer { display: flex; align-items: center; gap: 16px; padding-top: 12px; border-top: 1px solid var(--scheduler-border); color: var(--scheduler-muted); font-size: 11px; font-weight: 700; }
+.scheduler-runtime-card-footer span { display: inline-flex; align-items: center; gap: 5px; }
+.scheduler-runtime-empty { display: grid; min-height: 112px; place-content: center; border: 1px dashed var(--scheduler-border); border-radius: 14px; color: var(--scheduler-muted); font-size: 13px; }
+
 /* --- Scheduler Runs — one premium card-container table with segmented tabs.
    Populated tables follow content height; only the shared loading skeleton
    (5 rows, from SharedTableCard itself) keeps a natural minimum. ---------- */
@@ -2653,6 +2692,15 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 .scheduler-diagnostics-tabs .scheduler-diagnostics-tab { padding: 8px 4px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--scheduler-muted, #667085); font-size: 13px; font-weight: 700; cursor: pointer; }
 .scheduler-diagnostics-tabs .scheduler-diagnostics-tab.is-active { border-bottom-color: var(--scheduler-blue, #2563eb); color: var(--scheduler-ink, #101828); }
 .scheduler-diagnostics-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 20px; }
+.scheduler-runtime-diagnostics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.scheduler-runtime-diagnostic-card { padding: 14px; border: 1px solid var(--scheduler-border, #dbe3ef); border-radius: 12px; background: var(--scheduler-surface-muted); }
+.scheduler-runtime-diagnostic-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.scheduler-runtime-diagnostic-heading h4 { margin: 0; color: var(--scheduler-ink); font-size: 14px; }
+.scheduler-runtime-diagnostic-heading div > span { display: block; margin-top: 3px; color: var(--scheduler-muted); font-size: 11px; }
+.scheduler-runtime-diagnostic-card dl { display: grid; gap: 0; margin: 12px 0 0; border-top: 1px solid var(--scheduler-border); }
+.scheduler-runtime-diagnostic-card dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--scheduler-border); }
+.scheduler-runtime-diagnostic-card dt { color: var(--scheduler-muted); font-size: 11px; font-weight: 700; }
+.scheduler-runtime-diagnostic-card dd { margin: 0; color: var(--scheduler-ink); font-size: 12px; font-weight: 800; }
 .scheduler-diagnostics-tab-subtitle { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--scheduler-muted, #667085); font-size: 12px; }
 .scheduler-diagnostics-table-viewport { overflow-x: auto; overscroll-behavior: contain; border: 1px solid var(--scheduler-border, #dbe3ef); border-radius: 8px; }
 .scheduler-diagnostics-table-viewport table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 12px; }
@@ -2696,10 +2744,16 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
   .scheduler-overview-primary { flex-basis: 100%; }
   .scheduler-overview-divider { display: none; }
   .scheduler-overview-metrics { flex-wrap: wrap; gap: 14px; }
+  .scheduler-runtime-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scheduler-runtime-details > div:nth-child(3) { padding-left: 0; border-left: 0; }
 }
 @media (max-width: 680px) {
   .scheduler-health-page .page.scheduler-health-shell { width: min(100% - 28px, 720px); }
   .scheduler-runs-header-actions { align-items: flex-start; }
+  .scheduler-runtime-grid,
+  .scheduler-runtime-diagnostics-grid { grid-template-columns: 1fr; }
+  .scheduler-runtime-card-heading { flex-direction: column; }
+  .scheduler-runtime-card-badges { justify-content: flex-start; }
 }
 
 /* Scheduler final spacing polish r4 */

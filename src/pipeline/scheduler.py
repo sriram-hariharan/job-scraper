@@ -717,6 +717,37 @@ def build_scheduler_launchd_agent_payload(
     return enriched
 
 
+def _parse_launchctl_enabled_status(output: str, label: str) -> bool | None:
+    match = re.search(
+        rf'(?m)^\s*"?{re.escape(label)}"?\s*=>\s*(enabled|disabled)\s*$',
+        output,
+    )
+    if match is None:
+        return None
+    return match.group(1) == "enabled"
+
+
+def _parse_launchctl_root_running_status(output: str) -> bool | None:
+    state_lines = []
+    for line in output.splitlines():
+        match = re.match(r"^([ \t]*)state\s*=\s*(.*?)\s*$", line)
+        if match is not None:
+            indentation = len(match.group(1).expandtabs(4))
+            state_lines.append((indentation, match.group(2).lower()))
+    if not state_lines:
+        return None
+
+    root_indentation = min(indentation for indentation, _state in state_lines)
+    root_state = next(
+        state for indentation, state in state_lines if indentation == root_indentation
+    )
+    if root_state == "running":
+        return True
+    if root_state == "not running":
+        return False
+    return None
+
+
 def get_scheduler_launchd_agent_status(
     job_name: Any,
     **kwargs: Any,
@@ -729,6 +760,13 @@ def get_scheduler_launchd_agent_status(
     if shutil.which("launchctl") is None:
         payload["launchctl_available"] = False
         payload["loaded"] = False
+        payload["enabled"] = None
+        payload["running"] = None
+        payload["runtime_state"] = (
+            "not_installed"
+            if not payload["installed_plist_exists"]
+            else "unavailable"
+        )
         payload["print_return_code"] = None
         payload["print_stdout"] = ""
         payload["print_stderr"] = ""
@@ -741,7 +779,87 @@ def get_scheduler_launchd_agent_status(
     payload["print_return_code"] = int(completed.returncode)
     payload["print_stdout"] = completed.stdout or ""
     payload["print_stderr"] = completed.stderr or ""
+
+    disabled_completed = _run_launchctl(
+        ["launchctl", "print-disabled", str(payload["launchd_target"])],
+        check=False,
+    )
+    payload["enabled"] = (
+        _parse_launchctl_enabled_status(
+            disabled_completed.stdout or "",
+            str(payload["label"]),
+        )
+        if disabled_completed.returncode == 0
+        else None
+    )
+    payload["running"] = (
+        _parse_launchctl_root_running_status(payload["print_stdout"])
+        if payload["loaded"]
+        else None
+    )
+    if not payload["installed_plist_exists"]:
+        payload["runtime_state"] = "not_installed"
+    elif not payload["loaded"]:
+        payload["runtime_state"] = "unloaded"
+    elif payload["running"] is None:
+        payload["runtime_state"] = "unavailable"
+    elif payload["running"]:
+        payload["runtime_state"] = "running"
+    else:
+        payload["runtime_state"] = "idle"
     return payload
+
+
+def get_scheduler_runtime_job_status(job_name: Any) -> Dict[str, Any]:
+    definition = get_scheduled_job_definition(job_name)
+    try:
+        status = get_scheduler_launchd_agent_status(
+            definition["name"],
+            run_application_planning=False,
+            planning_only=False,
+            delete_seen_data="no",
+        )
+    except Exception:
+        return {
+            "job_name": definition["name"],
+            "description": definition["description"],
+            "cadence_seconds": definition["launchd_interval_seconds"],
+            "installed": None,
+            "loaded": None,
+            "enabled": None,
+            "armed": None,
+            "running": None,
+            "runtime_state": "unavailable",
+        }
+
+    launchctl_available = bool(status.get("launchctl_available"))
+    installed = bool(status.get("installed_plist_exists"))
+    loaded = bool(status.get("loaded")) if launchctl_available else None
+    enabled = status.get("enabled") if launchctl_available else None
+    running = status.get("running") if launchctl_available else None
+    armed = (
+        None
+        if loaded is None or (loaded and enabled is None)
+        else bool(loaded and enabled)
+    )
+    return {
+        "job_name": definition["name"],
+        "description": definition["description"],
+        "cadence_seconds": definition["launchd_interval_seconds"],
+        "installed": installed,
+        "loaded": loaded,
+        "enabled": enabled,
+        "armed": armed,
+        "running": running,
+        "runtime_state": status.get("runtime_state", "unavailable"),
+    }
+
+
+def get_scheduler_runtime_jobs_status() -> List[Dict[str, Any]]:
+    return [
+        get_scheduler_runtime_job_status(definition["name"])
+        for definition in get_scheduled_job_definitions()
+    ]
 
 
 def install_scheduler_launchd_agent(

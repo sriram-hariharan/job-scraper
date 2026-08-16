@@ -195,6 +195,7 @@ from src.pipeline.scheduler import (
     get_scheduled_job_definition,
     get_scheduled_job_definitions,
     get_scheduler_launchd_agent_status,
+    get_scheduler_runtime_jobs_status,
 )
 from src.storage.scheduler.contract import (
     scheduler_init_sql_generation_payload,
@@ -8505,6 +8506,19 @@ def scheduler_operator_summary_payload(
     latest_jsonl_rows = jsonl_rows[:normalized_limit]
 
     postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    latest_runs_by_job = list(postgres_block.get("latest_runs_by_job", []) or [])
+    latest_run_lookup = {
+        str(row.get("job_name", "") or ""): dict(row)
+        for row in latest_runs_by_job
+        if isinstance(row, dict)
+    }
+    runtime_jobs = [
+        {
+            **runtime_job,
+            "last_run": latest_run_lookup.get(runtime_job["job_name"]),
+        }
+        for runtime_job in get_scheduler_runtime_jobs_status()
+    ]
 
     return {
         "ok": True,
@@ -8516,7 +8530,8 @@ def scheduler_operator_summary_payload(
             "postgres_row_count": postgres_payload["history_postgres_row_count"],
             "count_matches": postgres_payload["history_count_matches_jsonl"],
         },
-        "latest_runs_by_job": postgres_block.get("latest_runs_by_job", []),
+        "latest_runs_by_job": latest_runs_by_job,
+        "runtime_jobs": runtime_jobs,
         "recent_postgres_runs": postgres_block.get("recent_runs", []),
         "recent_jsonl_runs": latest_jsonl_rows,
         "postgres_summary": {

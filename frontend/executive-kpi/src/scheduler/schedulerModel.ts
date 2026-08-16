@@ -31,6 +31,26 @@ export type SchedulerPostgresSummary = {
   failure_count?: number;
 };
 
+export type SchedulerRuntimeState =
+  | "running"
+  | "idle"
+  | "unloaded"
+  | "not_installed"
+  | "unavailable";
+
+export type SchedulerRuntimeJob = {
+  job_name: string;
+  description: string;
+  cadence_seconds: number;
+  installed: boolean | null;
+  loaded: boolean | null;
+  enabled: boolean | null;
+  armed: boolean | null;
+  running: boolean | null;
+  runtime_state: SchedulerRuntimeState;
+  last_run?: SchedulerRun | null;
+};
+
 export type SchedulerSummaryPayload = {
   ok?: boolean;
   limit?: number;
@@ -39,6 +59,7 @@ export type SchedulerSummaryPayload = {
   latest_runs_by_job?: SchedulerRun[];
   recent_postgres_runs?: SchedulerRun[];
   recent_jsonl_runs?: SchedulerRun[];
+  runtime_jobs?: SchedulerRuntimeJob[];
   postgres_summary?: SchedulerPostgresSummary;
   postgres_command_text?: string;
 };
@@ -98,6 +119,16 @@ export function formatClockTime(date: Date): string {
 
 export function isFailedStatus(status: unknown): boolean {
   return clean(status).toLowerCase() === "failed";
+}
+
+export function formatCadence(seconds: unknown): string {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return "Unavailable";
+  if (value % 3600 === 0) {
+    const hours = value / 3600;
+    return `Every ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  }
+  return `Every ${value} seconds`;
 }
 
 /**

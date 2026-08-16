@@ -7,10 +7,12 @@ import {
 } from "@tanstack/react-table";
 import {
   AlertTriangle,
+  Activity,
   CheckCircle2,
   CircleCheck,
   Database,
   FileSearch,
+  Power,
   RefreshCw,
   ShieldCheck,
   X,
@@ -32,6 +34,7 @@ import {
 } from "../table/TablePrimitives";
 import {
   clean,
+  formatCadence,
   formatClockTime,
   formatDateTime,
   isFailedStatus,
@@ -41,6 +44,7 @@ import {
   sortJobStatusRows,
   statusSlug,
   type SchedulerRun,
+  type SchedulerRuntimeJob,
   type SchedulerSummaryPayload,
 } from "./schedulerModel";
 
@@ -67,6 +71,42 @@ function schedulerBadge(status: unknown) {
   const label = shown(status, "Unknown");
   const tone = statusSlug(status);
   return <span className={`scheduler-badge scheduler-badge--${tone}`}>{label}</span>;
+}
+
+function jobDisplayName(jobName: unknown) {
+  return clean(jobName)
+    .split("_")
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ") || "Unnamed job";
+}
+
+function runtimeLabel(job: SchedulerRuntimeJob) {
+  if (job.runtime_state === "not_installed") return "Not installed";
+  if (job.runtime_state === "unloaded") return "Unloaded";
+  if (job.runtime_state === "unavailable") return "Unavailable";
+  if (job.runtime_state === "running") return "Running";
+  return "Idle";
+}
+
+function armedLabel(job: SchedulerRuntimeJob) {
+  if (job.armed === true) return "Armed";
+  if (job.enabled === false) return "Disabled";
+  if (job.loaded === false) return "Unloaded";
+  return "Armed unknown";
+}
+
+function runtimeTone(job: SchedulerRuntimeJob) {
+  if (job.runtime_state === "running") return "running";
+  if (job.runtime_state === "idle" && job.armed === true) return "succeeded";
+  if (job.runtime_state === "unavailable" || job.armed === null) return "unknown";
+  return "failed";
+}
+
+function truthLabel(value: boolean | null) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return "Unknown";
 }
 
 function DashboardHeader({
@@ -118,17 +158,35 @@ function OverviewPanel({
   diagnosticsTriggerRef: React.RefObject<HTMLButtonElement>;
 }) {
   const contractOk = Boolean(payload?.contract_health?.all_checks_pass);
-  const overallHealthy = Boolean(payload) && contractOk;
+  const runtimeJobs = payload?.runtime_jobs || [];
+  const runtimeTruthKnown = runtimeJobs.length === 2 && runtimeJobs.every((job) => (
+    job.installed !== null
+    && job.loaded !== null
+    && job.armed !== null
+    && job.running !== null
+    && job.runtime_state !== "unavailable"
+  ));
+  const runtimeHealthy = runtimeTruthKnown && runtimeJobs.every((job) => (
+    job.installed === true
+    && job.loaded === true
+    && job.armed === true
+    && (job.runtime_state === "idle" || job.runtime_state === "running")
+  ));
+  const overallHealthy = Boolean(payload) && contractOk && runtimeHealthy;
+  const overallUnavailable = Boolean(payload) && contractOk && !runtimeTruthKnown;
   const issues: string[] = [];
   if (payload && !contractOk) issues.push("configuration integrity");
+  if (payload && runtimeTruthKnown && !runtimeHealthy) issues.push("scheduler runtime");
 
   const explanation = loading
     ? "Loading scheduler status..."
     : !payload
       ? "Scheduler status is unavailable."
       : overallHealthy
-        ? "Configuration integrity is consistent."
-        : `Needs attention: ${issues.join(" and ")}.`;
+        ? "Configuration and launchd runtime are healthy."
+        : overallUnavailable
+          ? "Launchd runtime inspection is unavailable."
+          : `Needs attention: ${issues.join(" and ")}.`;
 
   const metrics = [
     { label: "Active jobs", value: loading || !payload ? "-" : String(payload.postgres_summary?.active_job_count ?? 0) },
@@ -141,14 +199,14 @@ function OverviewPanel({
     <section className="scheduler-overview-panel" aria-label="Operations overview">
       <div className="scheduler-overview-primary">
         <span
-          className={`scheduler-overview-icon ${overallHealthy ? "is-success" : payload ? "is-danger" : "is-muted"}`}
+          className={`scheduler-overview-icon ${overallHealthy ? "is-success" : overallUnavailable || !payload ? "is-muted" : "is-danger"}`}
           aria-hidden="true"
         >
-          {loading ? <ShieldCheck size={22} /> : overallHealthy ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+          {loading ? <ShieldCheck size={22} /> : overallHealthy ? <CheckCircle2 size={22} /> : overallUnavailable ? <Activity size={22} /> : <AlertTriangle size={22} />}
         </span>
         <div>
           <p className="scheduler-overview-kicker">Overall scheduler state</p>
-          <h2>{loading ? "Checking..." : overallHealthy ? "Healthy" : payload ? "Attention" : "Unavailable"}</h2>
+          <h2>{loading ? "Checking..." : overallHealthy ? "Healthy" : overallUnavailable || !payload ? "Unavailable" : "Attention"}</h2>
           <p className="scheduler-overview-explanation">{explanation}</p>
         </div>
       </div>
@@ -170,6 +228,62 @@ function OverviewPanel({
         <FileSearch size={14} aria-hidden="true" />
         View diagnostics
       </button>
+    </section>
+  );
+}
+
+function RuntimeJobsPanel({ payload, loading }: { payload: SchedulerSummaryPayload | null; loading: boolean }) {
+  const jobs = payload?.runtime_jobs || [];
+  return (
+    <section className="scheduler-runtime-section" aria-label="Scheduler runtime jobs">
+      <div className="scheduler-runtime-section-heading">
+        <div>
+          <p className="scheduler-overview-kicker">Launchd runtime</p>
+          <h2>Scheduled jobs</h2>
+        </div>
+        <span>{loading ? "Inspecting runtime..." : `${jobs.length} external jobs`}</span>
+      </div>
+      {jobs.length ? (
+        <div className="scheduler-runtime-grid">
+          {jobs.map((job) => {
+            const lastRun = job.last_run;
+            const lastStatus = clean(lastRun?.status) || "Never run";
+            const tone = runtimeTone(job);
+            return (
+              <article
+                className={`scheduler-runtime-card ${tone === "failed" || isFailedStatus(lastStatus) ? "is-attention" : ""}`}
+                data-job-name={job.job_name}
+                key={job.job_name}
+              >
+                <div className="scheduler-runtime-card-heading">
+                  <div>
+                    <h3>{jobDisplayName(job.job_name)}</h3>
+                    <p>{job.description}</p>
+                  </div>
+                  <div className="scheduler-runtime-card-badges">
+                    <span className={`scheduler-badge scheduler-badge--${tone}`}>{runtimeLabel(job)}</span>
+                    <span className={`scheduler-badge scheduler-badge--${job.armed === true ? "succeeded" : job.armed === null ? "unknown" : "failed"}`}>
+                      {armedLabel(job)}
+                    </span>
+                  </div>
+                </div>
+                <dl className="scheduler-runtime-details">
+                  <div><dt>Schedule</dt><dd>{formatCadence(job.cadence_seconds)}</dd></div>
+                  <div><dt>Last run</dt><dd>{lastRun ? formatDateTime(lastRun.started_at) : "Never run"}</dd></div>
+                  <div><dt>Last result</dt><dd>{schedulerBadge(lastStatus)}</dd></div>
+                  <div><dt>Return code</dt><dd>{lastRun ? shown(lastRun.return_code, "-") : "-"}</dd></div>
+                </dl>
+                <div className="scheduler-runtime-card-footer">
+                  <span><CheckCircle2 size={13} aria-hidden="true" />{job.installed === true ? "Installed" : job.installed === false ? "Not installed" : "Install unknown"}</span>
+                  <span><Power size={13} aria-hidden="true" />{job.loaded === true ? "Loaded" : job.loaded === false ? "Unloaded" : "Load unknown"}</span>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="scheduler-runtime-empty">{loading ? "Loading scheduler runtime..." : "Scheduler runtime is unavailable."}</div>
+      )}
     </section>
   );
 }
@@ -474,7 +588,7 @@ function SchedulerRunsCard({
   );
 }
 
-type DiagnosticsTab = "configuration" | "database_history";
+type DiagnosticsTab = "runtime" | "configuration" | "database_history";
 
 function ConfigStatusRow({
   icon: Icon,
@@ -550,13 +664,13 @@ function DiagnosticsModal({
   onClose: () => void;
   triggerRef: React.RefObject<HTMLButtonElement>;
 }) {
-  const [tab, setTab] = useState<DiagnosticsTab>("configuration");
+  const [tab, setTab] = useState<DiagnosticsTab>("runtime");
   const cardRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return undefined;
-    setTab("configuration");
+    setTab("runtime");
     window.requestAnimationFrame(() => closeButtonRef.current?.focus());
 
     const previousBodyOverflow = document.body.style.overflow;
@@ -618,7 +732,7 @@ function DiagnosticsModal({
           <div>
             <h3 id="schedulerDiagnosticsModalTitle">Scheduler diagnostics</h3>
             <div className="subtext" id="schedulerDiagnosticsModalDescription">
-              Configuration integrity and database history.
+              Read-only launchd runtime, configuration integrity, and Postgres history.
             </div>
           </div>
           <button
@@ -634,6 +748,7 @@ function DiagnosticsModal({
 
         <div className="scheduler-diagnostics-tabs" role="tablist" aria-label="Diagnostics views">
           {([
+            ["runtime", "Runtime"],
             ["configuration", "Configuration Integrity"],
             ["database_history", "Database History"],
           ] as const).map(([value, label]) => (
@@ -650,6 +765,24 @@ function DiagnosticsModal({
         </div>
 
         <div className="modal-body scheduler-diagnostics-body">
+          {tab === "runtime" ? (
+            <div className="scheduler-runtime-diagnostics-grid">
+              {(payload?.runtime_jobs || []).map((job) => (
+                <section className="scheduler-runtime-diagnostic-card" key={job.job_name}>
+                  <div className="scheduler-runtime-diagnostic-heading">
+                    <div><h4>{jobDisplayName(job.job_name)}</h4><span>{formatCadence(job.cadence_seconds)}</span></div>
+                    <span className={`scheduler-badge scheduler-badge--${runtimeTone(job)}`}>{runtimeLabel(job)}</span>
+                  </div>
+                  <dl>
+                    <div><dt>Installed</dt><dd>{truthLabel(job.installed)}</dd></div>
+                    <div><dt>Loaded</dt><dd>{truthLabel(job.loaded)}</dd></div>
+                    <div><dt>Armed</dt><dd>{truthLabel(job.armed)}</dd></div>
+                    <div><dt>Running</dt><dd>{truthLabel(job.running)}</dd></div>
+                  </dl>
+                </section>
+              ))}
+            </div>
+          ) : null}
           {tab === "configuration" ? (
             <ul className="scheduler-config-list">
               <ConfigStatusRow
@@ -728,6 +861,7 @@ export function SchedulerHealthDashboard({
         onOpenDiagnostics={() => setDiagnosticsOpen(true)}
         diagnosticsTriggerRef={diagnosticsTriggerRef}
       />
+      <RuntimeJobsPanel payload={payload} loading={state.kind === "loading"} />
       <SchedulerRunsCard
         status={status}
         errorMessage={errorMessage}

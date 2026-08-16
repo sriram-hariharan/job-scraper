@@ -218,6 +218,225 @@ def test_common_child_context_and_live_status_context_are_preserved(monkeypatch)
     assert live["EXISTING_ENV"] == "preserved"
 
 
+@pytest.mark.parametrize(
+    ("label", "output", "expected"),
+    [
+        (
+            "com.jobstack.scheduler.agent.discovery",
+            'disabled services = {\n\t"com.jobstack.scheduler.agent.discovery" => enabled\n}',
+            True,
+        ),
+        (
+            "com.jobstack.scheduler.live.pipeline",
+            'disabled services = {\n\t"com.jobstack.scheduler.live.pipeline" => enabled\n}',
+            True,
+        ),
+        (
+            "com.jobstack.scheduler.live.pipeline",
+            'disabled services = {\n\t"com.jobstack.scheduler.live.pipeline" => disabled\n}',
+            False,
+        ),
+        (
+            "com.jobstack.scheduler.live.pipeline",
+            'disabled services = {\n\t"com.jobstack.scheduler.live.pipeline.planning.only" => disabled\n}',
+            None,
+        ),
+    ],
+)
+def test_launchd_enabled_status_requires_exact_label(label, output, expected):
+    assert scheduler._parse_launchctl_enabled_status(output, label) is expected
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        (
+            "gui/501/example = {\n\tstate = not running\n\tservice = {\n\t\tstate = active\n\t}\n}",
+            False,
+        ),
+        ("gui/501/example = {\n\tstate = running\n}", True),
+        ("gui/501/example = {\n\tstate = waiting\n\tservice = {\n\t\tstate = running\n\t}\n}", None),
+    ],
+)
+def test_launchd_running_status_uses_only_root_service_state(output, expected):
+    assert scheduler._parse_launchctl_root_running_status(output) is expected
+
+
+def test_launchd_runtime_status_is_read_only_and_deterministic(monkeypatch, tmp_path):
+    plist_path = tmp_path / "com.jobstack.scheduler.live.pipeline.plist"
+    plist_path.write_text("<plist/>", encoding="utf-8")
+    commands = []
+    monkeypatch.setattr(
+        scheduler,
+        "build_scheduler_launchd_agent_payload",
+        lambda *_args, **_kwargs: {
+            "label": "com.jobstack.scheduler.live.pipeline",
+            "launchd_target": "gui/501",
+            "installed_plist_path": str(plist_path),
+            "print_command": [
+                "launchctl",
+                "print",
+                "gui/501/com.jobstack.scheduler.live.pipeline",
+            ],
+        },
+    )
+    monkeypatch.setattr(scheduler.shutil, "which", lambda name: f"/bin/{name}")
+
+    def fake_launchctl(cmd, *, check):
+        commands.append(list(cmd))
+        assert check is False
+        if cmd[1] == "print":
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "gui/501/com.jobstack.scheduler.live.pipeline = {\n"
+                    "\tstate = not running\n"
+                    "\tservice = {\n"
+                    "\t\tstate = active\n"
+                    "\t}\n"
+                    "}"
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                'disabled services = {\n'
+                '\t"com.jobstack.scheduler.live.pipeline.planning.only" => disabled\n'
+                '\t"com.jobstack.scheduler.live.pipeline" => enabled\n'
+                '}'
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(scheduler, "_run_launchctl", fake_launchctl)
+
+    status = scheduler.get_scheduler_launchd_agent_status("live_pipeline")
+
+    assert commands == [
+        ["launchctl", "print", "gui/501/com.jobstack.scheduler.live.pipeline"],
+        ["launchctl", "print-disabled", "gui/501"],
+    ]
+    assert {command[1] for command in commands} == {"print", "print-disabled"}
+    assert status["installed_plist_exists"] is True
+    assert status["loaded"] is True
+    assert status["enabled"] is True
+    assert status["running"] is False
+    assert status["runtime_state"] == "idle"
+
+
+def test_launchd_runtime_status_keeps_failed_checks_unknown(monkeypatch, tmp_path):
+    plist_path = tmp_path / "com.jobstack.scheduler.agent.discovery.plist"
+    plist_path.write_text("<plist/>", encoding="utf-8")
+    monkeypatch.setattr(
+        scheduler,
+        "build_scheduler_launchd_agent_payload",
+        lambda *_args, **_kwargs: {
+            "label": "com.jobstack.scheduler.agent.discovery",
+            "launchd_target": "gui/501",
+            "installed_plist_path": str(plist_path),
+            "print_command": [
+                "launchctl",
+                "print",
+                "gui/501/com.jobstack.scheduler.agent.discovery",
+            ],
+        },
+    )
+    monkeypatch.setattr(scheduler.shutil, "which", lambda name: f"/bin/{name}")
+
+    def fake_launchctl(cmd, *, check):
+        assert check is False
+        return SimpleNamespace(returncode=1, stdout="", stderr="synthetic failure")
+
+    monkeypatch.setattr(scheduler, "_run_launchctl", fake_launchctl)
+
+    status = scheduler.get_scheduler_launchd_agent_status("agent_discovery")
+
+    assert status["installed_plist_exists"] is True
+    assert status["loaded"] is False
+    assert status["enabled"] is None
+    assert status["running"] is None
+    assert status["runtime_state"] == "unloaded"
+
+
+def test_scheduler_runtime_jobs_are_exact_bounded_and_truthful(monkeypatch):
+    def fake_status(job_name, **_kwargs):
+        if job_name == "agent_discovery":
+            return {
+                "launchctl_available": True,
+                "installed_plist_exists": True,
+                "loaded": True,
+                "enabled": True,
+                "running": False,
+                "runtime_state": "idle",
+                "print_stdout": "synthetic-secret-output",
+                "print_stderr": "synthetic-password",
+            }
+        return {
+            "launchctl_available": True,
+            "installed_plist_exists": True,
+            "loaded": False,
+            "enabled": None,
+            "running": False,
+            "runtime_state": "unloaded",
+            "print_stdout": "synthetic-secret-output",
+            "print_stderr": "synthetic-password",
+        }
+
+    monkeypatch.setattr(scheduler, "get_scheduler_launchd_agent_status", fake_status)
+
+    runtime_jobs = scheduler.get_scheduler_runtime_jobs_status()
+
+    assert [job["job_name"] for job in runtime_jobs] == [
+        "agent_discovery",
+        "live_pipeline",
+    ]
+    assert [job["cadence_seconds"] for job in runtime_jobs] == [86400, 21600]
+    assert runtime_jobs[0]["armed"] is True
+    assert runtime_jobs[0]["runtime_state"] == "idle"
+    assert runtime_jobs[1]["armed"] is False
+    assert runtime_jobs[1]["runtime_state"] == "unloaded"
+    assert set(runtime_jobs[0]) == {
+        "job_name",
+        "description",
+        "cadence_seconds",
+        "installed",
+        "loaded",
+        "enabled",
+        "armed",
+        "running",
+        "runtime_state",
+    }
+    assert "synthetic-secret-output" not in repr(runtime_jobs)
+    assert "synthetic-password" not in repr(runtime_jobs)
+
+
+def test_scheduler_runtime_enabled_state_is_unknown_when_inspection_unavailable(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        scheduler,
+        "get_scheduler_launchd_agent_status",
+        lambda *_args, **_kwargs: {
+            "launchctl_available": False,
+            "installed_plist_exists": True,
+            "loaded": False,
+            "enabled": None,
+            "running": None,
+            "runtime_state": "unavailable",
+        },
+    )
+
+    runtime = scheduler.get_scheduler_runtime_job_status("live_pipeline")
+
+    assert runtime["installed"] is True
+    assert runtime["loaded"] is None
+    assert runtime["enabled"] is None
+    assert runtime["armed"] is None
+    assert runtime["running"] is None
+    assert runtime["runtime_state"] == "unavailable"
+
+
 def test_required_postgres_history_failure_is_visible(monkeypatch, tmp_path):
     monkeypatch.setattr(
         sys,

@@ -15,6 +15,7 @@ assertions below read the React source instead of src/app/ui.py, which now
 contains only the shared shell + a bare mount root.
 """
 
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -117,6 +118,95 @@ def test_admin_can_call_scheduler_summary_api(monkeypatch) -> None:
     response = client.get("/scheduler/summary")
     assert response.status_code == 200
     assert response.json() == FAKE_SUMMARY_PAYLOAD
+
+
+def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
+    monkeypatch,
+) -> None:
+    latest_runs = [
+        {
+            "run_id": "run-agent",
+            "job_name": "agent_discovery",
+            "status": "succeeded",
+            "return_code": 0,
+            "started_at": "2026-08-16T01:00:00Z",
+            "finished_at": "2026-08-16T01:05:00Z",
+        },
+        {
+            "run_id": "run-live",
+            "job_name": "live_pipeline",
+            "status": "failed",
+            "return_code": 7,
+            "started_at": "2026-08-16T02:00:00Z",
+            "finished_at": "2026-08-16T02:05:00Z",
+        },
+    ]
+    monkeypatch.setattr(
+        services,
+        "scheduler_contract_health_payload",
+        lambda: {"all_checks_pass": True},
+    )
+    monkeypatch.setattr(
+        services,
+        "scheduler_postgres_status_payload",
+        lambda **_kwargs: {
+            "history_jsonl_row_count": 2,
+            "history_postgres_row_count": 2,
+            "history_count_matches_jsonl": True,
+            "postgres_command_text": "psql [DATABASE_URL_REDACTED]",
+            "postgres": {
+                "latest_runs_by_job": latest_runs,
+                "recent_runs": latest_runs,
+            },
+        },
+    )
+    monkeypatch.setattr(services, "_load_scheduler_history_rows", lambda *_args: [])
+    monkeypatch.setattr(
+        services,
+        "get_scheduler_runtime_jobs_status",
+        lambda: [
+            {
+                "job_name": "agent_discovery",
+                "description": "Discovery",
+                "cadence_seconds": 86400,
+                "installed": True,
+                "loaded": True,
+                "enabled": True,
+                "armed": True,
+                "running": False,
+                "runtime_state": "idle",
+            },
+            {
+                "job_name": "live_pipeline",
+                "description": "Pipeline",
+                "cadence_seconds": 21600,
+                "installed": True,
+                "loaded": True,
+                "enabled": None,
+                "armed": None,
+                "running": None,
+                "runtime_state": "unavailable",
+            },
+        ],
+    )
+
+    payload = services.scheduler_operator_summary_payload(limit=25)
+
+    assert [job["job_name"] for job in payload["runtime_jobs"]] == [
+        "agent_discovery",
+        "live_pipeline",
+    ]
+    assert payload["runtime_jobs"][0]["last_run"] == latest_runs[0]
+    assert payload["runtime_jobs"][1]["last_run"] == latest_runs[1]
+    serialized = json.dumps(payload)
+    for forbidden in (
+        "DATABASE_URL=",
+        "synthetic-password",
+        "print_stdout",
+        "print_stderr",
+        "EnvironmentVariables",
+    ):
+        assert forbidden not in serialized
 
 
 def test_non_admin_receives_existing_admin_forbidden_api_response(monkeypatch) -> None:
@@ -232,10 +322,11 @@ def test_existing_payload_keys_remain_available_in_service_and_react_model() -> 
         "recent_postgres_runs",
         "recent_jsonl_runs",
         "postgres_summary",
+        "runtime_jobs",
     ):
         assert key in SCHEDULER_MODEL_TS
     assert '"contract_health": contract' in SERVICES_SOURCE
-    assert '"latest_runs_by_job": postgres_block.get("latest_runs_by_job", [])' in SERVICES_SOURCE
+    assert '"latest_runs_by_job": latest_runs_by_job' in SERVICES_SOURCE
     assert '"recent_postgres_runs": postgres_block.get("recent_runs", [])' in SERVICES_SOURCE
     assert '"recent_jsonl_runs": latest_jsonl_rows' in SERVICES_SOURCE
 
@@ -280,8 +371,10 @@ def test_storage_sync_and_count_matches_are_removed_from_the_health_calculation(
     assert "storage sync" not in SCHEDULER_DASHBOARD_TSX.lower()
 
 
-def test_overall_health_depends_only_on_contract_health() -> None:
-    assert "const overallHealthy = Boolean(payload) && contractOk;" in SCHEDULER_DASHBOARD_TSX
+def test_overall_health_requires_contract_and_truthful_runtime_health() -> None:
+    assert "const overallHealthy = Boolean(payload) && contractOk && runtimeHealthy;" in SCHEDULER_DASHBOARD_TSX
+    assert "runtimeTruthKnown" in SCHEDULER_DASHBOARD_TSX
+    assert 'job.runtime_state !== "unavailable"' in SCHEDULER_DASHBOARD_TSX
     assert "postgres_summary?.run_history_count" in SCHEDULER_DASHBOARD_TSX
     assert "Recorded runs" in SCHEDULER_DASHBOARD_TSX
 
@@ -291,6 +384,8 @@ def test_no_fake_time_period_labels_introduced() -> None:
         assert "today" not in source
         assert "last 24" not in source
         assert "past 24 hours" not in source
+        assert "next run" not in source
+        assert "runs in" not in source
 
 
 def test_no_new_scheduler_write_or_control_action_introduced() -> None:
@@ -359,6 +454,13 @@ def test_diagnostics_modal_has_accessible_dialog_semantics() -> None:
     assert 'aria-modal="true"' in SCHEDULER_DASHBOARD_TSX
     assert 'event.key === "Escape"' in SCHEDULER_DASHBOARD_TSX
     assert "triggerRef.current?.focus()" in SCHEDULER_DASHBOARD_TSX
+
+
+def test_runtime_cards_and_diagnostics_are_bounded_to_summary_runtime_jobs() -> None:
+    assert 'aria-label="Scheduler runtime jobs"' in SCHEDULER_DASHBOARD_TSX
+    assert "payload?.runtime_jobs || []" in SCHEDULER_DASHBOARD_TSX
+    assert "formatCadence(job.cadence_seconds)" in SCHEDULER_DASHBOARD_TSX
+    assert '["runtime", "Runtime"]' in SCHEDULER_DASHBOARD_TSX
 
 
 def test_configuration_checks_render_as_status_rows_not_a_legacy_table() -> None:

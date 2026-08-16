@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SchedulerHealthDashboard } from "./SchedulerHealthDashboard";
-import type { SchedulerSummaryPayload } from "./schedulerModel";
+import { formatDateTime, type SchedulerSummaryPayload } from "./schedulerModel";
 
 const READY_PAYLOAD: SchedulerSummaryPayload = {
   ok: true,
@@ -63,6 +63,46 @@ const READY_PAYLOAD: SchedulerSummaryPayload = {
       finished_at: "2026-07-20T01:05:00Z",
     },
   ],
+  runtime_jobs: [
+    {
+      job_name: "agent_discovery",
+      description: "Run standalone company discovery agent.",
+      cadence_seconds: 86400,
+      installed: true,
+      loaded: true,
+      enabled: true,
+      armed: true,
+      running: false,
+      runtime_state: "idle",
+      last_run: {
+        run_id: "run-agent-1",
+        job_name: "agent_discovery",
+        status: "succeeded",
+        return_code: 0,
+        started_at: "2026-07-20T00:00:00Z",
+        finished_at: "2026-07-20T00:05:00Z",
+      },
+    },
+    {
+      job_name: "live_pipeline",
+      description: "Run main pipeline and optionally downstream application planning.",
+      cadence_seconds: 21600,
+      installed: true,
+      loaded: true,
+      enabled: true,
+      armed: true,
+      running: true,
+      runtime_state: "running",
+      last_run: {
+        run_id: "run-live-1",
+        job_name: "live_pipeline",
+        status: "succeeded",
+        return_code: 0,
+        started_at: "2026-07-20T01:00:00Z",
+        finished_at: "2026-07-20T01:05:00Z",
+      },
+    },
+  ],
   postgres_summary: {
     job_definition_count: 2,
     active_job_count: 2,
@@ -93,6 +133,58 @@ describe("SchedulerHealthDashboard", () => {
     const activeJobsMetric = screen.getByText("Active jobs").closest(".scheduler-overview-metric");
     expect(activeJobsMetric).not.toBeNull();
     expect(within(activeJobsMetric as HTMLElement).getByText("2")).toBeInTheDocument();
+  });
+
+  it("renders exactly two truthful runtime cards with definition-owned cadences", async () => {
+    const { container } = render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+    await screen.findByText("Healthy");
+    const cards = container.querySelectorAll(".scheduler-runtime-card");
+    expect(cards).toHaveLength(2);
+
+    const discovery = container.querySelector('[data-job-name="agent_discovery"]') as HTMLElement;
+    const live = container.querySelector('[data-job-name="live_pipeline"]') as HTMLElement;
+    expect(within(discovery).getByText("Every 24 hours")).toBeInTheDocument();
+    expect(within(discovery).getByText("Idle")).toBeInTheDocument();
+    expect(within(discovery).getByText("Armed")).toBeInTheDocument();
+    expect(within(live).getByText("Every 6 hours")).toBeInTheDocument();
+    expect(within(live).getByText("Running")).toBeInTheDocument();
+    expect(within(live).getByText(formatDateTime("2026-07-20T01:00:00Z"))).toBeInTheDocument();
+    expect(within(live).getByText("0")).toBeInTheDocument();
+  });
+
+  it("renders disabled and unloaded runtime as attention", async () => {
+    const attentionPayload: SchedulerSummaryPayload = {
+      ...READY_PAYLOAD,
+      runtime_jobs: READY_PAYLOAD.runtime_jobs?.map((job) => (
+        job.job_name === "live_pipeline"
+          ? { ...job, loaded: false, enabled: false, armed: false, running: false, runtime_state: "unloaded" }
+          : job
+      )),
+    };
+    const { container } = render(<SchedulerHealthDashboard readSummary={async () => attentionPayload} />);
+    expect(await screen.findByText("Attention")).toBeInTheDocument();
+    const live = container.querySelector('[data-job-name="live_pipeline"]') as HTMLElement;
+    expect(live).toHaveClass("is-attention");
+    expect(within(live).getAllByText("Unloaded")).toHaveLength(2);
+    expect(within(live).getByText("Disabled")).toBeInTheDocument();
+  });
+
+  it("does not fabricate Healthy when launchd runtime is unavailable", async () => {
+    const unavailablePayload: SchedulerSummaryPayload = {
+      ...READY_PAYLOAD,
+      runtime_jobs: READY_PAYLOAD.runtime_jobs?.map((job) => ({
+        ...job,
+        loaded: null,
+        enabled: null,
+        armed: null,
+        running: null,
+        runtime_state: "unavailable",
+      })),
+    };
+    render(<SchedulerHealthDashboard readSummary={async () => unavailablePayload} />);
+    expect(await screen.findByText("Unavailable", { selector: ".scheduler-overview-primary h2" })).toBeInTheDocument();
+    expect(screen.getByText("Launchd runtime inspection is unavailable.")).toBeInTheDocument();
+    expect(screen.queryByText("Healthy")).not.toBeInTheDocument();
   });
 
   it("uses the shared app-page-header contract while keeping the Admin only badge and last-refreshed text", async () => {
@@ -141,7 +233,7 @@ describe("SchedulerHealthDashboard", () => {
     };
     render(<SchedulerHealthDashboard readSummary={async () => jsonlMissing} />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("Configuration integrity is consistent.")).toBeInTheDocument();
+    expect(screen.getByText("Configuration and launchd runtime are healthy.")).toBeInTheDocument();
   });
 
   it("renders a real error state on fetch failure, not a silent healthy default", async () => {
@@ -185,6 +277,8 @@ describe("SchedulerHealthDashboard", () => {
     await screen.findByText("Healthy");
     expect(screen.queryByText("Seed SQL artifact match")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View diagnostics" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Configuration Integrity" }));
     expect(await screen.findByText("Seed SQL artifact match")).toBeInTheDocument();
   });
 
@@ -215,7 +309,8 @@ describe("SchedulerHealthDashboard", () => {
     render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
     await screen.findByText("Healthy");
     fireEvent.click(screen.getByRole("button", { name: "View diagnostics" }));
-    await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Configuration Integrity" }));
     expect(screen.getByText("Overall configuration integrity")).toBeInTheDocument();
     expect(screen.getByText("Seed SQL artifact match")).toBeInTheDocument();
     expect(screen.getByText("Init SQL artifact match")).toBeInTheDocument();
@@ -229,16 +324,32 @@ describe("SchedulerHealthDashboard", () => {
     const dialog = await screen.findByRole("dialog");
 
     expect(within(dialog).queryByRole("tab", { name: "File Audit" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("tab", { name: "Runtime" })).toBeInTheDocument();
     expect(within(dialog).getByRole("tab", { name: "Configuration Integrity" })).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("tab", { name: "Database History" }));
     expect(screen.getByText(/mirrored into Postgres/)).toBeInTheDocument();
   });
 
+  it("shows bounded runtime details in diagnostics", async () => {
+    render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+    await screen.findByText("Healthy");
+    fireEvent.click(screen.getByRole("button", { name: "View diagnostics" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByText("Agent Discovery")).toHaveLength(1);
+    expect(within(dialog).getAllByText("Live Pipeline")).toHaveLength(1);
+    expect(within(dialog).getByText("Every 24 hours")).toBeInTheDocument();
+    expect(within(dialog).getByText("Every 6 hours")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("Yes").length).toBeGreaterThan(0);
+  });
+
   it("does not introduce a scheduler write/control action", async () => {
     render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
     await screen.findByText("Healthy");
-    for (const forbidden of ["Run job", "Stop job", "Trigger run", "Disable job", "Enable job"]) {
+    for (const forbidden of [
+      "Run job", "Run now", "Stop job", "Stop", "Restart", "Trigger run",
+      "Disable job", "Enable job", "Install", "Uninstall",
+    ]) {
       expect(screen.queryByRole("button", { name: forbidden })).not.toBeInTheDocument();
     }
   });

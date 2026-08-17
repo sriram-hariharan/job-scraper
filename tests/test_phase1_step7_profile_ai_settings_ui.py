@@ -289,16 +289,19 @@ def test_connection_test_posts_only_provider_and_model_and_never_renders_content
 def test_task_routing_card_is_existing_editable_dom_owner():
     html = profile_ai_settings_page()
     assert "Task-specific model routing will appear here" not in html
-    assert "ApplyLens Recommended by default" in html
+    assert "ApplyLens Recommended (default)" in html
     assert "currently qualified provider/model choice" in html
     assert ">Read only<" not in html
     assert "profile-ai-settings-readonly-badge" not in html
     assert ">Qualified choices<" in html
     assert 'id="aiTaskRoutingSummary"' in html
     assert 'id="aiTaskRoutingList"' in html
-    assert html.count("phase1_task_routing_ux_r3") == 2
+    assert html.count("phase1_task_routing_ux_r3") == 1
     assert "profile_ai_settings.css?v=phase1_task_routing_ux_r3" in html
-    assert "profile_ai_settings.js?v=phase1_task_routing_ux_r3" in html
+    assert (
+        "profile_ai_settings.js?v=item2f5_manual_preview_default_r1"
+        in html
+    )
     assert "phase1_task_routing_r2" not in html
     assert "preferred_model" not in html + AI_SETTINGS_JS
     assert "Resume scoring" not in html + AI_SETTINGS_JS
@@ -386,12 +389,15 @@ def test_routing_rendering_preserves_backend_order_and_uses_generic_fields():
         "Qualified choices",
         "Deterministic",
         "Not live",
-        "ApplyLens Recommended",
+        "ApplyLens Recommended (default)",
         "Save route",
     ):
         assert f'"{label}"' in rendering
     assert "state.routing.workloads.reduce(" in rendering
     assert "requestJson(" not in rendering
+    assert "ApplyLens Recommended (default) stores no explicit override." in rendering
+    assert '"ApplyLens Recommended (default)"' in rendering
+    assert "openai/gpt-oss-120b" not in AI_SETTINGS_JS
     for forbidden in (
         "test-connection",
         "preferred-provider",
@@ -405,6 +411,11 @@ def test_routing_rendering_preserves_backend_order_and_uses_generic_fields():
 
 def test_qualified_route_selector_uses_only_indexed_backend_options():
     rendering = _function(AI_SETTINGS_JS, "renderRouting", "renderAll")
+    assert 'const applyLensRecommendedRouteValue = "applylens-recommended"' in AI_SETTINGS_JS
+    assert (
+        'makeElement("option", "", "ApplyLens Recommended (default)")'
+        in rendering
+    )
     assert 'recommendedChoice.value = applyLensRecommendedRouteValue' in rendering
     assert 'explicitChoice.value = `qualified:${index}`' in rendering
     assert "route.qualifiedOptions.forEach((option, index)" in rendering
@@ -422,7 +433,10 @@ def test_qualified_route_selector_uses_only_indexed_backend_options():
 def test_stale_and_nonselectable_routes_are_visible_but_never_editable():
     rendering = _function(AI_SETTINGS_JS, "renderRouting", "renderAll")
     assert 'route.requestedSelectionStatus === "no_longer_qualified"' in rendering
-    assert "is no longer qualified. ApplyLens Recommended is currently effective." in rendering
+    assert (
+        "is no longer qualified. ApplyLens Recommended (default) is currently effective."
+        in rendering
+    )
     assert "route.requestedSelection.provider" in rendering
     assert "route.requestedSelection.model" in rendering
     assert 'route.executionMode === "qualified_provider_model"' in rendering
@@ -450,6 +464,7 @@ def test_task_route_write_uses_safe_index_resolution_and_exact_methods():
     assert "provider: selectedOption.provider" in saving
     assert "model: selectedOption.model" in saving
     assert "validateTaskRouteWriteResponse(result, workloadId)" in saving
+    assert "ApplyLens Recommended (default) is now effective." in saving
     assert "state.routing.workloads.map((existingRoute, index)" in saving
     delete_branch = saving.split("const result = useRecommended", 1)[1].split(
         ": await requestJson", 1
@@ -557,6 +572,10 @@ def test_route_failures_are_bounded_and_dynamic_events_use_existing_list_owner()
         "task_route_state_unavailable",
     ):
         assert category in AI_SETTINGS_JS
+    assert (
+        "The task route could not be returned to ApplyLens Recommended (default). Try again."
+        in AI_SETTINGS_JS
+    )
     assert "error.message" not in saving
     assert "error.stack" not in saving
     assert 'byId("aiTaskRoutingList").addEventListener("click"' in binding

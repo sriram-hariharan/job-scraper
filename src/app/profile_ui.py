@@ -803,7 +803,7 @@ def profile_ai_settings_page() -> str:
         <div class="profile-ai-settings-section-heading">
           <div>
             <h2 id="aiTaskRoutingTitle">AI task routing</h2>
-            <p>Use ApplyLens Recommended by default, or save an explicit currently qualified provider/model choice for a task.</p>
+            <p>Use ApplyLens Recommended (default), or save an explicit currently qualified provider/model choice for a task.</p>
           </div>
           <span class="profile-ai-settings-routing-badge">Qualified choices</span>
         </div>
@@ -910,7 +910,7 @@ def profile_ai_settings_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script src="/static/profile_ai_settings.js?v=phase1_task_routing_ux_r3"></script>
+  <script src="/static/profile_ai_settings.js?v=item2f5_manual_preview_default_r1"></script>
 </body>
 </html>
     """.strip()

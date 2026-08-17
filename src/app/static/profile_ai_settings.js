@@ -30,7 +30,7 @@
     connection_test_failed: "Connection test failed. Check the key and provider access.",
     task_route_not_qualified: "That route is no longer currently qualified. Choose from the current routing options and try again.",
     task_route_write_failed: "The task route could not be saved. Try again.",
-    task_route_delete_failed: "The task route could not be returned to ApplyLens Recommended. Try again.",
+    task_route_delete_failed: "The task route could not be returned to ApplyLens Recommended (default). Try again.",
     task_route_state_unavailable: "Current task routing is unavailable. Retry the page before saving.",
   };
 
@@ -653,7 +653,7 @@
             "profile-ai-settings-routing-source",
             route.effectiveSelectionSource === "user_override"
               ? "Explicit override"
-              : "ApplyLens Recommended"
+              : "ApplyLens Recommended (default)"
           )
         );
       } else {
@@ -677,7 +677,7 @@
         select.dataset.routeSelect = "true";
         selectLabel.appendChild(select);
 
-        const recommendedChoice = makeElement("option", "", "ApplyLens Recommended");
+        const recommendedChoice = makeElement("option", "", "ApplyLens Recommended (default)");
         recommendedChoice.value = applyLensRecommendedRouteValue;
         select.appendChild(recommendedChoice);
         route.qualifiedOptions.forEach((option, index) => {
@@ -721,7 +721,7 @@
             makeElement(
               "p",
               "profile-ai-settings-routing-stale-note",
-              `Previously saved ${displayProviderName(route.requestedSelection.provider)} · ${route.requestedSelection.model} is no longer qualified. ApplyLens Recommended is currently effective.`
+              `Previously saved ${displayProviderName(route.requestedSelection.provider)} · ${route.requestedSelection.model} is no longer qualified. ApplyLens Recommended (default) is currently effective.`
             )
           );
         } else {
@@ -729,7 +729,7 @@
             makeElement(
               "p",
               "profile-ai-settings-routing-help",
-              "ApplyLens Recommended stores no explicit override. Alternatives shown here are currently qualified."
+              "ApplyLens Recommended (default) stores no explicit override. Alternatives shown here are currently qualified."
             )
           );
         }
@@ -1110,7 +1110,7 @@
       };
       state.routeMessages.set(workloadId, {
         message: useRecommended
-          ? "ApplyLens Recommended is now effective."
+          ? "ApplyLens Recommended (default) is now effective."
           : "Explicit qualified route saved.",
         tone: "success",
       });

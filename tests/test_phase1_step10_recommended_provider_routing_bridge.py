@@ -31,6 +31,11 @@ JOB_FIT_OPTIONS = [
     {"provider": "openai", "model": "gpt-5.1"},
 ]
 
+MANUAL_PREVIEW_RECOMMENDED = {
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+}
+
 
 def _job_fit_overlay():
     return {
@@ -524,7 +529,9 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             ("openai", "gpt-5.1"),
         ],
         "manual_scan_phrase": [],
-        "manual_provider_preview": [],
+        "manual_provider_preview": [
+            ("groq", "openai/gpt-oss-120b"),
+        ],
     }
 
     assert len(workloads) == 12
@@ -546,7 +553,7 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             assert row["recommended_option"] is None
             assert row["qualified_options"] == []
 
-    assert actual_total == 18
+    assert actual_total == 19
     assert {
         mode: sum(row["execution_mode"] == mode for row in workloads)
         for mode in (
@@ -555,9 +562,9 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             "blocked_non_live",
         )
     } == {
-        "qualified_provider_model": 7,
+        "qualified_provider_model": 8,
         "deterministic": 4,
-        "blocked_non_live": 1,
+        "blocked_non_live": 0,
     }
 
     job_fit = by_workload["job_fit_evaluation"]
@@ -568,6 +575,26 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
     assert job_fit["effective_selection"] == JOB_FIT_OPTIONS[0]
     assert job_fit["effective_selection_source"] == (
         "applylens_recommended"
+    )
+
+    manual_preview = by_workload["manual_provider_preview"]
+    assert manual_preview["recommendation_status"] == "recommended"
+    assert manual_preview["execution_mode"] == "qualified_provider_model"
+    assert manual_preview["recommended_option"] == MANUAL_PREVIEW_RECOMMENDED
+    assert manual_preview["qualified_options"] == [MANUAL_PREVIEW_RECOMMENDED]
+    assert manual_preview["effective_selection"] == MANUAL_PREVIEW_RECOMMENDED
+    assert manual_preview["effective_selection_source"] == (
+        "applylens_recommended"
+    )
+    assert {
+        (option["provider"], option["model"])
+        for option in manual_preview["qualified_options"]
+    }.isdisjoint(
+        {
+            ("groq", "openai/gpt-oss-20b"),
+            ("openai", "gpt-5-mini"),
+            ("openai", "gpt-5.1"),
+        }
     )
 
     rendered = repr(payload)

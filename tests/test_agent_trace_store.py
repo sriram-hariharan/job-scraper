@@ -69,6 +69,90 @@ def test_runtime_query_runner_supports_dbapi_and_psql_fallback():
     assert "driver_name = \"psycopg\"" in source
 
 
+def test_runtime_query_runner_advances_psycopg_to_row_returning_result(monkeypatch):
+    captured = {
+        "nextset_calls": 0,
+        "commit_calls": 0,
+    }
+    real_import = builtins.__import__
+
+    class FakeCursor:
+        def __init__(self):
+            self._result_index = 0
+            self._descriptions = [
+                None,
+                None,
+                (object(),),
+            ]
+
+        @property
+        def description(self):
+            return self._descriptions[self._result_index]
+
+        def execute(self, sql):
+            captured["sql"] = sql
+
+        def nextset(self):
+            captured["nextset_calls"] += 1
+            if self._result_index + 1 >= len(self._descriptions):
+                return None
+            self._result_index += 1
+            return True
+
+        def fetchone(self):
+            if self.description is None:
+                raise AssertionError("fetchone called before row-returning result")
+            return ({"ok": True, "rows": []},)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            captured["commit_calls"] += 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakePsycopg:
+        @staticmethod
+        def connect(database_url):
+            captured["database_url"] = database_url
+            return FakeConnection()
+
+    def import_with_fake_psycopg(name, *args, **kwargs):
+        if name == "psycopg":
+            return FakePsycopg
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_with_fake_psycopg)
+
+    payload = store._run_postgres_json_query(
+        sql=(
+            "CREATE TABLE IF NOT EXISTS example(id integer);"
+            "CREATE INDEX IF NOT EXISTS example_idx ON example(id);"
+            "SELECT json_build_object('ok', true, 'rows', '[]'::json);"
+        ),
+        database_url="postgres://user:pass@example/db",
+        print_only=False,
+    )
+
+    assert payload["driver"] == "psycopg"
+    assert payload["data"] == {"ok": True, "rows": []}
+    assert captured["nextset_calls"] == 2
+    assert captured["commit_calls"] == 1
+    assert captured["database_url"] == "postgres://user:pass@example/db"
+
+
 def test_runtime_query_runner_falls_back_to_psql_when_dbapi_missing(monkeypatch):
     captured = {}
     real_import = builtins.__import__

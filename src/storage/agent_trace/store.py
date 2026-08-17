@@ -302,6 +302,12 @@ def _run_postgres_json_query(
         with connect(database_url_value) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql)
+                if driver_name == "psycopg":
+                    while cursor.description is None:
+                        if not cursor.nextset():
+                            raise SystemExit(
+                                "Postgres returned empty output for agent-trace query."
+                            )
                 row = cursor.fetchone()
             conn.commit()
         return _agent_trace_query_payload_from_row(payload, row)

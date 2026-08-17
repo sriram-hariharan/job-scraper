@@ -1,4 +1,6 @@
 import inspect
+import sys
+import types
 
 import pytest
 
@@ -285,6 +287,87 @@ def test_feedback_store_uses_dbapi_and_psql_fallback():
     assert "cursor.execute(sql)" in source
     assert "subprocess.run" in source
     assert "driver_name = \"psycopg\"" in source
+
+
+def test_psycopg_advances_past_schema_command_results_before_fetch(monkeypatch):
+    class FakeCursor:
+        def __init__(self):
+            self.result_index = 0
+            self.results = [
+                (None, None),
+                (None, None),
+                (None, None),
+                (None, None),
+                (None, None),
+                (("json_build_object",), ({"rows": []},)),
+            ]
+            self.executed_sql = ""
+
+        @property
+        def description(self):
+            return self.results[self.result_index][0]
+
+        def execute(self, sql):
+            self.executed_sql = sql
+
+        def nextset(self):
+            if self.result_index + 1 >= len(self.results):
+                return None
+            self.result_index += 1
+            return True
+
+        def fetchone(self):
+            assert self.description is not None
+            return self.results[self.result_index][1]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeConnection:
+        def __init__(self):
+            self.cursor_instance = FakeCursor()
+            self.committed = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    connection = FakeConnection()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg",
+        types.SimpleNamespace(
+            connect=lambda _database_url: connection,
+        ),
+    )
+
+    sql = (
+        agent_feedback_schema_sql_text()
+        + "\n\n"
+        + "SELECT json_build_object('rows', '[]'::json);"
+    )
+
+    payload = store._run_postgres_json_query(
+        sql=sql,
+        database_url="postgresql://local-test",
+    )
+
+    assert payload["driver"] == "psycopg"
+    assert payload["data"] == {"rows": []}
+    assert connection.cursor_instance.result_index == 5
+    assert connection.committed is True
 
 
 def test_feedback_not_imported_into_scoring_queue_or_tailoring_decision_modules():

@@ -306,6 +306,13 @@ def _run_postgres_json_query(
         with connect(database_url_value) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql)
+                if driver_name == "psycopg":
+                    while cursor.description is None and cursor.nextset():
+                        pass
+                if cursor.description is None:
+                    raise SystemExit(
+                        "Postgres agent-feedback query did not produce a result set."
+                    )
                 row = cursor.fetchone()
             conn.commit()
         return _feedback_query_payload_from_row(payload, row)

@@ -34,6 +34,12 @@ SHARED_POSTGRES_STAGE_ORDER = [
     *STAGE_ORDER[2:],
 ]
 
+PLANNING_ONLY_STAGE_ORDER = [
+    "startup",
+    "planning",
+    "finalization",
+]
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -114,9 +120,13 @@ def initialize_run(
         "current_stage": "startup",
         "completed_stages": [],
         "stage_order": (
-            SHARED_POSTGRES_STAGE_ORDER
-            if acquisition_input_source == "shared_postgres_pool"
-            else STAGE_ORDER
+            PLANNING_ONLY_STAGE_ORDER
+            if planning_only
+            else (
+                SHARED_POSTGRES_STAGE_ORDER
+                if acquisition_input_source == "shared_postgres_pool"
+                else STAGE_ORDER
+            )
         ),
         "stage_started_at": _utc_now(),
         "stage_message": "Starting pipeline entrypoint",

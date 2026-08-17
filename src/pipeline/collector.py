@@ -258,7 +258,8 @@ def _is_user_pipeline_mode() -> bool:
 
 COLLECTOR_INPUT_SCRAPERS = "scrapers"
 COLLECTOR_INPUT_SHARED_POSTGRES = "shared_postgres_pool"
-MAX_SHARED_POSTGRES_INPUT_JOBS = 50
+DEFAULT_SHARED_POSTGRES_INPUT_JOBS = 500_000
+MAX_SHARED_POSTGRES_INPUT_JOBS = 500_000
 
 
 def _bounded_shared_postgres_input_limit(value: Any) -> int:
@@ -271,7 +272,7 @@ def _bounded_shared_postgres_input_limit(value: Any) -> int:
     if parsed < 0:
         raise RuntimeError("shared_postgres_projection_limit_invalid")
     if parsed == 0:
-        return MAX_SHARED_POSTGRES_INPUT_JOBS
+        return DEFAULT_SHARED_POSTGRES_INPUT_JOBS
     return min(parsed, MAX_SHARED_POSTGRES_INPUT_JOBS)
 
 
@@ -306,6 +307,31 @@ def _normalize_shared_postgres_jobs(rows: Any, *, limit: int) -> List[Dict[str, 
             "before an authenticated pipeline."
         )
     return jobs
+
+
+def _shared_rag_retention_stage_counts(payload: Any) -> Dict[str, int]:
+    if not isinstance(payload, dict) or payload.get("ok") is not True:
+        raise RuntimeError("shared_postgres_retention_failed")
+    counts: Dict[str, int] = {}
+    for source_key, metric_key in (
+        ("retention_days", "shared_retention_days"),
+        ("inspected_count", "shared_retention_inspected"),
+        ("candidate_count", "shared_retention_stale_candidates"),
+        ("deleted_count", "shared_retention_deleted"),
+        ("retained_count", "shared_job_documents"),
+    ):
+        try:
+            value = int(payload.get(source_key))
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("shared_postgres_retention_failed") from exc
+        if value < 0:
+            raise RuntimeError("shared_postgres_retention_failed")
+        counts[metric_key] = value
+    if counts["shared_retention_stale_candidates"] != counts[
+        "shared_retention_deleted"
+    ]:
+        raise RuntimeError("shared_postgres_retention_failed")
+    return counts
 
 
 _PREFERENCE_ENV_NAMES = {
@@ -2758,7 +2784,7 @@ async def collect_all_jobs_async(
     *,
     global_acquisition_only: bool = False,
     input_source: str = COLLECTOR_INPUT_SCRAPERS,
-    shared_input_limit: int = MAX_SHARED_POSTGRES_INPUT_JOBS,
+    shared_input_limit: int = DEFAULT_SHARED_POSTGRES_INPUT_JOBS,
     shared_postgres_reader=None,
 ) -> List[Dict[str, Any]]:
     from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
@@ -2904,15 +2930,26 @@ async def collect_all_jobs_async(
     if shared_postgres_projection:
         bounded_limit = _bounded_shared_postgres_input_limit(shared_input_limit)
         if shared_postgres_reader is None:
-            from src.storage.rag_store import get_rag_job_documents
+            from src.storage.rag_store import (
+                get_bounded_owner_projection_rag_job_documents,
+            )
 
-            shared_postgres_reader = get_rag_job_documents
+            shared_postgres_reader = (
+                get_bounded_owner_projection_rag_job_documents
+            )
         start_stage(
             "shared_input",
-            f"Reading up to {bounded_limit} jobs from shared Postgres",
+            "Reading all active jobs from shared Postgres "
+            f"(safety ceiling {bounded_limit})",
         )
         try:
             shared_rows = shared_postgres_reader(limit=bounded_limit)
+        except RuntimeError as exc:
+            if str(exc).startswith(
+                "shared_postgres_active_corpus_safety_limit_exceeded:"
+            ):
+                raise
+            raise RuntimeError("shared_postgres_pool_read_failed") from exc
         except Exception as exc:
             raise RuntimeError("shared_postgres_pool_read_failed") from exc
         all_jobs = _normalize_shared_postgres_jobs(
@@ -2933,7 +2970,7 @@ async def collect_all_jobs_async(
         )
         logger.info(
             "Authenticated owner projection loaded shared Postgres jobs | "
-            "owner_user_id=%s | jobs=%s | limit=%s",
+            "owner_user_id=%s | jobs=%s | safety_limit=%s",
             owner_user_id,
             len(all_jobs),
             bounded_limit,
@@ -3022,15 +3059,30 @@ async def collect_all_jobs_async(
             "rag_export",
             f"Persisting {len(deduped_jobs)} owner-neutral shared jobs",
         )
-        shared_job_count = export_job_corpus(
+        export_job_corpus(
             deduped_jobs,
             "postgres://rag_job_documents",
             persist_postgres=True,
             owner_neutral=True,
         )
+        from src.storage.rag_store import delete_stale_rag_job_documents
+
+        retention_counts = _shared_rag_retention_stage_counts(
+            delete_stale_rag_job_documents()
+        )
+        shared_job_count = retention_counts["shared_job_documents"]
         complete_stage(
             "rag_export",
-            counts={"shared_job_documents": int(shared_job_count or 0)},
+            counts=retention_counts,
+        )
+        logger.info(
+            "Shared RAG retention completed | days=%s | inspected=%s | "
+            "stale_candidates=%s | deleted=%s | retained=%s",
+            retention_counts["shared_retention_days"],
+            retention_counts["shared_retention_inspected"],
+            retention_counts["shared_retention_stale_candidates"],
+            retention_counts["shared_retention_deleted"],
+            retention_counts["shared_job_documents"],
         )
         persist_discovered_companies()
 
@@ -3039,7 +3091,7 @@ async def collect_all_jobs_async(
             acquired_jobs=len(all_jobs),
             deduped_jobs=len(deduped_jobs),
             duplicate_jobs_removed=len(all_jobs) - len(deduped_jobs),
-            shared_job_documents=int(shared_job_count or 0),
+            **retention_counts,
             downstream_stages_executed=False,
         )
         logger.info(

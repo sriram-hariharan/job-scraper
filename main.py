@@ -67,6 +67,7 @@ logger = get_logger(__name__)
 
 
 DEFAULT_JOB_CORPUS_PATH = "data/rag/job_corpus.jsonl"
+DEFAULT_SHARED_POSTGRES_PROJECTION_LIMIT = 500_000
 
 
 def _job_corpus_path_from_env(default: str = DEFAULT_JOB_CORPUS_PATH) -> str:
@@ -95,8 +96,11 @@ def _parse_args():
     parser.add_argument(
         "--shared-postgres-job-limit",
         type=int,
-        default=50,
-        help="Maximum shared Postgres jobs to read for an authenticated owner projection.",
+        default=DEFAULT_SHARED_POSTGRES_PROJECTION_LIMIT,
+        help=(
+            "Emergency safety ceiling for the complete active shared Postgres "
+            "owner corpus; exceeding it fails the run."
+        ),
     )
     parser.add_argument(
         "--skip-application-planning",
@@ -362,12 +366,20 @@ def _validate_application_planning_only_args(args) -> None:
                 "--shared-postgres-projection cannot be combined with "
                 "--application-planning-only."
             )
-        if int(getattr(args, "shared_postgres_job_limit", 50)) < 0:
+        if int(
+            getattr(
+                args,
+                "shared_postgres_job_limit",
+                DEFAULT_SHARED_POSTGRES_PROJECTION_LIMIT,
+            )
+        ) < 0:
             raise SystemExit("--shared-postgres-job-limit must be non-negative.")
     if args.application_planning_only and not args.run_application_planning:
         raise SystemExit(
             "--application-planning-only requires --run-application-planning."
         )
+    if args.application_planning_only:
+        args.delete_seen_data = "no"
     corpus_source = str(
         getattr(args, "application_planning_corpus_source", "filesystem")
         or "filesystem"
@@ -692,12 +704,24 @@ async def _main_async(
             getattr(args, "global_acquisition_only", False)
         ),
         acquisition_input_source=(
-            "shared_postgres_pool"
-            if bool(getattr(args, "shared_postgres_projection", False))
-            else "scrapers"
+            "planning_corpus"
+            if bool(args.application_planning_only)
+            else (
+                "shared_postgres_pool"
+                if bool(getattr(args, "shared_postgres_projection", False))
+                else "scrapers"
+            )
         ),
-        shared_input_limit=int(
-            getattr(args, "shared_postgres_job_limit", 50)
+        shared_input_limit=(
+            int(
+                getattr(
+                    args,
+                    "shared_postgres_job_limit",
+                    DEFAULT_SHARED_POSTGRES_PROJECTION_LIMIT,
+                )
+            )
+            if bool(getattr(args, "shared_postgres_projection", False))
+            else 0
         ),
     )
     update_config(corpus_source=corpus_source)
@@ -759,7 +783,11 @@ async def _main_async(
             jobs = await collect_all_jobs_async(
                 input_source="shared_postgres_pool",
                 shared_input_limit=int(
-                    getattr(args, "shared_postgres_job_limit", 50)
+                    getattr(
+                        args,
+                        "shared_postgres_job_limit",
+                        DEFAULT_SHARED_POSTGRES_PROJECTION_LIMIT,
+                    )
                 ),
             )
         else:

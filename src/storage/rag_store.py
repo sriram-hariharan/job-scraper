@@ -14,6 +14,9 @@ _db_initialized = False
 _db_write_lock = Lock()
 
 _RAG_JOB_DOCUMENTS_CACHE_PREFIX = "rag:job_documents:v1:"
+RAG_JOB_RETENTION_DAYS = 15
+DEFAULT_BOUNDED_OWNER_PROJECTION_JOBS = 500_000
+MAX_BOUNDED_OWNER_PROJECTION_JOBS = 500_000
 
 
 def _rag_cache_ttl_seconds() -> int:
@@ -364,6 +367,173 @@ SELECT json_build_object(
     docs = [dict(row or {}) for row in list(result.get("rows", []) or [])]
     _cache_set_docs_safe(cache_key, docs)
     return docs
+
+
+def get_bounded_owner_projection_rag_job_documents(
+    limit: int = DEFAULT_BOUNDED_OWNER_PROJECTION_JOBS,
+) -> List[Dict[str, Any]]:
+    """Read the complete active shared corpus with a fail-loud safety ceiling."""
+
+    try:
+        safe_limit = int(limit)
+    except Exception:
+        safe_limit = DEFAULT_BOUNDED_OWNER_PROJECTION_JOBS
+    safe_limit = max(
+        1,
+        min(safe_limit, MAX_BOUNDED_OWNER_PROJECTION_JOBS),
+    )
+    cache_key = (
+        f"{_RAG_JOB_DOCUMENTS_CACHE_PREFIX}owner_projection:{safe_limit}"
+    )
+
+    cached = _cache_get_docs_safe(cache_key)
+    if cached is not None:
+        docs = [dict(row or {}) for row in cached]
+        if len(docs) > safe_limit:
+            raise RuntimeError(
+                "shared_postgres_active_corpus_safety_limit_exceeded: "
+                f"active_rows_at_least={len(docs)} safety_limit={safe_limit}"
+            )
+        return docs
+
+    init_rag_store()
+
+    sql = f"""
+WITH normalized_rows AS (
+    SELECT
+        payload_json,
+        updated_at,
+        merge_key,
+        COALESCE(
+            NULLIF(LOWER(BTRIM(company)), ''),
+            'missing-company:' || merge_key
+        ) AS company_key,
+        COALESCE(
+            NULLIF(LOWER(BTRIM(source)), ''),
+            'missing-source'
+        ) AS source_key
+    FROM rag_job_documents
+    WHERE updated_at >= statement_timestamp() - INTERVAL '{RAG_JOB_RETENTION_DAYS} days'
+),
+company_ranked AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY company_key
+            ORDER BY updated_at DESC, source_key ASC, merge_key ASC
+        ) AS company_rank
+    FROM normalized_rows
+),
+source_balanced AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY company_rank, source_key
+            ORDER BY updated_at DESC, company_key ASC, merge_key ASC
+        ) AS source_rank
+    FROM company_ranked
+),
+projected_rows AS (
+    SELECT
+        payload_json,
+        updated_at,
+        merge_key,
+        company_key,
+        source_key,
+        company_rank,
+        source_rank
+    FROM source_balanced
+    ORDER BY
+        company_rank ASC,
+        source_rank ASC,
+        updated_at DESC,
+        source_key ASC,
+        company_key ASC,
+        merge_key ASC
+    LIMIT {safe_limit + 1}
+)
+SELECT json_build_object(
+    'rows', COALESCE(
+        (
+            SELECT json_agg(
+                payload_json ORDER BY
+                    company_rank ASC,
+                    source_rank ASC,
+                    updated_at DESC,
+                    source_key ASC,
+                    company_key ASC,
+                    merge_key ASC
+            )
+            FROM projected_rows
+        ),
+        '[]'::json
+    )
+);
+""".strip()
+
+    result = _run_psql_json_query(sql)
+    docs = [
+        dict(row or {})
+        for row in list(result.get("rows", []) or [])
+    ]
+    if len(docs) > safe_limit:
+        raise RuntimeError(
+            "shared_postgres_active_corpus_safety_limit_exceeded: "
+            f"active_rows_at_least={len(docs)} safety_limit={safe_limit}"
+        )
+    _cache_set_docs_safe(cache_key, docs)
+    return docs
+
+
+def delete_stale_rag_job_documents() -> Dict[str, Any]:
+    """Delete shared jobs not refreshed within the active retention window."""
+
+    init_rag_store()
+    sql = f"""
+WITH cutoff AS (
+    SELECT statement_timestamp() - INTERVAL '{RAG_JOB_RETENTION_DAYS} days' AS stale_before
+),
+inspected AS (
+    SELECT COUNT(*) AS inspected_count
+    FROM rag_job_documents
+),
+stale_candidates AS (
+    SELECT COUNT(*) AS candidate_count
+    FROM rag_job_documents
+    WHERE updated_at < (SELECT stale_before FROM cutoff)
+),
+deleted AS (
+    DELETE FROM rag_job_documents
+    WHERE updated_at < (SELECT stale_before FROM cutoff)
+    RETURNING merge_key
+)
+SELECT json_build_object(
+    'inspected_count', (SELECT inspected_count FROM inspected),
+    'candidate_count', (SELECT candidate_count FROM stale_candidates),
+    'deleted_count', (SELECT COUNT(*) FROM deleted)
+);
+""".strip()
+
+    result = _run_psql_json_query(sql)
+    inspected_count = int(result.get("inspected_count", 0) or 0)
+    candidate_count = int(result.get("candidate_count", 0) or 0)
+    deleted_count = int(result.get("deleted_count", 0) or 0)
+    invalidation_attempted = deleted_count > 0
+    invalidation_succeeded = (
+        _invalidate_rag_document_cache()
+        if invalidation_attempted
+        else True
+    )
+    return {
+        "ok": bool(invalidation_succeeded),
+        "retention_days": RAG_JOB_RETENTION_DAYS,
+        "inspected_count": inspected_count,
+        "candidate_count": candidate_count,
+        "deleted_count": deleted_count,
+        "retained_count": max(0, inspected_count - deleted_count),
+        "cache_invalidation_attempted": invalidation_attempted,
+        "cache_invalidation_succeeded": bool(invalidation_succeeded),
+    }
 
 
 def count_rag_job_documents() -> int:

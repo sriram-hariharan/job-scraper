@@ -108,13 +108,18 @@ def _install_live_pipeline_fakes(monkeypatch, tmp_path, captured, preferences=No
     monkeypatch.setattr(services.subprocess, "Popen", fake_popen)
 
 
-def test_phase71a_live_pipeline_launch_uses_bounded_argv_with_all_selected_packets(monkeypatch, tmp_path):
+@pytest.mark.parametrize("job_limit", [25, 50, 100, 200, 500])
+def test_authenticated_scan_and_plan_keeps_job_limit_downstream_of_scraper_acquisition(
+    monkeypatch,
+    tmp_path,
+    job_limit,
+):
     captured = {}
     _install_live_pipeline_fakes(monkeypatch, tmp_path, captured)
 
     payload = services.run_live_pipeline_payload(
         owner_user_id="user_123",
-        job_limit=50,
+        job_limit=job_limit,
         job_packet_limit=0,
         llm_actions=["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR", "SKIP_FOR_NOW"],
         generate_tailoring=True,
@@ -130,7 +135,7 @@ def test_phase71a_live_pipeline_launch_uses_bounded_argv_with_all_selected_packe
 
     assert payload["ok"] is True
     assert services._pipeline_launch_argv_size_bytes(cmd) < 8192
-    assert "--application-planning-job-limit 50" in joined
+    assert f"--application-planning-job-limit {job_limit}" in joined
     assert "--application-planning-job-packet-limit 0" in joined
     assert "--application-planning-generate-tailoring" in cmd
     assert "--application-planning-generate-llm-tailoring" in cmd
@@ -138,13 +143,18 @@ def test_phase71a_live_pipeline_launch_uses_bounded_argv_with_all_selected_packe
     assert "--application-planning-generate-llm-fallback" in cmd
     assert "--application-planning-generate-llm-adjudication" in cmd
     assert "--delete-seen-data yes" in joined
-    assert "--shared-postgres-projection" in cmd
-    assert "--shared-postgres-job-limit 50" in joined
+    assert "--shared-postgres-projection" not in cmd
+    assert "--shared-postgres-job-limit" not in cmd
     assert "job_description" not in joined
     assert "selected_jobs" not in joined
     assert "planning_packet" not in joined
 
     config = payload["pipeline"]["config"]
+    assert config["job_limit"] == job_limit
+    assert config["acquisition_input_source"] == "scrapers"
+    assert config["shared_input_limit"] == 0
+    assert payload["pipeline"]["stage_order"][1] == "scraping"
+    assert "shared_input" not in payload["pipeline"]["stage_order"]
     assert config["job_packet_limit"] == 0
     assert config["delete_seen_data"] == "yes"
     assert config["generate_llm_adjudication"] is True
@@ -156,9 +166,57 @@ def test_phase71a_live_pipeline_launch_uses_bounded_argv_with_all_selected_packe
     launch_config = json.loads(launch_config_path.read_text(encoding="utf-8"))
     assert launch_config["contains_large_payloads"] is False
     assert launch_config["contains_selected_jobs"] is False
+    assert launch_config["options"]["job_limit"] == job_limit
+    assert launch_config["options"]["acquisition_input_source"] == "scrapers"
+    assert launch_config["options"]["shared_input_limit"] == 0
     assert launch_config["options"]["job_packet_limit"] == 0
     assert launch_config["options"]["preferences"]["preferred_skills"] == ["Python"]
     assert launch_config["options"]["selected_role_families"] == ["backend_engineering"]
+
+
+def test_authenticated_plan_only_uses_planning_corpus_and_forces_seen_history_retention(
+    monkeypatch,
+    tmp_path,
+):
+    captured = {}
+    _install_live_pipeline_fakes(monkeypatch, tmp_path, captured)
+    monkeypatch.setattr(
+        services,
+        "user_pipeline_gate_payload",
+        lambda **_kwargs: {
+            "can_run_live_pipeline": True,
+            "can_delete_seen_data": False,
+            "live_pipeline_block_reason": "",
+            "delete_seen_data_block_reason": "synthetic seen-state gate",
+        },
+    )
+
+    payload = services.run_live_pipeline_payload(
+        owner_user_id="user_123",
+        planning_only=True,
+        delete_seen_data="yes",
+    )
+
+    command = captured["cmd"]
+    config = payload["pipeline"]["config"]
+    launch_config = json.loads(Path(config["launch_config_path"]).read_text(encoding="utf-8"))
+    assert "--application-planning-only" in command
+    assert "--run-application-planning" in command
+    assert "--shared-postgres-projection" not in command
+    assert "--shared-postgres-job-limit" not in command
+    assert command[command.index("--delete-seen-data") + 1] == "no"
+    assert config["delete_seen_data"] == "no"
+    assert config["acquisition_input_source"] == "planning_corpus"
+    assert config["shared_input_limit"] == 0
+    assert payload["pipeline"]["stage_order"] == [
+        "startup",
+        "planning",
+        "finalization",
+    ]
+    assert "scraping" not in payload["pipeline"]["stage_order"]
+    assert "shared_input" not in payload["pipeline"]["stage_order"]
+    assert launch_config["options"]["delete_seen_data"] == "no"
+    assert launch_config["options"]["acquisition_input_source"] == "planning_corpus"
 
 
 def test_phase71a_live_pipeline_compacts_oversized_child_env_before_popen(monkeypatch, tmp_path):

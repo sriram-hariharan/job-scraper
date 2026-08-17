@@ -285,6 +285,7 @@ DEFAULT_OUTPUT_DIR = Path(
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
 DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
+DEFAULT_SHARED_POSTGRES_PROJECTION_LIMIT = 500_000
 DEFAULT_PIPELINE_SCRATCH_DIR = Path(
     os.environ.get("JOB_STACK_PIPELINE_SCRATCH_DIR", "tmp/pipeline_runs")
 ).expanduser()
@@ -9714,6 +9715,10 @@ def run_live_pipeline_payload(
     delete_seen_data: str = "no",
 ) -> Dict[str, Any]:
     owner_for_pipeline_gate = _clean_text(owner_user_id)
+    planning_only = bool(planning_only)
+    normalized_delete_seen_data = (
+        "no" if planning_only else _normalize_delete_seen_data(delete_seen_data)
+    )
     if owner_for_pipeline_gate:
         pipeline_gate = user_pipeline_gate_payload(owner_user_id=owner_for_pipeline_gate)
 
@@ -9723,9 +9728,8 @@ def run_live_pipeline_payload(
                 or "Upload at least one resume before running Live Pipeline."
             )
 
-        requested_delete_seen_data = _clean_text(delete_seen_data).lower()
         if (
-            requested_delete_seen_data in {"yes", "true", "1", "y"}
+            normalized_delete_seen_data == "yes"
             and not bool(pipeline_gate.get("can_delete_seen_data", False))
         ):
             raise ValueError(
@@ -9759,11 +9763,10 @@ def run_live_pipeline_payload(
     pipeline_job_corpus_path = output_dir / "current_run_job_corpus.jsonl"
 
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
-    normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
     pipeline_preferences = _preferences_for_pipeline(owner_for_pipeline_gate)
     selected_role_families = pipeline_preferences.get("selected_role_families", [])
     launch_options = {
-        "planning_only": bool(planning_only),
+        "planning_only": planning_only,
         "run_application_planning": True,
         "job_limit": int(job_limit),
         "job_packet_limit": int(job_packet_limit),
@@ -9778,15 +9781,9 @@ def run_live_pipeline_payload(
         "preferences": pipeline_preferences,
         "selected_role_families": selected_role_families,
         "acquisition_input_source": (
-            "shared_postgres_pool"
-            if owner_for_pipeline_gate and not planning_only
-            else "legacy_pipeline"
+            "planning_corpus" if planning_only else "scrapers"
         ),
-        "shared_input_limit": (
-            int(job_limit)
-            if owner_for_pipeline_gate and not planning_only
-            else 0
-        ),
+        "shared_input_limit": 0,
     }
     launch_config_path = _write_live_pipeline_launch_config(
         output_dir=output_dir,
@@ -9819,15 +9816,7 @@ def run_live_pipeline_payload(
         generate_llm_adjudication=effective_generate_llm_adjudication,
         delete_seen_data=normalized_delete_seen_data,
     )
-    cmd = ja._build_main_cmd(args, planning_only=bool(planning_only))
-    if owner_for_pipeline_gate and not planning_only:
-        cmd.extend(
-            [
-                "--shared-postgres-projection",
-                "--shared-postgres-job-limit",
-                str(int(job_limit)),
-            ]
-        )
+    cmd = ja._build_main_cmd(args, planning_only=planning_only)
 
     runtime_payload = {
         "run_id": run_id,
@@ -9837,28 +9826,28 @@ def run_live_pipeline_payload(
         "finished_at": "",
         "current_stage": "startup",
         "completed_stages": [],
-        "stage_order": [
-            "startup",
-            (
-                "shared_input"
-                if owner_for_pipeline_gate and not planning_only
-                else "scraping"
-            ),
-            "filtering",
-            "dedupe",
-            "ranking",
-            "cache_filter",
-            "details",
-            "intelligence",
-            "ai_evaluation_filter",
-            "embedding_prefilter",
-            "ai_evaluation",
-            "resume_matching",
-            "application_priority",
-            "rag_export",
-            "planning",
-                        "finalization",
-        ],
+        "stage_order": (
+            ["startup", "planning", "finalization"]
+            if planning_only
+            else [
+                "startup",
+                "scraping",
+                "filtering",
+                "dedupe",
+                "ranking",
+                "cache_filter",
+                "details",
+                "intelligence",
+                "ai_evaluation_filter",
+                "embedding_prefilter",
+                "ai_evaluation",
+                "resume_matching",
+                "application_priority",
+                "rag_export",
+                "planning",
+                "finalization",
+            ]
+        ),
         "stage_started_at": _utc_now(),
         "stage_message": "Launching pipeline subprocess",
         "counts": {},
@@ -9870,7 +9859,7 @@ def run_live_pipeline_payload(
         "log_path": str(canonical_log_path),
         "status_path": str(canonical_status_path),
         "config": {
-            "planning_only": bool(planning_only),
+            "planning_only": planning_only,
             "job_limit": int(job_limit),
             "job_packet_limit": int(job_packet_limit),
             "llm_actions": normalized_llm_actions.split(","),
@@ -9884,15 +9873,9 @@ def run_live_pipeline_payload(
             "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
             "owner_user_id": owner_for_pipeline_gate,
             "acquisition_input_source": (
-                "shared_postgres_pool"
-                if owner_for_pipeline_gate and not planning_only
-                else "legacy_pipeline"
+                "planning_corpus" if planning_only else "scrapers"
             ),
-            "shared_input_limit": (
-                int(job_limit)
-                if owner_for_pipeline_gate and not planning_only
-                else 0
-            ),
+            "shared_input_limit": 0,
             "job_corpus_path": str(pipeline_job_corpus_path),
             "launch_config_path": str(launch_config_path),
             "launch_config_contains_large_payloads": False,

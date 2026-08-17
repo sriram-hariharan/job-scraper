@@ -81,11 +81,11 @@ def test_live_pipeline_popup_has_short_helper_icons_and_text():
     modal = _pipeline_modal_html()
 
     for helper in [
-        "Maximum jobs allowed into this run.",
+        "Maximum qualified jobs from the current-run corpus that proceed through application planning.",
         "Maximum detailed planning packets to build. 0 means all selected jobs.",
-        "Include jobs that were already seen before.",
-        "Scrape jobs, score them, and build planning outputs.",
-        "Skip scraping and rebuild planning from existing jobs.",
+        "Controls seen-job history only; Scan + Plan scrapes current ATS jobs with either choice.",
+        "Scrape current jobs from configured ATS sources, then filter, score, and build planning outputs.",
+        "Skip ATS scraping and rebuild application planning from the existing planning corpus.",
         "Use AI to review planning decisions and borderline fits. This does not tailor resumes.",
         "Use fallback ranking when normal ranking signals are incomplete.",
     ]:
@@ -93,6 +93,11 @@ def test_live_pipeline_popup_has_short_helper_icons_and_text():
         assert f'aria-label="{helper}"' in modal
 
     assert modal.count("pipeline-help-icon") >= 7
+    assert (
+        "Control how many qualified jobs proceed through application planning"
+        in modal
+    )
+    assert "Control how many jobs enter the run" not in modal
 
 
 def test_live_pipeline_popup_does_not_render_internal_or_tailoring_controls():
@@ -133,7 +138,8 @@ def test_pipeline_payload_keeps_backend_fields_without_exposing_removed_controls
         "generate_llm_adjudication: getBinaryToggleBool(\"pipelineGenerateLlmAdjudication\")"
         in source
     )
-    assert "delete_seen_data: getPipelineDeleteSeenDataValue()" in source
+    assert 'const planningOnly = isPipelinePlanningOnly()' in source
+    assert 'delete_seen_data: planningOnly ? "no" : getPipelineDeleteSeenDataValue()' in source
     assert "evidence" not in source.lower()
     assert "langgraph" not in source.lower()
     assert "trace_persistence" not in source
@@ -157,6 +163,24 @@ def test_confirm_summary_uses_user_facing_labels_not_internal_buckets():
         "SKIP_FOR_NOW",
     ]:
         assert forbidden not in source
+
+    assert "Clear seen history" in source
+    assert "Keep seen history" in source
+    assert "Not applicable (Plan only)" in source
+
+
+def test_plan_only_marks_rerun_seen_not_applicable_and_forces_safe_payload():
+    modal = _pipeline_modal_html()
+    source = _source(APP_JS_PATH)
+
+    assert 'id="pipelineDeleteSeenDataHelp"' in modal
+    assert 'aria-describedby="pipelineDeleteSeenDataHelp"' in modal
+    assert "Scan + Plan scrapes current ATS jobs with either choice" in modal
+    assert "function syncPipelineDeleteSeenDataApplicability" in source
+    assert 'input[name=\'pipelinePlanningOnly\']' in source
+    assert 'forcePipelineDeleteSeenDataNo()' in source
+    assert '"Not applicable in Plan only; existing seen-job history is always kept."' in source
+    assert 'delete_seen_data: planningOnly ? "no"' in source
 
 
 def test_legacy_pipeline_gate_renders_ai_settings_prerequisite_and_preserves_resume_cta():

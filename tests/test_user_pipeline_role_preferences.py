@@ -396,18 +396,13 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_launch_config_
     assert captured["launch_config"]["options"]["preferences"] == (
         captured["state"]["config"]["preferences"]
     )
-    assert "--shared-postgres-projection" in captured["cmd"]
-    assert captured["cmd"][
-        captured["cmd"].index("--shared-postgres-job-limit") + 1
-    ] == "50"
-    assert captured["state"]["config"]["acquisition_input_source"] == (
-        "shared_postgres_pool"
-    )
-    assert captured["state"]["config"]["shared_input_limit"] == 50
-    assert payload["pipeline"]["stage_order"][1] == "shared_input"
-    assert captured["launch_config"]["options"]["acquisition_input_source"] == (
-        "shared_postgres_pool"
-    )
+    assert "--shared-postgres-projection" not in captured["cmd"]
+    assert "--shared-postgres-job-limit" not in captured["cmd"]
+    assert captured["state"]["config"]["acquisition_input_source"] == "scrapers"
+    assert captured["state"]["config"]["shared_input_limit"] == 0
+    assert payload["pipeline"]["stage_order"][1] == "scraping"
+    assert "shared_input" not in payload["pipeline"]["stage_order"]
+    assert captured["launch_config"]["options"]["acquisition_input_source"] == "scrapers"
     assert captured["env"]["JOB_STACK_OWNER_USER_ID"] == "user_123"
     assert captured["env"]["JOB_STACK_USER_PIPELINE_MODE"] == "true"
     assert captured["state"]["config"]["preference_runtime"] == {
@@ -819,6 +814,8 @@ def _install_drop_pct_collector_fakes(
         "logs": [],
         "route_events": [],
         "stage_completions": [],
+        "scraper_calls": [],
+        "cache_filter_calls": [],
     }
     filtered_jobs = list(jobs[:filtered_count])
     filtered_job_ids = {job.get("job_id") for job in filtered_jobs}
@@ -1099,9 +1096,20 @@ def _install_drop_pct_collector_fakes(
         "src.scrapers.himalayas_scraper": "scrape_all_himalayas",
     }
     selected_scraper_module = f"src.scrapers.{scraper_source}_scraper"
+
+    def scraper_fn(module_name, rows):
+        def run(**_kwargs):
+            captured["scraper_calls"].append(module_name)
+            return list(rows)
+
+        return run
+
     for module_name, function_name in scraper_modules.items():
         rows = list(jobs) if module_name == selected_scraper_module else []
-        install_module(module_name, **{function_name: lambda rows=rows, **_kwargs: rows})
+        install_module(
+            module_name,
+            **{function_name: scraper_fn(module_name, rows)},
+        )
 
     def global_metrics_not_allowed(*_args, **_kwargs):
         raise AssertionError("user pipeline must not use the global metrics store")
@@ -1160,7 +1168,7 @@ def _install_drop_pct_collector_fakes(
         "src.utils.job_cache",
         cache_keys_for_jobs=lambda rows: [row["job_id"] for row in rows],
         filter_new_jobs=lambda rows, _seen: (
-            list(rows),
+            captured["cache_filter_calls"].append(len(rows)) or list(rows),
             [row["job_id"] for row in rows],
         ),
         load_seen_job_ids=lambda: set(),
@@ -1220,8 +1228,30 @@ def test_completed_collector_paths_share_defined_drop_pct(
         graph_route=graph_route,
         user_pipeline=user_pipeline,
     )
+    monkeypatch.setattr(
+        rag_store,
+        "get_bounded_owner_projection_rag_job_documents",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("normal Scan + Plan must not read shared Postgres input")
+        ),
+    )
 
     result = asyncio.run(collector.collect_all_jobs_async())
+
+    assert set(captured["scraper_calls"]) == {
+        "src.scrapers.workday_scraper",
+        "src.scrapers.greenhouse_scraper",
+        "src.scrapers.lever_scraper",
+        "src.scrapers.ashby_scraper",
+        "src.scrapers.workable_scraper",
+        "src.scrapers.jobvite_scraper",
+        "src.scrapers.recruitee_scraper",
+        "src.scrapers.smartrecruiters_scraper",
+        "src.scrapers.builtin_scraper",
+        "src.scrapers.usajobs_scraper",
+        "src.scrapers.himalayas_scraper",
+    }
+    assert captured["cache_filter_calls"] == [filtered_count]
 
     assert [row["job_id"] for row in result] == [
         row["job_id"] for row in jobs[:filtered_count]
@@ -1282,6 +1312,21 @@ def test_global_acquisition_only_stops_before_owner_pipeline_and_persists_shared
         graph_route=False,
         user_pipeline=False,
     )
+    retention_calls = []
+    monkeypatch.setattr(
+        rag_store,
+        "delete_stale_rag_job_documents",
+        lambda: retention_calls.append("after_persist") or {
+            "ok": True,
+            "retention_days": 15,
+            "inspected_count": 1,
+            "candidate_count": 0,
+            "deleted_count": 0,
+            "retained_count": 1,
+            "cache_invalidation_attempted": False,
+            "cache_invalidation_succeeded": True,
+        },
+    )
     monkeypatch.setattr(
         collector,
         "resolve_pipeline_preference_runtime",
@@ -1329,6 +1374,14 @@ def test_global_acquisition_only_stops_before_owner_pipeline_and_persists_shared
     assert "persisted_metrics" not in captured
     assert captured["runtime_config"]["global_acquisition_only"] is True
     assert captured["runtime_counts"]["downstream_stages_executed"] is False
+    assert retention_calls == ["after_persist"]
+    assert captured["stage_counts"]["rag_export"] == {
+        "shared_retention_days": 15,
+        "shared_retention_inspected": 1,
+        "shared_retention_stale_candidates": 0,
+        "shared_retention_deleted": 0,
+        "shared_job_documents": 1,
+    }
     assert captured["corpus_exports"] == [
         {
             "rows": [dict(jobs[0])],
@@ -1339,6 +1392,46 @@ def test_global_acquisition_only_stops_before_owner_pipeline_and_persists_shared
             },
         }
     ]
+
+
+def test_failed_global_acquisition_persistence_never_runs_retention(
+    monkeypatch,
+    tmp_path,
+):
+    _install_drop_pct_collector_fakes(
+        monkeypatch,
+        tmp_path,
+        jobs=[
+            {
+                "job_id": "shared-1",
+                "title": "Data Engineer",
+                "company": "Acme",
+                "location": "United States",
+            }
+        ],
+        filtered_count=0,
+        graph_route=False,
+        user_pipeline=False,
+    )
+    monkeypatch.setattr(
+        sys.modules["src.rag.export_job_corpus"],
+        "export_job_corpus",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("synthetic_persistence_failure")
+        ),
+    )
+    monkeypatch.setattr(
+        rag_store,
+        "delete_stale_rag_job_documents",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("retention must follow successful persistence only")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic_persistence_failure"):
+        asyncio.run(
+            collector.collect_all_jobs_async(global_acquisition_only=True)
+        )
 
 
 def test_authenticated_owner_projection_reads_bounded_shared_pool_without_scraping(
@@ -1435,22 +1528,38 @@ def test_authenticated_owner_projection_reads_bounded_shared_pool_without_scrapi
         captured["shared_read_limit"] = limit
         return jobs
 
-    monkeypatch.setattr(rag_store, "get_rag_job_documents", shared_reader)
+    monkeypatch.setattr(
+        rag_store,
+        "get_rag_job_documents",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("generic RAG retrieval must remain separate")
+        ),
+    )
+    monkeypatch.setattr(
+        rag_store,
+        "get_bounded_owner_projection_rag_job_documents",
+        shared_reader,
+    )
     result = asyncio.run(
         collector.collect_all_jobs_async(
             input_source="shared_postgres_pool",
-            shared_input_limit=500,
         )
     )
 
     assert [row["job_id"] for row in result] == ["shared-1", "shared-2"]
-    assert captured["shared_read_limit"] == 50
+    assert captured["shared_read_limit"] == 500_000
     assert captured["seen_owner"] == "owner-a"
     assert captured["runtime_config"]["acquisition_input_source"] == (
         "shared_postgres_pool"
     )
     assert captured["runtime_counts"]["shared_input_jobs"] == 2
     assert captured["runtime_counts"]["scraped_jobs"] == 0
+    assert captured["stage_counts"]["shared_input"] == {
+        "shared_input_jobs": 2,
+        "shared_input_limit": 500_000,
+        "scraped_jobs": 0,
+    }
+    assert captured["stage_completions"][0] == "shared_input"
     assert [row["job_id"] for row in captured["filter_inputs"]] == [
         "shared-1",
         "shared-2",
@@ -1474,6 +1583,512 @@ def test_authenticated_owner_projection_reads_bounded_shared_pool_without_scrapi
     assert captured["corpus_exports"][-1]["kwargs"] == {
         "persist_postgres": False
     }
+
+
+def test_bounded_owner_projection_storage_read_is_diverse_deterministic_and_capped(
+    monkeypatch,
+):
+    captured_sql = []
+    newest_monopoly = [
+        {
+            "job_id": f"accenture-{index:03d}",
+            "company": "Accenture",
+            "source": "workday",
+            "title": "Engineer",
+        }
+        for index in range(600)
+    ]
+    diversified_projection = [
+        newest_monopoly[0],
+        {
+            "job_id": "other-001",
+            "company": "Other Company",
+            "source": "greenhouse",
+            "title": "Engineer",
+        },
+        {
+            "job_id": "third-001",
+            "company": "Third Company",
+            "source": "lever",
+            "title": "Engineer",
+        },
+        *newest_monopoly[1:],
+    ]
+
+    monkeypatch.setattr(rag_store, "_cache_get_docs_safe", lambda _key: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_cache_set_docs_safe",
+        lambda _key, _docs: None,
+    )
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+
+    def query(sql):
+        captured_sql.append(sql)
+        return {"rows": diversified_projection}
+
+    monkeypatch.setattr(rag_store, "_run_psql_json_query", query)
+
+    first = rag_store.get_bounded_owner_projection_rag_job_documents()
+    second = rag_store.get_bounded_owner_projection_rag_job_documents()
+
+    assert first == second
+    assert len(first) == len(diversified_projection)
+    assert len({row["job_id"] for row in first}) == len(first)
+    assert {row["company"] for row in first} >= {
+        "Accenture",
+        "Other Company",
+        "Third Company",
+    }
+    assert {row["source"] for row in first} >= {
+        "workday",
+        "greenhouse",
+        "lever",
+    }
+    assert captured_sql[0] == captured_sql[1]
+    sql = captured_sql[0]
+    assert "PARTITION BY company_key" in sql
+    assert "PARTITION BY company_rank, source_key" in sql
+    assert "ORDER BY updated_at DESC, source_key ASC, merge_key ASC" in sql
+    assert "company_rank ASC" in sql
+    assert "source_rank ASC" in sql
+    assert "LIMIT 500001" in sql
+    assert "RANDOM" not in sql.upper()
+    assert "owner_user_id" not in sql.lower()
+    assert "updated_at >= statement_timestamp() - INTERVAL '15 days'" in sql
+    assert "created_at" not in sql
+
+
+@pytest.mark.parametrize("requested", [25, 50, 100, 200, 500])
+def test_shared_projection_honors_explicit_internal_test_limits(
+    monkeypatch,
+    requested,
+):
+    rows = [{"job_id": f"job-{index:03d}"} for index in range(600)]
+    captured = {}
+    monkeypatch.setattr(rag_store, "_cache_get_docs_safe", lambda _key: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_cache_set_docs_safe",
+        lambda _key, _docs: None,
+    )
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+
+    def query(sql):
+        captured["sql"] = sql
+        return {"rows": rows[:requested]}
+
+    monkeypatch.setattr(rag_store, "_run_psql_json_query", query)
+
+    assert collector._bounded_shared_postgres_input_limit(requested) == requested
+    projected = rag_store.get_bounded_owner_projection_rag_job_documents(
+        limit=requested
+    )
+    assert len(projected) == requested
+    assert f"LIMIT {requested + 1}" in captured["sql"]
+
+
+def test_shared_projection_absolute_maximum_matches_broad_rag_boundary(
+    monkeypatch,
+):
+    rows = [{"job_id": f"job-{index:03d}"} for index in range(600)]
+    captured = {}
+    monkeypatch.setattr(rag_store, "_cache_get_docs_safe", lambda _key: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_cache_set_docs_safe",
+        lambda _key, _docs: None,
+    )
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+
+    def query(sql):
+        captured["sql"] = sql
+        return {"rows": rows}
+
+    monkeypatch.setattr(rag_store, "_run_psql_json_query", query)
+
+    assert services.DEFAULT_SHARED_POSTGRES_PROJECTION_LIMIT == 500_000
+    assert collector.DEFAULT_SHARED_POSTGRES_INPUT_JOBS == 500_000
+    assert collector.MAX_SHARED_POSTGRES_INPUT_JOBS == 500_000
+    assert rag_store.DEFAULT_BOUNDED_OWNER_PROJECTION_JOBS == 500_000
+    assert rag_store.MAX_BOUNDED_OWNER_PROJECTION_JOBS == 500_000
+    assert collector._bounded_shared_postgres_input_limit(500_001) == 500_000
+    projected = rag_store.get_bounded_owner_projection_rag_job_documents(
+        limit=500_001
+    )
+    assert len(projected) == len(rows)
+    assert "LIMIT 500001" in captured["sql"]
+
+
+def test_active_owner_reader_does_not_silently_truncate_above_old_projection_default(
+    monkeypatch,
+):
+    row = {
+        "job_id": "shared-active",
+        "company": "Acme",
+        "source": "workday",
+        "title": "Engineer",
+    }
+    rows = [row] * 100_001
+    captured = {}
+    monkeypatch.setattr(rag_store, "_cache_get_docs_safe", lambda _key: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_cache_set_docs_safe",
+        lambda _key, _docs: None,
+    )
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+
+    def query(sql):
+        captured["sql"] = sql
+        return {"rows": rows}
+
+    monkeypatch.setattr(rag_store, "_run_psql_json_query", query)
+
+    projected = rag_store.get_bounded_owner_projection_rag_job_documents()
+
+    assert len(projected) == 100_001
+    assert "LIMIT 500001" in captured["sql"]
+    assert "LIMIT 100000" not in captured["sql"]
+
+
+def test_active_owner_reader_fails_loudly_at_emergency_safety_ceiling(
+    monkeypatch,
+):
+    monkeypatch.setattr(rag_store, "_cache_get_docs_safe", lambda _key: None)
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_run_psql_json_query",
+        lambda sql: {"rows": [{"job_id": str(index)} for index in range(11)]},
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "shared_postgres_active_corpus_safety_limit_exceeded: "
+            "active_rows_at_least=11 safety_limit=10"
+        ),
+    ):
+        rag_store.get_bounded_owner_projection_rag_job_documents(limit=10)
+
+
+def test_shared_rag_retention_uses_exact_updated_at_cutoff_and_cache_contract(
+    monkeypatch,
+):
+    captured_sql = []
+    invalidations = []
+    results = [
+        {
+            "inspected_count": 12,
+            "candidate_count": 2,
+            "deleted_count": 2,
+        },
+        {
+            "inspected_count": 10,
+            "candidate_count": 0,
+            "deleted_count": 0,
+        },
+    ]
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_run_psql_json_query",
+        lambda sql: captured_sql.append(sql) or results.pop(0),
+    )
+    monkeypatch.setattr(
+        rag_store,
+        "_invalidate_rag_document_cache",
+        lambda: invalidations.append(True) or True,
+    )
+
+    deleted = rag_store.delete_stale_rag_job_documents()
+    unchanged = rag_store.delete_stale_rag_job_documents()
+
+    assert deleted == {
+        "ok": True,
+        "retention_days": 15,
+        "inspected_count": 12,
+        "candidate_count": 2,
+        "deleted_count": 2,
+        "retained_count": 10,
+        "cache_invalidation_attempted": True,
+        "cache_invalidation_succeeded": True,
+    }
+    assert unchanged["deleted_count"] == 0
+    assert unchanged["retained_count"] == 10
+    assert unchanged["cache_invalidation_attempted"] is False
+    assert unchanged["cache_invalidation_succeeded"] is True
+    assert invalidations == [True]
+
+    sql = captured_sql[0]
+    assert sql.count("DELETE FROM rag_job_documents") == 1
+    assert sql.count(
+        "updated_at < (SELECT stale_before FROM cutoff)"
+    ) == 2
+    assert "INTERVAL '15 days'" in sql
+    assert "created_at" not in sql
+    assert "DELETE FROM" not in sql.replace(
+        "DELETE FROM rag_job_documents", ""
+    )
+
+
+def test_shared_rag_retention_cache_failure_is_observable(monkeypatch):
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_run_psql_json_query",
+        lambda _sql: {
+            "inspected_count": 3,
+            "candidate_count": 1,
+            "deleted_count": 1,
+        },
+    )
+    monkeypatch.setattr(
+        rag_store,
+        "_invalidate_rag_document_cache",
+        lambda: False,
+    )
+
+    result = rag_store.delete_stale_rag_job_documents()
+
+    assert result["ok"] is False
+    assert result["deleted_count"] == 1
+    assert result["cache_invalidation_attempted"] is True
+    assert result["cache_invalidation_succeeded"] is False
+    with pytest.raises(RuntimeError, match="shared_postgres_retention_failed"):
+        collector._shared_rag_retention_stage_counts(result)
+
+
+def _main_mode_args(tmp_path, *, planning_only, delete_seen_data):
+    return types.SimpleNamespace(
+        run_application_planning=bool(planning_only),
+        skip_application_planning=False,
+        global_acquisition_only=False,
+        shared_postgres_projection=False,
+        shared_postgres_job_limit=500_000,
+        application_planning_only=bool(planning_only),
+        application_planning_corpus_source="filesystem",
+        application_planning_job_limit=50,
+        application_planning_job_packet_limit=0,
+        application_planning_output_dir=str(tmp_path),
+        application_planning_llm_actions="APPLY",
+        application_planning_generate_tailoring=False,
+        application_planning_generate_llm_tailoring=False,
+        application_planning_refresh_llm_tailoring=False,
+        application_planning_generate_llm_fallback=False,
+        application_planning_generate_llm_adjudication=False,
+        delete_seen_data=delete_seen_data,
+    )
+
+
+@pytest.mark.parametrize(
+    ("delete_seen_data", "expected_clear_count"),
+    [("no", 0), ("yes", 1)],
+)
+def test_scan_and_plan_seen_choice_never_bypasses_scraper_collection(
+    monkeypatch,
+    tmp_path,
+    delete_seen_data,
+    expected_clear_count,
+):
+    import main as pipeline_main
+
+    events = []
+
+    async def scrape():
+        events.append("scrape")
+        return []
+
+    monkeypatch.setattr(collector, "collect_all_jobs_async", scrape)
+    monkeypatch.setattr(
+        pipeline_main,
+        "_clear_seen_jobs_for_current_backend",
+        lambda: events.append("clear_seen"),
+    )
+    monkeypatch.setattr(pipeline_main, "_is_user_pipeline_mode", lambda: True)
+    monkeypatch.setattr(pipeline_main, "initialize_run", lambda **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "update_config", lambda **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "start_stage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "complete_stage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "finish_run", lambda **_kwargs: None)
+
+    asyncio.run(
+        pipeline_main.main_async(
+            _main_mode_args(
+                tmp_path,
+                planning_only=False,
+                delete_seen_data=delete_seen_data,
+            )
+        )
+    )
+
+    assert events.count("scrape") == 1
+    assert events.count("clear_seen") == expected_clear_count
+    if expected_clear_count:
+        assert events.index("clear_seen") < events.index("scrape")
+
+
+def test_plan_only_ignores_malformed_seen_clear_request_and_skips_collection(
+    monkeypatch,
+    tmp_path,
+):
+    import main as pipeline_main
+
+    corpus_path = tmp_path / "existing_planning_corpus.jsonl"
+    corpus_path.write_text(
+        json.dumps({"job_id": "existing-job", "title": "Existing role"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("JOB_STACK_JOB_CORPUS_PATH", str(corpus_path))
+    monkeypatch.setattr(
+        collector,
+        "collect_all_jobs_async",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Plan only must not invoke collector or ATS scrapers")
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline_main,
+        "_clear_seen_jobs_for_current_backend",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("Plan only must retain seen-job history")
+        ),
+    )
+    monkeypatch.setattr(pipeline_main, "_is_user_pipeline_mode", lambda: True)
+    monkeypatch.setattr(pipeline_main, "initialize_run", lambda **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "update_config", lambda **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "start_stage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "complete_stage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(pipeline_main, "finish_run", lambda **_kwargs: None)
+    planning_calls = []
+    monkeypatch.setattr(
+        pipeline_main,
+        "_run_application_planning",
+        lambda args, **kwargs: planning_calls.append((args, kwargs)),
+    )
+    monkeypatch.setattr(pipeline_main, "_load_best_variant_lookup", lambda *_args: {})
+    monkeypatch.setattr(pipeline_main, "_load_execution_queue_lookup", lambda *_args: {})
+    monkeypatch.setattr(pipeline_main, "_load_packet_manifest_lookup", lambda *_args: {})
+
+    args = _main_mode_args(
+        tmp_path,
+        planning_only=True,
+        delete_seen_data="yes",
+    )
+    asyncio.run(pipeline_main.main_async(args))
+
+    assert args.delete_seen_data == "no"
+    assert len(planning_calls) == 1
+    assert planning_calls[0][1]["job_corpus_path"] == str(corpus_path)
+
+
+def test_planning_only_runtime_status_omits_non_executed_collection_stages(
+    monkeypatch,
+    tmp_path,
+):
+    status_path = tmp_path / "planning-only-status.json"
+    monkeypatch.setenv(runtime_status.ENV_STATUS_PATH, str(status_path))
+    monkeypatch.setenv(runtime_status.ENV_RUN_ID, "planning-only-run")
+
+    runtime_status.initialize_run(
+        output_dir=str(tmp_path),
+        log_path=str(tmp_path / "run.log"),
+        status_path=str(status_path),
+        planning_only=True,
+        job_limit=50,
+        job_packet_limit=0,
+        llm_actions=["APPLY"],
+        generate_tailoring=False,
+        generate_llm_tailoring=False,
+        refresh_llm_tailoring=False,
+        generate_llm_fallback=False,
+        generate_llm_adjudication=False,
+        delete_seen_data="no",
+        acquisition_input_source="planning_corpus",
+        shared_input_limit=0,
+    )
+
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["stage_order"] == ["startup", "planning", "finalization"]
+    assert "scraping" not in payload["stage_order"]
+    assert "shared_input" not in payload["stage_order"]
+    assert "scraped_jobs" not in payload["counts"]
+    assert payload["config"]["acquisition_input_source"] == "planning_corpus"
+    assert payload["config"]["shared_input_limit"] == 0
+
+
+def test_historical_job_limit_stays_in_application_planning_handoff(
+    monkeypatch,
+):
+    import main as pipeline_main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["main.py", "--shared-postgres-projection"],
+    )
+    args = pipeline_main._parse_args()
+    assert args.application_planning_job_limit == 50
+    assert args.shared_postgres_job_limit == 500_000
+
+    captured = {}
+    monkeypatch.setattr(
+        pipeline_main,
+        "_run_cmd",
+        lambda cmd, **_kwargs: captured.setdefault("cmd", list(cmd)),
+    )
+    planning_args = types.SimpleNamespace(
+        application_planning_job_limit=200,
+        application_planning_job_packet_limit=0,
+        application_planning_output_dir="outputs/application_planning",
+        application_planning_llm_actions="APPLY",
+        application_planning_generate_tailoring=False,
+        application_planning_generate_llm_tailoring=False,
+        application_planning_refresh_llm_tailoring=False,
+        application_planning_generate_llm_fallback=False,
+        application_planning_generate_llm_adjudication=False,
+    )
+    pipeline_main._run_application_planning(
+        planning_args,
+        job_corpus_path="tmp/current_run_job_corpus.jsonl",
+    )
+    assert captured["cmd"][captured["cmd"].index("--job-limit") + 1] == "200"
+
+    planning_source = Path("run_application_planning.py").read_text(
+        encoding="utf-8"
+    )
+    batch_command = planning_source.split("batch_selector_cmd = [", 1)[
+        1
+    ].split("_run_cmd(batch_selector_cmd)", 1)[0]
+    assert '"batch_select_best_resume_variant.py"' in batch_command
+    assert '"--job-limit"' in batch_command
+    assert "str(args.job_limit)" in batch_command
+
+
+def test_generic_rag_document_read_keeps_latest_first_semantics(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(rag_store, "_cache_get_docs_safe", lambda _key: None)
+    monkeypatch.setattr(
+        rag_store,
+        "_cache_set_docs_safe",
+        lambda _key, _docs: None,
+    )
+    monkeypatch.setattr(rag_store, "init_rag_store", lambda: None)
+
+    def query(sql):
+        captured["sql"] = sql
+        return {"rows": [{"job_id": "latest"}]}
+
+    monkeypatch.setattr(rag_store, "_run_psql_json_query", query)
+
+    assert rag_store.get_rag_job_documents(limit=7) == [
+        {"job_id": "latest"}
+    ]
+    assert "ORDER BY updated_at DESC, merge_key ASC" in captured["sql"]
+    assert "LIMIT 7" in captured["sql"]
+    assert "company_rank" not in captured["sql"]
+    assert "source_rank" not in captured["sql"]
 
 
 def test_shared_postgres_projection_fails_closed_for_blank_owner_or_empty_pool(
@@ -1509,9 +2124,11 @@ def test_shared_postgres_projection_fails_closed_for_blank_owner_or_empty_pool(
         )
 
 
+@pytest.mark.parametrize("requested", [25, 50, 100, 200, 500])
 def test_shared_projection_runtime_status_uses_truthful_input_stage(
     monkeypatch,
     tmp_path,
+    requested,
 ):
     status_path = tmp_path / "status.json"
     monkeypatch.setenv(runtime_status.ENV_STATUS_PATH, str(status_path))
@@ -1522,7 +2139,7 @@ def test_shared_projection_runtime_status_uses_truthful_input_stage(
         log_path=str(tmp_path / "run.log"),
         status_path=str(status_path),
         planning_only=False,
-        job_limit=25,
+        job_limit=requested,
         job_packet_limit=0,
         llm_actions=["APPLY"],
         generate_tailoring=False,
@@ -1532,7 +2149,7 @@ def test_shared_projection_runtime_status_uses_truthful_input_stage(
         generate_llm_adjudication=False,
         delete_seen_data="no",
         acquisition_input_source="shared_postgres_pool",
-        shared_input_limit=25,
+        shared_input_limit=500_000,
     )
 
     payload = json.loads(status_path.read_text(encoding="utf-8"))
@@ -1541,7 +2158,8 @@ def test_shared_projection_runtime_status_uses_truthful_input_stage(
     assert payload["config"]["acquisition_input_source"] == (
         "shared_postgres_pool"
     )
-    assert payload["config"]["shared_input_limit"] == 25
+    assert payload["config"]["job_limit"] == requested
+    assert payload["config"]["shared_input_limit"] == 500_000
 
 
 def test_usajobs_rows_join_common_collector_filter_and_only_retained_rows_continue(

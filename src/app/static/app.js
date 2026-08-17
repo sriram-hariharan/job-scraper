@@ -1454,6 +1454,10 @@ function setPipelineDeleteSeenDataValue(value) {
   setBinaryToggleValue("pipelineDeleteSeenData", value);
 }
 
+function isPipelinePlanningOnly() {
+  return getBinaryToggleBool("pipelinePlanningOnly");
+}
+
 function setPipelineRunOptions(value) {
   [
     "pipelinePlanningOnly",
@@ -1487,6 +1491,7 @@ function applyPipelinePreset(name) {
   setBinaryToggleValue("pipelineGenerateLlmAdjudication", preset.generate_llm_adjudication);
   setPipelineDeleteSeenDataValue(preset.delete_seen_data);
   setPipelineLlmActions(preset.llm_actions || []);
+  syncPipelineDeleteSeenDataApplicability();
   syncPipelinePathPreview();
 }
 
@@ -2408,6 +2413,7 @@ function collectPipelineConfig() {
   const llmActions = getSelectedPipelineLlmActions();
   const effectiveLlmActions = llmActions.length ? llmActions : getDefaultPipelineLlmActions();
   const paths = derivePipelinePaths(DEFAULT_OUTPUT_DIR);
+  const planningOnly = isPipelinePlanningOnly();
 
   return {
     job_limit: Number(qs("pipelineJobLimitInput").value || 50),
@@ -2415,13 +2421,13 @@ function collectPipelineConfig() {
     output_dir: paths.output_dir,
     log_path: paths.log_path,
     llm_actions: effectiveLlmActions,
-    planning_only: getBinaryToggleBool("pipelinePlanningOnly"),
+    planning_only: planningOnly,
     generate_tailoring: false,
     generate_llm_tailoring: false,
     refresh_llm_tailoring: false,
     generate_llm_fallback: getBinaryToggleBool("pipelineGenerateLlmFallback"),
     generate_llm_adjudication: getBinaryToggleBool("pipelineGenerateLlmAdjudication"),
-    delete_seen_data: getPipelineDeleteSeenDataValue(),
+    delete_seen_data: planningOnly ? "no" : getPipelineDeleteSeenDataValue(),
   };
 }
 
@@ -2455,7 +2461,7 @@ function renderPipelineConfirmSummary(config) {
       <section class="pipeline-review-section" aria-labelledby="pipelineReviewOptionsTitle">
         <div class="pipeline-confirm-panel-title" id="pipelineReviewOptionsTitle">Planning options</div>
         <div class="pipeline-review-option-grid">
-          ${buildReviewRow("Rerun seen jobs", config.delete_seen_data === "yes" ? "Enabled" : "Disabled", config.delete_seen_data === "yes" ? "is-enabled" : "is-disabled")}
+          ${buildReviewRow("Rerun seen jobs", config.planning_only ? "Not applicable (Plan only)" : config.delete_seen_data === "yes" ? "Clear seen history" : "Keep seen history", config.delete_seen_data === "yes" && !config.planning_only ? "is-enabled" : "is-disabled")}
           ${buildReviewRow("AI review", config.generate_llm_adjudication ? "Enabled" : "Disabled", config.generate_llm_adjudication ? "is-enabled" : "is-disabled")}
           ${buildReviewRow("Backup ranking", config.generate_llm_fallback ? "Enabled" : "Disabled", config.generate_llm_fallback ? "is-enabled" : "is-disabled")}
         </div>
@@ -3160,6 +3166,10 @@ function attachPipelineConfigHandlers() {
   ["pipelineJobLimitInput", "pipelineJobPacketLimitInput"].forEach((id) => {
     qs(id)?.addEventListener("input", validatePipelineConfig);
   });
+
+  document.querySelectorAll("input[name='pipelinePlanningOnly']").forEach((input) => {
+    input.addEventListener("change", syncPipelineDeleteSeenDataApplicability);
+  });
 }
 
 function normalizeQueueFilters(filters = {}) {
@@ -3333,10 +3343,23 @@ function setPipelineDeleteSeenDataDisabled(isDisabled, reason = "") {
     forcePipelineDeleteSeenDataNo();
   }
 
-  const helper = document.querySelector(".pipeline-toggle-group .control-help");
+  const helper = qs("pipelineDeleteSeenDataHelp");
   if (helper && reason) {
     helper.textContent = reason;
   }
+}
+
+function syncPipelineDeleteSeenDataApplicability(gate = getPipelineGate()) {
+  const planningOnly = isPipelinePlanningOnly();
+  const gateBlocked = gate && gate.can_delete_seen_data === false;
+  const disabled = planningOnly || gateBlocked;
+  const reason = planningOnly
+    ? "Not applicable in Plan only; existing seen-job history is always kept."
+    : gateBlocked
+      ? gate.delete_seen_data_block_reason ||
+        "Clearing seen-job history is available after your first successful Live Pipeline run."
+      : "No keeps seen-job history; Yes clears it before Scan + Plan. ATS scraping runs either way.";
+  setPipelineDeleteSeenDataDisabled(disabled, reason);
 }
 
 function applyPipelineGateUi(gate) {
@@ -3394,14 +3417,7 @@ function applyPipelineGateUi(gate) {
     }
   }
 
-  const deleteSeenBlocked = !safeGate.can_delete_seen_data;
-  setPipelineDeleteSeenDataDisabled(
-    deleteSeenBlocked,
-    deleteSeenBlocked
-      ? safeGate.delete_seen_data_block_reason ||
-          "Delete seen data is available after your first successful Live Pipeline run."
-      : "No keeps the seen-job cache. Yes reruns jobs that were already seen before."
-  );
+  syncPipelineDeleteSeenDataApplicability(safeGate);
 }
 
 function redirectToResumeOnboardingIfRequired(gate) {

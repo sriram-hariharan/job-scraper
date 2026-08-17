@@ -282,11 +282,11 @@ def _pipeline_dashboard_launch_dialogs() -> str:
             <section class="pipeline-option-section pipeline-option-section--scope">
               <div class="pipeline-option-section-header">
                 <div><div class="pipeline-option-kicker">Scope</div><div class="pipeline-option-title">Run scope</div></div>
-                <div class="pipeline-option-description">Control how many jobs enter the run and how many planning packets are produced.</div>
+                <div class="pipeline-option-description">Control how many qualified jobs proceed through application planning and how many planning packets are produced.</div>
               </div>
               <div class="pipeline-form-grid pipeline-form-grid--compact">
                 <div class="control-group pipeline-limit-group">
-                  <label for="pipelineJobLimitInput">Job limit <span class="packet-info-icon pipeline-help-icon" title="Maximum jobs allowed into this run." aria-label="Maximum jobs allowed into this run.">?</span></label>
+                  <label for="pipelineJobLimitInput">Job limit <span class="packet-info-icon pipeline-help-icon" title="Maximum qualified jobs from the current-run corpus that proceed through application planning." aria-label="Maximum qualified jobs from the current-run corpus that proceed through application planning.">?</span></label>
                   <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" aria-describedby="pipelineJobLimitError" />
                   <div class="pipeline-inline-validation" id="pipelineJobLimitError" aria-live="polite"></div>
                   <div class="pipeline-inline-helper">
@@ -307,10 +307,10 @@ def _pipeline_dashboard_launch_dialogs() -> str:
                 </div>
                 <div class="pipeline-setting-row pipeline-setting-row--wide">
                   <div class="pipeline-toggle-copy">
-                    <div class="pipeline-toggle-name">Rerun seen jobs <span class="packet-info-icon pipeline-help-icon" title="Include jobs that were already seen before." aria-label="Include jobs that were already seen before.">?</span></div>
-                    <div class="pipeline-toggle-help">Include jobs that were processed in an earlier run.</div>
+                    <div class="pipeline-toggle-name">Rerun seen jobs <span class="packet-info-icon pipeline-help-icon" title="Controls seen-job history only; Scan + Plan scrapes current ATS jobs with either choice." aria-label="Controls seen-job history only; Scan + Plan scrapes current ATS jobs with either choice.">?</span></div>
+                    <div class="pipeline-toggle-help" id="pipelineDeleteSeenDataHelp">No keeps seen-job history; Yes clears it before Scan + Plan so earlier jobs can be reconsidered.</div>
                   </div>
-                  <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Rerun seen jobs">
+                  <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Rerun seen jobs" aria-describedby="pipelineDeleteSeenDataHelp">
                     <label class="binary-toggle-option"><input type="radio" name="pipelineDeleteSeenData" value="no" checked /><span>No</span></label>
                     <label class="binary-toggle-option"><input type="radio" name="pipelineDeleteSeenData" value="yes" /><span>Yes</span></label>
                   </div>
@@ -325,11 +325,11 @@ def _pipeline_dashboard_launch_dialogs() -> str:
               <div class="pipeline-setting-row pipeline-setting-row--mode">
                 <div class="pipeline-toggle-copy">
                   <div class="pipeline-toggle-name">Pipeline stages</div>
-                  <div class="pipeline-toggle-help">Scan and plan new jobs, or rebuild planning from jobs already collected.</div>
+                  <div class="pipeline-toggle-help">Choose fresh ATS collection or rebuild planning from the existing planning corpus.</div>
                 </div>
                 <div class="binary-toggle binary-toggle--compact pipeline-mode-toggle" role="radiogroup" aria-label="Run mode">
-                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="no" checked /><span>Scan + Plan <i class="packet-info-icon pipeline-help-icon" title="Scrape jobs, score them, and build planning outputs." aria-label="Scrape jobs, score them, and build planning outputs.">?</i></span></label>
-                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="yes" /><span>Plan only <i class="packet-info-icon pipeline-help-icon" title="Skip scraping and rebuild planning from existing jobs." aria-label="Skip scraping and rebuild planning from existing jobs.">?</i></span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="no" checked /><span>Scan + Plan <i class="packet-info-icon pipeline-help-icon" title="Scrape current jobs from configured ATS sources, then filter, score, and build planning outputs." aria-label="Scrape current jobs from configured ATS sources, then filter, score, and build planning outputs.">?</i></span></label>
+                  <label class="binary-toggle-option"><input type="radio" name="pipelinePlanningOnly" value="yes" /><span>Plan only <i class="packet-info-icon pipeline-help-icon" title="Skip ATS scraping and rebuild application planning from the existing planning corpus." aria-label="Skip ATS scraping and rebuild application planning from the existing planning corpus.">?</i></span></label>
                 </div>
               </div>
             </section>

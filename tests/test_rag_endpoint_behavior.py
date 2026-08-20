@@ -375,7 +375,7 @@ def test_assistant_query_payload_for_search_uses_search_lite(monkeypatch):
     monkeypatch.setattr(
         services,
         "jobs_search_lite_payload",
-        lambda request, top_k=5: {
+        lambda request, top_k=5, owner_user_id="", allowed_job_ids=None, supplemental_docs=None: {
             "ok": True,
             "request": request,
             "result_count": 1,
@@ -609,7 +609,7 @@ def test_assistant_and_rag_services_propagate_normalized_owner(monkeypatch):
     monkeypatch.setattr(
         services,
         "_overlay_application_actions",
-        lambda rows: rows,
+        lambda rows, owner_user_id="": rows,
     )
 
     original_rag_answer_payload(
@@ -629,6 +629,59 @@ def test_assistant_and_rag_services_propagate_normalized_owner(monkeypatch):
             "owner_user_id": "owner-a",
         }
     ]
+
+
+def test_assistant_query_payload_propagates_owner_to_overlay_for_both_intents(monkeypatch):
+    from src.app import services
+
+    overlay_owner_calls = []
+
+    def fake_overlay(rows, owner_user_id=""):
+        overlay_owner_calls.append(owner_user_id)
+        return rows
+
+    monkeypatch.setattr(services, "_overlay_application_actions", fake_overlay)
+
+    monkeypatch.setattr(
+        services,
+        "route_assistant_intent",
+        lambda _request: {"intent": "search_jobs", "reason": "test"},
+    )
+    from src.rag import corpus_store, lexical_retriever, query_filters
+
+    monkeypatch.setattr(query_filters, "_infer_metadata_filters", lambda request: {})
+    monkeypatch.setattr(lexical_retriever, "_lexical_search", lambda *args, **kwargs: [])
+    monkeypatch.setattr(corpus_store, "_load_job_corpus", lambda: [])
+
+    services.assistant_query_payload(
+        "python jobs",
+        owner_user_id=" owner-c ",
+    )
+
+    assert overlay_owner_calls == ["owner-c"]
+
+    monkeypatch.setattr(
+        services,
+        "route_assistant_intent",
+        lambda _request: {"intent": "answer_job_query", "reason": "test"},
+    )
+    from src.rag import rag_executor
+
+    monkeypatch.setattr(
+        rag_executor,
+        "execute_rag_request",
+        lambda **kwargs: {
+            "ok": True,
+            "response": {"answer": "answer", "sources": [], "job_evidence": []},
+        },
+    )
+
+    services.assistant_query_payload(
+        "Which jobs require Python?",
+        owner_user_id=" owner-c ",
+    )
+
+    assert overlay_owner_calls == ["owner-c", "owner-c", "owner-c"]
 
 
 def test_rag_executor_routes_owner_only_to_answer_tool(monkeypatch):

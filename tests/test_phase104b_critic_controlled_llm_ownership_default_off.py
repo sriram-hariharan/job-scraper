@@ -10,6 +10,7 @@ from src.agents.critic_agent import (
 )
 from tests.support.phase_guard_registry import (
     assert_no_forbidden_runtime_calls_ast,
+    current_milestone_guard_compatibility_allowlist,
     get_changed_files,
     legacy_guard_allowlist,
 )
@@ -332,6 +333,8 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         "src/app/static/shell.js",
     }
 
+    current_milestone_surface = current_milestone_guard_compatibility_allowlist()
+
     unexpected_static = {
         path
         for path in changed
@@ -339,6 +342,7 @@ def test_phase104b_does_not_wire_collector_api_or_static_runtime():
         and path not in historical_static_surface
         and path not in phase129_surface
         and path not in scheduler_static_surface
+        and path not in current_milestone_surface
     }
     assert not unexpected_static
 

@@ -552,6 +552,26 @@ ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES = {
     "tests/test_production_task_contract_fingerprints.py",
 }
 
+# Item 3 floating ApplyLens AI chatbot: Dashboard-scoped retrieval, evidence
+# completeness, and the redesigned chatbot UI. Only the files that stale
+# registry-backed scope guards actually flag are listed here; the remaining
+# Item 3 files (src/app/services.py, src/app/ui_shell.py,
+# src/app/static/app_redesign.css, src/storage/rag_store.py and the three
+# updated legacy test files) are already accepted by earlier milestone
+# allowlists, so re-listing them would widen the surface without need.
+ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES = {
+    "src/app/static/floating_intelligence_chat.js",
+    "src/rag/corpus_store.py",
+    "src/rag/lexical_retriever.py",
+    "src/rag/query_engine.py",
+    "src/rag/rag_answerer.py",
+    "src/rag/rag_executor.py",
+    "src/rag/rag_tools.py",
+    "src/rag/retrieval_ranker.py",
+    "tests/test_item3e0_chatbot_capability_matrix.py",
+    "tests/test_item3e2_dashboard_scoped_chatbot.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -2203,6 +2223,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
+        | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2461,6 +2482,8 @@ def assert_protected_hashes(
             "f544310044957fcd28c74e9375093695a0b94814e2473435ff1fdefe7fc93df5",
             "8f2ab896d709e95a6ae0300004a799e9206e8c20af1c82fa08d9414bd85ef06a",
             "bae6084f3be7e173e2cb9ec4bf39d085531a4f628f88508445b0a583783e0ded",
+            # Item 3 floating ApplyLens AI chatbot successor.
+            "90aff70ad5eb13958187dbd17f0250ec976ba8bd99a29e78f841bf4d0e8b5cbb",
         }),
         (
             "src/ai/llm_client.py",
@@ -2515,6 +2538,8 @@ def assert_protected_hashes(
             "aab9f26ebe70b458fb706cfeee7f9b6ae76a9bef5303b1d5c150b9773323d20e",
             "0512c0cd141947dbc6f48565b424920393f84fb9fc426dfc2816c504b03f33ce",
             "3b11179b92301e7734cb82ef2f4cc8ba6d251e2ee363cf27d04a0461a0913a7a",
+            # Item 3 floating ApplyLens AI chatbot successor.
+            "a9211f507cd0294d54040d45df11b846e359f815556306e64bb6785bd1e5ad41",
         }),
         (
             "src/app/services.py",
@@ -2537,6 +2562,8 @@ def assert_protected_hashes(
             "c17198d67a02c645a175854db5df45a68114a36c3a33392ca811c84f9ec50940",
             "f3def96a4b978fd200dab5ce1628a707a8d30a55c2fd1346887e2c72e05657e3",
             "3b11179b92301e7734cb82ef2f4cc8ba6d251e2ee363cf27d04a0461a0913a7a",
+            # Item 3 floating ApplyLens AI chatbot successor.
+            "a9211f507cd0294d54040d45df11b846e359f815556306e64bb6785bd1e5ad41",
         }),
             (
                 "src/agents/jd_intelligence.py",

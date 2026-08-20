@@ -1,7 +1,11 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from src.rag.diagnostic_filter import filter_diagnostic_rag_rows
-from src.rag.lexical_retriever import _lexical_search
+from src.rag.lexical_retriever import (
+    _corpus_overview_results,
+    _lexical_search,
+    is_job_doc_allowed,
+)
 from src.rag.query_filters import _infer_metadata_filters, _merge_filters, _matches_filters
 from src.rag.retrieval_ranker import (
     _dedupe_results,
@@ -20,6 +24,44 @@ SEMANTIC_RETRIEVAL_TIMEOUT_SECONDS = 10
 SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS = (
     "Legacy filesystem RAG index is disabled",
 )
+
+# Aggregate questions about the corpus as a whole. These never resemble an
+# individual posting lexically, so term matching legitimately returns nothing.
+# Bounded ceiling on how many postings such a question may see as evidence.
+CORPUS_OVERVIEW_EVIDENCE_LIMIT = 12
+
+CORPUS_OVERVIEW_QUERY_PHRASES = (
+    "what kinds of roles",
+    "what kind of roles",
+    "what types of roles",
+    "what type of roles",
+    "what roles are available",
+    "what jobs are available",
+    "which companies are hiring",
+    "what companies are hiring",
+    "who is hiring",
+    "which companies",
+    "what companies",
+    "what skills",
+    "which skills",
+    "what technologies",
+    "which technologies",
+    "what tech stack",
+    "most common",
+    "most often",
+    "commonly required",
+    "overview of the corpus",
+    "summarize the corpus",
+    "summarise the corpus",
+)
+
+
+def _is_corpus_overview_query(query: str) -> bool:
+    """Deterministic detector for corpus-level aggregate questions."""
+    normalized = " ".join(str(query or "").strip().lower().split())
+    if not normalized:
+        return False
+    return any(phrase in normalized for phrase in CORPUS_OVERVIEW_QUERY_PHRASES)
 
 def _build_preview(text: str, max_length: int = 400) -> str:
     text = (text or "").strip()
@@ -75,7 +117,13 @@ def search_jobs(
     top_k: int = 5,
     fetch_k: int = 15,
     filters: Optional[Dict[str, Any]] = None,
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
+    # allowed_job_ids scopes retrieval to the authenticated owner's Dashboard
+    # population BEFORE any evidence reaches the grounded answerer. None keeps
+    # existing unscoped behavior for non-chatbot callers; an empty set is
+    # fail-closed and must never widen back to the shared corpus.
     inferred_filters = _infer_metadata_filters(query)
     effective_filters = _merge_filters(filters, inferred_filters)
 
@@ -123,6 +171,10 @@ def search_jobs(
     semantic_filtered_results = [
         result for result in semantic_raw_results
         if _matches_filters(result, effective_filters)
+        and is_job_doc_allowed(
+            (result.get("metadata", {}) or {}),
+            allowed_job_ids,
+        )
     ]
 
     semantic_deduped_results = filter_diagnostic_rag_rows(
@@ -134,6 +186,8 @@ def search_jobs(
             query=query,
             top_k=fetch_k,
             filters=effective_filters,
+            allowed_job_ids=allowed_job_ids,
+            supplemental_docs=supplemental_docs,
         )
     )
 
@@ -179,6 +233,33 @@ def search_jobs(
         _top_score_summary(hybrid_results),
     )
 
+    # Corpus-level aggregate questions cannot match any single posting by term
+    # overlap. When term matching finds nothing, fall back to a bounded, ordered
+    # sample of real postings so the grounded answerer has genuine, citable
+    # evidence. The gate is skipped for this path because the sample is a
+    # deliberate corpus projection, not a claimed lexical match.
+    effective_top_k = top_k
+    if not hybrid_results and _is_corpus_overview_query(query):
+        overview_results = _corpus_overview_results(
+            top_k=CORPUS_OVERVIEW_EVIDENCE_LIMIT,
+            allowed_job_ids=allowed_job_ids,
+            supplemental_docs=supplemental_docs,
+        )
+        if overview_results:
+            hybrid_results = _merge_hybrid_results(
+                semantic_results=[],
+                lexical_results=overview_results,
+            )
+            effective_top_k = max(top_k, min(CORPUS_OVERVIEW_EVIDENCE_LIMIT, len(hybrid_results)))
+            gate_metrics = dict(gate_metrics)
+            gate_metrics["passed"] = True
+            logger.info(
+                "RAG corpus overview evidence used | query=%r | sampled=%s | effective_top_k=%s",
+                query,
+                len(hybrid_results),
+                effective_top_k,
+            )
+
     if not gate_metrics["passed"]:
         if effective_filters and hybrid_results:
             logger.info(
@@ -214,12 +295,14 @@ def search_jobs(
         annotated_hybrid_results.append(annotated_result)
 
     formatted_results = [_format_result(result) for result in annotated_hybrid_results]
-    final_results = formatted_results[:top_k]
+    final_results = formatted_results[:effective_top_k]
 
     logger.info(
-        "RAG retrieval return | query=%r | returned=%s | doc_ids=%s",
+        "RAG retrieval return | query=%r | returned=%s | dashboard_allowed_job_count=%s | "
+        "doc_ids=%s",
         query,
         len(final_results),
+        "unscoped" if allowed_job_ids is None else len(allowed_job_ids),
         [result.get("doc_id", "") for result in final_results],
     )
 

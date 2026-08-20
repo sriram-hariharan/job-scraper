@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from src.rag.query_engine import search_jobs
 from src.rag.rag_answerer import answer_job_query
@@ -226,6 +226,8 @@ def answer_job_query_tool(
     include_diagnostics: bool = False,
     output_mode: str = "full",
     owner_user_id: str = "",
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     question_error = _validate_non_empty_string(question, "question")
     if question_error:
@@ -264,6 +266,10 @@ def answer_job_query_tool(
         owner = str(owner_user_id or "").strip()
         if owner:
             answer_kwargs["owner_user_id"] = owner
+        if allowed_job_ids is not None:
+            answer_kwargs["allowed_job_ids"] = allowed_job_ids
+        if supplemental_docs:
+            answer_kwargs["supplemental_docs"] = supplemental_docs
         result = answer_job_query(**answer_kwargs)
     except Exception as exc:
         return _error_payload(

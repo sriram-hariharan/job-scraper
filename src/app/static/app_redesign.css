@@ -4527,18 +4527,39 @@ body.executive-dashboard-page {
   width: 64px !important;
   height: 64px !important;
   padding: 0 !important;
-  border: 1px solid rgba(255, 255, 255, 0.34) !important;
-  border-radius: var(--app-radius-pill) !important;
-  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 22px !important;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.34), transparent 58%),
+    linear-gradient(145deg, #4f7cff 0%, #7c5cff 52%, #a855f7 100%) !important;
   color: #ffffff !important;
-  box-shadow: 0 18px 42px rgba(37, 99, 235, 0.34) !important;
+  box-shadow:
+    0 16px 38px rgba(79, 124, 255, 0.42),
+    0 2px 0 rgba(255, 255, 255, 0.28) inset !important;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.24s ease, border-radius 0.24s ease !important;
+  overflow: visible !important;
+}
+
+.floating-intelligence-chat-button-glow {
+  position: absolute !important;
+  inset: -1px !important;
+  border-radius: inherit !important;
+  background: inherit !important;
+  opacity: 0.55 !important;
+  filter: blur(14px) !important;
+  z-index: -1 !important;
+  pointer-events: none !important;
 }
 
 #floatingIntelligenceChatButton:hover,
 #floatingIntelligenceChatButton:focus-visible {
-  transform: translateY(-2px) !important;
-  border-color: rgba(255, 255, 255, 0.58) !important;
-  box-shadow: 0 22px 54px rgba(37, 99, 235, 0.42) !important;
+  transform: translateY(-3px) scale(1.04) !important;
+  border-radius: 26px !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  box-shadow:
+    0 24px 54px rgba(79, 124, 255, 0.52),
+    0 2px 0 rgba(255, 255, 255, 0.38) inset !important;
 }
 
 #floatingIntelligenceChat.is-open #floatingIntelligenceChatButton {
@@ -4548,31 +4569,56 @@ body.executive-dashboard-page {
 }
 
 .floating-intelligence-chat-icon {
-  width: 32px !important;
-  height: 32px !important;
+  width: 30px !important;
+  height: 30px !important;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+#floatingIntelligenceChatButton:hover .floating-intelligence-chat-icon {
+  transform: rotate(-8deg) scale(1.06) !important;
 }
 
 #floatingIntelligenceChatPanel {
   position: fixed !important;
-  top: max(24px, env(safe-area-inset-top)) !important;
+  top: auto !important;
   right: 28px !important;
-  bottom: max(24px, env(safe-area-inset-bottom)) !important;
+  bottom: var(--floating-chat-launcher-bottom, max(28px, env(safe-area-inset-bottom))) !important;
   z-index: 900 !important;
   display: grid !important;
-  width: min(600px, calc(100vw - 56px)) !important;
-  height: min(760px, calc(100vh - 48px)) !important;
-  max-height: calc(100vh - 48px) !important;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 14px !important;
-  padding: 16px !important;
-  border: 1px solid rgba(129, 156, 205, 0.3) !important;
-  border-radius: 20px !important;
+  width: min(560px, calc(100vw - 56px)) !important;
+  height: auto !important;
+  max-height: min(660px, calc(100vh - 96px)) !important;
+  max-height: min(660px, calc(100dvh - 96px)) !important;
+  max-width: calc(100vw - 24px) !important;
+  overflow-wrap: anywhere !important;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 1px solid rgba(129, 156, 205, 0.24) !important;
+  border-radius: 24px !important;
   background:
-    radial-gradient(circle at 16% 0%, rgba(124, 156, 255, 0.2), transparent 34%),
-    linear-gradient(180deg, rgba(18, 25, 43, 0.98), rgba(11, 16, 32, 0.98)) !important;
+    radial-gradient(circle at 88% -6%, rgba(168, 85, 247, 0.14), transparent 46%),
+    radial-gradient(circle at 6% 0%, rgba(79, 124, 255, 0.16), transparent 42%),
+    linear-gradient(180deg, #161d33 0%, #0c1120 100%) !important;
   color: var(--app-text) !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34) !important;
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.46),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 1px 0 rgba(255, 255, 255, 0.09) inset !important;
   overflow: hidden !important;
+  transform-origin: bottom right !important;
+  animation: floating-intelligence-chat-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both !important;
+}
+
+@keyframes floating-intelligence-chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 #floatingIntelligenceChatPanel.hidden {
@@ -4580,19 +4626,46 @@ body.executive-dashboard-page {
 }
 
 html[data-theme="light"] #floatingIntelligenceChatPanel {
-  border-color: rgba(71, 94, 132, 0.22) !important;
+  border-color: rgba(71, 94, 132, 0.18) !important;
   background:
-    radial-gradient(circle at 16% 0%, rgba(37, 99, 235, 0.13), transparent 34%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
-  box-shadow: 0 24px 58px rgba(15, 23, 42, 0.16) !important;
+    radial-gradient(circle at 88% -6%, rgba(168, 85, 247, 0.07), transparent 46%),
+    radial-gradient(circle at 6% 0%, rgba(37, 99, 235, 0.08), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, #f9fbff 100%) !important;
+  box-shadow:
+    0 32px 72px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(15, 23, 42, 0.03) inset !important;
 }
 
 .floating-intelligence-chat-header {
-  display: flex !important;
-  align-items: flex-start !important;
-  justify-content: space-between !important;
-  gap: 14px !important;
-  padding: 6px 6px 0 !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center !important;
+  gap: 11px !important;
+  padding: 14px 16px !important;
+  border-bottom: 1px solid rgba(129, 156, 205, 0.16) !important;
+  background: rgba(255, 255, 255, 0.028) !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-header {
+  border-bottom-color: rgba(71, 94, 132, 0.12) !important;
+  background: rgba(15, 23, 42, 0.016) !important;
+}
+
+.floating-intelligence-chat-avatar {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 11px !important;
+  background: linear-gradient(145deg, #4f7cff, #a855f7) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(79, 124, 255, 0.36) !important;
+}
+
+.floating-intelligence-chat-avatar svg {
+  width: 20px !important;
+  height: 20px !important;
 }
 
 .floating-intelligence-chat-heading {
@@ -4601,35 +4674,90 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 
 .floating-intelligence-chat-heading h2 {
   margin: 0 !important;
-  font-size: 20px !important;
-  line-height: 1.2 !important;
+  font-size: 15px !important;
+  font-weight: 850 !important;
+  line-height: 1.25 !important;
   letter-spacing: 0 !important;
 }
 
 .floating-intelligence-chat-heading p {
-  margin: 4px 0 0 !important;
+  margin: 1px 0 0 !important;
   color: var(--app-muted) !important;
-  font-size: 13px !important;
-  line-height: 1.4 !important;
+  font-size: 11.5px !important;
+  font-weight: 650 !important;
+  line-height: 1.3 !important;
 }
 
-#floatingIntelligenceChatCloseBtn {
-  flex: 0 0 auto !important;
-  width: 32px !important;
-  height: 32px !important;
-  min-height: 32px !important;
-  padding: 0 !important;
+/* Neutral capability label. Deliberately not a health/status indicator: the UI
+   does not know provider, model, or retrieval health at render time. */
+.floating-intelligence-chat-status-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 4px 10px !important;
+  border: 1px solid rgba(129, 156, 205, 0.28) !important;
   border-radius: var(--app-radius-pill) !important;
-  background: var(--app-surface-2) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: rgba(226, 232, 240, 0.9) !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em !important;
+  white-space: nowrap !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-status-badge {
+  border-color: rgba(71, 94, 132, 0.24) !important;
+  background: rgba(15, 23, 42, 0.05) !important;
+  color: #334155 !important;
+}
+
+#floatingIntelligenceChatCloseBtn,
+.floating-intelligence-chat-header-btn {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: var(--app-muted) !important;
+  transition: background 0.16s ease, color 0.16s ease !important;
+}
+
+#floatingIntelligenceChatCloseBtn svg,
+.floating-intelligence-chat-header-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+#floatingIntelligenceChatCloseBtn:hover,
+#floatingIntelligenceChatCloseBtn:focus-visible,
+.floating-intelligence-chat-header-btn:hover,
+.floating-intelligence-chat-header-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.08) !important;
   color: var(--app-text) !important;
-  font-size: 22px !important;
-  line-height: 1 !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceChatCloseBtn:hover,
+html[data-theme="light"] #floatingIntelligenceChatCloseBtn:focus-visible,
+html[data-theme="light"] .floating-intelligence-chat-header-btn:hover,
+html[data-theme="light"] .floating-intelligence-chat-header-btn:focus-visible {
+  background: rgba(15, 23, 42, 0.06) !important;
 }
 
 .floating-intelligence-chat-controls {
-  display: grid !important;
-  gap: 8px !important;
-  padding: 0 4px !important;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
 }
 
 .floating-intelligence-chat-mode {
@@ -4659,19 +4787,439 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
   display: none !important;
 }
 
+.floating-intelligence-chat-viewport {
+  position: relative !important;
+  display: grid !important;
+  min-height: 0 !important;
+}
+
+.floating-intelligence-chat-jump-btn {
+  position: absolute !important;
+  right: 16px !important;
+  bottom: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(129, 156, 205, 0.24) !important;
+  border-radius: 50% !important;
+  background: rgba(20, 27, 47, 0.92) !important;
+  color: var(--app-text) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28) !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-jump-btn {
+  background: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12) !important;
+}
+
+.floating-intelligence-chat-jump-btn[hidden] {
+  display: none !important;
+}
+
+.floating-intelligence-chat-jump-btn svg {
+  width: 15px !important;
+  height: 15px !important;
+}
+
 #floatingIntelligenceMessages {
   display: flex !important;
   min-height: 0 !important;
   flex-direction: column !important;
-  gap: 14px !important;
+  gap: 18px !important;
   overflow: auto !important;
-  padding: 16px !important;
-  border: 1px solid var(--app-border) !important;
-  border-radius: 18px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01)),
-    var(--app-inset) !important;
+  padding: 18px 16px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.floating-intelligence-chat-thinking {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 6px 0 !important;
+}
+
+.floating-intelligence-chat-thinking-dot {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: var(--app-muted) !important;
+  animation: floating-intelligence-chat-blink 1.25s ease-in-out infinite !important;
+}
+
+.floating-intelligence-chat-thinking-dot:nth-child(2) {
+  animation-delay: 0.18s !important;
+}
+
+.floating-intelligence-chat-thinking-dot:nth-child(3) {
+  animation-delay: 0.36s !important;
+}
+
+@keyframes floating-intelligence-chat-blink {
+  0%, 80%, 100% { opacity: 0.28; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
+
+.floating-intelligence-chat-actions {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+
+.floating-intelligence-chat-retry-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 26px !important;
+  padding: 0 11px !important;
+  border: 1px solid rgba(129, 156, 205, 0.26) !important;
+  border-radius: var(--app-radius-pill) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--app-text) !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  transition: border-color 0.16s ease, background 0.16s ease !important;
+}
+
+.floating-intelligence-chat-retry-btn:hover,
+.floating-intelligence-chat-retry-btn:focus-visible {
+  border-color: rgba(124, 156, 255, 0.45) !important;
+  background: rgba(124, 156, 255, 0.12) !important;
+}
+
+.floating-intelligence-chat-provider-meta {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  overflow-wrap: anywhere !important;
+  align-items: center !important;
+  gap: 7px !important;
+  margin-top: 10px !important;
+  color: var(--app-muted) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.floating-intelligence-chat-provider-fallback {
+  padding: 2px 7px !important;
+  border: 1px solid rgba(251, 191, 36, 0.3) !important;
+  border-radius: var(--app-radius-pill) !important;
+  background: rgba(251, 191, 36, 0.12) !important;
+  color: #fcd34d !important;
+  font-size: 9.5px !important;
+  font-weight: 850 !important;
+  text-transform: uppercase !important;
+}
+
+/* Provider/runtime failure — visually distinct from insufficient evidence. */
+.floating-intelligence-chat-failure {
+  padding: 12px 13px !important;
+  border: 1px solid rgba(248, 113, 113, 0.32) !important;
+  border-left: 3px solid rgba(248, 113, 113, 0.72) !important;
+  border-radius: 11px !important;
+  background: rgba(248, 113, 113, 0.09) !important;
+}
+
+.floating-intelligence-chat-failure-title {
+  margin-bottom: 5px !important;
+  color: #fca5a5 !important;
+  font-size: 12.5px !important;
+  font-weight: 850 !important;
+  line-height: 1.35 !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-failure-copy {
+  margin: 0 !important;
+  color: rgba(226, 232, 240, 0.82) !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-failure {
+  border-color: rgba(190, 18, 60, 0.24) !important;
+  background: #fff5f5 !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-failure-title {
+  color: #b91c1c !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-failure-copy {
+  color: #475569 !important;
+}
+
+.floating-intelligence-chat-insufficient {
+  padding: 11px 13px !important;
+  border: 1px solid rgba(251, 191, 36, 0.26) !important;
+  border-left: 3px solid rgba(251, 191, 36, 0.6) !important;
+  border-radius: 11px !important;
+  background: rgba(251, 191, 36, 0.07) !important;
+}
+
+.floating-intelligence-chat-insufficient-label {
+  margin-bottom: 5px !important;
+  color: #fcd34d !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-insufficient-label,
+html[data-theme="light"] .floating-intelligence-chat-provider-fallback {
+  color: #b45309 !important;
+}
+
+#floatingIntelligenceMessages::-webkit-scrollbar {
+  width: 8px;
+}
+
+#floatingIntelligenceMessages::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgba(129, 156, 205, 0.32);
+}
+
+.floating-intelligence-chat-empty {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 0 !important;
+  padding: 10px 2px 4px !important;
+  text-align: center !important;
+}
+
+.floating-intelligence-chat-empty-mark {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 46px !important;
+  height: 46px !important;
+  margin-bottom: 14px !important;
+  border: 1px solid rgba(129, 156, 205, 0.22) !important;
+  border-radius: 15px !important;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.16), transparent 60%),
+    linear-gradient(145deg, rgba(79, 124, 255, 0.24), rgba(168, 85, 247, 0.24)) !important;
+  color: #a5bcff !important;
+}
+
+.floating-intelligence-chat-empty-mark svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.floating-intelligence-chat-empty-title {
+  margin: 0 !important;
+  font-size: 17px !important;
+  font-weight: 850 !important;
+  line-height: 1.3 !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-empty-copy {
+  max-width: 380px !important;
+  margin: 7px 0 0 !important;
+  color: var(--app-muted) !important;
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+}
+
+/* --- Suggested prompt tiles -------------------------------------------------
+   Single source of truth for the four empty-state action tiles.
+
+   IMPORTANT CASCADE NOTE: the global CTA rule near the top of this file,
+   `button:not(...)x24, .app-shell-primary-link`, carries specificity (0,24,1)
+   with !important and paints every unexcluded <button> with the
+   blue -> violet gradient plus white text. These tiles are <button> elements,
+   so class-only rules (0,1,0) lose to it no matter how late they appear.
+   Every rule below is therefore scoped under the #floatingIntelligenceMessages
+   ID, giving (1,x,y): an ID outranks any number of classes, so these
+   declarations win deterministically without touching the shared global
+   selector used by the rest of the app.
+
+   Card surfaces stay neutral in both themes; colour identity lives only in the
+   icon container and the hover accent, driven by [data-accent].
+   -------------------------------------------------------------------------- */
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompts {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px !important;
+  width: 100% !important;
+  margin-top: 20px !important;
+  text-align: left !important;
+  align-items: stretch !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt {
+  /* Per-accent tokens; overridden per [data-accent] below. */
+  --prompt-accent: #60a5fa;
+  --prompt-accent-bg: rgba(96, 141, 255, 0.18);
+  --prompt-accent-border: rgba(96, 141, 255, 0.44);
+
+  display: grid !important;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 14px !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  border: 1px solid #2b3852 !important;
+  border-radius: 14px !important;
+  /* Solid elevated neutral slate - never a gradient, never a tinted CTA fill. */
+  background: #182033 !important;
+  background-image: none !important;
+  color: #f8fafc !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+  transition: border-color 0.18s ease, background-color 0.18s ease,
+    transform 0.18s ease, box-shadow 0.18s ease !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt:hover,
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt:focus-visible {
+  transform: translateY(-2px) !important;
+  border-color: var(--prompt-accent-border) !important;
+  background: #1d2740 !important;
+  background-image: none !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32) !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt:focus-visible {
+  outline: 2px solid var(--prompt-accent) !important;
+  outline-offset: 2px !important;
+}
+
+/* Fixed icon column: identical box on every card, so the text column always
+   starts at the same x position regardless of glyph width. */
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-icon {
+  display: inline-flex !important;
+  flex: 0 0 42px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 42px !important;
+  height: 42px !important;
+  border: 1px solid var(--prompt-accent-border) !important;
+  border-radius: 12px !important;
+  background: var(--prompt-accent-bg) !important;
+  color: var(--prompt-accent) !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-icon svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Presentation attributes on the child paths only lose to CSS applied to the
+   children themselves, not to the parent <svg>. */
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-icon svg path,
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-icon svg circle {
+  stroke-width: 2.1 !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-copy {
+  display: grid !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+  align-content: center !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-title {
+  color: #f8fafc !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  line-height: 1.3 !important;
+  overflow-wrap: anywhere !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-hint {
+  color: #cbd5e1 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  overflow-wrap: anywhere !important;
+}
+
+/* Accent identities (dark theme values). */
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="blue"] {
+  --prompt-accent: #93b4ff;
+  --prompt-accent-bg: rgba(96, 141, 255, 0.2);
+  --prompt-accent-border: rgba(96, 141, 255, 0.5);
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="violet"] {
+  --prompt-accent: #c9a6ff;
+  --prompt-accent-bg: rgba(168, 85, 247, 0.2);
+  --prompt-accent-border: rgba(168, 85, 247, 0.5);
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="amber"] {
+  --prompt-accent: #fcc46b;
+  --prompt-accent-bg: rgba(245, 158, 11, 0.2);
+  --prompt-accent-border: rgba(245, 158, 11, 0.5);
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="teal"] {
+  --prompt-accent: #5fd9c0;
+  --prompt-accent-bg: rgba(20, 184, 166, 0.2);
+  --prompt-accent-border: rgba(20, 184, 166, 0.5);
+}
+
+/* Light theme: premium white tiles, darker accents for contrast on white. */
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt {
+  border-color: #dbe3ee !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt:hover,
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt:focus-visible {
+  background: #f8fafc !important;
+  background-image: none !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-title {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt-hint {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="blue"] {
+  --prompt-accent: #1d4ed8;
+  --prompt-accent-bg: rgba(37, 99, 235, 0.1);
+  --prompt-accent-border: rgba(37, 99, 235, 0.36);
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="violet"] {
+  --prompt-accent: #7e22ce;
+  --prompt-accent-bg: rgba(147, 51, 234, 0.1);
+  --prompt-accent-border: rgba(147, 51, 234, 0.36);
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="amber"] {
+  --prompt-accent: #b45309;
+  --prompt-accent-bg: rgba(217, 119, 6, 0.12);
+  --prompt-accent-border: rgba(217, 119, 6, 0.38);
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt[data-accent="teal"] {
+  --prompt-accent: #0f766e;
+  --prompt-accent-bg: rgba(13, 148, 136, 0.11);
+  --prompt-accent-border: rgba(13, 148, 136, 0.36);
 }
 
 #floatingIntelligenceMessages p {
@@ -4687,37 +5235,55 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 }
 
 .floating-intelligence-chat-message--user {
-  justify-content: flex-start !important;
+  justify-content: flex-end !important;
 }
 
 .floating-intelligence-chat-message--assistant,
 .floating-intelligence-chat-message--error {
-  justify-content: flex-end !important;
+  position: relative !important;
+  justify-content: flex-start !important;
+  padding-left: 36px !important;
+}
+
+.floating-intelligence-chat-message--assistant::before,
+.floating-intelligence-chat-message--error::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 1px !important;
+  left: 0 !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 9px !important;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.3), transparent 60%),
+    linear-gradient(145deg, #4f7cff, #a855f7) !important;
+  box-shadow: 0 4px 12px rgba(79, 124, 255, 0.34) !important;
 }
 
 .floating-intelligence-chat-bubble {
   width: fit-content !important;
-  max-width: min(500px, 86%) !important;
-  padding: 13px 15px !important;
-  border-radius: 18px !important;
-  font-size: 14px !important;
-  line-height: 1.5 !important;
+  max-width: min(440px, 100%) !important;
+  font-size: 13.5px !important;
+  line-height: 1.6 !important;
   overflow-wrap: anywhere !important;
 }
 
 .floating-intelligence-chat-message--user .floating-intelligence-chat-bubble {
-  border: 1px solid rgba(129, 156, 205, 0.24) !important;
-  border-bottom-left-radius: 6px !important;
-  background: rgba(255, 255, 255, 0.075) !important;
+  max-width: min(380px, 86%) !important;
+  padding: 10px 14px !important;
+  border: 1px solid rgba(124, 156, 255, 0.3) !important;
+  border-radius: 16px 16px 5px 16px !important;
+  background: rgba(124, 156, 255, 0.14) !important;
   color: var(--app-text) !important;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14) !important;
+  font-weight: 650 !important;
 }
 
 .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble {
-  border-bottom-right-radius: 6px !important;
-  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
-  color: #ffffff !important;
-  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.28) !important;
+  padding: 2px 0 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--app-text) !important;
 }
 
 #floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble,
@@ -4725,7 +5291,7 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 #floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble span,
 #floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble div,
 #floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble a {
-  color: #ffffff !important;
+  color: var(--app-text) !important;
 }
 
 .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble p,
@@ -4735,8 +5301,15 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 }
 
 .floating-intelligence-chat-message--error .floating-intelligence-chat-bubble {
-  border: 1px solid rgba(251, 113, 133, 0.35) !important;
-  background: rgba(251, 113, 133, 0.12) !important;
+  padding: 10px 13px !important;
+  border: 1px solid rgba(251, 113, 133, 0.32) !important;
+  border-radius: 13px !important;
+  background: rgba(251, 113, 133, 0.1) !important;
+  color: #fecdd3 !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-message--error .floating-intelligence-chat-bubble,
+#floatingIntelligenceMessages .floating-intelligence-chat-message--error .floating-intelligence-chat-bubble p {
   color: #fecdd3 !important;
 }
 
@@ -4749,14 +5322,20 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
   display: inline-flex !important;
   width: fit-content !important;
   margin: 0 0 9px !important;
-  padding: 4px 8px !important;
-  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  padding: 3px 9px !important;
+  border: 1px solid rgba(124, 156, 255, 0.3) !important;
   border-radius: var(--app-radius-pill) !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: rgba(255, 255, 255, 0.82) !important;
-  font-size: 11px !important;
+  background: rgba(124, 156, 255, 0.13) !important;
+  color: #a5bcff !important;
+  font-size: 10.5px !important;
   font-weight: 850 !important;
+  letter-spacing: 0.02em !important;
   line-height: 1.2 !important;
+  text-transform: uppercase !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-intent-chip {
+  color: var(--app-primary) !important;
 }
 
 .floating-intelligence-chat-results,
@@ -4768,21 +5347,26 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 
 .floating-intelligence-chat-section-label,
 .floating-intelligence-chat-card-kicker {
-  color: rgba(255, 255, 255, 0.72) !important;
-  font-size: 11px !important;
+  color: var(--app-muted) !important;
+  font-size: 10px !important;
   font-weight: 900 !important;
-  letter-spacing: 0 !important;
+  letter-spacing: 0.04em !important;
   text-transform: uppercase;
 }
 
 .floating-intelligence-chat-card {
   display: grid !important;
-  gap: 9px !important;
-  padding: 13px !important;
-  border: 1px solid rgba(255, 255, 255, 0.22) !important;
-  border-radius: 15px !important;
-  background: rgba(7, 11, 24, 0.42) !important;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14) !important;
+  gap: 7px !important;
+  padding: 12px !important;
+  border: 1px solid rgba(129, 156, 205, 0.18) !important;
+  border-radius: 13px !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  transition: border-color 0.18s ease, background 0.18s ease !important;
+}
+
+.floating-intelligence-chat-card:hover {
+  border-color: rgba(124, 156, 255, 0.36) !important;
+  background: rgba(124, 156, 255, 0.07) !important;
 }
 
 .floating-intelligence-chat-card-title {
@@ -4801,7 +5385,7 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 
 .floating-intelligence-chat-card-title a:hover,
 .floating-intelligence-chat-card-title a:focus-visible {
-  color: #ffffff !important;
+  color: var(--app-primary) !important;
   text-decoration: underline !important;
 }
 
@@ -4813,37 +5397,39 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 
 .floating-intelligence-chat-card-meta-item {
   display: inline-flex !important;
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
   align-items: center !important;
   gap: 4px !important;
   max-width: 100% !important;
-  padding: 4px 7px !important;
-  border: 1px solid rgba(129, 156, 205, 0.18) !important;
+  padding: 3px 8px !important;
+  border: 1px solid rgba(129, 156, 205, 0.16) !important;
   border-radius: var(--app-radius-pill) !important;
-  background: rgba(255, 255, 255, 0.11) !important;
-  color: rgba(255, 255, 255, 0.92) !important;
-  font-size: 11px !important;
-  font-weight: 750 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--app-text) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
 }
 
 #floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-card-meta-label,
 #floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-card-kicker,
 #floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-section-label {
-  color: rgba(255, 255, 255, 0.78) !important;
+  color: var(--app-muted) !important;
 }
 
 .floating-intelligence-chat-card-meta-label {
-  color: rgba(255, 255, 255, 0.68) !important;
+  color: var(--app-muted) !important;
   font-weight: 900 !important;
 }
 
-html[data-theme="light"] .floating-intelligence-chat-message--user .floating-intelligence-chat-bubble {
-  background: rgba(255, 255, 255, 0.96) !important;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08) !important;
+html[data-theme="light"] .floating-intelligence-chat-card {
+  border-color: rgba(71, 94, 132, 0.14) !important;
+  background: rgba(15, 23, 42, 0.022) !important;
 }
 
-html[data-theme="light"] .floating-intelligence-chat-card {
-  border-color: rgba(255, 255, 255, 0.34) !important;
-  background: rgba(255, 255, 255, 0.16) !important;
+html[data-theme="light"] .floating-intelligence-chat-card-meta-item {
+  border-color: rgba(71, 94, 132, 0.14) !important;
+  background: rgba(15, 23, 42, 0.03) !important;
 }
 
 html[data-theme="light"] .floating-intelligence-chat-message--error .floating-intelligence-chat-bubble {
@@ -4851,54 +5437,398 @@ html[data-theme="light"] .floating-intelligence-chat-message--error .floating-in
   color: #9f1239 !important;
 }
 
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-message--error .floating-intelligence-chat-bubble,
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-message--error .floating-intelligence-chat-bubble p {
+  color: #9f1239 !important;
+}
+
 .floating-intelligence-chat-compose {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px !important;
-  padding: 10px !important;
-  border: 1px solid rgba(129, 156, 205, 0.22) !important;
-  border-radius: 18px !important;
-  background: rgba(255, 255, 255, 0.045) !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 14px 14px !important;
+  padding: 7px 7px 7px 8px !important;
+  border: 1px solid rgba(129, 156, 205, 0.2) !important;
+  border-radius: 17px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14) !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-compose {
+  border-color: rgba(71, 94, 132, 0.16) !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07) !important;
+}
+
+.floating-intelligence-chat-compose:focus-within {
+  border-color: rgba(124, 156, 255, 0.5) !important;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.16),
+    0 0 0 3px rgba(124, 156, 255, 0.16) !important;
 }
 
 #floatingIntelligenceInput {
   min-width: 0 !important;
-  min-height: 48px !important;
+  min-height: 38px !important;
+  max-height: 132px !important;
+  padding: 9px 6px !important;
   border: 0 !important;
   background: transparent !important;
+  color: var(--app-text) !important;
+  font-family: inherit !important;
+  font-size: 13.5px !important;
+  line-height: 1.45 !important;
+  resize: none !important;
+  overflow-y: auto !important;
+  box-shadow: none !important;
+}
+
+#floatingIntelligenceInput:focus,
+#floatingIntelligenceInput:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 #floatingIntelligenceSendBtn {
-  min-height: 48px !important;
-  padding: 0 20px !important;
-  border-radius: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: linear-gradient(145deg, #4f7cff, #a855f7) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(79, 124, 255, 0.36) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease !important;
+}
+
+#floatingIntelligenceSendBtn svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+#floatingIntelligenceSendBtn .floating-intelligence-chat-stop-icon,
+#floatingIntelligenceSendBtn[data-state="busy"] .floating-intelligence-chat-send-icon {
+  display: none !important;
+}
+
+#floatingIntelligenceSendBtn[data-state="busy"] .floating-intelligence-chat-stop-icon {
+  display: block !important;
+}
+
+/* Slightly larger, easier-to-hit target while a request is in flight. */
+#floatingIntelligenceSendBtn[data-state="busy"] {
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: var(--app-text) !important;
+  box-shadow: none !important;
+}
+
+#floatingIntelligenceSendBtn[data-state="busy"] .floating-intelligence-chat-stop-icon {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceSendBtn[data-state="busy"] {
+  background: rgba(15, 23, 42, 0.08) !important;
+}
+
+#floatingIntelligenceSendBtn:hover:not(:disabled),
+#floatingIntelligenceSendBtn:focus-visible:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 10px 22px rgba(79, 124, 255, 0.46) !important;
+}
+
+#floatingIntelligenceSendBtn:disabled {
+  opacity: 0.5 !important;
+  box-shadow: none !important;
 }
 
 #floatingIntelligenceStatus {
   display: none !important;
 }
 
+/* --- Chat readability pass: explicit text tiers in both themes. --- */
+
+/* Dark theme: lift secondary text off the deep panel surface. */
+#floatingIntelligenceMessages .floating-intelligence-chat-empty-copy,
+.floating-intelligence-chat-provider-meta,
+.floating-intelligence-chat-card-meta-label,
+.floating-intelligence-chat-section-label,
+.floating-intelligence-chat-card-kicker,
+.floating-intelligence-chat-heading p {
+  color: rgba(208, 219, 238, 0.86) !important;
+}
+
+.floating-intelligence-chat-empty-mark {
+  color: #c3d2ff !important;
+}
+
+.floating-intelligence-chat-card-meta-item {
+  border-color: rgba(129, 156, 205, 0.26) !important;
+  background: rgba(255, 255, 255, 0.075) !important;
+  color: rgba(240, 245, 255, 0.95) !important;
+}
+
+.floating-intelligence-chat-card {
+  border-color: rgba(129, 156, 205, 0.24) !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+.floating-intelligence-chat-message--user .floating-intelligence-chat-bubble {
+  border-color: rgba(140, 170, 255, 0.42) !important;
+  background: rgba(124, 156, 255, 0.2) !important;
+}
+
+#floatingIntelligenceInput::placeholder {
+  color: rgba(186, 199, 222, 0.72) !important;
+  opacity: 1 !important;
+}
+
+.floating-intelligence-chat-thinking-dot {
+  background: rgba(203, 213, 225, 0.85) !important;
+}
+
+/* Light theme: keep the premium surface but make every tier legible. */
+html[data-theme="light"] #floatingIntelligenceMessages .floating-intelligence-chat-empty-copy,
+html[data-theme="light"] .floating-intelligence-chat-provider-meta,
+html[data-theme="light"] .floating-intelligence-chat-card-meta-label,
+html[data-theme="light"] .floating-intelligence-chat-section-label,
+html[data-theme="light"] .floating-intelligence-chat-card-kicker,
+html[data-theme="light"] .floating-intelligence-chat-heading p {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-empty-mark {
+  background: rgba(37, 99, 235, 0.11) !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-card {
+  border-color: rgba(71, 94, 132, 0.24) !important;
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-card-title {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-card-meta-item {
+  border-color: rgba(71, 94, 132, 0.22) !important;
+  background: #f1f5fb !important;
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-message--user .floating-intelligence-chat-bubble {
+  border-color: rgba(37, 99, 235, 0.3) !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceInput::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-thinking-dot {
+  background: #64748b !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-retry-btn {
+  border-color: rgba(71, 94, 132, 0.26) !important;
+  background: #ffffff !important;
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-insufficient {
+  border-color: rgba(180, 83, 9, 0.24) !important;
+  background: #fffbeb !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceMessages
+  .floating-intelligence-chat-insufficient .floating-intelligence-chat-answer {
+  color: #422006 !important;
+}
+
+/* Disabled states must stay visibly distinct without disappearing. */
+#floatingIntelligenceSendBtn:disabled {
+  opacity: 0.55 !important;
+}
+
+.floating-intelligence-chat-retry-btn:disabled,
+#floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt:disabled {
+  opacity: 0.55 !important;
+  cursor: default !important;
+}
+
+/* --- Accessibility: visible keyboard focus across the whole chatbot. --- */
+#floatingIntelligenceChatButton:focus-visible,
+#floatingIntelligenceChatCloseBtn:focus-visible,
+.floating-intelligence-chat-header-btn:focus-visible,
+#floatingIntelligenceSendBtn:focus-visible,
+.floating-intelligence-chat-retry-btn:focus-visible,
+.floating-intelligence-chat-jump-btn:focus-visible,
+.floating-intelligence-chat-card-title a:focus-visible {
+  outline: 2px solid #7c9cff !important;
+  outline-offset: 2px !important;
+}
+
+html[data-theme="light"] #floatingIntelligenceChatButton:focus-visible,
+html[data-theme="light"] #floatingIntelligenceChatCloseBtn:focus-visible,
+html[data-theme="light"] .floating-intelligence-chat-header-btn:focus-visible,
+html[data-theme="light"] #floatingIntelligenceSendBtn:focus-visible,
+html[data-theme="light"] .floating-intelligence-chat-retry-btn:focus-visible,
+html[data-theme="light"] .floating-intelligence-chat-jump-btn:focus-visible,
+html[data-theme="light"] .floating-intelligence-chat-card-title a:focus-visible {
+  outline-color: #1d4ed8 !important;
+}
+
+#floatingIntelligenceInput:focus-visible {
+  outline: none !important;
+}
+
+.floating-intelligence-chat-compose:focus-within {
+  outline: 2px solid transparent !important;
+}
+
+/* --- Touch targets: keep the approved visuals, widen the hit area. --- */
+@media (pointer: coarse) {
+  #floatingIntelligenceChatCloseBtn,
+  .floating-intelligence-chat-header-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+
+  #floatingIntelligenceSendBtn {
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+
+  .floating-intelligence-chat-retry-btn {
+    min-height: 44px !important;
+    padding: 0 16px !important;
+  }
+
+  .floating-intelligence-chat-jump-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+}
+
 @media (max-width: 560px) {
   #floatingIntelligenceChatButton {
-    right: 16px !important;
+    right: max(16px, env(safe-area-inset-right)) !important;
     bottom: var(--floating-chat-launcher-bottom-mobile, max(16px, env(safe-area-inset-bottom))) !important;
     width: 58px !important;
     height: 58px !important;
   }
 
   #floatingIntelligenceChatPanel {
-    top: max(16px, env(safe-area-inset-top)) !important;
-    right: 16px !important;
-    left: 16px !important;
-    bottom: max(16px, env(safe-area-inset-bottom)) !important;
+    top: max(12px, env(safe-area-inset-top)) !important;
+    right: max(10px, env(safe-area-inset-right)) !important;
+    left: max(10px, env(safe-area-inset-left)) !important;
+    bottom: max(10px, env(safe-area-inset-bottom)) !important;
     width: auto !important;
-    height: calc(100vh - 32px) !important;
-    max-height: calc(100vh - 32px) !important;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    max-width: none !important;
+    height: auto !important;
+    /* dvh avoids mobile browser-toolbar and keyboard height jumps; the vh
+       line above it remains the fallback for older engines. */
+    max-height: calc(100vh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .floating-intelligence-chat-status-badge {
+    display: none !important;
   }
 
   .floating-intelligence-chat-bubble {
+    max-width: 100% !important;
+  }
+
+  .floating-intelligence-chat-message--user .floating-intelligence-chat-bubble {
     max-width: 92% !important;
+  }
+
+  .floating-intelligence-chat-header {
+    padding: 12px 12px !important;
+  }
+
+  #floatingIntelligenceMessages {
+    padding: 14px 12px !important;
+  }
+
+  .floating-intelligence-chat-compose {
+    margin: 0 12px 12px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  #floatingIntelligenceChatPanel {
+    right: max(6px, env(safe-area-inset-right)) !important;
+    left: max(6px, env(safe-area-inset-left)) !important;
+    border-radius: 20px !important;
+  }
+
+  .floating-intelligence-chat-status-badge {
+    display: none !important;
+  }
+
+  .floating-intelligence-chat-heading p {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #floatingIntelligenceChatPanel {
+    animation: none !important;
+  }
+
+  #floatingIntelligenceChatButton,
+  #floatingIntelligenceChatButton:hover,
+  #floatingIntelligenceChatButton:focus-visible,
+  .floating-intelligence-chat-icon,
+  #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt,
+  #floatingIntelligenceMessages .floating-intelligence-chat-suggested-prompt:hover,
+  #floatingIntelligenceSendBtn {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .floating-intelligence-chat-thinking-dot {
+    animation: none !important;
+    opacity: 0.6 !important;
+  }
+
+  #floatingIntelligenceChatPanel,
+  #floatingIntelligenceChatButton .floating-intelligence-chat-button-glow,
+  #floatingIntelligenceChatCloseBtn,
+  .floating-intelligence-chat-header-btn,
+  .floating-intelligence-chat-card,
+  .floating-intelligence-chat-compose,
+  .floating-intelligence-chat-retry-btn,
+  .floating-intelligence-chat-jump-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  #floatingIntelligenceMessages {
+    scroll-behavior: auto !important;
   }
 }
 

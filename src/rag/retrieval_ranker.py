@@ -93,6 +93,29 @@ def _query_overlap_count(query_terms: List[str], result: Dict[str, Any]) -> int:
     return sum(1 for term in query_terms if term in searchable)
 
 
+# Conversational scaffolding that appears in natural-language questions but
+# essentially never inside a job posting. These terms inflate the query-term
+# count without adding anything a document could match, which made the gate
+# demand more overlap than an otherwise well-matched question could ever reach.
+# Used ONLY to size the overlap requirement; actual overlap still counts every
+# query term, so narrow job searches keep their existing strictness.
+GATE_SCAFFOLDING_TERMS = frozenset({
+    "compare", "comparison", "differ", "different", "difference", "differences",
+    "versus", "available", "posting", "postings", "job", "jobs", "role", "roles",
+    "position", "positions", "opening", "openings", "show", "find", "list",
+    "give", "tell", "which", "what", "how", "many", "much", "most", "often",
+    "common", "commonly", "kind", "kinds", "type", "types", "across", "these",
+    "those", "current", "corpus", "there", "here", "hiring", "overview",
+    "summarize", "summary", "appear", "appears", "mention", "mentions",
+    "mentioning", "ask", "asks", "asking",
+})
+
+
+def _content_query_terms(query_terms: List[str]) -> List[str]:
+    """Query terms with conversational scaffolding removed."""
+    return [term for term in query_terms if term not in GATE_SCAFFOLDING_TERMS]
+
+
 def _required_overlap_count(
     query_terms: List[str],
     effective_filters: Optional[Dict[str, Any]] = None,
@@ -100,12 +123,16 @@ def _required_overlap_count(
     if not query_terms:
         return 0
 
-    if len(query_terms) <= 2:
+    # Size the requirement from the substantive terms only. If a query is pure
+    # scaffolding, fall back to the original term list so behavior is unchanged.
+    sizing_terms = _content_query_terms(query_terms) or query_terms
+
+    if len(sizing_terms) <= 2:
         return 1
 
     has_filters = bool(effective_filters)
 
-    if len(query_terms) >= 5 and not has_filters:
+    if len(sizing_terms) >= 5 and not has_filters:
         return 3
 
     return 2

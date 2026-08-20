@@ -16,6 +16,7 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
     ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES,
     ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES,
+    ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -1780,12 +1781,29 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
     }.isdisjoint(phase9_step12_compatibility_profile)
 
+    assert ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES == {
+        "src/app/static/floating_intelligence_chat.js",
+        "src/rag/corpus_store.py",
+        "src/rag/lexical_retriever.py",
+        "src/rag/query_engine.py",
+        "src/rag/rag_answerer.py",
+        "src/rag/rag_executor.py",
+        "src/rag/rag_tools.py",
+        "src/rag/retrieval_ranker.py",
+        "tests/test_item3e0_chatbot_capability_matrix.py",
+        "tests/test_item3e2_dashboard_scoped_chatbot.py",
+    }
+    assert not any(
+        "*" in path for path in ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
+    )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
+        | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

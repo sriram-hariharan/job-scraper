@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from src.rag.rag_tools import (
     answer_job_query_tool,
@@ -170,6 +170,8 @@ def execute_rag_request(
     include_diagnostics: bool = False,
     intent_override: Optional[str] = None,
     owner_user_id: str = "",
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     request_norm = str(request or "").strip()
     if not request_norm:
@@ -235,6 +237,10 @@ def execute_rag_request(
         owner = str(owner_user_id or "").strip()
         if owner:
             answer_kwargs["owner_user_id"] = owner
+        if allowed_job_ids is not None:
+            answer_kwargs["allowed_job_ids"] = allowed_job_ids
+        if supplemental_docs:
+            answer_kwargs["supplemental_docs"] = supplemental_docs
         response = answer_job_query_tool(
             **answer_kwargs,
         )

@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 import re
 
 from src.ai.llm_client import run_chat_completion_with_metadata, get_default_model
@@ -493,10 +493,14 @@ def answer_job_query(
     fetch_k: int = 15,
     filters: Optional[Dict[str, Any]] = None,
     owner_user_id: str = "",
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     try:
         results = search_jobs(
             query=question,
+            allowed_job_ids=allowed_job_ids,
+            supplemental_docs=supplemental_docs,
             top_k=top_k,
             fetch_k=fetch_k,
             filters=filters,

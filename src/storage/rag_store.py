@@ -351,10 +351,13 @@ def get_rag_job_documents(limit: int = 100000) -> List[Dict[str, Any]]:
 
     init_rag_store()
 
+    # Active-window semantics match get_bounded_owner_projection_rag_job_documents
+    # so the chatbot corpus and the pipeline input agree on what "active" means.
     sql = f"""
 WITH doc_rows AS (
     SELECT payload_json
     FROM rag_job_documents
+    WHERE updated_at >= statement_timestamp() - INTERVAL '{RAG_JOB_RETENTION_DAYS} days'
     ORDER BY updated_at DESC, merge_key ASC
     LIMIT {safe_limit}
 )
@@ -489,6 +492,11 @@ def delete_stale_rag_job_documents() -> Dict[str, Any]:
     """Delete shared jobs not refreshed within the active retention window."""
 
     init_rag_store()
+    # A stale document is protected while it is still referenced by the latest
+    # succeeded run of any owner, so a job a user can still see on their
+    # Executive Dashboard is never evicted from the corpus behind it. Once that
+    # reference goes away (a newer run supersedes it), normal retention applies.
+    # Bounded: one latest run per owner, three planning artifacts per run.
     sql = f"""
 WITH cutoff AS (
     SELECT statement_timestamp() - INTERVAL '{RAG_JOB_RETENTION_DAYS} days' AS stale_before
@@ -496,6 +504,38 @@ WITH cutoff AS (
 inspected AS (
     SELECT COUNT(*) AS inspected_count
     FROM rag_job_documents
+),
+latest_runs AS (
+    SELECT DISTINCT ON (owner_user_id) run_id
+    FROM user_pipeline_runs
+    WHERE status = 'succeeded'
+    ORDER BY owner_user_id, completed_at DESC NULLS LAST, run_id DESC
+),
+referenced_lines AS (
+    SELECT unnest(string_to_array(a.content_text, E'\\n')) AS line
+    FROM user_pipeline_artifacts a
+    JOIN latest_runs lr ON lr.run_id = a.run_id
+    WHERE a.artifact_name IN (
+        'best_resume_variant_by_job.csv',
+        'application_execution_queue.csv',
+        'job_packet_manifest.csv'
+    )
+    AND a.content_text IS NOT NULL
+),
+referenced_ids AS (
+    SELECT DISTINCT BTRIM(split_part(line, ',', 1)) AS job_doc_id
+    FROM referenced_lines
+    WHERE line LIKE 'http%'
+),
+protected AS (
+    SELECT DISTINCT d.merge_key
+    FROM rag_job_documents d
+    JOIN referenced_ids r
+      ON r.job_doc_id = d.doc_id
+      OR r.job_doc_id = d.job_url
+      OR d.merge_key = 'doc_id:' || r.job_doc_id
+      OR d.merge_key = 'job_url:' || r.job_doc_id
+    WHERE d.updated_at < (SELECT stale_before FROM cutoff)
 ),
 stale_candidates AS (
     SELECT COUNT(*) AS candidate_count
@@ -505,11 +545,13 @@ stale_candidates AS (
 deleted AS (
     DELETE FROM rag_job_documents
     WHERE updated_at < (SELECT stale_before FROM cutoff)
+      AND merge_key NOT IN (SELECT merge_key FROM protected)
     RETURNING merge_key
 )
 SELECT json_build_object(
     'inspected_count', (SELECT inspected_count FROM inspected),
     'candidate_count', (SELECT candidate_count FROM stale_candidates),
+    'referenced_retained_count', (SELECT COUNT(*) FROM protected),
     'deleted_count', (SELECT COUNT(*) FROM deleted)
 );
 """.strip()
@@ -517,6 +559,7 @@ SELECT json_build_object(
     result = _run_psql_json_query(sql)
     inspected_count = int(result.get("inspected_count", 0) or 0)
     candidate_count = int(result.get("candidate_count", 0) or 0)
+    referenced_retained_count = int(result.get("referenced_retained_count", 0) or 0)
     deleted_count = int(result.get("deleted_count", 0) or 0)
     invalidation_attempted = deleted_count > 0
     invalidation_succeeded = (
@@ -529,6 +572,7 @@ SELECT json_build_object(
         "retention_days": RAG_JOB_RETENTION_DAYS,
         "inspected_count": inspected_count,
         "candidate_count": candidate_count,
+        "referenced_retained_count": referenced_retained_count,
         "deleted_count": deleted_count,
         "retained_count": max(0, inspected_count - deleted_count),
         "cache_invalidation_attempted": invalidation_attempted,

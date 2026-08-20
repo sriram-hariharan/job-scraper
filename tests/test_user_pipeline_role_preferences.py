@@ -1782,11 +1782,13 @@ def test_shared_rag_retention_uses_exact_updated_at_cutoff_and_cache_contract(
         {
             "inspected_count": 12,
             "candidate_count": 2,
+            "referenced_retained_count": 0,
             "deleted_count": 2,
         },
         {
             "inspected_count": 10,
             "candidate_count": 0,
+            "referenced_retained_count": 0,
             "deleted_count": 0,
         },
     ]
@@ -1810,6 +1812,7 @@ def test_shared_rag_retention_uses_exact_updated_at_cutoff_and_cache_contract(
         "retention_days": 15,
         "inspected_count": 12,
         "candidate_count": 2,
+        "referenced_retained_count": 0,
         "deleted_count": 2,
         "retained_count": 10,
         "cache_invalidation_attempted": True,
@@ -1825,7 +1828,10 @@ def test_shared_rag_retention_uses_exact_updated_at_cutoff_and_cache_contract(
     assert sql.count("DELETE FROM rag_job_documents") == 1
     assert sql.count(
         "updated_at < (SELECT stale_before FROM cutoff)"
-    ) == 2
+    ) == 3
+    # The extra occurrence is the Dashboard-referenced protection CTE, which
+    # must reuse the same cutoff and must not add another DELETE.
+    assert "merge_key NOT IN (SELECT merge_key FROM protected)" in sql
     assert "INTERVAL '15 days'" in sql
     assert "created_at" not in sql
     assert "DELETE FROM" not in sql.replace(

@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from src.config.consts import QUERY_STOPWORDS
 from src.rag.corpus_store import _load_job_corpus
@@ -217,12 +217,103 @@ def _metadata_only_fallback_results(
 
     return results
 
+def job_doc_identity_values(job_doc: Dict[str, Any]) -> List[str]:
+    """Canonical identity values for a corpus document (doc_id / job_url)."""
+    values: List[str] = []
+    for key in ("doc_id", "job_url", "url", "link"):
+        value = str(job_doc.get(key) or "").strip()
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
+def is_job_doc_allowed(
+    job_doc: Dict[str, Any],
+    allowed_job_ids: Optional[Set[str]] = None,
+) -> bool:
+    """Owner-scope membership test.
+
+    None means unscoped (non-chatbot callers keep existing behavior). An empty
+    set is fail-closed: nothing is allowed, and retrieval must not widen back
+    to the shared corpus.
+    """
+    if allowed_job_ids is None:
+        return True
+    if not allowed_job_ids:
+        return False
+    return any(value in allowed_job_ids for value in job_doc_identity_values(job_doc))
+
+
+def _allowed_corpus_docs(
+    docs: List[Dict[str, Any]],
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Scoped retrieval population.
+
+    Shared-corpus documents are filtered to the allowed scope, then any
+    supplemental owner-artifact documents for allowed jobs that the shared
+    corpus does not carry are appended. Deduplicated by canonical identity, so
+    a job present in shared RAG always uses its shared document.
+    """
+    if allowed_job_ids is None:
+        scoped = list(docs)
+    else:
+        scoped = [doc for doc in docs if is_job_doc_allowed(doc, allowed_job_ids)]
+
+    if not supplemental_docs:
+        return scoped
+
+    seen: Set[str] = set()
+    for doc in scoped:
+        seen.update(job_doc_identity_values(doc))
+
+    for doc in supplemental_docs:
+        if allowed_job_ids is not None and not is_job_doc_allowed(doc, allowed_job_ids):
+            continue
+        identities = job_doc_identity_values(doc)
+        if not identities or (set(identities) & seen):
+            continue
+        seen.update(identities)
+        scoped.append(doc)
+
+    return scoped
+
+
+def _corpus_overview_results(
+    top_k: int,
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Bounded, deterministic corpus sample for aggregate/overview questions.
+
+    Aggregate questions ("which companies are hiring?") do not lexically
+    resemble any single posting, so term matching returns nothing. This returns
+    the most recent postings as genuine evidence: real documents that the
+    grounded answerer must still cite, so nothing is fabricated. It is only
+    reached from the overview path in query_engine.search_jobs.
+    """
+    docs = _allowed_corpus_docs(_load_job_corpus(), allowed_job_ids, supplemental_docs)
+    if not docs:
+        return []
+
+    ordered = sorted(
+        docs,
+        key=lambda d: (str(d.get("posted_at", "") or ""), str(d.get("doc_id", "") or "")),
+        reverse=True,
+    )
+
+    return [_build_lexical_result(job_doc, 1.0) for job_doc in ordered[:max(0, int(top_k))]]
+
+
 def _lexical_search(
     query: str,
     top_k: int,
     filters: Optional[Dict[str, Any]] = None,
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    docs = _load_job_corpus()
+    docs = _allowed_corpus_docs(_load_job_corpus(), allowed_job_ids, supplemental_docs)
     scored: List[Any] = []
 
     for job_doc in docs:

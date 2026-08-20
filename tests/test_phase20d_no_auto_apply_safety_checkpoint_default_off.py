@@ -2567,6 +2567,26 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    item3_dashboard_scoped_chatbot_runtime_files = {
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/floating_intelligence_chat.js",
+        ROOT / "src/app/ui_shell.py",
+        ROOT / "src/rag/corpus_store.py",
+        ROOT / "src/rag/lexical_retriever.py",
+        ROOT / "src/rag/query_engine.py",
+        ROOT / "src/rag/rag_answerer.py",
+        ROOT / "src/rag/rag_executor.py",
+        ROOT / "src/rag/rag_tools.py",
+        ROOT / "src/rag/retrieval_ranker.py",
+        ROOT / "src/storage/rag_store.py",
+    }
+    if set(changed_runtime_files) == item3_dashboard_scoped_chatbot_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     assert changed_runtime_files in (
         [],
         [

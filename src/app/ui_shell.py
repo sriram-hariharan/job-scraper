@@ -418,20 +418,57 @@ def render_top_shell(active_href: str) -> str:
   <section
     class="floating-intelligence-chat-panel hidden"
     id="floatingIntelligenceChatPanel"
-    aria-label="Job Assistant"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="floatingIntelligenceChatTitle"
+    aria-describedby="floatingIntelligenceChatSubtitle"
+    aria-busy="false"
   >
     <header class="floating-intelligence-chat-header">
+      <span class="floating-intelligence-chat-avatar" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="1.9" />
+          <path d="M15.6 15.6 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <path d="M11 7.6l.85 2.05 2.05.85-2.05.85L11 13.4l-.85-2.05-2.05-.85 2.05-.85z" fill="currentColor" />
+        </svg>
+      </span>
       <div class="floating-intelligence-chat-heading">
-        <h2>Job Assistant</h2>
-        <p>Ask a question or search by keywords.</p>
+        <h2 id="floatingIntelligenceChatTitle">ApplyLens AI</h2>
+        <p id="floatingIntelligenceChatSubtitle">Job intelligence assistant</p>
       </div>
+      <span class="floating-intelligence-chat-status-badge">Job corpus</span>
+      <button
+        type="button"
+        class="floating-intelligence-chat-header-btn"
+        id="floatingIntelligenceNewChatBtn"
+        aria-label="Start new chat"
+        title="Start new chat"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M12 6v12M6 12h12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
       <button
         type="button"
         class="floating-intelligence-chat-close-btn"
         id="floatingIntelligenceChatCloseBtn"
         aria-label="Close Job Assistant"
       >
-        ×
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M7 7l10 10M17 7L7 17"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
       </button>
     </header>
 
@@ -443,20 +480,78 @@ def render_top_shell(active_href: str) -> str:
       </select>
     </div>
 
-    <div class="floating-intelligence-chat-messages" id="floatingIntelligenceMessages">
-      <p>Open the assistant to search jobs or ask grounded questions.</p>
+    <div class="floating-intelligence-chat-viewport">
+      <div
+        class="floating-intelligence-chat-messages"
+        id="floatingIntelligenceMessages"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-atomic="false"
+        aria-labelledby="floatingIntelligenceChatTitle"
+      >
+        <p>Open the assistant to search jobs or ask grounded questions.</p>
+      </div>
+      <button
+        type="button"
+        class="floating-intelligence-chat-jump-btn"
+        id="floatingIntelligenceJumpBtn"
+        aria-label="Jump to latest message"
+        hidden
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M12 5.5v13M6.2 12.5 12 18.5l5.8-6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
     </div>
 
     <div class="floating-intelligence-chat-compose">
-      <input
-        type="text"
+      <textarea
         id="floatingIntelligenceInput"
-        placeholder="Ask about jobs, companies, skills, or applications..."
-      />
-      <button type="button" id="floatingIntelligenceSendBtn">Send</button>
+        rows="1"
+        aria-label="Message ApplyLens AI"
+        placeholder="Ask about roles, companies, requirements, or skills"
+      ></textarea>
+      <button type="button" id="floatingIntelligenceSendBtn" aria-label="Send message">
+        <svg
+          class="floating-intelligence-chat-send-icon"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M5 12h13M12.5 6.2 18.8 12l-6.3 5.8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <svg
+          class="floating-intelligence-chat-stop-icon"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <rect x="7.5" y="7.5" width="9" height="9" rx="2" fill="currentColor" />
+        </svg>
+      </button>
     </div>
 
-    <div class="floating-intelligence-chat-status" id="floatingIntelligenceStatus">Idle</div>
+    <div
+      class="floating-intelligence-chat-status"
+      id="floatingIntelligenceStatus"
+      role="status"
+      aria-live="polite"
+    >Idle</div>
   </section>
 
   <button
@@ -464,29 +559,32 @@ def render_top_shell(active_href: str) -> str:
     class="floating-intelligence-chat-button"
     id="floatingIntelligenceChatButton"
     aria-label="Open Job Assistant"
+    aria-haspopup="dialog"
+    aria-expanded="false"
+    aria-controls="floatingIntelligenceChatPanel"
+    title="Open ApplyLens AI assistant"
   >
+    <span class="floating-intelligence-chat-button-glow" aria-hidden="true"></span>
     <svg
       class="floating-intelligence-chat-icon"
-      viewBox="0 0 24 24"
+      viewBox="0 0 28 28"
       aria-hidden="true"
       focusable="false"
     >
+      <circle cx="12.6" cy="12.6" r="7.1" fill="none" stroke="currentColor" stroke-width="2.1" />
       <path
-        d="M5.5 6.5h13v8.2h-5.3L9.8 18v-3.3H5.5z"
+        d="M17.9 17.9 23 23"
         fill="none"
         stroke="currentColor"
-        stroke-width="2"
-        stroke-linejoin="round"
+        stroke-width="2.4"
+        stroke-linecap="round"
       />
       <path
-        d="M8.3 10.3h7.4M8.3 12.8h4.8"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
+        d="M12.6 8.2l1.02 2.46 2.46 1.02-2.46 1.02-1.02 2.46-1.02-2.46-2.46-1.02 2.46-1.02z"
+        fill="currentColor"
       />
     </svg>
   </button>
 </div>
-<script src="/static/floating_intelligence_chat.js?v=floating_job_assistant_r1" defer></script>
+<script src="/static/floating_intelligence_chat.js?v=floating_job_assistant_r7" defer></script>
 """.strip()

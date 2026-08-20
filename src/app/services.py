@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse, urlunparse
 import csv
 import hashlib
@@ -29049,6 +29049,162 @@ def _latest_user_pipeline_artifact_context(
     }
 
 
+def _dashboard_job_identity_values(row: Dict[str, Any]) -> List[str]:
+    """Canonical identity values for one Dashboard row (3E1: job_doc_id is the job URL)."""
+    values: List[str] = []
+    for key in ("job_doc_id", "job_url", "doc_id", "url"):
+        value = _clean_text(row.get(key))
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
+def dashboard_allowed_job_ids(owner_user_id: str = "") -> Optional[Set[str]]:
+    """Authoritative Dashboard job identities for the authenticated owner.
+
+    Reuses the exact base membership /browse builds (latest succeeded run's
+    best/queue/manifest planning rows, owner application-action overlay, then
+    applied-job exclusion) before pagination and without any transient
+    browser-side filters.
+
+    Returns None when there is no authenticated owner, meaning "unscoped" so
+    non-chatbot callers keep their existing behavior. Returns a set (possibly
+    EMPTY) for an authenticated owner; an empty set is fail-closed and must
+    never widen back to the shared corpus.
+    """
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return None
+
+    ja = _job_app()
+
+    try:
+        artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner)
+    except Exception:
+        logger.exception(
+            "Dashboard scope lookup failed; failing closed | owner_user_id=%s", owner
+        )
+        return set()
+
+    if not artifact_context:
+        return set()
+
+    rows = _build_job_index_from_planning_rows(
+        ja,
+        best_rows=list(artifact_context.get("best_rows", []) or []),
+        queue_rows=list(artifact_context.get("queue_rows", []) or []),
+        manifest_rows=list(artifact_context.get("manifest_rows", []) or []),
+    )
+
+    rows = _overlay_application_actions(rows, owner_user_id=owner)
+    rows = _exclude_applied_rows(rows)
+
+    allowed: Set[str] = set()
+    for row in rows:
+        allowed.update(_dashboard_job_identity_values(row))
+
+    return allowed
+
+
+def _corpus_doc_from_run_corpus_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape one current_run_job_corpus.jsonl record like a shared RAG document.
+
+    Only fields the artifact actually carries are used; nothing is synthesized.
+    """
+    metadata = record.get("metadata", {}) if isinstance(record.get("metadata"), dict) else {}
+
+    def pick(*keys: str) -> Any:
+        for key in keys:
+            value = record.get(key)
+            if value in (None, "", [], {}):
+                value = metadata.get(key)
+            if value not in (None, "", [], {}):
+                return value
+        return ""
+
+    doc_id = _clean_text(pick("doc_id", "job_doc_id", "job_url", "url"))
+    if not doc_id:
+        return {}
+
+    return {
+        "doc_id": doc_id,
+        "company": _clean_text(pick("company")),
+        "title": _clean_text(pick("title")),
+        "location": _clean_text(pick("location")),
+        "source": _clean_text(pick("source")),
+        "job_url": _clean_text(pick("job_url", "url")) or doc_id,
+        "posted_at": _clean_text(pick("posted_at")),
+        "role_family": _clean_text(pick("role_family")),
+        "seniority": _clean_text(pick("seniority")),
+        "required_skills": pick("required_skills") or [],
+        "preferred_skills": pick("preferred_skills") or [],
+        "all_skills": pick("all_skills") or [],
+        "visa_sponsorship": _clean_text(pick("visa_sponsorship")),
+        "ai_fit_score": record.get("ai_fit_score", metadata.get("ai_fit_score")),
+        "retrieval_text": _clean_text(pick("retrieval_text", "description")),
+    }
+
+
+def dashboard_supplemental_documents(
+    owner_user_id: str = "",
+    allowed_job_ids: Optional[Set[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Authoritative owner-run evidence for Dashboard jobs, corpus-document shaped.
+
+    Read from the latest succeeded run's current_run_job_corpus.jsonl artifact.
+    Retrieval uses these only for Dashboard jobs whose shared RAG row is absent,
+    so a Dashboard job never becomes unanswerable just because the shared corpus
+    dropped it. Restricted to allowed Dashboard ids; never widens scope.
+    """
+    owner = _clean_text(owner_user_id)
+    if not owner or allowed_job_ids is None or not allowed_job_ids:
+        return []
+
+    try:
+        artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner)
+    except Exception:
+        logger.exception(
+            "Dashboard supplemental evidence lookup failed | owner_user_id=%s", owner
+        )
+        return []
+
+    if not artifact_context:
+        return []
+
+    docs: List[Dict[str, Any]] = []
+    seen: Set[str] = set()
+
+    for line in str(artifact_context.get("current_run_job_corpus_text", "") or "").splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            record = json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(record, dict):
+            continue
+
+        doc = _corpus_doc_from_run_corpus_record(record)
+        if not doc:
+            continue
+
+        identities = {doc["doc_id"], doc.get("job_url", "")} - {""}
+        if not (identities & allowed_job_ids):
+            continue
+        # Without searchable text the record cannot ground an answer; skip it
+        # rather than emit an empty document.
+        if not _clean_text(doc.get("retrieval_text")):
+            continue
+        if doc["doc_id"] in seen:
+            continue
+
+        seen.add(doc["doc_id"])
+        docs.append(doc)
+
+    return docs
+
+
 def _read_text_if_file(path: Path) -> str:
     try:
         if path.exists() and path.is_file():
@@ -37154,6 +37310,9 @@ def applied_jobs_payload(
 def jobs_search_lite_payload(
     request: str,
     top_k: int = 10,
+    owner_user_id: str = "",
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     from src.rag.corpus_store import _load_job_corpus
     from src.rag.diagnostic_filter import filter_diagnostic_rag_rows
@@ -37167,6 +37326,8 @@ def jobs_search_lite_payload(
             query=request,
             top_k=lexical_fetch_k,
             filters=inferred_filters or None,
+            allowed_job_ids=allowed_job_ids,
+            supplemental_docs=supplemental_docs,
         )
     )[:top_k]
 
@@ -37186,7 +37347,9 @@ def jobs_search_lite_payload(
             "ai_fit_score": metadata.get("ai_fit_score"),
         })
 
-    compact_results = _overlay_application_actions(compact_results)
+    compact_results = _overlay_application_actions(
+        compact_results, owner_user_id=owner_user_id
+    )
 
     return {
         "ok": True,
@@ -37303,10 +37466,33 @@ def assistant_query_payload(
     router = route_assistant_intent(request)
     intent = router["intent"]
 
+    # The floating chatbot answers only from this owner's authoritative
+    # Executive Dashboard population. None means unscoped (no authenticated
+    # owner); an empty set is fail-closed and never widens to the shared corpus.
+    allowed_job_ids = dashboard_allowed_job_ids(owner_user_id)
+    # Dashboard jobs whose shared RAG row is absent are evidenced from the
+    # latest succeeded owner run's own corpus artifact, so Dashboard membership
+    # and chatbot evidence membership stay equal.
+    supplemental_docs = dashboard_supplemental_documents(
+        owner_user_id=owner_user_id,
+        allowed_job_ids=allowed_job_ids,
+    )
+    logger.info(
+        "Assistant dashboard scope resolved | owner_user_id=%s | intent=%s | "
+        "dashboard_allowed_job_count=%s | artifact_backed_evidence_count=%s",
+        _clean_text(owner_user_id),
+        intent,
+        "unscoped" if allowed_job_ids is None else len(allowed_job_ids),
+        len(supplemental_docs),
+    )
+
     if intent == "search_jobs":
         search_payload = jobs_search_lite_payload(
             request=request,
             top_k=top_k,
+            owner_user_id=_clean_text(owner_user_id),
+            allowed_job_ids=allowed_job_ids,
+            supplemental_docs=supplemental_docs,
         )
         results = search_payload.get("results", []) or []
         return {
@@ -37331,6 +37517,10 @@ def assistant_query_payload(
         owner = _clean_text(owner_user_id)
         if owner:
             answer_kwargs["owner_user_id"] = owner
+        if allowed_job_ids is not None:
+            answer_kwargs["allowed_job_ids"] = allowed_job_ids
+        if supplemental_docs:
+            answer_kwargs["supplemental_docs"] = supplemental_docs
         answer_payload = rag_answer_payload(
             **answer_kwargs,
         )
@@ -37406,6 +37596,8 @@ def rag_answer_payload(
     output_mode: str = "compact",
     include_diagnostics: bool = False,
     owner_user_id: str = "",
+    allowed_job_ids: Optional[Set[str]] = None,
+    supplemental_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     from src.rag.rag_executor import execute_rag_request
 
@@ -37421,14 +37613,22 @@ def rag_answer_payload(
     owner = _clean_text(owner_user_id)
     if owner:
         execute_kwargs["owner_user_id"] = owner
+    if allowed_job_ids is not None:
+        execute_kwargs["allowed_job_ids"] = allowed_job_ids
+    if supplemental_docs:
+        execute_kwargs["supplemental_docs"] = supplemental_docs
     payload = execute_rag_request(
         **execute_kwargs,
     )
 
     if payload.get("ok") and isinstance(payload.get("response"), dict):
         response = dict(payload.get("response", {}))
-        response["sources"] = _overlay_application_actions(response.get("sources", []) or [])
-        response["job_evidence"] = _overlay_application_actions(response.get("job_evidence", []) or [])
+        response["sources"] = _overlay_application_actions(
+            response.get("sources", []) or [], owner_user_id=owner
+        )
+        response["job_evidence"] = _overlay_application_actions(
+            response.get("job_evidence", []) or [], owner_user_id=owner
+        )
         payload = dict(payload)
         payload["response"] = response
 

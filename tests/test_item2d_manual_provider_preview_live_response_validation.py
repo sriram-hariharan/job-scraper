@@ -14,7 +14,7 @@ from src.evaluation.production_task_contract_fingerprints import (
 
 
 EXPECTED_ITEM2B_FINGERPRINT = (
-    "817998a72669796e26c2e99a6ac28af4613cb99a671125dbac71e4d550498222"
+    "6d8867803fcd95e137ab774e3a3be153abb39e8d354798b1918a96db59de9b8b"
 )
 
 
@@ -408,3 +408,303 @@ def test_item2b_fingerprint_and_static_nonmutation_invariants_remain_exact():
         "Groq(",
     ):
         assert forbidden not in service_source
+
+
+def test_source_fact_preservation_rule_is_in_the_fingerprinted_prompt_contract():
+    """Human review rejected scope-widening; the rule must be contract-bound."""
+
+    material = (
+        contract.build_manual_provider_preview_production_task_contract_material()
+    )
+    prompt_contract = material["prompt_contract"]
+    user_template = prompt_contract["user_template"]
+
+    assert "must preserve the exact factual scope" in user_template
+    assert user_template.count("must preserve the exact factual scope") == 1
+    for prohibited_addition in (
+        "factual entity",
+        "ownership concept",
+        "deliverable",
+        "metric",
+        "technology",
+        "project or initiative characterization",
+        "outcome",
+    ):
+        assert prohibited_addition in user_template
+    assert "Rephrasing supported facts is allowed" in user_template
+    assert "widening" in user_template
+
+    # the preservation duty is scoped to candidate facts and defines them
+    assert "Every candidate fact must preserve the exact factual scope" in (
+        user_template
+    )
+    assert "A candidate fact is any assertion about what the candidate" in (
+        user_template
+    )
+    # and it still binds every free-text field
+    assert "In preview_text, claims, and rationale, do not introduce" in (
+        user_template
+    )
+
+    # the rule is fingerprinted, and the canonical schema is untouched by it
+    assert material["output_contract"]["schema"] == contract.RESPONSE_SCHEMA
+    assert material["output_contract"]["response_mode"] == "json_object"
+    assert material["output_contract"]["strict"] is False
+    assert material["task_parameters"]["max_tokens"] == 1024
+    assert production_task_contract_sha256("manual_provider_preview") == (
+        EXPECTED_ITEM2B_FINGERPRINT
+    )
+
+
+def test_source_fact_preservation_rule_does_not_hardcode_fixture_wording():
+    """The rule must be general, not tuned to the synthetic qualification case."""
+
+    user_template = (
+        contract.build_manual_provider_preview_production_task_contract_material()
+    )["prompt_contract"]["user_template"]
+
+    for fixture_specific in (
+        "evidence_alpha",
+        "Delivered python",
+        "Python projects",
+        "synthetic",
+    ):
+        assert fixture_specific not in user_template
+
+
+def test_rejected_history_remains_immutable_and_never_binds_the_registry():
+    """Rejected artifacts stay immutable and are never the registry binding."""
+
+    import json
+    from pathlib import Path
+
+    from src.evaluation import controlled_provider_qualification_registry as registry
+
+    root = Path(__file__).resolve().parents[1]
+    stem = (
+        "manual-provider-preview-groq-openai-gpt-oss-120b-"
+        "schedule_10712423fd687c623e99c3d69405eed1-jsonobject-e015724f"
+    )
+    evidence_path = root / "outputs/provider_qualification" / f"{stem}.json"
+    context_path = (
+        root / "outputs/provider_qualification" / f"{stem}.validation-context.json"
+    )
+    review_path = root / "outputs/provider_benchmark" / f"human-review-{stem}.json"
+    if not evidence_path.exists():
+        pytest.skip("rejected qualification history is not present locally")
+
+    evidence = json.loads(evidence_path.read_text())
+    context = json.loads(context_path.read_text())
+    record = json.loads(review_path.read_text())
+    authorization = context["live_authorization"]
+
+    # The rejected pair stays bound to the superseded contract. Contract-bound
+    # validators intentionally cannot re-validate it now that the fingerprint
+    # moved, so immutability is asserted on stored content instead.
+    assert record["decision"] == "rejected"
+    assert record["reviewer_id"] == "sriram"
+    assert record["evidence_sha256"] == (
+        "0303f061b985140bf7ea4d1b5ac3381894d6b4389a1403d4d163eb21e081c244"
+    )
+    assert evidence["grading_summaries"][0][
+        "production_task_contract_sha256"
+    ] == "e015724f26e30c57c6796ba382979a142bc6ca6a13d20762383b8811ac25c288"
+    assert authorization["production_task_contract_fingerprints"][
+        "manual_provider_preview"
+    ] == "e015724f26e30c57c6796ba382979a142bc6ca6a13d20762383b8811ac25c288"
+    assert record["evidence_sha256"] != EXPECTED_ITEM2B_FINGERPRINT
+
+    # the registry was never bound to the rejected attempt
+    stored = registry.load_provider_qualification_registry(
+        root / registry.REGISTRY_ARTIFACT_PATH, repository_root=root
+    )
+    cell = next(
+        item
+        for item in stored["cells"]
+        if item["schedule_key"] == "schedule_10712423fd687c623e99c3d69405eed1"
+    )
+    # neither rejected review may ever become the registry binding
+    assert cell["review_sha256"] not in {
+        "474438aad03dc50a0e48822431ef1cdac191f03c082e78ab2f1789fcd471aa49",
+        "7e7343b79f414771a928e8be7d2aa8de56e457a7752ce096c077ec4d97d7a344",
+    }
+    # the bound evidence is the approved attempt, not either rejected one
+    assert cell["evidence_sha256"] not in {
+        "0303f061b985140bf7ea4d1b5ac3381894d6b4389a1403d4d163eb21e081c244",
+        "5d6c160cfa6b902d5a9b4ea51a6726a8a95ff26a31f70867867fd38b31bcd509",
+    }
+
+
+def test_routing_binds_the_current_claims_anchor_contract():
+    """The claims-anchor contract is qualified, reviewed, and bound."""
+
+    from src.app import provider_model_routing_service as routing
+
+    entry = next(
+        item
+        for item in routing.list_provider_model_routing_statuses()["workloads"]
+        if item["workload_id"] == "manual_provider_preview"
+    )
+
+    assert entry["recommendation_status"] == "recommended"
+    assert entry["execution_mode"] == "qualified_provider_model"
+    assert entry["provider"] == "groq"
+    assert entry["model"] == "openai/gpt-oss-120b"
+    assert entry["qualified_options"] == [
+        {"provider": "groq", "model": "openai/gpt-oss-120b"}
+    ]
+    assert entry["effective_selection_source"] == "applylens_recommended"
+
+
+def test_job_linkage_is_permitted_only_for_preview_text_and_rationale():
+    """Bare restatement was rejected; relevance language is now sanctioned."""
+
+    user_template = (
+        contract.build_manual_provider_preview_production_task_contract_material()
+    )["prompt_contract"]["user_template"]
+
+    # preview_text and rationale may relate a preserved fact to the job context
+    assert (
+        "preview_text and rationale may additionally explain how a preserved "
+        "candidate fact matches, supports, addresses, or is relevant to a "
+        "requirement stated explicitly in the authorized job context."
+    ) in user_template
+
+    # linkage may never become a new candidate fact
+    assert "must never introduce or imply a new fact about the candidate" in (
+        user_template
+    )
+
+    # bare restatement is explicitly discouraged when a relationship exists
+    assert "Do not restate the evidence alone" in user_template
+
+
+def test_claims_are_candidate_fact_only_and_exclude_linkage_language():
+    """_claim_is_grounded is evidence-text based, so claims must stay strict."""
+
+    user_template = (
+        contract.build_manual_provider_preview_production_task_contract_material()
+    )["prompt_contract"]["user_template"]
+
+    assert (
+        "claims must contain only candidate facts supported by the cited "
+        "evidence and must not contain relevance or job-linkage language."
+    ) in user_template
+
+
+def test_claim_grounding_validator_behaviour_is_unchanged():
+    """The deterministic overlap validator must not have been altered."""
+
+    evidence = "Delivered python."
+
+    # a preserved candidate fact stays grounded
+    assert contract._claim_is_grounded("Delivered Python", evidence) is True
+    # candidate-fact widening is still rejected
+    assert contract._claim_is_grounded("Delivered Python projects", evidence) is (
+        False
+    )
+    # linkage wording in claims would still fail the overlap check, which is
+    # exactly why the prompt forbids putting linkage language in claims
+    assert contract._claim_is_grounded(
+        "Delivered Python, matching the role's Python requirement", evidence
+    ) is False
+
+
+# Obviously synthetic résumé-shaped evidence (~25 unique tokens), sized to the
+# real production evidence geometry (24-31 unique tokens per authorized row).
+# No real résumé or job-description content.
+_REALISTIC_SYNTHETIC_EVIDENCE = (
+    "Built and maintained batch ingestion services that consolidated vendor "
+    "telemetry into a governed warehouse, documented rollout checks for "
+    "downstream reporting teams, and reviewed weekly schedule adherence."
+)
+
+
+def test_realistic_evidence_close_lexical_anchor_is_grounded():
+    """CASE A: a concise claim reusing the evidence's own factual words."""
+
+    claim = (
+        "Built and maintained batch ingestion services consolidating vendor "
+        "telemetry"
+    )
+
+    assert contract._claim_is_grounded(claim, _REALISTIC_SYNTHETIC_EVIDENCE) is (
+        True
+    )
+
+
+def test_realistic_evidence_synonym_paraphrase_is_not_grounded():
+    """CASE B: semantically faithful but synonym-heavy paraphrase fails.
+
+    This documents the actual lexical contract the validator enforces, and is
+    exactly why the prompt asks for evidence anchors rather than paraphrase.
+    """
+
+    claim = "Engineered recurring data-transfer pipelines unifying supplier signals"
+
+    assert contract._claim_is_grounded(claim, _REALISTIC_SYNTHETIC_EVIDENCE) is (
+        False
+    )
+
+
+@pytest.mark.parametrize(
+    "widened_claim",
+    (
+        "Built batch ingestion services that reduced latency by forty percent",
+        "Owned the flagship migration initiative for enterprise customers",
+    ),
+)
+def test_realistic_evidence_unsupported_widening_is_not_grounded(widened_claim):
+    """CASE C: invented metrics/ownership remain rejected."""
+
+    assert contract._claim_is_grounded(
+        widened_claim, _REALISTIC_SYNTHETIC_EVIDENCE
+    ) is False
+
+
+def test_realistic_widening_is_also_rejected_by_the_response_validator():
+    """CASE C end-to-end: widening fails the authoritative validator."""
+
+    evidence_context = {
+        "selected_resume_id": "synthetic-resume.pdf",
+        "evidence": [
+            {
+                "source_evidence_id": "synthetic-evidence-1",
+                "text": _REALISTIC_SYNTHETIC_EVIDENCE,
+            }
+        ],
+    }
+    response = _valid_response()
+    suggestion = response["suggestions"][0]
+    suggestion["source_evidence_ids"] = ["synthetic-evidence-1"]
+    suggestion["claims"] = [
+        "Owned the flagship migration initiative for enterprise customers"
+    ]
+
+    with pytest.raises(contract.ManualProviderPreviewResponseError) as exc_info:
+        contract.validate_manual_provider_preview_production_response(
+            response,
+            bounded_resume_evidence_context=evidence_context,
+        )
+    assert exc_info.value.category == "ungrounded_claim"
+
+
+def test_claims_prompt_defines_claims_as_lexical_evidence_anchors():
+    """Prompt must align with the lexical validator, without leaking it."""
+
+    user_template = (
+        contract.build_manual_provider_preview_production_task_contract_material()
+    )["prompt_contract"]["user_template"]
+
+    assert "concise evidence anchor" in user_template
+    assert "reuses the cited evidence's key factual words" in user_template
+    assert "lexically traceable" in user_template
+    assert "Prefer the evidence's own factual terms over synonyms" in (
+        user_template
+    )
+    assert "Do not copy an entire evidence entry" in user_template
+    # claims stay candidate-fact-only and linkage-free
+    assert "must not contain relevance or job-linkage language" in user_template
+    # the implementation threshold must never leak into the prompt
+    for leaked in ("0.5", "fifty percent", "token overlap", "50%", "threshold"):
+        assert leaked not in user_template

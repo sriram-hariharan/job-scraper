@@ -2506,6 +2506,23 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    item2_manual_provider_preview_prompt_schema_alignment_runtime_files = {
+        ROOT / "src/agents/manual_provider_preview_production_task_contract.py",
+        ROOT / "src/ai/llm_client.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/evaluation/controlled_groq_canary_transport.py",
+        ROOT / "src/evaluation/controlled_production_parity_benchmark.py",
+        ROOT / "src/evaluation/provider_model_recommendation_policy.py",
+    }
+    if (
+        set(changed_runtime_files)
+        == item2_manual_provider_preview_prompt_schema_alignment_runtime_files
+    ):
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],

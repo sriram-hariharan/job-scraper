@@ -197,7 +197,7 @@ def test_route_calls_only_phase20a_helper_without_forbidden_wiring():
     start = source.index(
         '@app.post("/api/provider-call-readiness-readback")'
     )
-    end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
+    end = source.index('\n\n@app.post("/api/manual-review-readiness-readback")', start)
     snippet = source[start:end]
     compact = snippet.replace("\n", "").replace(" ", "")
 

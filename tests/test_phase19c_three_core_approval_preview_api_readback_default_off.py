@@ -197,7 +197,7 @@ def test_api_route_imports_and_calls_only_phase19b_helper():
     start = source.index(
         '@app.post("/api/three-core-approval-preview-service-readback")'
     )
-    end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
+    end = source.index('\n\n@app.post("/api/operator-decision-capture-readback")', start)
     snippet = source[start:end]
 
     assert (

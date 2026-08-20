@@ -50,7 +50,7 @@ _RESPONSE_MODES = {
     "tailoring_refinement": "plain_text",
     "tailoring_judge": "plain_text",
     "manual_scan_phrase": "structured_json",
-    "manual_provider_preview": "structured_json",
+    "manual_provider_preview": "json_object",
 }
 _PROMPT_KEYS = {
     "skill_extraction": ("system", "primary_user_template"),
@@ -614,7 +614,8 @@ def validate_production_parity_request(
     _require(
         isinstance(response, dict)
         and response == expected_response
-        and response.get("mode") in {"structured_json", "json_text", "plain_text"},
+        and response.get("mode")
+        in {"structured_json", "json_object", "json_text", "plain_text"},
         "production response mode mismatch",
     )
     if response["mode"] == "structured_json":

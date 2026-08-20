@@ -161,7 +161,8 @@ def test_manual_provider_preview_has_an_authoritative_bounded_contract():
         "manual_trigger_context",
     ]
     schema = contract["output_contract"]["schema"]
-    assert contract["output_contract"]["strict"] is True
+    assert contract["output_contract"]["response_mode"] == "json_object"
+    assert contract["output_contract"]["strict"] is False
     assert schema["properties"]["suggestions"]["maxItems"] == 3
     assert contract["input_contract"]["maximum_characters"] == {
         "authorized_job_context": 6000,
@@ -434,7 +435,7 @@ def test_provider_model_credentials_runtime_and_operational_state_are_excluded(
             "manual_provider_preview",
             {
                 "temperature": 0,
-                "max_tokens": 700,
+                "max_tokens": 1024,
                 "thinking_budget": 0,
                 "response_mime_type": "application/json",
                 "return_parsed": True,

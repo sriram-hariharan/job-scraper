@@ -158,7 +158,7 @@ def _route_snippet() -> str:
         '@app.post("/api/generate-ai-tailoring-action-boundary")'
     )
     end = source.index(
-        '\n\n@app.get("/api/manual-generate-ai-tailoring-preview-contract")',
+        '\n\n@app.post("/api/manual-generate-ai-tailoring-preview-live")',
         start,
     )
     return source[start:end]

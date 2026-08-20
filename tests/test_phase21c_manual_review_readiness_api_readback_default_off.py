@@ -153,7 +153,7 @@ def test_safety_metadata_keeps_all_forbidden_paths_inactive(monkeypatch):
 def test_route_calls_only_phase21b_helper_without_forbidden_wiring():
     source = (ROOT / "src/app/api.py").read_text(encoding="utf-8")
     start = source.index('@app.post("/api/manual-review-readiness-readback")')
-    end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
+    end = source.index('\n\n@app.post("/api/core-agent-evidence-materialization-preview")', start)
     snippet = source[start:end]
     compact = snippet.replace("\n", "").replace(" ", "")
 

@@ -82,6 +82,8 @@ def test_legacy_path_still_acquires_existing_global_client(
     assert result == "bounded legacy success"
     assert getter_calls == [provider]
     assert len(fake.calls) == 1
+    if provider == "groq" and model.startswith("openai/gpt-oss-"):
+        assert fake.calls[0]["include_reasoning"] is False
 
 
 @pytest.mark.parametrize(
@@ -158,7 +160,6 @@ def test_explicit_groq_client_uses_shared_gpt_oss_and_schema_request_surface(
             "temperature": 0.25,
             "max_completion_tokens": 96,
             "messages": MESSAGES,
-            "include_reasoning": False,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -169,6 +170,7 @@ def test_explicit_groq_client_uses_shared_gpt_oss_and_schema_request_surface(
             },
         }
     ]
+    assert "include_reasoning" not in explicit_client.calls[0]
     assert module.get_provider_metrics() == {
         "primary_attempts": 1,
         "fallback_attempts": 0,
@@ -178,6 +180,37 @@ def test_explicit_groq_client_uses_shared_gpt_oss_and_schema_request_surface(
         "fallback_successes": 0,
         "provider_failures": 0,
     }
+
+
+def test_explicit_groq_client_non_gpt_oss_schema_request_surface_is_unaffected(
+    client_module,
+):
+    module, _ = client_module
+    explicit_client = _CapturingClient()
+
+    module.run_chat_completion_with_metadata(
+        messages=deepcopy(MESSAGES),
+        provider="groq",
+        model="llama-3.3-70b-versatile",
+        temperature=0.25,
+        max_tokens=96,
+        response_mime_type="application/json",
+        response_schema=deepcopy(SCHEMA),
+        return_parsed=True,
+        fallback_enabled=False,
+        provider_client=explicit_client,
+    )
+
+    assert explicit_client.calls == [
+        {
+            "model": "llama-3.3-70b-versatile",
+            "temperature": 0.25,
+            "max_completion_tokens": 96,
+            "messages": MESSAGES,
+            "response_format": {"type": "json_object"},
+        }
+    ]
+    assert "include_reasoning" not in explicit_client.calls[0]
 
 
 def test_explicit_openai_client_preserves_gpt5_mini_compatibility_and_schema(
@@ -580,3 +613,88 @@ def test_user_runtime_keeps_shared_transport_import_lazy():
     assert "responses.create" not in source
     assert "fallback_enabled=False" in source
     assert "provider_client=provider_client" in source
+
+
+@pytest.mark.parametrize(
+    ("model", "thinking_budget", "response_schema", "expected_effort"),
+    (
+        # manual_provider_preview shape: gpt-oss + zero thinking budget
+        ("openai/gpt-oss-20b", 0, None, "low"),
+        # zero budget still maps under structured schema mode
+        ("openai/gpt-oss-20b", 0, SCHEMA, "low"),
+        # non-zero / absent budget must not gain a reasoning default
+        ("openai/gpt-oss-20b", 512, None, None),
+        ("openai/gpt-oss-20b", None, None, None),
+        # non-gpt-oss Groq models are untouched
+        ("llama-3.3-70b-versatile", 0, None, None),
+    ),
+)
+def test_groq_reasoning_effort_is_scoped_to_gpt_oss_zero_thinking_budget(
+    client_module,
+    model,
+    thinking_budget,
+    response_schema,
+    expected_effort,
+):
+    module, _ = client_module
+    explicit_client = _CapturingClient()
+
+    module.run_chat_completion_with_metadata(
+        messages=deepcopy(MESSAGES),
+        provider="groq",
+        model=model,
+        temperature=0,
+        max_tokens=64,
+        response_mime_type="application/json",
+        response_schema=deepcopy(response_schema) if response_schema else None,
+        return_parsed=True,
+        thinking_budget=thinking_budget,
+        fallback_enabled=False,
+        provider_client=explicit_client,
+    )
+
+    call = explicit_client.calls[0]
+    if expected_effort is None:
+        assert "reasoning_effort" not in call
+    else:
+        assert call["reasoning_effort"] == expected_effort
+    # reasoning_format is never supported for GPT-OSS on this transport
+    assert "reasoning_format" not in call
+
+
+def test_groq_gpt_oss_json_object_wire_bounds_reasoning_and_sends_no_schema(
+    client_module,
+):
+    """manual_provider_preview production shape, asserted as one surface."""
+
+    module, _ = client_module
+    explicit_client = _CapturingClient()
+
+    module.run_chat_completion_with_metadata(
+        messages=deepcopy(MESSAGES),
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        temperature=0,
+        max_tokens=1024,
+        response_mime_type="application/json",
+        response_schema=None,
+        return_parsed=True,
+        thinking_budget=0,
+        fallback_enabled=False,
+        provider_client=explicit_client,
+    )
+
+    assert explicit_client.calls == [
+        {
+            "model": "openai/gpt-oss-120b",
+            "temperature": 0,
+            "max_completion_tokens": 1024,
+            "messages": MESSAGES,
+            "include_reasoning": False,
+            "reasoning_effort": "low",
+            "response_format": {"type": "json_object"},
+        }
+    ]
+    call = explicit_client.calls[0]
+    assert call["response_format"] == {"type": "json_object"}
+    assert "reasoning_format" not in call

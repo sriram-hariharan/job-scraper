@@ -23233,6 +23233,110 @@ def _artifact_json_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> Di
 
 
 _MANUAL_PROVIDER_PREVIEW_RESPONSE_MAX_CHARACTERS = 32_000
+_MANUAL_PROVIDER_PREVIEW_PROVIDER_SCHEMA_REMOVED_KEYWORDS = frozenset(
+    {"maxItems", "maxLength", "minItems", "minLength"}
+)
+_MANUAL_PROVIDER_PREVIEW_PROVIDER_FAILURE_CATEGORIES = frozenset(
+    {
+        "authentication",
+        "authorization",
+        "configuration",
+        "connection",
+        "invalid_request",
+        "provider_5xx",
+        "provider_model_mismatch",
+        "rate_limit",
+        "refusal_or_empty_content",
+        "safety",
+        "schema_or_parse",
+        "timeout",
+        "unknown",
+        "unsupported_provider",
+    }
+)
+_MANUAL_PROVIDER_PREVIEW_INVALID_REQUEST_REASONS = frozenset(
+    {
+        "generated_schema_mismatch",
+        "messages",
+        "model_parameter",
+        "other_invalid_request",
+        "reasoning_parameter",
+        "response_format",
+        "response_schema",
+        "temperature",
+        "token_limit",
+        "unsupported_parameter",
+        "unsupported_schema_keyword",
+    }
+)
+_MANUAL_PROVIDER_PREVIEW_SAFE_ERROR_TYPES = frozenset(
+    {
+        "bad_request",
+        "bad_request_error",
+        "invalid_request",
+        "invalid_request_error",
+    }
+)
+_MANUAL_PROVIDER_PREVIEW_SAFE_ERROR_CODES = frozenset(
+    {
+        "context_length_exceeded",
+        "invalid_request",
+        "json_schema_validation_failed",
+        "json_validate_failed",
+        "model_not_found",
+        "schema_validation_failed",
+        "tool_use_failed",
+        "unsupported_parameter",
+        "unsupported_value",
+    }
+)
+_MANUAL_PROVIDER_PREVIEW_SAFE_ERROR_PARAMS = frozenset(
+    {
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "messages",
+        "model",
+        "reasoning_effort",
+        "response_format",
+        "response_schema",
+        "temperature",
+    }
+)
+_MANUAL_PROVIDER_PREVIEW_SAFE_SCHEMA_KEYWORDS = frozenset(
+    {
+        "$defs",
+        "$ref",
+        "additionalProperties",
+        "anyOf",
+        "enum",
+        "items",
+        "properties",
+        "required",
+        "type",
+    }
+)
+_MANUAL_PROVIDER_PREVIEW_PRIMARY_FAILURE_PATTERN = re.compile(
+    r"^LLM provider invocation failed \(stage=primary, "
+    r"category=(?P<category>[a-z0-9_]{1,64}), "
+    r"provider=(?P<provider>[a-z0-9_.-]{1,100}), "
+    r"model=(?P<model>[A-Za-z0-9._:/-]{1,200})"
+    r"(?:, invalid_request_reason=(?P<invalid_request_reason>[a-z_]{1,64})"
+    r"(?:, error_type=(?P<error_type>[a-z_]{1,64}))?"
+    r"(?:, error_code=(?P<error_code>[a-z_]{1,64}))?"
+    r"(?:, error_param=(?P<error_param>[a-z_]{1,64}))?"
+    r"(?:, schema_keyword=(?P<schema_keyword>[A-Za-z$][A-Za-z0-9_$]{0,63}))?"
+    r")?\)$"
+)
+_MANUAL_PROVIDER_PREVIEW_FALLBACK_FAILURE_PATTERN = re.compile(
+    r"^LLM provider invocation failed \(stage=fallback, "
+    r"primary_category=(?P<primary_category>[a-z0-9_]{1,64}), "
+    r"primary_provider=(?P<primary_provider>[a-z0-9_.-]{1,100}), "
+    r"primary_model=(?P<primary_model>[A-Za-z0-9._:/-]{1,200}), "
+    r"fallback_category=(?P<fallback_category>[a-z0-9_]{1,64}), "
+    r"fallback_provider=(?P<fallback_provider>[a-z0-9_.-]{1,100}), "
+    r"fallback_model=(?P<fallback_model>[A-Za-z0-9._:/-]{1,200})\)$"
+)
 _MANUAL_PROVIDER_PREVIEW_FORBIDDEN_RESPONSE_KEYS = {
     "api_key",
     "authorization",
@@ -23251,6 +23355,114 @@ _MANUAL_PROVIDER_PREVIEW_FORBIDDEN_RESPONSE_KEYS = {
 
 def _manual_provider_preview_text(value: Any, maximum: int) -> str:
     return _clean_text(value)[:maximum]
+
+
+def _manual_provider_preview_provider_compatible_schema(value: Any) -> Any:
+    if isinstance(value, list):
+        return [
+            _manual_provider_preview_provider_compatible_schema(item)
+            for item in value
+        ]
+    if not isinstance(value, dict):
+        return deepcopy(value)
+
+    has_const = "const" in value
+    const_value = deepcopy(value.get("const"))
+    existing_enum = value.get("enum")
+    if has_const and existing_enum is not None and existing_enum != [const_value]:
+        raise ValueError("provider schema const conflicts with enum")
+
+    adapted: Dict[str, Any] = {}
+    for key, item in value.items():
+        if (
+            key == "const"
+            or key in _MANUAL_PROVIDER_PREVIEW_PROVIDER_SCHEMA_REMOVED_KEYWORDS
+        ):
+            continue
+        adapted[key] = _manual_provider_preview_provider_compatible_schema(item)
+    if has_const and existing_enum is None:
+        adapted["enum"] = [const_value]
+    return adapted
+
+
+def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
+    bounded_message = str(exc or "").strip()[:1_000]
+    primary_match = _MANUAL_PROVIDER_PREVIEW_PRIMARY_FAILURE_PATTERN.fullmatch(
+        bounded_message
+    )
+    if primary_match:
+        diagnostic = primary_match.groupdict()
+        if (
+            diagnostic["category"]
+            in _MANUAL_PROVIDER_PREVIEW_PROVIDER_FAILURE_CATEGORIES
+        ):
+            invalid_request_reason = diagnostic.get("invalid_request_reason")
+            if invalid_request_reason and (
+                diagnostic["category"] != "invalid_request"
+                or diagnostic["provider"] != "groq"
+                or invalid_request_reason
+                not in _MANUAL_PROVIDER_PREVIEW_INVALID_REQUEST_REASONS
+                or (
+                    diagnostic.get("error_type")
+                    and diagnostic["error_type"]
+                    not in _MANUAL_PROVIDER_PREVIEW_SAFE_ERROR_TYPES
+                )
+                or (
+                    diagnostic.get("error_code")
+                    and diagnostic["error_code"]
+                    not in _MANUAL_PROVIDER_PREVIEW_SAFE_ERROR_CODES
+                )
+                or (
+                    diagnostic.get("error_param")
+                    and diagnostic["error_param"]
+                    not in _MANUAL_PROVIDER_PREVIEW_SAFE_ERROR_PARAMS
+                )
+                or (
+                    diagnostic.get("schema_keyword")
+                    and diagnostic["schema_keyword"]
+                    not in _MANUAL_PROVIDER_PREVIEW_SAFE_SCHEMA_KEYWORDS
+                )
+            ):
+                return ""
+            state = (
+                "stage=primary;"
+                f"category={diagnostic['category']};"
+                f"provider={diagnostic['provider']};"
+                f"model={diagnostic['model']}"
+            )
+            if invalid_request_reason:
+                state += "".join(
+                    f";{field_name}={diagnostic[field_name]}"
+                    for field_name in (
+                        "invalid_request_reason",
+                        "error_type",
+                        "error_code",
+                        "error_param",
+                        "schema_keyword",
+                    )
+                    if diagnostic.get(field_name)
+                )
+            return state
+
+    fallback_match = _MANUAL_PROVIDER_PREVIEW_FALLBACK_FAILURE_PATTERN.fullmatch(
+        bounded_message
+    )
+    if fallback_match:
+        diagnostic = fallback_match.groupdict()
+        if {
+            diagnostic["primary_category"],
+            diagnostic["fallback_category"],
+        } <= _MANUAL_PROVIDER_PREVIEW_PROVIDER_FAILURE_CATEGORIES:
+            return (
+                "stage=fallback;"
+                f"primary_category={diagnostic['primary_category']};"
+                f"primary_provider={diagnostic['primary_provider']};"
+                f"primary_model={diagnostic['primary_model']};"
+                f"fallback_category={diagnostic['fallback_category']};"
+                f"fallback_provider={diagnostic['fallback_provider']};"
+                f"fallback_model={diagnostic['fallback_model']}"
+            )
+    return ""
 
 
 def _manual_provider_preview_string_list(
@@ -23285,10 +23497,31 @@ def _manual_provider_preview_artifact_object(row: Dict[str, Any]) -> Dict[str, A
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _manual_provider_preview_job_identity_aliases(
+    job_snapshot: Dict[str, Any],
+) -> set[str]:
+    return {
+        identity
+        for identity in (
+            _clean_text(job_snapshot.get(field_name))
+            for field_name in (
+                "job_id",
+                "job_doc_id",
+                "doc_id",
+                "url",
+                "job_url",
+                "link",
+            )
+        )
+        if identity
+    }
+
+
 def _manual_provider_preview_job_packet(
     artifacts: List[Dict[str, Any]],
     job_id: str,
 ) -> Dict[str, Any]:
+    requested_identity = _clean_text(job_id)
     matches: List[Dict[str, Any]] = []
     for row in artifacts:
         if _clean_text(row.get("artifact_kind")) != "job_packet_json":
@@ -23297,7 +23530,9 @@ def _manual_provider_preview_job_packet(
         job_snapshot = packet.get("job_snapshot")
         if not isinstance(job_snapshot, dict):
             continue
-        if _clean_text(job_snapshot.get("job_id")) == job_id:
+        if requested_identity in _manual_provider_preview_job_identity_aliases(
+            job_snapshot
+        ):
             matches.append(packet)
     if len(matches) != 1:
         raise ManualProviderPreviewLiveError(
@@ -23481,6 +23716,12 @@ def manual_provider_preview_live_candidate_payload(
         ) from None
 
     parameters = contract["task_parameters"]
+    output_contract = contract["output_contract"]
+    provider_response_schema = (
+        deepcopy(output_contract["schema"])
+        if output_contract["response_mode"] == "json_schema"
+        else None
+    )
     try:
         result = run_effective_user_chat_completion_with_metadata(
             owner,
@@ -23489,7 +23730,7 @@ def manual_provider_preview_live_candidate_payload(
             temperature=parameters["temperature"],
             max_tokens=parameters["max_tokens"],
             response_mime_type=parameters["response_mime_type"],
-            response_schema=contract["output_contract"]["schema"],
+            response_schema=provider_response_schema,
             return_parsed=parameters["return_parsed"],
             thinking_budget=parameters["thinking_budget"],
         )
@@ -23503,8 +23744,16 @@ def manual_provider_preview_live_candidate_payload(
             _manual_provider_preview_text(exc.category, 100)
             or "provider_configuration_unavailable"
         ) from None
-    except Exception:
-        raise ManualProviderPreviewLiveError("provider_failure") from None
+    except Exception as exc:
+        provider_failure_state = _manual_provider_preview_provider_failure_state(exc)
+        logger.error(
+            "Manual provider preview provider failure diagnostic=%s",
+            provider_failure_state or "stage=unknown;category=unknown",
+        )
+        raise ManualProviderPreviewLiveError(
+            "provider_failure",
+            provider_failure_state,
+        ) from None
 
     if not isinstance(result, dict):
         raise ManualProviderPreviewLiveError("malformed_provider_response")

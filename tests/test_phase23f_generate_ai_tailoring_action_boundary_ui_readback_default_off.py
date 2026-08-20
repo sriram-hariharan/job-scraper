@@ -287,6 +287,7 @@ def test_new_ui_adds_no_other_generate_ai_tailoring_endpoint_urls():
             and "/api/manual-generate-ai-tailoring-preview-provider-call-dry-run-packet-contract" not in line
             and "/api/manual-generate-ai-tailoring-preview-provider-response-validation-contract" not in line
             and "/api/manual-generate-ai-tailoring-preview-provider-response-normalization-contract" not in line
+            and "/api/manual-generate-ai-tailoring-preview-live" not in line
         ]
     assert unexpected == []
 

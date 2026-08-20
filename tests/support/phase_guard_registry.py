@@ -538,6 +538,20 @@ STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES = {
     "tests/test_step1b4_owner_selector_llm_routing.py",
 }
 
+ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES = {
+    "tests/test_item2c_manual_provider_preview_live_service_boundary.py",
+}
+
+ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES = {
+    "src/agents/manual_provider_preview_production_task_contract.py",
+    "src/evaluation/provider_model_recommendation_policy.py",
+    "tests/test_item2d_manual_provider_preview_live_response_validation.py",
+    "tests/test_phase1_step5_user_scoped_shared_transport.py",
+    "src/evaluation/controlled_production_parity_benchmark.py",
+    "tests/test_controlled_production_parity_benchmark.py",
+    "tests/test_production_task_contract_fingerprints.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1602,7 +1616,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "src/ai/llm_client.py",
             "src/ai/job_fit_evaluator.py",
             "src/app/services.py",
+            "src/app/static/agentic_review.js",
             "src/app/static/app_redesign.css",
+            "src/evaluation/controlled_groq_canary_transport.py",
             "src/pipeline/collector.py",
             "src/pipeline/job_ranker.py",
             "src/agents/jd_intelligence.py",
@@ -2185,6 +2201,8 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
+        | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
+        | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2426,6 +2444,7 @@ def assert_protected_hashes(
             "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
             "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
+            "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
         }),
         (
             "src/app/services.py",
@@ -2441,11 +2460,29 @@ def assert_protected_hashes(
         ): frozenset({
             "f544310044957fcd28c74e9375093695a0b94814e2473435ff1fdefe7fc93df5",
             "8f2ab896d709e95a6ae0300004a799e9206e8c20af1c82fa08d9414bd85ef06a",
+            "bae6084f3be7e173e2cb9ec4bf39d085531a4f628f88508445b0a583783e0ded",
         }),
         (
             "src/ai/llm_client.py",
             "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2",
-        ): "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
+        ): frozenset({
+            "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
+            "ff2f412c4bcc3067e73d4fb78c65b53fa9d9760f56f1451d0dff6d4840386309",
+            "687ce0fa50a7a7a6498dc93287489027708fe866da90a97ae2fff941f4bcae44",
+            "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
+        }),
+        (
+            "src/ai/llm_client.py",
+            "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
+        ): frozenset({
+            "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
+        }),
+        (
+            "src/evaluation/controlled_groq_canary_transport.py",
+            "89d01fe8460e7eae40e794dce808bb26aef6dbb02366e7c5d5bed268fdf00489",
+        ): frozenset({
+            "06bb37112326d658f9a7bcac6cac0897c3150652a8b734cff0794e1997746741",
+        }),
         (
             "src/ai/job_fit_evaluator.py",
             "3776e5ce3c098c5329d2e7631195915f6bcf098ec0303ec619e9b0e9ecf393fb",
@@ -2468,6 +2505,7 @@ def assert_protected_hashes(
             "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
             "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
+            "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
         }),
         (
             "src/app/services.py",
@@ -2475,6 +2513,8 @@ def assert_protected_hashes(
         ): frozenset({
             "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
             "aab9f26ebe70b458fb706cfeee7f9b6ae76a9bef5303b1d5c150b9773323d20e",
+            "0512c0cd141947dbc6f48565b424920393f84fb9fc426dfc2816c504b03f33ce",
+            "3b11179b92301e7734cb82ef2f4cc8ba6d251e2ee363cf27d04a0461a0913a7a",
         }),
         (
             "src/app/services.py",
@@ -2490,6 +2530,13 @@ def assert_protected_hashes(
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
             "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
             "aab9f26ebe70b458fb706cfeee7f9b6ae76a9bef5303b1d5c150b9773323d20e",
+            "0512c0cd141947dbc6f48565b424920393f84fb9fc426dfc2816c504b03f33ce",
+            "f61e5a6107d3384e6560ba07c9710f878ed9fef796c2f5ddaac7894200619002",
+            "226c38184cda172def0848d5fc627c0a28b93cabed46443e3e663ff72cc5b42c",
+            "5bc0a8adf0d5c8a848843c814691fd214717e6a9ac41a1ed762dc81355708602",
+            "c17198d67a02c645a175854db5df45a68114a36c3a33392ca811c84f9ec50940",
+            "f3def96a4b978fd200dab5ce1628a707a8d30a55c2fd1346887e2c72e05657e3",
+            "3b11179b92301e7734cb82ef2f4cc8ba6d251e2ee363cf27d04a0461a0913a7a",
         }),
             (
                 "src/agents/jd_intelligence.py",
@@ -2544,6 +2591,7 @@ def assert_protected_hashes(
                     "153a2f59dd9b8efb8fa958751beb3ace7a933509e2abb61fe2054f0468922139",
                     "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
                     "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
+                    "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",
                 }),
         (
             "src/tailoring/llm.py",
@@ -2567,6 +2615,7 @@ def assert_protected_hashes(
         ): frozenset({
             "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
             "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
+            "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",
         }),
         (
             "src/pipeline/collector.py",
@@ -2587,7 +2636,10 @@ def assert_protected_hashes(
         (
             "src/app/static/agentic_review.js",
             "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
-        ): "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
+        ): frozenset({
+            "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
+            "b84272b1e74152d0f6e93b8d79636f24179a656d9c2a0ab4b66aa722730ade13",
+        }),
     }
     repo = Path(root)
     profiles = tuple(compatibility_profiles)

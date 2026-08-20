@@ -168,7 +168,7 @@ def test_route_calls_only_phase19g_helper_without_forbidden_wiring():
     start = source.index(
         '@app.post("/api/operator-decision-capture-readback")'
     )
-    end = source.index('\n\n@app.post("/api/provider-runtime-readback")', start)
+    end = source.index('\n\n@app.post("/api/provider-call-readiness-readback")', start)
     snippet = source[start:end]
 
     assert (

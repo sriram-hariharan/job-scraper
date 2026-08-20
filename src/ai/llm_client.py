@@ -56,6 +56,69 @@ _FALLBACK_ELIGIBLE_ERROR_CATEGORIES = {
     "rate_limit",
     "provider_5xx",
 }
+_INVALID_REQUEST_REASON_CATEGORIES = frozenset(
+    {
+        "generated_schema_mismatch",
+        "messages",
+        "model_parameter",
+        "other_invalid_request",
+        "reasoning_parameter",
+        "response_format",
+        "response_schema",
+        "temperature",
+        "token_limit",
+        "unsupported_parameter",
+        "unsupported_schema_keyword",
+    }
+)
+_SAFE_PROVIDER_ERROR_TYPES = frozenset(
+    {
+        "bad_request",
+        "bad_request_error",
+        "invalid_request",
+        "invalid_request_error",
+    }
+)
+_SAFE_PROVIDER_ERROR_CODES = frozenset(
+    {
+        "context_length_exceeded",
+        "invalid_request",
+        "json_schema_validation_failed",
+        "json_validate_failed",
+        "model_not_found",
+        "schema_validation_failed",
+        "tool_use_failed",
+        "unsupported_parameter",
+        "unsupported_value",
+    }
+)
+_SAFE_PROVIDER_ERROR_PARAMS = frozenset(
+    {
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "messages",
+        "model",
+        "reasoning_effort",
+        "response_format",
+        "response_schema",
+        "temperature",
+    }
+)
+_SAFE_SCHEMA_KEYWORD_PATTERNS = (
+    (
+        "additionalProperties",
+        r"(?<![A-Za-z0-9_])additionalproperties(?![A-Za-z0-9_])",
+    ),
+    ("properties", r"(?<![A-Za-z0-9_])properties(?![A-Za-z0-9_])"),
+    ("required", r"(?<![A-Za-z0-9_])required(?![A-Za-z0-9_])"),
+    ("anyOf", r"(?<![A-Za-z0-9_])anyof(?![A-Za-z0-9_])"),
+    ("items", r"(?<![A-Za-z0-9_])items(?![A-Za-z0-9_])"),
+    ("enum", r"(?<![A-Za-z0-9_])enum(?![A-Za-z0-9_])"),
+    ("type", r"(?<![A-Za-z0-9_])type(?![A-Za-z0-9_])"),
+    ("$defs", r"(?<![A-Za-z0-9_])\$defs(?![A-Za-z0-9_])"),
+    ("$ref", r"(?<![A-Za-z0-9_])\$ref(?![A-Za-z0-9_])"),
+)
 
 
 class _ProviderValidationError(ValueError):
@@ -235,10 +298,170 @@ def _classify_provider_error(exc):
     return "unknown"
 
 
-def _raise_bounded_provider_failure(category, provider, model, stage):
+def _allowlisted_provider_error_token(value, allowed_values):
+    token = str(value or "").strip().lower()
+    return token if token in allowed_values else ""
+
+
+def _structured_provider_error(exc):
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return {}, {}
+    error = body.get("error")
+    return body, error if isinstance(error, dict) else body
+
+
+def _explicit_safe_schema_keyword(message):
+    for keyword, pattern in _SAFE_SCHEMA_KEYWORD_PATTERNS:
+        if re.search(pattern, message, re.IGNORECASE):
+            return keyword
+    return ""
+
+
+def _classify_invalid_request_reason(error, body):
+    message = str(error.get("message") or "")[:2_000]
+    lowered = message.lower()
+    error_code = _allowlisted_provider_error_token(
+        error.get("code"),
+        _SAFE_PROVIDER_ERROR_CODES,
+    )
+    error_param = _allowlisted_provider_error_token(
+        error.get("param"),
+        _SAFE_PROVIDER_ERROR_PARAMS,
+    )
+    classification_text = f"{lowered} {error_code} {error_param}"
+    schema_keyword = _explicit_safe_schema_keyword(message)
+    unsupported_markers = (
+        "not supported",
+        "unsupported",
+        "unrecognized",
+        "unknown keyword",
+    )
+
+    if (
+        schema_keyword
+        and ("schema" in lowered or "json" in lowered)
+        and any(marker in classification_text for marker in unsupported_markers)
+    ):
+        return "unsupported_schema_keyword", schema_keyword
+    if "failed_generation" in error or "failed_generation" in body:
+        return "generated_schema_mismatch", ""
+    if (
+        "failed_generation" in classification_text
+        or "tool_use_failed" in error_code
+    ):
+        return "generated_schema_mismatch", ""
+    if "response_format" in classification_text or "response format" in lowered:
+        return "response_format", ""
+    if any(
+        marker in classification_text
+        for marker in (
+            "response_schema",
+            "response schema",
+            "json_schema",
+            "json schema",
+        )
+    ):
+        return "response_schema", ""
+    if any(
+        marker in classification_text
+        for marker in (
+            "include_reasoning",
+            "reasoning_effort",
+            "reasoning parameter",
+        )
+    ):
+        return "reasoning_parameter", ""
+    if "temperature" in classification_text:
+        return "temperature", ""
+    if any(
+        marker in classification_text
+        for marker in (
+            "max_completion_tokens",
+            "max_tokens",
+            "token limit",
+            "context length",
+            "context_length_exceeded",
+        )
+    ):
+        return "token_limit", ""
+    if "messages" in classification_text:
+        return "messages", ""
+    if "model" in classification_text:
+        return "model_parameter", ""
+    if (
+        any(marker in classification_text for marker in unsupported_markers)
+        and (
+            "parameter" in lowered
+            or " param" in lowered
+            or error_param in _SAFE_PROVIDER_ERROR_PARAMS
+        )
+    ):
+        return "unsupported_parameter", ""
+    return "other_invalid_request", ""
+
+
+def _bounded_invalid_request_diagnostic(exc, category, provider):
+    status_code = getattr(exc, "status_code", None)
+    try:
+        status_code = int(status_code)
+    except Exception:
+        status_code = None
+    if category != "invalid_request" or provider != "groq" or status_code != 400:
+        return {}
+
+    body, error = _structured_provider_error(exc)
+    reason, schema_keyword = _classify_invalid_request_reason(error, body)
+    if reason not in _INVALID_REQUEST_REASON_CATEGORIES:
+        return {}
+
+    diagnostic = {"invalid_request_reason": reason}
+    safe_type = _allowlisted_provider_error_token(
+        error.get("type"),
+        _SAFE_PROVIDER_ERROR_TYPES,
+    )
+    safe_code = _allowlisted_provider_error_token(
+        error.get("code"),
+        _SAFE_PROVIDER_ERROR_CODES,
+    )
+    safe_param = _allowlisted_provider_error_token(
+        error.get("param"),
+        _SAFE_PROVIDER_ERROR_PARAMS,
+    )
+    if safe_type:
+        diagnostic["error_type"] = safe_type
+    if safe_code:
+        diagnostic["error_code"] = safe_code
+    if safe_param:
+        diagnostic["error_param"] = safe_param
+    if schema_keyword:
+        diagnostic["schema_keyword"] = schema_keyword
+    return diagnostic
+
+
+def _raise_bounded_provider_failure(
+    category,
+    provider,
+    model,
+    stage,
+    diagnostic=None,
+):
+    safe_diagnostic = diagnostic if isinstance(diagnostic, dict) else {}
+    diagnostic_suffix = "".join(
+        f", {field_name}={safe_diagnostic[field_name]}"
+        for field_name in (
+            "invalid_request_reason",
+            "error_type",
+            "error_code",
+            "error_param",
+            "schema_keyword",
+        )
+        if safe_diagnostic.get(field_name)
+    )
     raise RuntimeError(
         f"LLM provider invocation failed "
-        f"(stage={stage}, category={category}, provider={provider}, model={model})"
+        f"(stage={stage}, category={category}, provider={provider}, model={model}"
+        f"{diagnostic_suffix})"
     ) from None
 
 
@@ -363,12 +586,25 @@ def _run_groq_chat_completion(
     }
 
     model_name = str(model or "").strip().lower()
-    if model_name.startswith("openai/gpt-oss-"):
+    supports_json_schema = model_name not in _GROQ_MODELS_WITHOUT_JSON_SCHEMA
+    uses_structured_json_schema = (
+        response_mime_type == "application/json"
+        and response_schema is not None
+        and supports_json_schema
+    )
+    is_groq_gpt_oss = model_name.startswith("openai/gpt-oss-")
+    if is_groq_gpt_oss and not uses_structured_json_schema:
         request_kwargs["include_reasoning"] = False
+    if is_groq_gpt_oss and thinking_budget == 0:
+        # Groq GPT-OSS has no zero-reasoning setting: "low" is the lowest
+        # reasoning effort this transport has empirically sustained. Map the
+        # existing zero thinking-budget task intent onto it, mirroring the
+        # OpenAI gpt-5-mini precedent below. This is an intent mapping, not a
+        # claim that "low" performs no reasoning.
+        request_kwargs["reasoning_effort"] = "low"
 
     if response_mime_type == "application/json":
-        supports_json_schema = model_name not in _GROQ_MODELS_WITHOUT_JSON_SCHEMA
-        if response_schema is not None and supports_json_schema:
+        if uses_structured_json_schema:
             request_kwargs["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
@@ -587,6 +823,11 @@ def run_chat_completion_with_metadata(
 
     except Exception as primary_error:
         primary_category = _classify_provider_error(primary_error)
+        primary_diagnostic = _bounded_invalid_request_diagnostic(
+            primary_error,
+            primary_category,
+            primary_provider,
+        )
         if (
             not effective_fallback_enabled
             or primary_category not in _FALLBACK_ELIGIBLE_ERROR_CATEGORIES
@@ -597,6 +838,7 @@ def run_chat_completion_with_metadata(
                 primary_provider,
                 primary_model,
                 "primary",
+                primary_diagnostic,
             )
 
         increment_provider_metric("fallback_attempts")

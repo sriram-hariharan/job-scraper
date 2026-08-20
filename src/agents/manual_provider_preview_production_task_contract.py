@@ -10,8 +10,9 @@ from typing import Any
 
 TASK_CONTRACT_VERSION = "manual-provider-preview-v1"
 SCHEMA_NAME = "manual_provider_preview_result_v1"
+RESPONSE_MODE = "json_object"
 TEMPERATURE = 0
-MAX_TOKENS = 700
+MAX_TOKENS = 1024
 SYSTEM_PROMPT = (
     "Generate a bounded, evidence-grounded resume tailoring preview for manual "
     "review. Use only the authorized job context and bounded resume evidence. "
@@ -23,7 +24,51 @@ USER_TEMPLATE = (
     "Selected tailoring opportunity/request:\n<selected_tailoring_request>\n\n"
     "Explicit manual-trigger context:\n<manual_trigger_context>\n\n"
     "Return one to three evidence-grounded preview suggestions. Each suggestion "
-    "must retain its source evidence identifiers and must remain advisory."
+    "must retain its source evidence identifiers and must remain advisory.\n\n"
+    "Return exactly one JSON object with exactly these top-level fields and no "
+    "others: preview_status, manual_only, suggestions, "
+    "resume_mutation_authorized, automatic_acceptance_authorized, "
+    "application_mutation_authorized, auto_apply_authorized, "
+    "auto_submit_authorized.\n"
+    "Use these fixed JSON values: preview_status is the string \"advisory\"; "
+    "manual_only is the JSON boolean true; resume_mutation_authorized, "
+    "automatic_acceptance_authorized, application_mutation_authorized, "
+    "auto_apply_authorized, and auto_submit_authorized are each the JSON "
+    "boolean false. Emit true and false as JSON booleans, never as strings.\n"
+    "suggestions is an array of one to three suggestion objects. Each "
+    "suggestion object must contain exactly these fields and no others: "
+    "suggestion_id, source_evidence_ids, preview_text, claims, rationale, "
+    "risk_flags.\n"
+    "source_evidence_ids must contain only exact source_evidence_id values "
+    "taken from the authorized bounded resume evidence context. Never invent, "
+    "alter, or abbreviate an evidence identifier. Every claim must be grounded "
+    "in the evidence referenced by that suggestion. claims may be an empty "
+    "array. risk_flags may be an empty array.\n"
+    "Every candidate fact must preserve the exact factual scope of the cited "
+    "evidence. A candidate fact is any assertion about what the candidate did, "
+    "used, owned, built, delivered, measured, achieved, led, created, or "
+    "experienced. In preview_text, claims, and rationale, do not introduce any "
+    "factual entity, noun, scope, count, ownership concept, activity type, "
+    "deliverable, metric, technology, project or initiative characterization, "
+    "or outcome that the cited evidence does not explicitly state. Rephrasing "
+    "supported facts is allowed; widening or inferring beyond them is not.\n"
+    "preview_text and rationale may additionally explain how a preserved "
+    "candidate fact matches, supports, addresses, or is relevant to a "
+    "requirement stated explicitly in the authorized job context. Such "
+    "relevance language must describe only that relationship and must never "
+    "introduce or imply a new fact about the candidate. Do not restate the "
+    "evidence alone when a supported relationship to an explicit requirement "
+    "can be stated.\n"
+    "claims must contain only candidate facts supported by the cited evidence "
+    "and must not contain relevance or job-linkage language. Write each claim "
+    "as a concise evidence anchor that reuses the cited evidence's key factual "
+    "words and phrasing, keeping paraphrasing minimal so the claim remains "
+    "lexically traceable to that evidence. Prefer the evidence's own factual "
+    "terms over synonyms or reworded equivalents. Any connective wording must "
+    "not introduce or imply a new candidate fact. Do not copy an entire "
+    "evidence entry.\n"
+    "Output one JSON object only. No Markdown, no code fences, no prose before "
+    "or after the JSON, no extra fields, and no missing required fields."
 )
 RESPONSE_SCHEMA = {
     "type": "object",
@@ -377,7 +422,8 @@ def build_manual_provider_preview_production_task_contract_material(
         },
         "output_contract": {
             "schema_name": SCHEMA_NAME,
-            "strict": True,
+            "response_mode": RESPONSE_MODE,
+            "strict": False,
             "schema": deepcopy(RESPONSE_SCHEMA),
         },
         "deterministic_transformation_contract": {

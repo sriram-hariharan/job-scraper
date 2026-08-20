@@ -4,6 +4,8 @@ import inspect
 import json
 from pathlib import Path
 
+import groq
+import httpx
 import pytest
 
 from src.evaluation.provider_client_compatibility import (
@@ -367,6 +369,16 @@ class _CategoryError(RuntimeError):
         super().__init__("bounded synthetic category")
 
 
+def _groq_bad_request(body, *, raw_message="raw provider body must not appear"):
+    request = httpx.Request(
+        "POST",
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"authorization": "Bearer sk-test-must-not-appear"},
+    )
+    response = httpx.Response(400, request=request)
+    return groq.BadRequestError(raw_message, response=response, body=body)
+
+
 @pytest.mark.parametrize(
     ("error", "category"),
     (
@@ -388,6 +400,164 @@ class _CategoryError(RuntimeError):
 def test_error_taxonomy_is_exact(client_module, error, category):
     module, _ = client_module
     assert module._classify_provider_error(error) == category
+
+
+@pytest.mark.parametrize(
+    ("error_metadata", "expected_reason", "expected_keyword"),
+    (
+        (
+            {"message": "Schema keyword anyOf is not supported"},
+            "unsupported_schema_keyword",
+            "anyOf",
+        ),
+        (
+            {"message": "Invalid response_format configuration"},
+            "response_format",
+            "",
+        ),
+        (
+            {"message": "Invalid JSON schema configuration"},
+            "response_schema",
+            "",
+        ),
+        (
+            {"message": "include_reasoning is not supported"},
+            "reasoning_parameter",
+            "",
+        ),
+        (
+            {"message": "max_completion_tokens exceeds the token limit"},
+            "token_limit",
+            "",
+        ),
+        (
+            {"message": "private unrecognized provider detail"},
+            "other_invalid_request",
+            "",
+        ),
+    ),
+)
+def test_structured_groq_invalid_request_reason_classification_is_allowlisted(
+    client_module,
+    error_metadata,
+    expected_reason,
+    expected_keyword,
+):
+    module, _ = client_module
+    body = {"error": error_metadata}
+
+    reason, keyword = module._classify_invalid_request_reason(
+        error_metadata,
+        body,
+    )
+
+    assert reason == expected_reason
+    assert keyword == expected_keyword
+
+
+def test_structured_groq_400_metadata_is_bounded_without_raw_provider_data(
+    client_module,
+):
+    module, _ = client_module
+    raw_markers = (
+        "raw provider body must not appear",
+        "private prompt must not appear",
+        "private failed generation must not appear",
+        "sk-test-must-not-appear",
+    )
+    provider_error = _groq_bad_request(
+        {
+            "error": {
+                "message": (
+                    "Schema keyword anyOf is not supported; "
+                    "private prompt must not appear"
+                ),
+                "type": "invalid_request_error",
+                "code": "json_validate_failed",
+                "param": "response_format",
+                "failed_generation_detail": (
+                    "private failed generation must not appear"
+                ),
+            },
+            "request_payload": "private prompt must not appear",
+            "api_key": "sk-test-must-not-appear",
+        }
+    )
+    calls = []
+
+    def dispatch(provider_name, **_kwargs):
+        calls.append(provider_name)
+        raise provider_error
+
+    module._run_single_provider = dispatch
+    module.reset_provider_metrics()
+    with pytest.raises(RuntimeError) as exc_info:
+        module.run_chat_completion_with_metadata(
+            messages=[
+                {"role": "user", "content": "private prompt must not appear"}
+            ],
+            provider="groq",
+            model="openai/gpt-oss-120b",
+            fallback_enabled=False,
+        )
+
+    rendered = str(exc_info.value)
+    assert calls == ["groq"]
+    assert rendered == (
+        "LLM provider invocation failed "
+        "(stage=primary, category=invalid_request, provider=groq, "
+        "model=openai/gpt-oss-120b, "
+        "invalid_request_reason=unsupported_schema_keyword, "
+        "error_type=invalid_request_error, error_code=json_validate_failed, "
+        "error_param=response_format, schema_keyword=anyOf)"
+    )
+    for raw_marker in raw_markers:
+        assert raw_marker not in rendered
+    metrics = module.get_provider_metrics()
+    assert metrics["primary_attempts"] == 1
+    assert metrics["fallback_attempts"] == 0
+    assert metrics["provider_failures"] == 1
+
+
+def test_unknown_groq_400_and_non_400_diagnostics_remain_generic(client_module):
+    module, _ = client_module
+    private_token = "sk-private-structured-token"
+    unknown_400 = _groq_bad_request(
+        {
+            "error": {
+                "message": f"unrecognized detail {private_token}",
+                "type": private_token,
+                "code": private_token,
+                "param": private_token,
+            }
+        },
+        raw_message=f"raw exception {private_token}",
+    )
+
+    diagnostic = module._bounded_invalid_request_diagnostic(
+        unknown_400,
+        "invalid_request",
+        "groq",
+    )
+
+    assert diagnostic == {"invalid_request_reason": "other_invalid_request"}
+    assert private_token not in str(diagnostic)
+    assert (
+        module._bounded_invalid_request_diagnostic(
+            _StatusError(422),
+            "invalid_request",
+            "groq",
+        )
+        == {}
+    )
+    assert (
+        module._bounded_invalid_request_diagnostic(
+            _StatusError(503),
+            "provider_5xx",
+            "groq",
+        )
+        == {}
+    )
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,7 @@ import pytest
 from src.evaluation import controlled_production_parity_benchmark as parity
 from src.evaluation.controlled_groq_canary_transport import (
     build_groq_production_parity_chat_completion_arguments,
+    validate_groq_production_parity_chat_completion_arguments,
 )
 from src.evaluation.controlled_openai_canary_transport import (
     build_openai_production_parity_chat_completion_arguments,
@@ -56,7 +57,7 @@ EXPECTED_MODES = {
     "tailoring_refinement": "plain_text",
     "tailoring_judge": "plain_text",
     "manual_scan_phrase": "structured_json",
-    "manual_provider_preview": "structured_json",
+    "manual_provider_preview": "json_object",
 }
 
 
@@ -290,7 +291,9 @@ def test_manual_preview_parity_is_bounded_grounded_and_preview_only(plan):
         plan=plan,
     )
 
-    assert request["response_contract"]["mode"] == "structured_json"
+    assert request["response_contract"]["mode"] == "json_object"
+    assert request["response_contract"]["schema"] is None
+    assert request["response_contract"]["strict"] is False
     assert request["fallback"] is False
     assert result["production_contract_valid"] is True
     assert result["benchmark_quality"]["quality_gate_passed"] is True
@@ -829,3 +832,67 @@ def test_no_result_promotes_qualification_or_creates_routing_authority(plan):
         assert authority["routing_changed"] is False
         assert authority["user_task_override_created"] is False
         assert authority["provider_call_count"] == 0
+
+
+def test_groq_gpt_oss_qualification_matches_production_reasoning_configuration(
+    plan,
+):
+    """Qualification must exercise the same generation config production sends."""
+
+    request = _request(plan, "manual_provider_preview", "groq")
+    scheduled = _scheduled(plan, "manual_provider_preview", "groq")
+    assert scheduled["model"].startswith("openai/gpt-oss-")
+    assert request["response_contract"]["mode"] == "json_object"
+    assert request["task_parameters"]["thinking_budget"] == 0
+
+    arguments = build_groq_production_parity_chat_completion_arguments(
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+    )
+
+    # production parity: reasoning bounded and effort pinned low
+    assert arguments["include_reasoning"] is False
+    assert arguments["reasoning_effort"] == "low"
+    # no provider-side schema in JSON Object Mode
+    assert arguments["response_format"] == {"type": "json_object"}
+    assert "reasoning_format" not in arguments
+    assert request["response_contract"]["schema"] is None
+    # controlled-transport conventions preserved
+    assert arguments["stream"] is False
+    assert arguments["n"] == 1
+    assert arguments["temperature"] == 0
+    assert arguments["max_completion_tokens"] == 1024
+
+
+def test_groq_parity_validator_rejects_missing_reasoning_configuration(plan):
+    """The exact field allowlist must require, not merely tolerate, parity."""
+
+    request = _request(plan, "manual_provider_preview", "groq")
+    scheduled = _scheduled(plan, "manual_provider_preview", "groq")
+    arguments = build_groq_production_parity_chat_completion_arguments(
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+    )
+
+    missing_effort = deepcopy(arguments)
+    missing_effort.pop("reasoning_effort")
+    with pytest.raises(ValueError, match="allowlist"):
+        validate_groq_production_parity_chat_completion_arguments(
+            missing_effort, parity_request=request, scheduled=scheduled, plan=plan
+        )
+
+    wrong_effort = deepcopy(arguments)
+    wrong_effort["reasoning_effort"] = "high"
+    with pytest.raises(ValueError, match="reasoning effort mismatch"):
+        validate_groq_production_parity_chat_completion_arguments(
+            wrong_effort, parity_request=request, scheduled=scheduled, plan=plan
+        )
+
+    wrong_bounding = deepcopy(arguments)
+    wrong_bounding["include_reasoning"] = True
+    with pytest.raises(ValueError, match="reasoning bounding mismatch"):
+        validate_groq_production_parity_chat_completion_arguments(
+            wrong_bounding, parity_request=request, scheduled=scheduled, plan=plan
+        )

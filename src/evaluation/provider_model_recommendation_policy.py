@@ -24,7 +24,7 @@ RECOMMENDATION_POLICY_VERSION = "provider-model-recommendation-policy-v1"
 RECOMMENDATION_POLICY_SCOPE = "evaluation_readonly_recommendation_only"
 
 SOURCE_QUALIFICATION_REGISTRY_SHA256 = (
-    "1d306df3beb42226d00e91f44260cbf9debc7f55132604b8849a4ccd5cc454a1"
+    "db8603718e0be6b441db04ee1cca87956272e016aa53c2f2c6aaf326d1d60030"
 )
 
 RECOMMENDATION_STATUSES = (

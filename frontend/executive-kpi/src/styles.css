@@ -2847,19 +2847,19 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 }
 .scheduler-discovery-summary-close-icon,
 #schedulerHealthDashboardRoot .scheduler-discovery-summary-close .scheduler-discovery-summary-close-icon {
-  position: relative; z-index: 1; display: block !important; width: 20px !important; height: 20px !important;
-  overflow: visible; visibility: visible !important; opacity: 1 !important;
-  color: #ffffff !important; fill: none !important; stroke: #ffffff !important;
+  position: relative; z-index: 1; display: block; width: 20px; height: 20px;
+  overflow: visible; visibility: visible; opacity: 1;
+  color: #ffffff; fill: none; stroke: #ffffff;
 }
 #schedulerHealthDashboardRoot .scheduler-discovery-summary-close .scheduler-discovery-summary-close-icon path {
   display: block; visibility: visible; opacity: 1;
-  fill: none; stroke: #ffffff !important; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+  fill: none; stroke: #ffffff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
 }
 .scheduler-discovery-summary-close:hover { border-color: #4f2bd3; background: linear-gradient(135deg, #1d4ed8, #5b31de); color: #ffffff; }
 .scheduler-discovery-summary-close:focus-visible { outline: 2px solid var(--scheduler-blue); outline-offset: 2px; color: #ffffff; }
 .scheduler-discovery-summary-close:hover .scheduler-discovery-summary-close-icon,
 .scheduler-discovery-summary-close:focus-visible .scheduler-discovery-summary-close-icon {
-  color: #ffffff !important; stroke: #ffffff !important;
+  color: #ffffff; stroke: #ffffff;
 }
 .scheduler-discovery-summary-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 20px 24px 24px; }
 .scheduler-discovery-summary-state { display: grid; min-height: 330px; place-content: center; justify-items: center; gap: 9px; color: var(--scheduler-blue); text-align: center; }

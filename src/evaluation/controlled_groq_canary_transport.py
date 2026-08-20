@@ -97,6 +97,10 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def _is_groq_gpt_oss_model(model: Any) -> bool:
+    return str(model or "").strip().lower().startswith("openai/gpt-oss-")
+
+
 def _canonical_json(value: Any) -> str:
     return json.dumps(
         value,
@@ -493,6 +497,18 @@ def build_groq_production_parity_chat_completion_arguments(
                 "schema": deepcopy(response_contract["schema"]),
             },
         }
+    elif response_contract["mode"] == "json_object":
+        arguments["response_format"] = {"type": "json_object"}
+    if _is_groq_gpt_oss_model(scheduled["model"]) and (
+        response_contract["mode"] != "structured_json"
+    ):
+        # Production parity: the shared Groq transport bounds reasoning for
+        # GPT-OSS non-schema requests and maps the zero thinking budget to the
+        # lowest sustained reasoning effort. Qualification must exercise the
+        # same generation configuration.
+        arguments["include_reasoning"] = False
+        if parity_request["task_parameters"].get("thinking_budget") == 0:
+            arguments["reasoning_effort"] = "low"
     validate_groq_production_parity_chat_completion_arguments(
         arguments,
         parity_request=parity_request,
@@ -528,8 +544,15 @@ def validate_groq_production_parity_chat_completion_arguments(
         "stream",
         "n",
     }
-    if response_contract["mode"] == "structured_json":
+    if response_contract["mode"] in {"structured_json", "json_object"}:
         expected_fields.add("response_format")
+    gpt_oss_non_schema = _is_groq_gpt_oss_model(scheduled.get("model")) and (
+        response_contract["mode"] != "structured_json"
+    )
+    if gpt_oss_non_schema:
+        expected_fields.add("include_reasoning")
+        if parity_request["task_parameters"].get("thinking_budget") == 0:
+            expected_fields.add("reasoning_effort")
     _require(
         isinstance(arguments, dict) and set(arguments) == expected_fields,
         "production-parity Groq arguments differ from the allowlist",
@@ -549,6 +572,20 @@ def validate_groq_production_parity_chat_completion_arguments(
         and arguments.get("n") == 1,
         "production-parity Groq request semantics changed",
     )
+    if gpt_oss_non_schema:
+        _require(
+            arguments.get("include_reasoning") is False,
+            "production-parity Groq reasoning bounding mismatch",
+        )
+        if parity_request["task_parameters"].get("thinking_budget") == 0:
+            _require(
+                arguments.get("reasoning_effort") == "low",
+                "production-parity Groq reasoning effort mismatch",
+            )
+    _require(
+        "reasoning_format" not in arguments,
+        "reasoning_format is not supported for this production parity request",
+    )
     if response_contract["mode"] == "structured_json":
         _require(
             arguments.get("response_format")
@@ -561,6 +598,16 @@ def validate_groq_production_parity_chat_completion_arguments(
                 },
             },
             "production-parity Groq structured schema mismatch",
+        )
+    elif response_contract["mode"] == "json_object":
+        _require(
+            arguments.get("response_format") == {"type": "json_object"},
+            "production-parity Groq JSON object mode mismatch",
+        )
+        _require(
+            response_contract["schema"] is None
+            and response_contract["schema_name"] is None,
+            "JSON object mode must not transmit a provider schema",
         )
     else:
         _require(

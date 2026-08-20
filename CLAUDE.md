@@ -111,8 +111,8 @@ Guidance for Claude Code when working in this repository.
 
 # Git workflow
 - Confirm branch and worktree state before editing.
-- Current branch: phase133-premium-dashboard-redesign.
-- Current approved checkpoint: c045bf20.
+- Current branch: item3-chatbot-ui-redesign.
+- Current approved checkpoint: cd2a213ad2b840f6821eda2343100a8fbdf58e77.
 - Do not commit or push unless explicitly requested.
 - Before commit, verify there are no numbered duplicate generated assets.
 - Stage only exact approved files.
@@ -133,11 +133,17 @@ Guidance for Claude Code when working in this repository.
 
 # Current checkpoint
 - The following facts were manually verified and approved by the user:
-  - Phase 133H premium responsive shared dashboard shell is complete.
-  - Approved feature checkpoint commit: c045bf20.
-  - The compact ApplyLens AI branding, grouped navigation, semantic route icons,
-    active-route behavior, desktop collapse behavior, and narrow-window drawer fallback work.
-  - Phase 133EF Decisions and Applications behavior remains approved.
+  - Item 3 ApplyLens AI chatbot redesign is complete.
+  - Approved feature checkpoint commit: cd2a213ad2b840f6821eda2343100a8fbdf58e77.
+  - The floating chatbot is read-only and remains on the existing shared-shell `/assistant/query`
+    architecture.
+  - Chatbot retrieval is scoped to the authenticated owner's current Executive Dashboard job
+    population, with authoritative current-run artifact evidence for allowed Dashboard jobs that
+    are absent from the shared RAG corpus.
+  - Shared `rag_job_documents` remains the owner-neutral acquisition corpus and pipeline input.
+  - Owner isolation, provider isolation, citation enforcement, RAG retention safety, accessibility,
+    mobile behavior, and historical checkpoint governance remain preserved.
+  - Final Item 3 full-suite release gate: 10,249 passed, 12 skipped, 0 failed.
 - Operational classic-script isolation and existing page request ownership boundaries remain preserved.
-- Next planned checkpoint: Phase 133I hardening.
+- Next planned checkpoint: Item 4 — Planning & Tailoring Options Review.
 - Update this Current checkpoint section after every approved checkpoint commit.

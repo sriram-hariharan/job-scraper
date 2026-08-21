@@ -174,6 +174,10 @@
   --agentic-tab-color: #7c3aed;
 }
 
+.agentic-review-page .agentic-review-tab[data-agentic-tab-target="agenticReviewAdvancedTab"] {
+  --agentic-tab-color: #64748b;
+}
+
 .agentic-review-page .agentic-review-tab[data-agentic-tab-target="agenticReviewTraceTab"] {
   --agentic-tab-color: #0891b2;
 }
@@ -443,13 +447,38 @@
   font-weight: 920;
 }
 
+.agent-trace-disclosure-body {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.agent-trace-disclosure-body > .agentic-review-muted {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding-inline: 2px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-disclosure-body > .agent-trace-json-grid {
+  min-width: 0;
+  margin: 0;
+}
+
 .agentic-workflow-markdown pre,
 .agent-trace-json-detail pre {
+  max-width: 100%;
   max-height: 280px;
   margin: 0;
-  padding: 14px;
+  padding: 12px;
   overflow: auto;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
   background: #f8fafc;
   color: #0f172a;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -1143,5 +1172,3550 @@ html[data-theme="light"] .agent-trace-error {
   .agentic-workflow-missing,
   .agentic-review-section-counts {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Item 6B1: premium shell and visual foundation. Route-scoped overrides keep
+   the existing Agentic Review behavior and shared ApplyLens tokens intact. */
+body .agentic-review-page.page {
+  width: min(100%, 1440px) !important;
+  max-width: 1440px !important;
+  margin-inline: auto;
+  padding: clamp(16px, 2.4vw, 34px) !important;
+  padding-bottom: clamp(168px, 18vh, 240px) !important;
+  gap: clamp(14px, 1.6vw, 20px);
+}
+
+body .agentic-review-page.page > .agentic-review-header.app-page-header {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0 0 14px !important;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.agentic-review-header .app-page-header__main {
+  align-items: flex-start;
+  max-width: min(840px, 100%) !important;
+}
+
+.agentic-review-header .app-page-header__description {
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-header .agentic-review-back-link {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  gap: 6px;
+  width: auto;
+  max-width: 100%;
+  min-height: 32px !important;
+  margin: 0 0 4px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 42%, var(--app-border)) !important;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-surface) 90%, var(--app-primary) 10%) !important;
+  color: color-mix(in srgb, var(--app-primary) 82%, var(--app-text)) !important;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: none !important;
+  transition: border-color var(--app-fast) var(--app-ease), background-color var(--app-fast) var(--app-ease), color var(--app-fast) var(--app-ease);
+}
+
+.agentic-review-header .agentic-review-back-link:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 68%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 84%, var(--app-primary) 16%) !important;
+  color: color-mix(in srgb, var(--app-primary) 90%, var(--app-text)) !important;
+  transform: none !important;
+}
+
+.agentic-review-back-link__icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+}
+
+body .agentic-review-page .agentic-review-status-card,
+body .agentic-review-page .agentic-workflow-summary-card,
+body .agentic-review-page .agentic-workflow-verification-card,
+body .agentic-review-page .agentic-review-section,
+body .agentic-review-page .agentic-review-diagnostics-card,
+body .agentic-review-page .agent-trace-panel,
+.agentic-review-page .agentic-review-board-shell {
+  gap: 14px;
+  padding: clamp(15px, 1.6vw, 20px);
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--app-radius-md) !important;
+  background: var(--app-surface) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+body .agentic-review-page .agentic-review-status-card {
+  gap: 9px;
+  padding: 10px 12px;
+  border-color: var(--app-border-2) !important;
+  border-left: 3px solid var(--app-primary) !important;
+  background: color-mix(in srgb, var(--app-surface) 98%, var(--app-primary) 2%) !important;
+}
+
+.agentic-review-status-content {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.agentic-review-status-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.agentic-review-status-summary .agentic-review-kicker {
+  grid-column: 1 / -1;
+}
+
+.agentic-review-status-run-id,
+.agentic-review-status-message {
+  min-width: 0;
+  margin: 0 !important;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-status-run-id {
+  display: inline-flex;
+  gap: 5px;
+  color: var(--app-muted) !important;
+  font-size: 10px !important;
+  font-weight: 680 !important;
+  line-height: 1.35 !important;
+}
+
+.agentic-review-status-run-id strong {
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.agentic-review-status-message {
+  color: var(--app-text-2) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+}
+
+.agentic-review-kicker {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.agentic-review-run-pills {
+  gap: 5px;
+}
+
+.agentic-review-health-strip,
+.agentic-workflow-grid {
+  gap: 8px;
+}
+
+.agentic-review-health-strip--primary {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 112px), 1fr));
+}
+
+.agentic-review-page .agentic-workflow-metric,
+.agentic-review-page .pipeline-run-count-tile,
+.agentic-review-page .agent-trace-counts .pipeline-run-detail-row {
+  min-height: 50px;
+  padding: 7px 9px;
+  border: 1px solid var(--app-border);
+  border-left: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-inset);
+}
+
+.agentic-review-page .agentic-workflow-metric span,
+.agentic-review-page .pipeline-run-count-label,
+.agentic-review-page .agent-trace-counts .pipeline-run-detail-label {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.agentic-review-page .agentic-workflow-metric strong,
+.agentic-review-page .pipeline-run-count-value {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+#agenticReviewStatusCard .agentic-review-health-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-block: 1px solid var(--app-border);
+}
+
+#agenticReviewStatusCard .agentic-workflow-metric {
+  flex: 1 1 108px;
+  min-height: 0;
+  padding: 6px 9px;
+  border: 0;
+  border-right: 1px solid var(--app-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+#agenticReviewStatusCard .agentic-workflow-metric span {
+  font-size: 9px;
+  letter-spacing: 0.025em;
+}
+
+#agenticReviewStatusCard .agentic-workflow-metric strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.agentic-review-secondary-diagnostics {
+  border: 0;
+}
+
+.agentic-review-secondary-diagnostics > summary {
+  width: fit-content;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 2px;
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.agentic-review-secondary-diagnostics[open] > summary {
+  color: var(--app-text-2);
+}
+
+#agenticReviewStatusCard .agentic-review-health-strip--secondary {
+  margin-top: 4px;
+  border-bottom: 0;
+  background: var(--app-inset);
+}
+
+.agentic-review-page .agentic-review-tabs {
+  gap: 4px;
+  padding: 0 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  border-bottom-color: var(--app-border);
+}
+
+.agentic-review-page .agentic-review-tab {
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 720;
+  transition: color var(--app-fast) var(--app-ease), background-color var(--app-fast) var(--app-ease);
+}
+
+.agentic-review-page .agentic-review-tab::after {
+  right: 10px;
+  left: 10px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--app-primary);
+  transform: scaleX(0.7);
+}
+
+.agentic-review-page .agentic-review-tab:hover {
+  background: color-mix(in srgb, var(--app-primary) 7%, transparent) !important;
+}
+
+.agentic-review-page .agentic-review-tab.is-active {
+  color: var(--app-text) !important;
+}
+
+.agentic-review-page .agentic-review-tab.is-active::after {
+  transform: scaleX(1);
+}
+
+.agentic-review-tab-panels,
+.agentic-review-tab-panel {
+  gap: clamp(14px, 1.5vw, 18px);
+}
+
+.agentic-review-tab-panels {
+  margin-top: 0;
+}
+
+.agentic-review-page .agentic-review-segmented {
+  width: fit-content;
+  max-width: 100%;
+  gap: 3px;
+  padding: 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-inset);
+}
+
+.agentic-review-page .agentic-review-segment {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 720;
+  transition: border-color var(--app-fast) var(--app-ease), background-color var(--app-fast) var(--app-ease), color var(--app-fast) var(--app-ease);
+}
+
+.agentic-review-page .agentic-review-segment::after {
+  display: none;
+}
+
+.agentic-review-page .agentic-review-segment:hover {
+  border: 1px solid transparent !important;
+  background: var(--app-surface) !important;
+}
+
+.agentic-review-page .agentic-review-segment.is-active {
+  border: 1px solid var(--app-border-2) !important;
+  background: var(--app-surface-3) !important;
+  color: var(--app-text) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
+}
+
+.agentic-workflow-header {
+  gap: 14px;
+}
+
+.agentic-review-page .agentic-workflow-header h2,
+.agentic-review-page .agentic-review-section > h2,
+.agentic-review-page .agentic-workflow-summary-card > h2,
+.agentic-review-page .agentic-workflow-verification-card > h2,
+.agentic-review-page .agentic-review-diagnostics-card > h2,
+.agentic-review-page .agent-trace-panel > h2 {
+  margin: 0;
+  font-size: clamp(16px, 1.4vw, 19px) !important;
+  font-weight: 820 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.25 !important;
+}
+
+.agentic-workflow-header p {
+  max-width: 760px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.agentic-workflow-badge,
+.agentic-workflow-verification-status,
+.agentic-review-pill {
+  min-height: 24px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.agentic-review-chip-list span,
+.agent-trace-step-summary span {
+  border-color: var(--app-border);
+  background: var(--app-inset);
+  font-weight: 700;
+}
+
+.agentic-review-page .pipeline-runs-empty-cell {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  padding: 20px;
+  border: 1px dashed var(--app-border-2);
+  border-radius: 10px;
+  background: var(--app-inset);
+  color: var(--app-muted) !important;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center !important;
+}
+
+.agentic-review-page .agentic-review-state--loading {
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: 10px;
+}
+
+.agentic-review-page .agentic-review-state--loading::before {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--app-border-2);
+  border-top-color: var(--app-primary);
+  border-radius: 50%;
+  content: "";
+  animation: agentic-review-spin 0.8s linear infinite;
+}
+
+.agentic-review-page .agent-trace-error {
+  padding: 14px 16px;
+  border-color: color-mix(in srgb, var(--app-danger) 44%, var(--app-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-danger) 8%);
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.agentic-review-page :is(.agentic-review-tab, .agentic-review-advanced-tab, .agentic-review-segment, .agentic-feedback-action, summary):focus-visible,
+.agentic-review-header .agentic-review-back-link:focus-visible,
+.manual-provider-preview-modal :is(button, [tabindex]):focus-visible {
+  outline: 3px solid var(--app-focus) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 1px var(--app-primary) !important;
+}
+
+@keyframes agentic-review-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 720px) {
+  body .agentic-review-page.page {
+    padding: 14px !important;
+    padding-bottom: 220px !important;
+  }
+
+  body .agentic-review-page.page > .agentic-review-header.app-page-header {
+    padding: 0 0 14px !important;
+  }
+
+  .agentic-review-status-content,
+  .agentic-workflow-header {
+    grid-template-columns: 1fr;
+  }
+
+  .agentic-review-status-summary {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  #agenticReviewStatusCard .agentic-workflow-metric {
+    flex-basis: min(46%, 150px);
+  }
+
+  .agentic-review-page .agentic-review-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .agentic-review-page .agentic-review-tab {
+    flex: 1 1 min(100%, 148px);
+    justify-content: center;
+  }
+
+  .agentic-review-page .agentic-review-segmented {
+    width: 100%;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .agentic-review-page .agentic-review-segment {
+    flex: 1 1 min(100%, 130px);
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  body .agentic-review-page .agentic-review-status-card,
+  body .agentic-review-page .agentic-workflow-summary-card,
+  body .agentic-review-page .agentic-workflow-verification-card,
+  body .agentic-review-page .agentic-review-section,
+  body .agentic-review-page .agentic-review-diagnostics-card,
+  body .agentic-review-page .agent-trace-panel,
+  .agentic-review-page .agentic-review-board-shell {
+    padding: 14px;
+  }
+
+  .agentic-review-status-content h2 {
+    font-size: 16px !important;
+  }
+
+  .agentic-review-page .agentic-review-tab,
+  .agentic-review-page .agentic-review-segment {
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+}
+
+/* Item 6B2: consolidated Review Queue foundation. */
+.agentic-review-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.88fr) minmax(340px, 1.12fr);
+  gap: clamp(14px, 1.8vw, 22px);
+  min-width: 0;
+  align-items: start;
+}
+
+.agentic-review-queue-surface,
+.agentic-review-selected-surface {
+  min-width: 0;
+  padding: clamp(15px, 1.6vw, 20px);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-inset);
+}
+
+.agentic-review-selected-surface {
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-primary) 4%);
+}
+
+.agentic-review-workspace-heading,
+.agentic-review-selected-summary__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.agentic-review-workspace-heading h3,
+.agentic-review-selected-summary__heading h3 {
+  margin: 3px 0 0;
+  color: var(--app-text);
+  font-size: clamp(16px, 1.35vw, 19px);
+  font-weight: 820;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-workspace-note {
+  flex: 0 0 auto;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agentic-review-queue-panel {
+  min-width: 0;
+  margin-top: 11px;
+}
+
+.agentic-review-queue-groups,
+.agentic-review-queue-group,
+.agentic-review-queue-group__items {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agentic-review-queue-groups {
+  gap: 13px;
+}
+
+.agentic-review-queue-group {
+  --agentic-queue-state: var(--app-muted);
+  --agentic-queue-tint: color-mix(in srgb, var(--app-muted) 7%, transparent);
+}
+
+.agentic-review-queue-group[data-agentic-review-lane="ready_to_apply"],
+.agentic-review-queue-lane[data-agentic-review-lane="ready_to_apply"] {
+  --agentic-queue-state: var(--app-success);
+  --agentic-queue-tint: color-mix(in srgb, var(--app-success) 10%, transparent);
+}
+
+.agentic-review-queue-group[data-agentic-review-lane="tailor_then_apply"],
+.agentic-review-queue-lane[data-agentic-review-lane="tailor_then_apply"] {
+  --agentic-queue-state: var(--app-primary);
+  --agentic-queue-tint: color-mix(in srgb, var(--app-primary) 10%, transparent);
+}
+
+.agentic-review-queue-group[data-agentic-review-lane="review_before_action"],
+.agentic-review-queue-lane[data-agentic-review-lane="review_before_action"] {
+  --agentic-queue-state: var(--app-warning);
+  --agentic-queue-tint: color-mix(in srgb, var(--app-warning) 10%, transparent);
+}
+
+.agentic-review-queue-group[data-agentic-review-lane="hold_or_skip"],
+.agentic-review-queue-lane[data-agentic-review-lane="hold_or_skip"] {
+  --agentic-queue-state: var(--app-danger);
+  --agentic-queue-tint: color-mix(in srgb, var(--app-danger) 9%, transparent);
+}
+
+.agentic-review-queue-group[data-agentic-review-lane="source_watch"],
+.agentic-review-queue-lane[data-agentic-review-lane="source_watch"] {
+  --agentic-queue-state: var(--app-violet);
+  --agentic-queue-tint: color-mix(in srgb, var(--app-violet) 10%, transparent);
+}
+
+.agentic-review-queue-group__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-inline: 3px;
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agentic-review-queue-group__heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agentic-review-queue-group__heading span::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--agentic-queue-state);
+  content: "";
+}
+
+.agentic-review-queue-group__heading strong {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+#agenticReviewQueuePanel .agentic-review-queue-item {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--agentic-queue-state) 24%, var(--app-border)) !important;
+  border-radius: 9px !important;
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--agentic-queue-state) 3%) !important;
+  background-image: none !important;
+  color: var(--app-text) !important;
+  font: inherit;
+  font-weight: inherit !important;
+  text-align: left;
+  white-space: normal !important;
+  cursor: pointer;
+  box-shadow: inset 3px 0 0 var(--agentic-queue-state) !important;
+  transition: border-color var(--app-fast) var(--app-ease), background-color var(--app-fast) var(--app-ease), box-shadow var(--app-fast) var(--app-ease);
+}
+
+#agenticReviewQueuePanel .agentic-review-queue-item:hover {
+  border-color: color-mix(in srgb, var(--agentic-queue-state) 42%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 94%, var(--agentic-queue-state) 6%) !important;
+  background-image: none !important;
+  transform: none !important;
+  box-shadow: inset 3px 0 0 var(--agentic-queue-state) !important;
+}
+
+#agenticReviewQueuePanel .agentic-review-queue-item.is-selected {
+  border-color: color-mix(in srgb, var(--app-primary) 72%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 91%, var(--app-primary) 9%) !important;
+  background-image: none !important;
+  box-shadow: inset 3px 0 0 var(--agentic-queue-state), 0 0 0 1px color-mix(in srgb, var(--app-primary) 26%, transparent), 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+}
+
+.agentic-review-queue-item__copy,
+.agentic-review-queue-item__meta {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.agentic-review-queue-item__copy strong {
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-queue-item__copy > span,
+.agentic-review-queue-item__meta small {
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-queue-item__meta {
+  justify-items: end;
+  text-align: right;
+}
+
+.agentic-review-queue-item__meta small {
+  color: var(--app-muted);
+  font-size: 10px;
+}
+
+.agentic-review-queue-lane {
+  --agentic-queue-state: var(--app-muted);
+  --agentic-queue-tint: color-mix(in srgb, var(--app-muted) 7%, transparent);
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--agentic-queue-state) 38%, var(--app-border));
+  border-radius: 7px;
+  background: var(--agentic-queue-tint);
+  color: color-mix(in srgb, var(--agentic-queue-state) 82%, var(--app-text));
+  font-size: 10px;
+  font-weight: 820;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-selected-summary,
+.agentic-review-selected-empty {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.agentic-review-selected-summary__heading > div {
+  min-width: 0;
+}
+
+.agentic-review-selected-summary__heading p:not(.agentic-review-kicker),
+.agentic-review-selected-empty span {
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-selected-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+}
+
+.agentic-review-selected-context span,
+.agentic-review-selected-context strong {
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.agentic-review-selected-context span {
+  color: var(--app-muted);
+}
+
+.agentic-review-selected-context strong {
+  color: var(--app-text);
+}
+
+.agentic-review-perspective-availability {
+  display: grid;
+  gap: 7px;
+}
+
+.agentic-review-perspective-availability h4 {
+  margin: 0;
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agentic-review-perspective-availability ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.agentic-review-perspective-availability li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text-2);
+  font-size: 12px;
+}
+
+.agentic-review-perspective-availability li:last-child {
+  border-bottom: 0;
+}
+
+.agentic-review-perspective-availability strong {
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.agentic-review-perspective-availability .is-available {
+  color: var(--app-success);
+}
+
+.agentic-review-perspective-availability .is-missing {
+  color: var(--app-muted);
+}
+
+.agentic-review-queue-empty {
+  min-height: 220px;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  padding: 24px;
+  border: 1px dashed var(--app-border-2);
+  border-radius: 11px;
+  background: var(--app-surface);
+  text-align: center;
+}
+
+.agentic-review-queue-empty strong,
+.agentic-review-selected-empty strong {
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.agentic-review-queue-empty span {
+  max-width: 380px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.agentic-review-source-views {
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-inset);
+  overflow: hidden;
+}
+
+.agentic-review-source-views > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 14px;
+  align-items: center;
+  min-height: 52px;
+  padding: 11px 14px;
+  color: var(--app-text-2);
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.agentic-review-source-views > summary::after {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--app-muted);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1;
+  content: "+";
+}
+
+.agentic-review-source-views > summary span {
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.agentic-review-source-views > summary small {
+  grid-column: 1;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agentic-review-source-views[open] > summary {
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
+}
+
+.agentic-review-source-views[open] > summary::after {
+  content: "−";
+}
+
+.agentic-review-source-views__content {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+#agenticReviewQueuePanel .agentic-review-queue-item:focus-visible {
+  outline: 3px solid var(--app-focus) !important;
+  outline-offset: 2px !important;
+  box-shadow: inset 3px 0 0 var(--agentic-queue-state), 0 0 0 1px var(--app-primary) !important;
+}
+
+@media (max-width: 980px) {
+  .agentic-review-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .agentic-review-queue-surface,
+  .agentic-review-selected-surface {
+    padding: 13px;
+  }
+
+  .agentic-review-workspace-heading,
+  .agentic-review-selected-summary__heading,
+  #agenticReviewQueuePanel .agentic-review-queue-item {
+    grid-template-columns: 1fr;
+  }
+
+  .agentic-review-workspace-heading,
+  .agentic-review-selected-summary__heading {
+    display: grid;
+  }
+
+  .agentic-review-workspace-note {
+    justify-self: start;
+  }
+
+  .agentic-review-queue-item__meta {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .agentic-review-source-views > summary {
+    grid-template-columns: 1fr;
+  }
+
+  .agentic-review-source-views > summary::after {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+}
+
+/* Item 6B6.5C: Extended Trace Diagnostics master/detail visual upgrade. */
+#agenticReviewAdvancedTab .agentic-review-advanced-tab {
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 7px !important;
+  background: var(--app-surface) !important;
+  background-image: none !important;
+  color: var(--app-text-2) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#agenticReviewAdvancedTab .agentic-review-advanced-tab:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 24%, var(--app-border-2)) !important;
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-primary) 4%) !important;
+  background-image: none !important;
+  color: var(--app-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#agenticReviewAdvancedTab .agentic-review-advanced-tab.is-active {
+  border-color: color-mix(in srgb, var(--app-primary) 38%, var(--app-border-2)) !important;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-primary) 8%) !important;
+  background-image: none !important;
+  color: var(--app-primary) !important;
+  box-shadow: inset 0 -2px 0 var(--app-primary) !important;
+  transform: none !important;
+}
+
+html[data-theme="light"] #agenticReviewAdvancedTab .agentic-review-advanced-tab {
+  border-color: #d8e2f0 !important;
+  background: #ffffff !important;
+  color: #475569 !important;
+}
+
+html[data-theme="light"] #agenticReviewAdvancedTab .agentic-review-advanced-tab:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 24%, #cbd5e1) !important;
+  background: color-mix(in srgb, #ffffff 96%, var(--app-primary) 4%) !important;
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] #agenticReviewAdvancedTab .agentic-review-advanced-tab.is-active {
+  border-color: color-mix(in srgb, var(--app-primary) 34%, #cbd5e1) !important;
+  background: color-mix(in srgb, #ffffff 92%, var(--app-primary) 8%) !important;
+  color: var(--app-primary) !important;
+}
+
+.agent-trace-extended-diagnostics {
+  display: grid;
+  gap: 14px;
+  padding: clamp(14px, 1.5vw, 18px);
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--app-primary) 3%);
+}
+
+.agent-trace-extended-diagnostics__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.agent-trace-extended-diagnostics__header h5,
+.agent-trace-diagnostic-master__heading h5,
+.agent-trace-diagnostic-detail__header h5 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 15px;
+  font-weight: 820;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.agent-trace-extended-diagnostics__header p,
+.agent-trace-diagnostic-detail__header p {
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 620;
+  line-height: 1.45;
+}
+
+.agent-trace-diagnostic-workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.3fr) minmax(0, 0.7fr);
+  gap: 14px;
+  min-width: 0;
+  align-items: start;
+}
+
+.agent-trace-diagnostic-master,
+.agent-trace-diagnostic-detail {
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 11px;
+  background: var(--app-surface);
+}
+
+.agent-trace-diagnostic-master {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: clamp(520px, 72vh, 780px);
+  overflow: hidden;
+}
+
+.agent-trace-diagnostic-master__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px 10px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-inset);
+}
+
+.agent-trace-diagnostic-master__heading > span {
+  display: inline-grid;
+  min-width: 25px;
+  min-height: 25px;
+  place-items: center;
+  padding-inline: 6px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 999px;
+  background: var(--app-surface-2);
+  color: var(--app-text-2);
+  font-size: 10px;
+  font-weight: 820;
+}
+
+.agent-trace-diagnostic-master__list {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.agent-trace-diagnostic-master__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.agent-trace-diagnostic-master__list::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-muted) 40%, transparent);
+  background-clip: padding-box;
+}
+
+.agent-trace-diagnostic-item,
+.agent-trace-diagnostic-detail__article {
+  --diagnostic-accent: #64748b;
+  --diagnostic-tint: color-mix(in srgb, #64748b 8%, transparent);
+}
+
+[data-agent-trace-diagnostic-category="evidence"] {
+  --diagnostic-accent: #0891b2;
+  --diagnostic-tint: color-mix(in srgb, #0891b2 10%, transparent);
+}
+
+[data-agent-trace-diagnostic-category="shadow"] {
+  --diagnostic-accent: var(--app-violet);
+  --diagnostic-tint: color-mix(in srgb, var(--app-violet) 10%, transparent);
+}
+
+[data-agent-trace-diagnostic-category="comparison"] {
+  --diagnostic-accent: var(--app-warning);
+  --diagnostic-tint: color-mix(in srgb, var(--app-warning) 11%, transparent);
+}
+
+[data-agent-trace-diagnostic-category="human"] {
+  --diagnostic-accent: #0d9488;
+  --diagnostic-tint: color-mix(in srgb, #0d9488 10%, transparent);
+}
+
+[data-agent-trace-diagnostic-category="approval"] {
+  --diagnostic-accent: #ea580c;
+  --diagnostic-tint: color-mix(in srgb, #ea580c 9%, transparent);
+}
+
+[data-agent-trace-diagnostic-category="safety"] {
+  --diagnostic-accent: var(--app-success);
+  --diagnostic-tint: color-mix(in srgb, var(--app-success) 9%, transparent);
+}
+
+[data-agent-trace-diagnostic-category="provider"] {
+  --diagnostic-accent: var(--app-primary);
+  --diagnostic-tint: color-mix(in srgb, var(--app-primary) 9%, transparent);
+}
+
+#agenticReviewDiagnosticMasterList .agent-trace-diagnostic-item {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px !important;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 8px;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 9px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--app-text-2) !important;
+  font: inherit;
+  text-align: left;
+  white-space: normal !important;
+  cursor: pointer;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#agenticReviewDiagnosticMasterList .agent-trace-diagnostic-item:hover {
+  border-color: color-mix(in srgb, var(--diagnostic-accent) 24%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 95%, var(--diagnostic-accent) 5%) !important;
+  background-image: none !important;
+  color: var(--app-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#agenticReviewDiagnosticMasterList .agent-trace-diagnostic-item.is-selected {
+  border-color: color-mix(in srgb, var(--diagnostic-accent) 44%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 90%, var(--diagnostic-accent) 10%) !important;
+  background-image: none !important;
+  color: var(--app-text) !important;
+  box-shadow: inset 3px 0 0 var(--diagnostic-accent), 0 3px 10px rgba(15, 23, 42, 0.07) !important;
+  transform: none !important;
+}
+
+#agenticReviewDiagnosticMasterList .agent-trace-diagnostic-item:focus-visible {
+  outline: 3px solid var(--app-focus) !important;
+  outline-offset: -1px !important;
+  box-shadow: inset 3px 0 0 var(--diagnostic-accent) !important;
+}
+
+.agent-trace-diagnostic-item__icon,
+.agent-trace-diagnostic-detail__icon {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--diagnostic-accent) 30%, var(--app-border));
+  border-radius: 8px;
+  background: var(--diagnostic-tint);
+  color: var(--diagnostic-accent);
+}
+
+.agent-trace-diagnostic-item__icon {
+  width: 30px;
+  height: 30px;
+}
+
+.agent-trace-diagnostic-item__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.agent-trace-diagnostic-item__copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.agent-trace-diagnostic-item__copy strong {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 770;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-diagnostic-item__copy small {
+  color: var(--app-muted);
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-diagnostic-item__status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--app-muted);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-muted) 10%, transparent);
+}
+
+.agent-trace-diagnostic-item__status.is-ready {
+  background: var(--app-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-success) 12%, transparent);
+}
+
+.agent-trace-diagnostic-item__status.is-review {
+  background: var(--app-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-warning) 13%, transparent);
+}
+
+.agent-trace-diagnostic-item__status.is-blocked {
+  background: var(--app-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-danger) 12%, transparent);
+}
+
+.agent-trace-diagnostic-item__status.is-watch {
+  background: var(--app-violet);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-violet) 12%, transparent);
+}
+
+.agent-trace-diagnostic-detail {
+  min-height: 520px;
+  padding: clamp(13px, 1.4vw, 18px);
+  overflow: visible;
+  background: color-mix(in srgb, var(--app-surface) 98%, var(--app-primary) 2%);
+}
+
+.agent-trace-diagnostic-detail__article {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.agent-trace-diagnostic-detail__header {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+  padding: 13px 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--diagnostic-accent) 30%, var(--app-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--diagnostic-accent) 8%);
+  box-shadow: inset 3px 0 0 var(--diagnostic-accent);
+}
+
+.agent-trace-diagnostic-detail__heading {
+  min-width: 0;
+}
+
+.agent-trace-diagnostic-detail__heading h5,
+.agent-trace-diagnostic-detail__heading p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-diagnostic-detail__badge {
+  align-self: start;
+  justify-self: end;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.agent-trace-diagnostic-detail__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+}
+
+.agent-trace-diagnostic-detail__icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.agent-trace-diagnostic-detail__content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-diagnostic-detail__content > .agent-trace-summary,
+.agent-trace-diagnostic-detail__content > .agent-trace-evidence-chain-card,
+.agent-trace-diagnostic-detail__content > details {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  border-color: color-mix(in srgb, var(--diagnostic-accent) 20%, var(--app-border));
+  box-shadow: none;
+}
+
+.agent-trace-diagnostic-detail__content > .agent-trace-summary,
+.agent-trace-diagnostic-detail__content > .agent-trace-evidence-chain-card {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-trace-diagnostic-detail__content .agentic-workflow-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 14px;
+  min-width: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.agent-trace-diagnostic-detail__content .agentic-workflow-header > div {
+  min-width: 0;
+}
+
+.agent-trace-diagnostic-detail__content .agentic-workflow-header :is(h2, h4, p) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-diagnostic-detail__content .agentic-workflow-badge {
+  align-self: start;
+  justify-self: end;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.agent-trace-diagnostic-detail__content .agent-trace-counts {
+  gap: 8px;
+  margin: 0;
+}
+
+.agent-trace-diagnostic-detail__content .agent-trace-counts .pipeline-run-detail-row {
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.agent-trace-diagnostic-detail__content .pipeline-runs-empty-cell.agent-trace-state {
+  min-height: 0;
+  margin: 0;
+  padding: 13px 14px;
+  place-items: start;
+  text-align: left !important;
+}
+
+.agent-trace-diagnostic-detail__content :is(
+  .agentic-review-chip-list,
+  .agentic-review-section-counts,
+  .agent-trace-json-grid,
+  .agent-trace-json-detail
+) {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+
+.agent-trace-diagnostic-detail__content :is(.agentic-feedback-actions, .agentic-review-actions) {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 12px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-inset);
+}
+
+.agent-trace-diagnostic-detail__content .agentic-review-actions > label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-diagnostic-detail__content .agentic-review-actions > .agent-trace-confirmation-control {
+  margin-bottom: 2px;
+  cursor: pointer;
+}
+
+.agent-trace-diagnostic-detail__content .agentic-review-actions > label :is(input:not([type="checkbox"]), select) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agent-trace-diagnostic-detail__content .agentic-review-actions > .agent-trace-confirmation-control input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.agent-trace-diagnostic-detail__content :is(.agentic-feedback-actions, .agentic-review-actions) > .agentic-feedback-action {
+  justify-self: start;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.agent-trace-diagnostic-detail__content :is(.agentic-feedback-actions, .agentic-review-actions) > .agentic-review-muted {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 580;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .agent-trace-diagnostic-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-trace-diagnostic-master {
+    position: static;
+    max-height: min(44vh, 390px);
+  }
+
+  .agent-trace-diagnostic-detail {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .agent-trace-extended-diagnostics__header,
+  .agent-trace-diagnostic-detail__header {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-trace-diagnostic-detail__badge,
+  .agent-trace-diagnostic-detail__content .agentic-workflow-badge {
+    justify-self: start;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .agent-trace-diagnostic-detail__content .agentic-workflow-header,
+  .agent-trace-diagnostic-detail__content :is(.agentic-feedback-actions, .agentic-review-actions) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-trace-extended-diagnostics__header {
+    flex-direction: column;
+  }
+}
+
+/* Item 6B3: selected-job review inspector. */
+.agentic-review-inspector {
+  --agentic-inspector-state: var(--app-muted);
+  --agentic-inspector-tint: color-mix(in srgb, var(--app-muted) 7%, transparent);
+  gap: 15px;
+}
+
+.agentic-review-inspector[data-agentic-review-lane="ready_to_apply"] {
+  --agentic-inspector-state: var(--app-success);
+  --agentic-inspector-tint: color-mix(in srgb, var(--app-success) 10%, transparent);
+}
+
+.agentic-review-inspector[data-agentic-review-lane="tailor_then_apply"] {
+  --agentic-inspector-state: var(--app-primary);
+  --agentic-inspector-tint: color-mix(in srgb, var(--app-primary) 11%, transparent);
+}
+
+.agentic-review-inspector[data-agentic-review-lane="review_before_action"] {
+  --agentic-inspector-state: var(--app-warning);
+  --agentic-inspector-tint: color-mix(in srgb, var(--app-warning) 11%, transparent);
+}
+
+.agentic-review-inspector[data-agentic-review-lane="hold_or_skip"] {
+  --agentic-inspector-state: var(--app-danger);
+  --agentic-inspector-tint: color-mix(in srgb, var(--app-danger) 9%, transparent);
+}
+
+.agentic-review-inspector[data-agentic-review-lane="source_watch"] {
+  --agentic-inspector-state: var(--app-violet);
+  --agentic-inspector-tint: color-mix(in srgb, var(--app-violet) 10%, transparent);
+}
+
+.agentic-review-inspector-header {
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.agentic-review-inspector-header h3 {
+  margin: 4px 0 0;
+  color: var(--app-text);
+  font-size: clamp(18px, 1.8vw, 23px);
+  font-weight: 840;
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-inspector-header > p:last-child {
+  margin: 5px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-inspector-recommendation {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 14px 13px 17px;
+  border: 1px solid color-mix(in srgb, var(--agentic-inspector-state) 35%, var(--app-border));
+  border-radius: 12px;
+  background: linear-gradient(
+    112deg,
+    var(--agentic-inspector-tint),
+    color-mix(in srgb, var(--app-surface) 97%, var(--agentic-inspector-state) 3%)
+  );
+  overflow: hidden;
+}
+
+.agentic-review-inspector-recommendation::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--agentic-inspector-state);
+  content: "";
+}
+
+.agentic-review-inspector-recommendation .agentic-review-kicker {
+  color: color-mix(in srgb, var(--agentic-inspector-state) 78%, var(--app-text));
+}
+
+.agentic-review-inspector-recommendation h4 {
+  margin: 0;
+  color: color-mix(in srgb, var(--agentic-inspector-state) 82%, var(--app-text));
+  font-size: clamp(22px, 2.3vw, 29px);
+  font-weight: 860;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-inspector-recommendation > p:last-child {
+  max-width: 54ch;
+  margin: 3px 0 0;
+  color: var(--app-text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.agentic-review-inspector-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agentic-review-inspector-section > h4 {
+  margin: 0;
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.agentic-review-inspector-reasons {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agentic-review-inspector-reasons li {
+  position: relative;
+  min-width: 0;
+  padding: 9px 11px 9px 29px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface);
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-inspector-reasons li::before {
+  position: absolute;
+  top: 13px;
+  left: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--agentic-inspector-state);
+  box-shadow: 0 0 0 3px var(--agentic-inspector-tint);
+  content: "";
+}
+
+.agentic-review-inspector-empty-copy {
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px dashed var(--app-border-2);
+  border-radius: 9px;
+  background: var(--app-surface);
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.agentic-review-inspector-reasons-more {
+  border-top: 1px solid var(--app-border);
+}
+
+.agentic-review-inspector-reasons-more > summary,
+.agentic-review-inspector-context > summary {
+  width: fit-content;
+  padding: 9px 2px;
+  color: var(--app-primary);
+  font-size: 11px;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.agentic-review-inspector-reasons-more > summary:focus-visible,
+.agentic-review-inspector-context > summary:focus-visible {
+  outline: 3px solid var(--app-focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.agentic-review-inspector-reasons-more[open] > summary {
+  margin-bottom: 3px;
+}
+
+.agentic-review-inspector .agentic-review-perspective-availability h4 {
+  letter-spacing: 0.055em;
+}
+
+.agentic-review-inspector .agentic-review-perspective-availability strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agentic-review-inspector .agentic-review-perspective-availability strong::before {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.agentic-review-inspector .agentic-review-perspective-availability .is-available::before {
+  content: "✓";
+}
+
+.agentic-review-inspector .agentic-review-perspective-availability .is-missing::before {
+  content: "—";
+}
+
+.agentic-review-inspector-context {
+  border-top: 1px solid var(--app-border);
+}
+
+.agentic-review-inspector-context dl {
+  display: grid;
+  gap: 0;
+  margin: 2px 0 0;
+  padding: 0 11px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface);
+}
+
+.agentic-review-inspector-context dl > div {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.36fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.agentic-review-inspector-context dl > div:last-child {
+  border-bottom: 0;
+}
+
+.agentic-review-inspector-context dt,
+.agentic-review-inspector-context dd {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-inspector-context dt {
+  color: var(--app-muted);
+  font-weight: 720;
+}
+
+.agentic-review-inspector-context dd {
+  color: var(--app-text-2);
+  font-weight: 680;
+}
+
+@media (max-width: 560px) {
+  .agentic-review-inspector-recommendation {
+    padding: 14px 14px 14px 17px;
+  }
+
+  .agentic-review-inspector-context dl > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
+/* Item 6B4: selected-job evidence and independent agent views. */
+.agentic-review-evidence-disclosure {
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+  overflow: hidden;
+}
+
+.agentic-review-evidence-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.agentic-review-evidence-disclosure > summary small {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.agentic-review-evidence-disclosure > summary:focus-visible,
+.agentic-review-agent-reasons > summary:focus-visible {
+  outline: 3px solid var(--app-focus);
+  outline-offset: -3px;
+}
+
+.agentic-review-evidence-disclosure[open] > summary {
+  border-bottom: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-primary) 4%);
+}
+
+.agentic-review-evidence-groups {
+  display: grid;
+  min-width: 0;
+}
+
+.agentic-review-evidence-group {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.34fr) minmax(0, 1fr);
+  gap: 13px;
+  min-width: 0;
+  padding: 12px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.agentic-review-evidence-group:last-child {
+  border-bottom: 0;
+}
+
+.agentic-review-evidence-group h5 {
+  margin: 2px 0 0;
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 820;
+  line-height: 1.35;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.agentic-review-evidence-group dl {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+}
+
+.agentic-review-evidence-group dl > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.72fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.agentic-review-evidence-group dt,
+.agentic-review-evidence-group dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-evidence-group dt {
+  color: var(--app-muted);
+  font-weight: 680;
+}
+
+.agentic-review-evidence-group dd {
+  display: grid;
+  gap: 2px;
+  color: var(--app-text-2);
+}
+
+.agentic-review-evidence-group dd strong {
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.agentic-review-evidence-group dd small {
+  color: var(--app-muted);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.agentic-review-evidence-disclosure > .agentic-review-inspector-empty-copy {
+  margin: 12px;
+}
+
+.agentic-review-agent-view-list {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.agentic-review-agent-view {
+  --agentic-agent-accent: color-mix(in srgb, var(--app-primary) 68%, var(--app-muted));
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 10px 8px 13px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--agentic-agent-accent) 3%);
+  overflow: hidden;
+}
+
+.agentic-review-agent-view::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--agentic-agent-accent);
+  content: "";
+}
+
+.agentic-review-agent-view[data-agentic-review-agent="tailoring"] {
+  --agentic-agent-accent: var(--app-primary);
+}
+
+.agentic-review-agent-view[data-agentic-review-agent="operator"] {
+  --agentic-agent-accent: var(--agentic-inspector-state);
+}
+
+.agentic-review-agent-view[data-agentic-review-agent="critic"] {
+  --agentic-agent-accent: var(--app-violet);
+}
+
+.agentic-review-agent-view.is-missing {
+  --agentic-agent-accent: var(--app-muted);
+  background: var(--app-inset);
+}
+
+.agentic-review-agent-view__result {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.48fr) minmax(0, 1fr);
+  gap: 3px 12px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.agentic-review-agent-view__result > span,
+.agentic-review-agent-view__result > strong,
+.agentic-review-agent-view__result > small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-agent-view__result > span {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.agentic-review-agent-view__result > strong {
+  color: color-mix(in srgb, var(--agentic-agent-accent) 72%, var(--app-text));
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.agentic-review-agent-view.is-missing .agentic-review-agent-view__result > strong {
+  color: var(--app-muted);
+}
+
+.agentic-review-agent-view__result > small {
+  grid-column: 2;
+  color: var(--app-muted);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.agentic-review-agent-view__note {
+  color: var(--app-muted);
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.agentic-review-agent-reasons {
+  justify-self: end;
+  min-width: 0;
+}
+
+.agentic-review-agent-reasons > summary {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: var(--app-primary);
+  font-size: 10px;
+  font-weight: 760;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.agentic-review-agent-reasons > summary small {
+  color: var(--app-muted);
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.agentic-review-agent-reasons ul {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+  margin: 6px 0 0;
+  padding: 8px 9px;
+  border-top: 1px solid var(--app-border);
+  list-style: none;
+}
+
+.agentic-review-agent-reasons li {
+  color: var(--app-text-2);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-agent-reasons li::before {
+  margin-right: 6px;
+  color: var(--agentic-agent-accent);
+  content: "•";
+}
+
+.agentic-review-agent-view:has(.agentic-review-agent-reasons[open]) {
+  grid-template-columns: 1fr;
+}
+
+.agentic-review-agent-view:has(.agentic-review-agent-reasons[open]) .agentic-review-agent-reasons {
+  justify-self: stretch;
+}
+
+@media (max-width: 620px) {
+  .agentic-review-evidence-group,
+  .agentic-review-evidence-group dl > div,
+  .agentic-review-agent-view,
+  .agentic-review-agent-view__result {
+    grid-template-columns: 1fr;
+  }
+
+  .agentic-review-evidence-group {
+    gap: 8px;
+  }
+
+  .agentic-review-agent-view__result > small {
+    grid-column: 1;
+  }
+
+  .agentic-review-agent-reasons {
+    justify-self: start;
+  }
+
+  .agentic-review-agent-reasons > summary {
+    justify-items: start;
+    padding-inline: 0;
+  }
+
+  .agentic-review-agent-view__note {
+    white-space: normal;
+  }
+}
+
+/* Item 6B5: selected-job contextual actions and owned manual preview. */
+.agentic-review-next-step {
+  padding-top: 2px;
+}
+
+.agentic-review-next-step-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 30%, var(--app-border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-primary) 4%);
+}
+
+.agentic-review-next-step-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.agentic-review-next-step-copy strong {
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.agentic-review-next-step-copy p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 620;
+  line-height: 1.45;
+}
+
+.agentic-review-next-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-action-cell {
+  gap: 5px;
+  min-width: 0;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-action {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 72%, var(--app-border)) !important;
+  border-radius: 9px !important;
+  background: var(--app-primary) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  font-size: 11px;
+  font-weight: 820 !important;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--app-primary) 22%, transparent) !important;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--app-primary) 84%, var(--app-text)) !important;
+  background: color-mix(in srgb, var(--app-primary) 90%, var(--app-text)) !important;
+  background-image: none !important;
+  transform: none !important;
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--app-primary) 26%, transparent) !important;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-action:disabled {
+  border-color: var(--app-border) !important;
+  background: var(--app-inset) !important;
+  background-image: none !important;
+  color: var(--app-muted) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-readiness {
+  max-width: 260px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.agentic-review-planning-link {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 11px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 9px;
+  background: var(--app-surface);
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.agentic-review-planning-link:hover {
+  border-color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-surface) 95%, var(--app-primary) 5%);
+  color: var(--app-text);
+  text-decoration: none;
+}
+
+.agentic-review-planning-link:focus-visible {
+  outline: 3px solid var(--app-focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px var(--app-primary);
+}
+
+.agentic-review-selected-preview-result {
+  min-width: 0;
+}
+
+.agentic-review-selected-preview-result:empty {
+  display: none;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result {
+  gap: 12px;
+  padding: 13px;
+  border-color: color-mix(in srgb, var(--app-primary) 30%, var(--app-border));
+  border-radius: 10px;
+  background: var(--app-surface);
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result__header {
+  gap: 10px;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result__header > div {
+  gap: 6px;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result h3 {
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 820;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result__header p,
+#agenticReviewSelectedJobPanel .manual-provider-preview-provider {
+  color: var(--app-muted);
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-suggestions {
+  gap: 8px;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-suggestion {
+  gap: 8px;
+  padding: 10px;
+  border-radius: 9px;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-suggestion h4 {
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-text {
+  font-size: 11px;
+  font-weight: 680;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-suggestion dl > div {
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-suggestion dt,
+#agenticReviewSelectedJobPanel .manual-provider-preview-suggestion dd {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+/* Item 6B6: Review-first workspace and progressive Advanced inspection. */
+.agentic-review-page .agentic-review-tabs {
+  width: min(100%, 420px);
+}
+
+.agentic-review-page .agentic-review-tab {
+  flex: 1 1 0;
+  justify-content: center;
+}
+
+.agentic-review-advanced-shell,
+.agentic-review-advanced-panels,
+.agentic-review-advanced-panel {
+  display: grid;
+  gap: clamp(12px, 1.4vw, 18px);
+  min-width: 0;
+}
+
+.agentic-review-advanced-shell {
+  padding: clamp(15px, 1.8vw, 22px);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--app-primary) 3%);
+  box-shadow: var(--app-shadow-sm);
+}
+
+.agentic-review-advanced-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.agentic-review-advanced-header h2 {
+  margin: 3px 0 0;
+  color: var(--app-text);
+  font-size: clamp(17px, 1.5vw, 20px);
+  font-weight: 820;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.agentic-review-advanced-header p:last-child {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.agentic-review-page .agentic-review-advanced-tabs {
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-inset);
+}
+
+.agentic-review-page .agentic-review-advanced-tab {
+  appearance: none;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--app-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--app-fast) var(--app-ease), background-color var(--app-fast) var(--app-ease), color var(--app-fast) var(--app-ease);
+}
+
+.agentic-review-page .agentic-review-advanced-tab:hover {
+  border-color: transparent;
+  background: var(--app-surface);
+  color: var(--app-text-2);
+}
+
+.agentic-review-page .agentic-review-advanced-tab.is-active {
+  border-color: var(--app-border-2);
+  background: var(--app-surface-3);
+  color: var(--app-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.agentic-review-advanced-panel.hidden {
+  display: none;
+}
+
+.agentic-review-advanced-panel > .agentic-review-source-views {
+  margin-top: 0;
+}
+
+html[data-theme="light"] .agentic-review-advanced-shell {
+  border-color: #d8e2f0;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .agentic-review-page .agentic-review-advanced-tabs {
+  border-color: #d8e2f0;
+  background: #f8fafc;
+}
+
+html[data-theme="light"] .agentic-review-page .agentic-review-advanced-tab.is-active {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+/* Item 6B6.5A: Review Queue controls and shell usability corrections. */
+.agentic-review-page .agentic-review-tabs {
+  overflow: visible;
+  overscroll-behavior-x: auto;
+  scrollbar-width: none;
+}
+
+.agentic-review-queue-controls {
+  display: grid;
+  grid-template-columns: minmax(132px, 0.78fr) minmax(170px, 1.22fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--app-primary) 3%);
+}
+
+.agentic-review-queue-control {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+}
+
+.agentic-review-queue-control > span {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: 0.025em;
+}
+
+.agentic-review-queue-control :is(select, input) {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.agentic-review-queue-control select {
+  padding-right: 30px;
+}
+
+.agentic-review-queue-control :is(select, input)::placeholder {
+  color: var(--app-muted);
+  opacity: 0.86;
+}
+
+.agentic-review-queue-control :is(select, input):focus-visible,
+.agentic-review-queue-clear:focus-visible,
+.agentic-review-queue-scroll-region:focus-visible {
+  outline: 3px solid var(--app-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--app-primary);
+}
+
+body .agentic-review-page .agentic-review-queue-clear {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--app-border-2) !important;
+  border-radius: 8px !important;
+  background: var(--app-surface) !important;
+  background-image: none !important;
+  color: var(--app-text-2) !important;
+  font-size: 11px;
+  font-weight: 760 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body .agentic-review-page .agentic-review-queue-clear:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--app-primary) 38%, var(--app-border-2)) !important;
+  background: color-mix(in srgb, var(--app-surface) 95%, var(--app-primary) 5%) !important;
+  color: var(--app-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.agentic-review-queue-clear.hidden {
+  display: none;
+}
+
+.agentic-review-queue-scroll-region {
+  max-height: clamp(420px, calc(100vh - 310px), 720px);
+  padding-right: 5px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-color: color-mix(in srgb, var(--app-muted) 42%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.agentic-review-queue-scroll-region::-webkit-scrollbar {
+  width: 8px;
+}
+
+.agentic-review-queue-scroll-region::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-muted) 42%, transparent);
+  background-clip: padding-box;
+}
+
+.agentic-review-queue-scroll-region::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body .agentic-review-page .agentic-review-advanced-tab {
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--app-muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body .agentic-review-page .agentic-review-advanced-tab:hover {
+  border-color: var(--app-border) !important;
+  background: var(--app-surface) !important;
+  background-image: none !important;
+  color: var(--app-text-2) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body .agentic-review-page .agentic-review-advanced-tab.is-active {
+  border-color: color-mix(in srgb, var(--app-primary) 34%, var(--app-border-2)) !important;
+  background: color-mix(in srgb, var(--app-surface) 93%, var(--app-primary) 7%) !important;
+  background-image: none !important;
+  color: var(--app-primary) !important;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--app-primary) 72%, transparent) !important;
+  transform: none !important;
+}
+
+html[data-theme="light"] .agentic-review-queue-controls {
+  border-color: #d8e2f0;
+  background: #f8fafc;
+}
+
+html[data-theme="light"] .agentic-review-queue-control :is(select, input) {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+html[data-theme="light"] body .agentic-review-page .agentic-review-advanced-tab {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] body .agentic-review-page .agentic-review-advanced-tab:hover {
+  border-color: #d8e2f0 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] body .agentic-review-page .agentic-review-advanced-tab.is-active {
+  border-color: color-mix(in srgb, var(--app-primary) 30%, #cbd5e1) !important;
+  background: color-mix(in srgb, #ffffff 94%, var(--app-primary) 6%) !important;
+  color: var(--app-primary) !important;
+}
+
+@media (max-width: 560px) {
+  .agentic-review-page .agentic-review-tabs,
+  .agentic-review-page .agentic-review-advanced-tabs {
+    width: 100%;
+  }
+
+  .agentic-review-page .agentic-review-advanced-tab {
+    flex: 1 1 min(100%, 132px);
+    justify-content: center;
+  }
+
+  .agentic-review-advanced-header {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .agentic-review-queue-controls {
+    grid-template-columns: 1fr auto;
+  }
+
+  .agentic-review-queue-control--search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .agentic-review-queue-scroll-region {
+    max-height: min(62vh, 560px);
+  }
+
+  .agentic-review-next-step-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  #agenticReviewSelectedJobPanel .manual-provider-preview-action-cell,
+  #agenticReviewSelectedJobPanel .manual-provider-preview-action,
+  .agentic-review-planning-link {
+    width: 100%;
+  }
+
+  #agenticReviewSelectedJobPanel .manual-provider-preview-suggestion dl > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agentic-review-page *,
+  .agentic-review-page *::before,
+  .agentic-review-page *::after,
+  .manual-provider-preview-modal *,
+  .manual-provider-preview-modal *::before,
+  .manual-provider-preview-modal *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Item 6B6.5B: Agent Trace master/detail and progressive disclosure. */
+.agent-trace-compact-context,
+.agent-trace-run-context,
+.agent-trace-master-detail,
+.agent-trace-extended-diagnostics {
+  min-width: 0;
+}
+
+.agent-trace-compact-context {
+  display: grid;
+  gap: 10px;
+}
+
+.agent-trace-run-context {
+  display: grid;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 11px;
+  background: var(--app-inset);
+}
+
+.agent-trace-master-detail {
+  display: grid;
+  grid-template-columns: minmax(245px, 0.68fr) minmax(0, 1.32fr);
+  gap: 14px;
+  align-items: stretch;
+  min-height: 460px;
+}
+
+.agent-trace-master,
+.agent-trace-detail {
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface);
+}
+
+.agent-trace-master {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: clamp(460px, 68vh, 760px);
+  overflow: hidden;
+}
+
+.agent-trace-master__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px 11px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-inset);
+}
+
+.agent-trace-master__heading h5,
+.agent-trace-selected-step h5,
+.agent-trace-detail-sections h6 {
+  margin: 0;
+  color: var(--app-text);
+}
+
+.agent-trace-master__heading h5,
+.agent-trace-selected-step h5 {
+  font-size: 15px;
+  font-weight: 820;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.agent-trace-master__heading > span {
+  display: inline-grid;
+  min-width: 25px;
+  min-height: 25px;
+  place-items: center;
+  padding-inline: 6px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 999px;
+  background: var(--app-surface-2);
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.agent-trace-master-list {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 0;
+  padding: 9px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.agent-trace-master-item {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--app-text) !important;
+  font: inherit;
+  text-align: left;
+  white-space: normal !important;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+
+.agent-trace-master-item:hover {
+  border-color: var(--app-border) !important;
+  background: var(--app-inset) !important;
+  background-image: none !important;
+  transform: none !important;
+}
+
+.agent-trace-master-item.is-selected {
+  border-color: color-mix(in srgb, var(--app-primary) 48%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 91%, var(--app-primary) 9%) !important;
+  background-image: none !important;
+  box-shadow: inset 3px 0 0 var(--app-primary), 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+}
+
+.agent-trace-master-item:focus-visible {
+  outline: 3px solid var(--app-focus) !important;
+  outline-offset: -1px !important;
+  box-shadow: inset 3px 0 0 var(--app-primary) !important;
+}
+
+.agent-trace-master-item__heading,
+.agent-trace-master-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.agent-trace-master-item__heading {
+  justify-content: space-between;
+}
+
+.agent-trace-master-item__heading strong {
+  min-width: 0;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 790;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-master-item__heading .agentic-review-pill {
+  flex: 0 0 auto;
+  min-height: 20px;
+  padding: 2px 6px;
+  font-size: 9px;
+}
+
+.agent-trace-master-item__agent,
+.agent-trace-master-item__meta {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.agent-trace-master-item__meta {
+  flex-wrap: wrap;
+}
+
+.agent-trace-master-item__meta span:not(:last-child)::after {
+  margin-left: 7px;
+  color: var(--app-border-2);
+  content: "·";
+}
+
+.agent-trace-detail {
+  padding: clamp(14px, 1.5vw, 19px);
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--app-primary) 3%);
+}
+
+.agent-trace-selected-step,
+.agent-trace-detail-sections {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+}
+
+.agent-trace-selected-step__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.agent-trace-selected-step__header p {
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.agent-trace-selected-step__eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--app-primary);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.agent-trace-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr));
+  gap: 7px;
+}
+
+.agent-trace-detail-facts .pipeline-run-detail-row {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-inset);
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-detail-sections > section {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--app-border);
+}
+
+.agent-trace-detail-sections h6 {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.agent-trace-detail-alert {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--app-warning) 40%, var(--app-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--app-surface) 91%, var(--app-warning) 9%);
+  color: var(--app-text);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.agent-trace-detail-alert.is-error {
+  border-color: color-mix(in srgb, var(--app-danger) 44%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface) 91%, var(--app-danger) 9%);
+}
+
+.agent-trace-raw-details,
+.agent-trace-extended-diagnostics {
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-inset);
+}
+
+.agent-trace-raw-details > summary,
+.agent-trace-extended-diagnostics > summary {
+  padding: 11px 13px;
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.agent-trace-raw-details > .agent-trace-disclosure-body {
+  border-top-color: var(--app-border);
+}
+
+.agent-trace-extended-diagnostics > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-trace-extended-diagnostics > summary small {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.agent-trace-extended-diagnostics__content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 12px 12px;
+}
+
+@media (max-width: 880px) {
+  .agent-trace-master-detail {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .agent-trace-master {
+    max-height: min(46vh, 390px);
+  }
+}
+
+@media (max-width: 560px) {
+  .agent-trace-selected-step__header,
+  .agent-trace-extended-diagnostics > summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .agent-trace-detail {
+    padding: 12px;
+  }
+
+  .agent-trace-master-item__heading {
+    align-items: flex-start;
+  }
+}
+
+/* Item 6B6.5C cascade lock: keep the upgraded diagnostic surface above 6B6.5B compatibility rules. */
+.agent-trace-panel .agent-trace-extended-diagnostics {
+  border-color: var(--app-border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--app-primary) 3%);
+}
+
+/* Item 6C: final route-scoped visual system and micro-UX polish. */
+.agentic-review-page {
+  --agentic-control-height: 36px;
+  --agentic-radius-sm: 9px;
+  --agentic-radius-panel: 12px;
+  --agentic-section-gap: 14px;
+}
+
+body .agentic-review-page.page {
+  gap: 16px;
+}
+
+.agentic-review-page :is(
+  .agentic-review-workspace-heading h3,
+  .agentic-review-inspector-header h3,
+  .agentic-review-advanced-header h2,
+  .agent-trace-master__heading h5,
+  .agent-trace-selected-step h5,
+  .agent-trace-extended-diagnostics__header h5,
+  .agent-trace-diagnostic-master__heading h5,
+  .agent-trace-diagnostic-detail__header h5
+) {
+  font-weight: 760;
+}
+
+.agentic-review-page .agentic-review-kicker,
+.agentic-review-page .agentic-review-inspector-section > h4,
+.agentic-review-page .agentic-review-perspective-availability h4,
+.agentic-review-page .agentic-review-evidence-group h5,
+.agentic-review-page .agent-trace-selected-step__eyebrow {
+  font-weight: 740;
+  letter-spacing: 0.065em;
+}
+
+.agentic-review-page :is(
+  .agentic-workflow-badge,
+  .agentic-workflow-verification-status,
+  .agentic-review-pill,
+  .agentic-review-queue-lane
+) {
+  min-height: 22px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1.15;
+}
+
+/* Compact run context: informative, but subordinate to the workspace. */
+#agenticReviewStatusCard .agentic-review-status-content {
+  align-items: center;
+}
+
+#agenticReviewStatusCard .agentic-review-run-pills {
+  align-items: center;
+}
+
+#agenticReviewStatusCard .agentic-workflow-metric {
+  flex-basis: 116px;
+  padding-block: 7px;
+}
+
+#agenticReviewStatusCard .agentic-workflow-metric span {
+  color: var(--app-muted);
+  font-weight: 680;
+}
+
+#agenticReviewStatusCard .agentic-workflow-metric strong {
+  color: var(--app-text-2);
+  font-weight: 740;
+}
+
+/* Primary and Advanced navigation are tabs, never application CTAs. */
+.agentic-review-page .agentic-review-tabs {
+  width: fit-content;
+  max-width: 100%;
+  gap: 2px;
+  overflow: visible;
+  scrollbar-width: none;
+}
+
+.agentic-review-page .agentic-review-tab {
+  flex: 0 0 auto;
+  min-width: 112px;
+  min-height: 38px;
+  padding-inline: 14px;
+  font-weight: 680;
+}
+
+#agenticReviewAdvancedTab .agentic-review-advanced-tabs {
+  gap: 2px;
+  padding: 3px;
+}
+
+#agenticReviewAdvancedTab .agentic-review-advanced-tab {
+  min-height: 34px !important;
+  padding-inline: 11px !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--app-muted) !important;
+  font-size: 12px !important;
+  font-weight: 680 !important;
+  box-shadow: none !important;
+}
+
+#agenticReviewAdvancedTab .agentic-review-advanced-tab:hover {
+  border-color: var(--app-border) !important;
+  background: var(--app-surface) !important;
+  color: var(--app-text-2) !important;
+}
+
+#agenticReviewAdvancedTab .agentic-review-advanced-tab.is-active {
+  border-color: color-mix(in srgb, var(--app-primary) 34%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-primary) 6%) !important;
+  color: var(--app-primary) !important;
+  box-shadow: inset 0 -2px 0 var(--app-primary) !important;
+}
+
+/* Workspace rhythm and surfaces. */
+.agentic-review-board-shell,
+.agentic-review-advanced-shell {
+  gap: 16px;
+}
+
+.agentic-review-workspace-grid {
+  grid-template-columns: minmax(320px, 0.84fr) minmax(400px, 1.16fr);
+  gap: 16px;
+}
+
+.agentic-review-queue-surface,
+.agentic-review-selected-surface {
+  padding: 16px;
+  border-radius: var(--agentic-radius-panel);
+}
+
+.agentic-review-selected-surface {
+  background: color-mix(in srgb, var(--app-surface) 98%, var(--app-primary) 2%);
+}
+
+.agentic-review-workspace-heading h3 {
+  font-size: 17px;
+}
+
+.agentic-review-workspace-note {
+  padding-top: 3px;
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.agentic-review-queue-controls {
+  grid-template-columns: minmax(126px, 0.72fr) minmax(190px, 1.28fr) auto;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 9px;
+  border-radius: var(--agentic-radius-sm);
+  background: var(--app-inset);
+}
+
+.agentic-review-queue-control {
+  gap: 4px;
+}
+
+.agentic-review-queue-control > span {
+  font-weight: 680;
+}
+
+.agentic-review-queue-control :is(select, input),
+body .agentic-review-page .agentic-review-queue-clear {
+  min-height: var(--agentic-control-height);
+  border-radius: 8px !important;
+  font-weight: 620 !important;
+}
+
+body .agentic-review-page .agentic-review-queue-clear {
+  font-size: 11px !important;
+}
+
+.agentic-review-queue-groups {
+  gap: 12px;
+}
+
+.agentic-review-queue-group,
+.agentic-review-queue-group__items {
+  gap: 6px;
+}
+
+.agentic-review-queue-group__heading {
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.agentic-review-queue-group__heading strong {
+  font-weight: 680;
+}
+
+#agenticReviewQueuePanel .agentic-review-queue-item {
+  min-height: 52px;
+  gap: 9px;
+  padding: 9px 10px 9px 12px;
+}
+
+.agentic-review-queue-item__copy strong {
+  font-weight: 740;
+}
+
+.agentic-review-queue-item__copy > span,
+.agentic-review-queue-item__meta small {
+  font-weight: 580;
+}
+
+#agenticReviewQueuePanel .agentic-review-queue-item.is-selected {
+  border-color: color-mix(in srgb, var(--app-primary) 62%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 93%, var(--app-primary) 7%) !important;
+  box-shadow: inset 3px 0 0 var(--agentic-queue-state), 0 0 0 1px color-mix(in srgb, var(--app-primary) 22%, transparent) !important;
+}
+
+/* Inspector hierarchy: recommendation leads; technical context recedes. */
+.agentic-review-selected-summary,
+.agentic-review-inspector {
+  gap: var(--agentic-section-gap);
+}
+
+.agentic-review-inspector-header {
+  padding-bottom: 11px;
+}
+
+.agentic-review-inspector-header h3 {
+  font-size: clamp(18px, 1.55vw, 22px);
+  line-height: 1.22;
+}
+
+.agentic-review-inspector-header > p:last-child {
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 580;
+}
+
+.agentic-review-inspector-recommendation {
+  gap: 4px;
+  padding: 12px 13px 12px 16px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--app-surface) 93%, var(--agentic-inspector-state) 7%);
+}
+
+.agentic-review-inspector-recommendation h4 {
+  font-size: clamp(20px, 2vw, 25px);
+  font-weight: 780;
+  line-height: 1.15;
+}
+
+.agentic-review-inspector-recommendation > p:last-child {
+  color: var(--app-text-2);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.agentic-review-inspector-section {
+  gap: 7px;
+}
+
+.agentic-review-inspector-reasons {
+  gap: 6px;
+}
+
+.agentic-review-inspector-reasons li {
+  padding: 8px 10px 8px 27px;
+  border-color: color-mix(in srgb, var(--app-border) 78%, transparent);
+  background: var(--app-inset);
+  font-weight: 600;
+}
+
+.agentic-review-inspector-reasons li::before {
+  top: 12px;
+  left: 11px;
+}
+
+.agentic-review-perspective-availability ul {
+  border-color: color-mix(in srgb, var(--app-border) 84%, transparent);
+  border-radius: var(--agentic-radius-sm);
+}
+
+.agentic-review-perspective-availability li {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.agentic-review-perspective-availability strong {
+  font-weight: 680;
+}
+
+.agentic-review-evidence-disclosure {
+  border-color: color-mix(in srgb, var(--app-border) 84%, transparent);
+  border-radius: var(--agentic-radius-sm);
+}
+
+.agentic-review-evidence-disclosure > summary {
+  min-height: 40px;
+  padding: 9px 11px;
+  font-weight: 680;
+}
+
+.agentic-review-evidence-disclosure > summary small {
+  font-weight: 620;
+}
+
+.agentic-review-evidence-group {
+  padding: 11px;
+}
+
+.agentic-review-evidence-group dd strong,
+.agentic-review-agent-view__result > strong {
+  font-weight: 720;
+}
+
+.agentic-review-agent-view-list {
+  gap: 6px;
+}
+
+.agentic-review-agent-view {
+  min-height: 48px;
+  padding: 8px 10px 8px 13px;
+  border-color: color-mix(in srgb, var(--app-border) 82%, transparent);
+  background: color-mix(in srgb, var(--app-surface) 98%, var(--agentic-agent-accent) 2%);
+}
+
+.agentic-review-agent-view__result > span {
+  font-weight: 700;
+}
+
+.agentic-review-agent-reasons > summary {
+  font-weight: 680;
+}
+
+.agentic-review-inspector-context dl {
+  border-color: color-mix(in srgb, var(--app-border) 82%, transparent);
+  background: var(--app-inset);
+}
+
+/* Next-step action and result states are compact and mutually coherent. */
+.agentic-review-next-step-panel {
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-surface) 97%, var(--app-primary) 3%);
+}
+
+.agentic-review-next-step-copy strong {
+  font-weight: 740;
+}
+
+.agentic-review-next-step-actions {
+  align-items: flex-start;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-action,
+.agentic-review-planning-link {
+  min-height: var(--agentic-control-height);
+  font-weight: 700 !important;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-action {
+  font-size: 11px !important;
+}
+
+.manual-provider-preview-readiness.is-complete {
+  color: var(--app-success);
+}
+
+.manual-provider-preview-readiness.is-generating {
+  color: var(--app-primary);
+}
+
+.manual-provider-preview-readiness.is-failed,
+.manual-provider-preview-readiness.is-unavailable {
+  color: var(--app-danger);
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result {
+  padding: 12px;
+  box-shadow: none;
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result.is-success {
+  border-color: color-mix(in srgb, var(--app-success) 30%, var(--app-border));
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-result.is-error {
+  border-color: color-mix(in srgb, var(--app-danger) 36%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface) 95%, var(--app-danger) 5%);
+}
+
+#agenticReviewSelectedJobPanel .manual-provider-preview-suggestion {
+  border-color: color-mix(in srgb, var(--app-border) 82%, transparent);
+  background: var(--app-inset);
+}
+
+/* Advanced cards stay technical without repeating heavy nested framing. */
+#agenticReviewOverviewTab :is(
+  .agentic-workflow-manifest-card,
+  .agentic-workflow-execution-plan-card,
+  .agentic-workflow-dry-run-card,
+  .read-only-adapter-preflight-card,
+  .manual-read-only-adapter-chain-card,
+  .explicit-read-only-chain-generator-card,
+  .dry-run-execution-simulation-card,
+  .proposal-only-mutation-plan-card,
+  .operator-approval-mock-card,
+  .rag-evaluation-card,
+  .agentic-feedback-card
+) {
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-left: 3px solid color-mix(in srgb, var(--app-primary) 64%, var(--app-border));
+  border-radius: 11px;
+  background: var(--app-inset);
+  box-shadow: none;
+}
+
+.agentic-review-page .agentic-workflow-header h2,
+.agentic-review-page .agentic-review-section > h2,
+.agentic-review-page .agentic-workflow-summary-card > h2,
+.agentic-review-page .agentic-workflow-verification-card > h2,
+.agentic-review-page .agentic-review-diagnostics-card > h2,
+.agentic-review-page .agent-trace-panel > h2 {
+  font-weight: 760 !important;
+}
+
+.agentic-review-page .agentic-workflow-metric span,
+.agentic-review-page .pipeline-run-count-label,
+.agentic-review-page .agent-trace-counts .pipeline-run-detail-label {
+  font-weight: 680;
+}
+
+.agentic-review-page .agentic-workflow-metric strong,
+.agentic-review-page .pipeline-run-count-value {
+  font-weight: 740;
+}
+
+/* Main trace and the 77-surface diagnostic inventory share one master/detail rhythm. */
+.agent-trace-master-detail {
+  grid-template-columns: minmax(250px, 0.64fr) minmax(0, 1.36fr);
+  gap: 12px;
+}
+
+.agent-trace-diagnostic-workspace {
+  grid-template-columns: minmax(260px, 0.31fr) minmax(0, 0.69fr);
+  gap: 12px;
+}
+
+.agent-trace-master,
+.agent-trace-detail,
+.agent-trace-diagnostic-master,
+.agent-trace-diagnostic-detail {
+  border-radius: var(--agentic-radius-panel);
+}
+
+.agent-trace-master__heading,
+.agent-trace-diagnostic-master__heading {
+  padding: 11px 12px 10px;
+}
+
+.agent-trace-master-list,
+.agent-trace-diagnostic-master__list {
+  scrollbar-color: color-mix(in srgb, var(--app-muted) 40%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.agent-trace-master-list::-webkit-scrollbar,
+.agent-trace-diagnostic-master__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.agent-trace-master-list::-webkit-scrollbar-thumb,
+.agent-trace-diagnostic-master__list::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-muted) 40%, transparent);
+  background-clip: padding-box;
+}
+
+.agent-trace-master-item {
+  padding: 9px 10px;
+}
+
+.agent-trace-master-item__heading strong,
+.agent-trace-diagnostic-item__copy strong {
+  font-weight: 720;
+}
+
+.agent-trace-detail,
+.agent-trace-diagnostic-detail {
+  padding: 14px;
+  background: color-mix(in srgb, var(--app-surface) 98%, var(--app-primary) 2%);
+}
+
+.agent-trace-diagnostic-detail__article {
+  gap: 12px;
+}
+
+.agent-trace-diagnostic-detail__header {
+  padding: 12px 13px;
+}
+
+.agent-trace-diagnostic-item__icon {
+  width: 30px;
+  height: 30px;
+}
+
+.agent-trace-diagnostic-item__icon svg,
+.agent-trace-diagnostic-detail__icon svg {
+  stroke-width: 1.8;
+}
+
+/* Manual diagnostics are explicit actions, not oversized global CTAs. */
+body .agentic-review-page .agentic-feedback-action:not(.manual-provider-preview-action) {
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid var(--app-border-2) !important;
+  border-radius: 8px !important;
+  background: var(--app-surface-2) !important;
+  background-image: none !important;
+  color: var(--app-text-2) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.2;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body .agentic-review-page .agentic-feedback-action:not(.manual-provider-preview-action):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--app-primary) 42%, var(--app-border-2)) !important;
+  background: color-mix(in srgb, var(--app-surface-2) 94%, var(--app-primary) 6%) !important;
+  color: var(--app-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body .agentic-review-page .agentic-feedback-action.is-helpful {
+  border-color: color-mix(in srgb, var(--app-success) 42%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-success) 8%) !important;
+  color: color-mix(in srgb, var(--app-success) 78%, var(--app-text)) !important;
+}
+
+body .agentic-review-page .agentic-feedback-action.is-not-helpful {
+  border-color: color-mix(in srgb, var(--app-danger) 38%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-danger) 6%) !important;
+  color: color-mix(in srgb, var(--app-danger) 76%, var(--app-text)) !important;
+}
+
+body .agentic-review-page .agentic-feedback-action:not(.manual-provider-preview-action):disabled {
+  border-color: var(--app-border) !important;
+  background: var(--app-inset) !important;
+  color: var(--app-muted) !important;
+  opacity: 0.72 !important;
+  cursor: not-allowed;
+}
+
+.agentic-review-source-views {
+  box-shadow: none;
+}
+
+.agentic-review-source-views > summary {
+  min-height: 48px;
+}
+
+@media (min-width: 1500px) {
+  .agentic-review-workspace-grid {
+    grid-template-columns: minmax(340px, 0.82fr) minmax(460px, 1.18fr);
+  }
+}
+
+@media (max-width: 980px) {
+  .agentic-review-workspace-grid,
+  .agent-trace-diagnostic-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .agentic-review-page .agentic-review-tabs {
+    width: 100%;
+  }
+
+  .agentic-review-page .agentic-review-tab {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .agentic-review-queue-controls {
+    grid-template-columns: 1fr auto;
+  }
+
+  .agentic-review-queue-surface,
+  .agentic-review-selected-surface,
+  .agent-trace-detail,
+  .agent-trace-diagnostic-detail {
+    padding: 12px;
   }
 }

@@ -60,7 +60,7 @@ def _trace_panel_render_snippet() -> str:
 def _recommendation_explainer_snippet() -> str:
     source = _source()
     start = source.index("function recommendationExplainerValues")
-    end = source.index("function renderAgenticReviewRows")
+    end = source.index("const AGENTIC_REVIEW_QUEUE_GROUPS", start)
     return source[start:end]
 
 

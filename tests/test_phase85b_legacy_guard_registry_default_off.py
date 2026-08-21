@@ -18,6 +18,7 @@ from tests.support.phase_guard_registry import (
     ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES,
     ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES,
     ITEM4_PLANNING_TAILORING_OPTIONS_FILES,
+    ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -1808,6 +1809,29 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "*" in path for path in ITEM4_PLANNING_TAILORING_OPTIONS_FILES
     )
 
+    assert ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES == {
+        "src/app/profile_ui.py",
+        "src/app/static/agentic_review.css",
+        "src/app/static/agentic_review.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
+        "tests/test_item2e_manual_provider_preview_ui.py",
+        "tests/test_item6b2_consolidated_agentic_review_queue_foundation.py",
+        "tests/test_item6b3_selected_job_review_inspector.py",
+        "tests/test_item6b45_premium_visual_correction_density.py",
+        "tests/test_item6b4_selected_job_evidence_agent_views.py",
+        "tests/test_item6b5_contextual_actions_manual_preview_integration.py",
+        "tests/test_item6b65a_review_advanced_shell_usability.py",
+        "tests/test_item6b65b_agent_trace_master_detail_search_keyboard.py",
+        "tests/test_item6b65c_extended_trace_diagnostics_master_detail.py",
+        "tests/test_item6b6_final_review_vs_advanced_changeover.py",
+        "tests/test_item6c1_extended_diagnostic_detail_layout_action_alignment.py",
+        "tests/test_item6c2_final_placement_disclosure_header_alignment.py",
+        "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+        "tests/test_item6c_final_agentic_review_visual_system_micro_ux.py",
+    }
+    assert not any("*" in path for path in ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES)
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
@@ -1816,6 +1840,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
+        | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

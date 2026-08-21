@@ -530,88 +530,161 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=agentic_review_v1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2e_manual_provider_preview_r1" />
-  <link rel="stylesheet" href="/static/agentic_review.css?v=agentic_review_v1" />
+  <link rel="stylesheet" href="/static/agentic_review.css?v=item6c3_back_navigation_r1" />
 </head>
 <body>
 {render_top_shell("/profile")}
   <div class="page agentic-review-page" data-agentic-review-run-id="{safe_run_id}">
-    <header class="page-header agentic-review-header">
-      <div>
-        <h1>Agentic Review</h1>
-        <p class="subtext" id="agenticReviewSubtitle">Pipeline run {safe_run_id}</p>
-      </div>
-      <div class="header-actions">
-        <a class="ghost-btn" href="/profile?tab=pipeline-runs">Back to pipeline runs</a>
+    <header class="page-header app-page-header agentic-review-header">
+      <div class="app-page-header__main">
+        <a class="agentic-review-back-link" href="/profile?tab=pipeline-runs">
+          <span class="agentic-review-back-link__icon" aria-hidden="true">←</span>
+          <span>Back to pipeline runs</span>
+        </a>
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">Agentic Review</h1>
+        </div>
+        <p class="subtext app-page-header__description" id="agenticReviewSubtitle">Pipeline run {safe_run_id}</p>
       </div>
     </header>
 
-    <section class="card agentic-review-status-card" id="agenticReviewStatusCard">
-      Loading agentic review...
+    <section class="card agentic-review-status-card" id="agenticReviewStatusCard" aria-live="polite">
+      <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading agentic review...</div>
     </section>
 
-    <nav class="agentic-review-tabs" aria-label="Agentic Review sections" role="tablist">
-      <button class="agentic-review-tab is-active" type="button" role="tab" aria-selected="true" data-agentic-tab-target="agenticReviewOverviewTab">Overview</button>
-      <button class="agentic-review-tab" type="button" role="tab" aria-selected="false" data-agentic-tab-target="agenticReviewAdvisoryTab">Advisory Board</button>
-      <button class="agentic-review-tab" type="button" role="tab" aria-selected="false" data-agentic-tab-target="agenticReviewTraceTab">Agent Trace</button>
-      <button class="agentic-review-tab" type="button" role="tab" aria-selected="false" data-agentic-tab-target="agenticReviewDiagnosticsTab">Artifacts / Diagnostics</button>
+    <nav class="agentic-review-tabs" aria-label="Agentic Review primary views" role="tablist">
+      <button class="agentic-review-tab is-active" id="agenticReviewReviewTabButton" type="button" role="tab" aria-selected="true" aria-controls="agenticReviewAdvisoryTab" tabindex="0" data-agentic-tab-target="agenticReviewAdvisoryTab">Review</button>
+      <button class="agentic-review-tab" id="agenticReviewAdvancedTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewAdvancedTab" tabindex="-1" data-agentic-tab-target="agenticReviewAdvancedTab">Advanced</button>
     </nav>
 
     <main class="agentic-review-tab-panels">
-      <section class="agentic-review-tab-panel" id="agenticReviewOverviewTab" data-agentic-tab-panel>
-        <section id="agenticWorkflowSummaryPanel" class="card agentic-workflow-summary-card">
-          <h2>Agentic Workflow Summary</h2>
-          <div class="pipeline-runs-empty-cell">Loading workflow summary...</div>
-        </section>
-        <section id="agenticWorkflowVerificationPanel" class="card agentic-workflow-verification-card">
-          <h2>Agentic Workflow Verification</h2>
-          <div class="pipeline-runs-empty-cell">Loading workflow verification...</div>
-        </section>
-      </section>
-
-      <section class="agentic-review-tab-panel hidden" id="agenticReviewAdvisoryTab" data-agentic-tab-panel>
+      <section class="agentic-review-tab-panel" id="agenticReviewAdvisoryTab" role="tabpanel" aria-labelledby="agenticReviewReviewTabButton" aria-hidden="false" tabindex="0" data-agentic-tab-panel>
         <div class="agentic-review-board-shell">
           <div class="agentic-workflow-header">
             <div>
-              <h2>Advisory Board</h2>
-              <p>Read-only priority, tailoring, and operator review guidance. Production action fields stay unchanged.</p>
+              <h2>Review Workspace</h2>
+              <p>Review each job once across the existing priority, tailoring, and operator perspectives.</p>
             </div>
-            <span class="agentic-workflow-badge">Advisory only</span>
-          </div>
-          <div class="agentic-review-segmented" role="tablist" aria-label="Advisory Board views">
-            <button class="agentic-review-segment is-active" type="button" role="tab" aria-selected="true" data-agentic-advisory-target="agenticReviewPriorityPanel">Prioritization</button>
-            <button class="agentic-review-segment" type="button" role="tab" aria-selected="false" data-agentic-advisory-target="agenticReviewTailoringPanel">Tailoring</button>
-            <button class="agentic-review-segment" type="button" role="tab" aria-selected="false" data-agentic-advisory-target="agenticReviewOperatorPanel">Operator Review</button>
+            <span class="agentic-workflow-badge">Read-only review</span>
           </div>
 
-          <section class="card agentic-review-section" id="agenticReviewPriorityPanel" data-agentic-advisory-panel>
-            <h2>Job Prioritization</h2>
-            <div class="pipeline-runs-empty-cell">Loading prioritization details...</div>
-          </section>
+          <div class="agentic-review-workspace-grid">
+            <section class="agentic-review-queue-surface" aria-labelledby="agenticReviewQueueHeading">
+              <div class="agentic-review-workspace-heading">
+                <div>
+                  <p class="agentic-review-kicker">Review queue</p>
+                  <h3 id="agenticReviewQueueHeading">Review Queue</h3>
+                </div>
+                <span class="agentic-review-workspace-note">One job per record</span>
+              </div>
+              <div class="agentic-review-queue-controls" role="group" aria-label="Review Queue filters">
+                <label class="agentic-review-queue-control" for="agenticReviewQueueFilter">
+                  <span>Review type</span>
+                  <select id="agenticReviewQueueFilter">
+                    <option value="all">All</option>
+                    <option value="ready_to_apply">Ready</option>
+                    <option value="tailor_then_apply">Tailor first</option>
+                    <option value="review_before_action">Review needed</option>
+                    <option value="hold_or_skip">Hold / skip</option>
+                    <option value="source_watch">Source watch</option>
+                    <option value="not_fully_evaluated">Not fully evaluated</option>
+                  </select>
+                </label>
+                <label class="agentic-review-queue-control agentic-review-queue-control--search" for="agenticReviewQueueSearch">
+                  <span>Search jobs</span>
+                  <input id="agenticReviewQueueSearch" type="search" inputmode="search" autocomplete="off" placeholder="Title or company" />
+                </label>
+                <button class="agentic-review-queue-clear hidden" id="agenticReviewQueueClear" type="button" disabled>Clear</button>
+              </div>
+              <div id="agenticReviewQueuePanel" class="agentic-review-queue-panel agentic-review-queue-scroll-region" aria-label="Review Queue records" tabindex="0">
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Building review queue...</div>
+              </div>
+            </section>
 
-          <section class="card agentic-review-section hidden" id="agenticReviewTailoringPanel" data-agentic-advisory-panel>
-            <h2>Tailoring Decision</h2>
-            <div class="pipeline-runs-empty-cell">Loading tailoring decision details...</div>
-          </section>
+            <aside class="agentic-review-selected-surface" id="agenticReviewSelectedJobPanel" aria-live="polite" aria-label="Selected job review inspector">
+              <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Preparing selected job review...</div>
+            </aside>
+          </div>
 
-          <section class="card agentic-review-section hidden" id="agenticReviewOperatorPanel" data-agentic-advisory-panel>
-            <h2>Operator Review</h2>
-            <div class="pipeline-runs-empty-cell">Loading operator review details...</div>
-          </section>
         </div>
       </section>
 
-      <section class="agentic-review-tab-panel hidden" id="agenticReviewTraceTab" data-agentic-tab-panel>
-        <section class="card agent-trace-panel" id="agenticReviewTracePanel">
-          <h2>Agent Trace</h2>
-          <div class="pipeline-runs-empty-cell">Loading agent trace...</div>
-        </section>
-      </section>
+      <section class="agentic-review-tab-panel hidden" id="agenticReviewAdvancedTab" role="tabpanel" aria-labelledby="agenticReviewAdvancedTabButton" aria-hidden="true" tabindex="0" data-agentic-tab-panel>
+        <div class="agentic-review-advanced-shell">
+          <div class="agentic-review-advanced-header">
+            <div>
+              <p class="agentic-review-kicker">Advanced inspection</p>
+              <h2>Run artifacts and agent diagnostics</h2>
+              <p>Overview, verification, trace, diagnostics, and original advisory sources remain available without competing with the review workflow.</p>
+            </div>
+            <span class="agentic-workflow-badge">Read-only inspection</span>
+          </div>
 
-      <section class="agentic-review-tab-panel hidden" id="agenticReviewDiagnosticsTab" data-agentic-tab-panel>
-        <section class="card agentic-review-diagnostics-card" id="agenticReviewDiagnosticsPanel">
-          <h2>Artifacts / Diagnostics</h2>
-          <div class="pipeline-runs-empty-cell">Loading artifact diagnostics...</div>
-        </section>
+          <nav class="agentic-review-advanced-tabs" aria-label="Advanced inspection views" role="tablist">
+            <button class="agentic-review-advanced-tab is-active" id="agenticReviewWorkflowTabButton" type="button" role="tab" aria-selected="true" aria-controls="agenticReviewOverviewTab" tabindex="0" data-agentic-advanced-target="agenticReviewOverviewTab">Workflow</button>
+            <button class="agentic-review-advanced-tab" id="agenticReviewTraceTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewTraceTab" tabindex="-1" data-agentic-advanced-target="agenticReviewTraceTab">Agent Trace</button>
+            <button class="agentic-review-advanced-tab" id="agenticReviewDiagnosticsTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewDiagnosticsTab" tabindex="-1" data-agentic-advanced-target="agenticReviewDiagnosticsTab">Diagnostics</button>
+            <button class="agentic-review-advanced-tab" id="agenticReviewSourceViewsTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewSourceViewsPanel" tabindex="-1" data-agentic-advanced-target="agenticReviewSourceViewsPanel">Source Views</button>
+          </nav>
+
+          <div class="agentic-review-advanced-panels">
+            <section class="agentic-review-advanced-panel" id="agenticReviewOverviewTab" role="tabpanel" aria-labelledby="agenticReviewWorkflowTabButton" aria-hidden="false" tabindex="0" data-agentic-advanced-panel>
+              <section id="agenticWorkflowSummaryPanel" class="card agentic-workflow-summary-card">
+                <h2>Agentic Workflow Summary</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading workflow summary...</div>
+              </section>
+              <section id="agenticWorkflowVerificationPanel" class="card agentic-workflow-verification-card">
+                <h2>Agentic Workflow Verification</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading workflow verification...</div>
+              </section>
+            </section>
+
+            <section class="agentic-review-advanced-panel hidden" id="agenticReviewTraceTab" role="tabpanel" aria-labelledby="agenticReviewTraceTabButton" aria-hidden="true" tabindex="0" data-agentic-advanced-panel>
+              <section class="card agent-trace-panel" id="agenticReviewTracePanel">
+                <h2>Agent Trace</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading agent trace...</div>
+              </section>
+            </section>
+
+            <section class="agentic-review-advanced-panel hidden" id="agenticReviewDiagnosticsTab" role="tabpanel" aria-labelledby="agenticReviewDiagnosticsTabButton" aria-hidden="true" tabindex="0" data-agentic-advanced-panel>
+              <section class="card agentic-review-diagnostics-card" id="agenticReviewDiagnosticsPanel">
+                <h2>Artifacts / Diagnostics</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading artifact diagnostics...</div>
+              </section>
+            </section>
+
+            <section class="agentic-review-advanced-panel hidden" id="agenticReviewSourceViewsPanel" role="tabpanel" aria-labelledby="agenticReviewSourceViewsTabButton" aria-hidden="true" tabindex="0" data-agentic-advanced-panel>
+              <details class="agentic-review-source-views" id="agenticReviewSourceViews">
+                <summary>
+                  <span>Advisory source views</span>
+                  <small>Inspect the original stage-level tables.</small>
+                </summary>
+                <div class="agentic-review-source-views__content">
+                  <div class="agentic-review-segmented" role="tablist" aria-label="Advisory Board views">
+                    <button class="agentic-review-segment is-active" id="agenticReviewPriorityTabButton" type="button" role="tab" aria-selected="true" aria-controls="agenticReviewPriorityPanel" tabindex="0" data-agentic-advisory-target="agenticReviewPriorityPanel">Prioritization</button>
+                    <button class="agentic-review-segment" id="agenticReviewTailoringTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewTailoringPanel" tabindex="-1" data-agentic-advisory-target="agenticReviewTailoringPanel">Tailoring</button>
+                    <button class="agentic-review-segment" id="agenticReviewOperatorTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewOperatorPanel" tabindex="-1" data-agentic-advisory-target="agenticReviewOperatorPanel">Operator Review</button>
+                  </div>
+
+                  <section class="card agentic-review-section" id="agenticReviewPriorityPanel" role="tabpanel" aria-labelledby="agenticReviewPriorityTabButton" aria-hidden="false" tabindex="0" data-agentic-advisory-panel>
+                    <h2>Job Prioritization</h2>
+                    <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading prioritization details...</div>
+                  </section>
+
+                  <section class="card agentic-review-section hidden" id="agenticReviewTailoringPanel" role="tabpanel" aria-labelledby="agenticReviewTailoringTabButton" aria-hidden="true" tabindex="0" data-agentic-advisory-panel>
+                    <h2>Tailoring Decision</h2>
+                    <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading tailoring decision details...</div>
+                  </section>
+
+                  <section class="card agentic-review-section hidden" id="agenticReviewOperatorPanel" role="tabpanel" aria-labelledby="agenticReviewOperatorTabButton" aria-hidden="true" tabindex="0" data-agentic-advisory-panel>
+                    <h2>Operator Review</h2>
+                    <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading operator review details...</div>
+                  </section>
+                </div>
+              </details>
+            </section>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -640,7 +713,7 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
 
   <script src="/static/shell.js?v=phase133h_r1"></script>
   <script src="/static/profile.js?v=agentic_review_v1"></script>
-  <script src="/static/agentic_review.js?v=item2e_manual_provider_preview_r1"></script>
+  <script src="/static/agentic_review.js?v=item6_final_agentic_review_r1"></script>
 </body>
 </html>
     """.strip()

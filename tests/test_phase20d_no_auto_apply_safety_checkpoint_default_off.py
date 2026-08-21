@@ -17,6 +17,7 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
     HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
     HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
+    ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -2600,6 +2601,32 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         # update) that incidentally matches the "submitApplication" marker. Only
         # lines Item 4 actually added are checked, matching the step1b3 pattern
         # above for the same reason.
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item6_agentic_review_ui_revamp_runtime_files = {
+        ROOT / relative_path
+        for relative_path in ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == item6_agentic_review_ui_revamp_runtime_files:
         diff = subprocess.check_output(
             [
                 "git",

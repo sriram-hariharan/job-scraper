@@ -21,6 +21,7 @@ const AGENTIC_REVIEW_FEEDBACK_EVENTS = {
 
 const MANUAL_PROVIDER_PREVIEW_ENDPOINT = "/api/manual-generate-ai-tailoring-preview-live";
 const MANUAL_PROVIDER_PREVIEW_WORKLOAD = "manual_provider_preview";
+const AGENTIC_REVIEW_PLANNING_PATH = "/planning";
 const manualProviderPreviewState = {
   readiness: "unknown",
   route: null,
@@ -54,6 +55,17 @@ const MANUAL_PROVIDER_PREVIEW_ERROR_MESSAGES = Object.freeze({
   unsafe_provider_response: "The provider response did not pass the preview safety checks.",
   unsafe_provider_metadata: "The provider response metadata did not pass safety checks.",
 });
+
+const MANUAL_PROVIDER_PREVIEW_UNAVAILABLE_CATEGORIES = new Set([
+  "activation_disabled",
+  "route_unavailable",
+  "blocked_non_live",
+  "credential_not_configured",
+  "credential_unavailable",
+  "settings_unavailable",
+  "client_construction_failed",
+  "provider_configuration_unavailable",
+]);
 
 function manualProviderPreviewReadiness(payload = {}) {
   const workloads = Array.isArray(payload?.workloads) ? payload.workloads : [];
@@ -177,10 +189,10 @@ function renderAgenticReviewStatus(payload = {}, tracePayload = {}) {
   if (!panel) return;
   panel.innerHTML = `
     <div class="agentic-review-status-content">
-      <div>
-        <div class="agentic-review-kicker">Pipeline run</div>
-        <h2>${escapeHtml(run?.run_id || "Unknown run")}</h2>
-        <p>${escapeHtml(run?.summary_message || run?.stage_message || run?.error || "No run summary available.")}</p>
+      <div class="agentic-review-status-summary">
+        <div class="agentic-review-kicker">Run context</div>
+        <p class="agentic-review-status-run-id"><span>Run</span> <strong>${escapeHtml(run?.run_id || "Unknown run")}</strong></p>
+        <p class="agentic-review-status-message">${escapeHtml(run?.summary_message || run?.stage_message || run?.error || "No run summary available.")}</p>
       </div>
       <div class="agentic-review-run-pills">
         ${renderReviewPill(pipelineRunStatusLabel(run?.status), "agentic-review-run-status")}
@@ -196,7 +208,7 @@ function renderAgenticReviewStatus(payload = {}, tracePayload = {}) {
       ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count ?? 0)}
       ${renderWorkflowSummaryMetric("Agent trace", traceSummary.found === true ? "available" : traceSummary.found === false ? "not persisted" : "-")}
     </div>
-      <details class="agentic-review-secondary-diagnostics" data-collapsed-by-default="true">
+    <details class="agentic-review-secondary-diagnostics" data-collapsed-by-default="true">
       <summary>Secondary diagnostics</summary>
       <div class="agentic-review-health-strip agentic-review-health-strip--secondary">
         ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count ?? 0)}
@@ -227,19 +239,57 @@ function renderAgenticReviewCell(row, column) {
   return escapeHtml(value || "-");
 }
 
-function renderManualProviderPreviewAction(row = {}) {
+function renderManualProviderPreviewAction(row = {}, options = {}) {
   const jobId = String(row?.job_id || "").trim();
   const routeReady = manualProviderPreviewState.readiness === "eligible";
-  const disabled = !jobId || !routeReady || manualProviderPreviewState.inFlight;
+  const contextAvailable = options.contextAvailable !== false;
+  const previewResult = options.previewResult !== undefined
+    ? options.previewResult
+    : jobId ? manualProviderPreviewState.results.get(jobId) : null;
+  const previewComplete = previewResult?.kind === "success";
+  const previewFailed = previewResult?.kind === "error";
+  const previewUnavailable = previewFailed
+    && MANUAL_PROVIDER_PREVIEW_UNAVAILABLE_CATEGORIES.has(String(previewResult?.category || "").trim());
+  const currentRequestInFlight = manualProviderPreviewState.inFlight
+    && manualProviderPreviewState.pendingJobId === jobId;
+  const anotherRequestInFlight = manualProviderPreviewState.inFlight && !currentRequestInFlight;
+  const disabled = !jobId || !contextAvailable || !routeReady
+    || previewUnavailable || manualProviderPreviewState.inFlight;
+  const actionLabel = currentRequestInFlight
+    ? "Generating preview…"
+    : previewComplete
+      ? "Generate another preview"
+      : previewFailed && !previewUnavailable
+        ? "Retry AI Preview"
+        : "Generate AI Preview";
   const stateLabel = !jobId
     ? "Job identifier unavailable"
-    : manualProviderPreviewState.readiness === "blocked"
-      ? "Provider route not ready"
-      : manualProviderPreviewState.readiness === "unknown"
-        ? "Preview readiness unavailable"
-        : manualProviderPreviewState.inFlight
-          ? "Generating preview…"
-          : "Ready for manual preview";
+    : !contextAvailable
+      ? "Tailoring evaluation not available"
+      : currentRequestInFlight
+        ? "Generating preview…"
+        : anotherRequestInFlight
+          ? "Another preview is generating…"
+          : previewComplete
+            ? "Preview generated"
+            : previewUnavailable
+              ? "Preview unavailable"
+              : previewFailed
+                ? "Preview failed — retry manually"
+                : manualProviderPreviewState.readiness === "blocked"
+                  ? "Provider route not ready"
+                  : manualProviderPreviewState.readiness === "unknown"
+                    ? "Preview readiness unavailable"
+                    : "Ready for manual preview";
+  const presentationState = currentRequestInFlight || anotherRequestInFlight
+    ? "generating"
+    : previewComplete
+      ? "complete"
+      : previewUnavailable
+        ? "unavailable"
+        : previewFailed
+          ? "failed"
+          : manualProviderPreviewState.readiness;
   return `
     <div class="manual-provider-preview-action-cell">
       <button
@@ -248,8 +298,8 @@ function renderManualProviderPreviewAction(row = {}) {
         data-manual-provider-preview-action
         data-job-id="${escapeHtml(jobId)}"
         ${disabled ? "disabled" : ""}
-      >Generate AI Preview</button>
-      <span class="manual-provider-preview-readiness is-${escapeHtml(manualProviderPreviewState.readiness)}" data-manual-provider-preview-readiness>
+      >${escapeHtml(actionLabel)}</button>
+      <span class="manual-provider-preview-readiness is-${escapeHtml(presentationState)}" data-manual-provider-preview-readiness>
         ${escapeHtml(stateLabel)}
       </span>
     </div>
@@ -322,7 +372,7 @@ function renderManualProviderPreviewResult(result) {
   }
   const preview = result.preview;
   return `
-    <article class="manual-provider-preview-result" aria-label="Live AI tailoring preview for manual review">
+    <article class="manual-provider-preview-result is-success" aria-label="Live AI tailoring preview for manual review">
       <div class="manual-provider-preview-result__header">
         <div>
           <span class="agentic-review-pill is-review">Preview · Manual review</span>
@@ -339,7 +389,7 @@ function renderManualProviderPreviewResult(result) {
             <dl>
               <div><dt>Evidence IDs</dt><dd>${renderReasonChips(suggestion.evidenceIds)}</dd></div>
               <div><dt>Rationale</dt><dd>${escapeHtml(suggestion.rationale)}</dd></div>
-              <div><dt>Risk flags</dt><dd>${renderReasonChips(suggestion.riskFlags)}</dd></div>
+              ${suggestion.riskFlags.length ? `<div><dt>Risk flags</dt><dd>${renderReasonChips(suggestion.riskFlags)}</dd></div>` : ""}
             </dl>
           </section>
         `).join("")}
@@ -439,6 +489,716 @@ function renderRecommendationExplainer(row = {}) {
       </div>
     </details>
   `;
+}
+
+const AGENTIC_REVIEW_QUEUE_GROUPS = Object.freeze([
+  Object.freeze({ key: "ready_to_apply", label: "Ready" }),
+  Object.freeze({ key: "tailor_then_apply", label: "Tailor first" }),
+  Object.freeze({ key: "review_before_action", label: "Review needed" }),
+  Object.freeze({ key: "hold_or_skip", label: "Hold / skip" }),
+  Object.freeze({ key: "source_watch", label: "Source watch" }),
+  Object.freeze({ key: "not_fully_evaluated", label: "Not fully evaluated" }),
+]);
+
+const AGENTIC_REVIEW_RECOMMENDATION_DESCRIPTIONS = Object.freeze({
+  ready_to_apply: "The operator review currently classifies this job as ready.",
+  tailor_then_apply: "The operator review recommends tailoring before moving forward.",
+  review_before_action: "The operator review recommends human review before the next action.",
+  hold_or_skip: "The operator review recommends holding or skipping this job.",
+  source_watch: "The operator review recommends monitoring the source before acting.",
+  not_fully_evaluated: "Operator review was not recorded for this job.",
+});
+
+const AGENTIC_REVIEW_VISIBLE_REASON_LIMIT = 4;
+
+const AGENTIC_REVIEW_STAGE_SOURCES = Object.freeze([
+  Object.freeze({ key: "operator", label: "Operator Review" }),
+  Object.freeze({ key: "tailoring", label: "Tailoring" }),
+  Object.freeze({ key: "prioritization", label: "Prioritization" }),
+]);
+
+const agenticReviewQueueState = {
+  records: [],
+  selectedJobId: "",
+  filterLane: "all",
+  searchQuery: "",
+};
+
+const agenticReviewTraceState = {
+  items: [],
+  selectedTraceKey: "",
+  tracePayload: {},
+};
+
+const agenticReviewDiagnosticState = {
+  items: [],
+  selectedDiagnosticKey: "",
+};
+
+function agenticReviewQueueIdentity(record = {}) {
+  const stageRows = [record.prioritization, record.tailoring, record.operator]
+    .filter((row) => row && typeof row === "object");
+  const firstField = (field) => {
+    for (const row of stageRows) {
+      const value = String(row?.[field] || "").trim();
+      if (value) return value;
+    }
+    return "";
+  };
+  return {
+    title: firstField("title"),
+    company: firstField("company"),
+  };
+}
+
+function consolidateAgenticReviewRows(
+  prioritizationRows = [],
+  tailoringRows = [],
+  operatorRows = [],
+) {
+  const recordsByJobId = new Map();
+  const orderedRecords = [];
+  const addStageRows = (rows, stage) => {
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const jobId = String(row.job_id || "").trim();
+      if (!jobId) return;
+      let record = recordsByJobId.get(jobId);
+      if (!record) {
+        record = {
+          job_id: jobId,
+          identity: { title: "", company: "" },
+          prioritization: null,
+          tailoring: null,
+          operator: null,
+        };
+        recordsByJobId.set(jobId, record);
+        orderedRecords.push(record);
+      }
+      if (!record[stage]) record[stage] = row;
+    });
+  };
+
+  addStageRows(prioritizationRows, "prioritization");
+  addStageRows(tailoringRows, "tailoring");
+  addStageRows(operatorRows, "operator");
+  orderedRecords.forEach((record) => {
+    record.identity = agenticReviewQueueIdentity(record);
+  });
+  return orderedRecords;
+}
+
+function agenticReviewQueueGroup(record = {}) {
+  const operatorLane = String(record?.operator?.operator_review_lane || "").trim();
+  const knownGroup = AGENTIC_REVIEW_QUEUE_GROUPS
+    .slice(0, 5)
+    .find((group) => group.key === operatorLane);
+  if (knownGroup) return knownGroup;
+  return AGENTIC_REVIEW_QUEUE_GROUPS.find((group) => group.key === "not_fully_evaluated");
+}
+
+function agenticReviewQueueLaneLabel(record = {}) {
+  const operatorLane = String(record?.operator?.operator_review_lane || "").trim();
+  if (!operatorLane) return "Not evaluated";
+  const group = agenticReviewQueueGroup(record);
+  return group?.key === "not_fully_evaluated" ? formatReviewLabel(operatorLane) : group?.label || formatReviewLabel(operatorLane);
+}
+
+function groupAgenticReviewQueueRecords(records = []) {
+  const safeRecords = Array.isArray(records) ? records : [];
+  return AGENTIC_REVIEW_QUEUE_GROUPS.map((group) => ({
+    ...group,
+    records: safeRecords.filter((record) => agenticReviewQueueGroup(record)?.key === group.key),
+  })).filter((group) => group.records.length);
+}
+
+function normalizeAgenticReviewQueueFilterLane(filterLane) {
+  const normalizedLane = String(filterLane || "").trim();
+  if (normalizedLane === "all") return "all";
+  return AGENTIC_REVIEW_QUEUE_GROUPS.some((group) => group.key === normalizedLane)
+    ? normalizedLane
+    : "all";
+}
+
+function agenticReviewQueueRecordMatchesLane(record = {}, filterLane = "all") {
+  const normalizedLane = normalizeAgenticReviewQueueFilterLane(filterLane);
+  if (normalizedLane === "all") return true;
+  const machineLane = String(record?.operator?.operator_review_lane || "").trim();
+  if (normalizedLane === "not_fully_evaluated") return !machineLane;
+  return machineLane === normalizedLane;
+}
+
+function agenticReviewQueueRecordMatchesSearch(record = {}, searchQuery = "") {
+  const normalizedQuery = String(searchQuery || "").trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  const title = String(record?.identity?.title || "").toLowerCase();
+  const company = String(record?.identity?.company || "").toLowerCase();
+  return title.includes(normalizedQuery) || company.includes(normalizedQuery);
+}
+
+function filterAgenticReviewQueueRecords(records = [], filterLane = "all", searchQuery = "") {
+  const safeRecords = Array.isArray(records) ? records : [];
+  return safeRecords.filter((record) => (
+    agenticReviewQueueRecordMatchesLane(record, filterLane)
+    && agenticReviewQueueRecordMatchesSearch(record, searchQuery)
+  ));
+}
+
+function visibleAgenticReviewQueueRecords() {
+  return filterAgenticReviewQueueRecords(
+    agenticReviewQueueState.records,
+    agenticReviewQueueState.filterLane,
+    agenticReviewQueueState.searchQuery,
+  );
+}
+
+function agenticReviewQueuePerspectiveCount(record = {}) {
+  return [record.prioritization, record.tailoring, record.operator].filter(Boolean).length;
+}
+
+function agenticReviewQueueField(record = {}, field = "") {
+  for (const row of [record.operator, record.tailoring, record.prioritization]) {
+    const value = String(row?.[field] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function agenticReviewQueueExistingAction(record = {}) {
+  return agenticReviewQueueField(record, "existing_action");
+}
+
+function agenticReviewInspectorRecommendationLabel(record = {}) {
+  if (!String(record?.operator?.operator_review_lane || "").trim()) return "Not fully evaluated";
+  return agenticReviewQueueLaneLabel(record);
+}
+
+function agenticReviewInspectorRecommendationDescription(record = {}) {
+  const machineLane = String(record?.operator?.operator_review_lane || "").trim();
+  if (!machineLane) return AGENTIC_REVIEW_RECOMMENDATION_DESCRIPTIONS.not_fully_evaluated;
+  return AGENTIC_REVIEW_RECOMMENDATION_DESCRIPTIONS[machineLane]
+    || "The operator review recorded a recommendation for this job.";
+}
+
+function agenticReviewOperatorReasonCodes(record = {}) {
+  return agenticReviewReasonCodesFromValue(record?.operator?.operator_review_reason_codes);
+}
+
+function agenticReviewReasonCodesFromValue(rawReasonCodes) {
+  const values = Array.isArray(rawReasonCodes)
+    ? rawReasonCodes
+    : String(rawReasonCodes ?? "").split("|");
+  return values.map((value) => String(value || "").trim()).filter(Boolean);
+}
+
+function agenticReviewReasonDisplayLabel(reasonCode) {
+  const label = String(reasonCode || "").trim().replaceAll("_", " ").replaceAll("-", " ");
+  return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : "";
+}
+
+function renderAgenticReviewInspectorReason(reasonCode) {
+  return `
+    <li data-agentic-review-reason-code="${escapeHtml(reasonCode)}">
+      ${escapeHtml(agenticReviewReasonDisplayLabel(reasonCode))}
+    </li>
+  `;
+}
+
+function renderAgenticReviewInspectorReasons(record = {}) {
+  const reasons = agenticReviewOperatorReasonCodes(record);
+  if (!reasons.length) {
+    return `<p class="agentic-review-inspector-empty-copy">No operator review reasons were recorded for this job.</p>`;
+  }
+  const visibleReasons = reasons.slice(0, AGENTIC_REVIEW_VISIBLE_REASON_LIMIT);
+  const remainingReasons = reasons.slice(AGENTIC_REVIEW_VISIBLE_REASON_LIMIT);
+  return `
+    <ul class="agentic-review-inspector-reasons">
+      ${visibleReasons.map(renderAgenticReviewInspectorReason).join("")}
+    </ul>
+    ${remainingReasons.length ? `
+      <details class="agentic-review-inspector-reasons-more">
+        <summary>Show ${escapeHtml(String(remainingReasons.length))} more ${remainingReasons.length === 1 ? "reason" : "reasons"}</summary>
+        <ul class="agentic-review-inspector-reasons">
+          ${remainingReasons.map(renderAgenticReviewInspectorReason).join("")}
+        </ul>
+      </details>
+    ` : ""}
+  `;
+}
+
+function renderAgenticReviewEvaluationCoverage(record = {}) {
+  const perspectives = [
+    ["Prioritization", Boolean(record.prioritization)],
+    ["Tailoring", Boolean(record.tailoring)],
+    ["Operator Review", Boolean(record.operator)],
+  ];
+  return `
+    <div class="agentic-review-perspective-availability" aria-label="Evaluation coverage">
+      <h4>Evaluation coverage</h4>
+      <ul>
+        ${perspectives.map(([label, evaluated]) => `
+          <li>
+            <span>${escapeHtml(label)}</span>
+            <strong class="${evaluated ? "is-available" : "is-missing"}">${evaluated ? "Evaluated" : "Not evaluated"}</strong>
+          </li>
+        `).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function agenticReviewHasRecordedValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function agenticReviewRecordedFact(record = {}, field = "") {
+  for (const source of AGENTIC_REVIEW_STAGE_SOURCES) {
+    const row = record?.[source.key];
+    if (!row || typeof row !== "object" || !agenticReviewHasRecordedValue(row[field])) continue;
+    return {
+      field,
+      value: row[field],
+      sourceKey: source.key,
+      sourceLabel: source.label,
+    };
+  }
+  return null;
+}
+
+function agenticReviewEvidenceGroups(record = {}) {
+  const groupDefinitions = [
+    {
+      key: "match",
+      label: "Match / score",
+      facts: [
+        ["deterministic_winner_score", "Deterministic match score", "plain"],
+      ],
+    },
+    {
+      key: "resume",
+      label: "Resume context",
+      facts: [
+        ["winner_resume", "Selected resume", "plain"],
+        ["resolved_resume", "Resolved resume", "plain"],
+      ],
+    },
+    {
+      key: "packet",
+      label: "Packet / gating",
+      facts: [
+        ["packet_generation_allowed", "Packet generation allowed", "readable"],
+        ["packet_generation_block_reason", "Packet block reason", "readable"],
+      ],
+    },
+    {
+      key: "fallback",
+      label: "Fallback context",
+      facts: [
+        ["fallback_only_no_deterministic_match", "Fallback only / no deterministic match", "readable"],
+      ],
+    },
+  ];
+  return groupDefinitions.map((group) => ({
+    ...group,
+    facts: group.facts.map(([field, label, format]) => {
+      const fact = agenticReviewRecordedFact(record, field);
+      return fact ? { ...fact, label, format } : null;
+    }).filter(Boolean),
+  })).filter((group) => group.facts.length);
+}
+
+function agenticReviewMachineValueLabel(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const readable = raw.replaceAll("_", " ").replaceAll("-", " ").toLowerCase();
+  return `${readable.charAt(0).toUpperCase()}${readable.slice(1)}`;
+}
+
+function renderAgenticReviewEvidence(record = {}) {
+  const groups = agenticReviewEvidenceGroups(record);
+  const factCount = groups.reduce((total, group) => total + group.facts.length, 0);
+  return `
+    <section class="agentic-review-inspector-section agentic-review-evidence" aria-labelledby="agenticReviewInspectorEvidenceHeading">
+      <h4 id="agenticReviewInspectorEvidenceHeading">Evidence</h4>
+      <details class="agentic-review-evidence-disclosure">
+        <summary>
+          <span>View supporting evidence</span>
+          <small>${escapeHtml(String(factCount))} recorded ${factCount === 1 ? "fact" : "facts"}</small>
+        </summary>
+        ${groups.length ? `
+          <div class="agentic-review-evidence-groups">
+            ${groups.map((group) => `
+              <section class="agentic-review-evidence-group" data-agentic-review-evidence-group="${escapeHtml(group.key)}">
+                <h5>${escapeHtml(group.label)}</h5>
+                <dl>
+                  ${group.facts.map((fact) => `
+                    <div data-agentic-review-evidence-field="${escapeHtml(fact.field)}">
+                      <dt>${escapeHtml(fact.label)}</dt>
+                      <dd>
+                        <strong>${escapeHtml(fact.format === "plain" ? String(fact.value) : agenticReviewMachineValueLabel(fact.value))}</strong>
+                        <small>From ${escapeHtml(fact.sourceLabel)}</small>
+                      </dd>
+                    </div>
+                  `).join("")}
+                </dl>
+              </section>
+            `).join("")}
+          </div>
+        ` : `<p class="agentic-review-inspector-empty-copy">No supporting evidence was recorded for this job.</p>`}
+      </details>
+    </section>
+  `;
+}
+
+function agenticReviewAgentViews(record = {}) {
+  const criticDecision = agenticReviewRecordedFact(record, "critic_decision");
+  const criticReasons = agenticReviewRecordedFact(record, "critic_reason_codes");
+  return [
+    {
+      key: "prioritization",
+      label: "Prioritization",
+      field: "advisory_priority",
+      row: record.prioritization,
+      reasons: agenticReviewReasonCodesFromValue(record?.prioritization?.advisory_reason_codes),
+      reasonSourceLabel: "Prioritization",
+    },
+    {
+      key: "tailoring",
+      label: "Tailoring",
+      field: "tailoring_decision",
+      row: record.tailoring,
+      reasons: agenticReviewReasonCodesFromValue(record?.tailoring?.tailoring_reason_codes),
+      reasonSourceLabel: "Tailoring",
+    },
+    {
+      key: "operator",
+      label: "Operator Review",
+      field: "operator_review_lane",
+      row: record.operator,
+      reasons: [],
+    },
+    {
+      key: "critic",
+      label: "Critic",
+      field: "critic_decision",
+      row: criticDecision || criticReasons ? { critic_decision: criticDecision?.value ?? "" } : null,
+      reasons: agenticReviewReasonCodesFromValue(criticReasons?.value),
+      sourceLabel: criticDecision?.sourceLabel || criticReasons?.sourceLabel || "",
+      reasonSourceLabel: criticReasons?.sourceLabel || "",
+    },
+  ];
+}
+
+function agenticReviewAgentViewResult(view = {}) {
+  if (!view.row) return { label: "Not evaluated", machineValue: "", missing: true };
+  const machineValue = String(view.row?.[view.field] ?? "").trim();
+  if (!machineValue) return { label: "Not recorded", machineValue: "", missing: true };
+  if (view.key === "operator") {
+    return {
+      label: agenticReviewInspectorRecommendationLabel({ operator: view.row }),
+      machineValue,
+      missing: false,
+    };
+  }
+  return { label: agenticReviewMachineValueLabel(machineValue), machineValue, missing: false };
+}
+
+function renderAgenticReviewAgentReasonDetails(view = {}) {
+  if (!view.reasons.length) return "";
+  return `
+    <details class="agentic-review-agent-reasons">
+      <summary>
+        <span>${escapeHtml(String(view.reasons.length))} recorded ${view.reasons.length === 1 ? "reason" : "reasons"}</span>
+        ${view.reasonSourceLabel ? `<small>From ${escapeHtml(view.reasonSourceLabel)}</small>` : ""}
+      </summary>
+      <ul>
+        ${view.reasons.map((reason) => `
+          <li data-agentic-review-agent-reason-code="${escapeHtml(reason)}">${escapeHtml(agenticReviewReasonDisplayLabel(reason))}</li>
+        `).join("")}
+      </ul>
+    </details>
+  `;
+}
+
+function renderAgenticReviewAgentViews(record = {}) {
+  return `
+    <section class="agentic-review-inspector-section agentic-review-agent-views" aria-labelledby="agenticReviewInspectorAgentViewsHeading">
+      <h4 id="agenticReviewInspectorAgentViewsHeading">Agent views</h4>
+      <div class="agentic-review-agent-view-list">
+        ${agenticReviewAgentViews(record).map((view) => {
+          const result = agenticReviewAgentViewResult(view);
+          return `
+            <article class="agentic-review-agent-view${result.missing ? " is-missing" : ""}" data-agentic-review-agent="${escapeHtml(view.key)}" data-agentic-review-machine-value="${escapeHtml(result.machineValue)}">
+              <div class="agentic-review-agent-view__result">
+                <span>${escapeHtml(view.label)}</span>
+                <strong>${escapeHtml(result.label)}</strong>
+                ${view.sourceLabel ? `<small>Recorded in ${escapeHtml(view.sourceLabel)}</small>` : ""}
+              </div>
+              ${view.key === "operator" && agenticReviewOperatorReasonCodes(record).length
+                ? `<small class="agentic-review-agent-view__note">Reasons shown in Why</small>`
+                : renderAgenticReviewAgentReasonDetails(view)}
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAgenticReviewNextStep(record = {}) {
+  const jobId = String(record?.job_id || "").trim();
+  const tailoringContextAvailable = Boolean(record?.tailoring);
+  const previewRow = {
+    ...(record?.tailoring || {}),
+    job_id: jobId,
+  };
+  const previewResult = jobId ? manualProviderPreviewState.results.get(jobId) : null;
+  return `
+    <section class="agentic-review-inspector-section agentic-review-next-step" aria-labelledby="agenticReviewInspectorNextStepHeading">
+      <h4 id="agenticReviewInspectorNextStepHeading">Next step</h4>
+      <div class="agentic-review-next-step-panel">
+        <div class="agentic-review-next-step-copy">
+          <strong>AI Tailoring Preview</strong>
+          <p>Preview only — your resume will not be changed.</p>
+        </div>
+        <div class="agentic-review-next-step-actions">
+          ${renderManualProviderPreviewAction(previewRow, {
+            contextAvailable: tailoringContextAvailable,
+            previewResult,
+          })}
+          <a class="agentic-review-planning-link" href="${AGENTIC_REVIEW_PLANNING_PATH}">Open Planning</a>
+        </div>
+        <div class="agentic-review-selected-preview-result" data-manual-provider-preview-result="${escapeHtml(jobId)}" aria-live="polite">
+          ${renderManualProviderPreviewResult(previewResult)}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderAgenticReviewInspectorContext(record = {}) {
+  const source = agenticReviewQueueField(record, "source");
+  const existingAction = agenticReviewQueueExistingAction(record);
+  const fields = [
+    ["Job ID", record.job_id],
+    ["Source", source],
+    ["Existing action", existingAction ? formatReviewLabel(existingAction) : ""],
+  ].filter(([, value]) => String(value || "").trim());
+  return `
+    <details class="agentic-review-inspector-context">
+      <summary>Job context</summary>
+      <dl>
+        ${fields.map(([label, value]) => `
+          <div>
+            <dt>${escapeHtml(label)}</dt>
+            <dd>${escapeHtml(value)}</dd>
+          </div>
+        `).join("")}
+      </dl>
+    </details>
+  `;
+}
+
+function renderAgenticReviewQueueLane(record = {}) {
+  const group = agenticReviewQueueGroup(record);
+  const machineLane = String(record?.operator?.operator_review_lane || "").trim();
+  return `
+    <span class="agentic-review-queue-lane" data-agentic-review-lane="${escapeHtml(group?.key || "not_fully_evaluated")}" data-agentic-review-machine-lane="${escapeHtml(machineLane)}">
+      ${escapeHtml(agenticReviewQueueLaneLabel(record))}
+    </span>
+  `;
+}
+
+function renderAgenticReviewQueue(records = [], selectedJobId = "", options = {}) {
+  const safeRecords = Array.isArray(records) ? records : [];
+  if (!safeRecords.length) {
+    if (options.filteredEmpty === true) {
+      return `
+        <div class="agentic-review-queue-empty agentic-review-queue-empty--filtered" role="status">
+          <strong>No jobs match the current filters.</strong>
+          <span>Change the review type or search, or use Clear to show every advisory job.</span>
+        </div>
+      `;
+    }
+    return `
+      <div class="agentic-review-queue-empty" role="status">
+        <strong>No advisory review data was produced for this run.</strong>
+        <span>No advisory records are available to review.</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="agentic-review-queue-groups">
+      ${groupAgenticReviewQueueRecords(safeRecords).map((group) => `
+        <section class="agentic-review-queue-group" data-agentic-review-lane="${escapeHtml(group.key)}" aria-label="${escapeHtml(group.label)}">
+          <div class="agentic-review-queue-group__heading">
+            <span>${escapeHtml(group.label)}</span>
+            <strong>${escapeHtml(String(group.records.length))}</strong>
+          </div>
+          <div class="agentic-review-queue-group__items">
+            ${group.records.map((record) => {
+              const isSelected = record.job_id === selectedJobId;
+              const title = record.identity?.title || "Untitled job";
+              const company = record.identity?.company || "Company not recorded";
+              const perspectiveCount = agenticReviewQueuePerspectiveCount(record);
+              const perspectiveSummary = `${isSelected ? "Selected · " : ""}${perspectiveCount} of 3 perspectives`;
+              return `
+                <button
+                  type="button"
+                  class="agentic-review-queue-item${isSelected ? " is-selected" : ""}"
+                  data-agentic-review-queue-job-id="${escapeHtml(record.job_id)}"
+                  data-agentic-review-lane="${escapeHtml(group.key)}"
+                  aria-pressed="${isSelected ? "true" : "false"}"
+                >
+                  <span class="agentic-review-queue-item__copy">
+                    <strong>${escapeHtml(title)}</strong>
+                    <span>${escapeHtml(company)}</span>
+                  </span>
+                  <span class="agentic-review-queue-item__meta">
+                    ${renderAgenticReviewQueueLane(record)}
+                    <small>${escapeHtml(perspectiveSummary)}</small>
+                  </span>
+                </button>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAgenticReviewSelectedJobSummary(record, options = {}) {
+  if (!record) {
+    const filteredEmpty = options.filteredEmpty === true;
+    return `
+      <div class="agentic-review-selected-empty">
+        <p class="agentic-review-kicker">Selected job</p>
+        <strong>${filteredEmpty ? "No matching job selected" : "No job selected"}</strong>
+        <span>${filteredEmpty ? "Clear or change the queue filters to inspect a job." : "Select a queue item when advisory records are available."}</span>
+      </div>
+    `;
+  }
+  const title = record.identity?.title || "Untitled job";
+  const company = record.identity?.company || "Company not recorded";
+  const group = agenticReviewQueueGroup(record);
+  const machineLane = String(record?.operator?.operator_review_lane || "").trim();
+  return `
+    <div class="agentic-review-selected-summary agentic-review-inspector" data-agentic-review-lane="${escapeHtml(group?.key || "not_fully_evaluated")}" data-agentic-review-machine-lane="${escapeHtml(machineLane)}">
+      <header class="agentic-review-inspector-header">
+        <p class="agentic-review-kicker">Selected job</p>
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(company)}</p>
+      </header>
+      <section class="agentic-review-inspector-recommendation" aria-labelledby="agenticReviewInspectorRecommendationHeading">
+        <p class="agentic-review-kicker">Recommendation</p>
+        <h4 id="agenticReviewInspectorRecommendationHeading">${escapeHtml(agenticReviewInspectorRecommendationLabel(record))}</h4>
+        <p>${escapeHtml(agenticReviewInspectorRecommendationDescription(record))}</p>
+      </section>
+      <section class="agentic-review-inspector-section" aria-labelledby="agenticReviewInspectorWhyHeading">
+        <h4 id="agenticReviewInspectorWhyHeading">Why</h4>
+        ${renderAgenticReviewInspectorReasons(record)}
+      </section>
+      <section class="agentic-review-inspector-section" aria-label="Advisory evaluation coverage">
+        ${renderAgenticReviewEvaluationCoverage(record)}
+      </section>
+      ${renderAgenticReviewEvidence(record)}
+      ${renderAgenticReviewAgentViews(record)}
+      ${renderAgenticReviewNextStep(record)}
+      ${renderAgenticReviewInspectorContext(record)}
+    </div>
+  `;
+}
+
+function renderAgenticReviewQueueWorkspace() {
+  const queuePanel = qs("agenticReviewQueuePanel");
+  const selectedPanel = qs("agenticReviewSelectedJobPanel");
+  const visibleRecords = visibleAgenticReviewQueueRecords();
+  const selectionIsVisible = visibleRecords.some(
+    (record) => record.job_id === agenticReviewQueueState.selectedJobId,
+  );
+  if (!selectionIsVisible) {
+    agenticReviewQueueState.selectedJobId = visibleRecords[0]?.job_id || "";
+  }
+  const selectedRecord = visibleRecords.find(
+    (record) => record.job_id === agenticReviewQueueState.selectedJobId,
+  ) || null;
+  const filteredEmpty = agenticReviewQueueState.records.length > 0 && visibleRecords.length === 0;
+  if (queuePanel) {
+    queuePanel.innerHTML = renderAgenticReviewQueue(
+      visibleRecords,
+      agenticReviewQueueState.selectedJobId,
+      { filteredEmpty },
+    );
+  }
+  if (selectedPanel) {
+    selectedPanel.innerHTML = renderAgenticReviewSelectedJobSummary(selectedRecord, { filteredEmpty });
+  }
+  const filterControl = qs("agenticReviewQueueFilter");
+  const searchControl = qs("agenticReviewQueueSearch");
+  const clearControl = qs("agenticReviewQueueClear");
+  if (filterControl && filterControl.value !== agenticReviewQueueState.filterLane) {
+    filterControl.value = agenticReviewQueueState.filterLane;
+  }
+  if (searchControl && searchControl.value !== agenticReviewQueueState.searchQuery) {
+    searchControl.value = agenticReviewQueueState.searchQuery;
+  }
+  if (clearControl) {
+    const hasActiveFilters = agenticReviewQueueState.filterLane !== "all"
+      || Boolean(agenticReviewQueueState.searchQuery);
+    clearControl.disabled = !hasActiveFilters;
+    clearControl.classList.toggle("hidden", !hasActiveFilters);
+  }
+}
+
+function setAgenticReviewQueueRecords(records = []) {
+  agenticReviewQueueState.records = Array.isArray(records) ? records : [];
+  const selectionExists = agenticReviewQueueState.records.some(
+    (record) => record.job_id === agenticReviewQueueState.selectedJobId,
+  );
+  if (!selectionExists) {
+    agenticReviewQueueState.selectedJobId = agenticReviewQueueState.records[0]?.job_id || "";
+  }
+  renderAgenticReviewQueueWorkspace();
+}
+
+function selectAgenticReviewQueueJob(jobId) {
+  const normalizedJobId = String(jobId || "").trim();
+  if (!visibleAgenticReviewQueueRecords().some((record) => record.job_id === normalizedJobId)) return false;
+  agenticReviewQueueState.selectedJobId = normalizedJobId;
+  renderAgenticReviewQueueWorkspace();
+  return true;
+}
+
+function setAgenticReviewQueueFilter(filterLane) {
+  agenticReviewQueueState.filterLane = normalizeAgenticReviewQueueFilterLane(filterLane);
+  renderAgenticReviewQueueWorkspace();
+}
+
+function setAgenticReviewQueueSearch(searchQuery) {
+  agenticReviewQueueState.searchQuery = String(searchQuery || "");
+  renderAgenticReviewQueueWorkspace();
+}
+
+function clearAgenticReviewQueueFilters() {
+  agenticReviewQueueState.filterLane = "all";
+  agenticReviewQueueState.searchQuery = "";
+  renderAgenticReviewQueueWorkspace();
+}
+
+function bindAgenticReviewQueue() {
+  qs("agenticReviewQueuePanel")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agentic-review-queue-job-id]");
+    if (!button) return;
+    selectAgenticReviewQueueJob(button.dataset.agenticReviewQueueJobId || "");
+  });
+  qs("agenticReviewQueueFilter")?.addEventListener("change", (event) => {
+    setAgenticReviewQueueFilter(event.target.value || "all");
+  });
+  qs("agenticReviewQueueSearch")?.addEventListener("input", (event) => {
+    setAgenticReviewQueueSearch(event.target.value || "");
+  });
+  qs("agenticReviewQueueClear")?.addEventListener("click", clearAgenticReviewQueueFilters);
 }
 
 function renderAgenticReviewRows(rows, columns, options = {}) {
@@ -760,7 +1520,9 @@ function renderAgenticWorkflowMarkdownSummary(label, markdown) {
   return `
     <details class="agentic-workflow-markdown agentic-workflow-markdown-summary" data-collapsed-by-default="true">
       <summary>${escapeHtml(label)} Markdown summary</summary>
-      <pre>${escapeHtml(safeMarkdown)}</pre>
+      <div class="agent-trace-disclosure-body">
+        <pre>${escapeHtml(safeMarkdown)}</pre>
+      </div>
     </details>
   `;
 }
@@ -817,8 +1579,10 @@ function renderAgentTraceReadOnlyDetails(label, value, options = {}) {
   return `
     <details class="agent-trace-json-detail" data-collapsed-by-default="true" aria-label="${escapeHtml(label)}">
       <summary>${escapeHtml(summary)}</summary>
-      ${helper}
-      <pre>${escapeHtml(payload)}</pre>
+      <div class="agent-trace-disclosure-body">
+        ${helper}
+        <pre>${escapeHtml(payload)}</pre>
+      </div>
     </details>
   `;
 }
@@ -858,6 +1622,451 @@ function renderAgentTraceReadOnlyStep(step = {}) {
       </div>
     </article>
   `;
+}
+
+function agentTraceItemKey(step = {}, index = 0, agentRun = {}) {
+  const runKey = String(agentRun.agent_run_id || "agent-run").trim() || "agent-run";
+  const stepKey = String(step.agent_step_id || "").trim();
+  return stepKey ? `${runKey}:${stepKey}` : `${runKey}:ordered-step-${index}`;
+}
+
+function buildAgentTraceSelectionItems(tracePayload = {}) {
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
+  return steps.map((step, index) => ({
+    key: agentTraceItemKey(step, index, agentRun),
+    index,
+    step,
+  }));
+}
+
+function syncAgentTraceSelection(tracePayload = {}) {
+  const items = buildAgentTraceSelectionItems(tracePayload);
+  const selectionExists = items.some((item) => item.key === agenticReviewTraceState.selectedTraceKey);
+  agenticReviewTraceState.items = items;
+  agenticReviewTraceState.tracePayload = tracePayload;
+  if (!selectionExists) {
+    agenticReviewTraceState.selectedTraceKey = items[0]?.key || "";
+  }
+  return items.find((item) => item.key === agenticReviewTraceState.selectedTraceKey) || null;
+}
+
+function agentTraceStepValidation(step = {}) {
+  return step.validation_json || step.output_summary?.validation_json || {};
+}
+
+function agentTraceStepSafety(step = {}) {
+  return step.safety_metadata || step.metadata?.safety_metadata || {};
+}
+
+function agentTraceStepHasField(step = {}, field) {
+  return Object.prototype.hasOwnProperty.call(step, field)
+    && step[field] !== null
+    && step[field] !== "";
+}
+
+function renderAgentTraceMasterItems(items = [], selectedTraceKey = "") {
+  return items.map((item) => {
+    const step = item.step || {};
+    const status = agentTraceReadOnlyStepStatus(step);
+    const tone = statusToneForValue(status);
+    const isSelected = item.key === selectedTraceKey;
+    const stepName = step.step_name || step.agent_step_id || `Ordered step ${item.index + 1}`;
+    const observedAt = step.observed_at_utc || step.started_at || "Timestamp unavailable";
+    return `
+      <button
+        type="button"
+        class="agent-trace-master-item ${isSelected ? "is-selected" : ""}"
+        data-agent-trace-item-key="${escapeHtml(item.key)}"
+        aria-pressed="${isSelected ? "true" : "false"}"
+      >
+        <span class="agent-trace-master-item__heading">
+          <strong>${escapeHtml(stepName)}</strong>
+          <span class="agentic-review-pill is-${escapeHtml(tone)}">${escapeHtml(formatReviewLabel(status))}</span>
+        </span>
+        <span class="agent-trace-master-item__agent">${escapeHtml(step.agent_name || "Agent step")}</span>
+        <span class="agent-trace-master-item__meta">
+          <span>Step ${escapeHtml(step.step_index ?? item.index + 1)}</span>
+          <span>${escapeHtml(observedAt)}</span>
+          ${agentTraceStepHasField(step, "latency_ms") ? `<span>${escapeHtml(step.latency_ms)} ms</span>` : ""}
+        </span>
+      </button>
+    `;
+  }).join("");
+}
+
+function renderAgentTraceSelectedStep(item = null, tracePayload = {}) {
+  if (!item) {
+    return renderAgentTraceReadOnlyState(
+      "No ordered agent step is selected.",
+      "info",
+      "Agent trace selected step empty state",
+    );
+  }
+  const step = item.step || {};
+  const status = agentTraceReadOnlyStepStatus(step);
+  const tone = statusToneForValue(status);
+  const validation = agentTraceStepValidation(step);
+  const safety = agentTraceStepSafety(step);
+  const validationStatus = String(validation.validation_status || validation.status || "").trim();
+  const stepName = step.step_name || step.agent_step_id || `Ordered step ${item.index + 1}`;
+  const modelLabel = [step.model_provider, step.model_name].filter(Boolean).join(" / ");
+  const warningVisible = validationStatus.toLowerCase() === "warning";
+  return `
+    <article class="agent-trace-selected-step" aria-label="Selected read-only agent trace step">
+      <div class="agent-trace-selected-step__header">
+        <div>
+          <span class="agent-trace-selected-step__eyebrow">Selected trace step</span>
+          <h5>${escapeHtml(stepName)}</h5>
+          <p>${escapeHtml(step.agent_name || "Agent step")}${step.agent_version ? ` · ${escapeHtml(step.agent_version)}` : ""}</p>
+        </div>
+        <span class="agentic-review-pill is-${escapeHtml(tone)}">${escapeHtml(formatReviewLabel(status))}</span>
+      </div>
+      ${step.error ? `<div class="agent-trace-detail-alert is-error" role="alert"><strong>Step error</strong><span>${escapeHtml(step.error)}</span></div>` : ""}
+      ${warningVisible ? `<div class="agent-trace-detail-alert is-warning" role="status"><strong>Validation warning</strong><span>${escapeHtml(formatReviewLabel(validationStatus))}</span></div>` : ""}
+      <div class="agent-trace-detail-facts" aria-label="Selected trace step execution facts">
+        ${renderWorkflowSummaryMetric("Index", step.step_index ?? item.index + 1)}
+        ${renderWorkflowSummaryMetric("Started", step.observed_at_utc || step.started_at || "-")}
+        ${step.completed_at ? renderWorkflowSummaryMetric("Completed", step.completed_at) : ""}
+        ${modelLabel ? renderWorkflowSummaryMetric("Model", modelLabel) : ""}
+        ${agentTraceStepHasField(step, "latency_ms") ? renderWorkflowSummaryMetric("Latency", `${step.latency_ms} ms`) : ""}
+      </div>
+      <div class="agent-trace-detail-sections">
+        <section aria-labelledby="agentTraceSelectedInputHeading">
+          <h6 id="agentTraceSelectedInputHeading">Input</h6>
+          ${renderAgentTraceReadOnlyDetails("Input summary", step.input_summary || step.input_json, { helper: "Read-only persisted step input." }) || `<span class="agentic-review-muted">No input summary recorded.</span>`}
+        </section>
+        <section aria-labelledby="agentTraceSelectedOutputHeading">
+          <h6 id="agentTraceSelectedOutputHeading">Output</h6>
+          ${renderAgentTraceReadOnlyDetails("Output summary", step.output_summary || step.output_json, { helper: "Read-only persisted step output." }) || `<span class="agentic-review-muted">No output summary recorded.</span>`}
+        </section>
+        <section aria-labelledby="agentTraceSelectedValidationHeading">
+          <h6 id="agentTraceSelectedValidationHeading">Validation and safety</h6>
+          <div class="agent-trace-json-grid">
+            ${renderAgentTraceReadOnlyDetails("validation_json", validation, { helper: "Readable validation_json display." }) || `<span class="agentic-review-muted">No validation metadata recorded.</span>`}
+            ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable safety metadata display." }) || `<span class="agentic-review-muted">No step safety metadata recorded.</span>`}
+          </div>
+        </section>
+        <section aria-labelledby="agentTraceSelectedUsageHeading">
+          <h6 id="agentTraceSelectedUsageHeading">Model, tokens, cost, and latency</h6>
+          <div class="agent-trace-json-grid">
+            ${renderAgentTraceReadOnlyDetails("Token usage", step.token_usage_json, { helper: "Persisted token usage for this step." }) || `<span class="agentic-review-muted">No token usage recorded.</span>`}
+            ${renderAgentTraceReadOnlyDetails("Cost", step.cost_json, { helper: "Persisted cost metadata for this step." }) || `<span class="agentic-review-muted">No cost metadata recorded.</span>`}
+          </div>
+        </section>
+      </div>
+      <details class="agent-trace-raw-details" data-collapsed-by-default="true">
+        <summary>Raw / debug</summary>
+        <div class="agent-trace-disclosure-body agent-trace-disclosure-body--grid">
+          <div class="agent-trace-json-grid">
+            ${renderAgentTraceReadOnlyDetails("Raw step payload", step, { helper: "Unmodified frontend view of the selected persisted step." })}
+            ${renderAgentTraceReadOnlyDetails("Agent run metadata", tracePayload?.agent_run?.metadata || tracePayload?.agent_run?.summary_json, { helper: "Read-only agent run metadata." })}
+          </div>
+        </div>
+      </details>
+    </article>
+  `;
+}
+
+function renderAgentTraceCompactContext(tracePayload = {}) {
+  const traceSummary = hasAgentTraceSummaryObject(tracePayload?.trace_summary)
+    ? tracePayload.trace_summary
+    : {};
+  const stageHealth = hasAgentTraceSummaryObject(tracePayload?.stage_trace_health)
+    ? tracePayload.stage_trace_health
+    : {};
+  const stageReadiness = hasAgentTraceSummaryObject(tracePayload?.stage_trace_readiness)
+    ? tracePayload.stage_trace_readiness
+    : {};
+  const warningCount = Number(traceSummary.warning_step_count ?? 0);
+  const errorCount = Number(traceSummary.error_step_count ?? 0);
+  const healthStatus = String(stageHealth.health_status || "").trim();
+  const readinessStatus = String(stageReadiness.readiness_status || "").trim();
+  const healthNeedsReview = healthStatus && !["healthy", "ready", "passed"].includes(healthStatus.toLowerCase());
+  const readinessNeedsReview = readinessStatus && !readinessStatus.toLowerCase().startsWith("ready");
+  return `
+    <div class="agent-trace-compact-context" aria-label="Agent trace run summary">
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Steps", traceSummary.step_count ?? tracePayload.step_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Completed", traceSummary.completed_step_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Errors", errorCount)}
+        ${renderWorkflowSummaryMetric("Warnings", warningCount)}
+        ${healthStatus ? renderWorkflowSummaryMetric("Health", healthStatus) : ""}
+        ${readinessStatus ? renderWorkflowSummaryMetric("Readiness", readinessStatus) : ""}
+      </div>
+      ${(errorCount > 0 || warningCount > 0 || healthNeedsReview || readinessNeedsReview) ? `
+        <div class="agent-trace-detail-alert is-warning" role="status">
+          <strong>Trace needs attention</strong>
+          <span>${escapeHtml(`${errorCount} errors · ${warningCount} warnings${healthStatus ? ` · ${formatReviewLabel(healthStatus)}` : ""}${readinessStatus ? ` · ${formatReviewLabel(readinessStatus)}` : ""}`)}</span>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderAgentTraceMasterDetail(tracePayload = {}) {
+  const selectedItem = syncAgentTraceSelection(tracePayload);
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const safety = tracePayload?.safety_metadata && typeof tracePayload.safety_metadata === "object"
+    ? tracePayload.safety_metadata
+    : {};
+  return `
+    ${renderAgentTraceCompactContext(tracePayload)}
+    <article class="agent-trace-run-context" aria-label="Read-only agent trace run metadata">
+      <div class="agent-trace-run-header">
+        <div>
+          <div class="agent-trace-run-id">${escapeHtml(agentRun.agent_run_id || "Agent run")}</div>
+          <div class="agent-trace-step-meta">${escapeHtml(agentRun.agent_name || "-")} · ${escapeHtml(agentRun.run_status || agentRun.status || "-")}</div>
+        </div>
+        ${renderReviewPill(agentRun.run_status || agentRun.status || "unknown")}
+      </div>
+      <div class="agent-trace-step-times">
+        ${escapeHtml(agentRun.observed_at_utc || agentRun.started_at || "Timestamp unavailable")}
+        ${agentRun.completed_at ? ` -> ${escapeHtml(agentRun.completed_at)}` : ""}
+      </div>
+      <div class="agentic-review-muted">Long trace readability is supported by master/detail selection, collapsed step details, and readable metadata summaries.</div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Agent run metadata", agentRun.metadata || agentRun.summary_json, { helper: "Read-only agent run metadata." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable safety metadata display." })}
+      </div>
+    </article>
+    <div class="agent-trace-master-detail" aria-label="Read-only ordered agent steps master detail">
+      <aside class="agent-trace-master" aria-label="Ordered agent trace steps">
+        <div class="agent-trace-master__heading">
+          <div>
+            <span class="agent-trace-selected-step__eyebrow">Trace steps</span>
+            <h5>Ordered activity</h5>
+          </div>
+          <span>${escapeHtml(agenticReviewTraceState.items.length)}</span>
+        </div>
+        <div id="agenticReviewTraceMasterList" class="agent-trace-master-list">
+          ${renderAgentTraceMasterItems(agenticReviewTraceState.items, agenticReviewTraceState.selectedTraceKey)}
+        </div>
+      </aside>
+      <div id="agenticReviewTraceDetail" class="agent-trace-detail" aria-live="polite">
+        ${renderAgentTraceSelectedStep(selectedItem, tracePayload)}
+      </div>
+    </div>
+  `;
+}
+
+function selectAgentTraceItem(traceKey) {
+  const normalizedKey = String(traceKey || "");
+  const selectedItem = agenticReviewTraceState.items.find((item) => item.key === normalizedKey);
+  if (!selectedItem) return false;
+  agenticReviewTraceState.selectedTraceKey = normalizedKey;
+  document.querySelectorAll("[data-agent-trace-item-key]").forEach((button) => {
+    const isSelected = button.dataset.agentTraceItemKey === normalizedKey;
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+  const detail = qs("agenticReviewTraceDetail");
+  if (detail) {
+    detail.innerHTML = renderAgentTraceSelectedStep(selectedItem, agenticReviewTraceState.tracePayload);
+  }
+  return true;
+}
+
+function bindAgentTraceMasterDetail() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agent-trace-item-key]");
+    if (!button) return;
+    selectAgentTraceItem(button.dataset.agentTraceItemKey || "");
+  });
+}
+
+function agentTraceDiagnosticText(markup = "") {
+  return String(markup || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function agentTraceDiagnosticObservedState(markup = "") {
+  const source = String(markup || "");
+  const metricMatch = source.match(/class="agentic-workflow-metric"[\s\S]*?<strong>([\s\S]*?)<\/strong>/);
+  const badgeMatch = source.match(/class="agentic-workflow-badge"[^>]*>([\s\S]*?)<\/span>/);
+  return agentTraceDiagnosticText(metricMatch?.[1] || badgeMatch?.[1] || "Not available");
+}
+
+function agentTraceDiagnosticCategory(title = "") {
+  const normalized = String(title || "").toLowerCase();
+  if (normalized.includes("human")) return "human";
+  if (normalized.includes("comparison")) return "comparison";
+  if (normalized.includes("shadow") || normalized.includes("sidecar")) return "shadow";
+  if (normalized.includes("approval")) return "approval";
+  if (normalized.includes("safety") || normalized.includes("readiness")
+    || normalized.includes("preflight") || normalized.includes("gate")
+    || normalized.includes("critic")) return "safety";
+  if (normalized.includes("evidence") || normalized.includes("trace")) return "evidence";
+  if (normalized.includes("provider") || normalized.includes("llm")) return "provider";
+  return "neutral";
+}
+
+function renderAgentTraceDiagnosticIcon(item = {}) {
+  const title = String(item.title || "").toLowerCase();
+  const category = item.category || "neutral";
+  let paths = '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/>';
+  if (title.includes("evidence chain")) {
+    paths = '<path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/>';
+  } else if (title.includes("evidence pack")) {
+    paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>';
+  } else if (category === "shadow") {
+    paths = '<path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>';
+  } else if (category === "comparison") {
+    paths = '<path d="M7 7h11l-3-3"/><path d="m18 17H7l3 3"/><path d="M18 7 15 10M7 17l3-3"/>';
+  } else if (category === "human") {
+    paths = '<circle cx="9" cy="7" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m16 13 2 2 4-4"/>';
+  } else if (category === "approval" || category === "safety") {
+    paths = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>';
+  } else if (category === "provider") {
+    paths = '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M20 9h3M1 15h3M20 15h3"/>';
+  }
+  return `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      ${paths}
+    </svg>
+  `;
+}
+
+function buildAgentTraceDiagnosticItems(definitions = []) {
+  return definitions.map(([key, title, markup], index) => {
+    const safeMarkup = String(markup || "").trim();
+    return {
+      key: String(key || `diagnostic-${index}`),
+      title: String(title || `Diagnostic ${index + 1}`),
+      markup: safeMarkup,
+      state: agentTraceDiagnosticObservedState(safeMarkup),
+      category: agentTraceDiagnosticCategory(title),
+      index,
+    };
+  });
+}
+
+function syncAgentTraceDiagnosticSelection(items = []) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const selectionExists = safeItems.some(
+    (item) => item.key === agenticReviewDiagnosticState.selectedDiagnosticKey,
+  );
+  agenticReviewDiagnosticState.items = safeItems;
+  if (!selectionExists) {
+    agenticReviewDiagnosticState.selectedDiagnosticKey = safeItems[0]?.key || "";
+  }
+  return safeItems.find(
+    (item) => item.key === agenticReviewDiagnosticState.selectedDiagnosticKey,
+  ) || null;
+}
+
+function renderAgentTraceDiagnosticMasterItems(items = [], selectedDiagnosticKey = "") {
+  return items.map((item) => {
+    const isSelected = item.key === selectedDiagnosticKey;
+    const tone = statusToneForValue(item.state);
+    return `
+      <button
+        type="button"
+        class="agent-trace-diagnostic-item ${isSelected ? "is-selected" : ""}"
+        data-agent-trace-diagnostic-key="${escapeHtml(item.key)}"
+        data-agent-trace-diagnostic-category="${escapeHtml(item.category)}"
+        aria-pressed="${isSelected ? "true" : "false"}"
+      >
+        <span class="agent-trace-diagnostic-item__icon">${renderAgentTraceDiagnosticIcon(item)}</span>
+        <span class="agent-trace-diagnostic-item__copy">
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${escapeHtml(formatReviewLabel(item.state))}</small>
+        </span>
+        <span class="agent-trace-diagnostic-item__status is-${escapeHtml(tone)}" aria-hidden="true"></span>
+      </button>
+    `;
+  }).join("");
+}
+
+function renderAgentTraceDiagnosticDetail(item = null) {
+  if (!item) {
+    return renderAgentTraceReadOnlyState(
+      "No extended diagnostic is selected.",
+      "info",
+      "Extended trace diagnostic empty state",
+    );
+  }
+  const tone = statusToneForValue(item.state);
+  return `
+    <article
+      class="agent-trace-diagnostic-detail__article"
+      data-agent-trace-diagnostic-category="${escapeHtml(item.category)}"
+      aria-labelledby="agentTraceDiagnosticDetailHeading"
+    >
+      <header class="agent-trace-diagnostic-detail__header">
+        <span class="agent-trace-diagnostic-detail__icon">${renderAgentTraceDiagnosticIcon(item)}</span>
+        <div class="agent-trace-diagnostic-detail__heading">
+          <span class="agent-trace-selected-step__eyebrow">Selected diagnostic</span>
+          <h5 id="agentTraceDiagnosticDetailHeading">${escapeHtml(item.title)}</h5>
+          <p>Existing read-only diagnostic content and explicit manual controls.</p>
+        </div>
+        <span class="agentic-review-pill agent-trace-diagnostic-detail__badge is-${escapeHtml(tone)}">${escapeHtml(formatReviewLabel(item.state))}</span>
+      </header>
+      <div class="agent-trace-diagnostic-detail__content">
+        ${item.markup || renderAgentTraceReadOnlyState(
+          "No diagnostic data was recorded for this section.",
+          "info",
+          `${item.title} unavailable`,
+        )}
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentTraceDiagnosticWorkspace(items = []) {
+  const selectedItem = syncAgentTraceDiagnosticSelection(items);
+  return `
+    <div class="agent-trace-diagnostic-workspace" aria-label="Extended trace diagnostics master detail">
+      <aside class="agent-trace-diagnostic-master" aria-label="Extended trace diagnostic sections">
+        <div class="agent-trace-diagnostic-master__heading">
+          <div>
+            <span class="agent-trace-selected-step__eyebrow">Diagnostic inventory</span>
+            <h5>Inspection surfaces</h5>
+          </div>
+          <span>${escapeHtml(items.length)}</span>
+        </div>
+        <div id="agenticReviewDiagnosticMasterList" class="agent-trace-diagnostic-master__list">
+          ${renderAgentTraceDiagnosticMasterItems(items, agenticReviewDiagnosticState.selectedDiagnosticKey)}
+        </div>
+      </aside>
+      <div id="agenticReviewDiagnosticDetail" class="agent-trace-diagnostic-detail" aria-live="polite">
+        ${renderAgentTraceDiagnosticDetail(selectedItem)}
+      </div>
+    </div>
+  `;
+}
+
+function selectAgentTraceDiagnostic(diagnosticKey) {
+  const normalizedKey = String(diagnosticKey || "");
+  const selectedItem = agenticReviewDiagnosticState.items.find(
+    (item) => item.key === normalizedKey,
+  );
+  if (!selectedItem) return false;
+  agenticReviewDiagnosticState.selectedDiagnosticKey = normalizedKey;
+  document.querySelectorAll("[data-agent-trace-diagnostic-key]").forEach((button) => {
+    const isSelected = button.dataset.agentTraceDiagnosticKey === normalizedKey;
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+  const detail = qs("agenticReviewDiagnosticDetail");
+  if (detail) {
+    detail.innerHTML = renderAgentTraceDiagnosticDetail(selectedItem);
+  }
+  return true;
+}
+
+function bindAgentTraceDiagnosticMasterDetail() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agent-trace-diagnostic-key]");
+    if (!button) return;
+    selectAgentTraceDiagnostic(button.dataset.agentTraceDiagnosticKey || "");
+  });
 }
 
 function renderAgentTraceReadOnlyState(message, tone = "info", label = "Agent trace state") {
@@ -1538,7 +2747,7 @@ function renderVectorEvidenceReadbackSection(tracePayload = {}) {
           Owner user id
           <input type="text" value="" placeholder="Existing owner user id" data-vector-evidence-readback-owner>
         </label>
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-vector-evidence-readback-enable>
           Enable this manual readback request
         </label>
@@ -1649,7 +2858,7 @@ function renderThreeAgentLlmopsObservabilitySection(tracePayload = {}) {
       </div>
       ${agentRows}
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-llmops-observability-enable>
           Enable this manual observability readback
         </label>
@@ -1792,7 +3001,7 @@ function renderProviderRuntimeReadbackSection(tracePayload = {}) {
         { helper: "Advisory setup guidance only. Runtime calls remain disabled from this UI." },
       )}
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-runtime-readback-enable>
           Enable this manual provider runtime readback
         </label>
@@ -1881,7 +3090,7 @@ function renderJdProviderRuntimeReadbackSection(tracePayload = {}) {
         { helper: "Read-only guidance from existing metadata; no runtime activation occurs here." },
       )}
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-jd-runtime-readback-enable>
           Enable this manual JD provider runtime readback
         </label>
@@ -4629,7 +5838,7 @@ function renderHumanReviewedInfluenceApprovalRequestSection(tracePayload = {}) {
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-influence-application safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-human-reviewed-influence-approval-request-confirmation>
           Explicitly create influence approval request
         </label>
@@ -5466,7 +6675,7 @@ function renderManualApprovalCreationGateDryRunSection(tracePayload = {}) {
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable approval creation gate safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-approval-creation-gate-confirmation>
           Reviewer confirmation
         </label>
@@ -5522,7 +6731,7 @@ function renderManualGuardedApprovalRequestCreateSection(tracePayload = {}) {
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded approval creation safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-guarded-approval-request-create-confirmation>
           Explicitly create approval request
         </label>
@@ -5772,7 +6981,7 @@ function renderManualGuardedApprovalStatusTransitionSection(tracePayload = {}) {
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded approval status transition safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-guarded-approval-status-transition-confirmation>
           I explicitly confirm this guarded approval status transition.
         </label>
@@ -5959,7 +7168,7 @@ function renderManualGuardedQueueHandoffCreateSection(tracePayload = {}) {
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded queue handoff safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-guarded-queue-handoff-create-confirmation>
           I explicitly confirm this guarded queue handoff.
         </label>
@@ -6321,7 +7530,7 @@ function renderManualGuardedExecutionRequestCreateSection(tracePayload = {}) {
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded execution request safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-guarded-execution-request-create-confirmation>
           I explicitly confirm this guarded execution request.
         </label>
@@ -6573,7 +7782,7 @@ function renderManualGuardedExecutionRequestStatusTransitionSection(tracePayload
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded execution request status transition safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-guarded-execution-request-status-transition-confirmation>
           I explicitly confirm this guarded execution request status transition.
         </label>
@@ -6969,7 +8178,7 @@ function renderManualGuardedApplicationExecutionLaunchRequestCreateSection(trace
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded execution launch request safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-guarded-application-execution-launch-request-create-confirmation>
           I explicitly confirm this guarded execution launch request.
         </label>
@@ -7238,7 +8447,7 @@ function renderManualGuardedExecutionLaunchRequestStatusTransitionSection(traceP
         ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded execution launch request status transition safety metadata." })}
       </div>
       <div class="agentic-review-actions">
-        <label class="agentic-review-muted">
+        <label class="agentic-review-muted agent-trace-confirmation-control">
           <input type="checkbox" data-manual-guarded-execution-launch-request-status-transition-confirmation>
           I explicitly confirm this guarded execution launch request status transition.
         </label>
@@ -7410,8 +8619,87 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
     ? "No persisted trace found for this run. The trace panel is read-only and will show ordered agent steps when trace records are available."
     : "";
   const emptyMessage = found && emptyTrace
-    ? "Empty trace: agent run metadata is available, but no ordered agent steps were returned. The read-only display remains deterministic."
+    ? "Empty trace: agent run metadata is available, but no ordered agent steps were returned. No ordered agent steps returned for this trace. The read-only display remains deterministic."
     : "";
+  const diagnosticItems = buildAgentTraceDiagnosticItems([
+    ["evidence-chain", "Evidence Chain", renderEvidenceChainReadbackCard(tracePayload)],
+    ["trace-evidence-pack", "Trace Evidence Pack", renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)],
+    ["shadow-sidecar-trace-readback", "Shadow Sidecar Trace Readback", renderShadowSidecarTraceReadbackSection(tracePayload)],
+    ["shadow-score-comparison", "Shadow Score Comparison", renderShadowSidecarScoreComparisonSection(tracePayload)],
+    ["human-reviewed-influence-preview", "Human-reviewed Influence Preview", renderHumanReviewedInfluencePreviewSection(tracePayload)],
+    ["human-reviewed-influence-approval-request", "Human-reviewed Influence Approval Request", renderHumanReviewedInfluenceApprovalRequestSection(tracePayload)],
+    ["agent-recommendation-overlay", "Agent Recommendation Overlay", renderAgentRecommendationOverlaySection(tracePayload)],
+    ["pipeline-overlay-readback", "Pipeline-generated Overlay Readback", renderPipelineGeneratedAgentRecommendationOverlayReadbackSection(tracePayload)],
+    ["pipeline-overlay-readiness", "Pipeline-generated Overlay Readiness", renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySection(tracePayload)],
+    ["pipeline-agent-review-packet", "Pipeline Agent Review Packet", renderPipelineGeneratedOverlayReviewPacketSection(tracePayload)],
+    ["vector-evidence", "Vector Evidence", renderVectorEvidenceSection(tracePayload)],
+    ["pgvector-extension-probe", "pgvector Extension Probe", renderPgvectorExtensionProbeSection(tracePayload)],
+    ["vector-evidence-readback", "Vector Evidence Readback", renderVectorEvidenceReadbackSection(tracePayload)],
+    ["three-agent-llmops-observability", "Three-Agent LLMOps Observability", renderThreeAgentLlmopsObservabilitySection(tracePayload)],
+    ["provider-runtime-readiness", "Provider Runtime Readiness", renderProviderRuntimeReadbackSection(tracePayload)],
+    ["jd-provider-runtime-readback", "JD Provider Runtime Readback", renderJdProviderRuntimeReadbackSection(tracePayload)],
+    ["jd-live-canary-readback", "JD Live Canary Readback", renderJdLiveProviderCanaryReadbackSection(tracePayload)],
+    ["three-core-shadow-operator-canary", "Three-Core Shadow Operator Canary", renderThreeCoreShadowOperatorCanaryReadbackSection(fixtureVisibleTracePayload)],
+    ["three-core-approval-preview-readback", "Three-Core Approval Preview Readback", renderThreeCoreApprovalPreviewServiceReadbackSection(fixtureVisibleTracePayload)],
+    ["approval-preview-operator-decision", "Approval Preview Operator Decision", renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(decisionPreviewVisibleTracePayload)],
+    ["operator-decision-capture-readback", "Operator Decision Capture Readback", renderOperatorDecisionCaptureReadbackSection(operatorDecisionCaptureVisibleTracePayload)],
+    ["provider-call-readiness-readback", "Provider-Call Readiness Readback", renderProviderCallReadinessReadbackSection(providerCallReadinessVisibleTracePayload)],
+    ["manual-review-readiness-readback", "Manual-Review Readiness Readback", renderManualReviewReadinessReadbackSection(manualReviewReadinessVisibleTracePayload)],
+    ["core-agent-evidence-materialization", "Core-Agent Evidence Materialization Readback", renderCoreAgentEvidenceMaterializationReadbackSection(coreAgentEvidenceMaterializationVisibleTracePayload)],
+    ["tailoring-agent-opportunity", "Tailoring-Agent Opportunity Readback", renderTailoringAgentOpportunityReadbackSection(tailoringAgentOpportunityVisibleTracePayload)],
+    ["generate-ai-tailoring-action-boundary", "Generate AI Tailoring Action-Boundary Readback", renderGenerateAiTailoringActionBoundaryReadbackSection(generateAiTailoringActionBoundaryVisibleTracePayload)],
+    ["manual-ai-tailoring-preview", "Manual Generate AI Tailoring Preview Readback", renderManualGenerateAiTailoringPreviewReadbackSection(manualGenerateAiTailoringPreviewVisibleTracePayload)],
+    ["manual-ai-tailoring-request-packet", "Manual Generate AI Tailoring Preview Request-Packet Readback", renderManualGenerateAiTailoringPreviewRequestPacketReadbackSection(manualGenerateAiTailoringPreviewVisibleTracePayload)],
+    ["manual-ai-tailoring-dispatch-boundary", "Manual Generate AI Tailoring Preview Dispatch-Boundary Readback", renderManualGenerateAiTailoringPreviewDispatchBoundaryReadbackSection(manualGenerateAiTailoringPreviewDispatchBoundaryVisibleTracePayload)],
+    ["manual-ai-tailoring-provider-envelope", "Manual Generate AI Tailoring Preview Provider Request-Envelope Readback", renderManualGenerateAiTailoringPreviewProviderRequestEnvelopeReadbackSection(manualGenerateAiTailoringPreviewProviderRequestEnvelopeVisibleTracePayload)],
+    ["manual-ai-tailoring-provider-boundary", "Manual Generate AI Tailoring Preview Provider-Call Boundary Readback", renderManualGenerateAiTailoringPreviewProviderCallBoundaryReadbackSection(manualGenerateAiTailoringPreviewProviderCallBoundaryVisibleTracePayload)],
+    ["manual-ai-tailoring-provider-dry-run", "Manual Generate AI Tailoring Preview Provider-Call Dry-Run Packet Readback", renderManualGenerateAiTailoringPreviewProviderCallDryRunPacketReadbackSection(manualGenerateAiTailoringPreviewProviderCallDryRunPacketVisibleTracePayload)],
+    ["manual-ai-tailoring-response-validation", "Manual Generate AI Tailoring Preview Provider Response Validation Readback", renderManualGenerateAiTailoringPreviewProviderResponseValidationReadbackSection(manualGenerateAiTailoringPreviewProviderResponseValidationVisibleTracePayload)],
+    ["manual-ai-tailoring-response-normalization", "Manual Generate AI Tailoring Preview Provider Response Normalization Readback", renderManualGenerateAiTailoringPreviewProviderResponseNormalizationReadbackSection(manualGenerateAiTailoringPreviewProviderResponseNormalizationVisibleTracePayload)],
+    ["critic-evaluator", "Read-only Critic Evaluator", renderAgentTraceCriticEvaluatorSection(tracePayload)],
+    ["manual-jd-intelligence-dry-run", "Manual JD Intelligence Dry-run", renderManualJdIntelligenceDryRunSection(tracePayload)],
+    ["manual-resume-match-dry-run", "Manual Resume Match Dry-run", renderManualResumeMatchDryRunSection(tracePayload)],
+    ["manual-tailoring-suggestion-dry-run", "Manual Tailoring Suggestion Dry-run", renderManualTailoringSuggestionDryRunSection(tracePayload)],
+    ["manual-critic-guardrail-dry-run", "Manual Critic Guardrail Dry-run", renderManualCriticGuardrailDryRunSection(tracePayload)],
+    ["manual-strategy-recommendation-dry-run", "Manual Strategy Recommendation Dry-run", renderManualStrategyRecommendationDryRunSection(tracePayload)],
+    ["manual-shadow-chain-dry-run", "Manual Shadow Chain Dry-run", renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload)],
+    ["manual-shadow-recommendation-handoff", "Manual Shadow Recommendation Handoff", renderManualShadowRecommendationHandoffDryRunSection(tracePayload)],
+    ["manual-human-decision-capture", "Manual Human Decision Capture Dry-run", renderManualHumanDecisionCaptureDryRunSection(tracePayload)],
+    ["manual-human-action-plan", "Manual Human-approved Action Plan Dry-run", renderManualHumanApprovedActionPlanDryRunSection(tracePayload)],
+    ["manual-review-packet-preview", "Manual Review Packet Preview Dry-run", renderManualReviewPacketPreviewDryRunSection(tracePayload)],
+    ["manual-approval-request-preview", "Manual Approval Request Preview Dry-run", renderManualApprovalRequestPreviewDryRunSection(tracePayload)],
+    ["manual-approval-creation-gate", "Manual Approval Creation Gate Dry-run", renderManualApprovalCreationGateDryRunSection(tracePayload)],
+    ["manual-guarded-approval-creation", "Manual Guarded Approval Request Creation", renderManualGuardedApprovalRequestCreateSection(tracePayload)],
+    ["manual-approval-creation-audit", "Manual Guarded Approval Creation Audit", renderManualGuardedApprovalCreationObservabilitySection(tracePayload)],
+    ["manual-approval-request-readback", "Manual Approval Request Readback", renderManualApprovalRequestReadbackSection(tracePayload)],
+    ["manual-approval-status-preview", "Manual Approval Status Transition Preview", renderManualApprovalStatusTransitionPreviewSection(tracePayload)],
+    ["manual-guarded-approval-status", "Manual Guarded Approval Status Transition", renderManualGuardedApprovalStatusTransitionSection(tracePayload)],
+    ["manual-approval-status-audit", "Manual Approval Status Transition Audit", renderManualApprovalStatusTransitionObservabilitySection(tracePayload)],
+    ["manual-queue-handoff-readiness", "Manual Queue Handoff Readiness Preview", renderManualQueueHandoffReadinessPreviewSection(tracePayload)],
+    ["manual-guarded-queue-handoff", "Manual Guarded Queue Handoff Creation", renderManualGuardedQueueHandoffCreateSection(tracePayload)],
+    ["manual-queue-handoff-audit", "Manual Queue Handoff Audit", renderManualQueueHandoffCreationObservabilitySection(tracePayload)],
+    ["manual-execution-readiness", "Manual Execution Readiness Preview", renderManualExecutionReadinessPreviewSection(tracePayload)],
+    ["manual-execution-launch-gate", "Manual Execution Launch Gate Preview", renderManualExecutionLaunchGatePreviewSection(tracePayload)],
+    ["manual-execution-launch-gate-audit", "Manual Execution Launch Gate Audit", renderManualExecutionLaunchGateObservabilitySection(tracePayload)],
+    ["manual-execution-request-packet", "Manual Execution Request Packet Preview", renderManualExecutionRequestPacketPreviewSection(tracePayload)],
+    ["manual-guarded-execution-request", "Manual Guarded Execution Request Creation", renderManualGuardedExecutionRequestCreateSection(tracePayload)],
+    ["manual-execution-request-audit", "Manual Execution Request Audit", renderManualGuardedExecutionRequestObservabilitySection(tracePayload)],
+    ["manual-execution-request-readback", "Manual Execution Request Readback", renderManualExecutionRequestReadbackSection(tracePayload)],
+    ["manual-execution-request-status-preview", "Manual Execution Request Status Transition Preview", renderManualExecutionRequestStatusTransitionPreviewSection(tracePayload)],
+    ["manual-guarded-execution-request-status", "Manual Guarded Execution Request Status Transition", renderManualGuardedExecutionRequestStatusTransitionSection(tracePayload)],
+    ["manual-execution-request-status-audit", "Manual Execution Request Status Audit", renderManualGuardedExecutionRequestStatusTransitionObservabilitySection(tracePayload)],
+    ["manual-application-simulation-preview", "Manual Application Execution Simulation Preview", renderManualApplicationExecutionSimulationPreviewSection(tracePayload)],
+    ["manual-application-simulation-audit", "Manual Application Execution Simulation Audit", renderManualApplicationExecutionSimulationObservabilitySection(tracePayload)],
+    ["manual-application-preflight-checklist", "Manual Application Execution Preflight Checklist", renderManualApplicationExecutionPreflightChecklistSection(tracePayload)],
+    ["manual-application-preflight-audit", "Manual Application Execution Preflight Audit", renderManualApplicationExecutionPreflightObservabilitySection(tracePayload)],
+    ["manual-guarded-execution-launch-request", "Manual Guarded Execution Launch Request", renderManualGuardedApplicationExecutionLaunchRequestCreateSection(tracePayload)],
+    ["manual-execution-launch-request-audit", "Manual Execution Launch Request Audit", renderManualGuardedApplicationExecutionLaunchRequestObservabilitySection(tracePayload)],
+    ["manual-execution-launch-request-readback", "Manual Execution Launch Request Readback", renderManualApplicationExecutionLaunchRequestReadbackSection(tracePayload)],
+    ["manual-execution-launch-status-preview", "Manual Execution Launch Request Status Preview", renderManualExecutionLaunchRequestStatusTransitionPreviewSection(tracePayload)],
+    ["manual-guarded-execution-launch-status", "Manual Guarded Execution Launch Request Status Transition", renderManualGuardedExecutionLaunchRequestStatusTransitionSection(tracePayload)],
+    ["manual-execution-launch-status-audit", "Manual Execution Launch Status Audit", renderManualGuardedExecutionLaunchRequestStatusTransitionObservabilitySection(tracePayload)],
+    ["detailed-trace-sections", "Detailed trace sections", renderAgentTraceDetailedSections(tracePayload)],
+  ]);
   return `
     <section id="agenticReviewTracePanel" class="pipeline-run-detail-panel agent-trace-panel" data-agent-trace-read-only-panel aria-label="Read-only agent trace panel with accessibility labels">
       <div class="agentic-workflow-header">
@@ -7428,83 +8716,18 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
         ${renderWorkflowSummaryMetric("Trace state", stateLabel)}
         ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
-      ${renderEvidenceChainReadbackCard(tracePayload)}
-      ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
-      ${renderShadowSidecarTraceReadbackSection(tracePayload)}
-      ${renderShadowSidecarScoreComparisonSection(tracePayload)}
-      ${renderHumanReviewedInfluencePreviewSection(tracePayload)}
-      ${renderHumanReviewedInfluenceApprovalRequestSection(tracePayload)}
-      ${renderAgentRecommendationOverlaySection(tracePayload)}
-      ${renderPipelineGeneratedAgentRecommendationOverlayReadbackSection(tracePayload)}
-      ${renderPipelineGeneratedAgentRecommendationOverlayReadinessSummarySection(tracePayload)}
-      ${renderPipelineGeneratedOverlayReviewPacketSection(tracePayload)}
-      ${renderVectorEvidenceSection(tracePayload)}
-      ${renderPgvectorExtensionProbeSection(tracePayload)}
-      ${renderVectorEvidenceReadbackSection(tracePayload)}
-      ${renderThreeAgentLlmopsObservabilitySection(tracePayload)}
-      ${renderProviderRuntimeReadbackSection(tracePayload)}
-      ${renderJdProviderRuntimeReadbackSection(tracePayload)}
-      ${renderJdLiveProviderCanaryReadbackSection(tracePayload)}
-      ${renderThreeCoreShadowOperatorCanaryReadbackSection(fixtureVisibleTracePayload)}
-      ${renderThreeCoreApprovalPreviewServiceReadbackSection(fixtureVisibleTracePayload)}
-      ${renderThreeCoreApprovalPreviewOperatorDecisionPreviewSection(decisionPreviewVisibleTracePayload)}
-      ${renderOperatorDecisionCaptureReadbackSection(operatorDecisionCaptureVisibleTracePayload)}
-      ${renderProviderCallReadinessReadbackSection(providerCallReadinessVisibleTracePayload)}
-      ${renderManualReviewReadinessReadbackSection(manualReviewReadinessVisibleTracePayload)}
-      ${renderCoreAgentEvidenceMaterializationReadbackSection(coreAgentEvidenceMaterializationVisibleTracePayload)}
-      ${renderTailoringAgentOpportunityReadbackSection(tailoringAgentOpportunityVisibleTracePayload)}
-      ${renderGenerateAiTailoringActionBoundaryReadbackSection(generateAiTailoringActionBoundaryVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewReadbackSection(manualGenerateAiTailoringPreviewVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewRequestPacketReadbackSection(manualGenerateAiTailoringPreviewVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewDispatchBoundaryReadbackSection(manualGenerateAiTailoringPreviewDispatchBoundaryVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewProviderRequestEnvelopeReadbackSection(manualGenerateAiTailoringPreviewProviderRequestEnvelopeVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewProviderCallBoundaryReadbackSection(manualGenerateAiTailoringPreviewProviderCallBoundaryVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewProviderCallDryRunPacketReadbackSection(manualGenerateAiTailoringPreviewProviderCallDryRunPacketVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewProviderResponseValidationReadbackSection(manualGenerateAiTailoringPreviewProviderResponseValidationVisibleTracePayload)}
-      ${renderManualGenerateAiTailoringPreviewProviderResponseNormalizationReadbackSection(manualGenerateAiTailoringPreviewProviderResponseNormalizationVisibleTracePayload)}
-      ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
-      ${renderManualJdIntelligenceDryRunSection(tracePayload)}
-      ${renderManualResumeMatchDryRunSection(tracePayload)}
-      ${renderManualTailoringSuggestionDryRunSection(tracePayload)}
-      ${renderManualCriticGuardrailDryRunSection(tracePayload)}
-      ${renderManualStrategyRecommendationDryRunSection(tracePayload)}
-      ${renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload)}
-      ${renderManualShadowRecommendationHandoffDryRunSection(tracePayload)}
-      ${renderManualHumanDecisionCaptureDryRunSection(tracePayload)}
-      ${renderManualHumanApprovedActionPlanDryRunSection(tracePayload)}
-      ${renderManualReviewPacketPreviewDryRunSection(tracePayload)}
-      ${renderManualApprovalRequestPreviewDryRunSection(tracePayload)}
-      ${renderManualApprovalCreationGateDryRunSection(tracePayload)}
-      ${renderManualGuardedApprovalRequestCreateSection(tracePayload)}
-      ${renderManualGuardedApprovalCreationObservabilitySection(tracePayload)}
-      ${renderManualApprovalRequestReadbackSection(tracePayload)}
-      ${renderManualApprovalStatusTransitionPreviewSection(tracePayload)}
-      ${renderManualGuardedApprovalStatusTransitionSection(tracePayload)}
-      ${renderManualApprovalStatusTransitionObservabilitySection(tracePayload)}
-      ${renderManualQueueHandoffReadinessPreviewSection(tracePayload)}
-      ${renderManualGuardedQueueHandoffCreateSection(tracePayload)}
-      ${renderManualQueueHandoffCreationObservabilitySection(tracePayload)}
-      ${renderManualExecutionReadinessPreviewSection(tracePayload)}
-      ${renderManualExecutionLaunchGatePreviewSection(tracePayload)}
-      ${renderManualExecutionLaunchGateObservabilitySection(tracePayload)}
-      ${renderManualExecutionRequestPacketPreviewSection(tracePayload)}
-      ${renderManualGuardedExecutionRequestCreateSection(tracePayload)}
-      ${renderManualGuardedExecutionRequestObservabilitySection(tracePayload)}
-      ${renderManualExecutionRequestReadbackSection(tracePayload)}
-      ${renderManualExecutionRequestStatusTransitionPreviewSection(tracePayload)}
-      ${renderManualGuardedExecutionRequestStatusTransitionSection(tracePayload)}
-      ${renderManualGuardedExecutionRequestStatusTransitionObservabilitySection(tracePayload)}
-      ${renderManualApplicationExecutionSimulationPreviewSection(tracePayload)}
-      ${renderManualApplicationExecutionSimulationObservabilitySection(tracePayload)}
-      ${renderManualApplicationExecutionPreflightChecklistSection(tracePayload)}
-      ${renderManualApplicationExecutionPreflightObservabilitySection(tracePayload)}
-      ${renderManualGuardedApplicationExecutionLaunchRequestCreateSection(tracePayload)}
-      ${renderManualGuardedApplicationExecutionLaunchRequestObservabilitySection(tracePayload)}
-      ${renderManualApplicationExecutionLaunchRequestReadbackSection(tracePayload)}
-      ${renderManualExecutionLaunchRequestStatusTransitionPreviewSection(tracePayload)}
-      ${renderManualGuardedExecutionLaunchRequestStatusTransitionSection(tracePayload)}
-      ${renderManualGuardedExecutionLaunchRequestStatusTransitionObservabilitySection(tracePayload)}
-      ${renderAgentTraceDetailedSections(tracePayload)}
+      ${found && !loadingState && steps.length ? renderAgentTraceMasterDetail(tracePayload) : ""}
+      <section class="agent-trace-extended-diagnostics" aria-labelledby="agentTraceExtendedDiagnosticsHeading">
+        <div class="agent-trace-extended-diagnostics__header">
+          <div>
+            <span class="agent-trace-selected-step__eyebrow">Deep inspection</span>
+            <h5 id="agentTraceExtendedDiagnosticsHeading">Extended trace diagnostics</h5>
+            <p>Choose one existing diagnostic surface to inspect. Manual controls remain explicit and read-only.</p>
+          </div>
+          <span class="agentic-workflow-badge">Read-only inspection</span>
+        </div>
+        ${renderAgentTraceDiagnosticWorkspace(diagnosticItems)}
+      </section>
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
       <details class="agent-trace-debug-details" data-collapsed-by-default="true">
@@ -7515,34 +8738,8 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
           ${renderWorkflowSummaryMetric("Empty trace", emptyTrace ? "true" : "false")}
           ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "true" : "unknown")}
         </div>
+        ${renderAgentTraceReadOnlyDetails("Agent run metadata", agentRun, { helper: "Read-only run payload for empty and error inspection." })}
       </details>
-      ${found && !loadingState ? `
-        <article class="agent-trace-run" aria-label="Read-only agent trace run metadata">
-          <div class="agent-trace-run-header">
-            <div>
-              <div class="agent-trace-run-id">${escapeHtml(agentRun.agent_run_id || "Agent run")}</div>
-              <div class="agent-trace-step-meta">
-                ${escapeHtml(agentRun.agent_name || "-")} · ${escapeHtml(agentRun.run_status || agentRun.status || "-")}
-              </div>
-            </div>
-            ${renderReviewPill(agentRun.run_status || agentRun.status || "unknown")}
-          </div>
-          <div class="agent-trace-step-times">
-            ${escapeHtml(agentRun.observed_at_utc || agentRun.started_at || "Timestamp unavailable")}
-            ${agentRun.completed_at ? ` -> ${escapeHtml(agentRun.completed_at)}` : ""}
-          </div>
-          <div class="agentic-review-muted">Long trace readability is supported by collapsed step details and readable metadata summaries.</div>
-          <div class="agent-trace-json-grid">
-            ${renderAgentTraceReadOnlyDetails("Agent run metadata", agentRun.metadata || agentRun.summary_json, { helper: "Read-only agent run metadata." })}
-            ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable safety metadata display." })}
-          </div>
-          <div class="agent-trace-step-list" aria-label="Read-only ordered agent steps list">
-            ${steps.length
-              ? steps.map(renderAgentTraceReadOnlyStep).join("")
-              : renderAgentTraceReadOnlyState("No ordered agent steps returned for this trace. Empty trace: no ordered agent steps returned for this trace.", "info", "Agent trace empty trace")}
-          </div>
-        </article>
-      ` : ""}
     </section>
   `;
 }
@@ -10449,6 +11646,12 @@ function renderAgenticReviewData(payload, tracePayload) {
     verificationNode.outerHTML = renderAgenticWorkflowVerificationPanel(payload.agentic_workflow_verification);
   }
 
+  setAgenticReviewQueueRecords(consolidateAgenticReviewRows(
+    payload.job_prioritization_rows || [],
+    payload.tailoring_decision_rows || [],
+    payload.operator_review_rows || [],
+  ));
+
   renderAgenticReviewAdvisoryPanel(
     "agenticReviewPriorityPanel",
     "Job Prioritization",
@@ -10481,9 +11684,7 @@ function renderAgenticReviewData(payload, tracePayload) {
       { key: "advisory_priority", label: "Priority", type: "pill" },
       { key: "tailoring_decision", label: "Tailoring decision", type: "pill" },
       { key: "tailoring_reason_codes", label: "Reasons", type: "reasons" },
-      { key: "job_id", label: "AI preview", type: "manual_provider_preview_action" },
     ],
-    { manualProviderPreview: true },
   );
 
   renderAgenticReviewAdvisoryPanel(
@@ -10534,9 +11735,46 @@ function activateAgenticReviewPanel(buttonSelector, panelSelector, activeButton,
     const isActive = button === activeButton;
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-selected", isActive ? "true" : "false");
+    button.setAttribute("tabindex", isActive ? "0" : "-1");
   });
   document.querySelectorAll(panelSelector).forEach((panel) => {
-    panel.classList.toggle("hidden", panel.id !== targetId);
+    const isActive = panel.id === targetId;
+    panel.classList.toggle("hidden", !isActive);
+    panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+  });
+}
+
+function bindAgenticReviewTablist(
+  tablistSelector,
+  buttonSelector,
+  panelSelector,
+  targetDataKey,
+) {
+  const tablist = document.querySelector(tablistSelector);
+  if (!tablist) return;
+
+  const activateButton = (button) => {
+    const targetId = String(button?.dataset?.[targetDataKey] || "");
+    activateAgenticReviewPanel(buttonSelector, panelSelector, button, targetId);
+  };
+
+  tablist.addEventListener("click", (event) => {
+    const button = event.target.closest(buttonSelector);
+    if (!button) return;
+    activateButton(button);
+  });
+
+  tablist.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    const buttons = Array.from(tablist.querySelectorAll(buttonSelector));
+    const currentButton = event.target.closest(buttonSelector);
+    const currentIndex = buttons.indexOf(currentButton);
+    if (currentIndex < 0 || buttons.length < 2) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const nextButton = buttons[(currentIndex + direction + buttons.length) % buttons.length];
+    nextButton.focus();
+    activateButton(nextButton);
   });
 }
 
@@ -10554,10 +11792,9 @@ function rerenderManualProviderPreviewWorkspace() {
       { key: "advisory_priority", label: "Priority", type: "pill" },
       { key: "tailoring_decision", label: "Tailoring decision", type: "pill" },
       { key: "tailoring_reason_codes", label: "Reasons", type: "reasons" },
-      { key: "job_id", label: "AI preview", type: "manual_provider_preview_action" },
     ],
-    { manualProviderPreview: true },
   );
+  renderAgenticReviewQueueWorkspace();
 }
 
 async function loadManualProviderPreviewReadiness() {
@@ -10575,7 +11812,7 @@ async function loadManualProviderPreviewReadiness() {
     manualProviderPreviewState.readiness = "unknown";
     manualProviderPreviewState.route = null;
   }
-  if (manualProviderPreviewState.tailoringRows.length) rerenderManualProviderPreviewWorkspace();
+  rerenderManualProviderPreviewWorkspace();
 }
 
 function openManualProviderPreviewConfirmation(button) {
@@ -10684,27 +11921,24 @@ function bindManualProviderPreviewControls() {
 }
 
 function bindAgenticReviewTabs() {
-  document.querySelector(".agentic-review-tabs")?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-agentic-tab-target]");
-    if (!button) return;
-    activateAgenticReviewPanel(
-      ".agentic-review-tab",
-      "[data-agentic-tab-panel]",
-      button,
-      button.dataset.agenticTabTarget || "",
-    );
-  });
-
-  document.querySelector(".agentic-review-segmented")?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-agentic-advisory-target]");
-    if (!button) return;
-    activateAgenticReviewPanel(
-      ".agentic-review-segment",
-      "[data-agentic-advisory-panel]",
-      button,
-      button.dataset.agenticAdvisoryTarget || "",
-    );
-  });
+  bindAgenticReviewTablist(
+    ".agentic-review-tabs",
+    ".agentic-review-tab",
+    "[data-agentic-tab-panel]",
+    "agenticTabTarget",
+  );
+  bindAgenticReviewTablist(
+    ".agentic-review-advanced-tabs",
+    ".agentic-review-advanced-tab",
+    "[data-agentic-advanced-panel]",
+    "agenticAdvancedTarget",
+  );
+  bindAgenticReviewTablist(
+    ".agentic-review-segmented",
+    ".agentic-review-segment",
+    "[data-agentic-advisory-panel]",
+    "agenticAdvisoryTarget",
+  );
 
   document.addEventListener("click", (event) => {
     const button = event.target.closest("[data-agentic-feedback-event]");
@@ -13466,6 +14700,9 @@ function bindAgenticReviewTabs() {
 
 async function initAgenticReviewPage() {
   bindAgenticReviewTabs();
+  bindAgenticReviewQueue();
+  bindAgentTraceMasterDetail();
+  bindAgentTraceDiagnosticMasterDetail();
   bindManualProviderPreviewControls();
   const runId = getAgenticReviewRunId();
   if (!runId) return;

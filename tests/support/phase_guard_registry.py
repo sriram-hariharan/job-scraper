@@ -588,6 +588,30 @@ ITEM4_PLANNING_TAILORING_OPTIONS_FILES = {
     "tests/test_item4et_tailoring_state_contract.py",
 }
 
+# Item 6 Agentic Review UI revamp: exact final frontend and focused-test
+# boundary accepted by stale registry-backed guards.
+ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES = {
+    "src/app/profile_ui.py",
+    "src/app/static/agentic_review.css",
+    "src/app/static/agentic_review.js",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
+    "tests/test_item2e_manual_provider_preview_ui.py",
+    "tests/test_item6b2_consolidated_agentic_review_queue_foundation.py",
+    "tests/test_item6b3_selected_job_review_inspector.py",
+    "tests/test_item6b45_premium_visual_correction_density.py",
+    "tests/test_item6b4_selected_job_evidence_agent_views.py",
+    "tests/test_item6b5_contextual_actions_manual_preview_integration.py",
+    "tests/test_item6b65a_review_advanced_shell_usability.py",
+    "tests/test_item6b65b_agent_trace_master_detail_search_keyboard.py",
+    "tests/test_item6b65c_extended_trace_diagnostics_master_detail.py",
+    "tests/test_item6b6_final_review_vs_advanced_changeover.py",
+    "tests/test_item6c1_extended_diagnostic_detail_layout_action_alignment.py",
+    "tests/test_item6c2_final_placement_disclosure_header_alignment.py",
+    "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+    "tests/test_item6c_final_agentic_review_visual_system_micro_ux.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -2241,6 +2265,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
+        | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2691,6 +2716,8 @@ def assert_protected_hashes(
         ): frozenset({
             "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
             "b84272b1e74152d0f6e93b8d79636f24179a656d9c2a0ab4b66aa722730ade13",
+            # Final approved Item 6 Agentic Review UI revamp.
+            "959d9f4cd2c33cee9104695118eff1d83d62e99d495142cc380d9b26c38b415f",
         }),
     }
     repo = Path(root)

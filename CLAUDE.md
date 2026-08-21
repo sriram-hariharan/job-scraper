@@ -111,8 +111,8 @@ Guidance for Claude Code when working in this repository.
 
 # Git workflow
 - Confirm branch and worktree state before editing.
-- Current branch: item3-chatbot-ui-redesign.
-- Current approved checkpoint: cd2a213ad2b840f6821eda2343100a8fbdf58e77.
+- Current branch: item4-planning-tailoring-options-review.
+- Current approved checkpoint: ddf02cb2af56f061087d9ff56c17de9541fd98fd.
 - Do not commit or push unless explicitly requested.
 - Before commit, verify there are no numbered duplicate generated assets.
 - Stage only exact approved files.
@@ -133,17 +133,16 @@ Guidance for Claude Code when working in this repository.
 
 # Current checkpoint
 - The following facts were manually verified and approved by the user:
-  - Item 3 ApplyLens AI chatbot redesign is complete.
-  - Approved feature checkpoint commit: cd2a213ad2b840f6821eda2343100a8fbdf58e77.
-  - The floating chatbot is read-only and remains on the existing shared-shell `/assistant/query`
-    architecture.
-  - Chatbot retrieval is scoped to the authenticated owner's current Executive Dashboard job
-    population, with authoritative current-run artifact evidence for allowed Dashboard jobs that
-    are absent from the shared RAG corpus.
-  - Shared `rag_job_documents` remains the owner-neutral acquisition corpus and pipeline input.
-  - Owner isolation, provider isolation, citation enforcement, RAG retention safety, accessibility,
-    mobile behavior, and historical checkpoint governance remain preserved.
-  - Final Item 3 full-suite release gate: 10,249 passed, 12 skipped, 0 failed.
+  - Item 4 Planning & Tailoring Options Review is complete.
+  - Approved feature checkpoint commit: ddf02cb2af56f061087d9ff56c17de9541fd98fd.
+  - Planning patch-selection writes now persist the authenticated owner and fail closed on blank ownership.
+  - Draft save/load and patch preview resolve planning artifacts from authenticated owner + pipeline-run identity rather than caller-controlled output roots.
+  - `/planning-artifact` uses authenticated owner-root containment, permits same-owner historical-run reads, and rejects cross-owner artifact access.
+  - Request `output_dir` values no longer provide authorization authority on the hardened planning routes.
+  - `generate_llm_tailoring=false` remains the passive deterministic default; LLM tailoring is triggered only by explicit user actions.
+  - `review_decision`, `draft_status`, and derived tailoring readiness remain intentionally separate state concepts.
+  - Item 4 focused, compatibility, governance, and closure verification is complete; repository-wide full-suite testing remains deferred until all planned items are complete.
+- Application safety remains preserved: no auto-apply, ATS submission, recruiter messaging, or automatic mark-applied behavior was introduced.
 - Operational classic-script isolation and existing page request ownership boundaries remain preserved.
-- Next planned checkpoint: Item 4 — Planning & Tailoring Options Review.
+- Next planned checkpoint: Item 5 — Deployment.
 - Update this Current checkpoint section after every approved checkpoint commit.

@@ -572,6 +572,22 @@ ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES = {
     "tests/test_item3e2_dashboard_scoped_chatbot.py",
 }
 
+# Item 4 planning & tailoring options review: authenticated-owner patch
+# selection/draft/preview scoping, planning-artifact owner-root path
+# hardening, generate_llm_tailoring default-contract audit, and tailoring
+# state-field contract coverage. Runtime files (src/app/api.py,
+# src/app/services.py, src/app/planning_ui.py, src/app/static/planning.js)
+# and the modified test_phase71a_tailoring_workspace_artifact_path_preload_
+# repair_default_off.py file are already accepted by
+# phase133g_premium_planning_dashboard; only the four new Item 4 test files
+# are listed here.
+ITEM4_PLANNING_TAILORING_OPTIONS_FILES = {
+    "tests/test_item4bc_planning_owner_isolation.py",
+    "tests/test_item4cr2_planning_artifact_owner_root.py",
+    "tests/test_item4d_generate_llm_tailoring_contract.py",
+    "tests/test_item4et_tailoring_state_contract.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -2224,6 +2240,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
+        | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2466,6 +2483,8 @@ def assert_protected_hashes(
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
             "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
             "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
+            # Item 4 planning & tailoring options review successor.
+            "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
         }),
         (
             "src/app/services.py",
@@ -2529,6 +2548,8 @@ def assert_protected_hashes(
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
             "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
             "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
+            # Item 4 planning & tailoring options review successor.
+            "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
         }),
         (
             "src/app/services.py",
@@ -2540,6 +2561,8 @@ def assert_protected_hashes(
             "3b11179b92301e7734cb82ef2f4cc8ba6d251e2ee363cf27d04a0461a0913a7a",
             # Item 3 floating ApplyLens AI chatbot successor.
             "a9211f507cd0294d54040d45df11b846e359f815556306e64bb6785bd1e5ad41",
+            # Item 4 planning & tailoring options review successor.
+            "c223631f87bd6b358bdd91e732dc54b1fd55568e93ef8c86c3645d321fdf078a",
         }),
         (
             "src/app/services.py",
@@ -2564,6 +2587,8 @@ def assert_protected_hashes(
             "3b11179b92301e7734cb82ef2f4cc8ba6d251e2ee363cf27d04a0461a0913a7a",
             # Item 3 floating ApplyLens AI chatbot successor.
             "a9211f507cd0294d54040d45df11b846e359f815556306e64bb6785bd1e5ad41",
+            # Item 4 planning & tailoring options review successor.
+            "c223631f87bd6b358bdd91e732dc54b1fd55568e93ef8c86c3645d321fdf078a",
         }),
             (
                 "src/agents/jd_intelligence.py",

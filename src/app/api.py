@@ -90,11 +90,13 @@ def _start_semantic_warmup_thread() -> None:
 class PlanningWorkspaceDraftLoadRequest(BaseModel):
     tailoring_json_path: str
     selected_resume: str = ""
+    pipeline_run_id: str = ""
 
 
 class PlanningWorkspaceDraftSaveRequest(BaseModel):
     tailoring_json_path: str
     selected_resume: str = ""
+    pipeline_run_id: str = ""
     selected_patch_candidate_ids: list[str] = Field(default_factory=list)
     manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
     rewrite_review_decisions: dict[str, dict[str, str] | str] = Field(default_factory=dict)
@@ -165,6 +167,42 @@ def _phase71b_effective_planning_output_dir(path_value: str, output_dir_value: s
     if idx >= 0:
         return raw[: idx + len("/application_planning")]
     return str(output_dir_value or "")
+
+
+def _owner_scoped_planning_output_dir(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str,
+    requested_output_dir: str = "",
+) -> Path:
+    """Authoritative planning root for an owner-scoped artifact operation.
+
+    Item 4B/C: a request-supplied output_dir must never be the security
+    containment root, because the traversal guard only validates relative to
+    whatever root the caller supplied. When a pipeline run identity is present
+    the root is derived from the authenticated owner + run through the existing
+    validated resolver, and the requested value is ignored entirely.
+
+    Without a run identity this fails closed rather than silently falling back
+    to DEFAULT_OUTPUT_DIR for an authenticated owner-scoped operation.
+    """
+    safe_owner = str(owner_user_id or "").strip()
+    safe_run_id = str(pipeline_run_id or "").strip()
+    if not safe_owner:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not safe_run_id:
+        raise HTTPException(
+            status_code=400,
+            detail="pipeline_run_id is required for this planning workspace request.",
+        )
+    try:
+        resolved_output_dir, _job_corpus = services.resolve_user_pipeline_run_planning_paths(
+            owner_user_id=safe_owner,
+            run_id=safe_run_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return resolved_output_dir
 
 
 class PlanningSavedScanStateRequest(BaseModel):
@@ -3353,13 +3391,26 @@ def planner(
 
 @app.get("/planning-artifact")
 def planning_artifact(
+    http_request: Request,
     path: str,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
+    # Item 4C-R2: owner-scoped (not run-scoped) read. The authenticated owner is
+    # needed for authorization, not merely as proof that someone is logged in.
+    # output_dir is retained for wire compatibility and still shapes path
+    # RESOLUTION, but it has zero authority over containment: authorization is
+    # decided solely by the server-derived owner root below.
+    owner_user_id = _require_auth_owner_user_id(http_request)
+    try:
+        owner_root = services.owner_planning_artifact_root(owner_user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
     try:
         return services.planning_artifact_payload(
             path=path,
             output_dir=Path(_phase71b_effective_planning_output_dir(path, output_dir)),
+            owner_root=owner_root,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -3654,12 +3705,21 @@ def planning_regenerate_selected_resume(
 
 @app.post("/planning/preview-selected-patches")
 def planning_preview_selected_patches(
+    http_request: Request,
     payload: dict = Body(...),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
+    # Read-only, but still an owner-scoped artifact read: a preview must not
+    # become a cross-owner read channel simply because it does not mutate.
+    owner_user_id = _require_auth_owner_user_id(http_request)
+    resolved_output_dir = _owner_scoped_planning_output_dir(
+        owner_user_id=owner_user_id,
+        pipeline_run_id=str(payload.get("pipeline_run_id", "") or ""),
+        requested_output_dir=output_dir,
+    )
     try:
         return services.preview_planning_patch_selection_payload(
-            output_dir=Path(output_dir),
+            output_dir=resolved_output_dir,
             tailoring_json_path=str(payload.get("tailoring_json_path", "") or ""),
             selected_candidate_ids=payload.get("selected_candidate_ids", []),
         )
@@ -3668,30 +3728,45 @@ def planning_preview_selected_patches(
     
 @app.post("/planning/select-patches")
 def planning_select_patches(
+    http_request: Request,
     payload: dict = Body(...),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
+    owner_user_id = _require_auth_owner_user_id(http_request)
+    resolved_output_dir = _owner_scoped_planning_output_dir(
+        owner_user_id=owner_user_id,
+        pipeline_run_id=str(payload.get("pipeline_run_id", "") or ""),
+        requested_output_dir=output_dir,
+    )
     try:
         return services.record_planning_patch_selection_payload(
-            output_dir=Path(output_dir),
+            output_dir=resolved_output_dir,
             tailoring_json_path=str(payload.get("tailoring_json_path", "") or ""),
             job_doc_id=str(payload.get("job_doc_id", "") or ""),
             queue_rank=str(payload.get("queue_rank", "") or ""),
             selected_resume=str(payload.get("selected_resume", "") or ""),
             selected_candidate_ids=payload.get("selected_candidate_ids", []),
             note=str(payload.get("note", "") or ""),
+            owner_user_id=owner_user_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.post("/planning/load-workspace-draft")
 def load_workspace_draft(
+    http_request: Request,
     request: PlanningWorkspaceDraftLoadRequest,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
+    owner_user_id = _require_auth_owner_user_id(http_request)
+    resolved_output_dir = _owner_scoped_planning_output_dir(
+        owner_user_id=owner_user_id,
+        pipeline_run_id=request.pipeline_run_id,
+        requested_output_dir=output_dir,
+    )
     try:
         return services.load_tailoring_workspace_draft_payload(
-            output_dir=Path(output_dir),
+            output_dir=resolved_output_dir,
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
         )
@@ -3701,12 +3776,19 @@ def load_workspace_draft(
 
 @app.post("/planning/save-workspace-draft")
 def save_workspace_draft(
+    http_request: Request,
     request: PlanningWorkspaceDraftSaveRequest,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
+    owner_user_id = _require_auth_owner_user_id(http_request)
+    resolved_output_dir = _owner_scoped_planning_output_dir(
+        owner_user_id=owner_user_id,
+        pipeline_run_id=request.pipeline_run_id,
+        requested_output_dir=output_dir,
+    )
     try:
         return services.save_tailoring_workspace_draft_payload(
-            output_dir=Path(output_dir),
+            output_dir=resolved_output_dir,
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
             selected_patch_candidate_ids=request.selected_patch_candidate_ids,

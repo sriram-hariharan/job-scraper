@@ -5040,6 +5040,7 @@ function getTailoringWorkspaceContext() {
     resumeName: String(page.dataset.resumeName || "").trim(),
     packetJsonKey: String(page.dataset.packetJsonKey || "").trim(),
     planningOutputDir: String(page.dataset.planningOutputDir || "").trim(),
+    pipelineRunId: String(page.dataset.pipelineRunId || "").trim(),
   };
 }
 
@@ -5066,6 +5067,7 @@ async function loadTailoringWorkspaceDraft() {
   return postJson(buildPlanningEndpoint("/planning/load-workspace-draft", context.planningOutputDir), {
     tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
     selected_resume: getTailoringWorkspaceResumePreviewName(context),
+    pipeline_run_id: context.pipelineRunId || "",
   });
 }
 
@@ -8196,6 +8198,7 @@ async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
     const response = await postJson(buildPlanningEndpoint("/planning/preview-workspace-draft", context.planningOutputDir), {
       tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
       selected_resume: getTailoringWorkspaceResumePreviewName(context),
+      pipeline_run_id: context.pipelineRunId || "",
       selected_patch_candidate_ids: selectedIds,
       manual_bullet_edits: manualEdits,
       rewrite_review_decisions: reviewDecisions,
@@ -11963,6 +11966,7 @@ async function saveScanWorkspaceState() {
     const response = await postJson(buildPlanningEndpoint("/planning/save-workspace-draft", context.planningOutputDir), {
       tailoring_json_path: getTailoringWorkspaceSuggestionArtifactKey(context),
       selected_resume: getTailoringWorkspaceResumePreviewName(context),
+      pipeline_run_id: context.pipelineRunId || "",
       selected_patch_candidate_ids: getScanWorkspaceSelectedCandidateIds(),
       manual_bullet_edits: {},
       rewrite_review_decisions: getScanWorkspaceCurrentReviewDecisionMap(),
@@ -12423,6 +12427,8 @@ function buildTailoringWorkspaceUrl(row) {
   if (row.tailoring_llm_json) params.set("tailoring_llm_json", row.tailoring_llm_json);
   if (row.packet_json_key || row.packet_json) params.set("packet_json", row.packet_json_key || row.packet_json);
   if (row.planning_output_dir) params.set("output_dir", row.planning_output_dir);
+  const workspaceRunId = row.pipeline_run_id || row.run_id || "";
+  if (workspaceRunId) params.set("pipeline_run_id", workspaceRunId);
 
   return `/tailoring-workspace?${params.toString()}`;
 }

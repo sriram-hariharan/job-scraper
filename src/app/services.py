@@ -30641,10 +30641,45 @@ def _phase71b_expired_optional_tailoring_artifact_payload(
     }
 
 
+def owner_planning_artifact_root(owner_user_id: str = "") -> Path:
+    """Server-derived pipeline-runs root for one authenticated owner.
+
+    Item 4C-R2: the only authorization root for /planning-artifact. Built from
+    the same normalization the pipeline itself uses (_pipeline_scratch_output_dir),
+    never from a caller-supplied path, output_dir, or owner value.
+    """
+    safe_owner = _safe_owner_dir_name(owner_user_id)
+    if not safe_owner:
+        raise ValueError("Authenticated owner is required to read a planning artifact.")
+    return (DEFAULT_PIPELINE_SCRATCH_DIR / safe_owner).expanduser().resolve()
+
+
 def planning_artifact_payload(
     path: str,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
+    owner_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
+    # Item 4C-R2 owner containment. When owner_root is supplied (always true for
+    # the authenticated /planning-artifact route) every candidate artifact must
+    # canonically resolve underneath it, so a requested path can never
+    # self-authorize. Left optional so existing owner-neutral callers are
+    # preserved rather than globally broken.
+    allowed_root = (
+        Path(owner_root).expanduser().resolve() if owner_root is not None else None
+    )
+
+    def _authorize_owner_root(candidate: Path) -> Path:
+        resolved = Path(candidate).expanduser().resolve()
+        if allowed_root is None:
+            return resolved
+        try:
+            resolved.relative_to(allowed_root)
+        except ValueError as exc:
+            raise ValueError(
+                "Artifact path must stay inside the authenticated owner's planning directory."
+            ) from exc
+        return resolved
+
     fallback: Dict[str, Any] | None = None
     try:
         artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
@@ -30681,8 +30716,14 @@ def planning_artifact_payload(
                 and _is_optional_tailoring_artifact_path(raw_artifact_path)
             )
             if is_run_scoped_expired_optional:
+                # This branch answers from the raw requested path, so it must be
+                # owner-authorized too or it becomes a bypass.
+                _authorize_owner_root(raw_artifact_path)
                 return _phase71b_expired_optional_tailoring_artifact_payload(raw_artifact_path)
             raise
+
+    # Single convergence point for every resolved-artifact branch above.
+    artifact_path = _authorize_owner_root(artifact_path)
     suffix = artifact_path.suffix.lower()
 
     payload: Dict[str, Any] = {
@@ -31219,8 +31260,15 @@ def record_planning_patch_selection_payload(
     selected_resume: str = "",
     selected_candidate_ids: Any = None,
     note: str = "",
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
+
+    # Patch selections are owner-scoped planning state. Fail closed rather than
+    # persisting a blank-owner row that every owner's reads could match.
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated owner is required to record a patch selection.")
 
     artifact_path = _resolve_planning_artifact_path(
         tailoring_json_path,
@@ -31261,6 +31309,7 @@ def record_planning_patch_selection_payload(
 
     row = {
         "selection_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "owner_user_id": owner,
         "job_doc_id": _clean_text(job_doc_id) or _clean_text(job.get("job_doc_id")),
         "queue_rank": _clean_text(queue_rank),
         "job_company": _clean_text(job.get("company")),

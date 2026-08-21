@@ -17,6 +17,7 @@ from tests.support.phase_guard_registry import (
     ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES,
     ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES,
     ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES,
+    ITEM4_PLANNING_TAILORING_OPTIONS_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -1797,6 +1798,16 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "*" in path for path in ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
     )
 
+    assert ITEM4_PLANNING_TAILORING_OPTIONS_FILES == {
+        "tests/test_item4bc_planning_owner_isolation.py",
+        "tests/test_item4cr2_planning_artifact_owner_root.py",
+        "tests/test_item4d_generate_llm_tailoring_contract.py",
+        "tests/test_item4et_tailoring_state_contract.py",
+    }
+    assert not any(
+        "*" in path for path in ITEM4_PLANNING_TAILORING_OPTIONS_FILES
+    )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
@@ -1804,6 +1815,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
+        | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

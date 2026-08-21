@@ -632,6 +632,7 @@ def tailoring_workspace(
     tailoring_llm_json: str = "",
     packet_json: str = "",
     output_dir: str = "",
+    pipeline_run_id: str = "",
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
@@ -655,6 +656,7 @@ def tailoring_workspace(
     packet_json_safe = escape(packet_json or "")
     packet_json_key_safe = escape(packet_json or "")
     output_dir_safe = escape(output_dir or "")
+    pipeline_run_id_safe = escape(pipeline_run_id or "")
 
     scan_query = urlencode(
         {
@@ -702,6 +704,7 @@ def tailoring_workspace(
     data-packet-json-path="{packet_json_safe}"
     data-packet-json-key="{packet_json_key_safe}"
     data-planning-output-dir="{output_dir_safe}"
+    data-pipeline-run-id="{pipeline_run_id_safe}"
   >
     <header class="tailoring-workspace-header">
       <div class="tailoring-workspace-header-topline">

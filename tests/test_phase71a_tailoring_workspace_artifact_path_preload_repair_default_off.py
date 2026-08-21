@@ -1086,7 +1086,10 @@ def test_missing_required_base_packet_still_fails_safely(tmp_path):
 
 
 def test_actual_workspace_suggestion_route_returns_no_suggestions_for_missing_tailoring_json(monkeypatch, tmp_path):
-    output_dir = tmp_path / "run-scoped" / "application_planning"
+    # Item 4C-R2: /planning-artifact is now owner-scoped, so the run must live
+    # under the authenticated owner's server-derived pipeline-runs root.
+    monkeypatch.setattr(services, "DEFAULT_PIPELINE_SCRATCH_DIR", tmp_path)
+    output_dir = tmp_path / "owner-a" / "run-scoped" / "application_planning"
     packet_path = _write_base_packet(output_dir)
     missing_tailoring_key = (
         packet_path.with_name("acme__platform_engineer__resume__tailoring.json")
@@ -1094,6 +1097,7 @@ def test_actual_workspace_suggestion_route_returns_no_suggestions_for_missing_ta
         .as_posix()
     )
     monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    monkeypatch.setattr(api, "_require_auth_owner_user_id", lambda _request: "owner-a")
     client = TestClient(api.app)
 
     response = client.get(

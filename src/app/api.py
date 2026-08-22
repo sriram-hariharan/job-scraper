@@ -4372,6 +4372,7 @@ def profile_pipeline_run_agent_trace(
     include_stage_trace_readiness: str = "",
     include_trace_evidence_pack: str = "",
 ):
+    _require_admin_user(http_request)
     try:
         return services.agent_trace_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -4402,6 +4403,7 @@ def profile_pipeline_run_evidence_chain_trace(
     limit_runs: int = 10,
     limit_steps: int = 100,
 ):
+    _require_admin_user(http_request)
     try:
         return services.get_evidence_chain_trace_readback_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -6059,6 +6061,7 @@ def jd_live_provider_canary_readback(
 
 @app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")
 def profile_pipeline_run_agentic_review_data(run_id: str, http_request: Request):
+    _require_admin_user(http_request)
     try:
         return services.profile_pipeline_run_agentic_review_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),

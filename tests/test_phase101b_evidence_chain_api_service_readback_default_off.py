@@ -43,7 +43,9 @@ SAFETY_FALSE_FLAGS = [
 def _request(owner_user_id="owner-101b"):
     return types.SimpleNamespace(
         state=types.SimpleNamespace(
-            auth_user={"user_id": owner_user_id} if owner_user_id else {}
+            auth_user={"user_id": owner_user_id, "is_admin": True}
+            if owner_user_id
+            else {}
         )
     )
 

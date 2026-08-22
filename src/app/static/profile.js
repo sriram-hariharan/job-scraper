@@ -688,6 +688,18 @@ function renderPipelineRuns(runs) {
     const tone = pipelineRunStatusTone(run.status);
     const summary = run.summary_message || run.stage_message || run.error || "-";
     const finalJobs = run.final_job_count ?? run.counts?.final_jobs ?? "-";
+    const agenticReviewAction = isCurrentUserAdmin(profileState.currentUser)
+      ? `
+            <a
+              class="pipeline-run-icon-btn pipeline-run-agentic-review-btn"
+              href="/profile/pipeline-runs/${encodeURIComponent(run.run_id || "")}/agentic-review"
+              data-tooltip="Agentic review"
+              aria-label="Agentic review"
+              title="Agentic review"
+            >
+              <span class="pipeline-run-action-icon pipeline-run-action-icon--agentic" aria-hidden="true"></span>
+            </a>`
+      : "";
     return `
       <tr data-pipeline-run-id="${runId}">
         <td>
@@ -715,15 +727,7 @@ function renderPipelineRuns(runs) {
             >
               <span class="pipeline-run-action-icon pipeline-run-action-icon--view" aria-hidden="true"></span>
             </button>
-            <a
-              class="pipeline-run-icon-btn pipeline-run-agentic-review-btn"
-              href="/profile/pipeline-runs/${encodeURIComponent(run.run_id || "")}/agentic-review"
-              data-tooltip="Agentic review"
-              aria-label="Agentic review"
-              title="Agentic review"
-            >
-              <span class="pipeline-run-action-icon pipeline-run-action-icon--agentic" aria-hidden="true"></span>
-            </a>
+            ${agenticReviewAction}
           </div>
         </td>
         <td>

@@ -19,6 +19,7 @@ from tests.support.phase_guard_registry import (
     ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES,
     ITEM4_PLANNING_TAILORING_OPTIONS_FILES,
     ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
+    ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -1894,6 +1895,36 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     }
     assert not any("*" in path for path in ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES)
 
+    item61b_admin_boundary_profile = legacy_guard_allowlist(
+        "item61b_agentic_review_admin_boundary"
+    )
+    assert ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES == {
+        "src/app/api.py",
+        "src/app/profile_ui.py",
+        "src/app/static/profile.js",
+        "tests/test_item61b_agentic_review_admin_boundary.py",
+        "tests/test_agent_trace_api.py",
+        "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
+    }
+    assert item61b_admin_boundary_profile == (
+        ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES
+    )
+    assert len(item61b_admin_boundary_profile) == 6
+    assert not any("*" in path for path in item61b_admin_boundary_profile)
+    assert_changed_files_allowed(
+        item61b_admin_boundary_profile,
+        set(),
+        legacy_guard_profiles=("item61b_agentic_review_admin_boundary",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=("item61b_agentic_review_admin_boundary",),
+            include_current_milestone_compatibility=False,
+        )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
@@ -1903,6 +1934,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
         | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
+        | item61b_admin_boundary_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile
@@ -2316,6 +2348,13 @@ def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):
 @pytest.mark.parametrize(
     ("relative_path", "historical_hash", "accepted_successors"),
     (
+        (
+            "src/app/api.py",
+            "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+            (
+                "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
+            ),
+        ),
         (
             "src/app/services.py",
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",

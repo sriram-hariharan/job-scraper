@@ -140,6 +140,7 @@ def test_phase106b_does_not_change_protected_backend_runtime_files():
         PROTECTED_BACKEND_HASHES,
         compatibility_profiles=(
             "phase129c_workflow_overlay_and_run_scoped_corpus",
+            "item61b_agentic_review_admin_boundary",
         ),
     )
 

@@ -612,6 +612,17 @@ ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES = {
     "tests/test_item6c_final_agentic_review_visual_system_micro_ux.py",
 }
 
+# Item 6.1B Agentic Review admin boundary: exact production and focused-test
+# surface accepted by historical registry-backed guards.
+ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES = {
+    "src/app/api.py",
+    "src/app/profile_ui.py",
+    "src/app/static/profile.js",
+    "tests/test_item61b_agentic_review_admin_boundary.py",
+    "tests/test_agent_trace_api.py",
+    "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1086,6 +1097,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
             "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
             "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
         },
+        "item61b_agentic_review_admin_boundary": (
+            ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES
+        ),
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -2293,6 +2307,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
         | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
+        | legacy_guard_allowlist("item61b_agentic_review_admin_boundary")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2543,6 +2558,8 @@ def assert_protected_hashes(
             "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
             # Item 4 planning & tailoring options review successor.
             "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
+            # Item 6.1B Agentic Review admin boundary successor.
+            "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
         }),
         (
             "src/app/services.py",
@@ -2612,6 +2629,8 @@ def assert_protected_hashes(
             "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
             # Item 4 planning & tailoring options review successor.
             "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
+            # Item 6.1B Agentic Review admin boundary successor.
+            "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
         }),
         (
             "src/app/services.py",

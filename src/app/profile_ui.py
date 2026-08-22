@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from html import escape
 
@@ -15,6 +15,24 @@ router = APIRouter()
 def _is_resume_onboarding_query(value: str | None) -> bool:
     normalized = str(value or "").strip().rstrip("/\\")
     return normalized == "resume_upload"
+
+
+def _profile_user_from_request(request: Request) -> dict:
+    return dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+
+
+def _profile_user_is_admin(user: dict) -> bool:
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    return bool(user.get("is_admin", False)) or access_level == "admin"
+
+
+def _require_profile_admin_user(request: Request) -> dict:
+    user = _profile_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _profile_user_is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
 
 
 def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) -> str:
@@ -41,10 +59,9 @@ def _profile_navigation_icon_preloads_html() -> str:
 
 @router.get("/profile", response_class=HTMLResponse)
 def profile_page(request: Request) -> str:
-    user = dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+    user = _profile_user_from_request(request)
     is_resume_onboarding = _is_resume_onboarding_query(request.query_params.get("onboarding"))
-    access_level = str(user.get("access_level", "") or "").strip().lower()
-    is_admin = bool(user.get("is_admin", False)) or access_level == "admin"
+    is_admin = _profile_user_is_admin(user)
     admin_tab_html = (
         """
       <button type="button" class="profile-tab-btn" data-profile-tab-target="profileAdminUsersSection">
@@ -518,7 +535,8 @@ def profile_page(request: Request) -> str:
 
 
 @router.get("/profile/pipeline-runs/{run_id}/agentic-review", response_class=HTMLResponse)
-def pipeline_run_agentic_review_page(run_id: str) -> str:
+def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
+    _require_profile_admin_user(request)
     safe_run_id = escape(str(run_id or "").strip())
     return f"""
 <!DOCTYPE html>

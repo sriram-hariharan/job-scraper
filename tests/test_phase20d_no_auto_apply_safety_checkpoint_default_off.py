@@ -19,6 +19,7 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
     ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
     ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
+    ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -2671,6 +2672,35 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
     if (
         set(changed_runtime_files)
         == item61b_agentic_review_admin_boundary_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61c_agentic_operations_readonly_backend_runtime_files = {
+        ROOT / relative_path
+        for relative_path in ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if (
+        set(changed_runtime_files)
+        == item61c_agentic_operations_readonly_backend_runtime_files
     ):
         diff = subprocess.check_output(
             [

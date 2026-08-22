@@ -1,6 +1,7 @@
 from collections import Counter
 from contextlib import ExitStack
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -82,6 +83,7 @@ from src.agents import (
     tailoring_decision_agent,
     workflow_runner,
 )
+from src.agents.canonical_registry import list_canonical_agent_definitions
 from src.agents.trace import (
     build_agent_trace_evidence_pack,
     build_stage_trace_bundle_payload,
@@ -278,6 +280,39 @@ class ManualProviderPreviewLiveError(RuntimeError):
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
 AGENT_FEEDBACK_SUMMARY_MAX_LIMIT = 1000
 AGENT_FEEDBACK_EXPORT_MAX_LIMIT = 5000
+AGENTIC_OPERATIONS_RECENT_RUN_LIMIT = 10
+
+_AGENTIC_OPERATIONS_CURRENT_PIPELINE_FIELDS = (
+    "run_id",
+    "status",
+    "current_stage",
+    "completed_stages",
+    "stage_order",
+    "stage_started_at",
+    "stage_message",
+    "counts",
+    "config",
+    "final_job_count",
+    "return_code",
+    "error",
+    "started_at",
+    "finished_at",
+    "updated_at",
+    "updated_at_utc",
+    "status_path",
+)
+
+_AGENTIC_OPERATIONS_MUTATION_COUNT_FIELDS = (
+    ("score_mutation_capable_count", "score_mutation"),
+    ("rank_mutation_capable_count", "rank_mutation"),
+    ("queue_mutation_capable_count", "queue_mutation"),
+    ("resume_text_mutation_capable_count", "resume_text_mutation"),
+    (
+        "operator_state_persistence_capable_count",
+        "operator_state_persistence",
+    ),
+    ("application_action_capable_count", "application_action_capability"),
+)
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -1190,6 +1225,195 @@ def _pipeline_run_public_row(run: Dict[str, Any]) -> Dict[str, Any]:
         "final_job_count": status_json.get("final_job_count"),
         "counts": counts,
         "config": config,
+    }
+
+
+def agentic_operations_current_pipeline_payload(
+    status_path: str | Path | None = None,
+) -> Dict[str, Any]:
+    raw_path = str(status_path or "").strip()
+    if not raw_path:
+        return {
+            "available": False,
+            "state": "not_configured",
+            "source_path": "",
+        }
+
+    resolved_path = Path(raw_path).expanduser()
+    source_path = str(resolved_path)
+    if not resolved_path.exists() or not resolved_path.is_file():
+        return {
+            "available": False,
+            "state": "not_found",
+            "source_path": source_path,
+        }
+
+    try:
+        raw_payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "available": False,
+            "state": "malformed",
+            "source_path": source_path,
+        }
+    except OSError:
+        return {
+            "available": False,
+            "state": "unavailable",
+            "source_path": source_path,
+        }
+
+    if not isinstance(raw_payload, dict):
+        return {
+            "available": False,
+            "state": "malformed",
+            "source_path": source_path,
+        }
+
+    projection = {
+        field_name: deepcopy(raw_payload[field_name])
+        for field_name in _AGENTIC_OPERATIONS_CURRENT_PIPELINE_FIELDS
+        if field_name in raw_payload
+    }
+    return {
+        "available": True,
+        "state": "available",
+        "source_path": source_path,
+        **projection,
+    }
+
+
+def agentic_operations_recent_runs_payload(
+    *,
+    owner_user_id: str,
+    limit: int = AGENTIC_OPERATIONS_RECENT_RUN_LIMIT,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    safe_limit = max(
+        1,
+        min(
+            int(limit or AGENTIC_OPERATIONS_RECENT_RUN_LIMIT),
+            AGENTIC_OPERATIONS_RECENT_RUN_LIMIT,
+        ),
+    )
+
+    try:
+        payload = get_user_pipeline_runs_postgres_payload(
+            owner_user_id=owner,
+            limit=safe_limit,
+            offset=0,
+            status="",
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=False,
+        )
+    except (Exception, SystemExit) as exc:
+        logger.warning(
+            "Agentic Operations recent-runs readback unavailable for owner_user_id=%s: %s",
+            owner,
+            exc,
+        )
+        return {
+            "available": False,
+            "state": "unavailable",
+            "count": 0,
+            "bound": safe_limit,
+            "runs": [],
+        }
+
+    rows = list(payload.get("runs", payload.get("rows", [])) or [])[:safe_limit]
+    current_status_path = (
+        _pipeline_run_status_path_from_record(dict(rows[0] or {})) if rows else ""
+    )
+    runs = [_pipeline_run_public_row(dict(row or {})) for row in rows]
+    return {
+        "available": True,
+        "state": "available",
+        "count": len(runs),
+        "bound": safe_limit,
+        "runs": runs,
+        "_current_status_path": current_status_path,
+    }
+
+
+def agentic_operations_canonical_agents_payload() -> Dict[str, Any]:
+    definitions = list_canonical_agent_definitions()
+    agents = [asdict(definition) for definition in definitions]
+    safety_summary = {"canonical_agent_count": len(definitions)}
+    safety_summary.update(
+        {
+            output_field: sum(
+                1 for definition in definitions if bool(getattr(definition, source_field))
+            )
+            for output_field, source_field in _AGENTIC_OPERATIONS_MUTATION_COUNT_FIELDS
+        }
+    )
+    return {
+        "agents": agents,
+        "safety_summary": safety_summary,
+    }
+
+
+def _agentic_operations_safety_metadata() -> Dict[str, bool]:
+    return {
+        "read_only": True,
+        "admin_only": True,
+        "cross_user_access": False,
+        "database_write_performed": False,
+        "schema_write_performed": False,
+        "provider_call_performed": False,
+        "pipeline_execution_performed": False,
+        "scheduler_mutation_performed": False,
+        "scoring_changed": False,
+        "ranking_changed": False,
+        "queue_mutation_performed": False,
+        "resume_mutation_performed": False,
+        "application_execution_performed": False,
+        "ats_submission_performed": False,
+    }
+
+
+def agentic_operations_overview_payload(
+    *,
+    owner_user_id: str,
+    status_path: str | Path | None = None,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    recent_runs_payload = agentic_operations_recent_runs_payload(
+        owner_user_id=owner,
+        limit=AGENTIC_OPERATIONS_RECENT_RUN_LIMIT,
+    )
+    canonical_payload = agentic_operations_canonical_agents_payload()
+    current_status_path = (
+        status_path
+        if status_path is not None
+        else recent_runs_payload.get("_current_status_path", "")
+    )
+    recent_runs_state = {
+        key: deepcopy(value)
+        for key, value in recent_runs_payload.items()
+        if key not in {"runs", "_current_status_path"}
+    }
+    return {
+        "ok": True,
+        "read_only": True,
+        "admin_only": True,
+        "owner_user_id": owner,
+        "current_pipeline": agentic_operations_current_pipeline_payload(
+            current_status_path
+        ),
+        "recent_runs": deepcopy(recent_runs_payload.get("runs", [])),
+        "recent_runs_state": recent_runs_state,
+        "canonical_agents": deepcopy(canonical_payload["agents"]),
+        "safety_summary": deepcopy(canonical_payload["safety_summary"]),
+        "safety_metadata": _agentic_operations_safety_metadata(),
     }
 
 

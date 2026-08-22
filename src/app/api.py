@@ -4308,6 +4308,17 @@ def profile_admin_users(http_request: Request, limit: int = 100):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/profile/admin/agentic-operations/overview")
+def profile_admin_agentic_operations_overview(http_request: Request):
+    _require_admin_user(http_request)
+    try:
+        return services.agentic_operations_overview_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.patch("/profile/admin/users/{user_id}/access")
 def profile_admin_update_user_access(
     user_id: str,

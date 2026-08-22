@@ -623,6 +623,14 @@ ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES = {
     "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
 }
 
+# Item 6.1C Agentic Operations pure admin readback: exact production and
+# focused-test surface accepted by historical registry-backed guards.
+ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES = {
+    "src/app/api.py",
+    "src/app/services.py",
+    "tests/test_item61c_agentic_operations_readonly_backend.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1099,6 +1107,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         },
         "item61b_agentic_review_admin_boundary": (
             ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES
+        ),
+        "item61c_agentic_operations_readonly_backend": (
+            ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES
         ),
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
@@ -2308,6 +2319,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
         | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
         | legacy_guard_allowlist("item61b_agentic_review_admin_boundary")
+        | legacy_guard_allowlist("item61c_agentic_operations_readonly_backend")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2560,6 +2572,8 @@ def assert_protected_hashes(
             "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
             # Item 6.1B Agentic Review admin boundary successor.
             "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
+            # Item 6.1C Agentic Operations pure admin readback successor.
+            "d7107123ae4a98bf133f14b8593902a8c33e151660cb7024a6bec25186ea89c9",
         }),
         (
             "src/app/services.py",
@@ -2631,6 +2645,8 @@ def assert_protected_hashes(
             "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
             # Item 6.1B Agentic Review admin boundary successor.
             "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
+            # Item 6.1C Agentic Operations pure admin readback successor.
+            "d7107123ae4a98bf133f14b8593902a8c33e151660cb7024a6bec25186ea89c9",
         }),
         (
             "src/app/services.py",
@@ -2670,6 +2686,8 @@ def assert_protected_hashes(
             "a9211f507cd0294d54040d45df11b846e359f815556306e64bb6785bd1e5ad41",
             # Item 4 planning & tailoring options review successor.
             "c223631f87bd6b358bdd91e732dc54b1fd55568e93ef8c86c3645d321fdf078a",
+            # Item 6.1C Agentic Operations pure admin readback successor.
+            "4b181f0ba86b03edf9e2b474c91f9121417568a2a65bdcca8dd53604385c033c",
         }),
             (
                 "src/agents/jd_intelligence.py",

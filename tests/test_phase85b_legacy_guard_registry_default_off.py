@@ -20,6 +20,7 @@ from tests.support.phase_guard_registry import (
     ITEM4_PLANNING_TAILORING_OPTIONS_FILES,
     ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
     ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
+    ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -1925,6 +1926,33 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
             include_current_milestone_compatibility=False,
         )
 
+    item61c_readonly_backend_profile = legacy_guard_allowlist(
+        "item61c_agentic_operations_readonly_backend"
+    )
+    assert ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES == {
+        "src/app/api.py",
+        "src/app/services.py",
+        "tests/test_item61c_agentic_operations_readonly_backend.py",
+    }
+    assert item61c_readonly_backend_profile == (
+        ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES
+    )
+    assert len(item61c_readonly_backend_profile) == 3
+    assert not any("*" in path for path in item61c_readonly_backend_profile)
+    assert_changed_files_allowed(
+        item61c_readonly_backend_profile,
+        set(),
+        legacy_guard_profiles=("item61c_agentic_operations_readonly_backend",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unapproved_runtime.py"},
+            set(),
+            legacy_guard_profiles=("item61c_agentic_operations_readonly_backend",),
+            include_current_milestone_compatibility=False,
+        )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
@@ -1935,6 +1963,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
         | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
         | item61b_admin_boundary_profile
+        | item61c_readonly_backend_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile
@@ -2329,6 +2358,43 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
             Path(__file__).resolve().parents[1],
             phase129_api_baseline,
             compatibility_profiles=("config_vocabulary_scoring_change",),
+        )
+
+
+def test_item61c_direct_hash_successors_are_exact_and_path_scoped():
+    root = Path(__file__).resolve().parents[1]
+    profile = ("item61c_agentic_operations_readonly_backend",)
+
+    assert_protected_hashes(
+        root,
+        {
+            "src/app/api.py": (
+                "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"
+            ),
+            "src/app/services.py": (
+                "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74"
+            ),
+        },
+        compatibility_profiles=profile,
+    )
+    assert_protected_hashes(
+        root,
+        {
+            "src/app/api.py": (
+                "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"
+            ),
+        },
+        compatibility_profiles=profile,
+    )
+    with pytest.raises(AssertionError):
+        assert_protected_hashes(
+            root,
+            {
+                "src/app/api.py": (
+                    "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985"
+                ),
+            },
+            compatibility_profiles=profile,
         )
 
 

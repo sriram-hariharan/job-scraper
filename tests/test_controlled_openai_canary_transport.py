@@ -471,6 +471,32 @@ def test_production_parity_rejects_unrelated_response_model():
         _execute_production_parity(response_model="gpt-5-mini-evil")
 
 
+def test_unsupported_production_parity_mode_fails_before_sdk_construction():
+    plan = _plan()
+    scheduled = _scheduled("gpt-5-mini")
+    scheduled["provider_sdk_retry_limit"] = 0
+    parity_request = build_production_parity_request(
+        _packet("gpt-5-mini"),
+        plan=plan,
+    )
+    parity_request["response_contract"]["mode"] = "unsupported"
+    sdk = FakeSDK([])
+
+    with pytest.raises(ValueError, match="production response mode mismatch"):
+        transport.execute_openai_production_parity_chat_completion_once(
+            api_key=FAKE_KEY,
+            parity_request=parity_request,
+            scheduled=scheduled,
+            parity_response_consumer=lambda _content: {},
+            monotonic_clock=_clock(),
+            sdk_module=sdk,
+            plan=plan,
+        )
+
+    assert sdk.constructor_calls == []
+    assert sdk.clients == []
+
+
 @pytest.mark.parametrize(
     ("prompt_tokens", "completion_tokens"),
     [

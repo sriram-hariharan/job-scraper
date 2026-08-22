@@ -767,6 +767,68 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     )
     assert jobvite_location_freshness_profile == JOBVITE_LOCATION_FRESHNESS_FILES
     assert not any("*" in path for path in jobvite_location_freshness_profile)
+    lr2_reliability_profile = legacy_guard_allowlist(
+        "live_pipeline_ai_evaluation_reliability_lr2b_lr2c"
+    )
+    assert lr2_reliability_profile == {
+        "src/ai/job_fit_evaluator.py",
+        "src/evaluation/controlled_openai_canary_transport.py",
+        "src/evaluation/controlled_production_parity_benchmark.py",
+        "src/pipeline/collector.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_controlled_openai_canary_transport.py",
+        "tests/test_controlled_production_parity_benchmark.py",
+        "tests/test_phase17b_lean_cache_first_semantic_evaluation_activation.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }
+    assert len(lr2_reliability_profile) == 10
+    assert not any("*" in path for path in lr2_reliability_profile)
+    assert_changed_files_allowed(
+        lr2_reliability_profile,
+        set(),
+        legacy_guard_profiles=(
+            "live_pipeline_ai_evaluation_reliability_lr2b_lr2c",
+        ),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=(
+                "live_pipeline_ai_evaluation_reliability_lr2b_lr2c",
+            ),
+            include_current_milestone_compatibility=False,
+        )
+    fvr2b_source_contracts_profile = legacy_guard_allowlist(
+        "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts"
+    )
+    assert fvr2b_source_contracts_profile == {
+        "tests/test_phase16b_lean_deterministic_production_orchestration_closure.py",
+        "tests/test_phase17a_lean_cache_first_jd_intelligence_activation.py",
+        "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+        "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+    }
+    assert len(fvr2b_source_contracts_profile) == 4
+    assert not any("*" in path for path in fvr2b_source_contracts_profile)
+    assert_changed_files_allowed(
+        fvr2b_source_contracts_profile,
+        set(),
+        legacy_guard_profiles=(
+            "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts",
+        ),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=(
+                "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts",
+            ),
+            include_current_milestone_compatibility=False,
+        )
     expected_phase132_profile = {
         "src/app/api.py",
         "src/app/onboarding_ui.py",
@@ -1857,6 +1919,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133ef_profile
         | source_yield_ui_profile
         | jobvite_location_freshness_profile
+        | lr2_reliability_profile
+        | fvr2b_source_contracts_profile
         | phase133h_profile
         | scheduler_admin_health_profile
         | scheduler_visual_correction_profile

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List
 import asyncio
 import hashlib
+import inspect
 import json
 import os
 import time
@@ -18,6 +19,7 @@ from src.pipeline.runtime_status import (
     start_stage,
     update_config,
     update_counts,
+    update_stage_message,
 )
 from src.storage.onboarding_preferences.store import (
     PREFERENCE_LIST_FIELDS,
@@ -1152,6 +1154,134 @@ def _authoritative_semantic_evaluation_langgraph_enabled(
     return _truthy_env_value(
         env_map.get(AUTHORITATIVE_SEMANTIC_EVALUATION_LANGGRAPH_FLAG)
     )
+
+
+_AI_EVALUATION_PROGRESS_COUNT_KEYS = {
+    "total_jobs": "ai_evaluation_total_jobs",
+    "cache_hits": "ai_evaluation_cache_hits",
+    "cache_misses": "ai_evaluation_cache_misses",
+    "cache_only_skips": "ai_evaluation_cache_only_skips",
+    "uncached_jobs": "ai_evaluation_uncached_jobs",
+    "total_batches": "ai_evaluation_total_batches",
+    "completed_batches": "ai_evaluation_completed_batches",
+    "failed_batches": "ai_evaluation_failed_batches",
+    "processed_live_jobs": "ai_evaluation_processed_live_jobs",
+    "failed_live_jobs": "ai_evaluation_failed_live_jobs",
+}
+_AI_EVALUATION_RETRY_CATEGORIES = frozenset(
+    {
+        "malformed_response",
+        "rate_limit",
+        "timeout",
+        "connection",
+        "provider_5xx",
+    }
+)
+
+
+def _ai_evaluation_progress_count(progress: Dict[str, Any], key: str) -> int:
+    value = progress.get(key)
+    return value if type(value) is int and value >= 0 else 0
+
+
+def _update_ai_evaluation_runtime_progress(
+    progress: Dict[str, Any],
+    *,
+    status_updater=update_stage_message,
+) -> None:
+    if not isinstance(progress, dict):
+        return
+
+    event = str(progress.get("event") or "").strip().lower()
+    counts = {
+        status_key: _ai_evaluation_progress_count(progress, progress_key)
+        for progress_key, status_key in _AI_EVALUATION_PROGRESS_COUNT_KEYS.items()
+        if progress_key in progress
+    }
+
+    if event == "retry":
+        category = str(progress.get("category") or "").strip().lower()
+        if category not in _AI_EVALUATION_RETRY_CATEGORIES:
+            category = "unknown"
+        batch_ordinal = _ai_evaluation_progress_count(
+            progress,
+            "batch_ordinal",
+        )
+        total_batches = _ai_evaluation_progress_count(
+            progress,
+            "total_batches",
+        )
+        attempt = _ai_evaluation_progress_count(progress, "attempt")
+        maximum_attempts = _ai_evaluation_progress_count(
+            progress,
+            "maximum_attempts",
+        )
+        message = (
+            "AI Evaluation: "
+            f"batch {batch_ordinal}/{total_batches} retrying {category} "
+            f"(attempt {attempt}/{maximum_attempts})"
+        )
+    elif event in {"prepared", "batch_completed", "completed"}:
+        cache_hits = _ai_evaluation_progress_count(progress, "cache_hits")
+        uncached_jobs = _ai_evaluation_progress_count(
+            progress,
+            "uncached_jobs",
+        )
+        total_batches = _ai_evaluation_progress_count(
+            progress,
+            "total_batches",
+        )
+        completed_batches = _ai_evaluation_progress_count(
+            progress,
+            "completed_batches",
+        )
+        processed_live_jobs = _ai_evaluation_progress_count(
+            progress,
+            "processed_live_jobs",
+        )
+        failed_live_jobs = _ai_evaluation_progress_count(
+            progress,
+            "failed_live_jobs",
+        )
+        message = (
+            "AI Evaluation: "
+            f"{completed_batches}/{total_batches} live batches complete | "
+            f"{cache_hits} cached | "
+            f"{processed_live_jobs}/{uncached_jobs} live jobs processed"
+        )
+        if failed_live_jobs:
+            message += f" | {failed_live_jobs} failed"
+    else:
+        return
+
+    status_updater(message, counts=counts)
+
+
+def _wrap_ai_evaluator_with_runtime_progress(
+    evaluate_jobs_func,
+    progress_callback=_update_ai_evaluation_runtime_progress,
+):
+    try:
+        parameters = inspect.signature(evaluate_jobs_func).parameters
+        accepts_progress_callback = (
+            "progress_callback" in parameters
+            or any(
+                parameter.kind == inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters.values()
+            )
+        )
+    except (TypeError, ValueError):
+        accepts_progress_callback = True
+
+    def evaluate_with_progress(jobs):
+        if not accepts_progress_callback:
+            return evaluate_jobs_func(jobs)
+        return evaluate_jobs_func(
+            jobs,
+            progress_callback=progress_callback,
+        )
+
+    return evaluate_with_progress
 
 
 def _maybe_execute_authoritative_semantic_evaluation_graph(
@@ -3625,14 +3755,18 @@ async def collect_all_jobs_async(
     section("AI JOB EVALUATION", logger)
     start_stage("ai_evaluation", f"Evaluating {len(evaluable_jobs)} jobs with AI")
 
+    evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress(
+        evaluate_jobs
+    )
+
     semantic_evaluation_graph_result = (
         _maybe_execute_authoritative_semantic_evaluation_graph(
             jobs=evaluable_jobs,
-            evaluate_jobs_func=evaluate_jobs,
+            evaluate_jobs_func=evaluate_jobs_with_progress,
         )
     )
     if semantic_evaluation_graph_result is None:
-        ai_jobs = evaluate_jobs(evaluable_jobs)
+        ai_jobs = evaluate_jobs_with_progress(evaluable_jobs)
     else:
         ai_jobs = semantic_evaluation_graph_result["evaluated_jobs"]
     logger.info(f"AI evaluated {len(ai_jobs)} jobs")

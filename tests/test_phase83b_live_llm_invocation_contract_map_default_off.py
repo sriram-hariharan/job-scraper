@@ -201,7 +201,20 @@ def test_collector_automatic_llm_capable_paths_are_cache_first_contracts():
     assert "build_job_intelligence," in collector
     assert "intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]" in collector
     assert "from src.ai.job_fit_evaluator import evaluate_jobs" in collector
-    assert "ai_jobs = evaluate_jobs(evaluable_jobs)" in collector
+    assert (
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress("
+        in collector
+    )
+    assert "_maybe_execute_authoritative_semantic_evaluation_graph(" in collector
+    assert "jobs=evaluable_jobs" in collector
+    assert "evaluate_jobs_func=evaluate_jobs_with_progress" in collector
+    assert collector.count(
+        "ai_jobs = evaluate_jobs_with_progress(evaluable_jobs)"
+    ) == 1
+    assert (
+        'ai_jobs = semantic_evaluation_graph_result["evaluated_jobs"]'
+        in collector
+    )
 
     assert (
         LLM_PATH_CLASSIFICATION["collector_skill_extraction"]["bucket"]

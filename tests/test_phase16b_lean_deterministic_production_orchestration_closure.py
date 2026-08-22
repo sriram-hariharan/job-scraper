@@ -431,16 +431,46 @@ def test_graph_owner_has_no_llm_provider_persistence_or_action_authority():
 def test_collector_preserves_llm_then_final_scoring_order():
     source = Path("src/pipeline/collector.py").read_text(encoding="utf-8")
 
-    evaluation = source.index("ai_jobs = evaluate_jobs(evaluable_jobs)")
+    evaluation_stage = source.index('section("AI JOB EVALUATION", logger)')
+    evaluation = source.index(
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress(",
+        evaluation_stage,
+    )
+    semantic_graph = source.index(
+        "_maybe_execute_authoritative_semantic_evaluation_graph(",
+        evaluation,
+    )
+    direct_fallback = source.index(
+        "ai_jobs = evaluate_jobs_with_progress(evaluable_jobs)",
+        semantic_graph,
+    )
+    evaluated_jobs_available = source.index(
+        'logger.info(f"AI evaluated {len(ai_jobs)} jobs")',
+        direct_fallback,
+    )
     scoring_boundary = source.index(
-        "_maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)"
+        "_maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)",
+        evaluated_jobs_available,
     )
     shadow = source.index(
         "_maybe_run_shadow_sidecar_after_application_priority(",
         scoring_boundary,
     )
 
-    assert evaluation < scoring_boundary < shadow
+    assert (
+        evaluation
+        < semantic_graph
+        < direct_fallback
+        < evaluated_jobs_available
+        < scoring_boundary
+        < shadow
+    )
+    assert "evaluate_jobs_func=evaluate_jobs_with_progress" in source[
+        semantic_graph:direct_fallback
+    ]
+    assert source.count(
+        "ai_jobs = evaluate_jobs_with_progress(evaluable_jobs)"
+    ) == 1
 
 
 def test_gate_off_collector_path_keeps_direct_owner_call():
@@ -522,7 +552,22 @@ def test_llm_responsibilities_remain_deferred_outside_graph():
         "src/agents/final_scoring_authoritative_graph.py"
     ).read_text(encoding="utf-8")
 
-    assert "evaluate_jobs(evaluable_jobs)" in collector_source
+    assert "from src.ai.job_fit_evaluator import evaluate_jobs" in collector_source
+    assert (
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress("
+        in collector_source
+    )
+    assert "evaluate_jobs_func=evaluate_jobs_with_progress" in collector_source
+    assert (
+        collector_source.count(
+            "ai_jobs = evaluate_jobs_with_progress(evaluable_jobs)"
+        )
+        == 1
+    )
+    assert (
+        'ai_jobs = semantic_evaluation_graph_result["evaluated_jobs"]'
+        in collector_source
+    )
     assert "build_job_intelligence" in collector_source
     assert "evaluate_jobs" not in graph_source
     assert "build_job_intelligence" not in graph_source

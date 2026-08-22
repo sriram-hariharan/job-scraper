@@ -231,6 +231,8 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "src/pipeline/collector.py",
+        "tests/test_phase16b_lean_deterministic_production_orchestration_closure.py",
+        "tests/test_phase17a_lean_cache_first_jd_intelligence_activation.py",
         "tests/test_phase79b_relevance_prefilter_live_trace_wrapper_default_off.py",
         "src/agents/orchestrator_adapter_harness.py",
         "tests/test_phase79d_default_off_advisory_agent_chain_harness.py",
@@ -888,6 +890,7 @@ def test_phase20d_changes_only_docs_tests_and_legacy_guards():
             "personio_source_retirement",
             "recruitee_standalone_discovery",
             "jobvite_standalone_discovery",
+            "live_pipeline_ai_evaluation_reliability_lr2b",
         ),
     )
 
@@ -2563,6 +2566,18 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         ROOT / "src/evaluation/provider_model_recommendation_policy.py",
     }
     if set(changed_runtime_files) == item2_manual_provider_preview_prompt_schema_alignment_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    live_pipeline_ai_evaluation_reliability_runtime_files = {
+        ROOT / "src/ai/job_fit_evaluator.py",
+        ROOT / "src/evaluation/controlled_openai_canary_transport.py",
+        ROOT / "src/evaluation/controlled_production_parity_benchmark.py",
+        ROOT / "src/pipeline/collector.py",
+    }
+    if set(changed_runtime_files) == live_pipeline_ai_evaluation_reliability_runtime_files:
         for path in changed_runtime_files:
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:

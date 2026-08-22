@@ -13,6 +13,7 @@ from src.evaluation.controlled_groq_canary_transport import (
 )
 from src.evaluation.controlled_openai_canary_transport import (
     build_openai_production_parity_chat_completion_arguments,
+    validate_openai_production_parity_chat_completion_arguments,
 )
 from src.evaluation.controlled_provider_benchmark_human_review import (
     canonical_human_review_requirements,
@@ -262,6 +263,17 @@ def _valid_response(workload_id):
             "auto_submit_authorized": False,
         },
     }[workload_id]
+
+
+def _job_fit_result(result_id=0, *, missing_field=None, **updates):
+    result = deepcopy(
+        _valid_response("job_fit_evaluation")["results"][0]
+    )
+    result["id"] = result_id
+    result.update(updates)
+    if missing_field is not None:
+        result.pop(missing_field)
+    return result
 
 
 def test_all_twelve_workloads_are_production_parity_runnable():
@@ -582,17 +594,86 @@ def test_skill_parser_and_normalizer_use_production_bucket_semantics(plan):
     }
 
 
-def test_job_fit_production_result_structure_and_defaults_are_represented(plan):
+def test_job_fit_production_result_requires_explicit_complete_fields(plan):
     response = {"results": [{"id": 0, "overall_score": 7}]}
     result = parity.validate_and_grade_production_parity_response(
         _request(plan, "job_fit_evaluation"),
         response,
         plan=plan,
     )
-    normalized = result["production_normalized_output"]["results"][0]
-    assert normalized["ai_relevance"] == 0
-    assert normalized["visa_sponsorship_signal"] == "unknown"
-    assert normalized["reason"] == "No explanation"
+    assert result["production_contract_valid"] is False
+    assert result["production_validation_errors"] == [
+        "production_contract_invalid"
+    ]
+
+
+def test_job_fit_complete_controlled_batch_passes_without_rescoring(plan):
+    response = _valid_response("job_fit_evaluation")
+    response["results"][0].update(
+        {
+            "ai_relevance": 6.25,
+            "skill_match": 4.5,
+            "seniority_match": 7.75,
+            "learning_opportunity": 8.125,
+            "overall_score": 6.65625,
+        }
+    )
+    result = parity.validate_and_grade_production_parity_response(
+        _request(plan, "job_fit_evaluation"),
+        response,
+        plan=plan,
+    )
+
+    assert result["production_contract_valid"] is True
+    assert result["production_normalized_output"] == response
+    assert result["production_normalized_output"]["results"][0][
+        "overall_score"
+    ] == 6.65625
+
+
+@pytest.mark.parametrize(
+    ("results", "expected_batch_size", "error"),
+    [
+        ([_job_fit_result(0)], 2, "result count"),
+        ([_job_fit_result(0), _job_fit_result(0)], 2, "duplicated"),
+        ([_job_fit_result("0")], 1, "not an integer"),
+        ([_job_fit_result(True)], 1, "not an integer"),
+        ([_job_fit_result(1)], 1, "out of range"),
+        ([_job_fit_result(0, missing_field="reason")], 1, "required fields"),
+    ],
+)
+def test_job_fit_completeness_validator_rejects_invalid_batches(
+    results,
+    expected_batch_size,
+    error,
+):
+    with pytest.raises(ValueError, match=error):
+        parity._validate_job_fit_results(
+            results,
+            expected_batch_size=expected_batch_size,
+        )
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        [],
+        {"results": "not-a-list"},
+        {"results": []},
+        {"results": [_job_fit_result(1)]},
+    ],
+)
+def test_job_fit_invalid_controlled_payloads_fail_production_validation(
+    plan,
+    response,
+):
+    result = parity.validate_and_grade_production_parity_response(
+        _request(plan, "job_fit_evaluation"),
+        response,
+        plan=plan,
+    )
+    assert result["production_contract_valid"] is False
+    assert result["production_normalized_output"] == {}
 
 
 def test_jd_and_critic_strict_schemas_are_the_production_schemas(plan):
@@ -763,6 +844,83 @@ def test_transports_support_structured_and_plain_text_without_fallback_or_retry(
     assert arguments["max_completion_tokens"] == request["task_parameters"]["max_tokens"]
     assert request["fallback"] is False
     assert request["retry_limit"] == 0
+
+
+def test_openai_structured_parity_still_emits_exact_json_schema(plan):
+    request = _request(plan, "critic_evaluation", "openai")
+    scheduled = _scheduled(plan, "critic_evaluation", "openai")
+    arguments = build_openai_production_parity_chat_completion_arguments(
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+    )
+
+    assert arguments["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": request["response_contract"]["schema_name"],
+            "strict": True,
+            "schema": request["response_contract"]["schema"],
+        },
+    }
+    assert validate_openai_production_parity_chat_completion_arguments(
+        arguments,
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+    )
+
+
+def test_openai_json_object_parity_emits_no_schema_and_preserves_bounds(plan):
+    request = _request(plan, "manual_provider_preview", "openai")
+    scheduled = _scheduled(plan, "manual_provider_preview", "openai")
+    arguments = build_openai_production_parity_chat_completion_arguments(
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+    )
+
+    assert request["response_contract"]["mode"] == "json_object"
+    assert request["response_contract"]["schema_name"] is None
+    assert request["response_contract"]["strict"] is False
+    assert request["response_contract"]["schema"] is None
+    assert arguments["response_format"] == {"type": "json_object"}
+    assert set(arguments["response_format"]) == {"type"}
+    assert request["fallback"] is False
+    assert request["retry_limit"] == 0
+    assert request["timeout_seconds"] == 30
+    assert scheduled["fallback"] is False
+    assert scheduled["harness_retry_limit"] == 0
+    assert scheduled["provider_sdk_retry_limit"] == 0
+    assert validate_openai_production_parity_chat_completion_arguments(
+        arguments,
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+    )
+
+
+def test_openai_parity_rejects_unsupported_mode_and_model_mismatch(plan):
+    request = _request(plan, "manual_provider_preview", "openai")
+    scheduled = _scheduled(plan, "manual_provider_preview", "openai")
+
+    unsupported = deepcopy(request)
+    unsupported["response_contract"]["mode"] = "unsupported"
+    with pytest.raises(ValueError, match="production response mode mismatch"):
+        build_openai_production_parity_chat_completion_arguments(
+            parity_request=unsupported,
+            scheduled=scheduled,
+            plan=plan,
+        )
+
+    mismatched = deepcopy(scheduled)
+    mismatched["model"] = "gpt-5.1"
+    with pytest.raises(ValueError, match="schedule binding mismatch"):
+        build_openai_production_parity_chat_completion_arguments(
+            parity_request=request,
+            scheduled=mismatched,
+            plan=plan,
+        )
 
 
 def test_adapter_imports_no_sdk_environment_or_credential_owner():

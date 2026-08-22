@@ -205,11 +205,32 @@ def test_collector_source_places_diagnostics_after_intelligence_before_later_sta
     )
     skill_store = source.index("store_job_skills(skill_run_id, intelligent_jobs)")
     evaluation_filter = source.index("filter_jobs_for_ai_evaluation(intelligent_jobs)")
-    evaluation = source.index("evaluate_jobs(evaluable_jobs)")
-    scoring = source.index("score_jobs(ai_jobs)")
+    evaluation = source.index(
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress(",
+        evaluation_filter,
+    )
+    semantic_graph = source.index(
+        "_maybe_execute_authoritative_semantic_evaluation_graph(",
+        evaluation,
+    )
+    evaluated_jobs_available = source.index(
+        'logger.info(f"AI evaluated {len(ai_jobs)} jobs")',
+        semantic_graph,
+    )
+    scoring = source.index(
+        "_maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)",
+        evaluated_jobs_available,
+    )
 
     assert intelligence_complete < diagnostics_call < skill_store
-    assert diagnostics_call < evaluation_filter < evaluation < scoring
+    assert (
+        diagnostics_call
+        < evaluation_filter
+        < evaluation
+        < semantic_graph
+        < evaluated_jobs_available
+        < scoring
+    )
 
 
 def test_collector_diagnostics_helper_has_no_duplicate_provider_persistence_or_scoring_calls():

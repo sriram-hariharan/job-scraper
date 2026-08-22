@@ -32,6 +32,45 @@ GROQ_CONCURRENCY_LIMIT = 1
 EVAL_MODE = os.getenv("EVAL_MODE", "cache_prefer_live").strip().lower()
 VALID_EVAL_MODES = {"cache_prefer_live", "cache_only", "live_only"}
 
+_PROVIDER_FAILURE_CATEGORIES = frozenset(
+    {
+        "timeout",
+        "connection",
+        "rate_limit",
+        "provider_5xx",
+        "authentication",
+        "authorization",
+        "configuration",
+        "invalid_request",
+        "provider_model_mismatch",
+        "unsupported_provider",
+        "schema_or_parse",
+        "refusal_or_empty_content",
+        "safety",
+        "unknown",
+    }
+)
+_TRANSIENT_PROVIDER_FAILURE_CATEGORIES = frozenset(
+    {"timeout", "connection", "provider_5xx"}
+)
+_JOB_FIT_RESULT_FIELDS = (
+    "id",
+    "ai_relevance",
+    "skill_match",
+    "seniority_match",
+    "learning_opportunity",
+    "overall_score",
+    "visa_sponsorship_signal",
+    "reason",
+)
+_MAX_RATE_LIMIT_ATTEMPTS = 5
+_MAX_BOUNDED_RETRY_ATTEMPTS = 2
+_RETRY_DELAY_SECONDS = 10
+_PROGRESS_HEARTBEAT_INTERVAL_SECONDS = 20
+_TERMINAL_BATCH_FAILURE_MARKERS = frozenset(
+    {"LLM_CALL_FAIL", "PARSE_ERROR", "RATE_LIMIT_FAIL"}
+)
+
 groq_semaphore = Semaphore(GROQ_CONCURRENCY_LIMIT)
 
 eval_cache_metrics_lock = Lock()
@@ -319,19 +358,113 @@ def _is_rate_limit_error(error):
     return "429" in message or "category=rate_limit" in message
 
 
+def _provider_failure_category(error):
+    for attribute in ("error_category", "category"):
+        category = str(getattr(error, attribute, "") or "").strip().lower()
+        if category in _PROVIDER_FAILURE_CATEGORIES:
+            return category
+
+    match = re.search(
+        r"category=([a-z0-9_]+)",
+        str(error or "").lower(),
+    )
+    if match and match.group(1) in _PROVIDER_FAILURE_CATEGORIES:
+        return match.group(1)
+    return "unknown"
+
+
+def _emit_progress(progress_callback, event, **metadata):
+    if progress_callback is None:
+        return
+    payload = {"event": str(event or "")}
+    payload.update(metadata)
+    try:
+        progress_callback(dict(payload))
+    except BaseException:
+        return
+
+
+def _sleep_with_progress_heartbeat(
+    delay_seconds,
+    progress_callback,
+    retry_metadata,
+):
+    if (
+        progress_callback is None
+        or delay_seconds <= _PROGRESS_HEARTBEAT_INTERVAL_SECONDS
+    ):
+        time.sleep(delay_seconds)
+        return
+
+    remaining_seconds = delay_seconds
+    while remaining_seconds > 0:
+        sleep_seconds = min(
+            _PROGRESS_HEARTBEAT_INTERVAL_SECONDS,
+            remaining_seconds,
+        )
+        time.sleep(sleep_seconds)
+        remaining_seconds -= sleep_seconds
+        if remaining_seconds > 0:
+            _emit_progress(
+                progress_callback,
+                "retry",
+                **retry_metadata,
+                heartbeat=True,
+                remaining_delay_seconds=remaining_seconds,
+            )
+
+
+def _validate_complete_batch_response(data, expected_count):
+    if not isinstance(data, dict):
+        return None
+    results = data.get("results")
+    if not isinstance(results, list) or len(results) != expected_count:
+        return None
+
+    expected_ids = set(range(expected_count))
+    observed_ids = set()
+    for item in results:
+        if not isinstance(item, dict):
+            return None
+        if not all(field in item for field in _JOB_FIT_RESULT_FIELDS):
+            return None
+        result_id = item["id"]
+        if type(result_id) is not int:
+            return None
+        if result_id not in expected_ids or result_id in observed_ids:
+            return None
+        observed_ids.add(result_id)
+
+    if observed_ids != expected_ids:
+        return None
+    return results
+
+
+def _mark_terminal_batch_failure(batch, marker):
+    increment_eval_cache_metric("eval_live_failures")
+    for job in batch:
+        job["ai_fit"] = marker
+    return batch
+
+
 def evaluate_batch(
     batch,
     owner_user_id="",
     routed_provider="",
     routed_model="",
+    progress_callback=None,
+    batch_ordinal=0,
+    total_batches=0,
 ):
 
     prompt = build_batch_prompt(batch)
 
-    max_retries = 5
-    retry_delay = 10
+    attempt = 0
+    attempt_limit = _MAX_RATE_LIMIT_ATTEMPTS
 
-    for attempt in range(max_retries):
+    while attempt < attempt_limit:
+        current_attempt = attempt
+        attempt += 1
 
         try:
 
@@ -371,57 +504,113 @@ def evaluate_batch(
                     )
 
         except Exception as e:
+            category = _provider_failure_category(e)
+            if (
+                not owner_user_id
+                and category == "unknown"
+                and _is_rate_limit_error(e)
+            ):
+                category = "rate_limit"
 
-            if _is_rate_limit_error(e):
-                wait = retry_delay * (2 ** attempt)
-                print(f"Rate limited. Waiting {wait}s")
-                time.sleep(wait)
-                continue
+            if category == "rate_limit":
+                if attempt < attempt_limit:
+                    wait = _RETRY_DELAY_SECONDS * (2 ** current_attempt)
+                    print(f"Rate limited. Waiting {wait}s")
+                    retry_metadata = {
+                        "category": category,
+                        "attempt": attempt + 1,
+                        "maximum_attempts": attempt_limit,
+                        "delay_seconds": wait,
+                        "batch_ordinal": batch_ordinal,
+                        "total_batches": total_batches,
+                    }
+                    _emit_progress(
+                        progress_callback,
+                        "retry",
+                        **retry_metadata,
+                    )
+                    _sleep_with_progress_heartbeat(
+                        wait,
+                        progress_callback,
+                        retry_metadata,
+                    )
+                    continue
+                return _mark_terminal_batch_failure(batch, "RATE_LIMIT_FAIL")
+
+            if category in _TRANSIENT_PROVIDER_FAILURE_CATEGORIES:
+                attempt_limit = min(
+                    attempt_limit,
+                    _MAX_BOUNDED_RETRY_ATTEMPTS,
+                )
+                if attempt < attempt_limit:
+                    print(
+                        "AI evaluation transient provider failure; "
+                        f"retrying (category={category})"
+                    )
+                    retry_metadata = {
+                        "category": category,
+                        "attempt": attempt + 1,
+                        "maximum_attempts": attempt_limit,
+                        "delay_seconds": _RETRY_DELAY_SECONDS,
+                        "batch_ordinal": batch_ordinal,
+                        "total_batches": total_batches,
+                    }
+                    _emit_progress(
+                        progress_callback,
+                        "retry",
+                        **retry_metadata,
+                    )
+                    _sleep_with_progress_heartbeat(
+                        _RETRY_DELAY_SECONDS,
+                        progress_callback,
+                        retry_metadata,
+                    )
+                    continue
 
             if owner_user_id:
-                print("AI evaluation failed for owner route")
+                print(
+                    "AI evaluation failed for owner route "
+                    f"(category={category})"
+                )
             else:
-                print(f"AI evaluation failed: {e}")
-            increment_eval_cache_metric("eval_live_failures")
-
-            for job in batch:
-                job["ai_fit"] = "LLM_CALL_FAIL"
-
-            return batch
+                print(f"AI evaluation failed (category={category})")
+            return _mark_terminal_batch_failure(batch, "LLM_CALL_FAIL")
 
         data = extract_json_from_response(response)
+        results = _validate_complete_batch_response(data, len(batch))
 
-        if not data:
-
-            if attempt < max_retries - 1:
-                wait = retry_delay * (2 ** attempt)
-                print(f"AI evaluation parse failed. Retrying in {wait}s")
-                time.sleep(wait)
+        if results is None:
+            attempt_limit = min(
+                attempt_limit,
+                _MAX_BOUNDED_RETRY_ATTEMPTS,
+            )
+            if attempt < attempt_limit:
+                print("AI evaluation response invalid; retrying once")
+                _emit_progress(
+                    progress_callback,
+                    "retry",
+                    category="malformed_response",
+                    attempt=attempt + 1,
+                    maximum_attempts=attempt_limit,
+                    delay_seconds=0,
+                    batch_ordinal=batch_ordinal,
+                    total_batches=total_batches,
+                )
                 continue
-            else:
-                increment_eval_cache_metric("eval_live_failures")
-
-                for job in batch:
-                    job["ai_fit"] = "PARSE_ERROR"
-                return batch
-
-        results = data.get("results", [])
+            return _mark_terminal_batch_failure(batch, "PARSE_ERROR")
 
         for item in results:
 
-            idx = item.get("id")
-
-            if idx is None or idx >= len(batch):
-                continue
+            idx = item["id"]
 
             evaluation_data = {
-                "ai_relevance": item.get("ai_relevance", 0),
-                "skill_match": item.get("skill_match", 0),
-                "seniority_match": item.get("seniority_match", 0),
-                "learning_opportunity": item.get("learning_opportunity", 0),
-                "overall_score": item.get("overall_score", 0),
-                "visa_sponsorship_signal": item.get("visa_sponsorship_signal", "unknown"),
-                "reason": item.get("reason", "No explanation"),
+                "ai_relevance": item["ai_relevance"],
+                "skill_match": item["skill_match"],
+                "seniority_match": item["seniority_match"],
+                "learning_opportunity": item["learning_opportunity"],
+                "overall_score": item["overall_score"],
+                "visa_sponsorship_signal": item["visa_sponsorship_signal"],
+                "reason": item["reason"],
             }
 
             apply_evaluation_to_job(batch[idx], evaluation_data)
@@ -439,20 +628,13 @@ def evaluate_batch(
 
         return batch
 
-    increment_eval_cache_metric("eval_live_failures")
-
-    for job in batch:
-        job["ai_fit"] = "RATE_LIMIT_FAIL"
-
-    return batch
-
 def chunk_jobs(jobs, size):
 
     for i in range(0, len(jobs), size):
         yield jobs[i:i + size]
 
 
-def evaluate_jobs(jobs, owner_user_id=""):
+def evaluate_jobs(jobs, owner_user_id="", progress_callback=None):
 
     reset_eval_cache_metrics()
 
@@ -491,6 +673,29 @@ def evaluate_jobs(jobs, owner_user_id=""):
         if "ai_fit_score" not in job
     ]
 
+    progress_state = None
+    if progress_callback is not None:
+        cache_metrics = get_eval_cache_metrics()
+        uncached_job_count = len(uncached_jobs)
+        total_batch_count = (
+            (uncached_job_count + BATCH_SIZE - 1) // BATCH_SIZE
+            if uncached_job_count
+            else 0
+        )
+        progress_state = {
+            "total_jobs": len(indexed_jobs),
+            "cache_hits": cache_metrics["eval_cache_hits"],
+            "cache_misses": cache_metrics["eval_cache_misses"],
+            "cache_only_skips": cache_metrics["eval_cache_only_skips"],
+            "uncached_jobs": uncached_job_count,
+            "total_batches": total_batch_count,
+            "completed_batches": 0,
+            "failed_batches": 0,
+            "processed_live_jobs": 0,
+            "failed_live_jobs": 0,
+        }
+        _emit_progress(progress_callback, "prepared", **progress_state)
+
     live_results = []
 
     explicit_owner = str(owner_user_id or "").strip()
@@ -514,6 +719,8 @@ def evaluate_jobs(jobs, owner_user_id=""):
             increment_eval_cache_metric("eval_live_failures")
             for job in uncached_jobs:
                 job["ai_fit"] = "LLM_CALL_FAIL"
+            if progress_state is not None:
+                progress_state["failed_live_jobs"] = len(uncached_jobs)
             uncached_jobs = []
 
     if uncached_jobs:
@@ -529,6 +736,9 @@ def evaluate_jobs(jobs, owner_user_id=""):
                     owner,
                     routed_provider,
                     routed_model,
+                    progress_callback,
+                    i + 1,
+                    len(batches),
                 ): i
                 for i, batch in enumerate(batches)
             }
@@ -541,7 +751,27 @@ def evaluate_jobs(jobs, owner_user_id=""):
                 desc="AI batch evaluation"
             ):
                 idx = futures[future]
-                batch_results[idx] = future.result()
+                completed_batch = future.result()
+                batch_results[idx] = completed_batch
+                if progress_state is not None:
+                    failed_job_count = sum(
+                        1
+                        for job in completed_batch
+                        if job.get("ai_fit")
+                        in _TERMINAL_BATCH_FAILURE_MARKERS
+                    )
+                    progress_state["completed_batches"] += 1
+                    progress_state["processed_live_jobs"] += (
+                        len(completed_batch) - failed_job_count
+                    )
+                    progress_state["failed_live_jobs"] += failed_job_count
+                    if failed_job_count:
+                        progress_state["failed_batches"] += 1
+                    _emit_progress(
+                        progress_callback,
+                        "batch_completed",
+                        **progress_state,
+                    )
 
             for r in batch_results:
                 live_results.extend(r)
@@ -562,6 +792,9 @@ def evaluate_jobs(jobs, owner_user_id=""):
         job.pop("_eval_original_index", None)
         job.pop("_eval_cache_key", None)
         job.pop("_eval_mode", None)
+
+    if progress_state is not None:
+        _emit_progress(progress_callback, "completed", **progress_state)
 
     return all_results
 

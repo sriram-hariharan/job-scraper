@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from src.app import services
@@ -811,8 +812,16 @@ def test_agentic_review_dedicated_page_contract():
     assert "agentic_review.css" in profile_ui_source
     assert route_source.index("app_redesign.css") < route_source.index("agentic_review.css")
     assert "{render_top_shell(\"/profile\")}" in route_source
-    assert 'href="/profile?tab=pipeline-runs">Back to pipeline runs</a>' in route_source
-    assert 'href="/profile">Back to pipeline runs</a>' not in route_source
+    assert (
+        '<a class="agentic-review-back-link" href="/profile?tab=pipeline-runs">'
+        in route_source
+    )
+    assert (
+        '<span class="agentic-review-back-link__icon" aria-hidden="true">←</span>'
+        in route_source
+    )
+    assert "<span>Back to pipeline runs</span>" in route_source
+    assert '<a class="agentic-review-back-link" href="/profile">' not in route_source
     assert "getProfileTabTargetFromUrl" in profile_source
     assert 'tab === "pipeline-runs"' in profile_source
     assert 'activateProfileTab(getProfileTabTargetFromUrl())' in profile_source
@@ -882,7 +891,7 @@ def test_agentic_review_dedicated_page_contract():
     assert ".app-shell" not in review_css
     assert ".sidebar" not in review_css
     assert ".topbar" not in review_css
-    assert "body {" not in review_css
+    assert re.search(r"(?m)^\s*body\s*\{", review_css) is None
     assert ".agentic-review-page" not in common_css
     assert ".agentic-review-tabs" not in common_css
     assert ".agentic-review-tab::after" not in common_css

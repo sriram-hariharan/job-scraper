@@ -1029,12 +1029,32 @@ def test_collector_preserves_details_jd_filter_semantic_and_scoring_order():
     eligibility = source.index(
         "evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)"
     )
-    semantic = source.index("ai_jobs = evaluate_jobs(evaluable_jobs)")
+    semantic = source.index(
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress(",
+        eligibility,
+    )
+    semantic_graph = source.index(
+        "_maybe_execute_authoritative_semantic_evaluation_graph(",
+        semantic,
+    )
+    evaluated_jobs_available = source.index(
+        'logger.info(f"AI evaluated {len(ai_jobs)} jobs")',
+        semantic_graph,
+    )
     final_scoring = source.index(
-        "_maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)"
+        "_maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)",
+        evaluated_jobs_available,
     )
 
-    assert details < graph_call < eligibility < semantic < final_scoring
+    assert (
+        details
+        < graph_call
+        < eligibility
+        < semantic
+        < semantic_graph
+        < evaluated_jobs_available
+        < final_scoring
+    )
 
 
 def test_gate_off_collector_path_keeps_direct_jd_owner_call():
@@ -1076,7 +1096,20 @@ def test_semantic_evaluation_remains_at_existing_filtered_caller():
         "src/agents/jd_intelligence_authoritative_graph.py"
     ).read_text(encoding="utf-8")
 
-    assert "ai_jobs = evaluate_jobs(evaluable_jobs)" in source
+    assert "from src.ai.job_fit_evaluator import evaluate_jobs" in source
+    assert (
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress("
+        in source
+    )
+    assert "jobs=evaluable_jobs" in source
+    assert "evaluate_jobs_func=evaluate_jobs_with_progress" in source
+    assert source.count(
+        "ai_jobs = evaluate_jobs_with_progress(evaluable_jobs)"
+    ) == 1
+    assert (
+        'ai_jobs = semantic_evaluation_graph_result["evaluated_jobs"]'
+        in source
+    )
     assert "evaluate_jobs" not in graph_source
     assert "job_fit_evaluator" not in graph_source
 

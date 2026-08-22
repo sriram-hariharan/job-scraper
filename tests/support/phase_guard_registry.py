@@ -1059,6 +1059,33 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "source_yield_ui": SOURCE_YIELD_UI_FILES,
         "jobvite_location_freshness": JOBVITE_LOCATION_FRESHNESS_FILES,
         "jobvite_standalone_discovery": JOBVITE_STANDALONE_DISCOVERY_FILES,
+        "live_pipeline_ai_evaluation_reliability_lr2b": {
+            "src/ai/job_fit_evaluator.py",
+            "src/evaluation/controlled_openai_canary_transport.py",
+            "src/evaluation/controlled_production_parity_benchmark.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_controlled_openai_canary_transport.py",
+            "tests/test_controlled_production_parity_benchmark.py",
+            "tests/test_phase17b_lean_cache_first_semantic_evaluation_activation.py",
+        },
+        "live_pipeline_ai_evaluation_reliability_lr2b_lr2c": {
+            "src/ai/job_fit_evaluator.py",
+            "src/evaluation/controlled_openai_canary_transport.py",
+            "src/evaluation/controlled_production_parity_benchmark.py",
+            "src/pipeline/collector.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_controlled_openai_canary_transport.py",
+            "tests/test_controlled_production_parity_benchmark.py",
+            "tests/test_phase17b_lean_cache_first_semantic_evaluation_activation.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        },
+        "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts": {
+            "tests/test_phase16b_lean_deterministic_production_orchestration_closure.py",
+            "tests/test_phase17a_lean_cache_first_jd_intelligence_activation.py",
+            "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+            "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+        },
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -2294,6 +2321,12 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
         | legacy_guard_allowlist("source_yield_ui")
         | legacy_guard_allowlist("jobvite_location_freshness")
+        | legacy_guard_allowlist(
+            "live_pipeline_ai_evaluation_reliability_lr2b_lr2c"
+        )
+        | legacy_guard_allowlist(
+            "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts"
+        )
         | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
         | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
         | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")
@@ -2553,7 +2586,11 @@ def assert_protected_hashes(
         (
             "src/ai/job_fit_evaluator.py",
             "3776e5ce3c098c5329d2e7631195915f6bcf098ec0303ec619e9b0e9ecf393fb",
-        ): "33a145c4d1aa640f970b698c95298600ea5903711315d44ed136174d6f27a999",
+        ): frozenset({
+            "33a145c4d1aa640f970b698c95298600ea5903711315d44ed136174d6f27a999",
+            "b58d270494f9049dbcefcd785a220cb9cfb33aad4b10b75f4c149197cb0ca56e",
+            "4c971173cd0e224b441263595e82b4f52eb6b0ed65172eb336e182a206bc5d3b",
+        }),
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
@@ -2669,6 +2706,7 @@ def assert_protected_hashes(
                     "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
                     "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
                     "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",
+                    "2a9448e511a5f2076104efde4e89e1142834425ed0606e98e5c42028bf6273eb",
                 }),
         (
             "src/tailoring/llm.py",
@@ -2693,6 +2731,7 @@ def assert_protected_hashes(
             "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
             "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
             "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",
+            "2a9448e511a5f2076104efde4e89e1142834425ed0606e98e5c42028bf6273eb",
         }),
         (
             "src/pipeline/collector.py",

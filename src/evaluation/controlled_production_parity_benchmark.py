@@ -65,6 +65,16 @@ _PROMPT_KEYS = {
     "manual_scan_phrase": ("system", "user_template"),
     "manual_provider_preview": ("system", "user_template"),
 }
+_JOB_FIT_RESULT_FIELDS = (
+    "id",
+    "ai_relevance",
+    "skill_match",
+    "seniority_match",
+    "learning_opportunity",
+    "overall_score",
+    "visa_sponsorship_signal",
+    "reason",
+)
 _PARITY_REQUEST_FIELDS = {
     "parity_adapter_version",
     "case_alias",
@@ -258,7 +268,11 @@ def _synthetic_material(
             "<seniority>": "synthetic_seniority",
             "<ai_signal>": _first(evidence, "synthetic_workflow_signal"),
         }
-        context = {"required_skills": required, "missing_skills": _strings(values.get("missing_skills"))}
+        context = {
+            "required_skills": required,
+            "missing_skills": _strings(values.get("missing_skills")),
+            "expected_batch_size": 1,
+        }
     elif workload_id == "jd_intelligence":
         workflow = _strings(values.get("workflow_context"))
         description = (
@@ -652,6 +666,47 @@ def _parse_json_object(raw_response: Any, parser) -> Dict[str, Any]:
     return parsed
 
 
+def _validate_job_fit_results(
+    results: Any,
+    *,
+    expected_batch_size: Any,
+) -> list[Dict[str, Any]]:
+    _require(
+        type(expected_batch_size) is int and expected_batch_size > 0,
+        "job-fit expected batch size is invalid",
+    )
+    _require(isinstance(results, list), "job-fit results are missing")
+    _require(
+        len(results) == expected_batch_size,
+        "job-fit result count does not match the expected batch size",
+    )
+    expected_ids = set(range(expected_batch_size))
+    observed_ids: set[int] = set()
+    normalized = []
+    for item in results:
+        _require(isinstance(item, dict), "job-fit result is not an object")
+        _require(
+            all(field in item for field in _JOB_FIT_RESULT_FIELDS),
+            "job-fit result is missing required fields",
+        )
+        result_id = item["id"]
+        _require(type(result_id) is int, "job-fit result id is not an integer")
+        _require(result_id in expected_ids, "job-fit result id is out of range")
+        _require(result_id not in observed_ids, "job-fit result id is duplicated")
+        observed_ids.add(result_id)
+        normalized.append(
+            {
+                field: deepcopy(item[field])
+                for field in _JOB_FIT_RESULT_FIELDS
+            }
+        )
+    _require(
+        observed_ids == expected_ids,
+        "job-fit results do not contain every expected id",
+    )
+    return normalized
+
+
 def _tailoring_inputs(context: Mapping[str, Any]):
     owner = import_module("src.tailoring.llm")
     packet, payload, candidate = owner._production_task_contract_representative_tailoring_inputs()
@@ -691,25 +746,10 @@ def _normalize_production_response(
     if workload_id == "job_fit_evaluation":
         owner = import_module("src.ai.job_fit_evaluator")
         parsed = _parse_json_object(raw_response, owner.extract_json_from_response)
-        results = parsed.get("results")
-        _require(isinstance(results, list) and bool(results), "job-fit results are missing")
-        normalized = []
-        for item in results:
-            if not isinstance(item, dict):
-                continue
-            normalized.append(
-                {
-                    "id": item.get("id"),
-                    "ai_relevance": item.get("ai_relevance", 0),
-                    "skill_match": item.get("skill_match", 0),
-                    "seniority_match": item.get("seniority_match", 0),
-                    "learning_opportunity": item.get("learning_opportunity", 0),
-                    "overall_score": item.get("overall_score", 0),
-                    "visa_sponsorship_signal": item.get("visa_sponsorship_signal", "unknown"),
-                    "reason": item.get("reason", "No explanation"),
-                }
-            )
-        _require(bool(normalized), "job-fit results are invalid")
+        normalized = _validate_job_fit_results(
+            parsed.get("results"),
+            expected_batch_size=context.get("expected_batch_size"),
+        )
         return {"results": normalized}
 
     if workload_id == "jd_intelligence":

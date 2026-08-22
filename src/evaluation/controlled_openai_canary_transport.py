@@ -528,7 +528,8 @@ def build_openai_production_parity_chat_completion_arguments(
         "max_completion_tokens": parity_request["task_parameters"]["max_tokens"],
     }
     response_contract = parity_request["response_contract"]
-    if response_contract["mode"] == "structured_json":
+    response_mode = response_contract["mode"]
+    if response_mode == "structured_json":
         arguments["response_format"] = {
             "type": "json_schema",
             "json_schema": {
@@ -537,6 +538,13 @@ def build_openai_production_parity_chat_completion_arguments(
                 "schema": deepcopy(response_contract["schema"]),
             },
         }
+    elif response_mode == "json_object":
+        arguments["response_format"] = {"type": "json_object"}
+    else:
+        _require(
+            response_mode in {"json_text", "plain_text"},
+            "unsupported production-parity OpenAI response mode",
+        )
     if _is_gpt_5_mini(scheduled["model"]):
         arguments["reasoning_effort"] = "minimal"
     else:
@@ -568,8 +576,14 @@ def validate_openai_production_parity_chat_completion_arguments(
     )
     validate_production_parity_request(parity_request, plan=controlled_plan)
     response_contract = parity_request["response_contract"]
+    response_mode = response_contract["mode"]
+    _require(
+        response_mode
+        in {"structured_json", "json_object", "json_text", "plain_text"},
+        "unsupported production-parity OpenAI response mode",
+    )
     expected_fields = {"model", "messages", "max_completion_tokens"}
-    if response_contract["mode"] == "structured_json":
+    if response_mode in {"structured_json", "json_object"}:
         expected_fields.add("response_format")
     if _is_gpt_5_mini(scheduled["model"]):
         expected_fields.add("reasoning_effort")
@@ -603,7 +617,7 @@ def validate_openai_production_parity_chat_completion_arguments(
             and "reasoning_effort" not in arguments,
             "production-parity OpenAI temperature compatibility changed",
         )
-    if response_contract["mode"] == "structured_json":
+    if response_mode == "structured_json":
         _require(
             arguments.get("response_format")
             == {
@@ -615,6 +629,17 @@ def validate_openai_production_parity_chat_completion_arguments(
                 },
             },
             "production-parity OpenAI structured schema mismatch",
+        )
+    elif response_mode == "json_object":
+        _require(
+            arguments.get("response_format") == {"type": "json_object"},
+            "production-parity OpenAI JSON object mode mismatch",
+        )
+        _require(
+            response_contract.get("schema") is None
+            and response_contract.get("schema_name") is None
+            and response_contract.get("strict") is False,
+            "JSON object mode must not transmit a provider schema",
         )
     else:
         _require(

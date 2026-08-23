@@ -666,6 +666,17 @@ ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES = {
     "tests/test_item61f_agent_registry_safety_matrix.py",
 }
 
+# Item 6.1G run inspector and Agentic Review integration: exact accepted
+# frontend, generated-bundle, and focused-test surface.
+ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES = {
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "tests/test_item61g_run_inspector_agentic_review_integration.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1154,6 +1165,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         ),
         "item61f_agent_registry_safety_matrix": (
             ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES
+        ),
+        "item61g_run_inspector_agentic_review_integration": (
+            ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES
         ),
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
@@ -2367,6 +2381,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item61d_agentic_operations_console_shell")
         | legacy_guard_allowlist("item61e_agentic_operations_overview_ui")
         | legacy_guard_allowlist("item61f_agent_registry_safety_matrix")
+        | legacy_guard_allowlist("item61g_run_inspector_agentic_review_integration")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")

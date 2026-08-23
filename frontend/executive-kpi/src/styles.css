@@ -2587,10 +2587,11 @@ html[data-theme="dark"] #agenticOperationsRoot {
 .agentic-operations-unavailable--compact { min-height: 142px; }
 .agentic-operations-empty { display: grid; min-height: 142px; place-content: center; justify-items: center; gap: 8px; padding: 22px; color: var(--agentic-operations-muted); font-size: 12px; text-align: center; }
 
-.agentic-operations-run-list { display: grid; }
-.agentic-operations-run-row { display: grid; min-width: 0; grid-template-columns: minmax(170px, .95fr) minmax(180px, 1.2fr) 72px; align-items: center; gap: 14px; padding: 11px 16px; border-bottom: 1px solid var(--agentic-operations-border); }
+.agentic-operations-run-list { display: grid; max-height: 392px; overflow-y: auto; overscroll-behavior-y: contain; }
+.agentic-operations-run-row { display: grid; min-width: 0; grid-template-columns: minmax(150px, .9fr) minmax(160px, 1.1fr) 62px 82px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--agentic-operations-border); border-left: 3px solid transparent; }
 .agentic-operations-run-row:last-child { border-bottom: 0; }
 .agentic-operations-run-row:hover { background: var(--agentic-operations-surface-muted); }
+.agentic-operations-run-row.is-selected { border-left-color: var(--agentic-operations-blue); background: var(--agentic-operations-blue-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agentic-operations-blue) 20%, transparent); }
 .agentic-operations-run-primary,
 .agentic-operations-run-stage,
 .agentic-operations-run-count { display: grid; min-width: 0; gap: 4px; }
@@ -2604,6 +2605,29 @@ html[data-theme="dark"] #agenticOperationsRoot {
 .agentic-operations-run-stage span { color: var(--agentic-operations-ink); font-size: 11px; font-weight: 700; }
 .agentic-operations-run-count { justify-items: end; text-align: right; }
 .agentic-operations-run-count strong { color: var(--agentic-operations-ink); font-size: 14px; }
+.agentic-operations-run-action { display: flex; min-width: 0; justify-content: flex-end; }
+.agentic-operations-run-action > span { color: var(--agentic-operations-muted); font-size: 9px; line-height: 1.3; text-align: right; }
+.agentic-operations-inspect { min-width: 72px; border: 1px solid var(--agentic-operations-border); border-radius: 7px; padding: 6px 9px; background: var(--agentic-operations-surface); color: var(--agentic-operations-blue); font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; }
+.agentic-operations-inspect:hover { border-color: color-mix(in srgb, var(--agentic-operations-blue) 42%, var(--agentic-operations-border)); background: var(--agentic-operations-blue-soft); }
+.agentic-operations-inspect[aria-pressed="true"] { border-color: var(--agentic-operations-blue); background: var(--agentic-operations-blue); color: #fff; }
+.agentic-operations-inspect:focus-visible,
+.agentic-operations-review-link:focus-visible { outline: 3px solid color-mix(in srgb, var(--agentic-operations-blue) 28%, transparent); outline-offset: 2px; }
+
+.agentic-operations-inspector-empty { display: flex; min-height: 96px; align-items: center; justify-content: center; gap: 10px; padding: 18px; color: var(--agentic-operations-muted); font-size: 11px; text-align: center; }
+.agentic-operations-inspector-content { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px 18px; padding: 14px 16px 16px; }
+.agentic-operations-inspector-grid { display: grid; min-width: 0; grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; margin: 0; overflow: hidden; border: 1px solid var(--agentic-operations-border); border-radius: 8px; background: var(--agentic-operations-border); }
+.agentic-operations-inspector-grid > div { min-width: 0; padding: 9px 10px; background: var(--agentic-operations-surface-muted); }
+.agentic-operations-inspector-grid dt,
+.agentic-operations-inspector-message span,
+.agentic-operations-inspector-error span { display: block; color: var(--agentic-operations-muted); font-size: 9px; font-weight: 800; letter-spacing: .025em; text-transform: uppercase; }
+.agentic-operations-inspector-grid dd { margin: 4px 0 0; overflow: hidden; color: var(--agentic-operations-ink); font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-operations-inspector-message,
+.agentic-operations-inspector-error { min-width: 0; margin: 0; color: var(--agentic-operations-ink); font-size: 11px; line-height: 1.45; }
+.agentic-operations-inspector-message span,
+.agentic-operations-inspector-error span { margin-bottom: 4px; }
+.agentic-operations-inspector-error { color: var(--agentic-operations-red); }
+.agentic-operations-review-link { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid color-mix(in srgb, var(--agentic-operations-blue) 40%, var(--agentic-operations-border)); border-radius: 8px; padding: 8px 11px; background: var(--agentic-operations-blue-soft); color: var(--agentic-operations-blue); font-size: 11px; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.agentic-operations-review-link:hover { border-color: var(--agentic-operations-blue); color: var(--agentic-operations-blue); }
 
 .agentic-operations-safety { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 1.2fr); align-items: center; gap: 20px; border: 1px solid var(--agentic-operations-border); border-radius: 10px; padding: 16px; background: var(--agentic-operations-surface); box-shadow: 0 9px 24px rgba(15, 23, 42, .045); }
 .agentic-operations-safety.is-confirmed { border-color: color-mix(in srgb, var(--agentic-operations-green) 30%, var(--agentic-operations-border)); }
@@ -2673,6 +2697,11 @@ html[data-theme="dark"] #agenticOperationsRoot {
   .agentic-operations-run-row { grid-template-columns: 1fr auto; }
   .agentic-operations-run-stage { grid-column: 1 / -1; grid-row: 2; }
   .agentic-operations-run-count { grid-column: 2; grid-row: 1; }
+  .agentic-operations-run-action { grid-column: 1 / -1; justify-content: stretch; }
+  .agentic-operations-inspect { width: 100%; }
+  .agentic-operations-inspector-content { grid-template-columns: 1fr; }
+  .agentic-operations-inspector-grid { grid-template-columns: 1fr; }
+  .agentic-operations-review-link { width: 100%; }
   .agentic-operations-safety-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agentic-operations-safety-metrics > div:nth-child(2) { border-right: 0; }
   .agentic-operations-safety-metrics > div:nth-child(-n + 2) { border-bottom: 1px solid var(--agentic-operations-border); }

@@ -3,6 +3,7 @@ import {
   Bot,
   Check,
   Clock3,
+  ExternalLink,
   Minus,
   RefreshCw,
   ShieldCheck,
@@ -301,7 +302,15 @@ function runTime(run: AgenticOperationsRecentRun): string {
   return formatDateTime(run.completed_at || run.updated_at || run.started_at);
 }
 
-function RecentRunsPanel({ payload }: { payload: AgenticOperationsOverviewPayload }) {
+function RecentRunsPanel({
+  payload,
+  selectedRunId,
+  onSelect,
+}: {
+  payload: AgenticOperationsOverviewPayload;
+  selectedRunId: string | null;
+  onSelect: (runId: string) => void;
+}) {
   const state = payload.recent_runs_state;
   const runs = Array.isArray(payload.recent_runs) ? payload.recent_runs : [];
   return (
@@ -324,25 +333,93 @@ function RecentRunsPanel({ payload }: { payload: AgenticOperationsOverviewPayloa
         <div className="agentic-operations-empty"><Clock3 size={20} aria-hidden="true" /><strong>No recent runs recorded</strong></div>
       ) : (
         <div className="agentic-operations-run-list" role="list">
-          {runs.map((run, index) => (
-            <article className="agentic-operations-run-row" role="listitem" key={`${clean(run.run_id) || "run"}-${index}`}>
-              <div className="agentic-operations-run-primary">
-                <span className={`agentic-operations-status agentic-operations-status--${statusTone(run.status)}`}>{label(run.status, "Unknown")}</span>
-                <strong title={clean(run.run_id)}>{clean(run.run_id) || "Run ID unavailable"}</strong>
-                <span>{runTime(run)}</span>
-              </div>
-              <div className="agentic-operations-run-stage">
-                <span>{clean(run.current_stage) ? label(run.current_stage) : "Final stage unavailable"}</span>
-                <small>{clean(run.stage_message) || clean(run.summary_message) || "No run message recorded"}</small>
-              </div>
-              <div className="agentic-operations-run-count">
-                <span>Final jobs</span>
-                <strong>{countValue(run.final_job_count)}</strong>
-              </div>
-            </article>
-          ))}
+          {runs.map((run, index) => {
+            const runId = clean(run.run_id);
+            const selected = Boolean(runId && runId === selectedRunId);
+            return (
+              <article className={`agentic-operations-run-row${selected ? " is-selected" : ""}`} role="listitem" key={`${runId || "run"}-${index}`}>
+                <div className="agentic-operations-run-primary">
+                  <span className={`agentic-operations-status agentic-operations-status--${statusTone(run.status)}`}>{label(run.status, "Unknown")}</span>
+                  <strong title={runId}>{runId || "Run ID unavailable"}</strong>
+                  <span>{runTime(run)}</span>
+                </div>
+                <div className="agentic-operations-run-stage">
+                  <span>{clean(run.current_stage) ? label(run.current_stage) : "Final stage unavailable"}</span>
+                  <small>{clean(run.stage_message) || clean(run.summary_message) || "No run message recorded"}</small>
+                </div>
+                <div className="agentic-operations-run-count">
+                  <span>Final jobs</span>
+                  <strong>{countValue(run.final_job_count)}</strong>
+                </div>
+                <div className="agentic-operations-run-action">
+                  {runId ? (
+                    <input
+                      type="button"
+                      className="agentic-operations-inspect"
+                      value={selected ? "Selected" : "Inspect"}
+                      aria-label={`${selected ? "Selected" : "Inspect"} pipeline run ${runId}`}
+                      aria-pressed={selected}
+                      onClick={() => onSelect(runId)}
+                    />
+                  ) : <span>Inspection unavailable</span>}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
+    </section>
+  );
+}
+
+function SelectedRunInspector({ run }: { run: AgenticOperationsRecentRun | null }) {
+  if (!run) {
+    return (
+      <section className="agentic-operations-card agentic-operations-inspector" aria-labelledby="agenticOperationsInspectorTitle">
+        <div className="agentic-operations-section-heading">
+          <div>
+            <span className="agentic-operations-eyebrow">Recorded run summary</span>
+            <h2 id="agenticOperationsInspectorTitle">Run Inspector</h2>
+          </div>
+        </div>
+        <div className="agentic-operations-inspector-empty">
+          <Clock3 size={20} aria-hidden="true" />
+          <strong>Select a recent pipeline run to inspect its recorded summary.</strong>
+        </div>
+      </section>
+    );
+  }
+
+  const runId = clean(run.run_id);
+  const message = clean(run.stage_message) || clean(run.summary_message);
+  const error = clean(run.error);
+  const timestamp = clean(run.completed_at || run.updated_at || run.started_at);
+  const stage = clean(run.current_stage);
+  const hasFinalJobCount = typeof run.final_job_count === "number" && Number.isFinite(run.final_job_count);
+  const hasReturnCode = run.return_code !== null && run.return_code !== undefined && run.return_code !== "";
+  return (
+    <section className="agentic-operations-card agentic-operations-inspector" aria-labelledby="agenticOperationsInspectorTitle">
+      <div className="agentic-operations-section-heading">
+        <div>
+          <span className="agentic-operations-eyebrow">Recorded run summary</span>
+          <h2 id="agenticOperationsInspectorTitle">Run Inspector</h2>
+        </div>
+        {clean(run.status) ? <span className={`agentic-operations-status agentic-operations-status--${statusTone(run.status)}`}>{label(run.status)}</span> : null}
+      </div>
+      <div className="agentic-operations-inspector-content">
+        <dl className="agentic-operations-inspector-grid">
+          <div><dt>Run ID</dt><dd title={runId}>{runId}</dd></div>
+          {timestamp ? <div><dt>Recorded at</dt><dd>{runTime(run)}</dd></div> : null}
+          {stage ? <div><dt>Current / final stage</dt><dd>{label(stage)}</dd></div> : null}
+          {hasFinalJobCount ? <div><dt>Final job count</dt><dd>{String(run.final_job_count)}</dd></div> : null}
+          {hasReturnCode ? <div><dt>Return code</dt><dd>{String(run.return_code)}</dd></div> : null}
+        </dl>
+        {message ? <p className="agentic-operations-inspector-message"><span>Recorded message</span>{message}</p> : null}
+        {error ? <p className="agentic-operations-inspector-error"><span>Recorded error</span>{error}</p> : null}
+        <a className="agentic-operations-review-link" href={`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review`}>
+          Open Agentic Review <ExternalLink size={14} aria-hidden="true" />
+        </a>
+      </div>
     </section>
   );
 }
@@ -537,6 +614,7 @@ export function AgenticOperationsDashboard({
 }: AgenticOperationsDashboardProps) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const inFlightRef = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback((manual = false) => {
@@ -559,6 +637,17 @@ export function AgenticOperationsDashboard({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const recentRuns = state.kind === "ready" && Array.isArray(state.payload.recent_runs)
+    ? state.payload.recent_runs
+    : [];
+  const selectedRun = selectedRunId
+    ? recentRuns.find((run) => clean(run.run_id) === selectedRunId) || null
+    : null;
+
+  useEffect(() => {
+    if (state.kind === "ready" && selectedRunId && !selectedRun) setSelectedRunId(null);
+  }, [selectedRun, selectedRunId, state.kind]);
 
   const readOnlyConfirmed = state.kind === "ready" && safetyContractConfirmed(state.payload);
   const registry = state.kind === "ready" ? canonicalRegistryState(state.payload.canonical_agents) : null;
@@ -594,8 +683,9 @@ export function AgenticOperationsDashboard({
           <SummaryGrid payload={state.payload} />
           <div className="agentic-operations-primary-grid">
             <CurrentPipelinePanel pipeline={state.payload.current_pipeline} />
-            <RecentRunsPanel payload={state.payload} />
+            <RecentRunsPanel payload={state.payload} selectedRunId={selectedRunId} onSelect={setSelectedRunId} />
           </div>
+          <SelectedRunInspector run={selectedRun} />
           <SafetyOverview payload={state.payload} confirmed={readOnlyConfirmed} />
           <CanonicalAgentRegistry registry={registry} />
           <MutationAuthorityMatrix registry={registry} summary={state.payload.safety_summary} />

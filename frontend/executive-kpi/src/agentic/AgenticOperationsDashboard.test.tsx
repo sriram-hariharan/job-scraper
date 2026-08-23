@@ -302,13 +302,99 @@ describe("AgenticOperationsDashboard", () => {
     expect(screen.getAllByLabelText("Queue: Yes")).toHaveLength(3);
   });
 
-  it("adds no run selector, trace, execution, or approval controls", async () => {
+  it("starts with no selected run, a neutral inspector prompt, and no review link", async () => {
+    const readOverview = vi.fn(async () => READY_PAYLOAD);
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    const inspector = await screen.findByRole("region", { name: "Run Inspector" });
+    expect(within(inspector).getByText("Select a recent pipeline run to inspect its recorded summary.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Inspect pipeline run/ })).toHaveLength(2);
+    expect(screen.queryByRole("link", { name: "Open Agentic Review" })).not.toBeInTheDocument();
+    expect(readOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects and changes exact recent-run rows locally without another overview read", async () => {
+    const readOverview = vi.fn(async () => READY_PAYLOAD);
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Inspect pipeline run run-recent-1" }));
+    const firstSelection = screen.getByRole("button", { name: "Selected pipeline run run-recent-1" });
+    expect(firstSelection).toHaveAttribute("aria-pressed", "true");
+    expect(firstSelection.closest(".agentic-operations-run-row")).toHaveClass("is-selected");
+    let inspector = screen.getByRole("region", { name: "Run Inspector" });
+    expect(within(inspector).getByText("run-recent-1")).toBeInTheDocument();
+    expect(within(inspector).getByText("Pipeline completed")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Inspect pipeline run run-recent-2" }));
+    inspector = screen.getByRole("region", { name: "Run Inspector" });
+    expect(within(inspector).getByText("run-recent-2")).toBeInTheDocument();
+    expect(within(inspector).getByText("Evaluation stopped")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Inspect pipeline run run-recent-1" })).toHaveAttribute("aria-pressed", "false");
+    expect(readOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps missing-ID metadata visible without selection or deep-link actions", async () => {
+    const payload = {
+      ...READY_PAYLOAD,
+      recent_runs: [{ status: "failed", current_stage: "finalize", stage_message: "Missing identifier row" }],
+      recent_runs_state: { available: true, state: "available", count: 1, bound: 10 },
+    };
+    render(<AgenticOperationsDashboard readOverview={vi.fn(async () => payload)} />);
+
+    const runs = await screen.findByRole("region", { name: "Recent pipeline runs" });
+    expect(within(runs).getByText("Run ID unavailable")).toBeInTheDocument();
+    expect(within(runs).getByText("Missing identifier row")).toBeInTheDocument();
+    expect(within(runs).getByText("Inspection unavailable")).toBeInTheDocument();
+    expect(within(runs).queryByRole("button", { name: /inspect/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Agentic Review" })).not.toBeInTheDocument();
+  });
+
+  it("encodes the selected run ID in the existing Agentic Review route without owner context", async () => {
+    const payload = {
+      ...READY_PAYLOAD,
+      recent_runs: [{ ...READY_PAYLOAD.recent_runs?.[0], run_id: "run/review abc" }],
+      recent_runs_state: { available: true, state: "available", count: 1, bound: 10 },
+    };
+    render(<AgenticOperationsDashboard readOverview={vi.fn(async () => payload)} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Inspect pipeline run run/review abc" }));
+    const link = screen.getByRole("link", { name: "Open Agentic Review" });
+    expect(link).toHaveAttribute("href", "/profile/pipeline-runs/run%2Freview%20abc/agentic-review");
+    expect(link.getAttribute("href")).not.toContain("owner");
+  });
+
+  it("preserves a selected run across refresh and clears it when a later payload removes it", async () => {
+    const readOverview = vi.fn()
+      .mockResolvedValueOnce(READY_PAYLOAD)
+      .mockResolvedValueOnce({
+        ...READY_PAYLOAD,
+        recent_runs: READY_PAYLOAD.recent_runs?.map((run) => ({
+          ...run,
+          stage_message: run.run_id === "run-recent-1" ? "Refreshed selected run" : run.stage_message,
+        })),
+      })
+      .mockResolvedValueOnce({ ...READY_PAYLOAD, recent_runs: [READY_PAYLOAD.recent_runs?.[1] || {}], recent_runs_state: { available: true, state: "available", count: 1, bound: 10 } });
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Inspect pipeline run run-recent-1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh overview" }));
+    expect((await screen.findAllByText("Refreshed selected run")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Selected pipeline run run-recent-1" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh overview" }));
+    await waitFor(() => expect(screen.queryByText("run-recent-1")).not.toBeInTheDocument());
+    expect(screen.getByText("Select a recent pipeline run to inspect its recorded summary.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Agentic Review" })).not.toBeInTheDocument();
+    expect(readOverview).toHaveBeenCalledTimes(3);
+  });
+
+  it("adds no trace, evidence, execution, retry, or approval controls", async () => {
     render(<AgenticOperationsDashboard readOverview={vi.fn(async () => READY_PAYLOAD)} />);
 
     await screen.findByRole("region", { name: "Canonical Agent Registry" });
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /run|execute|approve|reject|trace/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /execute|approve|reject|retry|trace|evidence/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Inspect pipeline run/ })).toHaveLength(2);
   });
 
   it("keeps the title dominant and renders the ordered header badges without another request", async () => {
@@ -323,7 +409,7 @@ describe("AgenticOperationsDashboard", () => {
     expect(badges.map((badge) => badge.textContent)).toEqual(["Admin only", "Read-only"]);
     expect(screen.getAllByText("Read-only")).toHaveLength(1);
     expect(readOverview).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getAllByRole("button")).toHaveLength(3);
     expect(screen.getByRole("button", { name: "Refresh overview" })).toBeInTheDocument();
   });
 

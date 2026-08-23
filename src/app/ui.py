@@ -488,14 +488,20 @@ def agentic_operations_console(request: Request) -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item61e_operations_overview_r1" />
 </head>
 <body class="agentic-operations-page">
   {render_top_shell("/agentic-operations")}
   <main class="page agentic-operations-shell">
     <header class="page-header app-page-header">
       <div class="page-header-main app-page-header__main">
-        <div class="app-page-header__title-row">
+        <div class="agentic-operations-header-title-row app-page-header__title-row">
           <h1 class="app-page-header__title">Agentic Operations</h1>
+          <span class="agentic-operations-header-badge app-page-header__badge">Admin only</span>
+          <span
+            id="agenticOperationsHeaderReadOnlyBadge"
+            class="agentic-operations-header-badge-slot"
+          ></span>
         </div>
         <p class="subtext app-page-header__description">
           Administrative read-only workspace for agent supervision and runtime evidence.
@@ -505,17 +511,17 @@ def agentic_operations_console(request: Request) -> str:
 
     <section
       id="agenticOperationsRoot"
-      class="card"
       aria-label="Agentic Operations workspace"
+      aria-live="polite"
     >
-      <div class="card-body">
-        <p class="subtext">Agent supervision, runs, traces, and safety.</p>
-      </div>
+      <div class="agentic-operations-server-fallback">Loading Agentic Operations...</div>
+      <noscript>Enable JavaScript to view Agentic Operations.</noscript>
     </section>
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item61e_operations_overview_r1"></script>
 </body>
 </html>
     """.strip()

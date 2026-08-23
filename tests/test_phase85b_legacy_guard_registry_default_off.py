@@ -22,6 +22,7 @@ from tests.support.phase_guard_registry import (
     ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
     ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
     ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES,
+    ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -1982,6 +1983,46 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
             include_current_milestone_compatibility=False,
         )
 
+    item61e_overview_ui_profile = legacy_guard_allowlist(
+        "item61e_agentic_operations_overview_ui"
+    )
+    assert ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES == {
+        "src/app/ui.py",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+        "frontend/executive-kpi/src/agentic/agenticOperationsModel.ts",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "tests/test_item61e_agentic_operations_overview_ui.py",
+    }
+    assert item61e_overview_ui_profile == (
+        ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES
+    )
+    assert len(item61e_overview_ui_profile) == 9
+    assert not any("*" in path for path in item61e_overview_ui_profile)
+    assert_changed_files_allowed(
+        item61e_overview_ui_profile,
+        set(),
+        legacy_guard_profiles=("item61e_agentic_operations_overview_ui",),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/agentic/UnapprovedDashboard.tsx",
+        "src/app/static/build/executive-kpi/unapproved.js",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61e_agentic_operations_overview_ui",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
@@ -1994,6 +2035,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item61b_admin_boundary_profile
         | item61c_readonly_backend_profile
         | item61d_console_shell_profile
+        | item61e_overview_ui_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

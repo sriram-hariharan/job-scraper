@@ -242,7 +242,7 @@ def profile_page(request: Request) -> str:
   <title>{page_title}</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_pipeline_run_buttons_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
 </head>
 <body{body_class}>
   {render_top_shell("/profile")}
@@ -527,7 +527,7 @@ def profile_page(request: Request) -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/profile.js?v=item2_phase4_profile_corrections_r1"></script>
 </body>
 </html>
@@ -550,7 +550,7 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
   <title>Agentic Review</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=agentic_review_v1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2e_manual_provider_preview_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/agentic_review.css?v=item6c3_back_navigation_r1" />
 </head>
 <body>
@@ -733,7 +733,7 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
     </div>
   </section>
 
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/profile.js?v=agentic_review_v1"></script>
   <script src="/static/agentic_review.js?v=item6_final_agentic_review_r1"></script>
 </body>
@@ -752,7 +752,7 @@ def profile_preferences_page() -> str:
   <title>Preferences · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/preferences.css?v=phase1_step8b_r1" />
 </head>
 <body class="preferences-page-shell">
@@ -763,7 +763,7 @@ def profile_preferences_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/preferences_workflow.js?v=phase1_step8b_r1"></script>
   <script src="/static/profile.js?v=preferences_guided_parity_r9"></script>
@@ -783,7 +783,7 @@ def profile_ai_settings_page() -> str:
   <title>AI Settings · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_step7b_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_task_routing_ux_r3" />
 </head>
 <body class="profile-ai-settings-page-shell">
@@ -1004,7 +1004,7 @@ def profile_ai_settings_page() -> str:
   {render_provider_key_guidance_templates()}
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/profile_ai_settings.js?v=item2f5_manual_preview_default_r1"></script>
 </body>
 </html>
@@ -1022,7 +1022,7 @@ def saved_scans_page() -> str:
   <title>Saved Scans</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_confirm_specific_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -1114,7 +1114,7 @@ def saved_scans_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10"></script>
 </body>
 </html>

@@ -1821,6 +1821,23 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    item7b_premium_account_toolbar_runtime_files = {
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/onboarding_ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/shell.js",
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/ui_shell.py",
+    }
+    if set(changed_runtime_files) == item7b_premium_account_toolbar_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     phase133h_shared_shell_files = {
         ROOT / "src/app/application_hub_ui.py",
         ROOT / "src/app/applied_ui.py",

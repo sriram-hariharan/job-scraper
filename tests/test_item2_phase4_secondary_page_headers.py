@@ -198,21 +198,16 @@ def test_legacy_scan_workspace_stylesheets_are_unchanged():
 # --- 20-21. Cache markers -----------------------------------------------------
 
 
-def test_all_migrated_authenticated_pages_use_the_new_cache_marker():
-    marker = "item2_phase4_secondary_headers_r1"
-    occurrences = (
-        UI_SOURCE.count(marker)
-        + PLANNING_UI_SOURCE.count(marker)
-        + DECISIONS_UI_SOURCE.count(marker)
-        + APPLICATION_HUB_UI_SOURCE.count(marker)
-        + PROFILE_UI_SOURCE.count(marker)
+def test_all_shared_shell_pages_use_the_item7b_cache_marker():
+    sources = (
+        UI_SOURCE,
+        PLANNING_UI_SOURCE,
+        DECISIONS_UI_SOURCE,
+        APPLICATION_HUB_UI_SOURCE,
+        PROFILE_UI_SOURCE,
     )
-    # 10 migrated routes x 1 app_redesign.css reference each, after the
-    # Correction Pass 1 retirement of /intelligence, /applied, and /saved
-    # removed their 3 former occurrences.
-    assert occurrences == 10
-    # Onboarding/preferences/auth keep their old marker (see test below).
-    assert "app_redesign.css?v=scheduler_health_polish_r1" in PROFILE_UI_SOURCE
+    assert sum(source.count("item7b_v1_toolbar_notification_r1") for source in sources) == 15
+    assert sum(source.count("item7b_account_toolbar_r1") for source in sources) == 15
 
 
 def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
@@ -245,7 +240,7 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
     assert f'/static/planning.js?v={planning_marker}' in planning_route
     assert old_js in planning_route
     assert old_css not in planning_route
-    assert '/static/shell.js?v=phase133h_r1' in planning_route
+    assert '/static/shell.js?v=item7b_account_toolbar_r1' in planning_route
 
     # The unaffected Phase 3 surfaces still use both complete old bundle
     # references, including Advanced Diagnostics in planning_ui.py.
@@ -256,10 +251,10 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
 
     # Tailoring Workspace and Scan Workspace retain their distinct historical
     # script ownership and never acquire the Planning-only marker.
-    assert '/static/shell.js?v=phase133h_r1' in tailoring_route
+    assert '/static/shell.js?v=item7b_account_toolbar_r1' in tailoring_route
     assert '/static/planning.js?v=planning_ui_20260512_tailoring_tabs8' in tailoring_route
     assert planning_marker not in tailoring_route
-    assert '/static/shell.js?v=phase133h_r1' in scan_workspace_renderer
+    assert '/static/shell.js?v=item7b_account_toolbar_r1' in scan_workspace_renderer
     assert '/static/planning.js?v=planning_ui_20260518_scan_replacement_markers' in scan_workspace_renderer
     assert '/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll' in scan_workspace_renderer
     assert planning_marker not in scan_workspace_renderer
@@ -268,11 +263,10 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
 # --- 22. Onboarding/preferences/auth not migrated ----------------------------
 
 
-def test_onboarding_preferences_auth_headers_are_not_migrated_by_this_phase():
+def test_auth_is_unchanged_while_shared_shell_preferences_use_item7_assets():
     changed = get_changed_files(ROOT)
     assert "src/app/auth_ui.py" not in changed
-    assert "src/app/onboarding_ui.py" not in changed
-    assert "app_redesign.css?v=scheduler_health_polish_r1" in PROFILE_UI_SOURCE  # /profile/preferences etc.
+    assert "app_redesign.css?v=item7b_v1_toolbar_notification_r1" in PROFILE_UI_SOURCE
 
 
 # --- 23. Advanced Diagnostics execution remains disabled ----------------------

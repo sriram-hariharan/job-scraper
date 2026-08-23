@@ -74,6 +74,11 @@ _ICON_PATHS = {
         '<path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/>'
         '<path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/>'
     ),
+    "agentic-operations": (
+        '<circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/>'
+        '<circle cx="19" cy="19" r="3"/><path d="M12 8v4"/>'
+        '<path d="M5 16v-4h14v4"/>'
+    ),
     "ai-settings": (
         '<path d="M12 2a4 4 0 0 0-4 4v1.1A4.5 4.5 0 0 0 5.5 15H7v1a5 5 0 0 0 10 0v-1h1.5A4.5 4.5 0 0 0 16 7.1V6a4 4 0 0 0-4-4Z"/>'
         '<path d="M9 10h.01"/><path d="M15 10h.01"/>'
@@ -92,6 +97,10 @@ _ICON_PATHS = {
     "expand": (
         '<rect width="18" height="18" x="3" y="3" rx="2"/>'
         '<path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>'
+    ),
+    "logout": (
+        '<path d="M10 17l5-5-5-5"/><path d="M15 12H3"/>'
+        '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>'
     ),
 }
 
@@ -191,7 +200,7 @@ def render_top_shell(active_href: str) -> str:
   </nav>
 </aside>
 
-<div class="{toolbar_classes}">
+<div class="{toolbar_classes}" role="group" aria-label="Workspace controls">
   <div class="notification-shell" id="notificationShell">
     <button
       type="button"
@@ -281,9 +290,6 @@ def render_top_shell(active_href: str) -> str:
     aria-pressed="false"
     title="Switch to light theme"
   >
-    <span class="theme-toggle-track" aria-hidden="true">
-      <span class="theme-toggle-knob"></span>
-    </span>
     <img
       class="theme-toggle-icon"
       src="/static/media/dark_mode.svg"
@@ -314,12 +320,19 @@ def render_top_shell(active_href: str) -> str:
       id="profileMenuButton"
       aria-expanded="false"
       aria-haspopup="true"
+      aria-controls="profileDropdown"
+      aria-label="Account"
       title="{escape(DEFAULT_USER_NAME)}"
     >
       {escape(DEFAULT_USER_INITIAL)}
     </button>
 
-    <div class="profile-dropdown hidden" id="profileDropdown">
+    <div
+      class="profile-dropdown hidden"
+      id="profileDropdown"
+      aria-labelledby="profileMenuButton"
+      aria-hidden="true"
+    >
       <div class="profile-dropdown-identity">
         <span class="profile-dropdown-avatar" id="profileDropdownAvatar" aria-hidden="true">
           {escape(DEFAULT_USER_INITIAL)}
@@ -330,101 +343,96 @@ def render_top_shell(active_href: str) -> str:
         </span>
       </div>
       <div class="profile-dropdown-actions">
-        <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scans" aria-hidden="true">
-            <img src="/static/media/scan_icon.svg" alt="" />
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Saved Scans</span>
-            <span class="profile-dropdown-nav-subtitle">Resume scan history and match snapshots</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+        <section class="profile-dropdown-section" aria-labelledby="profileWorkspaceSectionLabel">
+          <div class="profile-dropdown-section-label" id="profileWorkspaceSectionLabel">Workspace</div>
+          <nav class="profile-dropdown-nav" aria-labelledby="profileWorkspaceSectionLabel">
+            <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scans" aria-hidden="true">
+                <img src="/static/media/scan_icon.svg" alt="" />
+              </span>
+              <span class="profile-dropdown-nav-title">Saved Scans</span>
+            </a>
 
-        <a class="profile-dropdown-nav-btn" href="/profile">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--profile" aria-hidden="true">
-            <img src="/static/media/profile_icon.svg" alt="" />
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">My Profile</span>
-            <span class="profile-dropdown-nav-subtitle">Resumes and account tools</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+            <a class="profile-dropdown-nav-btn" href="/profile">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--profile" aria-hidden="true">
+                <img src="/static/media/profile_icon.svg" alt="" />
+              </span>
+              <span class="profile-dropdown-nav-title">My Profile</span>
+            </a>
+          </nav>
+        </section>
 
-        <a class="profile-dropdown-nav-btn" href="/profile/preferences">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--preferences" aria-hidden="true">
-            <img src="/static/media/preferences_icon.svg" alt="" />
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Preferences</span>
-            <span class="profile-dropdown-nav-subtitle">Role focus, location, and matching signals</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+        <section class="profile-dropdown-section" aria-labelledby="profileSettingsSectionLabel">
+          <div class="profile-dropdown-section-label" id="profileSettingsSectionLabel">Settings</div>
+          <nav class="profile-dropdown-nav" aria-labelledby="profileSettingsSectionLabel">
+            <a class="profile-dropdown-nav-btn" href="/profile/preferences">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--preferences" aria-hidden="true">
+                <img src="/static/media/preferences_icon.svg" alt="" />
+              </span>
+              <span class="profile-dropdown-nav-title">Preferences</span>
+            </a>
 
-        <a class="profile-dropdown-nav-btn" href="/profile/ai-settings">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--ai-settings" aria-hidden="true">
-            {_icon_svg("ai-settings")}
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">AI Settings</span>
-            <span class="profile-dropdown-nav-subtitle">Providers, API keys, and model access</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+            <a class="profile-dropdown-nav-btn" href="/profile/ai-settings">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--ai-settings" aria-hidden="true">
+                {_icon_svg("ai-settings")}
+              </span>
+              <span class="profile-dropdown-nav-title">AI Settings</span>
+            </a>
+          </nav>
+        </section>
 
-        <a
-          class="profile-dropdown-nav-btn hidden"
-          href="/advanced-diagnostics"
-          id="profileAdvancedDiagnosticsLink"
-          data-admin-only="true"
+        <section
+          class="profile-dropdown-section hidden"
+          id="profileAdminToolsSection"
+          aria-labelledby="profileAdminToolsSectionLabel"
+          aria-hidden="true"
         >
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
-            {_icon_svg("diagnostics")}
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Scan Diagnostics</span>
-            <span class="profile-dropdown-nav-subtitle">Saved scan, tailoring, and artifact diagnostics</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+          <div class="profile-dropdown-section-label" id="profileAdminToolsSectionLabel">Admin tools</div>
+          <nav class="profile-dropdown-nav" aria-labelledby="profileAdminToolsSectionLabel">
+            <a
+              class="profile-dropdown-nav-btn hidden"
+              href="/advanced-diagnostics"
+              id="profileAdvancedDiagnosticsLink"
+              data-admin-only="true"
+            >
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
+                {_icon_svg("diagnostics")}
+              </span>
+              <span class="profile-dropdown-nav-title">Scan Diagnostics</span>
+            </a>
 
-        <a
-          class="profile-dropdown-nav-btn hidden"
-          href="/agentic-operations"
-          id="profileAgenticOperationsLink"
-          data-admin-only="true"
-        >
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
-            {_icon_svg("diagnostics")}
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Agentic Operations</span>
-            <span class="profile-dropdown-nav-subtitle">Agent supervision, run review, and safety</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+            <a
+              class="profile-dropdown-nav-btn hidden"
+              href="/agentic-operations"
+              id="profileAgenticOperationsLink"
+              data-admin-only="true"
+            >
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--agentic-operations" aria-hidden="true">
+                {_icon_svg("agentic-operations")}
+              </span>
+              <span class="profile-dropdown-nav-title">Agentic Operations</span>
+            </a>
 
-        <a
-          class="profile-dropdown-nav-btn hidden"
-          href="/scheduler"
-          id="profileSchedulerHealthLink"
-          data-admin-only="true"
-        >
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scheduler" aria-hidden="true">
-            {_icon_svg("scheduler")}
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Scheduler Health</span>
-            <span class="profile-dropdown-nav-subtitle">Scheduled jobs, run outcomes, and persistence integrity</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+            <a
+              class="profile-dropdown-nav-btn hidden"
+              href="/scheduler"
+              id="profileSchedulerHealthLink"
+              data-admin-only="true"
+            >
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scheduler" aria-hidden="true">
+                {_icon_svg("scheduler")}
+              </span>
+              <span class="profile-dropdown-nav-title">Scheduler Health</span>
+            </a>
+          </nav>
+        </section>
 
-        <button type="button" class="profile-dropdown-danger-btn" id="profileLogoutBtn">
-          Log out
-        </button>
+        <div class="profile-dropdown-footer">
+          <button type="button" class="profile-dropdown-danger-btn" id="profileLogoutBtn">
+            <span class="profile-dropdown-danger-icon" aria-hidden="true">{_icon_svg("logout")}</span>
+            <span>Log out</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

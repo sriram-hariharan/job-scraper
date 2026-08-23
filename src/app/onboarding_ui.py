@@ -486,7 +486,7 @@ def onboarding_page() -> str:
   <title>Onboarding · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/preferences.css?v=phase1_step8b_r1" />
 </head>
 <body class="preferences-page-shell">
@@ -503,7 +503,7 @@ def onboarding_page() -> str:
   {_onboarding_ai_credential_modal_html()}
   {render_provider_key_guidance_templates()}
 
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/preferences_workflow.js?v=phase1_step8b_r1"></script>
   <script src="/static/onboarding.js?v=phase1_step8b_r1"></script>

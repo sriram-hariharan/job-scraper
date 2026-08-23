@@ -68,8 +68,8 @@ def test_advanced_diagnostics_link_metadata_preserved():
     assert 'id="profileAdvancedDiagnosticsLink"' in advanced_diagnostics_link
     assert 'data-admin-only="true"' in advanced_diagnostics_link
     assert "Scan Diagnostics" in advanced_diagnostics_link
-    assert "Saved scan, tailoring, and artifact diagnostics" in advanced_diagnostics_link
-    assert 'class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>' in advanced_diagnostics_link
+    assert "profile-dropdown-nav-subtitle" not in advanced_diagnostics_link
+    assert "profile-dropdown-nav-arrow" not in advanced_diagnostics_link
 
 
 def test_scheduler_health_link_metadata_preserved():
@@ -77,7 +77,7 @@ def test_scheduler_health_link_metadata_preserved():
     assert 'id="profileSchedulerHealthLink"' in scheduler_link
     assert 'data-admin-only="true"' in scheduler_link
     assert "Scheduler Health" in scheduler_link
-    assert "Scheduled jobs, run outcomes, and persistence integrity" in scheduler_link
+    assert "profile-dropdown-nav-subtitle" not in scheduler_link
 
 
 def test_profile_menu_icon_color_uses_theme_variable_not_hardcoded_hex():
@@ -108,9 +108,13 @@ def test_advanced_diagnostics_svg_asset_no_longer_referenced_in_profile_menu():
     assert "adv_diagnostics_img.svg" not in UI_SHELL_SOURCE
 
 
-def test_profile_menu_layout_and_arrows_are_unchanged():
-    assert UI_SHELL_SOURCE.count('class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>') >= 2
-    assert 'class="profile-dropdown-nav-copy"' in UI_SHELL_SOURCE
+def test_profile_menu_uses_compact_grouped_rows_without_card_chevrons():
+    assert "profile-dropdown-nav-arrow" not in UI_SHELL_SOURCE
+    assert "profile-dropdown-nav-copy" not in UI_SHELL_SOURCE
+    assert UI_SHELL_SOURCE.count('class="profile-dropdown-section-label"') == 3
+    assert ">Workspace</div>" in UI_SHELL_SOURCE
+    assert ">Settings</div>" in UI_SHELL_SOURCE
+    assert ">Admin tools</div>" in UI_SHELL_SOURCE
 
 
 def test_floating_job_assistant_widget_preserved():

@@ -705,6 +705,31 @@ ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES = {
     "tests/test_advanced_diagnostics_react_redesign.py",
 }
 
+# Item 7B premium account popover and attached toolbar: exact shared-shell,
+# finite cache-owner, focused compatibility, and guard-closure surface.
+ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES = {
+    "src/app/application_hub_ui.py",
+    "src/app/decisions_ui.py",
+    "src/app/onboarding_ui.py",
+    "src/app/planning_ui.py",
+    "src/app/profile_ui.py",
+    "src/app/static/app_redesign.css",
+    "src/app/static/shell.js",
+    "src/app/ui.py",
+    "src/app/ui_shell.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+    "tests/test_item2_phase4_secondary_page_headers.py",
+    "tests/test_item61d_agentic_operations_console_shell.py",
+    "tests/test_item7b_premium_account_toolbar.py",
+    "tests/test_phase132b2r3_guided_preferences_workflow.py",
+    "tests/test_phase133d_pipeline_dashboard_react_island.py",
+    "tests/test_phase1_step7_profile_ai_settings_ui.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1203,6 +1228,7 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "item61h_v1_scan_diagnostics_visual_polish": (
             ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES
         ),
+        "item7b_premium_account_toolbar": ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES,
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -2418,6 +2444,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item61g_run_inspector_agentic_review_integration")
         | legacy_guard_allowlist("item61h_cross_page_navigation_product_clarity")
         | legacy_guard_allowlist("item61h_v1_scan_diagnostics_visual_polish")
+        | legacy_guard_allowlist("item7b_premium_account_toolbar")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2690,6 +2717,10 @@ def assert_protected_hashes(
             "bae6084f3be7e173e2cb9ec4bf39d085531a4f628f88508445b0a583783e0ded",
             # Item 3 floating ApplyLens AI chatbot successor.
             "90aff70ad5eb13958187dbd17f0250ec976ba8bd99a29e78f841bf4d0e8b5cbb",
+            # Item 7B premium account popover and attached toolbar successor.
+            "33471634a2f475c74016a672639c64ff2b3fb24ac7ce52bf7061ad4d95afc125",
+            # Item 7B-V1 neutral toolbar and notification-position successor.
+            "4c364771368cb781ff0c97dc227a4882fa52119c8c5f82ad24eb99f8b0bc2b5a",
         }),
         (
             "src/ai/llm_client.py",

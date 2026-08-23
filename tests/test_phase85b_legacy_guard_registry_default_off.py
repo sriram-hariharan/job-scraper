@@ -27,6 +27,7 @@ from tests.support.phase_guard_registry import (
     ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES,
     ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES,
     ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES,
+    ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -2027,6 +2028,58 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
                 include_current_milestone_compatibility=False,
             )
 
+    item7b_account_toolbar_profile = legacy_guard_allowlist(
+        "item7b_premium_account_toolbar"
+    )
+    assert ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES == {
+        "src/app/application_hub_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/onboarding_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/shell.js",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+        "tests/test_item2_phase4_secondary_page_headers.py",
+        "tests/test_item61d_agentic_operations_console_shell.py",
+        "tests/test_item7b_premium_account_toolbar.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase1_step7_profile_ai_settings_ui.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert item7b_account_toolbar_profile == ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES
+    assert len(item7b_account_toolbar_profile) == 20
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item7b_account_toolbar_profile
+    )
+    assert_changed_files_allowed(
+        item7b_account_toolbar_profile,
+        set(),
+        legacy_guard_profiles=("item7b_premium_account_toolbar",),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "src/app/api.py",
+        "frontend/executive-kpi/src/UnapprovedAccountMenu.tsx",
+        "tests/test_unapproved_item7b_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=("item7b_premium_account_toolbar",),
+                include_current_milestone_compatibility=False,
+            )
+
     item61h_v1_visual_polish_profile = legacy_guard_allowlist(
         "item61h_v1_scan_diagnostics_visual_polish"
     )
@@ -2215,6 +2268,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item61g_run_inspector_profile
         | item61h_product_clarity_profile
         | item61h_v1_visual_polish_profile
+        | item7b_account_toolbar_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

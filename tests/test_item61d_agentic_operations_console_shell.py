@@ -108,8 +108,9 @@ def test_profile_dropdown_has_one_initially_hidden_admin_entry() -> None:
     assert 'href="/agentic-operations"' in entry
     assert 'data-admin-only="true"' in entry
     assert "Agentic Operations" in entry
-    assert "Agent supervision, run review, and safety" in entry
-    assert '{_icon_svg("diagnostics")}' in entry
+    assert "profile-dropdown-nav-subtitle" not in entry
+    assert 'profile-dropdown-nav-icon--agentic-operations' in entry
+    assert '{_icon_svg("agentic-operations")}' in entry
     assert "<img" not in entry
 
 
@@ -162,6 +163,7 @@ const menuButton = null;
 const profileDropdownAvatar = null;
 const profileDropdownName = null;
 const profileDropdownEmail = null;
+const profileAdminToolsSection = null;
 const profileAdvancedDiagnosticsLink = null;
 const profileSchedulerHealthLink = null;
 function userInitialFromName() {{ return "A"; }}

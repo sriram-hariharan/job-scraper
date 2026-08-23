@@ -411,7 +411,7 @@ def test_preferences_assets_are_scoped_ordered_and_cache_busted_consistently():
         # app_redesign.css is bumped uniformly to the Phase 133H shell marker; it
         # now recurs across routes, so anchor the preferences-page ordering check
         # to the app_redesign link that follows this page's styles.css link.
-        redesign = source.index('/static/app_redesign.css?v=scheduler_health_polish_r1', styles)
+        redesign = source.index('/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1', styles)
         preferences = source.index('/static/preferences.css?v=phase1_step8b_r1')
         selector = source.index('/static/preference_location_selector.js?v=preferences_guided_parity_r9')
         workflow = source.index('/static/preferences_workflow.js?v=phase1_step8b_r1')

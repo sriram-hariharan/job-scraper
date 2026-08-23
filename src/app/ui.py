@@ -38,7 +38,7 @@ def executive_dashboard() -> str:
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="executive-dashboard-page">
@@ -238,7 +238,7 @@ def executive_dashboard() -> str:
   </div>
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
@@ -414,7 +414,7 @@ def pipeline_dashboard() -> str:
   <title>Pipeline Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="pipeline-dashboard-page">
@@ -432,7 +432,7 @@ def pipeline_dashboard() -> str:
   {_pipeline_dashboard_launch_dialogs()}
   {_pipeline_dashboard_error_dialog()}
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
@@ -451,7 +451,7 @@ def scheduler_dashboard(request: Request) -> str:
   <title>Scheduler Health</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="scheduler-health-page">
@@ -468,7 +468,7 @@ def scheduler_dashboard(request: Request) -> str:
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
 </body>
 </html>
@@ -487,7 +487,7 @@ def agentic_operations_console(request: Request) -> str:
   <title>Agentic Operations</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item61e_operations_overview_r1" />
 </head>
 <body class="agentic-operations-page">
@@ -520,7 +520,7 @@ def agentic_operations_console(request: Request) -> str:
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item61e_operations_overview_r1"></script>
 </body>
 </html>

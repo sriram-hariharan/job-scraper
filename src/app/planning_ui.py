@@ -121,7 +121,7 @@ def planning_dashboard() -> str:
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=planning_tailoring_workflow_polish_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=planning_tailoring_workflow_polish_r1" />
 </head>
@@ -582,7 +582,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
   <script src="/static/planning.js?v=planning_tailoring_workflow_polish_r1"></script>
 </body>
@@ -684,7 +684,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/tailoring_workspace_premium.css?v=tailoring_workspace_finish_r3" />
 </head>
 <body>
@@ -1020,7 +1020,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <section class="tailoring-workspace-export-modal hidden" id="tailoringWorkspaceExportModal">
     <div class="tailoring-workspace-export-modal-card" role="dialog" aria-modal="true" aria-labelledby="tailoringWorkspaceExportTitle">
       <div class="tailoring-workspace-export-header">
@@ -1228,7 +1228,7 @@ def advanced_diagnostics(
   <title>Scan Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
 <body class="advanced-diagnostics-page">
@@ -1240,7 +1240,7 @@ def advanced_diagnostics(
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script>
     window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = {initial_state_script};
   </script>
@@ -1406,7 +1406,7 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1" />
 </head>
 <body>
@@ -2286,7 +2286,7 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll"></script>
 </body>

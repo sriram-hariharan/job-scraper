@@ -621,6 +621,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const profileDropdownName = qs("profileDropdownName");
   const profileDropdownEmail = qs("profileDropdownEmail");
   const profileLogoutBtn = qs("profileLogoutBtn");
+  const profileAdminToolsSection = qs("profileAdminToolsSection");
   const profileAdvancedDiagnosticsLink = qs("profileAdvancedDiagnosticsLink");
   const profileAgenticOperationsLink = qs("profileAgenticOperationsLink");
   const profileSchedulerHealthLink = qs("profileSchedulerHealthLink");
@@ -824,15 +825,21 @@ window.addEventListener("DOMContentLoaded", () => {
     modal.setAttribute("aria-hidden", "false");
   }
 
-  function closeProfileMenu() {
+  function closeProfileMenu({ restoreFocus = false } = {}) {
     if (!dropdown || !menuButton) return;
+    const wasOpen = !dropdown.classList.contains("hidden");
     dropdown.classList.add("hidden");
+    dropdown.setAttribute("aria-hidden", "true");
     menuButton.setAttribute("aria-expanded", "false");
+    if (restoreFocus && wasOpen) {
+      menuButton.focus();
+    }
   }
 
   function openProfileMenu() {
     if (!dropdown || !menuButton) return;
     dropdown.classList.remove("hidden");
+    dropdown.setAttribute("aria-hidden", "false");
     menuButton.setAttribute("aria-expanded", "true");
   }
 
@@ -865,6 +872,11 @@ window.addEventListener("DOMContentLoaded", () => {
     if (profileDropdownEmail) {
       profileDropdownEmail.textContent = email;
       profileDropdownEmail.classList.toggle("hidden", !email);
+    }
+
+    if (profileAdminToolsSection) {
+      profileAdminToolsSection.classList.toggle("hidden", !isAdmin);
+      profileAdminToolsSection.setAttribute("aria-hidden", isAdmin ? "false" : "true");
     }
 
     if (profileAdvancedDiagnosticsLink) {
@@ -1156,7 +1168,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      closeProfileMenu();
+      closeProfileMenu({ restoreFocus: true });
       closeNotifications();
     }
   });

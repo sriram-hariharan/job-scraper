@@ -2620,10 +2620,48 @@ html[data-theme="dark"] #agenticOperationsRoot {
 .agentic-operations-safety-metrics dt { color: var(--agentic-operations-muted); font-size: 9px; font-weight: 750; line-height: 1.35; }
 .agentic-operations-safety-metrics dd { margin: 5px 0 0; color: var(--agentic-operations-ink); font-size: 17px; font-weight: 800; }
 
+.agentic-operations-agent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+.agentic-operations-agent-card { min-width: 0; border: 1px solid var(--agentic-operations-border); border-radius: 9px; padding: 14px; background: var(--agentic-operations-surface-muted); }
+.agentic-operations-agent-heading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.agentic-operations-agent-heading > div { min-width: 0; }
+.agentic-operations-agent-heading > div > span { color: var(--agentic-operations-muted); font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.agentic-operations-agent-heading h3 { margin: 2px 0 0; overflow: hidden; color: var(--agentic-operations-ink); font-size: 14px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-operations-agent-icon { display: inline-flex; width: 32px; height: 32px; flex: 0 0 32px; align-items: center; justify-content: center; border-radius: 8px; background: var(--agentic-operations-blue-soft); color: var(--agentic-operations-blue); }
+.agentic-operations-agent-card > p { min-height: 34px; margin: 10px 0 12px; color: var(--agentic-operations-muted); font-size: 11px; line-height: 1.5; }
+.agentic-operations-declarations { display: flex; flex-wrap: wrap; gap: 6px; }
+.agentic-operations-declaration { display: inline-flex; min-width: 0; align-items: center; gap: 5px; border: 1px solid var(--agentic-operations-border); border-radius: 999px; padding: 4px 7px; background: var(--agentic-operations-surface); color: var(--agentic-operations-muted); font-size: 9px; font-weight: 750; line-height: 1.25; }
+.agentic-operations-declaration > svg { flex: 0 0 auto; }
+.agentic-operations-declaration--yes { border-color: color-mix(in srgb, var(--agentic-operations-green) 28%, var(--agentic-operations-border)); background: var(--agentic-operations-green-soft); color: var(--agentic-operations-green); }
+.agentic-operations-declaration--unavailable { border-color: color-mix(in srgb, var(--agentic-operations-amber) 28%, var(--agentic-operations-border)); background: var(--agentic-operations-amber-soft); color: var(--agentic-operations-amber); }
+.agentic-operations-registry-empty { display: flex; min-height: 126px; align-items: center; justify-content: center; gap: 11px; padding: 20px; color: var(--agentic-operations-muted); }
+.agentic-operations-registry-empty > svg { flex: 0 0 auto; }
+.agentic-operations-registry-empty strong { display: block; color: var(--agentic-operations-ink); font-size: 13px; }
+.agentic-operations-registry-empty p { margin: 4px 0 0; font-size: 11px; line-height: 1.45; }
+.agentic-operations-registry-empty--compact { min-height: 104px; }
+.agentic-operations-registry-note,
+.agentic-operations-consistency-warning { display: flex; align-items: center; gap: 8px; border-top: 1px solid color-mix(in srgb, var(--agentic-operations-amber) 28%, var(--agentic-operations-border)); padding: 10px 14px; background: var(--agentic-operations-amber-soft); color: var(--agentic-operations-amber); font-size: 10px; font-weight: 700; }
+.agentic-operations-registry-note > svg,
+.agentic-operations-consistency-warning > svg { flex: 0 0 auto; }
+.agentic-operations-matrix-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.agentic-operations-matrix table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 10px; }
+.agentic-operations-matrix caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.agentic-operations-matrix th,
+.agentic-operations-matrix td { border-bottom: 1px solid var(--agentic-operations-border); padding: 10px 12px; text-align: center; }
+.agentic-operations-matrix thead th { background: var(--agentic-operations-surface-muted); color: var(--agentic-operations-muted); font-size: 9px; font-weight: 800; letter-spacing: .025em; text-transform: uppercase; white-space: nowrap; }
+.agentic-operations-matrix th:first-child { position: sticky; left: 0; z-index: 1; min-width: 190px; background: var(--agentic-operations-surface); text-align: left; }
+.agentic-operations-matrix thead th:first-child { z-index: 2; background: var(--agentic-operations-surface-muted); }
+.agentic-operations-matrix tbody th { color: var(--agentic-operations-ink); font-size: 11px; font-weight: 750; }
+.agentic-operations-matrix tbody tr:last-child th,
+.agentic-operations-matrix tbody tr:last-child td { border-bottom: 0; }
+.agentic-operations-authority { display: inline-flex; min-width: 64px; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--agentic-operations-border); border-radius: 999px; padding: 4px 7px; background: var(--agentic-operations-surface-muted); color: var(--agentic-operations-muted); font-weight: 800; }
+.agentic-operations-authority--yes { border-color: color-mix(in srgb, var(--agentic-operations-amber) 38%, var(--agentic-operations-border)); background: var(--agentic-operations-amber-soft); color: var(--agentic-operations-amber); }
+.agentic-operations-authority--unavailable { color: var(--agentic-operations-amber); }
+
 @media (max-width: 1000px) {
   .agentic-operations-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agentic-operations-primary-grid { grid-template-columns: 1fr; }
   .agentic-operations-safety { grid-template-columns: 1fr; }
+  .agentic-operations-agent-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 680px) {
   .agentic-operations-page .page.agentic-operations-shell { width: min(100% - 28px, 720px); }

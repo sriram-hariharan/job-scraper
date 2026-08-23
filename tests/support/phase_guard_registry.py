@@ -654,6 +654,18 @@ ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES = {
     "tests/test_item61e_agentic_operations_overview_ui.py",
 }
 
+# Item 6.1F canonical agent registry and safety matrix: exact accepted
+# frontend, generated-bundle, and focused-test surface.
+ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES = {
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+    "frontend/executive-kpi/src/agentic/agenticOperationsModel.ts",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "tests/test_item61f_agent_registry_safety_matrix.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1139,6 +1151,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         ),
         "item61e_agentic_operations_overview_ui": (
             ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES
+        ),
+        "item61f_agent_registry_safety_matrix": (
+            ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES
         ),
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
@@ -2351,6 +2366,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item61c_agentic_operations_readonly_backend")
         | legacy_guard_allowlist("item61d_agentic_operations_console_shell")
         | legacy_guard_allowlist("item61e_agentic_operations_overview_ui")
+        | legacy_guard_allowlist("item61f_agent_registry_safety_matrix")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")

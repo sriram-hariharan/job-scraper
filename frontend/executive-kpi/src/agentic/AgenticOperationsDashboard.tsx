@@ -1,7 +1,9 @@
 import {
   Activity,
   Bot,
+  Check,
   Clock3,
+  Minus,
   RefreshCw,
   ShieldCheck,
   TriangleAlert,
@@ -11,10 +13,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   readAgenticOperationsOverview,
+  type AgenticOperationsCanonicalAgent,
   type AgenticOperationsCurrentPipeline,
   type AgenticOperationsOverviewPayload,
   type AgenticOperationsRecentRun,
   type AgenticOperationsSafetyMetadata,
+  type AgenticOperationsSafetySummary,
 } from "./agenticOperationsModel";
 
 type LoadState =
@@ -25,6 +29,35 @@ type LoadState =
 type AgenticOperationsDashboardProps = {
   readOverview?: () => Promise<AgenticOperationsOverviewPayload>;
 };
+
+type CanonicalRegistryState = {
+  agents: AgenticOperationsCanonicalAgent[];
+  invalidCount: number;
+  state: "available" | "empty" | "unavailable";
+};
+
+type MutationField = keyof Pick<
+  AgenticOperationsCanonicalAgent,
+  | "score_mutation"
+  | "rank_mutation"
+  | "queue_mutation"
+  | "resume_text_mutation"
+  | "operator_state_persistence"
+  | "application_action_capability"
+>;
+
+const MUTATION_COLUMNS: {
+  field: MutationField;
+  label: string;
+  summaryField: keyof AgenticOperationsSafetySummary;
+}[] = [
+  { field: "score_mutation", label: "Score", summaryField: "score_mutation_capable_count" },
+  { field: "rank_mutation", label: "Rank", summaryField: "rank_mutation_capable_count" },
+  { field: "queue_mutation", label: "Queue", summaryField: "queue_mutation_capable_count" },
+  { field: "resume_text_mutation", label: "Resume text", summaryField: "resume_text_mutation_capable_count" },
+  { field: "operator_state_persistence", label: "Operator state", summaryField: "operator_state_persistence_capable_count" },
+  { field: "application_action_capability", label: "Application action", summaryField: "application_action_capable_count" },
+];
 
 const REQUIRED_FALSE_SAFETY_FIELDS: (keyof AgenticOperationsSafetyMetadata)[] = [
   "cross_user_access",
@@ -56,6 +89,35 @@ function label(value: unknown, fallback = "Unavailable"): string {
 
 function countValue(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value) ? String(value) : "Unavailable";
+}
+
+function canonicalRegistryState(value: unknown): CanonicalRegistryState {
+  if (!Array.isArray(value)) return { agents: [], invalidCount: 0, state: "unavailable" };
+  if (value.length === 0) return { agents: [], invalidCount: 0, state: "empty" };
+  const agents = value.filter((entry): entry is AgenticOperationsCanonicalAgent => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+    const agent = entry as AgenticOperationsCanonicalAgent;
+    return Boolean(clean(agent.key) && clean(agent.display_name) && clean(agent.responsibility));
+  });
+  return {
+    agents,
+    invalidCount: value.length - agents.length,
+    state: agents.length > 0 ? "available" : "unavailable",
+  };
+}
+
+function registrySummaryMismatch(
+  agents: AgenticOperationsCanonicalAgent[],
+  summary: AgenticOperationsSafetySummary | undefined,
+): boolean {
+  if (!summary || agents.length === 0) return false;
+  if (typeof summary.canonical_agent_count !== "number") return false;
+  if (agents.some((agent) => MUTATION_COLUMNS.some(({ field }) => typeof agent[field] !== "boolean"))) return false;
+  if (MUTATION_COLUMNS.some(({ summaryField }) => typeof summary[summaryField] !== "number")) return false;
+  if (summary.canonical_agent_count !== agents.length) return true;
+  return MUTATION_COLUMNS.some(({ field, summaryField }) => (
+    summary[summaryField] !== agents.filter((agent) => agent[field] === true).length
+  ));
 }
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -285,6 +347,151 @@ function RecentRunsPanel({ payload }: { payload: AgenticOperationsOverviewPayloa
   );
 }
 
+function DeclarationChip({
+  value,
+  trueLabel,
+  falseLabel,
+  unavailableLabel,
+}: {
+  value: unknown;
+  trueLabel: string;
+  falseLabel: string;
+  unavailableLabel: string;
+}) {
+  const state = value === true ? "yes" : value === false ? "no" : "unavailable";
+  const text = state === "yes" ? trueLabel : state === "no" ? falseLabel : unavailableLabel;
+  return (
+    <span className={`agentic-operations-declaration agentic-operations-declaration--${state}`}>
+      {state === "yes" ? <Check size={13} aria-hidden="true" /> : <Minus size={13} aria-hidden="true" />}
+      <span>{text}</span>
+    </span>
+  );
+}
+
+function CanonicalAgentRegistry({ registry }: { registry: CanonicalRegistryState }) {
+  return (
+    <section className="agentic-operations-card agentic-operations-registry" aria-labelledby="agenticOperationsRegistryTitle">
+      <div className="agentic-operations-section-heading">
+        <div>
+          <span className="agentic-operations-eyebrow">Declared capabilities</span>
+          <h2 id="agenticOperationsRegistryTitle">Canonical Agent Registry</h2>
+        </div>
+        <span className="agentic-operations-section-meta">
+          {registry.state === "available" ? `${registry.agents.length} registered` : "Unavailable"}
+        </span>
+      </div>
+      {registry.state !== "available" ? (
+        <div className="agentic-operations-registry-empty">
+          <Bot size={20} aria-hidden="true" />
+          <div>
+            <strong>{registry.state === "empty" ? "No canonical agent definitions returned" : "Canonical registry unavailable"}</strong>
+            <p>No canonical agents are fabricated when registry data is absent or malformed.</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="agentic-operations-agent-grid">
+            {registry.agents.map((agent, index) => (
+              <article className="agentic-operations-agent-card" key={`${clean(agent.key)}-${index}`}>
+                <div className="agentic-operations-agent-heading">
+                  <span className="agentic-operations-agent-icon" aria-hidden="true"><Bot size={17} /></span>
+                  <div>
+                    <span>Canonical definition</span>
+                    <h3>{clean(agent.display_name)}</h3>
+                  </div>
+                </div>
+                <p>{clean(agent.responsibility)}</p>
+                <div className="agentic-operations-declarations" aria-label={`${clean(agent.display_name)} declared capabilities`}>
+                  <DeclarationChip value={agent.deterministic_core} trueLabel="Deterministic core" falseLabel="Non-deterministic core" unavailableLabel="Deterministic core unavailable" />
+                  <DeclarationChip value={agent.llm_capable} trueLabel="LLM capable" falseLabel="Not LLM capable" unavailableLabel="LLM capability unavailable" />
+                  <DeclarationChip value={agent.optional_controlled_llm_guardrail} trueLabel="Controlled LLM guardrail available" falseLabel="Controlled LLM guardrail not available" unavailableLabel="Controlled LLM guardrail unavailable" />
+                  <DeclarationChip value={agent.advisory_only} trueLabel="Advisory only" falseLabel="Not advisory-only" unavailableLabel="Advisory status unavailable" />
+                  <DeclarationChip value={agent.human_approval_required} trueLabel="Human approval required" falseLabel="Human approval not required by definition" unavailableLabel="Human approval requirement unavailable" />
+                </div>
+              </article>
+            ))}
+          </div>
+          {registry.invalidCount > 0 ? (
+            <div className="agentic-operations-registry-note" role="status">
+              <TriangleAlert size={16} aria-hidden="true" />
+              {registry.invalidCount} malformed canonical {registry.invalidCount === 1 ? "definition was" : "definitions were"} not rendered.
+            </div>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+function AuthorityValue({ value, label }: { value: unknown; label: string }) {
+  const state = value === true ? "yes" : value === false ? "no" : "unavailable";
+  const text = state === "yes" ? "Yes" : state === "no" ? "No" : "Unavailable";
+  return (
+    <span
+      className={`agentic-operations-authority agentic-operations-authority--${state}`}
+      aria-label={`${label}: ${text}`}
+    >
+      {state === "yes" ? <Check size={13} aria-hidden="true" /> : <Minus size={13} aria-hidden="true" />}
+      <span>{text}</span>
+    </span>
+  );
+}
+
+function MutationAuthorityMatrix({
+  registry,
+  summary,
+}: {
+  registry: CanonicalRegistryState;
+  summary: AgenticOperationsSafetySummary | undefined;
+}) {
+  const mismatch = registrySummaryMismatch(registry.agents, summary);
+  return (
+    <section className="agentic-operations-card agentic-operations-matrix" aria-labelledby="agenticOperationsMatrixTitle">
+      <div className="agentic-operations-section-heading">
+        <div>
+          <span className="agentic-operations-eyebrow">Declared mutation authority</span>
+          <h2 id="agenticOperationsMatrixTitle">Safety / Mutation Authority Matrix</h2>
+        </div>
+        <span className="agentic-operations-section-meta">Registry definitions</span>
+      </div>
+      {mismatch ? (
+        <div className="agentic-operations-consistency-warning" role="status">
+          <TriangleAlert size={17} aria-hidden="true" />
+          <span>Registry capability totals do not match the returned safety summary.</span>
+        </div>
+      ) : null}
+      {registry.state !== "available" ? (
+        <div className="agentic-operations-registry-empty agentic-operations-registry-empty--compact">
+          <ShieldCheck size={20} aria-hidden="true" />
+          <div><strong>Mutation authority unavailable</strong><p>No authoritative per-agent rows were returned.</p></div>
+        </div>
+      ) : (
+        <div className="agentic-operations-matrix-scroll">
+          <table>
+            <caption>Declared mutation authority by canonical agent</caption>
+            <thead>
+              <tr>
+                <th scope="col">Canonical agent</th>
+                {MUTATION_COLUMNS.map((column) => <th scope="col" key={column.field}>{column.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {registry.agents.map((agent, index) => (
+                <tr key={`${clean(agent.key)}-${index}`}>
+                  <th scope="row">{clean(agent.display_name)}</th>
+                  {MUTATION_COLUMNS.map((column) => (
+                    <td key={column.field}><AuthorityValue value={agent[column.field]} label={column.label} /></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SafetyOverview({
   payload,
   confirmed,
@@ -354,6 +561,7 @@ export function AgenticOperationsDashboard({
   }, [refresh]);
 
   const readOnlyConfirmed = state.kind === "ready" && safetyContractConfirmed(state.payload);
+  const registry = state.kind === "ready" ? canonicalRegistryState(state.payload.canonical_agents) : null;
 
   return (
     <div className="agentic-operations-dashboard" aria-busy={state.kind === "loading" || refreshing}>
@@ -381,7 +589,7 @@ export function AgenticOperationsDashboard({
           <div><strong>Overview unavailable</strong><p>{state.message}</p></div>
         </div>
       ) : null}
-      {state.kind === "ready" ? (
+      {state.kind === "ready" && registry ? (
         <>
           <SummaryGrid payload={state.payload} />
           <div className="agentic-operations-primary-grid">
@@ -389,6 +597,8 @@ export function AgenticOperationsDashboard({
             <RecentRunsPanel payload={state.payload} />
           </div>
           <SafetyOverview payload={state.payload} confirmed={readOnlyConfirmed} />
+          <CanonicalAgentRegistry registry={registry} />
+          <MutationAuthorityMatrix registry={registry} summary={state.payload.safety_summary} />
         </>
       ) : null}
     </div>

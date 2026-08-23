@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgenticOperationsDashboard } from "./AgenticOperationsDashboard";
 import {
   readAgenticOperationsOverview,
+  type AgenticOperationsCanonicalAgent,
   type AgenticOperationsOverviewPayload,
 } from "./agenticOperationsModel";
 
@@ -22,6 +23,73 @@ const SAFETY_METADATA = {
   application_execution_performed: false,
   ats_submission_performed: false,
 };
+
+const CANONICAL_AGENTS: AgenticOperationsCanonicalAgent[] = [
+  {
+    key: "critic",
+    display_name: "Critic Agent",
+    responsibility: "Review evidence for unsupported claims and contradictions.",
+    deterministic_core: true,
+    llm_capable: true,
+    optional_controlled_llm_guardrail: true,
+    advisory_only: true,
+    human_approval_required: false,
+    score_mutation: true,
+    rank_mutation: false,
+    queue_mutation: true,
+    resume_text_mutation: false,
+    operator_state_persistence: false,
+    application_action_capability: false,
+  },
+  {
+    key: "job_prioritization",
+    display_name: "Job Prioritization Agent",
+    responsibility: "Recommend an advisory priority posture from existing evidence.",
+    deterministic_core: true,
+    llm_capable: false,
+    optional_controlled_llm_guardrail: false,
+    advisory_only: true,
+    human_approval_required: false,
+    score_mutation: false,
+    rank_mutation: false,
+    queue_mutation: true,
+    resume_text_mutation: false,
+    operator_state_persistence: false,
+    application_action_capability: false,
+  },
+  {
+    key: "tailoring_decision",
+    display_name: "Tailoring Decision Agent",
+    responsibility: "Recommend whether and how strongly to tailor.",
+    deterministic_core: true,
+    llm_capable: false,
+    optional_controlled_llm_guardrail: false,
+    advisory_only: true,
+    human_approval_required: false,
+    score_mutation: false,
+    rank_mutation: false,
+    queue_mutation: true,
+    resume_text_mutation: true,
+    operator_state_persistence: false,
+    application_action_capability: false,
+  },
+  {
+    key: "operator_review",
+    display_name: "Operator Review Agent",
+    responsibility: "Assign a human-review lane from existing advisory evidence.",
+    deterministic_core: true,
+    llm_capable: false,
+    optional_controlled_llm_guardrail: false,
+    advisory_only: true,
+    human_approval_required: true,
+    score_mutation: false,
+    rank_mutation: false,
+    queue_mutation: false,
+    resume_text_mutation: true,
+    operator_state_persistence: false,
+    application_action_capability: true,
+  },
+];
 
 const READY_PAYLOAD: AgenticOperationsOverviewPayload = {
   ok: true,
@@ -61,10 +129,10 @@ const READY_PAYLOAD: AgenticOperationsOverviewPayload = {
     },
   ],
   recent_runs_state: { available: true, state: "available", count: 2, bound: 10 },
-  canonical_agents: [{ key: "critic" }],
+  canonical_agents: CANONICAL_AGENTS,
   safety_summary: {
-    canonical_agent_count: 8,
-    score_mutation_capable_count: 0,
+    canonical_agent_count: 4,
+    score_mutation_capable_count: 1,
     rank_mutation_capable_count: 0,
     queue_mutation_capable_count: 3,
     resume_text_mutation_capable_count: 2,
@@ -115,13 +183,132 @@ describe("AgenticOperationsDashboard", () => {
     expect(screen.getByText("run-current-61e")).toBeInTheDocument();
     expect(screen.getByText("run-recent-1")).toBeInTheDocument();
     expect(screen.getByText("run-recent-2")).toBeInTheDocument();
-    expect(screen.getAllByText("8").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
     const safety = screen.getByRole("region", { name: "Safety overview" });
     expect(within(safety).getByText("Queue mutation capable").nextSibling).toHaveTextContent("3");
     expect(within(safety).getByText("Resume mutation capable").nextSibling).toHaveTextContent("2");
     expect(within(safety).getByText("Application-action capable").nextSibling).toHaveTextContent("1");
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/owner/i)).not.toBeInTheDocument();
+  });
+
+  it("renders every returned canonical definition and its declared capabilities", async () => {
+    const readOverview = vi.fn(async () => READY_PAYLOAD);
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    const registry = await screen.findByRole("region", { name: "Canonical Agent Registry" });
+    for (const agent of CANONICAL_AGENTS) {
+      expect(within(registry).getByText(agent.display_name || "")).toBeInTheDocument();
+      expect(within(registry).getByText(agent.responsibility || "")).toBeInTheDocument();
+    }
+    expect(within(registry).getAllByText("Deterministic core")).toHaveLength(4);
+    expect(within(registry).getByText("LLM capable")).toBeInTheDocument();
+    expect(within(registry).getByText("Controlled LLM guardrail available")).toBeInTheDocument();
+    expect(within(registry).getAllByText("Advisory only")).toHaveLength(4);
+    expect(within(registry).getByText("Human approval required")).toBeInTheDocument();
+    expect(within(registry).getAllByText("Human approval not required by definition")).toHaveLength(3);
+    expect(readOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders changed registry values from payload rather than agent-name assumptions", async () => {
+    const changedAgent: AgenticOperationsCanonicalAgent = {
+      ...CANONICAL_AGENTS[0],
+      display_name: "Payload Defined Reviewer",
+      responsibility: "Responsibility supplied only by this payload.",
+      deterministic_core: false,
+      llm_capable: false,
+      optional_controlled_llm_guardrail: false,
+      advisory_only: false,
+      human_approval_required: true,
+      score_mutation: false,
+      queue_mutation: false,
+    };
+    const readOverview = vi.fn(async () => ({
+      ...READY_PAYLOAD,
+      canonical_agents: [changedAgent],
+      safety_summary: {
+        canonical_agent_count: 1,
+        score_mutation_capable_count: 0,
+        rank_mutation_capable_count: 0,
+        queue_mutation_capable_count: 0,
+        resume_text_mutation_capable_count: 0,
+        operator_state_persistence_capable_count: 0,
+        application_action_capable_count: 0,
+      },
+    }));
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    const registry = await screen.findByRole("region", { name: "Canonical Agent Registry" });
+    expect(within(registry).getByText("Payload Defined Reviewer")).toBeInTheDocument();
+    expect(within(registry).getByText("Responsibility supplied only by this payload.")).toBeInTheDocument();
+    expect(within(registry).getByText("Non-deterministic core")).toBeInTheDocument();
+    expect(within(registry).getByText("Not LLM capable")).toBeInTheDocument();
+    expect(within(registry).getByText("Controlled LLM guardrail not available")).toBeInTheDocument();
+    expect(within(registry).getByText("Not advisory-only")).toBeInTheDocument();
+    expect(within(registry).getByText("Human approval required")).toBeInTheDocument();
+  });
+
+  it("renders all six per-agent mutation columns including true authority", async () => {
+    render(<AgenticOperationsDashboard readOverview={vi.fn(async () => READY_PAYLOAD)} />);
+
+    const table = await screen.findByRole("table", { name: "Declared mutation authority by canonical agent" });
+    for (const column of ["Score", "Rank", "Queue", "Resume text", "Operator state", "Application action"]) {
+      expect(within(table).getByRole("columnheader", { name: column })).toBeInTheDocument();
+    }
+    expect(within(table).getAllByRole("row")).toHaveLength(CANONICAL_AGENTS.length + 1);
+    const criticRow = within(table).getByRole("row", { name: /Critic Agent/ });
+    expect(within(criticRow).getByLabelText("Score: Yes")).toBeInTheDocument();
+    expect(within(criticRow).getByLabelText("Queue: Yes")).toBeInTheDocument();
+    expect(within(criticRow).getByLabelText("Rank: No")).toBeInTheDocument();
+    const operatorRow = within(table).getByRole("row", { name: /Operator Review Agent/ });
+    expect(within(operatorRow).getByLabelText("Application action: Yes")).toBeInTheDocument();
+  });
+
+  it("does not fabricate agents when the returned registry is empty", async () => {
+    const readOverview = vi.fn(async () => ({
+      ...READY_PAYLOAD,
+      canonical_agents: [],
+      safety_summary: { ...READY_PAYLOAD.safety_summary, canonical_agent_count: 0 },
+    }));
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    expect(await screen.findByText("No canonical agent definitions returned")).toBeInTheDocument();
+    expect(screen.getByText("Mutation authority unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Critic Agent")).not.toBeInTheDocument();
+  });
+
+  it("keeps valid rows truthful while surfacing malformed definitions and missing values", async () => {
+    const incomplete = { ...CANONICAL_AGENTS[0], llm_capable: undefined };
+    const readOverview = vi.fn(async () => ({
+      ...READY_PAYLOAD,
+      canonical_agents: [incomplete, { key: "malformed" } as AgenticOperationsCanonicalAgent],
+    }));
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    expect((await screen.findAllByText("Critic Agent")).length).toBeGreaterThan(0);
+    expect(screen.getByText("LLM capability unavailable")).toBeInTheDocument();
+    expect(screen.getByText("1 malformed canonical definition was not rendered.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Score: Yes")).toBeInTheDocument();
+  });
+
+  it("warns without rewriting rows when registry totals disagree with safety summary", async () => {
+    const readOverview = vi.fn(async () => ({
+      ...READY_PAYLOAD,
+      safety_summary: { ...READY_PAYLOAD.safety_summary, queue_mutation_capable_count: 0 },
+    }));
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
+
+    expect(await screen.findByText("Registry capability totals do not match the returned safety summary.")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Queue: Yes")).toHaveLength(3);
+  });
+
+  it("adds no run selector, trace, execution, or approval controls", async () => {
+    render(<AgenticOperationsDashboard readOverview={vi.fn(async () => READY_PAYLOAD)} />);
+
+    await screen.findByRole("region", { name: "Canonical Agent Registry" });
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /run|execute|approve|reject|trace/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
   it("keeps the title dominant and renders the ordered header badges without another request", async () => {

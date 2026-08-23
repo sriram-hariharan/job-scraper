@@ -71,6 +71,24 @@ export type AgenticOperationsSafetyMetadata = {
   ats_submission_performed?: boolean;
 };
 
+export type AgenticOperationsCanonicalAgent = {
+  key?: string;
+  display_name?: string;
+  owner_module?: string;
+  responsibility?: string;
+  deterministic_core?: boolean;
+  llm_capable?: boolean;
+  optional_controlled_llm_guardrail?: boolean;
+  advisory_only?: boolean;
+  human_approval_required?: boolean;
+  score_mutation?: boolean;
+  rank_mutation?: boolean;
+  queue_mutation?: boolean;
+  resume_text_mutation?: boolean;
+  operator_state_persistence?: boolean;
+  application_action_capability?: boolean;
+};
+
 export type AgenticOperationsOverviewPayload = {
   ok?: boolean;
   read_only?: boolean;
@@ -79,7 +97,7 @@ export type AgenticOperationsOverviewPayload = {
   current_pipeline?: AgenticOperationsCurrentPipeline;
   recent_runs?: AgenticOperationsRecentRun[];
   recent_runs_state?: AgenticOperationsRecentRunsState;
-  canonical_agents?: Record<string, unknown>[];
+  canonical_agents?: AgenticOperationsCanonicalAgent[];
   safety_summary?: AgenticOperationsSafetySummary;
   safety_metadata?: AgenticOperationsSafetyMetadata;
 };

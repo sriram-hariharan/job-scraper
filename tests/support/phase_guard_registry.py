@@ -677,6 +677,34 @@ ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES = {
     "tests/test_item61g_run_inspector_agentic_review_integration.py",
 }
 
+# Item 6.1H cross-page navigation and product clarity: exact accepted
+# production, frontend, generated-bundle, and focused-test surface.
+ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES = {
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+    "src/app/planning_ui.py",
+    "src/app/profile_ui.py",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/app/ui_shell.py",
+    "tests/test_advanced_diagnostics_react_redesign.py",
+    "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+    "tests/test_item61b_agentic_review_admin_boundary.py",
+    "tests/test_item61d_agentic_operations_console_shell.py",
+    "tests/test_item61g_run_inspector_agentic_review_integration.py",
+    "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+}
+
+# Item 6.1H-V1 Scan Diagnostics visual polish: exact source, server-shell,
+# generated-style, and focused-test surface.
+ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES = {
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/planning_ui.py",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "tests/test_advanced_diagnostics_react_redesign.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1168,6 +1196,12 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         ),
         "item61g_run_inspector_agentic_review_integration": (
             ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES
+        ),
+        "item61h_cross_page_navigation_product_clarity": (
+            ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES
+        ),
+        "item61h_v1_scan_diagnostics_visual_polish": (
+            ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES
         ),
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
@@ -2382,6 +2416,8 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item61e_agentic_operations_overview_ui")
         | legacy_guard_allowlist("item61f_agent_registry_safety_matrix")
         | legacy_guard_allowlist("item61g_run_inspector_agentic_review_integration")
+        | legacy_guard_allowlist("item61h_cross_page_navigation_product_clarity")
+        | legacy_guard_allowlist("item61h_v1_scan_diagnostics_visual_polish")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")

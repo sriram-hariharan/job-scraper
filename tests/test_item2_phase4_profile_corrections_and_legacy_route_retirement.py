@@ -67,8 +67,8 @@ def test_advanced_diagnostics_link_metadata_preserved():
     )
     assert 'id="profileAdvancedDiagnosticsLink"' in advanced_diagnostics_link
     assert 'data-admin-only="true"' in advanced_diagnostics_link
-    assert "Advanced Diagnostics" in advanced_diagnostics_link
-    assert "Admin workflow diagnostics" in advanced_diagnostics_link
+    assert "Scan Diagnostics" in advanced_diagnostics_link
+    assert "Saved scan, tailoring, and artifact diagnostics" in advanced_diagnostics_link
     assert 'class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>' in advanced_diagnostics_link
 
 

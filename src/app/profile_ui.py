@@ -538,6 +538,9 @@ def profile_page(request: Request) -> str:
 def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
     _require_profile_admin_user(request)
     safe_run_id = escape(str(run_id or "").strip())
+    from_agentic_operations = request.query_params.get("source") == "agentic-operations"
+    back_href = "/agentic-operations" if from_agentic_operations else "/profile?tab=pipeline-runs"
+    back_label = "Back to Agentic Operations" if from_agentic_operations else "Back to pipeline runs"
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -555,12 +558,13 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
   <div class="page agentic-review-page" data-agentic-review-run-id="{safe_run_id}">
     <header class="page-header app-page-header agentic-review-header">
       <div class="app-page-header__main">
-        <a class="agentic-review-back-link" href="/profile?tab=pipeline-runs">
+        <a class="agentic-review-back-link" href="{back_href}">
           <span class="agentic-review-back-link__icon" aria-hidden="true">←</span>
-          <span>Back to pipeline runs</span>
+          <span>{back_label}</span>
         </a>
         <div class="app-page-header__title-row">
           <h1 class="app-page-header__title">Agentic Review</h1>
+          <span class="app-page-header__badge">Admin only</span>
         </div>
         <p class="subtext app-page-header__description" id="agenticReviewSubtitle">Pipeline run {safe_run_id}</p>
       </div>

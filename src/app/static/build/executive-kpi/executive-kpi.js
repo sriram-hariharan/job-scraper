@@ -27907,7 +27907,7 @@ function uz() {
 					children: [
 						/* @__PURE__ */ (0, Y.jsx)("h1", {
 							className: "app-page-header__title",
-							children: "Advanced Diagnostics"
+							children: "Scan Diagnostics"
 						}),
 						/* @__PURE__ */ (0, Y.jsx)("span", {
 							className: "advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge",
@@ -27920,7 +27920,7 @@ function uz() {
 					]
 				}), /* @__PURE__ */ (0, Y.jsx)("p", {
 					className: "app-page-header__description",
-					children: "Admin workflow diagnostics for saved scan contexts and scan-specific readbacks."
+					children: "Admin diagnostics for saved scan contexts, tailoring, resume artifacts, and scan-specific readbacks."
 				})]
 			})]
 		})
@@ -27977,7 +27977,7 @@ function fz({ hrefs: e }) {
 			/* @__PURE__ */ (0, Y.jsx)("h2", { children: "No saved scans available" }),
 			/* @__PURE__ */ (0, Y.jsx)("p", {
 				className: "advanced-diagnostics-card-description",
-				children: "Advanced Diagnostics needs a saved or loaded AI Optimize Scan before scan-specific controls and readbacks can be opened."
+				children: "Scan Diagnostics needs a saved or loaded AI Optimize Scan before scan-specific controls and readbacks can be opened."
 			}),
 			/* @__PURE__ */ (0, Y.jsx)("a", {
 				className: "ghost-btn btn-sm",
@@ -28190,7 +28190,7 @@ function _z({ state: e = XR, navigate: t = (e) => {
 									})] })]
 								}), /* @__PURE__ */ (0, Y.jsx)("div", {
 									className: "advanced-diagnostics-readbacks",
-									"aria-label": "Advanced diagnostic readbacks",
+									"aria-label": "Scan diagnostic readbacks",
 									children: $R.map((e) => /* @__PURE__ */ (0, Y.jsx)(cz, { row: e }, e.id))
 								})]
 							})]
@@ -28639,7 +28639,7 @@ function Rz({ run: e }) {
 				}) : null,
 				/* @__PURE__ */ (0, Y.jsxs)("a", {
 					className: "agentic-operations-review-link",
-					href: `/profile/pipeline-runs/${encodeURIComponent(t)}/agentic-review`,
+					href: `/profile/pipeline-runs/${encodeURIComponent(t)}/agentic-review?source=agentic-operations`,
 					children: ["Open Agentic Review ", /* @__PURE__ */ (0, Y.jsx)(ce, {
 						size: 14,
 						"aria-hidden": "true"

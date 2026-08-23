@@ -108,7 +108,7 @@ def test_profile_dropdown_has_one_initially_hidden_admin_entry() -> None:
     assert 'href="/agentic-operations"' in entry
     assert 'data-admin-only="true"' in entry
     assert "Agentic Operations" in entry
-    assert "Agent supervision, runs, traces, and safety" in entry
+    assert "Agent supervision, run review, and safety" in entry
     assert '{_icon_svg("diagnostics")}' in entry
     assert "<img" not in entry
 

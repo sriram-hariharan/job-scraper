@@ -416,7 +416,7 @@ function SelectedRunInspector({ run }: { run: AgenticOperationsRecentRun | null 
         </dl>
         {message ? <p className="agentic-operations-inspector-message"><span>Recorded message</span>{message}</p> : null}
         {error ? <p className="agentic-operations-inspector-error"><span>Recorded error</span>{error}</p> : null}
-        <a className="agentic-operations-review-link" href={`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review`}>
+        <a className="agentic-operations-review-link" href={`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review?source=agentic-operations`}>
           Open Agentic Review <ExternalLink size={14} aria-hidden="true" />
         </a>
       </div>

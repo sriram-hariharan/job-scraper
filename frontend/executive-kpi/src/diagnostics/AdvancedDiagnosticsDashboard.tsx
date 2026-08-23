@@ -538,12 +538,12 @@ function AdvancedDiagnosticsHeader() {
         </span>
         <div className="app-page-header__copy">
           <div className="advanced-diagnostics-header-title-row app-page-header__title-row">
-            <h1 className="app-page-header__title">Advanced Diagnostics</h1>
+            <h1 className="app-page-header__title">Scan Diagnostics</h1>
             <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge">Admin only</span>
             <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge">Read-only</span>
           </div>
           <p className="app-page-header__description">
-            Admin workflow diagnostics for saved scan contexts and scan-specific readbacks.
+            Admin diagnostics for saved scan contexts, tailoring, resume artifacts, and scan-specific readbacks.
           </p>
         </div>
       </div>
@@ -615,7 +615,7 @@ function EmptyModeCard({ hrefs }: { hrefs: AdvancedDiagnosticsHrefs }) {
       </span>
       <h2>No saved scans available</h2>
       <p className="advanced-diagnostics-card-description">
-        Advanced Diagnostics needs a saved or loaded AI Optimize Scan before scan-specific
+        Scan Diagnostics needs a saved or loaded AI Optimize Scan before scan-specific
         controls and readbacks can be opened.
       </p>
       <a className="ghost-btn btn-sm" href={hrefs.scanWorkspace}>
@@ -809,7 +809,7 @@ export function AdvancedDiagnosticsDashboard({
                     </p>
                   </div>
                 </div>
-                <div className="advanced-diagnostics-readbacks" aria-label="Advanced diagnostic readbacks">
+                <div className="advanced-diagnostics-readbacks" aria-label="Scan diagnostic readbacks">
                   {READBACK_ROWS.map((row) => (
                     <ReadbackRow key={row.id} row={row} />
                   ))}

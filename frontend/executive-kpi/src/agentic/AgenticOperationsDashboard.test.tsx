@@ -349,18 +349,24 @@ describe("AgenticOperationsDashboard", () => {
     expect(screen.queryByRole("link", { name: "Open Agentic Review" })).not.toBeInTheDocument();
   });
 
-  it("encodes the selected run ID in the existing Agentic Review route without owner context", async () => {
+  it("encodes the selected run ID and adds only the finite Agentic Operations source context", async () => {
     const payload = {
       ...READY_PAYLOAD,
       recent_runs: [{ ...READY_PAYLOAD.recent_runs?.[0], run_id: "run/review abc" }],
       recent_runs_state: { available: true, state: "available", count: 1, bound: 10 },
     };
-    render(<AgenticOperationsDashboard readOverview={vi.fn(async () => payload)} />);
+    const readOverview = vi.fn(async () => payload);
+    render(<AgenticOperationsDashboard readOverview={readOverview} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Inspect pipeline run run/review abc" }));
     const link = screen.getByRole("link", { name: "Open Agentic Review" });
-    expect(link).toHaveAttribute("href", "/profile/pipeline-runs/run%2Freview%20abc/agentic-review");
+    expect(link).toHaveAttribute(
+      "href",
+      "/profile/pipeline-runs/run%2Freview%20abc/agentic-review?source=agentic-operations",
+    );
     expect(link.getAttribute("href")).not.toContain("owner");
+    expect(link.getAttribute("href")).not.toContain("return");
+    expect(readOverview).toHaveBeenCalledTimes(1);
   });
 
   it("preserves a selected run across refresh and clears it when a later payload removes it", async () => {

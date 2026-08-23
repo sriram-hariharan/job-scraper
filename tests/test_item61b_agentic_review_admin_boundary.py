@@ -70,6 +70,8 @@ def test_admin_can_load_agentic_review_html(monkeypatch, admin_user) -> None:
 
     assert response.status_code == 200
     assert '<div class="page agentic-review-page" data-agentic-review-run-id="run-61b">' in response.text
+    assert '<span class="app-page-header__badge">Admin only</span>' in response.text
+    assert '<span class="app-page-header__badge">Read-only</span>' not in response.text
 
 
 def test_authenticated_non_admin_cannot_load_agentic_review_html(monkeypatch) -> None:
@@ -79,6 +81,17 @@ def test_authenticated_non_admin_cannot_load_agentic_review_html(monkeypatch) ->
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Admin access required."}
+
+
+def test_source_query_does_not_change_agentic_review_authorization(monkeypatch) -> None:
+    path = "/profile/pipeline-runs/run-61b/agentic-review?source=agentic-operations"
+    forbidden = _client_as(monkeypatch, NON_ADMIN_USER).get(path)
+    allowed = _client_as(monkeypatch, ADMIN_USER).get(path)
+
+    assert forbidden.status_code == 403
+    assert forbidden.json() == {"detail": "Admin access required."}
+    assert allowed.status_code == 200
+    assert 'href="/agentic-operations"' in allowed.text
 
 
 @pytest.mark.parametrize(("path", "service_name", "run_key"), DEDICATED_APIS)

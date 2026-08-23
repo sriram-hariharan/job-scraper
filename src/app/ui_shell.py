@@ -384,8 +384,8 @@ def render_top_shell(active_href: str) -> str:
             {_icon_svg("diagnostics")}
           </span>
           <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Advanced Diagnostics</span>
-            <span class="profile-dropdown-nav-subtitle">Admin workflow diagnostics</span>
+            <span class="profile-dropdown-nav-title">Scan Diagnostics</span>
+            <span class="profile-dropdown-nav-subtitle">Saved scan, tailoring, and artifact diagnostics</span>
           </span>
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>
@@ -401,7 +401,7 @@ def render_top_shell(active_href: str) -> str:
           </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">Agentic Operations</span>
-            <span class="profile-dropdown-nav-subtitle">Agent supervision, runs, traces, and safety</span>
+            <span class="profile-dropdown-nav-subtitle">Agent supervision, run review, and safety</span>
           </span>
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>

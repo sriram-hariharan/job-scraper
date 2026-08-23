@@ -2767,6 +2767,55 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         for marker in FORBIDDEN_RUNTIME_MARKERS:
             assert marker not in added_lines
         return
+    item61h_cross_page_navigation_runtime_files = {
+        ROOT / "src/app/ui_shell.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+    }
+    if set(changed_runtime_files) == item61h_cross_page_navigation_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61h_v1_scan_diagnostics_visual_runtime_files = {
+        ROOT / "src/app/ui_shell.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+    }
+    if set(changed_runtime_files) == item61h_v1_scan_diagnostics_visual_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
     assert changed_runtime_files in (
         [],
         [ROOT / "src/agents/manual_review_readiness_contract.py"],

@@ -1225,17 +1225,17 @@ def advanced_diagnostics(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Advanced Diagnostics</title>
+  <title>Scan Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
 </head>
-<body>
+<body class="advanced-diagnostics-page">
 {render_top_shell("/advanced-diagnostics")}
   <main class="page scan-workspace-diagnostics-page">
     <div id="advancedDiagnosticsRoot" aria-live="polite">
-      <div class="advanced-diagnostics-server-fallback">Loading Advanced Diagnostics...</div>
+      <div class="advanced-diagnostics-server-fallback">Loading Scan Diagnostics...</div>
     </div>
   </main>
 

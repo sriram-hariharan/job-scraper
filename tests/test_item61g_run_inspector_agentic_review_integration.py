@@ -60,12 +60,13 @@ def test_existing_agentic_review_route_is_exact_and_remains_admin_protected(
 def test_operations_links_to_existing_encoded_route_without_owner_context() -> None:
     component = _source(COMPONENT_PATH)
     assert (
-        "`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review`"
+        "`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review?source=agentic-operations`"
         in component
     )
     assert "Open Agentic Review" in component
     link_source = component.split("Open Agentic Review", 1)[0].rsplit("<a ", 1)[1]
     assert "owner" not in link_source
+    assert "return" not in link_source
 
 
 def test_overview_remains_the_only_agentic_operations_data_endpoint() -> None:

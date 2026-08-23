@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from fastapi.testclient import TestClient
+
+from src.app import api
 from tests.test_item6b65c_extended_trace_diagnostics_master_detail import (
     EXPECTED_DIAGNOSTIC_RENDERERS,
     _diagnostic_registry,
@@ -13,6 +17,7 @@ PROFILE_UI_PATH = ROOT / "src/app/profile_ui.py"
 REVIEW_CSS_PATH = ROOT / "src/app/static/agentic_review.css"
 REVIEW_JS_PATH = ROOT / "src/app/static/agentic_review.js"
 UI_SHELL_PATH = ROOT / "src/app/ui_shell.py"
+ADMIN_USER = {"user_id": "admin-6c3", "is_admin": True, "access_level": "admin"}
 
 
 def _profile() -> str:
@@ -35,6 +40,15 @@ def _header() -> str:
     return profile[start : profile.index("</header>", start)]
 
 
+def _client_as_admin(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    def guard(request):
+        request.state.auth_user = dict(ADMIN_USER)
+        return None
+
+    monkeypatch.setattr(api, "auth_guard_response", guard)
+    return TestClient(api.app)
+
+
 def _css_rule(css: str, selector: str) -> str:
     start = css.index(selector)
     return css[start : css.index("}", start) + 1]
@@ -42,19 +56,45 @@ def _css_rule(css: str, selector: str) -> str:
 
 def test_back_route_label_and_visible_arrow_cue_are_preserved():
     header = _header()
-    link_start = header.index(
-        '<a class="agentic-review-back-link" href="/profile?tab=pipeline-runs">'
-    )
+    link_start = header.index('<a class="agentic-review-back-link" href="{back_href}">')
     icon = header.index(
         '<span class="agentic-review-back-link__icon" aria-hidden="true">←</span>',
         link_start,
     )
-    label = header.index("<span>Back to pipeline runs</span>", icon)
+    label = header.index("<span>{back_label}</span>", icon)
     link_end = header.index("</a>", label)
 
     assert link_start < icon < label < link_end
     assert "Back to tailoring" not in header
     assert "/tailoring" not in header
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_href", "expected_label"),
+    [
+        ("", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+        ("?source=agentic-operations", "/agentic-operations", "Back to Agentic Operations"),
+        ("?source=", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+        ("?source=profile", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+        ("?source=../../", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+        ("?source=/agentic-operations", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+        ("?source=anything-else", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+        ("?source=https://example.com", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+        ("?source=javascript:alert(1)", "/profile?tab=pipeline-runs", "Back to pipeline runs"),
+    ],
+)
+def test_back_navigation_resolves_only_the_finite_operations_source(
+    monkeypatch, query, expected_href, expected_label
+):
+    response = _client_as_admin(monkeypatch).get(
+        f"/profile/pipeline-runs/run-6c3/agentic-review{query}"
+    )
+
+    assert response.status_code == 200
+    assert f'<a class="agentic-review-back-link" href="{expected_href}">' in response.text
+    assert f"<span>{expected_label}</span>" in response.text
+    assert "https://example.com" not in response.text
+    assert "javascript:alert(1)" not in response.text
 
 
 def test_back_navigation_is_owned_by_left_page_header_content_not_detached_actions():

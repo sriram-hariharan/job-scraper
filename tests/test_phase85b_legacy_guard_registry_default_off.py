@@ -25,6 +25,8 @@ from tests.support.phase_guard_registry import (
     ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES,
     ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES,
     ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES,
+    ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES,
+    ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -2025,6 +2027,40 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
                 include_current_milestone_compatibility=False,
             )
 
+    item61h_v1_visual_polish_profile = legacy_guard_allowlist(
+        "item61h_v1_scan_diagnostics_visual_polish"
+    )
+    assert ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES == {
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/planning_ui.py",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "tests/test_advanced_diagnostics_react_redesign.py",
+    }
+    assert item61h_v1_visual_polish_profile == (
+        ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES
+    )
+    assert len(item61h_v1_visual_polish_profile) == 4
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item61h_v1_visual_polish_profile
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/diagnostics/UnapprovedDiagnostics.tsx",
+        "src/app/static/build/executive-kpi/unapproved.css",
+        "tests/test_unapproved_item61h_v1_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61h_v1_scan_diagnostics_visual_polish",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
     item61f_registry_matrix_profile = legacy_guard_allowlist(
         "item61f_agent_registry_safety_matrix"
     )
@@ -2112,6 +2148,56 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
                 include_current_milestone_compatibility=False,
             )
 
+    item61h_product_clarity_profile = legacy_guard_allowlist(
+        "item61h_cross_page_navigation_product_clarity"
+    )
+    assert ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES == {
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/ui_shell.py",
+        "tests/test_advanced_diagnostics_react_redesign.py",
+        "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+        "tests/test_item61b_agentic_review_admin_boundary.py",
+        "tests/test_item61d_agentic_operations_console_shell.py",
+        "tests/test_item61g_run_inspector_agentic_review_integration.py",
+        "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+    }
+    assert item61h_product_clarity_profile == (
+        ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES
+    )
+    assert len(item61h_product_clarity_profile) == 14
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item61h_product_clarity_profile
+    )
+    assert_changed_files_allowed(
+        item61h_product_clarity_profile,
+        set(),
+        legacy_guard_profiles=("item61h_cross_page_navigation_product_clarity",),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/agentic/UnapprovedDashboard.tsx",
+        "src/app/static/build/executive-kpi/unapproved.js",
+        "tests/test_unapproved_item61h_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61h_cross_page_navigation_product_clarity",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
@@ -2127,6 +2213,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item61e_overview_ui_profile
         | item61f_registry_matrix_profile
         | item61g_run_inspector_profile
+        | item61h_product_clarity_profile
+        | item61h_v1_visual_polish_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

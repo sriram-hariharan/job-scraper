@@ -182,6 +182,7 @@ describe("AdvancedDiagnosticsDashboard — empty mode", () => {
   it("renders the no-saved-scans empty state", () => {
     render(<AdvancedDiagnosticsDashboard state={EMPTY_STATE} />);
     expect(screen.getByText("No saved scans available")).toBeInTheDocument();
+    expect(screen.getByText(/Scan Diagnostics needs a saved or loaded AI Optimize Scan/)).toBeInTheDocument();
   });
 
   it("links Open New Scan to /scan-workspace", () => {
@@ -396,10 +397,10 @@ describe("AdvancedDiagnosticsDashboard — context mode", () => {
 
 describe("AdvancedDiagnosticsDashboard — header", () => {
 
-  it("always renders the Advanced Diagnostics title", () => {
+  it("always renders the Scan Diagnostics title", () => {
     render(<AdvancedDiagnosticsDashboard state={HUB_STATE} />);
     expect(within(screen.getByRole("banner")).getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Advanced Diagnostics",
+      "Scan Diagnostics",
     );
   });
 
@@ -413,7 +414,7 @@ describe("AdvancedDiagnosticsDashboard — header", () => {
     expect(within(header).getByText("Read-only")).toHaveClass("app-page-header__badge");
     expect(
       within(header).getByText(
-        "Admin workflow diagnostics for saved scan contexts and scan-specific readbacks.",
+        "Admin diagnostics for saved scan contexts, tailoring, resume artifacts, and scan-specific readbacks.",
       ),
     ).toHaveClass("app-page-header__description");
     // Icon-tile layout preserved via app-page-header__main--with-icon / __copy.

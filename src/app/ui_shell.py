@@ -392,6 +392,22 @@ def render_top_shell(active_href: str) -> str:
 
         <a
           class="profile-dropdown-nav-btn hidden"
+          href="/agentic-operations"
+          id="profileAgenticOperationsLink"
+          data-admin-only="true"
+        >
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
+            {_icon_svg("diagnostics")}
+          </span>
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">Agentic Operations</span>
+            <span class="profile-dropdown-nav-subtitle">Agent supervision, runs, traces, and safety</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
+        <a
+          class="profile-dropdown-nav-btn hidden"
           href="/scheduler"
           id="profileSchedulerHealthLink"
           data-admin-only="true"

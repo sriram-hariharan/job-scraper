@@ -631,6 +631,15 @@ ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES = {
     "tests/test_item61c_agentic_operations_readonly_backend.py",
 }
 
+# Item 6.1D Agentic Operations admin console shell: exact production and
+# focused-test surface accepted by historical registry-backed guards.
+ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES = {
+    "src/app/ui.py",
+    "src/app/ui_shell.py",
+    "src/app/static/shell.js",
+    "tests/test_item61d_agentic_operations_console_shell.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1110,6 +1119,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         ),
         "item61c_agentic_operations_readonly_backend": (
             ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES
+        ),
+        "item61d_agentic_operations_console_shell": (
+            ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES
         ),
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
@@ -2320,6 +2332,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
         | legacy_guard_allowlist("item61b_agentic_review_admin_boundary")
         | legacy_guard_allowlist("item61c_agentic_operations_readonly_backend")
+        | legacy_guard_allowlist("item61d_agentic_operations_console_shell")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")

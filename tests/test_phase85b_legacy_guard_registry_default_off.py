@@ -21,6 +21,7 @@ from tests.support.phase_guard_registry import (
     ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
     ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
     ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
+    ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -1953,6 +1954,34 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
             include_current_milestone_compatibility=False,
         )
 
+    item61d_console_shell_profile = legacy_guard_allowlist(
+        "item61d_agentic_operations_console_shell"
+    )
+    assert ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES == {
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "src/app/static/shell.js",
+        "tests/test_item61d_agentic_operations_console_shell.py",
+    }
+    assert item61d_console_shell_profile == (
+        ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES
+    )
+    assert len(item61d_console_shell_profile) == 4
+    assert not any("*" in path for path in item61d_console_shell_profile)
+    assert_changed_files_allowed(
+        item61d_console_shell_profile,
+        set(),
+        legacy_guard_profiles=("item61d_agentic_operations_console_shell",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unapproved_runtime.py"},
+            set(),
+            legacy_guard_profiles=("item61d_agentic_operations_console_shell",),
+            include_current_milestone_compatibility=False,
+        )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
@@ -1964,6 +1993,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
         | item61b_admin_boundary_profile
         | item61c_readonly_backend_profile
+        | item61d_console_shell_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

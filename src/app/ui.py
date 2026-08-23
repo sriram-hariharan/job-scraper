@@ -473,3 +473,49 @@ def scheduler_dashboard(request: Request) -> str:
 </body>
 </html>
     """.strip()
+
+
+@router.get("/agentic-operations", response_class=HTMLResponse)
+def agentic_operations_console(request: Request) -> str:
+    _require_admin_user(request)
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Operations</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+</head>
+<body class="agentic-operations-page">
+  {render_top_shell("/agentic-operations")}
+  <main class="page agentic-operations-shell">
+    <header class="page-header app-page-header">
+      <div class="page-header-main app-page-header__main">
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">Agentic Operations</h1>
+        </div>
+        <p class="subtext app-page-header__description">
+          Administrative read-only workspace for agent supervision and runtime evidence.
+        </p>
+      </div>
+    </header>
+
+    <section
+      id="agenticOperationsRoot"
+      class="card"
+      aria-label="Agentic Operations workspace"
+    >
+      <div class="card-body">
+        <p class="subtext">Agent supervision, runs, traces, and safety.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=phase133h_r1"></script>
+</body>
+</html>
+    """.strip()

@@ -349,6 +349,71 @@ WHERE scan_id = {_sql_quote_text(safe_scan_id)}
     }
 
 
+def save_saved_scan_diagnostic_state_postgres_payload(
+    *,
+    scan_id: str,
+    diagnostic_state: Dict[str, Any],
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    """Merge owner-scoped diagnostic state without replacing workspace draft data."""
+    safe_scan_id = str(scan_id or "").strip()
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+    safe_state = diagnostic_state if isinstance(diagnostic_state, dict) else {}
+    state_json = json.dumps(safe_state, sort_keys=True).replace("'", "''")
+    owner_and = _owner_visibility_clause(owner_user_id, prefix="AND")
+    sql = f"""
+WITH updated AS (
+    UPDATE saved_scans
+    SET payload_json = jsonb_set(
+            payload_json,
+            '{{scan_review_payload,diagnostic_state}}',
+            '{state_json}'::jsonb,
+            true
+        )
+    WHERE scan_id = {_sql_quote_text(safe_scan_id)}
+    {owner_and}
+    RETURNING scan_id
+)
+SELECT json_build_object(
+    'updated', EXISTS(SELECT 1 FROM updated),
+    'scan_id', COALESCE((SELECT scan_id FROM updated LIMIT 1), '')
+);
+""".strip()
+    schema_payload: Dict[str, Any] = {}
+    if ensure_schema:
+        schema_payload = _run_psql_command(
+            sql=saved_scans_schema_sql_text(),
+            database_url=database_url,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+            print_only=print_only,
+        )
+    update_payload = _run_psql_json_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    updated = bool(update_payload.get("data", {}).get("updated", False))
+    return {
+        "ok": updated,
+        "updated": updated,
+        "scan_id": safe_scan_id if updated else "",
+        "diagnostic_state": safe_state if updated else {},
+        "schema_command": schema_payload.get("command", []),
+        "schema_command_text": schema_payload.get("command_text", ""),
+        "command": update_payload.get("command", []),
+        "command_text": update_payload.get("command_text", ""),
+    }
+
+
 def get_saved_scans_postgres_payload(
     *,
     limit: int = 25,

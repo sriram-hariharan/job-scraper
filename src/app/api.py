@@ -206,6 +206,9 @@ def _owner_scoped_planning_output_dir(
 
 
 class PlanningSavedScanStateRequest(BaseModel):
+    diagnostics_execution: bool = False
+    diagnostics_reset: bool = False
+    diagnostic_stages: list[str] = Field(default_factory=list)
     selected_patch_candidate_ids: list[str] = Field(default_factory=list)
     manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
     rewrite_review_decisions: dict[str, dict[str, str] | str] = Field(default_factory=dict)
@@ -3475,6 +3478,51 @@ def planning_save_saved_scan_state(
     request: PlanningSavedScanStateRequest,
 ):
     try:
+        if request.diagnostics_reset:
+            conflicting_fields = sorted(
+                key
+                for key in request.model_dump(exclude_defaults=True)
+                if key != "diagnostics_reset"
+            )
+            if conflicting_fields:
+                raise ValueError(
+                    "diagnostics_reset cannot be combined with other saved-scan state inputs: "
+                    + ", ".join(conflicting_fields)
+                )
+            return services.reset_saved_scan_diagnostics_payload(
+                scan_id=scan_id,
+                owner_user_id=_auth_owner_user_id(http_request),
+            )
+        if request.diagnostics_execution:
+            return services.execute_saved_scan_diagnostics_payload(
+                scan_id=scan_id,
+                owner_user_id=_auth_owner_user_id(http_request),
+                diagnostic_stages=request.diagnostic_stages,
+                accepted_exact_change_proposal_ids=request.accepted_exact_change_proposal_ids,
+                approved_change_plan_id=request.approved_change_plan_id,
+                guarded_resume_copy_artifact_id=request.guarded_resume_copy_artifact_id,
+                verified_artifact_operator_review_artifact_id=request.verified_artifact_operator_review_artifact_id,
+                verified_artifact_operator_decision_packet_id=request.verified_artifact_operator_decision_packet_id,
+                verified_artifact_operator_decision_artifact_id=request.verified_artifact_operator_decision_artifact_id,
+                verified_artifact_operator_decision_value=request.verified_artifact_operator_decision_value,
+                application_readiness_operator_decision_id=request.application_readiness_operator_decision_id,
+                application_readiness_operator_review_packet_id=request.application_readiness_operator_review_packet_id,
+                application_readiness_artifact_id=request.application_readiness_artifact_id,
+                manual_handoff_application_readiness_packet_id=request.manual_handoff_application_readiness_packet_id,
+                manual_handoff_artifact_id=request.manual_handoff_artifact_id,
+                handoff_audit_manual_handoff_packet_id=request.handoff_audit_manual_handoff_packet_id,
+                handoff_audit_application_readiness_packet_id=request.handoff_audit_application_readiness_packet_id,
+                handoff_audit_artifact_id=request.handoff_audit_artifact_id,
+                safety_boundary_handoff_audit_trail_id=request.safety_boundary_handoff_audit_trail_id,
+                safety_boundary_manual_handoff_packet_id=request.safety_boundary_manual_handoff_packet_id,
+                safety_boundary_application_readiness_packet_id=request.safety_boundary_application_readiness_packet_id,
+                safety_boundary_artifact_id=request.safety_boundary_artifact_id,
+                workflow_readiness_safety_boundary_summary_id=request.workflow_readiness_safety_boundary_summary_id,
+                workflow_readiness_handoff_audit_trail_id=request.workflow_readiness_handoff_audit_trail_id,
+                workflow_readiness_manual_handoff_packet_id=request.workflow_readiness_manual_handoff_packet_id,
+                workflow_readiness_application_readiness_packet_id=request.workflow_readiness_application_readiness_packet_id,
+                workflow_readiness_artifact_id=request.workflow_readiness_artifact_id,
+            )
         return services.save_saved_scan_state_payload(
             scan_id=scan_id,
             owner_user_id=_auth_owner_user_id(http_request),
@@ -3520,6 +3568,8 @@ def planning_save_saved_scan_state(
             workflow_readiness_application_readiness_packet_id=request.workflow_readiness_application_readiness_packet_id,
             workflow_readiness_artifact_id=request.workflow_readiness_artifact_id,
         )
+    except services.SavedScanDiagnosticsNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

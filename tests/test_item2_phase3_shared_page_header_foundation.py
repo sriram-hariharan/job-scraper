@@ -278,18 +278,21 @@ def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
     assert old_css not in planning_route
 
     # Every unaffected Phase 3 route retains both exact bundle references and
-    # must not acquire the Planning-only marker.
+    # must not acquire the Planning-only marker. Item 7.1C intentionally owns
+    # the Scan Diagnostics bundle cache key.
     for route in (
         overview_route,
         pipeline_route,
         scheduler_route,
-        advanced_diagnostics_route,
         decisions_route,
         applications_route,
     ):
         assert old_css in route
         assert old_js in route
         assert planning_marker not in route
+    assert "/static/build/executive-kpi/executive-kpi.css?v=item71d_diagnostics_rerun_r1" in advanced_diagnostics_route
+    assert "/static/build/executive-kpi/executive-kpi.js?v=item71d_diagnostics_rerun_r1" in advanced_diagnostics_route
+    assert planning_marker not in advanced_diagnostics_route
 
 
 # --- 19. Scan Workspace / Tailoring Workspace exceptions untouched -----------
@@ -305,10 +308,14 @@ def test_scan_and_tailoring_workspace_title_exceptions_remain_unchanged():
 # --- 20. No diagnostic execution enabled -------------------------------------
 
 
-def test_no_diagnostic_execution_was_enabled():
-    run_button_block = ADVANCED_DIAGNOSTICS_TSX.split('className="advanced-diagnostics-run-btn"', 1)[1].split(
-        "</button>", 1
-    )[0]
-    assert "disabled" in run_button_block
-    assert "onClick" not in run_button_block
-    assert "Execution is not enabled yet. Selections are for admin review only." in run_button_block
+def test_diagnostic_execution_requires_an_explicit_enabled_run_action():
+    explicit_provider_actions = {
+        "scanWorkspaceLiveTailoringSuggestionToggle": 'runStage("live_tailoring_suggestion")',
+        "scanWorkspaceLiveExactChangeProposalToggle": 'runStage("live_exact_resume_change_proposal")',
+    }
+    for action_id, handler in explicit_provider_actions.items():
+        button_block = ADVANCED_DIAGNOSTICS_TSX.split(f'id="{action_id}"', 1)[1].split("</button>", 1)[0]
+        assert 'type="button"' in button_block
+        assert "disabled" in button_block
+        assert "onClick" in button_block
+        assert handler in button_block

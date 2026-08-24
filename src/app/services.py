@@ -136,6 +136,7 @@ from src.storage.saved_scans.read_postgres import (
     delete_saved_scan_postgres_payload,
     get_saved_scan_postgres_payload,
     get_saved_scans_postgres_payload,
+    save_saved_scan_diagnostic_state_postgres_payload,
     save_saved_scan_draft_postgres_payload,
 )
 from src.storage.profile_resumes.store import (
@@ -5326,6 +5327,37 @@ def _new_scan_tailoring_summary(
     }
 
 
+def _new_scan_structured_resume_targets(resume_evidence: Any) -> Dict[str, Any]:
+    experience_bullets: List[Dict[str, str]] = []
+    for entry in list(getattr(resume_evidence, "experience_entries", []) or []):
+        source_entry_id = _clean_text(getattr(entry, "entry_id", ""))
+        bullets = list(getattr(entry, "bullets", []) or [])
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        for index, bullet in enumerate(bullets):
+            source_bullet_id = (
+                _clean_text(bullet_ids[index]) if index < len(bullet_ids) else ""
+            )
+            text = _clean_text(bullet)
+            if not source_entry_id or not source_bullet_id or not text:
+                continue
+            experience_bullets.append(
+                {
+                    "source_entry_id": source_entry_id,
+                    "source_bullet_id": source_bullet_id,
+                    "text": text,
+                }
+            )
+
+    return {
+        "version": "structured_resume_targets_v1",
+        "source": "resume_evidence",
+        "experience_bullets": experience_bullets,
+        "skills": _unique_scan_terms(
+            list(getattr(resume_evidence, "skills", []) or [])
+        ),
+    }
+
+
 def _unique_scan_terms(values: List[Any]) -> List[str]:
     terms: List[str] = []
     seen: set[str] = set()
@@ -5558,6 +5590,9 @@ def _build_new_scan_review_payload(
         },
         "ai_optimize_suggestions": [],
         "directional_guidance": [],
+        "structured_resume_targets": _new_scan_structured_resume_targets(
+            resume_evidence
+        ),
         "lane_counts": {
             "direct_apply_ready": 0,
             "direct_apply_optional": 0,
@@ -6085,6 +6120,11 @@ def saved_scan_report_payload(
     refreshed_payload["agentic_workflow_production_readiness_checkpoint"] = (
         production_readiness_checkpoint
     )
+    diagnostic_state = (
+        deepcopy(refreshed_payload.get("diagnostic_state"))
+        if isinstance(refreshed_payload.get("diagnostic_state"), dict)
+        else {}
+    )
 
     return {
         "ok": True,
@@ -6093,6 +6133,7 @@ def saved_scan_report_payload(
         "jd_llm_extraction_readback": jd_llm_readback,
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
         "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
+        "diagnostic_state": diagnostic_state,
     }
 
 
@@ -6405,6 +6446,485 @@ def save_saved_scan_state_payload(
         "human_only_safety_boundary_summary_readback": human_only_safety_boundary_summary_readback,
         "human_only_workflow_readiness_checkpoint_readback": human_only_workflow_readiness_checkpoint_readback,
     }
+
+
+class SavedScanDiagnosticsNotFoundError(ValueError):
+    """Neutral owner-scoped saved-scan lookup/update failure."""
+
+
+_SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER = (
+    "live_tailoring_suggestion",
+    "live_exact_resume_change_proposal",
+    "manual_exact_change_acceptance",
+    "guarded_resume_copy_artifact",
+    "guarded_resume_copy_artifact_verification",
+    "verified_artifact_operator_review_packet",
+    "verified_artifact_operator_decision",
+    "application_readiness_packet",
+    "manual_application_handoff_packet",
+    "handoff_audit_trail",
+    "safety_boundary_summary",
+    "workflow_readiness_checkpoint",
+)
+
+_SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS = {
+    "live_tailoring_suggestion": "live_tailoring_suggestion_readback",
+    "live_exact_resume_change_proposal": "live_exact_resume_change_proposal_readback",
+    "manual_exact_change_acceptance": "manual_exact_change_acceptance_readback",
+    "guarded_resume_copy_artifact": "guarded_resume_copy_artifact_readback",
+    "guarded_resume_copy_artifact_verification": "guarded_resume_copy_artifact_verification_readback",
+    "verified_artifact_operator_review_packet": "verified_artifact_operator_review_packet_readback",
+    "verified_artifact_operator_decision": "verified_artifact_operator_decision_readback",
+    "application_readiness_packet": "operator_approved_artifact_application_readiness_packet_readback",
+    "manual_application_handoff_packet": "human_only_manual_application_handoff_packet_readback",
+    "handoff_audit_trail": "human_only_handoff_audit_trail_readback",
+    "safety_boundary_summary": "human_only_safety_boundary_summary_readback",
+    "workflow_readiness_checkpoint": "human_only_workflow_readiness_checkpoint_readback",
+}
+
+_LIVE_TAILORING_FAILURE_READBACK_FIELDS = (
+    "provider",
+    "model",
+    "failure_category",
+    "exception_class",
+    "http_status",
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+    "invalid_request_reason",
+    "schema_keyword",
+    "safe_error_summary",
+    "provider_call_attempted",
+    "retry_performed",
+    "provider_fallback_performed",
+)
+
+
+def _saved_scan_diagnostic_stages(values: Any) -> List[str]:
+    requested = {
+        _clean_text(value)
+        for value in list(values or [])
+        if _clean_text(value)
+    }
+    unknown = sorted(requested.difference(_SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER))
+    if unknown:
+        raise ValueError(f"Unknown diagnostic stage: {unknown[0]}")
+    if not requested:
+        raise ValueError("At least one diagnostic stage is required.")
+    return [stage for stage in _SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER if stage in requested]
+
+
+def _saved_scan_diagnostic_readback_is_valid(readback: Any) -> bool:
+    return (
+        isinstance(readback, dict)
+        and _clean_text(readback.get("validation_status")) == "valid"
+        and readback.get("fallback_used") is False
+    )
+
+
+def _saved_scan_diagnostic_persisted_readback(readback: Dict[str, Any]) -> Dict[str, Any]:
+    source = deepcopy(readback)
+    source.pop("stage_results", None)
+    if _saved_scan_diagnostic_readback_is_valid(source):
+        return source
+    return {
+        key: deepcopy(source.get(key))
+        for key in (
+            "phase",
+            "readback_phase",
+            "default_off",
+            "planning_workspace_action",
+            "validation_status",
+            "validation_errors",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "safety",
+            *_LIVE_TAILORING_FAILURE_READBACK_FIELDS,
+        )
+        if key in source
+    }
+
+
+def _saved_scan_diagnostic_state_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    report = row.get("payload_json") if isinstance(row.get("payload_json"), dict) else {}
+    review = report.get("scan_review_payload") if isinstance(report.get("scan_review_payload"), dict) else {}
+    state = review.get("diagnostic_state") if isinstance(review.get("diagnostic_state"), dict) else {}
+    return deepcopy(state)
+
+
+def _saved_scan_diagnostic_review_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+    report = row.get("payload_json") if isinstance(row.get("payload_json"), dict) else {}
+    review = report.get("scan_review_payload") if isinstance(report.get("scan_review_payload"), dict) else {}
+    return dict(review)
+
+
+def _saved_scan_diagnostic_ambient_readbacks(
+    review_payload: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
+    return {
+        key: deepcopy(review_payload.get(key))
+        for key in (
+            "jd_llm_extraction_readback",
+            "agentic_workflow_integration_readback",
+            "agentic_workflow_production_readiness_checkpoint",
+        )
+        if isinstance(review_payload.get(key), dict)
+    }
+
+
+def _fresh_saved_scan_diagnostic_state(
+    *,
+    scan_id: str,
+    review_payload: Dict[str, Any],
+    reset_performed: bool = False,
+) -> Dict[str, Any]:
+    now = _utc_now()
+    return {
+        "version": 1,
+        "scan_id": _clean_text(scan_id),
+        "updated_at": now,
+        "readbacks": {},
+        "validated_readbacks": {},
+        "ambient_readbacks": _saved_scan_diagnostic_ambient_readbacks(review_payload),
+        "human_inputs": {},
+        "last_execution": {
+            "requested_stages": [],
+            "stage_results": [],
+            "completed_at": now,
+            "provider_retry_performed": False,
+            "background_execution_performed": False,
+            "diagnostics_reset_performed": bool(reset_performed),
+        },
+    }
+
+
+def reset_saved_scan_diagnostics_payload(
+    *,
+    scan_id: str,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    safe_scan_id = _clean_text(scan_id)
+    safe_owner_user_id = _clean_text(owner_user_id)
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+    if not safe_owner_user_id:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    stored = get_saved_scan_postgres_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=safe_owner_user_id,
+    )
+    row = dict(stored.get("scan", {}) or {})
+    if not row:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+    review_payload = _saved_scan_diagnostic_review_payload(row)
+    if not review_payload:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    diagnostic_state = _fresh_saved_scan_diagnostic_state(
+        scan_id=safe_scan_id,
+        review_payload=review_payload,
+        reset_performed=True,
+    )
+    persisted = save_saved_scan_diagnostic_state_postgres_payload(
+        scan_id=safe_scan_id,
+        diagnostic_state=diagnostic_state,
+        owner_user_id=safe_owner_user_id,
+    )
+    if not persisted.get("updated"):
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    return {
+        "ok": True,
+        "scan_id": safe_scan_id,
+        "diagnostics_reset": True,
+        "diagnostics_execution": False,
+        "ordinary_draft_updated": False,
+        "requested_stages": [],
+        "stage_results": [],
+        "diagnostic_state": diagnostic_state,
+    }
+
+
+def execute_saved_scan_diagnostics_payload(
+    *,
+    scan_id: str,
+    owner_user_id: str = "",
+    diagnostic_stages: Any = None,
+    accepted_exact_change_proposal_ids: Any = None,
+    approved_change_plan_id: str = "",
+    guarded_resume_copy_artifact_id: str = "",
+    verified_artifact_operator_review_artifact_id: str = "",
+    verified_artifact_operator_decision_packet_id: str = "",
+    verified_artifact_operator_decision_artifact_id: str = "",
+    verified_artifact_operator_decision_value: str = "",
+    application_readiness_operator_decision_id: str = "",
+    application_readiness_operator_review_packet_id: str = "",
+    application_readiness_artifact_id: str = "",
+    manual_handoff_application_readiness_packet_id: str = "",
+    manual_handoff_artifact_id: str = "",
+    handoff_audit_manual_handoff_packet_id: str = "",
+    handoff_audit_application_readiness_packet_id: str = "",
+    handoff_audit_artifact_id: str = "",
+    safety_boundary_handoff_audit_trail_id: str = "",
+    safety_boundary_manual_handoff_packet_id: str = "",
+    safety_boundary_application_readiness_packet_id: str = "",
+    safety_boundary_artifact_id: str = "",
+    workflow_readiness_safety_boundary_summary_id: str = "",
+    workflow_readiness_handoff_audit_trail_id: str = "",
+    workflow_readiness_manual_handoff_packet_id: str = "",
+    workflow_readiness_application_readiness_packet_id: str = "",
+    workflow_readiness_artifact_id: str = "",
+    live_tailoring_suggestion_adapter: Any = None,
+    live_exact_resume_change_proposal_adapter: Any = None,
+) -> Dict[str, Any]:
+    safe_scan_id = _clean_text(scan_id)
+    safe_owner_user_id = _clean_text(owner_user_id)
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+    if not safe_owner_user_id:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+    stages = _saved_scan_diagnostic_stages(diagnostic_stages)
+
+    stored = get_saved_scan_postgres_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=safe_owner_user_id,
+    )
+    row = dict(stored.get("scan", {}) or {})
+    if not row:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+    review_payload = _saved_scan_diagnostic_review_payload(row)
+    if not review_payload:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    previous_state = _saved_scan_diagnostic_state_from_row(row)
+    readbacks = dict(previous_state.get("readbacks", {}) or {})
+    validated = dict(previous_state.get("validated_readbacks", {}) or {})
+    draft = dict(review_payload.get("draft", {}) or {})
+    ambient = _saved_scan_diagnostic_ambient_readbacks(review_payload)
+    accepted_ids = [
+        _clean_text(value)
+        for value in list(accepted_exact_change_proposal_ids or [])
+        if _clean_text(value)
+    ]
+    requested_decision = _clean_text(verified_artifact_operator_decision_value)
+    stage_results: List[Dict[str, Any]] = []
+    failed_stages: set[str] = set()
+
+    def current(stage: str) -> Dict[str, Any]:
+        if stage in failed_stages:
+            return {}
+        value = validated.get(_SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS[stage])
+        return dict(value or {}) if isinstance(value, dict) else {}
+
+    def upstream_id(stage: str, field: str, override: str = "") -> str:
+        return _clean_text(override) or _clean_text(current(stage).get(field))
+
+    def record(stage: str, value: Dict[str, Any]) -> None:
+        key = _SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS[stage]
+        persisted = _saved_scan_diagnostic_persisted_readback(value)
+        readbacks[key] = persisted
+        valid = _saved_scan_diagnostic_readback_is_valid(value)
+        if valid:
+            validated[key] = persisted
+            if stage != "live_tailoring_suggestion":
+                stage_index = _SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER.index(stage)
+                for downstream in _SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER[stage_index + 1 :]:
+                    downstream_key = _SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS[downstream]
+                    readbacks.pop(downstream_key, None)
+                    validated.pop(downstream_key, None)
+        else:
+            failed_stages.add(stage)
+        stage_results.append(
+            {
+                "stage": stage,
+                "readback_key": key,
+                "status": _clean_text(value.get("validation_status")) or "missing",
+                "valid": valid,
+                "validation_errors": list(value.get("validation_errors") or []),
+            }
+        )
+
+    for stage in stages:
+        value: Dict[str, Any]
+        if stage == "live_tailoring_suggestion":
+            value = _planning_workspace_live_tailoring_suggestion_payload(
+                scan_id=safe_scan_id,
+                owner_user_id=safe_owner_user_id,
+                enabled=True,
+                adapter=live_tailoring_suggestion_adapter,
+                draft=draft,
+            )
+        elif stage == "live_exact_resume_change_proposal":
+            value = _planning_workspace_live_exact_resume_change_proposal_payload(
+                scan_id=safe_scan_id,
+                owner_user_id=safe_owner_user_id,
+                enabled=True,
+                adapter=live_exact_resume_change_proposal_adapter,
+                draft=draft,
+            )
+        elif stage == "manual_exact_change_acceptance":
+            value = _planning_workspace_manual_exact_change_acceptance_payload(
+                live_exact_change_readback=current("live_exact_resume_change_proposal"),
+                enabled=True,
+                accepted_proposal_ids=accepted_ids,
+            )
+        elif stage == "guarded_resume_copy_artifact":
+            value = _planning_workspace_guarded_resume_copy_artifact_payload(
+                manual_acceptance_readback=current("manual_exact_change_acceptance"),
+                enabled=True,
+                approved_change_plan_id=upstream_id(
+                    "manual_exact_change_acceptance", "approved_change_plan_id", approved_change_plan_id
+                ),
+            )
+        elif stage == "guarded_resume_copy_artifact_verification":
+            value = _planning_workspace_guarded_resume_copy_artifact_verification_payload(
+                guarded_artifact_readback=current("guarded_resume_copy_artifact"),
+                enabled=True,
+                artifact_id=upstream_id(
+                    "guarded_resume_copy_artifact", "artifact_id", guarded_resume_copy_artifact_id
+                ),
+            )
+        elif stage == "verified_artifact_operator_review_packet":
+            value = _planning_workspace_verified_artifact_operator_review_packet_payload(
+                verification_readback=current("guarded_resume_copy_artifact_verification"),
+                enabled=True,
+                artifact_id=upstream_id(
+                    "guarded_resume_copy_artifact_verification",
+                    "artifact_id",
+                    verified_artifact_operator_review_artifact_id,
+                ),
+            )
+        elif stage == "verified_artifact_operator_decision":
+            value = _planning_workspace_verified_artifact_operator_decision_capture_payload(
+                operator_review_packet_readback=current("verified_artifact_operator_review_packet"),
+                enabled=True,
+                operator_review_packet_id=upstream_id(
+                    "verified_artifact_operator_review_packet",
+                    "operator_review_packet_id",
+                    verified_artifact_operator_decision_packet_id,
+                ),
+                artifact_id=upstream_id(
+                    "verified_artifact_operator_review_packet",
+                    "artifact_id",
+                    verified_artifact_operator_decision_artifact_id,
+                ),
+                decision_value=requested_decision,
+            )
+        elif stage == "application_readiness_packet":
+            decision_readback = current("verified_artifact_operator_decision")
+            value = _planning_workspace_operator_approved_artifact_application_readiness_packet_payload(
+                operator_decision_readback=decision_readback,
+                enabled=True,
+                operator_decision_id=_clean_text(application_readiness_operator_decision_id)
+                or _clean_text(decision_readback.get("operator_decision_id")),
+                operator_review_packet_id=_clean_text(application_readiness_operator_review_packet_id)
+                or _clean_text(decision_readback.get("operator_review_packet_id")),
+                artifact_id=_clean_text(application_readiness_artifact_id)
+                or _clean_text(decision_readback.get("artifact_id")),
+            )
+        elif stage == "manual_application_handoff_packet":
+            readiness = current("application_readiness_packet")
+            value = _planning_workspace_human_only_manual_application_handoff_packet_payload(
+                application_readiness_readback=readiness,
+                enabled=True,
+                application_readiness_packet_id=_clean_text(manual_handoff_application_readiness_packet_id)
+                or _clean_text(readiness.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(manual_handoff_artifact_id)
+                or _clean_text(readiness.get("artifact_id")),
+            )
+        elif stage == "handoff_audit_trail":
+            handoff = current("manual_application_handoff_packet")
+            value = _planning_workspace_human_only_handoff_audit_trail_payload(
+                manual_handoff_readback=handoff,
+                enabled=True,
+                manual_handoff_packet_id=_clean_text(handoff_audit_manual_handoff_packet_id)
+                or _clean_text(handoff.get("manual_handoff_packet_id")),
+                application_readiness_packet_id=_clean_text(handoff_audit_application_readiness_packet_id)
+                or _clean_text(handoff.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(handoff_audit_artifact_id)
+                or _clean_text(handoff.get("artifact_id")),
+            )
+        elif stage == "safety_boundary_summary":
+            audit = current("handoff_audit_trail")
+            value = _planning_workspace_human_only_safety_boundary_summary_payload(
+                handoff_audit_readback=audit,
+                enabled=True,
+                handoff_audit_trail_id=_clean_text(safety_boundary_handoff_audit_trail_id)
+                or _clean_text(audit.get("handoff_audit_trail_id")),
+                manual_handoff_packet_id=_clean_text(safety_boundary_manual_handoff_packet_id)
+                or _clean_text(audit.get("manual_handoff_packet_id")),
+                application_readiness_packet_id=_clean_text(safety_boundary_application_readiness_packet_id)
+                or _clean_text(audit.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(safety_boundary_artifact_id)
+                or _clean_text(audit.get("artifact_id")),
+            )
+        else:
+            summary = current("safety_boundary_summary")
+            value = _planning_workspace_human_only_workflow_readiness_checkpoint_payload(
+                safety_boundary_summary_readback=summary,
+                enabled=True,
+                safety_boundary_summary_id=_clean_text(workflow_readiness_safety_boundary_summary_id)
+                or _clean_text(summary.get("safety_boundary_summary_id")),
+                handoff_audit_trail_id=_clean_text(workflow_readiness_handoff_audit_trail_id)
+                or _clean_text(summary.get("handoff_audit_trail_id")),
+                manual_handoff_packet_id=_clean_text(workflow_readiness_manual_handoff_packet_id)
+                or _clean_text(summary.get("manual_handoff_packet_id")),
+                application_readiness_packet_id=_clean_text(workflow_readiness_application_readiness_packet_id)
+                or _clean_text(summary.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(workflow_readiness_artifact_id)
+                or _clean_text(summary.get("artifact_id")),
+            )
+        record(stage, value)
+
+    human_inputs = dict(previous_state.get("human_inputs", {}) or {})
+    successful_stages = {
+        result["stage"] for result in stage_results if result.get("valid") is True
+    }
+    if "manual_exact_change_acceptance" in successful_stages:
+        human_inputs["accepted_exact_change_proposal_ids"] = list(accepted_ids)
+    if "verified_artifact_operator_decision" in successful_stages:
+        human_inputs["verified_artifact_operator_decision_value"] = requested_decision
+
+    now = _utc_now()
+    diagnostic_state = {
+        "version": 1,
+        "scan_id": safe_scan_id,
+        "updated_at": now,
+        "readbacks": readbacks,
+        "validated_readbacks": validated,
+        "ambient_readbacks": ambient,
+        "human_inputs": human_inputs,
+        "last_execution": {
+            "requested_stages": stages,
+            "stage_results": stage_results,
+            "completed_at": now,
+            "provider_retry_performed": False,
+            "background_execution_performed": False,
+        },
+    }
+    persisted = save_saved_scan_diagnostic_state_postgres_payload(
+        scan_id=safe_scan_id,
+        diagnostic_state=diagnostic_state,
+        owner_user_id=safe_owner_user_id,
+    )
+    if not persisted.get("updated"):
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    response: Dict[str, Any] = {
+        "ok": True,
+        "scan_id": safe_scan_id,
+        "diagnostics_execution": True,
+        "ordinary_draft_updated": False,
+        "requested_stages": stages,
+        "stage_results": stage_results,
+        "diagnostic_state": diagnostic_state,
+    }
+    response.update(readbacks)
+    return response
 
 
 def _extract_scan_upload_text_from_pdf(path: Path) -> str:
@@ -15194,33 +15714,77 @@ LIVE_JD_LLM_PLANNING_SCAN_EXTRACTION_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_TAILORING_SUGGESTION_DRY_RUN_JD_SIGNAL_LINK_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "field": {"type": "string"},
+        "signal": {"type": "string"},
+    },
+    "required": ["field", "signal"],
+}
+LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "suggestion_id": {"type": "string"},
+        "source_bullet_id": {"type": "string"},
+        "original_text": {"type": "string"},
+        "suggested_text": {"type": "string"},
+        "reason": {"type": "string"},
+        "evidence_spans": {"type": "array", "items": {"type": "string"}},
+        "jd_signal_links": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_JD_SIGNAL_LINK_SCHEMA,
+        },
+        "patch_ready": {"type": "boolean"},
+        "projected_score_delta": {"type": "number"},
+        "risk_flags": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "suggestion_id",
+        "source_bullet_id",
+        "original_text",
+        "suggested_text",
+        "reason",
+        "evidence_spans",
+        "jd_signal_links",
+        "patch_ready",
+        "projected_score_delta",
+        "risk_flags",
+    ],
+}
+LIVE_TAILORING_SUGGESTION_DRY_RUN_UNSUPPORTED_CLAIM_RISK_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "field": {"type": "string"},
+        "signal": {"type": "string"},
+        "risk": {"type": "string"},
+    },
+    "required": ["field", "signal", "risk"],
+}
 LIVE_TAILORING_SUGGESTION_DRY_RUN_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
         "patch_ready_suggestions": {
             "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": True,
-                "properties": {
-                    "suggestion_id": {"type": "string"},
-                    "source_bullet_id": {"type": "string"},
-                    "original_text": {"type": "string"},
-                    "suggested_text": {"type": "string"},
-                    "reason": {"type": "string"},
-                    "evidence_spans": {"type": "array", "items": {"type": "string"}},
-                    "jd_signal_links": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-                    "patch_ready": {"type": "boolean"},
-                    "projected_score_delta": {"type": "number"},
-                    "risk_flags": {"type": "array", "items": {"type": "string"}},
-                },
-            },
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA,
         },
-        "guidance_only_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-        "rejected_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "guidance_only_suggestions": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA,
+        },
+        "rejected_suggestions": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA,
+        },
         "missing_evidence": {"type": "array", "items": {"type": "string"}},
-        "unsupported_claim_risks": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "unsupported_claim_risks": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_UNSUPPORTED_CLAIM_RISK_SCHEMA,
+        },
         "projected_score_delta": {"type": "number"},
         "rationale": {"type": "string"},
     },
@@ -15244,33 +15808,23 @@ LIVE_TAILORING_SUGGESTION_DRY_RUN_ENABLED = (
 )
 LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER = os.getenv(
     "APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
+    "groq",
 ).strip().lower()
 LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL = os.getenv(
     "APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+    "openai/gpt-oss-120b",
 ).strip()
-LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED = (
-    os.getenv("APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED", "false")
-    .strip()
-    .lower()
-    == "true"
-)
+LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED = False
 LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER = os.getenv(
     "APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
+    "groq",
 ).strip().lower()
 LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL = os.getenv(
     "APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+    "openai/gpt-oss-120b",
 ).strip()
 LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROMPT_VERSION = "v1"
-LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED = (
-    os.getenv("APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED", "false")
-    .strip()
-    .lower()
-    == "true"
-)
+LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED = False
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -16204,21 +16758,46 @@ def _planning_workspace_tailoring_suggestion_preview_rows(
     suggestion_type: str,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    for suggestion in suggestions:
+    for suggestion in suggestions[:8]:
         if not isinstance(suggestion, dict):
             continue
         suggestion_id = _clean_text(suggestion.get("suggestion_id"))
         if not suggestion_id:
             continue
+        jd_signal_links = []
+        for item in list(suggestion.get("jd_signal_links") or [])[:4]:
+            if not isinstance(item, dict):
+                continue
+            jd_signal_links.append(
+                {
+                    key: _clean_text(item.get(key))[:400]
+                    for key in ("field", "signal", "rationale", "evidence")
+                    if _clean_text(item.get(key))
+                }
+            )
         rows.append(
             {
                 "suggestion_id": suggestion_id,
                 "suggestion_type": suggestion_type,
-                "source_bullet_id": _clean_text(suggestion.get("source_bullet_id")),
+                "source_bullet_id": _clean_text(suggestion.get("source_bullet_id"))[:240],
                 "target_section": _clean_text(
                     suggestion.get("target_section") or suggestion.get("section")
-                ),
+                )[:240],
                 "patch_ready": bool(suggestion.get("patch_ready", False)),
+                "original_text": _clean_text(suggestion.get("original_text"))[:1200],
+                "suggested_text": _clean_text(suggestion.get("suggested_text"))[:1200],
+                "reason": _clean_text(suggestion.get("reason"))[:800],
+                "evidence_spans": [
+                    _clean_text(item)[:600]
+                    for item in list(suggestion.get("evidence_spans") or [])[:4]
+                    if _clean_text(item)
+                ],
+                "jd_signal_links": jd_signal_links,
+                "risk_flags": [
+                    _clean_text(item)[:300]
+                    for item in list(suggestion.get("risk_flags") or [])[:4]
+                    if _clean_text(item)
+                ],
             }
         )
     return rows
@@ -16265,7 +16844,7 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
         for row in list(source.get("rejected_suggestions") or [])
         if isinstance(row, dict)
     ]
-    preview_rows = (
+    actionable_preview_rows = (
         _planning_workspace_tailoring_suggestion_preview_rows(
             patch_ready,
             suggestion_type="patch_ready",
@@ -16275,7 +16854,12 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
             suggestion_type="guidance_only",
         )
     )
-    suggestion_ids = [row["suggestion_id"] for row in preview_rows]
+    rejected_preview_rows = _planning_workspace_tailoring_suggestion_preview_rows(
+            rejected,
+            suggestion_type="rejected",
+        )
+    preview_rows = (actionable_preview_rows + rejected_preview_rows)[:12]
+    suggestion_ids = [row["suggestion_id"] for row in actionable_preview_rows]
     safety_metadata = dict(source.get("safety_metadata") or {})
     fallback_used = bool(source.get("fallback_used", True))
     validation_status = _clean_text(source.get("validation_status")) or (
@@ -16303,6 +16887,11 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
     cost = deepcopy(source.get("cost", {}))
     if not isinstance(cost, dict):
         cost = {}
+    failure_metadata = {
+        key: deepcopy(source.get(key))
+        for key in _LIVE_TAILORING_FAILURE_READBACK_FIELDS
+        if key in source
+    }
 
     return {
         "phase": "56B",
@@ -16330,15 +16919,31 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
         "token_usage": token_usage,
         "cost": cost,
         "latency_ms": source.get("latency_ms", 0),
-        "suggestion_count": len(preview_rows),
+        "suggestion_count": len(patch_ready) + len(guidance_only),
         "patch_ready_suggestion_count": len(patch_ready),
         "guidance_only_suggestion_count": len(guidance_only),
         "rejected_suggestion_count": len(rejected),
         "suggestion_ids": suggestion_ids,
         "stable_suggestion_keys": suggestion_ids,
         "suggestions_preview": preview_rows,
+        "missing_evidence": [
+            _clean_text(item)[:400]
+            for item in list(source.get("missing_evidence") or [])[:8]
+            if _clean_text(item)
+        ],
+        "unsupported_claim_risks": [
+            {
+                key: _clean_text(item.get(key))[:400]
+                for key in ("field", "signal", "claim", "reason", "risk", "category", "evidence")
+                if _clean_text(item.get(key))
+            }
+            for item in list(source.get("unsupported_claim_risks") or [])[:8]
+            if isinstance(item, dict)
+        ],
+        "rationale": _clean_text(source.get("rationale"))[:1000],
         "suggestion_status": _clean_text(source.get("suggestion_status")),
         "safety": _planning_workspace_tailoring_suggestion_safety(),
+        **failure_metadata,
     }
 
 
@@ -16378,6 +16983,24 @@ def _planning_workspace_exact_change_preview_rows(
                 "change_type": _clean_text(proposal.get("change_type")),
                 "target_section": _clean_text(proposal.get("target_section")),
                 "target_identifier": _clean_text(proposal.get("target_identifier")),
+                "current_text": _clean_text(proposal.get("current_text")),
+                "proposed_text": _clean_text(proposal.get("proposed_text")),
+                "change_reason": _clean_text(proposal.get("change_reason")),
+                "jd_terms_supported": [
+                    _clean_text(value)
+                    for value in list(proposal.get("jd_terms_supported") or [])
+                    if _clean_text(value)
+                ],
+                "resume_evidence_used": [
+                    _clean_text(value)
+                    for value in list(proposal.get("resume_evidence_used") or [])
+                    if _clean_text(value)
+                ],
+                "risk_flags": [
+                    _clean_text(value)
+                    for value in list(proposal.get("risk_flags") or [])
+                    if _clean_text(value)
+                ],
                 "manual_review_required": proposal.get("manual_review_required") is True,
                 "requires_user_acceptance": proposal.get("requires_user_acceptance") is True,
             }
@@ -16958,33 +17581,56 @@ def _planning_workspace_exact_change_resume_context(
     draft: Dict[str, Any] | None,
 ) -> Dict[str, Any]:
     safe_draft = dict(draft or {})
-    evidence_rows = _planning_workspace_resume_evidence_rows_from_review(review_payload)
     bullets: List[Dict[str, Any]] = []
-    for index, evidence in enumerate(evidence_rows):
-        if not isinstance(evidence, dict):
-            continue
-        text = _clean_text(
-            evidence.get("evidence")
-            or evidence.get("text")
-            or evidence.get("resume_evidence")
-            or evidence.get("bullet")
+    structured_targets = review_payload.get("structured_resume_targets")
+    has_structured_targets = isinstance(structured_targets, dict)
+    if has_structured_targets:
+        for target in list(structured_targets.get("experience_bullets") or []):
+            if not isinstance(target, dict):
+                continue
+            source_bullet_id = _clean_text(target.get("source_bullet_id"))
+            text = _clean_text(target.get("text"))
+            if source_bullet_id and text:
+                bullets.append({"id": source_bullet_id, "text": text})
+    else:
+        evidence_rows = _planning_workspace_resume_evidence_rows_from_review(
+            review_payload
         )
-        if not text:
-            continue
-        bullets.append(
-            {
-                "id": _clean_text(evidence.get("bullet_id") or evidence.get("candidate_id"))
-                or f"evidence-{index + 1}",
-                "text": text,
-            }
-        )
+        for evidence in evidence_rows:
+            if not isinstance(evidence, dict):
+                continue
+            text = _clean_text(
+                evidence.get("evidence")
+                or evidence.get("text")
+                or evidence.get("resume_evidence")
+                or evidence.get("bullet")
+            )
+            source_bullet_id = _clean_text(
+                evidence.get("bullet_id") or evidence.get("candidate_id")
+            )
+            if not source_bullet_id or not text:
+                continue
+            bullets.append(
+                {
+                    "id": source_bullet_id,
+                    "text": text,
+                }
+            )
     for bullet_id, text in dict(safe_draft.get("manual_bullet_edits") or {}).items():
         clean_text = _clean_text(text)
         if clean_text:
             bullets.append({"id": _clean_text(bullet_id), "text": clean_text})
-    skills = review_payload.get("skills")
-    if not isinstance(skills, list):
-        skills = review_payload.get("resume_skills")
+    if has_structured_targets:
+        skills = structured_targets.get("skills")
+    else:
+        skills = review_payload.get("skills")
+        if not isinstance(skills, list):
+            skills = review_payload.get("resume_skills")
+    profile_summary = _clean_text(
+        review_payload.get("profile_summary") or review_payload.get("resume_summary")
+    )
+    if not has_structured_targets and not profile_summary:
+        profile_summary = "Manual planning workspace resume context."
     return {
         "resume_id": _clean_text(
             review_payload.get("selected_resume")
@@ -16992,11 +17638,7 @@ def _planning_workspace_exact_change_resume_context(
             or row.get("resume_name")
         ),
         "resume_name": _clean_text(review_payload.get("resume_name") or row.get("resume_name")),
-        "profile_summary": _clean_text(
-            review_payload.get("profile_summary")
-            or review_payload.get("resume_summary")
-            or "Manual planning workspace resume context."
-        ),
+        "profile_summary": profile_summary,
         "resume_bullets": bullets,
         "skills": list(skills or []) if isinstance(skills, list) else [],
     }
@@ -17007,26 +17649,94 @@ def _planning_workspace_exact_change_jd_context(
 ) -> Dict[str, Any]:
     jd_readback = review_payload.get("jd_llm_extraction_readback")
     jd_metadata = review_payload.get("jd_llm_extraction")
-    signals: Dict[str, Any] = {}
-    if isinstance(jd_readback, dict) and isinstance(
-        jd_readback.get("structured_jd_signals"),
-        dict,
-    ):
-        signals = dict(jd_readback.get("structured_jd_signals") or {})
-    elif isinstance(jd_metadata, dict) and isinstance(
-        jd_metadata.get("structured_jd_signals"),
-        dict,
-    ):
-        signals = dict(jd_metadata.get("structured_jd_signals") or {})
-    if not signals:
-        signals = {
-            "required_skills": list(review_payload.get("required_skills") or [])
-            if isinstance(review_payload.get("required_skills"), list)
-            else [],
-            "tools": list(review_payload.get("tools") or [])
-            if isinstance(review_payload.get("tools"), list)
-            else [],
-        }
+
+    def has_signal_values(signals: Dict[str, Any]) -> bool:
+        for key in (
+            "required_skills",
+            "preferred_skills",
+            "tools",
+            "responsibilities",
+            "domain",
+            "seniority",
+            "red_flags",
+        ):
+            value = signals.get(key)
+            if isinstance(value, dict) and value:
+                return True
+            if isinstance(value, (list, tuple, set)) and any(
+                _clean_text(item) for item in value
+            ):
+                return True
+            if not isinstance(value, (dict, list, tuple, set)) and _clean_text(value):
+                return True
+        return False
+
+    for metadata in (jd_readback, jd_metadata):
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("fallback_used") is True:
+            continue
+        validation_status = _clean_text(metadata.get("validation_status"))
+        if validation_status and validation_status != "valid":
+            continue
+        structured = metadata.get("structured_jd_signals")
+        if isinstance(structured, dict) and has_signal_values(structured):
+            return dict(structured)
+
+    signals: Dict[str, List[str]] = {
+        "required_skills": [],
+        "tools": [],
+        "domain": [],
+    }
+    seen: Dict[str, set[str]] = {key: set() for key in signals}
+
+    def add_signal(key: str, value: Any) -> None:
+        text = _clean_text(value)
+        normalized = text.lower()
+        if not text or normalized in seen[key]:
+            return
+        seen[key].add(normalized)
+        signals[key].append(text)
+
+    required_skills = review_payload.get("required_skills")
+    if isinstance(required_skills, list):
+        for value in required_skills:
+            add_signal("required_skills", value)
+    tools = review_payload.get("tools")
+    if isinstance(tools, list):
+        for value in tools:
+            add_signal("tools", value)
+
+    contract = review_payload.get("scan_issue_contract")
+    issues = list(contract.get("issues") or []) if isinstance(contract, dict) else []
+    for issue in issues:
+        if not isinstance(issue, dict) or _clean_text(issue.get("group_id")) != "skills":
+            continue
+        if issue.get("predicted_skill") is True or _clean_text(
+            issue.get("keyword_source")
+        ) == "predicted_skill":
+            continue
+
+        values = _scan_issue_display_terms(issue)
+        if not values:
+            fallback_value = _clean_text(
+                issue.get("display_term")
+                or issue.get("canonical_term")
+                or issue.get("title")
+            )
+            values = [fallback_value] if fallback_value else []
+
+        term_family = _clean_text(issue.get("term_family")).lower()
+        skill_type = _clean_text(issue.get("skill_type")).lower()
+        keyword_source = _clean_text(issue.get("keyword_source")).lower()
+        target_key = "required_skills"
+        if term_family in {"tool", "tools"}:
+            target_key = "tools"
+        elif skill_type == "other_keyword" or keyword_source == "other_keyword":
+            target_key = "domain"
+        for value in values:
+            add_signal(target_key, value)
+
     return signals
 
 
@@ -17053,9 +17763,13 @@ def _live_exact_resume_change_proposal_provider_adapter(
 ) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
+    provider, model = _scan_diagnostics_groq_configuration(
+        LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER,
+        LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL,
+    )
     result = run_chat_completion_with_metadata(
-        provider=LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER,
-        model=LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL,
+        provider=provider,
+        model=model,
         temperature=request_packet.get("temperature", 0),
         max_tokens=int(request_packet.get("max_output_tokens") or 1800),
         response_mime_type="application/json",
@@ -17199,6 +17913,34 @@ def _planning_workspace_live_exact_resume_change_proposal_payload(
             enabled=True,
         )
 
+    request_summary = (
+        dict(request_result.get("request_packet_summary") or {})
+        if isinstance(request_result, dict)
+        and isinstance(request_result.get("request_packet_summary"), dict)
+        else {}
+    )
+    included_count = int(request_summary.get("included_change_proposal_count") or 0)
+    if (
+        request_summary.get("request_blocked") is True
+        or included_count == 0
+        or request_summary.get("provider_dispatch_ready") is not True
+    ):
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": False,
+                "validation_status": "blocked",
+                "validation_errors": ["exact_change_provider_dispatch_not_ready"],
+                "proposal_result": proposal_result,
+                "request_result": request_result,
+                "runtime_result": {
+                    "real_provider_call_attempted": False,
+                    "real_provider_call_performed": False,
+                    "network_call_performed": False,
+                },
+            },
+            enabled=True,
+        )
+
     effective_adapter = adapter or _live_exact_resume_change_proposal_provider_adapter
     runtime_result = build_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off(
         request_packet=request_packet,
@@ -17227,6 +17969,7 @@ def _planning_workspace_live_exact_resume_change_proposal_payload(
     validation_result = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
         provider_call_result=runtime_result,
         original_request_packet=request_packet,
+        validation_policy={"require_known_proposal_ids": True},
     )
     if validation_result.get("provider_response_valid") is not True:
         return build_planning_workspace_live_exact_resume_change_proposal_readback(
@@ -20698,6 +21441,14 @@ def _live_tailoring_suggestion_structured_output_contract() -> Dict[str, Any]:
     }
 
 
+def _scan_diagnostics_groq_configuration(provider: Any, model: Any) -> tuple[str, str]:
+    safe_provider = _clean_text(provider).lower()
+    safe_model = _clean_text(model)
+    if safe_provider != "groq":
+        raise ValueError("Scan Diagnostics provider must be groq.")
+    return safe_provider, safe_model
+
+
 def _live_tailoring_suggestion_prompt(adapter_input: Dict[str, Any]) -> str:
     return "\n".join([
         "Create conservative tailoring suggestions for a manual read-only dry-run.",
@@ -20719,9 +21470,13 @@ def _live_tailoring_suggestion_prompt(adapter_input: Dict[str, Any]) -> str:
 def _live_tailoring_suggestion_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
+    provider, model = _scan_diagnostics_groq_configuration(
+        LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER,
+        LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL,
+    )
     result = run_chat_completion_with_metadata(
-        provider=LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER,
-        model=LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL,
+        provider=provider,
+        model=model,
         temperature=0,
         max_tokens=900,
         response_mime_type="application/json",
@@ -21256,6 +22011,11 @@ def build_manual_tailoring_suggestion_dry_run_payload(
                 "fallback_used": True,
                 "validation_status": "fallback",
                 "validation_errors": [f"adapter_error:{exc.__class__.__name__}"],
+                **_live_tailoring_provider_failure_metadata(
+                    exc,
+                    provider=LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER,
+                    model=LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL,
+                ),
             }
     else:
         payload = {
@@ -23609,7 +24369,9 @@ def _manual_provider_preview_provider_compatible_schema(value: Any) -> Any:
     return adapted
 
 
-def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
+def _manual_provider_preview_provider_failure_metadata(
+    exc: Exception,
+) -> Dict[str, str]:
     bounded_message = str(exc or "").strip()[:1_000]
     primary_match = _MANUAL_PROVIDER_PREVIEW_PRIMARY_FAILURE_PATTERN.fullmatch(
         bounded_message
@@ -23647,26 +24409,15 @@ def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
                     not in _MANUAL_PROVIDER_PREVIEW_SAFE_SCHEMA_KEYWORDS
                 )
             ):
-                return ""
-            state = (
-                "stage=primary;"
-                f"category={diagnostic['category']};"
-                f"provider={diagnostic['provider']};"
-                f"model={diagnostic['model']}"
-            )
-            if invalid_request_reason:
-                state += "".join(
-                    f";{field_name}={diagnostic[field_name]}"
-                    for field_name in (
-                        "invalid_request_reason",
-                        "error_type",
-                        "error_code",
-                        "error_param",
-                        "schema_keyword",
-                    )
-                    if diagnostic.get(field_name)
-                )
-            return state
+                return {}
+            return {
+                "stage": "primary",
+                **{
+                    key: value
+                    for key, value in diagnostic.items()
+                    if value
+                },
+            }
 
     fallback_match = _MANUAL_PROVIDER_PREVIEW_FALLBACK_FAILURE_PATTERN.fullmatch(
         bounded_message
@@ -23677,16 +24428,142 @@ def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
             diagnostic["primary_category"],
             diagnostic["fallback_category"],
         } <= _MANUAL_PROVIDER_PREVIEW_PROVIDER_FAILURE_CATEGORIES:
-            return (
-                "stage=fallback;"
-                f"primary_category={diagnostic['primary_category']};"
-                f"primary_provider={diagnostic['primary_provider']};"
-                f"primary_model={diagnostic['primary_model']};"
-                f"fallback_category={diagnostic['fallback_category']};"
-                f"fallback_provider={diagnostic['fallback_provider']};"
-                f"fallback_model={diagnostic['fallback_model']}"
+            return {"stage": "fallback", **diagnostic}
+    return {}
+
+
+def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
+    diagnostic = _manual_provider_preview_provider_failure_metadata(exc)
+    if diagnostic.get("stage") == "primary":
+        state = (
+            "stage=primary;"
+            f"category={diagnostic['category']};"
+            f"provider={diagnostic['provider']};"
+            f"model={diagnostic['model']}"
+        )
+        if diagnostic.get("invalid_request_reason"):
+            state += "".join(
+                f";{field_name}={diagnostic[field_name]}"
+                for field_name in (
+                    "invalid_request_reason",
+                    "error_type",
+                    "error_code",
+                    "error_param",
+                    "schema_keyword",
+                )
+                if diagnostic.get(field_name)
             )
+        return state
+    if diagnostic.get("stage") == "fallback":
+        return (
+            "stage=fallback;"
+            f"primary_category={diagnostic['primary_category']};"
+            f"primary_provider={diagnostic['primary_provider']};"
+            f"primary_model={diagnostic['primary_model']};"
+            f"fallback_category={diagnostic['fallback_category']};"
+            f"fallback_provider={diagnostic['fallback_provider']};"
+            f"fallback_model={diagnostic['fallback_model']}"
+        )
     return ""
+
+
+def _live_tailoring_provider_failure_metadata(
+    exc: Exception,
+    *,
+    provider: Any,
+    model: Any,
+) -> Dict[str, Any]:
+    safe_provider = _clean_text(provider).lower()[:100]
+    safe_model = _clean_text(model)[:200]
+    exception_class = exc.__class__.__name__
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,99}", exception_class):
+        exception_class = "Exception"
+
+    failure_category = "provider_adapter_error"
+    provider_diagnostic: Dict[str, Any] = {}
+    bounded_failure = _manual_provider_preview_provider_failure_metadata(exc)
+    if bounded_failure.get("stage") == "primary":
+        failure_category = bounded_failure["category"]
+        safe_provider = bounded_failure["provider"]
+        safe_model = bounded_failure["model"]
+        provider_diagnostic = {
+            output_key: bounded_failure[source_key]
+            for source_key, output_key in (
+                ("error_type", "provider_error_type"),
+                ("error_code", "provider_error_code"),
+                ("error_param", "provider_error_param"),
+                ("invalid_request_reason", "invalid_request_reason"),
+                ("schema_keyword", "schema_keyword"),
+            )
+            if bounded_failure.get(source_key)
+        }
+    else:
+        status_code = getattr(exc, "status_code", None)
+        try:
+            status_code = int(status_code)
+        except (TypeError, ValueError):
+            status_code = None
+        has_structured_failure = (
+            getattr(exc, "error_category", None) is not None
+            or status_code is not None
+            or isinstance(getattr(exc, "body", None), dict)
+        )
+        if has_structured_failure:
+            from src.ai.llm_client import (
+                _bounded_invalid_request_diagnostic,
+                _classify_provider_error,
+            )
+
+            normalized_category = _classify_provider_error(exc)
+            if normalized_category in _MANUAL_PROVIDER_PREVIEW_PROVIDER_FAILURE_CATEGORIES:
+                failure_category = normalized_category
+            if status_code is not None and 100 <= status_code <= 599:
+                provider_diagnostic["http_status"] = status_code
+            bounded_diagnostic = _bounded_invalid_request_diagnostic(
+                exc,
+                normalized_category,
+                safe_provider,
+            )
+            provider_diagnostic.update(
+                {
+                    output_key: bounded_diagnostic[source_key]
+                    for source_key, output_key in (
+                        ("error_type", "provider_error_type"),
+                        ("error_code", "provider_error_code"),
+                        ("error_param", "provider_error_param"),
+                        ("invalid_request_reason", "invalid_request_reason"),
+                        ("schema_keyword", "schema_keyword"),
+                    )
+                    if bounded_diagnostic.get(source_key)
+                }
+            )
+
+    summary_parts = [f"category={failure_category}"]
+    for key, label in (
+        ("http_status", "http"),
+        ("invalid_request_reason", "reason"),
+        ("provider_error_type", "type"),
+        ("provider_error_code", "code"),
+        ("provider_error_param", "parameter"),
+        ("schema_keyword", "schema_keyword"),
+    ):
+        if provider_diagnostic.get(key) not in (None, ""):
+            summary_parts.append(f"{label}={provider_diagnostic[key]}")
+    safe_error_summary = (
+        "Provider adapter failed "
+        f"({'; '.join(summary_parts)}; exception={exception_class})."
+    )[:240]
+    return {
+        "provider": safe_provider,
+        "model": safe_model,
+        "failure_category": failure_category,
+        "exception_class": exception_class,
+        **provider_diagnostic,
+        "safe_error_summary": safe_error_summary,
+        "provider_call_attempted": True,
+        "retry_performed": False,
+        "provider_fallback_performed": False,
+    }
 
 
 def _manual_provider_preview_string_list(

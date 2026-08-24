@@ -242,12 +242,12 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
     assert old_css not in planning_route
     assert '/static/shell.js?v=item7b_account_toolbar_r1' in planning_route
 
-    # The unaffected Phase 3 surfaces still use both complete old bundle
-    # references, including Advanced Diagnostics in planning_ui.py.
+    # The unaffected Phase 3 surfaces retain the old references. Item 7.1C
+    # intentionally gives Advanced Diagnostics a narrow bundle cache key.
     assert old_css in UI_SOURCE
     assert old_js in UI_SOURCE
-    assert old_css in advanced_diagnostics_route
-    assert old_js in advanced_diagnostics_route
+    assert '/static/build/executive-kpi/executive-kpi.css?v=item71d_diagnostics_rerun_r1' in advanced_diagnostics_route
+    assert '/static/build/executive-kpi/executive-kpi.js?v=item71d_diagnostics_rerun_r1' in advanced_diagnostics_route
 
     # Tailoring Workspace and Scan Workspace retain their distinct historical
     # script ownership and never acquire the Planning-only marker.
@@ -269,15 +269,20 @@ def test_auth_is_unchanged_while_shared_shell_preferences_use_item7_assets():
     assert "app_redesign.css?v=item7b_v1_toolbar_notification_r1" in PROFILE_UI_SOURCE
 
 
-# --- 23. Advanced Diagnostics execution remains disabled ----------------------
+# --- 23. Advanced Diagnostics execution remains explicit ----------------------
 
 
-def test_advanced_diagnostics_execution_remains_disabled():
-    run_button_block = ADVANCED_DIAGNOSTICS_TSX.split(
-        'className="advanced-diagnostics-run-btn"', 1
-    )[1].split("</button>", 1)[0]
-    assert "disabled" in run_button_block
-    assert "onClick" not in run_button_block
+def test_advanced_diagnostics_execution_requires_explicit_run():
+    explicit_provider_actions = {
+        "scanWorkspaceLiveTailoringSuggestionToggle": 'runStage("live_tailoring_suggestion")',
+        "scanWorkspaceLiveExactChangeProposalToggle": 'runStage("live_exact_resume_change_proposal")',
+    }
+    for action_id, handler in explicit_provider_actions.items():
+        button_block = ADVANCED_DIAGNOSTICS_TSX.split(f'id="{action_id}"', 1)[1].split("</button>", 1)[0]
+        assert 'type="button"' in button_block
+        assert "disabled" in button_block
+        assert "onClick" in button_block
+        assert handler in button_block
 
 
 # --- 24. Global shell markup unchanged ---------------------------------------

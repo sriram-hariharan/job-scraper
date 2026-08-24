@@ -168,6 +168,12 @@ def test_protected_runtime_files_are_unchanged():
             "source_yield_ui",
             "jobvite_location_freshness",
             "jobvite_standalone_discovery",
+            "item71b_safe_diagnostics_runtime_foundation",
+            "item71c_scan_diagnostics_frontend_activation",
+            "item71d_latest_diagnostics_workflow_reset",
+            "item71_manual_review_groq_diagnostics_fix",
+            "item71_effective_exact_change_filter",
+            "item71_production_exact_change_refinement",
         ),
     )
 
@@ -863,6 +869,12 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "recruitee_standalone_discovery",
             "jobvite_standalone_discovery",
             "live_pipeline_ai_evaluation_reliability_lr2b",
+            "item71b_safe_diagnostics_runtime_foundation",
+            "item71c_scan_diagnostics_frontend_activation",
+            "item71d_latest_diagnostics_workflow_reset",
+            "item71_manual_review_groq_diagnostics_fix",
+            "item71_effective_exact_change_filter",
+            "item71_production_exact_change_refinement",
         ),
     )
 
@@ -1837,6 +1849,110 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             source = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
+        return
+    item71b_safe_diagnostics_runtime_files = {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/storage/saved_scans/read_postgres.py",
+    }
+    if set(changed_runtime_files) == item71b_safe_diagnostics_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    item71c_scan_diagnostics_runtime_files = item71b_safe_diagnostics_runtime_files | {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == item71c_scan_diagnostics_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item71_groq_fix_runtime_files = item71c_scan_diagnostics_runtime_files | {
+        ROOT
+        / "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    }
+    if set(changed_runtime_files) == item71_groq_fix_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item71_effective_exact_change_filter_runtime_files = (
+        item71_groq_fix_runtime_files
+        | {
+            ROOT
+            / "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
+        }
+    )
+    if (
+        set(changed_runtime_files)
+        == item71_effective_exact_change_filter_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item71_production_exact_change_refinement_runtime_files = (
+        item71_effective_exact_change_filter_runtime_files
+        | {
+            ROOT
+            / "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+        }
+    )
+    if (
+        set(changed_runtime_files)
+        == item71_production_exact_change_refinement_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
         return
     phase133h_shared_shell_files = {
         ROOT / "src/app/application_hub_ui.py",

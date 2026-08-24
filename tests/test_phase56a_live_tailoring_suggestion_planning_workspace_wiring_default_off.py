@@ -214,9 +214,62 @@ def test_valid_fake_provider_response_appears_in_workspace_readback_metadata(
     assert readback["patch_ready_suggestion_count"] == 1
     assert readback["suggestion_ids"] == ["live_tailoring_001"]
     assert readback["suggestions_preview"][0]["source_bullet_id"] == "bullet-1"
+    assert readback["suggestions_preview"][0]["suggested_text"] == "Built Python pipelines."
+    assert readback["suggestions_preview"][0]["reason"] == "Evidence supports Python alignment."
+    assert readback["suggestions_preview"][0]["jd_signal_links"] == [
+        {"field": "required_skills", "signal": "Python"}
+    ]
+    assert readback["suggestions_preview"][0]["evidence_spans"] == [
+        "Built Python pipelines."
+    ]
     assert readback["token_usage"] == {"total_token_count": 42}
     assert readback["cost"] == {"estimated_cost": 0.01, "cost_currency": "USD"}
     assert readback["latency_ms"] == 88
+
+
+def test_live_tailoring_human_review_preview_is_bounded_and_preserves_categories():
+    source = _valid_provider_payload()
+    source["patch_ready_suggestions"] = [
+        {
+            **source["patch_ready_suggestions"][0],
+            "suggestion_id": f"patch-{index:02d}",
+        }
+        for index in range(10)
+    ]
+    source["guidance_only_suggestions"] = [
+        {
+            **source["patch_ready_suggestions"][0],
+            "suggestion_id": "guidance-01",
+            "patch_ready": False,
+        }
+    ]
+    source["rejected_suggestions"] = [
+        {
+            **source["patch_ready_suggestions"][0],
+            "suggestion_id": "rejected-01",
+            "patch_ready": False,
+        }
+    ]
+    source["unsupported_claim_risks"] = [
+        {"field": "required_skills", "signal": "Python", "risk": "unsupported_claim"}
+    ]
+    source["patch_ready_suggestions"][0]["suggested_text"] = "x" * 2000
+
+    readback = services.build_planning_workspace_live_tailoring_suggestion_readback(
+        source,
+        enabled=True,
+    )
+
+    assert len(readback["suggestions_preview"]) <= 12
+    assert len(readback["suggestions_preview"][0]["suggested_text"]) == 1200
+    assert {row["suggestion_type"] for row in readback["suggestions_preview"]} == {
+        "patch_ready",
+        "guidance_only",
+        "rejected",
+    }
+    assert readback["unsupported_claim_risks"] == [
+        {"field": "required_skills", "signal": "Python", "risk": "unsupported_claim"}
+    ]
 
 
 def test_invalid_provider_response_falls_back_safely(monkeypatch):
@@ -381,16 +434,18 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
     ]
 
     # The internal workflow surface now lives in the React Advanced
-    # Diagnostics Command Center (frontend/executive-kpi/src/diagnostics/),
+    # Diagnostics workspace (frontend/executive-kpi/src/diagnostics/),
     # rendered only at the standalone /advanced-diagnostics route — it is no
     # longer inlined into src/app/planning_ui.py's scan-review markup.
-    assert "Advanced Diagnostics" in diagnostics
-    assert "These do not apply to jobs automatically." in diagnostics
-    assert "Selecting diagnostics does not run them." in diagnostics
-    assert "Diagnostics never apply to jobs automatically." in diagnostics
-    assert "Run selected diagnostics" in diagnostics
-    assert "Execution is not enabled yet. Selections are for admin review only." in diagnostics
-    assert "<details" not in diagnostics
+    assert "Scan Diagnostics" in diagnostics
+    assert "Manual control" in diagnostics
+    assert "Every action runs only when you choose it." in diagnostics
+    assert "does not automatically cross human review gates or submit applications" in diagnostics
+    assert "Run selected diagnostics" not in diagnostics
+    assert "Run tailoring analysis" in diagnostics
+    assert "Generate proposed changes" in diagnostics
+    assert "diagnostics_execution: true" in diagnostics
+    assert "<details" in diagnostics
     assert "scanWorkspaceAdvancedDiagnostics" not in html
     assert "admin-diagnostics-shell" not in html
 
@@ -421,7 +476,6 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
         "scanWorkspaceLiveTailoringSuggestionToggle",
         "scanWorkspaceLiveExactChangeProposalToggle",
         "scanWorkspaceManualExactChangeAcceptanceToggle",
-        "scanWorkspaceAcceptedExactChangeProposalIds",
         "scanWorkspaceGuardedResumeCopyArtifactToggle",
         "scanWorkspaceApprovedChangePlanId",
         "scanWorkspaceGuardedResumeCopyArtifactVerificationToggle",
@@ -471,6 +525,9 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
         "scanWorkspaceProductionReadinessCheckpointReadback",
     ):
         assert internal_id in diagnostics
+    # Item 7.1C replaces the opaque accepted-ID text field with exact proposal
+    # checkboxes sourced from the persisted provider readback.
+    assert "scanWorkspaceAcceptedExactChangeProposalIds" not in diagnostics
 
 
 def test_phase78b_scan_review_summary_drops_resume_name_and_keeps_metrics():

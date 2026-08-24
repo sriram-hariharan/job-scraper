@@ -1134,6 +1134,27 @@ def advanced_diagnostics(
         resume = resume or str(selected_scan_context.get("resume") or "")
         status = status or str(selected_scan_context.get("status") or "")
 
+    diagnostic_state: dict = {}
+    if selected_scan_context:
+        try:
+            report_payload = services.saved_scan_report_payload(
+                selected_scan_id,
+                owner_user_id=owner_user_id,
+            )
+        except Exception:
+            report_payload = {}
+        diagnostic_state = dict(report_payload.get("diagnostic_state") or {})
+        ambient_readbacks = dict(diagnostic_state.get("ambient_readbacks") or {})
+        for readback_key in (
+            "jd_llm_extraction_readback",
+            "agentic_workflow_integration_readback",
+            "agentic_workflow_production_readiness_checkpoint",
+        ):
+            readback = report_payload.get(readback_key)
+            if isinstance(readback, dict):
+                ambient_readbacks[readback_key] = readback
+        diagnostic_state["ambient_readbacks"] = ambient_readbacks
+
     raw_resume_name = _resolve_workspace_route_resume_name(
         resume,
         packet_json=packet_json,
@@ -1216,6 +1237,7 @@ def advanced_diagnostics(
             "advancedDiagnostics": "/advanced-diagnostics",
             "scanWorkspace": "/scan-workspace",
         },
+        "diagnosticState": diagnostic_state,
     }
     initial_state_script = _safe_json_script(initial_state)
 
@@ -1229,7 +1251,7 @@ def advanced_diagnostics(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item71d_diagnostics_rerun_r1" />
 </head>
 <body class="advanced-diagnostics-page">
 {render_top_shell("/advanced-diagnostics")}
@@ -1244,7 +1266,7 @@ def advanced_diagnostics(
   <script>
     window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = {initial_state_script};
   </script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item71d_diagnostics_rerun_r1"></script>
 </body>
 </html>
     """.strip()

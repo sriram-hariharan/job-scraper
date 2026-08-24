@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from typing import Any
 
 
@@ -179,6 +180,7 @@ def _compact_context(value: dict[str, Any] | None, *, include_full: bool) -> dic
 def _schema() -> dict[str, Any]:
     proposal_shape = {
         "type": "object",
+        "additionalProperties": False,
         "required": [
             "proposal_id",
             "change_type",
@@ -210,6 +212,7 @@ def _schema() -> dict[str, Any]:
     }
     return {
         "type": "object",
+        "additionalProperties": False,
         "required": [
             "refined_change_proposals",
             "resume_overwrite_performed",
@@ -244,11 +247,20 @@ def _constraints() -> tuple[list[str], list[str], list[str]]:
         "Use only supplied proposals and context.",
         "Do not add unsupported claims.",
         "Do not invent employers, metrics, tools, or experience.",
+        "Preserve supplied employers, metrics, technologies, accomplishments, duties, scope, and experience unless the supplied evidence explicitly supports revised wording.",
+        "Do not infer a technology relationship merely because terms co-occur elsewhere in the supplied context.",
         "Keep missing evidence explicit.",
     ]
     output = [
         "Return JSON only.",
         "Return refined_change_proposals with the requested fields.",
+        "Treat repository-generated [Emphasize: ...] and [Align with JD term: ...] text as internal candidate instructions, never as final resume text.",
+        "Convert each supported internal candidate instruction into polished, natural, resume-ready proposed_text suitable for direct human review.",
+        "Do not return bracketed internal instructions, TODO-like text, editorial directions, or Focus: annotations in proposed_text.",
+        "Keep current_text as the actual supplied existing target text.",
+        "Keep proposal_id, change_type, target_section, and target_identifier associated with the same supplied candidate.",
+        "Do not return unchanged proposed_text and do not manufacture a change when the supplied evidence cannot support one.",
+        "Manual user acceptance remains required for every proposal.",
         "Keep all safety flags false.",
     ]
     return safety, evidence, output
@@ -288,14 +300,21 @@ def _messages(
         {
             "role": "system",
             "content": (
-                "You must refine exact resume change proposals only. "
+                "You must refine exact resume change proposals into polished, natural, resume-ready wording. "
+                "Repository-generated [Emphasize: ...] and [Align with JD term: ...] markers are internal instructions, not final resume text. "
                 "Do not generate a full resume, invent unsupported claims, overwrite or mutate resumes, "
-                "execute or submit applications, auto-apply, or auto-submit."
+                "execute or submit applications, auto-apply, or auto-submit. "
+                "Do not force or manufacture a change; preserve candidate identity and require manual user acceptance."
             ),
         },
         {
             "role": "user",
-            "content": deepcopy(context_payload),
+            "content": json.dumps(
+                context_payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
         },
     ]
 
@@ -435,7 +454,7 @@ def build_controlled_exact_resume_change_set_llm_request_packet_default_off(
             excluded_count=len(excluded),
         ),
         "llm_request_packet_created": True,
-        "provider_dispatch_ready": True,
+        "provider_dispatch_ready": bool(included),
     }
     for key in FALSE_ACTION_KEYS:
         payload[key] = False

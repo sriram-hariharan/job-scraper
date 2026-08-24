@@ -117,15 +117,20 @@ def test_valid_fake_provider_suggestions_are_shown_in_readback_metadata(monkeypa
     assert readback["suggestion_count"] == 1
     assert readback["suggestion_ids"] == ["live_tailoring_001"]
     assert readback["stable_suggestion_keys"] == ["live_tailoring_001"]
-    assert readback["suggestions_preview"] == [
-        {
-            "suggestion_id": "live_tailoring_001",
-            "suggestion_type": "patch_ready",
-            "source_bullet_id": "bullet-1",
-            "target_section": "",
-            "patch_ready": True,
-        }
-    ]
+    assert len(readback["suggestions_preview"]) == 1
+    assert readback["suggestions_preview"][0] == {
+        "suggestion_id": "live_tailoring_001",
+        "suggestion_type": "patch_ready",
+        "source_bullet_id": "bullet-1",
+        "target_section": "",
+        "patch_ready": True,
+        "original_text": "Built Python pipelines.",
+        "suggested_text": "Built Python pipelines.",
+        "reason": "Evidence supports Python alignment.",
+        "evidence_spans": ["Built Python pipelines."],
+        "jd_signal_links": [{"field": "required_skills", "signal": "Python"}],
+        "risk_flags": [],
+    }
 
 
 def test_invalid_provider_response_falls_back_and_exposes_metadata(monkeypatch):

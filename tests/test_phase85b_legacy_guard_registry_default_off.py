@@ -28,6 +28,12 @@ from tests.support.phase_guard_registry import (
     ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES,
     ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES,
     ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES,
+    ITEM71_EFFECTIVE_EXACT_CHANGE_FILTER_FILES,
+    ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES,
+    ITEM71_PRODUCTION_EXACT_CHANGE_REFINEMENT_FILES,
+    ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES,
+    ITEM71C_SCAN_DIAGNOSTICS_FRONTEND_ACTIVATION_FILES,
+    ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -808,6 +814,28 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
             legacy_guard_profiles=(
                 "live_pipeline_ai_evaluation_reliability_lr2b_lr2c",
             ),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71_production_refinement_profile = legacy_guard_allowlist(
+        "item71_production_exact_change_refinement"
+    )
+    assert item71_production_refinement_profile == (
+        ITEM71_PRODUCTION_EXACT_CHANGE_REFINEMENT_FILES
+    )
+    assert len(item71_production_refinement_profile) == 12
+    assert not any("*" in path for path in item71_production_refinement_profile)
+    assert_changed_files_allowed(
+        item71_production_refinement_profile,
+        set(),
+        legacy_guard_profiles=("item71_production_exact_change_refinement",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/ai/llm_client.py"},
+            set(),
+            legacy_guard_profiles=("item71_production_exact_change_refinement",),
             include_current_milestone_compatibility=False,
         )
     fvr2b_source_contracts_profile = legacy_guard_allowlist(
@@ -2080,6 +2108,132 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
                 include_current_milestone_compatibility=False,
             )
 
+    item71b_runtime_profile = legacy_guard_allowlist(
+        "item71b_safe_diagnostics_runtime_foundation"
+    )
+    assert ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES == {
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/storage/saved_scans/read_postgres.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item71b_safe_diagnostics_runtime_foundation.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert item71b_runtime_profile == ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES
+    assert len(item71b_runtime_profile) == 8
+    assert not any("*" in path for path in item71b_runtime_profile)
+    assert_changed_files_allowed(
+        item71b_runtime_profile,
+        set(),
+        legacy_guard_profiles=("item71b_safe_diagnostics_runtime_foundation",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"},
+            set(),
+            legacy_guard_profiles=("item71b_safe_diagnostics_runtime_foundation",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71c_frontend_profile = legacy_guard_allowlist(
+        "item71c_scan_diagnostics_frontend_activation"
+    )
+    assert item71c_frontend_profile == ITEM71C_SCAN_DIAGNOSTICS_FRONTEND_ACTIVATION_FILES
+    assert len(item71c_frontend_profile) == 14
+    assert not any("*" in path for path in item71c_frontend_profile)
+    assert_changed_files_allowed(
+        item71c_frontend_profile,
+        set(),
+        legacy_guard_profiles=("item71c_scan_diagnostics_frontend_activation",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/api.py"},
+            set(),
+            legacy_guard_profiles=("item71c_scan_diagnostics_frontend_activation",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71d_reset_profile = legacy_guard_allowlist(
+        "item71d_latest_diagnostics_workflow_reset"
+    )
+    assert item71d_reset_profile == ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES
+    assert len(item71d_reset_profile) == 22
+    assert not any("*" in path for path in item71d_reset_profile)
+    assert_changed_files_allowed(
+        item71d_reset_profile,
+        set(),
+        legacy_guard_profiles=("item71d_latest_diagnostics_workflow_reset",),
+        include_current_milestone_compatibility=False,
+    )
+
+    item71_groq_fix_profile = legacy_guard_allowlist(
+        "item71_manual_review_groq_diagnostics_fix"
+    )
+    assert item71_groq_fix_profile == ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES
+    assert item71_groq_fix_profile == {
+        "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+        "src/app/services.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item71_manual_review_groq_diagnostics_fix.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
+        "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+        "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+        "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+        "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(item71_groq_fix_profile) == 12
+    assert not any("*" in path for path in item71_groq_fix_profile)
+    assert_changed_files_allowed(
+        item71_groq_fix_profile,
+        set(),
+        legacy_guard_profiles=("item71_manual_review_groq_diagnostics_fix",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/ai/llm_client.py"},
+            set(),
+            legacy_guard_profiles=("item71_manual_review_groq_diagnostics_fix",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71_effective_filter_profile = legacy_guard_allowlist(
+        "item71_effective_exact_change_filter"
+    )
+    assert item71_effective_filter_profile == (
+        ITEM71_EFFECTIVE_EXACT_CHANGE_FILTER_FILES
+    )
+    assert item71_effective_filter_profile == {
+        "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
+        "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
+        "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    }
+    assert len(item71_effective_filter_profile) == 5
+    assert not any("*" in path for path in item71_effective_filter_profile)
+    assert_changed_files_allowed(
+        item71_effective_filter_profile,
+        set(),
+        legacy_guard_profiles=("item71_effective_exact_change_filter",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=("item71_effective_exact_change_filter",),
+            include_current_milestone_compatibility=False,
+        )
+
     item61h_v1_visual_polish_profile = legacy_guard_allowlist(
         "item61h_v1_scan_diagnostics_visual_polish"
     )
@@ -2269,6 +2423,12 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item61h_product_clarity_profile
         | item61h_v1_visual_polish_profile
         | item7b_account_toolbar_profile
+        | item71b_runtime_profile
+        | item71c_frontend_profile
+        | item71d_reset_profile
+        | item71_groq_fix_profile
+        | item71_effective_filter_profile
+        | item71_production_refinement_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile

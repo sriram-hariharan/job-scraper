@@ -34,6 +34,7 @@ from tests.support.phase_guard_registry import (
     ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES,
     ITEM71C_SCAN_DIAGNOSTICS_FRONTEND_ACTIVATION_FILES,
     ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES,
+    NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -2171,6 +2172,26 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         include_current_milestone_compatibility=False,
     )
 
+    notification_bridge_profile = legacy_guard_allowlist(
+        "notifications_scheduler_bell_bridge"
+    )
+    assert notification_bridge_profile == NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES
+    assert len(notification_bridge_profile) == 8
+    assert not any("*" in path for path in notification_bridge_profile)
+    assert_changed_files_allowed(
+        notification_bridge_profile,
+        set(),
+        legacy_guard_profiles=("notifications_scheduler_bell_bridge",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/pipeline/scheduler.py"},
+            set(),
+            legacy_guard_profiles=("notifications_scheduler_bell_bridge",),
+            include_current_milestone_compatibility=False,
+        )
+
     item71_groq_fix_profile = legacy_guard_allowlist(
         "item71_manual_review_groq_diagnostics_fix"
     )
@@ -2426,6 +2447,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | item71b_runtime_profile
         | item71c_frontend_profile
         | item71d_reset_profile
+        | notification_bridge_profile
         | item71_groq_fix_profile
         | item71_effective_filter_profile
         | item71_production_refinement_profile

@@ -21,6 +21,7 @@ from tests.support.phase_guard_registry import (
     ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
     ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
     ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES,
+    NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -174,6 +175,7 @@ def test_protected_runtime_files_are_unchanged():
             "item71_manual_review_groq_diagnostics_fix",
             "item71_effective_exact_change_filter",
             "item71_production_exact_change_refinement",
+            "notifications_scheduler_bell_bridge",
         ),
     )
 
@@ -875,6 +877,7 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "item71_manual_review_groq_diagnostics_fix",
             "item71_effective_exact_change_filter",
             "item71_production_exact_change_refinement",
+            "notifications_scheduler_bell_bridge",
         ),
     )
 
@@ -2934,6 +2937,28 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         ROOT / "src/app/profile_ui.py",
     }
     if set(changed_runtime_files) == item61h_v1_scan_diagnostics_visual_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    notification_bridge_runtime_files = {
+        ROOT / relative_path
+        for relative_path in NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == notification_bridge_runtime_files:
         diff = subprocess.check_output(
             [
                 "git", "diff", "--unified=0", "--",

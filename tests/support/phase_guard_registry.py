@@ -791,6 +791,19 @@ ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES = {
     "tests/test_phase85b_legacy_guard_registry_default_off.py",
 }
 
+# Notifications scheduler-bell bridge: exact PostgreSQL scheduler-artifact
+# reader, notification service/API boundary, focused proof, and finite guards.
+NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES = {
+    "src/app/api.py",
+    "src/app/services.py",
+    "src/storage/scheduler_artifacts_store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_scheduler_notification_bell_bridge.py",
+}
+
 # Item 7.1 manual-review correction: exact-change message serialization,
 # Groq-only diagnostic adapters, focused proof, and finite guard closure.
 ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES = {
@@ -1343,6 +1356,9 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         ),
         "item71d_latest_diagnostics_workflow_reset": (
             ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES
+        ),
+        "notifications_scheduler_bell_bridge": (
+            NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES
         ),
         "item71_manual_review_groq_diagnostics_fix": (
             ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES
@@ -2572,6 +2588,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item71b_safe_diagnostics_runtime_foundation")
         | legacy_guard_allowlist("item71c_scan_diagnostics_frontend_activation")
         | legacy_guard_allowlist("item71d_latest_diagnostics_workflow_reset")
+        | legacy_guard_allowlist("notifications_scheduler_bell_bridge")
         | legacy_guard_allowlist("item71_manual_review_groq_diagnostics_fix")
         | legacy_guard_allowlist("item71_effective_exact_change_filter")
         | legacy_guard_allowlist("item71_production_exact_change_refinement")
@@ -2833,6 +2850,8 @@ def assert_protected_hashes(
             "1c945efff35250fbdc2b92b7a608b1acdee668694c2952d7d45aadc9d809c9fe",
             # Item 7.1D latest diagnostics workflow reset successor.
             "c1698f3b988371a1df644c9c1f1e0906526d45b7886990842216ea76d8ad824d",
+            # Scheduler-artifact notification bell bridge successor.
+            "85247b5e2ac0987429293ff83f7d6463110fa1123c0e0bb4d0c834f546eb573b",
         }),
         (
             "src/app/services.py",
@@ -2914,6 +2933,8 @@ def assert_protected_hashes(
             "1c945efff35250fbdc2b92b7a608b1acdee668694c2952d7d45aadc9d809c9fe",
             # Item 7.1D latest diagnostics workflow reset successor.
             "c1698f3b988371a1df644c9c1f1e0906526d45b7886990842216ea76d8ad824d",
+            # Scheduler-artifact notification bell bridge successor.
+            "85247b5e2ac0987429293ff83f7d6463110fa1123c0e0bb4d0c834f546eb573b",
         }),
         (
             "src/app/services.py",
@@ -2975,6 +2996,8 @@ def assert_protected_hashes(
                 "327aa973bb7b7da2781d4b4bf5479b5b872bb6fb3dda720dbdb51b665f440839",
                 # Item 7.1D latest diagnostics workflow reset successor.
                 "c37b51252e77d0004d50c1d819b40d828144a011fcd5742b08483d7d7bee6e63",
+                # Scheduler-artifact notification bell bridge successor.
+                "0016a2d936e16461450853a4e8bfc96ef92fdeea978424a7f126245002071e3c",
             }),
         (
             "src/agents/exact_resume_change_set_proposal_builder_default_off.py",

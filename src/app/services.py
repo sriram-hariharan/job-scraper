@@ -227,7 +227,10 @@ from src.storage.scheduler.contract import (
 from src.storage.scheduler.read_postgres import (
     get_scheduler_postgres_status_payload,
 )
-from src.storage.scheduler_artifacts_store import get_scheduler_artifact_payload
+from src.storage.scheduler_artifacts_store import (
+    get_scheduler_artifact_payload,
+    list_scheduler_artifacts_by_kind,
+)
 from src.storage.scheduler.contract import (
     scheduler_contract_health_payload,
 )
@@ -9880,6 +9883,69 @@ def _load_notification_rows(
     return rows
 
 
+class NotificationStorageUnavailableError(RuntimeError):
+    """Raised when authoritative notification storage cannot be read or written."""
+
+
+_SCHEDULER_NOTIFICATION_ARTIFACT_KIND = "post_run_notification"
+_SCHEDULER_NOTIFICATION_KIND = "scheduled_run_email_delivery"
+_SCHEDULER_NOTIFICATION_READ_LIMIT = 500
+
+
+def _load_scheduler_notification_rows() -> List[Dict[str, Any]]:
+    try:
+        artifact_payload = list_scheduler_artifacts_by_kind(
+            artifact_kind=_SCHEDULER_NOTIFICATION_ARTIFACT_KIND,
+            limit=_SCHEDULER_NOTIFICATION_READ_LIMIT,
+            initialize=False,
+        )
+        candidate_rows: List[Dict[str, Any]] = []
+        for artifact_row in list(artifact_payload.get("rows", []) or []):
+            if not isinstance(artifact_row, dict):
+                continue
+            payload = artifact_row.get("payload_json")
+            if not isinstance(payload, dict):
+                continue
+            row = dict(payload)
+            if _clean_text(row.get("notification_kind")) != _SCHEDULER_NOTIFICATION_KIND:
+                continue
+            if not _clean_text(row.get("notification_id")):
+                continue
+            candidate_rows.append(row)
+
+        candidate_rows.sort(
+            key=lambda row: (
+                _clean_text(row.get("created_at")),
+                _clean_text(row.get("notification_id")),
+            ),
+            reverse=True,
+        )
+        deduplicated: List[Dict[str, Any]] = []
+        seen_notification_ids: set[str] = set()
+        for row in candidate_rows:
+            notification_id = _clean_text(row.get("notification_id"))
+            if notification_id in seen_notification_ids:
+                continue
+            seen_notification_ids.add(notification_id)
+            deduplicated.append(row)
+        return _apply_notification_state_overlay(deduplicated)
+    except (Exception, SystemExit) as exc:
+        if isinstance(exc, NotificationStorageUnavailableError):
+            raise
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        ) from exc
+
+
+def _visible_scheduler_notification_rows(
+    *,
+    scheduler_notifications_visible: bool,
+) -> List[Dict[str, Any]]:
+    if not scheduler_notifications_visible:
+        return []
+    return _load_scheduler_notification_rows()
+
+
 def _normalize_notification_read_flag(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -9946,7 +10012,9 @@ def _apply_notification_state_overlay(
 
     for row in rows:
         merged = dict(row)
-        merged["is_read"] = bool(merged.get("is_read", False))
+        # Content artifacts do not own read state. Without a transition, every
+        # scheduler notification is unread regardless of any payload default.
+        merged["is_read"] = False
         merged["read_state_timestamp"] = ""
 
         notification_id = str(merged.get("notification_id", "") or "").strip()
@@ -9962,15 +10030,16 @@ def _apply_notification_state_overlay(
 
 
 def notifications_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
     is_read: str = "",
     limit: int = 20,
+    *,
+    scheduler_notifications_visible: bool = False,
 ) -> Dict[str, Any]:
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    rows = _visible_scheduler_notification_rows(
+        scheduler_notifications_visible=scheduler_notifications_visible,
     )
 
     normalized_job_name = _normalize_scheduler_filter_text(job_name)
@@ -10006,7 +10075,7 @@ def notifications_payload(
 
     return {
         "ok": True,
-        "notification_dir": str(notification_dir),
+        "notification_source": "scheduler_artifacts",
         "filters": {
             "job_name": job_name,
             "level": level,
@@ -10021,11 +10090,12 @@ def notifications_payload(
 
 
 def notifications_summary_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
     limit: int = 10,
+    *,
+    scheduler_notifications_visible: bool = False,
 ) -> Dict[str, Any]:
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    rows = _visible_scheduler_notification_rows(
+        scheduler_notifications_visible=scheduler_notifications_visible,
     )
     selected = rows[: max(int(limit), 0)]
 
@@ -10059,10 +10129,11 @@ def notifications_summary_payload(
 
 
 def notifications_unread_count_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    *,
+    scheduler_notifications_visible: bool = False,
 ) -> Dict[str, Any]:
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    rows = _visible_scheduler_notification_rows(
+        scheduler_notifications_visible=scheduler_notifications_visible,
     )
 
     unread_count = sum(1 for row in rows if not bool(row.get("is_read", False)))
@@ -10120,17 +10191,17 @@ def _dual_write_notification_state_postgres(row: Dict[str, Any]) -> Dict[str, An
         }
     
 def record_notification_read_state_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
     *,
     notification_id: str = "",
     is_read: Any = True,
+    scheduler_notifications_visible: bool = False,
 ) -> Dict[str, Any]:
     clean_notification_id = str(notification_id or "").strip()
     if not clean_notification_id:
         raise ValueError("notification_id is required.")
 
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    rows = _visible_scheduler_notification_rows(
+        scheduler_notifications_visible=scheduler_notifications_visible,
     )
 
     target_notification = None
@@ -10151,6 +10222,10 @@ def record_notification_read_state_payload(
     }
 
     postgres_write = _dual_write_notification_state_postgres(state_row)
+    if not postgres_write.get("ok"):
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        )
 
     target_notification["is_read"] = normalized_is_read
     target_notification["read_state_timestamp"] = state_row["state_timestamp"]

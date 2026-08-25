@@ -1056,6 +1056,12 @@ def _auth_owner_email(request: Request) -> str:
     return str(_auth_user_from_request(request).get("email", "") or "").strip()
 
 
+def _auth_user_is_admin(request: Request) -> bool:
+    user = _auth_user_from_request(request)
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    return bool(user) and (bool(user.get("is_admin", False)) or access_level == "admin")
+
+
 def _require_admin_user(request: Request) -> dict:
     user = _auth_user_from_request(request)
     access_level = str(user.get("access_level", "") or "").strip().lower()
@@ -3221,52 +3227,75 @@ def scheduler_agent_discovery_run_summary(run_id: str, http_request: Request):
 
 @app.get("/notifications")
 def notifications(
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    http_request: Request,
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
     is_read: str = "",
     limit: int = 20,
 ):
-    return services.notifications_payload(
-        notification_dir=Path(notification_dir),
-        job_name=job_name,
-        level=level,
-        delivery_status=delivery_status,
-        is_read=is_read,
-        limit=limit,
-    )
+    try:
+        return services.notifications_payload(
+            job_name=job_name,
+            level=level,
+            delivery_status=delivery_status,
+            is_read=is_read,
+            limit=limit,
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
 
 @app.get("/notifications/summary")
 def notifications_summary(
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    http_request: Request,
     limit: int = 10,
 ):
-    return services.notifications_summary_payload(
-        notification_dir=Path(notification_dir),
-        limit=limit,
-    )
+    try:
+        return services.notifications_summary_payload(
+            limit=limit,
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
 
 @app.get("/notifications/unread-count")
 def notifications_unread_count(
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    http_request: Request,
 ):
-    return services.notifications_unread_count_payload(
-        notification_dir=Path(notification_dir),
-    )
+    try:
+        return services.notifications_unread_count_payload(
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
 
 
 @app.post("/notifications/read-state")
 def notifications_read_state(
+    http_request: Request,
     payload: dict = Body(...),
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
 ):
     try:
         return services.record_notification_read_state_payload(
-            notification_dir=Path(notification_dir),
             notification_id=str(payload.get("notification_id", "") or ""),
             is_read=payload.get("is_read", True),
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
         )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     

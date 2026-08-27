@@ -233,10 +233,17 @@ def test_no_global_shell_toolbar_markup_changed():
 
 def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
     old_marker = "item2_phase3_shared_header_r1"
-    planning_marker = "planning_tailoring_workflow_polish_r1"
+    planning_marker = "planning_bulk_action_control_r1"
+    # r3 governs the Planning stylesheet; r4 governs the rebuilt bundle.
+    planning_bundle_marker = "planning_dashboard_ui_polish_r6"
     old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_marker}'
     old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_marker}'
-    planning_css = f'/static/build/executive-kpi/executive-kpi.css?v={planning_marker}'
+    planning_css = f'/static/build/executive-kpi/executive-kpi.css?v={planning_bundle_marker}'
+    # The "/" dashboard owns its own bundle marker: Source Yield became a
+    # drawer and the Executive Queue sticky column surfaces changed.
+    overview_marker = "dashboard_ui_polish_r3"
+    overview_css = f'/static/build/executive-kpi/executive-kpi.css?v={overview_marker}'
+    overview_js = f'/static/build/executive-kpi/executive-kpi.js?v={overview_marker}'
 
     overview_route = _route_block(
         UI_SOURCE,
@@ -274,14 +281,22 @@ def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
     # Planning intentionally owns the polished stylesheet marker while its
     # unchanged JavaScript bundle remains owned by the Phase 3 marker.
     assert planning_css in planning_route
-    assert old_js in planning_route
+    assert (
+        f'/static/build/executive-kpi/executive-kpi.js?v={planning_bundle_marker}'
+        in planning_route
+    )
+    assert old_js not in planning_route
     assert old_css not in planning_route
 
     # Every unaffected Phase 3 route retains both exact bundle references and
     # must not acquire the Planning-only marker. Item 7.1C intentionally owns
     # the Scan Diagnostics bundle cache key.
+    assert overview_css in overview_route
+    assert overview_js in overview_route
+    assert old_css not in overview_route
+    assert planning_marker not in overview_route
+
     for route in (
-        overview_route,
         pipeline_route,
         scheduler_route,
         decisions_route,

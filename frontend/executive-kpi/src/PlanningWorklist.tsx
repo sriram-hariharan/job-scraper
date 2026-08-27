@@ -6,7 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { CheckCircle2, ClipboardList, FileText, UserRoundCheck } from "lucide-react";
+import { CheckCircle2, ClipboardList, FileText, Sparkles, UserRoundCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { SharedFilterSelect, type SharedFilterOption } from "./filter/FilterSelect";
 import {
@@ -608,7 +608,10 @@ export function PlanningWorklist({ state }: { state: PlanningWorklistState }) {
             : "No Planning jobs currently need suggestions."}
           onClick={() => publishPlanningAction({ type: "bulk_generate_suggestions" })}
         >
-          <span>Bulk generate suggestions</span>
+          <span className="planning-react-bulk-generate__icon" aria-hidden="true">
+            <Sparkles size={15} strokeWidth={2} />
+          </span>
+          <span className="planning-react-bulk-generate__label">Bulk generate suggestions</span>
           <small>{state.bulkSuggestions.eligibleCount} eligible</small>
         </button>
       )}

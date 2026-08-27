@@ -824,6 +824,201 @@ def test_bulk_tailoring_primary_action_uses_restrained_soft_plum_tokens():
     assert "--workflow-accent: #72587c;" in light_tokens
 
 
+def test_no_global_important_background_rule_can_match_the_bulk_control():
+    """The earlier exclusion covered only one selector family and missed this one.
+
+    Any broad `background ... !important` rule whose rightmost compound is a
+    bare <button> and whose ancestors the Bulk control actually has will beat
+    the component rule regardless of specificity, so every such family must
+    carry the opt-out.
+    """
+
+    import re
+
+    # Ancestors the Bulk button really has inside the Planning worklist card.
+    allowed_ancestors = {
+        "html", "body", "main", "#planningWorklistRoot",
+        ".planning-dashboard-page", ".page", ".planning-dashboard-shell",
+        ".shared-table-card", ".shared-table-heading-with-actions",
+        ".shared-table-heading-actions", ".shared-table-heading",
+    }
+
+    def ancestors_reachable(prefix: str) -> bool:
+        if not prefix.strip():
+            return True
+        for token in [t for t in re.split(r"[\s>+~]+", prefix.strip()) if t]:
+            token = re.sub(r":[a-z-]+(\([^)]*\))?$", "", token)
+            if token in ("html", "body", "main", "*") or token.startswith("html["):
+                continue
+            if token in allowed_ancestors:
+                continue
+            parts = re.findall(r"[.#][\w-]+", token)
+            if parts and all(part in allowed_ancestors for part in parts):
+                continue
+            return False
+        return True
+
+    offenders = []
+    for sheet in (STYLES_CSS, Path("src/app/static/app_redesign.css")):
+        css = sheet.read_text(encoding="utf-8")
+        for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+            body = match.group(2)
+            if "!important" not in body:
+                continue
+            if not re.search(r"background(-color|-image)?\s*:", body):
+                continue
+            line = css[: match.start()].count("\n") + 1
+            for selector in match.group(1).split(","):
+                selector = " ".join(selector.split())
+                if not selector or "/*" in selector:
+                    continue
+                parts = re.split(r"\s*[\s>+~]\s*", selector)
+                last, prefix = parts[-1], " ".join(parts[:-1])
+                if not re.match(r"^button([:.\[]|$)", last):
+                    continue
+                negations = [n.strip() for n in re.findall(r":not\(([^)]*)\)", last)]
+                if ".planning-react-bulk-generate" in negations:
+                    continue
+                if not ancestors_reachable(prefix):
+                    continue
+                offenders.append(f"{sheet.name}:{line} {selector[:80]}")
+
+    assert not offenders, "Global !important background can override Bulk: " + "; ".join(offenders)
+
+    # The specific family that was missed the first time.
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    assert (
+        "button:not(.primary-btn):not(.app-shell-primary-link)" in styles
+    )
+    for match in re.finditer(r"button:not\(\.primary-btn\)(?::not\([^)]*\))*", styles):
+        assert ".planning-react-bulk-generate" in match.group(0)
+
+
+def test_sticky_action_cells_own_an_isolated_foreground_paint_shield():
+    """Runtime showed ordinary cells geometrically overlap the sticky column.
+
+    A table cell's own background is not a reliable cover for the *content* of
+    cells scrolling beneath it, so the sticky cell isolates a stacking context
+    and paints an explicit shield above them but below its own contents.
+    """
+
+    styles = FRONTEND_STYLES_CSS.read_text(encoding="utf-8")
+
+    # Shield exists for both tables, on the real TablePrimitives hook.
+    for selector in (
+        ".shared-table-viewport td.is-sticky-action::before",
+        ".shared-table-viewport th.is-sticky-action::before",
+        ".executive-queue-table-viewport td.is-sticky-action::before",
+        ".executive-queue-table-viewport th.is-sticky-action::before",
+    ):
+        assert selector in styles
+
+    shield_start = styles.index(".shared-table-viewport th.is-sticky-action::before")
+    shield = styles[shield_start : styles.index("}", shield_start)]
+    assert 'content: "";' in shield
+    assert "position: absolute;" in shield
+    assert "inset: 0;" in shield
+    assert "z-index: 0;" in shield
+    assert "background: var(--sticky-action-bg);" in shield
+    assert "pointer-events: none;" in shield
+
+    # Sticky cell isolates its own stacking context; contents sit above shield.
+    assert "isolation: isolate;" in styles
+    lift_start = styles.index(".shared-table-viewport th.is-sticky-action > *")
+    lift = styles[lift_start : styles.index("}", lift_start)]
+    assert "position: relative;" in lift
+    assert "z-index: 1;" in lift
+
+    # Shield surface comes from the existing opaque row tokens only.
+    for token in (
+        "--sticky-action-bg: var(--queue-row-default);",
+        "--sticky-action-bg: var(--queue-surface-muted);",
+        "--sticky-action-bg: var(--queue-row-alternate);",
+        "--sticky-action-bg: var(--queue-row-hover);",
+        "--sticky-action-bg: var(--queue-row-expanded);",
+        "--sticky-action-bg: var(--queue-row-focus);",
+    ):
+        assert token in styles
+
+    # Opaque one-pixel seam at the left boundary.
+    assert "-1px 0 0 var(--queue-border)" in styles
+
+    # Table safety invariants preserved.
+    assert "z-index: 9999" not in styles
+    assert styles.count("border-collapse: separate;") >= 2
+    assert styles.count("overflow: auto;") >= 2
+
+
+def test_sticky_action_column_owns_an_opaque_paint_layer_in_both_tables():
+    """Adjacent columns must never paint through the final sticky column."""
+
+    styles = FRONTEND_STYLES_CSS.read_text(encoding="utf-8")
+
+    # Both viewports establish their own stacking context and still scroll.
+    assert ".shared-table-viewport {\n  isolation: isolate;" in styles
+    assert ".executive-queue-table-viewport {\n  isolation: isolate;" in styles
+    assert styles.count("overflow: auto;") >= 2
+
+    # The sticky cell is a real covering layer, not just a positioned cell.
+    for marker in (
+        "opacity: 1;",
+        "background-image: none;",
+        "background-clip: border-box;",
+    ):
+        assert marker in styles
+    assert "background-clip: padding-box" not in styles
+
+    # Generic sticky hook applied by TablePrimitives, plus the column ids.
+    assert ".shared-table-viewport th.is-sticky-action," in styles
+    assert ".shared-table-viewport td.is-sticky-action," in styles
+    assert ".executive-queue-table-viewport td.is-sticky-action {" in styles
+
+    # Every row state paints an opaque row token on the sticky cell.
+    for token in (
+        "var(--queue-row-default)",
+        "var(--queue-row-alternate)",
+        "var(--queue-row-hover)",
+        "var(--queue-row-expanded)",
+        "var(--queue-row-focus)",
+    ):
+        assert token in styles
+    assert "td.is-sticky-action { background: var(--queue-row-alternate); }" in styles
+    assert "td.is-sticky-action { background: var(--queue-row-hover); }" in styles
+    assert "td.is-sticky-action { background: var(--queue-row-expanded); }" in styles
+
+    # Sticky header sits above sticky body, which sits above ordinary cells.
+    assert "z-index: 5;" in styles
+    assert "z-index: 6; background: var(--queue-surface-muted); }" in styles
+    assert "z-index: 9999" not in styles
+
+
+def test_packet_status_is_a_separate_column_from_the_sticky_next_step_cell():
+    """Proves a visible `Packet ready` inside the sticky region is bleed."""
+
+    worklist = (
+        Path("frontend/executive-kpi/src/PlanningWorklist.tsx")
+    ).read_text(encoding="utf-8")
+
+    assert 'id: "packet_status"' in worklist
+    assert 'stickyColumnId="next_step"' in worklist
+    packet_index = worklist.index('id: "packet_status"')
+    next_step_index = worklist.index('id: "next_step"')
+    assert packet_index != next_step_index
+
+
+def test_executive_pipeline_run_meta_is_retained_but_visually_hidden():
+    """app.js still resolves the node; the idle pill is not rendered."""
+
+    ui_source = Path("src/app/ui.py").read_text(encoding="utf-8")
+    app_js = Path("src/app/static/app.js").read_text(encoding="utf-8")
+
+    assert 'id="pipelineRunMeta"' in ui_source
+    assert 'class="subtext pipeline-run-meta hidden" id="pipelineRunMeta"' in ui_source
+    assert ui_source.index('id="sourceYieldRoot"') < ui_source.index('id="pipelineRunMeta"')
+    assert ui_source.index('id="pipelineRunMeta"') < ui_source.index('id="executiveQueueRoot"')
+    assert 'qs("pipelineRunMeta")' in app_js
+
+
 def test_bulk_configuration_progress_and_safety_contract_is_explicit_and_bounded():
     source = _source()
     ui = PLANNING_UI.read_text(encoding="utf-8")
@@ -890,18 +1085,45 @@ def test_bulk_configuration_progress_and_safety_contract_is_explicit_and_bounded
     assert "animation: none;" in styles
     assert ".workflow-overlay--tailoring.is-stopped .workflow-dialog-status-icon" in styles
 
-    assert "border: 1px solid #ddcde4;" in frontend_styles
-    assert "background: #f1eaf4;" in frontend_styles
-    assert "color: #5f4168;" in frontend_styles
-    assert ".planning-react-bulk-generate small { color: #72587c;" in frontend_styles
+    # Bulk action is a compact neutral/plum product control, ID-scoped so no
+    # generic button rule can win, in both themes.
+    assert (
+        "#planningWorklistRoot .planning-react-bulk-generate {" in frontend_styles
+    )
+    assert "border: 1px solid #9fc7bb;" in frontend_styles
+    assert "background: #d3e8e2;" in frontend_styles
+    assert "color: #16322d;" in frontend_styles
+    assert (
+        "#planningWorklistRoot .planning-react-bulk-generate__icon {"
+        in frontend_styles
+    )
+    assert "color: #356f63;" in frontend_styles
+    assert (
+        "#planningWorklistRoot .planning-react-bulk-generate small {"
+        in frontend_styles
+    )
+    assert "color: #466e65;" in frontend_styles
     assert 'html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate {' in frontend_styles
-    assert "border-color: #514359;" in frontend_styles
-    assert "background: #2d2731;" in frontend_styles
-    assert "color: #e8dceb;" in frontend_styles
-    assert 'html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate small { color: #bfaac5; }' in frontend_styles
-    bulk_style_start = frontend_styles.index(".planning-react-bulk-generate {")
-    bulk_style_end = frontend_styles.index(".shared-table-title-line", bulk_style_start)
-    assert "gradient" not in frontend_styles[bulk_style_start:bulk_style_end]
+    assert "border-color: #3f6c64;" in frontend_styles
+    assert "background: #24433f;" in frontend_styles
+    assert "color: #a8d4ca;" in frontend_styles
+    assert "color: #f3faf8;" in frontend_styles
+    assert (
+        'html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate small {'
+        in frontend_styles
+    )
+    assert "color: #c7dfda;" in frontend_styles
+    bulk_style_start = frontend_styles.index(
+        "#planningWorklistRoot .planning-react-bulk-generate {"
+    )
+    bulk_style_end = frontend_styles.index(
+        ".shared-table-title-line", bulk_style_start
+    )
+    bulk_styles = frontend_styles[bulk_style_start:bulk_style_end]
+    # The control must never regress to a gradient CTA, and must not need
+    # !important to beat the generic `button` rule.
+    assert "gradient" not in bulk_styles
+    assert "!important" not in bulk_styles
 
     guarded_bulk_source = open_source + update_source + start_source + execute_source + stop_source + overlay_source
     for forbidden in (

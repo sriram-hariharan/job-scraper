@@ -183,7 +183,7 @@ html[data-theme="dark"] .executive-kpi-card {
   --source-yield-ink: #0f172a;
   --source-yield-muted: #64748b;
   --source-yield-accent: #2563eb;
-  margin: 0 0 18px;
+  margin: 0 0 22px;
   min-width: 0;
   min-height: 176px;
   color: var(--source-yield-ink);
@@ -240,6 +240,42 @@ html[data-theme="dark"] .source-yield-card { box-shadow: 0 16px 34px rgba(2, 6, 
 }
 
 .source-yield-header h2 { margin: 0; color: var(--source-yield-ink); font-size: 19px; line-height: 1.25; }
+
+/* Top-level Source Yield drawer. Collapsed by default: the header alone is a
+   compact dashboard section; the table only mounts when opened. */
+.source-yield-header:not(:has(+ .source-yield-body)) { border-bottom: 0; }
+
+.source-yield-section-toggle {
+  display: inline-grid;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--source-yield-border);
+  border-radius: 9px;
+  background: var(--source-yield-surface-muted, transparent);
+  color: var(--source-yield-muted);
+  cursor: pointer;
+}
+
+.source-yield-section-toggle:hover {
+  border-color: var(--source-yield-border-strong, var(--source-yield-border));
+  color: var(--source-yield-ink);
+}
+
+.source-yield-section-toggle:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--source-yield-ink) 26%, transparent);
+  outline-offset: 2px;
+}
+
+.source-yield-section-chevron {
+  flex: 0 0 auto;
+  color: currentColor;
+  transition: transform 160ms ease;
+}
+
+.source-yield-section-chevron.is-expanded { transform: rotate(180deg); }
 .source-yield-header p { margin: 4px 0 0; color: var(--source-yield-muted); font-size: 12px; }
 .source-yield-header .source-yield-coverage-note { margin-top: 2px; font-size: 11px; }
 
@@ -342,6 +378,7 @@ html[data-theme="dark"] .source-yield-health--empty { color: #cbd5e1; }
 
 @media (prefers-reduced-motion: reduce) {
   .source-yield-source-button svg { transition: none; }
+  .source-yield-section-chevron { transition: none; }
   .source-yield-skeleton { animation: none; }
 }
 
@@ -349,7 +386,9 @@ html[data-theme="dark"] .source-yield-health--empty { color: #cbd5e1; }
 #planningFiltersRoot,
 #planningWorklistRoot,
 #planningSummaryRoot {
-  --queue-surface: rgba(255, 255, 255, 0.95);
+  /* Fully opaque: dashboard tables must never let the page background show
+     through in light mode. */
+  --queue-surface: #ffffff;
   --queue-surface-strong: #ffffff;
   --queue-surface-muted: #f8fafc;
   --queue-border: #dbe3ef;
@@ -1005,6 +1044,11 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
 }
 .executive-queue-table-viewport th.is-sticky-action,
 .executive-queue-table-viewport td.is-sticky-action {
+  --sticky-action-bg: var(--queue-row-default);
+  isolation: isolate;
+  opacity: 1;
+  background-image: none;
+  background-clip: border-box;
   position: sticky;
   z-index: 5;
   right: 0;
@@ -1012,7 +1056,6 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
   min-width: var(--queue-review-column-width);
   max-width: var(--queue-review-column-width);
   border-left: 1px solid var(--queue-border);
-  background-clip: padding-box;
   box-shadow: -6px 0 8px -8px var(--queue-review-shadow);
 }
 .executive-queue-table-viewport th.is-sticky-action { z-index: 7; background: var(--queue-surface-muted); }
@@ -1268,40 +1311,165 @@ html[data-theme="dark"] .executive-queue-badge--later { color: #fcd34d; }
 .shared-table-heading-with-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: flex-start; gap: 14px 28px; }
 .shared-table-heading-copy { min-width: 0; }
 .shared-table-heading-actions { display: flex; min-width: 0; align-items: flex-start; }
-.planning-react-bulk-generate {
+#planningWorklistRoot .planning-react-bulk-generate {
   display: inline-flex;
-  min-height: 42px;
-  padding: 7px 12px;
-  align-items: flex-start;
-  justify-content: center;
-  flex-direction: column;
-  gap: 1px;
-  border: 1px solid #ddcde4;
-  border-radius: 8px;
-  background: #f1eaf4;
+  min-height: 43px;
+  max-width: 100%;
+  padding: 7px 10px;
+  align-items: center;
+  justify-content: flex-start;
+  flex-direction: row;
+  gap: 9px;
+  border: 1px solid #9fc7bb;
+  border-radius: 10px;
+  background: #d3e8e2;
   background-image: none;
-  color: #5f4168;
+  color: #16322d;
   font: inherit;
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1.25;
   text-align: left;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+  transition: background-color 120ms ease, border-color 120ms ease,
+    box-shadow 120ms ease, transform 120ms ease;
 }
-.planning-react-bulk-generate small { color: #72587c; font-size: 10px; font-weight: 750; }
-.planning-react-bulk-generate:hover:not(:disabled) { border-color: #ddcde4; background: #e9deee; }
-.planning-react-bulk-generate:focus-visible { outline: 3px solid color-mix(in srgb, #72587c 36%, transparent); outline-offset: 2px; }
-.planning-react-bulk-generate:disabled { cursor: not-allowed; opacity: 0.52; }
+
+#planningWorklistRoot .planning-react-bulk-generate__icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: #bddbd2;
+  color: #356f63;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 13.5px;
+  font-weight: 660;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate small {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  align-items: center;
+  border-radius: 6px;
+  background: #f2f8f6;
+  color: #466e65;
+  font-size: 10.5px;
+  font-weight: 680;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate:hover:not(:disabled) {
+  border-color: #8ab8ab;
+  background: #c5e0d8;
+  box-shadow: 0 3px 8px rgba(43, 35, 48, 0.12);
+  transform: translateY(-1px);
+}
+
+#planningWorklistRoot .planning-react-bulk-generate:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+
+#planningWorklistRoot .planning-react-bulk-generate:focus-visible {
+  outline: 3px solid rgba(53, 111, 99, 0.42);
+  outline-offset: 2px;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate:disabled {
+  cursor: not-allowed;
+  border-color: #d3e2dd;
+  background: #eef4f2;
+  box-shadow: none;
+  transform: none;
+  color: #7d9490;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate:disabled
+  .planning-react-bulk-generate__icon {
+  background: #e6efec;
+  color: #93a9a4;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate:disabled small {
+  background: #e6efec;
+  color: #859b96;
+}
+
 html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate {
-  border-color: #514359;
-  background: #2d2731;
+  border-color: #3f6c64;
+  background: #24433f;
   background-image: none;
-  color: #e8dceb;
+  color: #f3faf8;
+  box-shadow: 0 1px 2px rgba(10, 6, 14, 0.45);
 }
-html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate small { color: #bfaac5; }
-html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate:hover:not(:disabled) {
-  border-color: #514359;
-  background: #37303c;
+
+html[data-theme="dark"] #planningWorklistRoot
+  .planning-react-bulk-generate__icon {
+  background: #31554f;
+  color: #a8d4ca;
 }
+
+html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate small {
+  background: #31514d;
+  color: #c7dfda;
+}
+
+html[data-theme="dark"] #planningWorklistRoot
+  .planning-react-bulk-generate:hover:not(:disabled) {
+  border-color: #507e75;
+  background: #2d504b;
+  box-shadow: 0 4px 12px rgba(10, 6, 14, 0.5);
+}
+
+html[data-theme="dark"] #planningWorklistRoot
+  .planning-react-bulk-generate:focus-visible {
+  outline: 3px solid rgba(168, 212, 202, 0.45);
+  outline-offset: 2px;
+}
+
+html[data-theme="dark"] #planningWorklistRoot
+  .planning-react-bulk-generate:disabled {
+  border-color: #2e4a46;
+  background: #1a302d;
+  color: #71908a;
+  box-shadow: none;
+}
+
+html[data-theme="dark"] #planningWorklistRoot
+  .planning-react-bulk-generate:disabled .planning-react-bulk-generate__icon {
+  background: #22403c;
+  color: #7d9c96;
+}
+
+html[data-theme="dark"] #planningWorklistRoot
+  .planning-react-bulk-generate:disabled small {
+  background: #22403c;
+  color: #82a099;
+}
+
+@media (max-width: 640px) {
+  #planningWorklistRoot .planning-react-bulk-generate {
+    min-height: 40px;
+    padding: 6px 8px;
+    gap: 8px;
+  }
+  #planningWorklistRoot .planning-react-bulk-generate__label {
+    font-size: 13px;
+  }
+}
+
 .shared-table-title-line { display: flex; align-items: center; gap: 9px; }
 .shared-table-title-line h2 { margin: 0; color: var(--queue-ink); font-size: 18px; }
 .shared-table-title-line > span {
@@ -1329,6 +1497,7 @@ html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate:hove
 }
 
 .shared-table-viewport {
+  isolation: isolate;
   width: 100%;
   max-width: 100%;
   min-height: 286px;
@@ -1481,11 +1650,18 @@ html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate:hove
 }
 
 .shared-table-column--expand { width: 42px; min-width: 42px; max-width: 42px; padding-inline: 6px; text-align: center; }
+.shared-table-viewport th.is-sticky-action,
+.shared-table-viewport td.is-sticky-action,
 .shared-table-column--review,
 .shared-table-column--next_step {
+  --sticky-action-bg: var(--queue-row-default);
   position: sticky;
+  isolation: isolate;
   z-index: 5;
   right: 0;
+  opacity: 1;
+  background-image: none;
+  background-clip: border-box;
   width: var(--shared-sticky-width);
   min-width: var(--shared-sticky-width);
   max-width: var(--shared-sticky-width);
@@ -1493,11 +1669,97 @@ html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate:hove
   background: var(--queue-row-default);
   box-shadow: -6px 0 8px -8px var(--queue-review-shadow);
 }
+.shared-table-viewport th.is-sticky-action,
 th.shared-table-column--review,
 th.shared-table-column--next_step { z-index: 6; background: var(--queue-surface-muted); }
-.planning-react-row.is-alternate .shared-table-column--next_step { background: var(--queue-row-alternate); }
-.planning-react-row:hover .shared-table-column--next_step { background: var(--queue-row-hover); }
-.planning-react-row.is-expanded .shared-table-column--next_step { background: var(--queue-row-expanded); }
+/* Sticky action columns must paint a fully opaque row surface in every state,
+   otherwise horizontally scrolled cells show through underneath. */
+.shared-table-viewport tbody tr:nth-child(4n + 3) td.shared-table-column--review,
+.shared-table-viewport tbody tr:nth-child(4n + 3) td.shared-table-column--next_step,
+.planning-react-row.is-alternate .shared-table-column--review,
+.planning-react-row.is-alternate .shared-table-column--next_step {
+  background: var(--queue-row-alternate);
+}
+.shared-table-viewport tbody tr:not(.shared-table-detail-row):hover td.shared-table-column--review,
+.shared-table-viewport tbody tr:not(.shared-table-detail-row):hover td.shared-table-column--next_step,
+.planning-react-row:hover .shared-table-column--review,
+.planning-react-row:hover .shared-table-column--next_step {
+  background: var(--queue-row-hover);
+}
+.shared-table-viewport tbody tr.is-expanded td.shared-table-column--review,
+.shared-table-viewport tbody tr.is-expanded td.shared-table-column--next_step,
+.planning-react-row.is-expanded .shared-table-column--review,
+.planning-react-row.is-expanded .shared-table-column--next_step {
+  background: var(--queue-row-expanded);
+}
+.shared-table-viewport tbody tr:focus-within td.shared-table-column--review,
+.shared-table-viewport tbody tr:focus-within td.shared-table-column--next_step,
+.shared-table-viewport tbody tr:focus-within td.is-sticky-action {
+  background: var(--queue-row-focus);
+}
+/* Ordinary cells legitimately scroll underneath the sticky action column, and
+   a table cell's own background is not a reliable cover for their content. The
+   sticky cell therefore isolates a stacking context and paints an explicit
+   foreground shield above the scrolled cells but below its own contents. */
+.shared-table-viewport th.is-sticky-action::before,
+.shared-table-viewport td.is-sticky-action::before,
+.executive-queue-table-viewport th.is-sticky-action::before,
+.executive-queue-table-viewport td.is-sticky-action::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--sticky-action-bg);
+  pointer-events: none;
+}
+.shared-table-viewport th.is-sticky-action > *,
+.shared-table-viewport td.is-sticky-action > *,
+.executive-queue-table-viewport th.is-sticky-action > *,
+.executive-queue-table-viewport td.is-sticky-action > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Row-state ownership for the shield surface. Values come from the existing
+   opaque row tokens; no theme colour is duplicated here. */
+.shared-table-viewport th.is-sticky-action,
+.executive-queue-table-viewport th.is-sticky-action {
+  --sticky-action-bg: var(--queue-surface-muted);
+}
+.shared-table-viewport tbody tr:nth-child(4n + 3) td.is-sticky-action,
+.planning-react-row.is-alternate td.is-sticky-action,
+.executive-queue-table-viewport tbody tr:nth-child(even):not(.executive-queue-detail-row) td.is-sticky-action {
+  --sticky-action-bg: var(--queue-row-alternate);
+}
+.shared-table-viewport tbody tr:not(.shared-table-detail-row):hover td.is-sticky-action,
+.planning-react-row:hover td.is-sticky-action,
+.executive-queue-table-viewport tbody tr:hover:not(.executive-queue-detail-row) td.is-sticky-action {
+  --sticky-action-bg: var(--queue-row-hover);
+}
+.shared-table-viewport tbody tr.is-expanded td.is-sticky-action,
+.planning-react-row.is-expanded td.is-sticky-action,
+.executive-queue-table-viewport tbody tr.is-expanded td.is-sticky-action {
+  --sticky-action-bg: var(--queue-row-expanded);
+}
+.shared-table-viewport tbody tr:focus-within td.is-sticky-action,
+.executive-queue-table-viewport tbody tr.executive-queue-row:focus-within td.is-sticky-action {
+  --sticky-action-bg: var(--queue-row-focus);
+}
+
+/* Opaque one-pixel seam so nothing bleeds through the left boundary. */
+.shared-table-viewport th.is-sticky-action,
+.shared-table-viewport td.is-sticky-action,
+.executive-queue-table-viewport th.is-sticky-action,
+.executive-queue-table-viewport td.is-sticky-action {
+  box-shadow: -1px 0 0 var(--queue-border), -8px 0 12px -12px var(--queue-review-shadow);
+}
+
+.shared-table-viewport tbody tr:nth-child(4n + 3) td.is-sticky-action,
+.planning-react-row.is-alternate td.is-sticky-action { background: var(--queue-row-alternate); }
+.shared-table-viewport tbody tr:not(.shared-table-detail-row):hover td.is-sticky-action,
+.planning-react-row:hover td.is-sticky-action { background: var(--queue-row-hover); }
+.shared-table-viewport tbody tr.is-expanded td.is-sticky-action,
+.planning-react-row.is-expanded td.is-sticky-action { background: var(--queue-row-expanded); }
 
 .shared-table-pagination {
   display: flex;

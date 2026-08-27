@@ -22548,6 +22548,7 @@ function DF({ icon: e, title: t, body: n }) {
 	});
 }
 function OF({ state: e }) {
+	let [t, n] = (0, C.useState)(!1);
 	if (e.status === "loading") return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "source-yield-card",
 		"aria-label": "Loading source yield",
@@ -22561,104 +22562,126 @@ function OF({ state: e }) {
 			body: e.message || "Status could not be loaded."
 		})
 	});
-	let t = e.data;
-	return t != null && t.available ? t.sources.length ? /* @__PURE__ */ (0, Y.jsxs)("section", {
+	let r = e.data;
+	return r != null && r.available ? r.sources.length ? /* @__PURE__ */ (0, Y.jsxs)("section", {
 		className: "source-yield-card",
 		"aria-labelledby": "sourceYieldHeading",
 		children: [/* @__PURE__ */ (0, Y.jsxs)("header", {
 			className: "source-yield-header",
-			children: [/* @__PURE__ */ (0, Y.jsxs)("div", { children: [
-				/* @__PURE__ */ (0, Y.jsx)("span", {
-					className: "source-yield-eyebrow",
-					children: "Acquisition intelligence"
-				}),
-				/* @__PURE__ */ (0, Y.jsx)("h2", {
-					id: "sourceYieldHeading",
-					children: "Source Yield"
-				}),
-				/* @__PURE__ */ (0, Y.jsxs)("p", { children: ["Latest completed pipeline run", t.run_id ? ` · ${t.run_id}` : ""] }),
-				/* @__PURE__ */ (0, Y.jsx)("p", {
-					className: "source-yield-coverage-note",
-					children: "Sources shown reflect the latest completed pipeline run."
-				}),
-				/* @__PURE__ */ (0, Y.jsx)("span", {
-					className: "sr-only",
-					id: "sourceYieldTargetsHelp",
-					children: xF
-				})
-			] }), /* @__PURE__ */ (0, Y.jsxs)("div", {
-				className: "source-yield-chips",
-				"aria-label": "Source yield summary",
-				children: [
-					/* @__PURE__ */ (0, Y.jsxs)("span", { children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(t.totals.source_count) }), " sources contributing"] }),
-					/* @__PURE__ */ (0, Y.jsxs)("span", {
-						title: xF,
-						"aria-describedby": "sourceYieldTargetsHelp",
-						children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(t.totals.accounts_queried) }), " targets queried"]
+			children: [
+				/* @__PURE__ */ (0, Y.jsxs)("div", { children: [
+					/* @__PURE__ */ (0, Y.jsx)("span", {
+						className: "source-yield-eyebrow",
+						children: "Acquisition intelligence"
 					}),
-					/* @__PURE__ */ (0, Y.jsxs)("span", { children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(t.totals.scraped_jobs) }), " acquired"] }),
-					/* @__PURE__ */ (0, Y.jsxs)("span", {
-						className: "is-accent",
-						children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(t.totals.final_display_jobs) }), " final jobs"]
-					})
-				]
-			})]
-		}), /* @__PURE__ */ (0, Y.jsx)("div", {
-			className: "source-yield-table-wrap",
-			children: /* @__PURE__ */ (0, Y.jsxs)("table", {
-				className: "source-yield-table",
-				children: [
-					/* @__PURE__ */ (0, Y.jsx)("caption", {
+					/* @__PURE__ */ (0, Y.jsx)("h2", {
+						id: "sourceYieldHeading",
+						children: "Source Yield"
+					}),
+					/* @__PURE__ */ (0, Y.jsxs)("p", { children: ["Latest completed pipeline run", r.run_id ? ` · ${r.run_id}` : ""] }),
+					/* @__PURE__ */ (0, Y.jsx)("p", {
+						className: "source-yield-coverage-note",
+						children: "Sources shown reflect the latest completed pipeline run."
+					}),
+					/* @__PURE__ */ (0, Y.jsx)("span", {
 						className: "sr-only",
-						children: "Source yield funnel metrics for the latest successful pipeline run"
-					}),
-					/* @__PURE__ */ (0, Y.jsx)("thead", { children: /* @__PURE__ */ (0, Y.jsxs)("tr", { children: [
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "Source"
+						id: "sourceYieldTargetsHelp",
+						children: xF
+					})
+				] }),
+				/* @__PURE__ */ (0, Y.jsxs)("div", {
+					className: "source-yield-chips",
+					"aria-label": "Source yield summary",
+					children: [
+						/* @__PURE__ */ (0, Y.jsxs)("span", { children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(r.totals.source_count) }), " sources contributing"] }),
+						/* @__PURE__ */ (0, Y.jsxs)("span", {
+							title: xF,
+							"aria-describedby": "sourceYieldTargetsHelp",
+							children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(r.totals.accounts_queried) }), " targets queried"]
 						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: /* @__PURE__ */ (0, Y.jsx)("span", {
-								className: "source-yield-target-label",
-								title: xF,
-								"aria-describedby": "sourceYieldTargetsHelp",
-								children: "Targets queried"
-							})
-						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "Acquired"
-						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "Title pass"
-						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "U.S. pass"
-						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "Fresh 24h"
-						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "Final jobs"
-						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "Yield"
-						}),
-						/* @__PURE__ */ (0, Y.jsx)("th", {
-							scope: "col",
-							children: "Health"
+						/* @__PURE__ */ (0, Y.jsxs)("span", { children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(r.totals.scraped_jobs) }), " acquired"] }),
+						/* @__PURE__ */ (0, Y.jsxs)("span", {
+							className: "is-accent",
+							children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: yF(r.totals.final_display_jobs) }), " final jobs"]
 						})
-					] }) }),
-					/* @__PURE__ */ (0, Y.jsx)("tbody", { children: t.sources.map((e) => /* @__PURE__ */ (0, Y.jsx)(EF, { row: e }, e.source)) })
-				]
+					]
+				}),
+				/* @__PURE__ */ (0, Y.jsxs)("button", {
+					type: "button",
+					className: "source-yield-section-toggle",
+					"aria-expanded": t,
+					"aria-controls": "sourceYieldBody",
+					onClick: () => n((e) => !e),
+					children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+						className: "sr-only",
+						children: t ? "Collapse source yield details" : "Expand source yield details"
+					}), /* @__PURE__ */ (0, Y.jsx)(P, {
+						"aria-hidden": "true",
+						className: `source-yield-section-chevron${t ? " is-expanded" : ""}`,
+						size: 18
+					})]
+				})
+			]
+		}), t ? /* @__PURE__ */ (0, Y.jsx)("div", {
+			className: "source-yield-body",
+			id: "sourceYieldBody",
+			children: /* @__PURE__ */ (0, Y.jsx)("div", {
+				className: "source-yield-table-wrap",
+				children: /* @__PURE__ */ (0, Y.jsxs)("table", {
+					className: "source-yield-table",
+					children: [
+						/* @__PURE__ */ (0, Y.jsx)("caption", {
+							className: "sr-only",
+							children: "Source yield funnel metrics for the latest successful pipeline run"
+						}),
+						/* @__PURE__ */ (0, Y.jsx)("thead", { children: /* @__PURE__ */ (0, Y.jsxs)("tr", { children: [
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "Source"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: /* @__PURE__ */ (0, Y.jsx)("span", {
+									className: "source-yield-target-label",
+									title: xF,
+									"aria-describedby": "sourceYieldTargetsHelp",
+									children: "Targets queried"
+								})
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "Acquired"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "Title pass"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "U.S. pass"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "Fresh 24h"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "Final jobs"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "Yield"
+							}),
+							/* @__PURE__ */ (0, Y.jsx)("th", {
+								scope: "col",
+								children: "Health"
+							})
+						] }) }),
+						/* @__PURE__ */ (0, Y.jsx)("tbody", { children: r.sources.map((e) => /* @__PURE__ */ (0, Y.jsx)(EF, { row: e }, e.source)) })
+					]
+				})
 			})
-		})]
+		}) : null]
 	}) : /* @__PURE__ */ (0, Y.jsx)("div", {
 		className: "source-yield-card",
 		children: /* @__PURE__ */ (0, Y.jsx)(DF, {
@@ -30386,7 +30409,21 @@ function BB({ state: e }) {
 			disabled: !e.bulkSuggestions.available || e.bulkSuggestions.isRunning,
 			title: e.bulkSuggestions.eligibleCount > 0 ? `Generate suggestions for ${e.bulkSuggestions.eligibleCount} eligible Planning job${e.bulkSuggestions.eligibleCount === 1 ? "" : "s"}.` : "No Planning jobs currently need suggestions.",
 			onClick: () => wB({ type: "bulk_generate_suggestions" }),
-			children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Bulk generate suggestions" }), /* @__PURE__ */ (0, Y.jsxs)("small", { children: [e.bulkSuggestions.eligibleCount, " eligible"] })]
+			children: [
+				/* @__PURE__ */ (0, Y.jsx)("span", {
+					className: "planning-react-bulk-generate__icon",
+					"aria-hidden": "true",
+					children: /* @__PURE__ */ (0, Y.jsx)(ke, {
+						size: 15,
+						strokeWidth: 2
+					})
+				}),
+				/* @__PURE__ */ (0, Y.jsx)("span", {
+					className: "planning-react-bulk-generate__label",
+					children: "Bulk generate suggestions"
+				}),
+				/* @__PURE__ */ (0, Y.jsxs)("small", { children: [e.bulkSuggestions.eligibleCount, " eligible"] })
+			]
 		}),
 		table: c,
 		columns: a,

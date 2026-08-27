@@ -120,10 +120,10 @@ def planning_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=bulk_generate_suggestions_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=planning_dashboard_ui_polish_r3" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=planning_bulk_action_control_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=planning_tailoring_workflow_polish_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=planning_dashboard_ui_polish_r6" />
 </head>
 <body class="planning-dashboard-page">
 {render_top_shell("/planning")}
@@ -669,7 +669,7 @@ def planning_dashboard() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=planning_dashboard_ui_polish_r6"></script>
   <script src="/static/planning.js?v=bulk_generate_suggestions_r2"></script>
 </body>
 </html>

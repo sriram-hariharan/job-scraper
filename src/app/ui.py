@@ -39,7 +39,7 @@ def executive_dashboard() -> str:
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=dashboard_ui_polish_r3" />
 </head>
 <body class="executive-dashboard-page">
   {render_top_shell("/")}
@@ -78,7 +78,7 @@ def executive_dashboard() -> str:
       <noscript>Enable JavaScript to view source yield.</noscript>
     </section>
 
-    <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
+    <div class="subtext pipeline-run-meta hidden" id="pipelineRunMeta">Pipeline idle.</div>
     <section
       id="executiveQueueRoot"
       class="executive-queue-root"
@@ -239,7 +239,7 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=dashboard_ui_polish_r3"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
 </html>

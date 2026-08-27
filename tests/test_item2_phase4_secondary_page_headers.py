@@ -206,13 +206,17 @@ def test_all_shared_shell_pages_use_the_item7b_cache_marker():
         APPLICATION_HUB_UI_SOURCE,
         PROFILE_UI_SOURCE,
     )
-    assert sum(source.count("item7b_v1_toolbar_notification_r1") for source in sources) == 15
+    # Planning now owns its own app_redesign.css marker so the Bulk action
+    # control receives the scoped button exemption after a reload; every other
+    # shell page still shares the Item 7b marker.
+    assert sum(source.count("item7b_v1_toolbar_notification_r1") for source in sources) == 14
     assert sum(source.count("item7b_account_toolbar_r1") for source in sources) == 15
 
 
 def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
     old_bundle_marker = "item2_phase3_shared_header_r1"
-    planning_marker = "planning_tailoring_workflow_polish_r1"
+    planning_marker = "planning_bulk_action_control_r1"
+    planning_bundle_marker = "planning_dashboard_ui_polish_r6"
     # Bulk Generate Suggestions ships new planning.js/styles.css content;
     # the executive-kpi bundle markers stay frozen for this phase.
     bulk_marker = "bulk_generate_suggestions_r2"
@@ -238,10 +242,18 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
 
     # Planning UI polish owns only these exact Planning route references. The
     # unchanged executive JavaScript bundle remains on its Phase 3 marker.
-    assert f'/static/styles.css?v={bulk_marker}' in planning_route
-    assert f'/static/build/executive-kpi/executive-kpi.css?v={planning_marker}' in planning_route
+    # styles.css advanced again: the global button exclusion that lets the
+    # Bulk control own its own background changed that file's contents.
+    assert (
+        '/static/styles.css?v=planning_dashboard_ui_polish_r3' in planning_route
+    )
+    assert f'/static/build/executive-kpi/executive-kpi.css?v={planning_bundle_marker}' in planning_route
     assert f'/static/planning.js?v={bulk_marker}' in planning_route
-    assert old_js in planning_route
+    assert (
+        f'/static/build/executive-kpi/executive-kpi.js?v={planning_bundle_marker}'
+        in planning_route
+    )
+    assert old_js not in planning_route
     assert old_css not in planning_route
     assert '/static/shell.js?v=item7b_account_toolbar_r1' in planning_route
 

@@ -55,6 +55,9 @@ describe("SourceYield", () => {
   it("renders the compact source funnel contract and accessible details", () => {
     render(<SourceYield state={{ status: "ready", data }} />);
 
+    // The module is a drawer: open it before asserting the table contract.
+    fireEvent.click(screen.getByRole("button", { name: "Expand source yield details" }));
+
     expect(screen.getByRole("heading", { name: "Source Yield" })).toBeInTheDocument();
     for (const heading of ["Source", "Targets queried", "Acquired", "Title pass", "U.S. pass", "Fresh 24h", "Final jobs", "Yield", "Health"]) {
       expect(screen.getByRole("columnheader", { name: heading })).toBeInTheDocument();
@@ -105,6 +108,48 @@ describe("SourceYield", () => {
       }).label).toBe(expected);
     },
   );
+
+  it("stays collapsed by default and only mounts the table once opened", () => {
+    render(<SourceYield state={{ status: "ready", data }} />);
+
+    // Collapsed: header/chips remain, table is absent.
+    expect(screen.getByRole("heading", { name: "Source Yield" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Source yield summary")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole("button", { name: "Expand source yield details" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveAttribute("aria-controls", "sourceYieldBody");
+
+    fireEvent.click(toggle);
+
+    const openToggle = screen.getByRole("button", { name: "Collapse source yield details" });
+    expect(openToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+
+    fireEvent.click(openToggle);
+
+    expect(
+      screen.getByRole("button", { name: "Expand source yield details" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("keeps per-source row expansion working after the drawer is opened", () => {
+    render(<SourceYield state={{ status: "ready", data }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand source yield details" }));
+
+    const sourceButton = screen.getByRole("button", { name: "Usajobs" });
+    expect(sourceButton).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(sourceButton);
+    expect(sourceButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Conversion funnel")).toBeInTheDocument();
+
+    fireEvent.click(sourceButton);
+    expect(sourceButton).toHaveAttribute("aria-expanded", "false");
+  });
 
   it("keeps loading, unavailable, zero, and error states truthful", () => {
     const { rerender } = render(<SourceYield state={{ status: "loading" }} />);

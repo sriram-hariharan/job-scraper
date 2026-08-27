@@ -22,6 +22,7 @@ from time import monotonic
 from typing import Any, Callable, Dict, Iterable, Mapping, Sequence
 
 from src.evaluation.controlled_production_parity_benchmark import (
+    MAXIMUM_PRODUCTION_CONTRACT_FAILURES,
     PRODUCTION_PARITY_BLOCKED_WORKLOADS,
     PRODUCTION_PARITY_RUNNABLE_WORKLOADS,
     build_production_parity_request,
@@ -47,6 +48,7 @@ from src.evaluation.production_task_contract_fingerprints import (
     build_all_production_task_contract_fingerprints,
 )
 from src.evaluation.provider_benchmark_contract import (
+    HARD_FAILURE_ORDER,
     MODEL_ORDER,
     WORKLOAD_ORDER,
     provider_benchmark_contract_sha256,
@@ -161,8 +163,59 @@ _EVIDENCE_FIELDS = {
     "stop_reason",
     "aggregate_usage",
     "grading_summaries",
+    "failure_diagnostics",
+    "transport_diagnostics",
     "retention_policy",
     "authority_invariants",
+}
+# Transport rejections happen BEFORE grading, so they deliberately do not carry
+# contract/quality-gate fields: fabricating them would misreport a request that
+# never produced a gradeable response. Same bounded-evidence convention as
+# failure_diagnostics, kept as a distinct truthful shape.
+_TRANSPORT_DIAGNOSTIC_FIELDS = {
+    "schedule_key",
+    "workload_id",
+    "provider",
+    "model",
+    "transport_failure_category",
+    "http_status_code",
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+    "has_failed_generation",
+}
+# Categorical tokens are accepted only from the repository's established
+# provider-error allowlists; anything else is already reduced to None upstream.
+_TRANSPORT_DIAGNOSTIC_TOKEN_FIELDS = (
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+)
+# Bounded, explanatory-only diagnostics for cells that fail the hard safety
+# check. Qualification remains decided by the registry status ladder; these
+# fields exist purely so a rejected cell can be explained after the fact.
+_FAILURE_DIAGNOSTIC_FIELDS = {
+    "schedule_key",
+    "case_alias",
+    "workload_id",
+    "provider",
+    "model",
+    "production_contract_valid",
+    "production_validation_errors",
+    "production_contract_failures",
+    "unsupported_claim_tokens",
+    "quality_gate_passed",
+    "hard_failure_present",
+    "hard_failures",
+    "quality_gate_components",
+}
+_QUALITY_GATE_COMPONENT_FIELDS = {
+    "schema_valid",
+    "normalization_succeeded",
+    "required_field_completeness",
+    "authority_preserved",
+    "task_quality_passed",
+    "all_hard_failures_zero",
 }
 _VALIDATION_CONTEXT_FIELDS = {
     "context_version",
@@ -230,11 +283,35 @@ class LiveQualificationAmbiguousTimeout(RuntimeError):
 
 
 class LiveQualificationDefinitiveFailure(RuntimeError):
-    """The provider definitively rejected the single authorized request."""
+    """The provider definitively rejected the single authorized request.
+
+    Optional ``status_code`` is bounded observability only and never affects
+    the stop-reason taxonomy or retry/fallback behavior.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        self.provider_error = dict(provider_error) if provider_error else None
 
 
 class LiveQualificationUnknownOutcome(RuntimeError):
     """The provider outcome cannot be safely classified."""
+
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        self.provider_error = dict(provider_error) if provider_error else None
 
 
 class LiveQualificationPersistenceFailure(RuntimeError):
@@ -246,6 +323,37 @@ def _bounded_transport_failure_stop_reason(value: Any) -> str:
     if category in _BOUNDED_TRANSPORT_FAILURE_STOP_REASONS:
         return category
     return "unknown_provider_outcome"
+
+
+def _safe_transport_provider_error(value: Any) -> Dict[str, Any]:
+    """Re-read only the bounded provider-error projection the adapter attached."""
+
+    payload = getattr(value, "provider_error", None)
+    if not isinstance(payload, Mapping):
+        return {
+            "provider_error_type": None,
+            "provider_error_code": None,
+            "provider_error_param": None,
+            "has_failed_generation": False,
+        }
+    return {
+        "provider_error_type": _clean(payload.get("provider_error_type")) or None,
+        "provider_error_code": _clean(payload.get("provider_error_code")) or None,
+        "provider_error_param": _clean(payload.get("provider_error_param")) or None,
+        "has_failed_generation": bool(payload.get("has_failed_generation", False)),
+    }
+
+
+def _safe_transport_status_code(value: Any) -> int | None:
+    """Read only the bounded integer status attribute a transport error carries."""
+
+    status_code = getattr(value, "status_code", None)
+    if isinstance(status_code, bool):
+        return None
+    try:
+        return int(status_code)
+    except (TypeError, ValueError):
+        return None
 
 
 def _require(condition: bool, message: str) -> None:
@@ -304,6 +412,120 @@ def _iter_keys(value: Any) -> Iterable[str]:
 
 def _contains_prohibited_serialized_key(value: Any) -> bool:
     return any(key in _PROHIBITED_SERIALIZED_KEYS for key in _iter_keys(value))
+
+
+MAXIMUM_UNSUPPORTED_CLAIM_TOKENS = 16
+
+
+def _safe_unsupported_claim_tokens(value: Any) -> list[str]:
+    """Retain only tokens the closed claim extractor itself recognizes.
+
+    The grader derives these from a fixed regex vocabulary, so re-running that
+    extractor over each candidate token is an independent guarantee that no
+    free provider text, direction sentence, or prompt fragment can enter the
+    evidence even if an upstream projection changed.
+    """
+
+    from src.evaluation.controlled_production_parity_benchmark import _claim_tokens
+
+    if not isinstance(value, list):
+        return []
+    accepted: list[str] = []
+    for item in value:
+        token = _clean(item).lower()
+        if not token or token in accepted:
+            continue
+        # A token survives only when it round-trips through the closed extractor.
+        if _claim_tokens(token) == [token]:
+            accepted.append(token)
+    return sorted(accepted)[:MAXIMUM_UNSUPPORTED_CLAIM_TOKENS]
+
+
+def _bounded_failure_diagnostic(
+    *,
+    schedule_key: str,
+    scheduled: Mapping[str, Any],
+    parity_result: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Explain one failed cell using only values the graders already produced.
+
+    Nothing here is reconstructed from provider output: the raw response, the
+    normalized output and the request packet are all deliberately excluded so
+    the artifact stays safe to retain. Counter ordering follows the
+    authoritative HARD_FAILURE_ORDER so the evidence digest stays deterministic.
+    """
+
+    quality = parity_result.get("benchmark_quality")
+    quality = quality if isinstance(quality, dict) else {}
+    raw_hard_failures = quality.get("hard_failures")
+    raw_hard_failures = (
+        raw_hard_failures if isinstance(raw_hard_failures, dict) else {}
+    )
+    hard_failures = {
+        failure_id: int(raw_hard_failures.get(failure_id, 0) or 0)
+        for failure_id in HARD_FAILURE_ORDER
+    }
+    workload_metrics = quality.get("workload_metrics")
+    workload_metrics = (
+        workload_metrics if isinstance(workload_metrics, dict) else {}
+    )
+    unsupported_claim_tokens = _safe_unsupported_claim_tokens(
+        quality.get("unsupported_claim_tokens")
+    )
+    # Only bounded codes are retained. The production normalizer intentionally
+    # discards its exception, so there is no exception text to serialize.
+    validation_errors = [
+        _clean(code)
+        for code in list(parity_result.get("production_validation_errors") or [])
+        if _clean(code)
+    ]
+    # Bounded structured detail produced by the parity layer from typed
+    # attributes only. Deterministic order; provider values never appear.
+    contract_failures = [
+        {
+            "code": _clean(row.get("code")),
+            "index": row.get("index") if isinstance(row.get("index"), int) else None,
+            "count": row.get("count") if isinstance(row.get("count"), int) else None,
+        }
+        for row in list(parity_result.get("production_contract_failures") or [])
+        if isinstance(row, dict) and _clean(row.get("code"))
+    ]
+
+    return {
+        "schedule_key": schedule_key,
+        "case_alias": scheduled["case_alias"],
+        "workload_id": scheduled["workload_id"],
+        "provider": scheduled["provider"],
+        "model": scheduled["model"],
+        "production_contract_valid": bool(
+            parity_result.get("production_contract_valid", False)
+        ),
+        "production_validation_errors": validation_errors,
+        "production_contract_failures": contract_failures,
+        "unsupported_claim_tokens": unsupported_claim_tokens,
+        "quality_gate_passed": bool(quality.get("quality_gate_passed", False)),
+        "hard_failure_present": any(value != 0 for value in hard_failures.values()),
+        "hard_failures": hard_failures,
+        "quality_gate_components": {
+            "schema_valid": bool(quality.get("schema_valid_response", 0.0)),
+            "normalization_succeeded": bool(
+                quality.get("normalization_success", 0.0)
+            ),
+            "required_field_completeness": float(
+                quality.get("required_field_completeness", 0.0) or 0.0
+            ),
+            "authority_preserved": hard_failures[
+                "deterministic_authority_mutation"
+            ]
+            == 0,
+            "task_quality_passed": bool(
+                workload_metrics.get("task_quality_passed", False)
+            ),
+            "all_hard_failures_zero": all(
+                value == 0 for value in hard_failures.values()
+            ),
+        },
+    }
 
 
 def _iter_strings(value: Any) -> Iterable[str]:
@@ -730,9 +952,20 @@ def _default_dispatch(
             raise LiveQualificationAmbiguousTimeout("ambiguous_timeout") from None
         if name == "DefinitiveTransportFailure":
             category = _bounded_transport_failure_stop_reason(exc)
+            # Bounded integer/categorical only; classification is unchanged.
+            status_code = _safe_transport_status_code(exc)
+            provider_error = _safe_transport_provider_error(exc)
             if category == "unknown_provider_outcome":
-                raise LiveQualificationUnknownOutcome(category) from None
-            raise LiveQualificationDefinitiveFailure(category) from None
+                raise LiveQualificationUnknownOutcome(
+                    category,
+                    status_code=status_code,
+                    provider_error=provider_error,
+                ) from None
+            raise LiveQualificationDefinitiveFailure(
+                category,
+                status_code=status_code,
+                provider_error=provider_error,
+            ) from None
         if name == "UnknownProviderOutcome":
             raise LiveQualificationUnknownOutcome("unknown_provider_outcome") from None
         raise
@@ -777,6 +1010,8 @@ def _empty_evidence(
             },
         },
         "grading_summaries": [],
+        "failure_diagnostics": [],
+        "transport_diagnostics": [],
         "retention_policy": {
             "automatic_persistence": False,
             "explicit_persistence_required": True,
@@ -873,6 +1108,121 @@ def validate_live_qualification_evidence(
         and set(summary_keys).issubset(set(attempted)),
         "live evidence grading summary scope is invalid",
     )
+    diagnostics = evidence["failure_diagnostics"]
+    _require(
+        isinstance(diagnostics, list)
+        and all(
+            isinstance(row, dict) and set(row) == _FAILURE_DIAGNOSTIC_FIELDS
+            for row in diagnostics
+        ),
+        "live evidence failure diagnostics are invalid",
+    )
+    transport_rows = evidence["transport_diagnostics"]
+    _require(
+        isinstance(transport_rows, list)
+        and all(
+            isinstance(row, dict)
+            and set(row) == _TRANSPORT_DIAGNOSTIC_FIELDS
+            and isinstance(row["transport_failure_category"], str)
+            # Mirrors exactly what _bounded_transport_failure_stop_reason can
+            # return: a bounded member, or the fail-closed generic outcome for
+            # unrecognized detail.
+            and row["transport_failure_category"]
+            in (
+                _BOUNDED_TRANSPORT_FAILURE_STOP_REASONS
+                | {"unknown_provider_outcome"}
+            )
+            and (
+                row["http_status_code"] is None
+                or (
+                    isinstance(row["http_status_code"], int)
+                    and not isinstance(row["http_status_code"], bool)
+                )
+            )
+            and isinstance(row["has_failed_generation"], bool)
+            for row in transport_rows
+        ),
+        "live evidence transport diagnostics are invalid",
+    )
+    from src.ai.llm_client import (
+        _SAFE_PROVIDER_ERROR_CODES,
+        _SAFE_PROVIDER_ERROR_PARAMS,
+        _SAFE_PROVIDER_ERROR_TYPES,
+    )
+
+    allowed_tokens = {
+        "provider_error_type": _SAFE_PROVIDER_ERROR_TYPES,
+        "provider_error_code": _SAFE_PROVIDER_ERROR_CODES,
+        "provider_error_param": _SAFE_PROVIDER_ERROR_PARAMS,
+    }
+    _require(
+        all(
+            row[field] is None or row[field] in allowed_tokens[field]
+            for row in transport_rows
+            for field in _TRANSPORT_DIAGNOSTIC_TOKEN_FIELDS
+        ),
+        "live evidence transport diagnostic tokens are not allowlisted",
+    )
+    transport_keys = [row["schedule_key"] for row in transport_rows]
+    _require(
+        len(transport_keys) == len(set(transport_keys))
+        and set(transport_keys).issubset(set(evidence["blocked_schedule_keys"])),
+        "live evidence transport diagnostic scope is invalid",
+    )
+    diagnostic_keys = [row["schedule_key"] for row in diagnostics]
+    _require(
+        len(diagnostic_keys) == len(set(diagnostic_keys))
+        and set(diagnostic_keys).issubset(set(evidence["blocked_schedule_keys"])),
+        "live evidence failure diagnostic scope is invalid",
+    )
+    for diagnostic in diagnostics:
+        _require(
+            isinstance(diagnostic["hard_failures"], dict)
+            and set(diagnostic["hard_failures"]) == set(HARD_FAILURE_ORDER)
+            and all(
+                isinstance(value, int)
+                for value in diagnostic["hard_failures"].values()
+            ),
+            "live evidence failure diagnostic counters are invalid",
+        )
+        _require(
+            isinstance(diagnostic["quality_gate_components"], dict)
+            and set(diagnostic["quality_gate_components"])
+            == _QUALITY_GATE_COMPONENT_FIELDS,
+            "live evidence failure diagnostic gate components are invalid",
+        )
+        _require(
+            isinstance(diagnostic["production_validation_errors"], list)
+            and all(
+                isinstance(code, str) and code
+                for code in diagnostic["production_validation_errors"]
+            ),
+            "live evidence failure diagnostic validation codes are invalid",
+        )
+        _require(
+            isinstance(diagnostic["production_contract_failures"], list)
+            and len(diagnostic["production_contract_failures"])
+            <= MAXIMUM_PRODUCTION_CONTRACT_FAILURES
+            and all(
+                isinstance(row, dict)
+                and set(row) == {"code", "index", "count"}
+                and isinstance(row["code"], str)
+                and bool(row["code"])
+                and (row["index"] is None or isinstance(row["index"], int))
+                and (row["count"] is None or isinstance(row["count"], int))
+                for row in diagnostic["production_contract_failures"]
+            ),
+            "live evidence failure diagnostic contract failures are invalid",
+        )
+        tokens = diagnostic["unsupported_claim_tokens"]
+        _require(
+            isinstance(tokens, list)
+            and len(tokens) <= MAXIMUM_UNSUPPORTED_CLAIM_TOKENS
+            and tokens == sorted(set(tokens))
+            and all(isinstance(token, str) and token for token in tokens)
+            and tokens == _safe_unsupported_claim_tokens(tokens),
+            "live evidence unsupported claim tokens are invalid",
+        )
     universe = {
         row["schedule_key"]: row
         for row in build_live_qualification_universe(plan)
@@ -1175,7 +1525,20 @@ def execute_controlled_live_qualification(
             break
         except LiveQualificationDefinitiveFailure as exc:
             evidence["blocked_schedule_keys"].append(key)
-            evidence["stop_reason"] = _bounded_transport_failure_stop_reason(exc)
+            category = _bounded_transport_failure_stop_reason(exc)
+            evidence["stop_reason"] = category
+            # Additive only: the stop reason above is unchanged.
+            evidence["transport_diagnostics"].append(
+                {
+                    "schedule_key": key,
+                    "workload_id": scheduled["workload_id"],
+                    "provider": scheduled["provider"],
+                    "model": scheduled["model"],
+                    "transport_failure_category": category,
+                    "http_status_code": _safe_transport_status_code(exc),
+                    **_safe_transport_provider_error(exc),
+                }
+            )
             break
         except Exception:
             evidence["blocked_schedule_keys"].append(key)
@@ -1256,6 +1619,16 @@ def execute_controlled_live_qualification(
             evidence["stop_reason"] = "cost_ceiling_exceeded"
             break
         if not production_valid or not quality_passed or hard_failure_present:
+            # Capture the bounded explanation before fail-fast exit; without
+            # this the rejected cell keeps only its status/reason codes and the
+            # reason for rejection is unrecoverable.
+            evidence["failure_diagnostics"].append(
+                _bounded_failure_diagnostic(
+                    schedule_key=key,
+                    scheduled=scheduled,
+                    parity_result=parity_result,
+                )
+            )
             evidence["blocked_schedule_keys"].append(key)
             evidence["stop_reason"] = "hard_safety_failure"
             break

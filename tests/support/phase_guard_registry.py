@@ -2565,10 +2565,21 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         raise AssertionError(f"Unknown legacy guard allowlist profile: {profile}") from exc
 
 
+LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES = {
+    "src/ai/user_provider_runtime.py",
+    "src/evaluation/controlled_live_provider_qualification.py",
+    "tests/test_phase1_step10_recommended_provider_routing_bridge.py",
+    "tests/test_phase1_step9c7a_controlled_live_qualification_gate.py",
+    "tests/test_provider_model_recommendation_policy.py",
+    "tests/test_score_first_scan.py",
+}
+
+
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
-        STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
+        LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
@@ -2848,10 +2859,14 @@ def assert_protected_hashes(
             "d7107123ae4a98bf133f14b8593902a8c33e151660cb7024a6bec25186ea89c9",
             # Item 7.1B safe diagnostics runtime foundation successor.
             "1c945efff35250fbdc2b92b7a608b1acdee668694c2952d7d45aadc9d809c9fe",
+            # Bounded live tailoring parse-retry authority successor.
+            "895a72ab959d0f2a4195b7563c5e0a73d0c4e83e4f075065bd76072720c08e6a",
             # Item 7.1D latest diagnostics workflow reset successor.
             "c1698f3b988371a1df644c9c1f1e0906526d45b7886990842216ea76d8ad824d",
             # Scheduler-artifact notification bell bridge successor.
             "85247b5e2ac0987429293ff83f7d6463110fa1123c0e0bb4d0c834f546eb573b",
+            # Planning bulk suggestions and uncapped browse limit successor.
+            "b386161a6da69dc1eacfda8583846b5ee979d8dcba51ec33e83afd48c1e39c11",
         }),
         (
             "src/app/services.py",
@@ -2883,18 +2898,30 @@ def assert_protected_hashes(
             "ff2f412c4bcc3067e73d4fb78c65b53fa9d9760f56f1451d0dff6d4840386309",
             "687ce0fa50a7a7a6498dc93287489027708fe866da90a97ae2fff941f4bcae44",
             "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
+            # Workload-scoped Groq json_object compatibility successor.
+            "27a0fd87f1be4372b78bdaced6451f5d7c4a286cf8bc6398914b5158a8d1cb20",
         }),
         (
             "src/ai/llm_client.py",
             "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
         ): frozenset({
             "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
+            # Workload-scoped Groq json_object compatibility successor.
+            "27a0fd87f1be4372b78bdaced6451f5d7c4a286cf8bc6398914b5158a8d1cb20",
         }),
         (
             "src/evaluation/controlled_groq_canary_transport.py",
             "89d01fe8460e7eae40e794dce808bb26aef6dbb02366e7c5d5bed268fdf00489",
         ): frozenset({
             "06bb37112326d658f9a7bcac6cac0897c3150652a8b734cff0794e1997746741",
+            # Bounded transport HTTP-status observability successor: retains the
+            # already-computed integer status on DefinitiveTransportFailure.
+            # Classification, retry, and fallback behavior are unchanged.
+            "8400de79ebe34da31300ad93b7a18b6c71c216613fc6f7e54d35b23ba1d89fe1",
+            # Bounded structural Groq error projection successor: adds
+            # allowlisted provider_error_type/code/param plus a
+            # has_failed_generation boolean. No provider text is retained.
+            "2d5652030715d9300d16244f53c6096785b2193e73d870d3bfaf3573c25a9ab9",
         }),
         (
             "src/ai/job_fit_evaluator.py",
@@ -2931,10 +2958,14 @@ def assert_protected_hashes(
             "d7107123ae4a98bf133f14b8593902a8c33e151660cb7024a6bec25186ea89c9",
             # Item 7.1B safe diagnostics runtime foundation successor.
             "1c945efff35250fbdc2b92b7a608b1acdee668694c2952d7d45aadc9d809c9fe",
+            # Bounded live tailoring parse-retry authority successor.
+            "895a72ab959d0f2a4195b7563c5e0a73d0c4e83e4f075065bd76072720c08e6a",
             # Item 7.1D latest diagnostics workflow reset successor.
             "c1698f3b988371a1df644c9c1f1e0906526d45b7886990842216ea76d8ad824d",
             # Scheduler-artifact notification bell bridge successor.
             "85247b5e2ac0987429293ff83f7d6463110fa1123c0e0bb4d0c834f546eb573b",
+            # Planning bulk suggestions and uncapped browse limit successor.
+            "b386161a6da69dc1eacfda8583846b5ee979d8dcba51ec33e83afd48c1e39c11",
         }),
         (
             "src/app/services.py",
@@ -2953,6 +2984,11 @@ def assert_protected_hashes(
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
         ): frozenset({
+            # Bounded live tailoring parse-retry authority successor.
+            "2b55cad33fc29986d36c02f18eed5dc72f785e39c95e0f7d80bc67af3002ab51",
+            # Reviewed Bulk universe projection + grounded-review/empty status
+            # work, with the historical browse_payload limit clamp restored.
+            "8e339d90d055bf15b184466487d6af23a1e062e033e3938daa073de2edcc45dc",
             "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
             "b71cf683a281bfa07de70fe41a101975f066c35179e7607af6d078f10ee35835",
             "4f9c9b7a8266d0017bdef62a1db3809fa7d9bd2b4d7d975e8f134e84fe00c386",
@@ -2998,6 +3034,8 @@ def assert_protected_hashes(
                 "c37b51252e77d0004d50c1d819b40d828144a011fcd5742b08483d7d7bee6e63",
                 # Scheduler-artifact notification bell bridge successor.
                 "0016a2d936e16461450853a4e8bfc96ef92fdeea978424a7f126245002071e3c",
+                # Planning bulk suggestions and uncapped browse limit successor.
+                "c6d272bd777e49a12ebaaeba9eb093360b7b889589df9ca95934a66393e96c88",
             }),
         (
             "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
@@ -3086,11 +3124,19 @@ def assert_protected_hashes(
         (
             "src/tailoring/llm.py",
             "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
-        ): "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+        ): frozenset({
+            "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+            # Workload-scoped Groq json_object compatibility successor.
+            "01d4b57686733c40fcdb65b2a4eea648175bac3effb4c43b59068135467c2df5",
+        }),
         (
             "src/tailoring/llm.py",
             "5e9e858c6b671526eb6839d110ae05aae780d1c165a37a8bde2c1cc5bcecf31d",
-        ): "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+        ): frozenset({
+            "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+            # Workload-scoped Groq json_object compatibility successor.
+            "01d4b57686733c40fcdb65b2a4eea648175bac3effb4c43b59068135467c2df5",
+        }),
         (
             "src/pipeline/job_ranker.py",
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",

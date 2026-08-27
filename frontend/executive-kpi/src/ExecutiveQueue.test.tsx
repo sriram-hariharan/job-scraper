@@ -164,7 +164,9 @@ describe("ExecutiveQueue", () => {
     fireEvent.click(screen.getByRole("option", { name: "Data Engineering" }));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     expect(listener.actions).toHaveLength(0);
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Limit" }), { target: { value: "40" } });
+    const limit = screen.getByRole("spinbutton", { name: "Limit" });
+    expect(limit).not.toHaveAttribute("max");
+    fireEvent.change(limit, { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: "Yes" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
 
@@ -174,7 +176,7 @@ describe("ExecutiveQueue", () => {
         actions: ["APPLY"],
         preferenceIds: ["data_engineering"],
         undecidedOnly: true,
-        limit: 40,
+        limit: 1000,
       },
     });
 

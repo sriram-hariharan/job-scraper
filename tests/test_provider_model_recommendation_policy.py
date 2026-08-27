@@ -117,7 +117,7 @@ def isolated_registry_validation(monkeypatch):
     )
 
 
-def test_policy_has_exact_frozen_6_5_1_split():
+def test_policy_has_exact_frozen_7_4_1_split():
     result = policy.build_provider_model_recommendation_policy(
         _synthetic_registry()
     )
@@ -128,8 +128,8 @@ def test_policy_has_exact_frozen_6_5_1_split():
     ]
 
     assert len(result["workloads"]) == 12
-    assert statuses.count("recommended") == 6
-    assert statuses.count("fail_closed_zero_qualified") == 5
+    assert statuses.count("recommended") == 7
+    assert statuses.count("fail_closed_zero_qualified") == 4
     assert statuses.count("blocked_non_live") == 1
 
     assert result["cost_selection_weight"] == 0
@@ -143,7 +143,7 @@ def test_policy_has_exact_frozen_6_5_1_split():
     )
 
 
-def test_exact_six_recommendation_identities_and_bindings_are_frozen():
+def test_exact_seven_recommendation_identities_and_bindings_are_frozen():
     result = policy.build_provider_model_recommendation_policy(
         _synthetic_registry()
     )
@@ -260,7 +260,7 @@ def test_fail_closed_workload_cannot_auto_promote_new_model():
     target = next(
         cell
         for cell in payload["cells"]
-        if cell["workload_id"] == "tailoring_generation"
+        if cell["workload_id"] == "critic_evaluation"
     )
     target["status"] = "qualified"
 

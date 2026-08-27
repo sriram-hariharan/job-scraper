@@ -1559,6 +1559,10 @@ def grade_normalized_candidate_result(
         "critic_agreement": workload_metrics.get("critic_agreement"),
         "workload_metrics": deepcopy(workload_metrics),
         "hard_failures": hard_failures,
+        # Observability only: the exact deterministic token set the grader
+        # already computed for unsupported_claim, carried forward instead of
+        # being reduced to a bare count. Never influences any gate decision.
+        "unsupported_claim_tokens": list(unsupported),
         "quality_gate_passed": quality_gate_passed,
         "cost_comparison_eligible": (
             quality_gate_passed

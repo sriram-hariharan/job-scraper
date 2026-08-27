@@ -36,7 +36,7 @@ def test_planning_route_mounts_the_scoped_react_islands_and_canonical_bundle() -
     # header was migrated onto the shared .app-page-header contract.
     assert '/static/build/executive-kpi/executive-kpi.css?v=planning_tailoring_workflow_polish_r1' in html
     assert '/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1' in html
-    assert '/static/planning.js?v=planning_tailoring_workflow_polish_r1' in html
+    assert '/static/planning.js?v=bulk_generate_suggestions_r2' in html
 
 
 def test_executive_and_planning_import_the_same_real_table_primitives() -> None:

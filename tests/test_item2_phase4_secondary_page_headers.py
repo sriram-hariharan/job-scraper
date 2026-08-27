@@ -213,6 +213,9 @@ def test_all_shared_shell_pages_use_the_item7b_cache_marker():
 def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
     old_bundle_marker = "item2_phase3_shared_header_r1"
     planning_marker = "planning_tailoring_workflow_polish_r1"
+    # Bulk Generate Suggestions ships new planning.js/styles.css content;
+    # the executive-kpi bundle markers stay frozen for this phase.
+    bulk_marker = "bulk_generate_suggestions_r2"
     old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_bundle_marker}'
     old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_bundle_marker}'
 
@@ -235,9 +238,9 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
 
     # Planning UI polish owns only these exact Planning route references. The
     # unchanged executive JavaScript bundle remains on its Phase 3 marker.
-    assert f'/static/styles.css?v={planning_marker}' in planning_route
+    assert f'/static/styles.css?v={bulk_marker}' in planning_route
     assert f'/static/build/executive-kpi/executive-kpi.css?v={planning_marker}' in planning_route
-    assert f'/static/planning.js?v={planning_marker}' in planning_route
+    assert f'/static/planning.js?v={bulk_marker}' in planning_route
     assert old_js in planning_route
     assert old_css not in planning_route
     assert '/static/shell.js?v=item7b_account_toolbar_r1' in planning_route

@@ -356,6 +356,73 @@ def test_direction_only_artifacts_are_no_safe_rewrites_not_unavailable(tmp_path)
     assert no_safe_row["tailoring_review_replacement_count"] == 1
 
 
+def test_placeholder_bullet_diagnosis_does_not_create_review_guidance():
+    state = services._derive_workspace_button_state_from_raw_payload(
+        {
+            "empty_state_reason": {"code": "no_grounded_rewrite_evidence"},
+            "bullet_diagnoses": [
+                {
+                    "diagnosis_action": "keep",
+                    "diagnosis_reason_type": "keep_as_is",
+                    "source": "",
+                    "entry_id": "",
+                    "bullet_id": "",
+                    "original_text": "",
+                    "current_evidence": "",
+                    "jd_signal_terms": [],
+                    "likely_impacted_dimensions": [],
+                    "recommended_rewrite": "",
+                    "why": "Preserve truthful resume language.",
+                }
+            ],
+        }
+    )
+
+    assert state["tailoring_workspace_state"] == "empty"
+    assert state["tailoring_review_replacement_count"] == 0
+    assert state["tailoring_has_review_guidance"] is False
+
+
+def test_grounded_bullet_diagnosis_remains_no_safe_rewrites_guidance():
+    state = services._derive_workspace_button_state_from_raw_payload(
+        {
+            "bullet_diagnoses": [
+                {
+                    "diagnosis_action": "keep",
+                    "source": "Data Analyst @ ExampleCo",
+                    "entry_id": "experience:1",
+                    "bullet_id": "experience:1:bullet:1",
+                    "original_text": "Built SQL validation workflows.",
+                    "current_evidence": "Built SQL validation workflows.",
+                    "jd_signal_terms": ["SQL", "workflow"],
+                    "recommended_rewrite": "",
+                }
+            ],
+        }
+    )
+
+    assert state["tailoring_workspace_state"] == "no_safe_rewrites"
+    assert state["tailoring_review_replacement_count"] == 1
+    assert state["tailoring_has_review_guidance"] is True
+
+
+def test_anchor_evidence_remains_meaningful_without_actionable_rewrite():
+    state = services._derive_workspace_button_state_from_raw_payload(
+        {
+            "anchor_cards": [
+                {
+                    "source": "Data Analyst @ ExampleCo",
+                    "current_evidence": "Built SQL validation workflows.",
+                }
+            ],
+        }
+    )
+
+    assert state["tailoring_workspace_state"] == "no_safe_rewrites"
+    assert state["tailoring_review_replacement_count"] == 1
+    assert state["tailoring_has_review_guidance"] is True
+
+
 def test_safe_rewrite_artifacts_remain_ready_and_workspace_openable(tmp_path):
     output_dir = tmp_path / "run-scoped" / "application_planning"
     artifact_path = _write_tailoring_artifact(output_dir, suggestions=True)
@@ -448,15 +515,193 @@ def test_browse_tailoring_state_filters_separate_unavailable_and_no_safe_rewrite
     )
 
     assert [row["job_doc_id"] for row in unavailable_payload["rows"]] == ["job-no-artifact"]
+    expected_bulk_ids = ["job-no-artifact", "job-direction-only", "job-ready"]
+    assert [row["job_doc_id"] for row in unavailable_payload["bulk_suggestion_rows"]] == expected_bulk_ids
     assert unavailable_payload["rows"][0]["tailoring_workspace_state"] == "unavailable"
 
     assert [row["job_doc_id"] for row in no_safe_payload["rows"]] == ["job-direction-only"]
+    assert [row["job_doc_id"] for row in no_safe_payload["bulk_suggestion_rows"]] == expected_bulk_ids
     assert no_safe_payload["rows"][0]["tailoring_workspace_state"] == "no_safe_rewrites"
     assert no_safe_payload["rows"][0]["tailoring_actionable_replacement_count"] == 0
 
     assert [row["job_doc_id"] for row in ready_payload["rows"]] == ["job-ready"]
+    assert [row["job_doc_id"] for row in ready_payload["bulk_suggestion_rows"]] == expected_bulk_ids
     assert ready_payload["rows"][0]["tailoring_workspace_state"] == "ready"
     assert ready_payload["rows"][0]["tailoring_actionable_replacement_count"] == 1
+
+
+def test_browse_bulk_projection_uses_full_owner_run_universe_without_product_cap(
+    monkeypatch, tmp_path
+):
+    output_dir = tmp_path / "pipeline_runs" / "owner-1" / "run-1" / "application_planning"
+    output_dir.mkdir(parents=True)
+    manifest_rows = [
+        {
+            "queue_rank": str(index),
+            "job_doc_id": f"job-{index:03d}",
+            "job_company": "Example Co",
+            "job_title": f"Engineer {index:03d}",
+            "action": "APPLY" if index <= 125 else "SKIP_FOR_NOW",
+            "winner_resume": "Winner.pdf",
+        }
+        for index in range(1, 131)
+    ]
+
+    monkeypatch.setattr(
+        services,
+        "_latest_user_pipeline_artifact_context",
+        lambda owner_user_id="": {
+            "run_id": "run-1",
+            "output_dir": str(output_dir),
+            "best_rows": [],
+            "queue_rows": [],
+            "manifest_rows": manifest_rows,
+            "job_prioritization_rows": [],
+            "tailoring_decision_rows": [],
+            "operator_review_rows": [],
+            "current_run_job_corpus_text": "",
+        },
+    )
+    monkeypatch.setattr(services._job_app(), "_overlay_operator_decisions", lambda rows: rows)
+    monkeypatch.setattr(services, "_overlay_application_actions", lambda rows, owner_user_id="": rows)
+    monkeypatch.setattr(services, "_exclude_applied_rows", lambda rows: rows)
+
+    payload = services.browse_payload(
+        output_dir=output_dir,
+        owner_user_id="owner-1",
+        action=["APPLY"],
+        sort_key="queue_rank",
+        sort_dir="asc",
+        limit=125,
+        page=1,
+    )
+
+    assert payload["total_count"] == 125
+    assert len(payload["rows"]) == 15
+    assert len(payload["bulk_suggestion_rows"]) == 130
+    assert [row["job_doc_id"] for row in payload["bulk_suggestion_rows"][:3]] == [
+        "job-001",
+        "job-002",
+        "job-003",
+    ]
+    assert payload["bulk_suggestion_rows"][-1]["job_doc_id"] == "job-130"
+    assert all(
+        row["pipeline_run_id"] == "run-1"
+        and row["planning_output_dir"] == str(output_dir)
+        for row in payload["bulk_suggestion_rows"]
+    )
+    assert "job_description" not in payload["bulk_suggestion_rows"][0]
+    assert "resume_text" not in payload["bulk_suggestion_rows"][0]
+    assert payload["bulk_suggestion_rows"][0]["action"] == "APPLY"
+
+    high_limit_payload = services.browse_payload(
+        output_dir=output_dir,
+        owner_user_id="owner-1",
+        sort_key="queue_rank",
+        sort_dir="asc",
+        limit=1000,
+        page=1,
+    )
+    assert high_limit_payload["filters"]["limit"] == 1000
+    assert high_limit_payload["total_count"] == 130
+    assert len(high_limit_payload["bulk_suggestion_rows"]) == 130
+
+
+def test_bulk_selection_helper_preserves_all_applied_filter_stages_and_limit(
+    monkeypatch, tmp_path
+):
+    captured = {"owner": "", "preferences": None, "tailoring": []}
+
+    class FakeJobApp:
+        def _select_browse_rows(self, rows, args):
+            assert args.action == ["APPLY"]
+            assert args.winner_bucket == ["strong"]
+            assert args.undecided_only == "true"
+            assert args.company_contains == "example"
+            assert args.limit == len(rows)
+            return [
+                row for row in rows
+                if row["action"] == "APPLY"
+                and row["winner_bucket"] == "strong"
+                and row["operator_decision"] == ""
+            ]
+
+    rows = [
+        {
+            "job_doc_id": "eligible-high",
+            "action": "APPLY",
+            "winner_bucket": "strong",
+            "operator_decision": "",
+            "preference_id": "pref-a",
+            "tailoring_workspace_state": "unavailable",
+            "winner_score": "0.9",
+        },
+        {
+            "job_doc_id": "eligible-low",
+            "action": "APPLY",
+            "winner_bucket": "strong",
+            "operator_decision": "",
+            "preference_id": "pref-a",
+            "tailoring_workspace_state": "unavailable",
+            "winner_score": "0.5",
+        },
+        {
+            "job_doc_id": "wrong-match",
+            "action": "APPLY",
+            "winner_bucket": "moderate",
+            "operator_decision": "",
+            "preference_id": "pref-a",
+            "tailoring_workspace_state": "unavailable",
+            "winner_score": "1.0",
+        },
+    ]
+
+    def overlay(selected, owner_user_id=""):
+        captured["owner"] = owner_user_id
+        return selected
+
+    def filter_preferences(selected, *, requested_ids, validated_ids):
+        captured["preferences"] = (requested_ids, validated_ids)
+        return [row for row in selected if row["preference_id"] in validated_ids]
+
+    def match_tailoring(row, requested_states, *, output_dir):
+        captured["tailoring"].append((requested_states, output_dir))
+        return row["tailoring_workspace_state"] in requested_states, dict(row)
+
+    monkeypatch.setattr(services, "_overlay_application_actions", overlay)
+    monkeypatch.setattr(services, "_exclude_applied_rows", lambda selected: selected)
+    monkeypatch.setattr(services, "_overlay_job_metadata_from_map", lambda selected, metadata: selected)
+    monkeypatch.setattr(services, "_filter_browse_rows_by_preference_ids", filter_preferences)
+    monkeypatch.setattr(services, "_row_matches_tailoring_state_filter", match_tailoring)
+
+    selected = services._select_planning_browse_rows(
+        FakeJobApp(),
+        rows,
+        resolved_filters={
+            "action": ["APPLY"],
+            "winner_bucket": ["strong"],
+            "undecided_only": "true",
+            "company_contains": "example",
+            "sort_key": "winner_score",
+            "sort_dir": "desc",
+        },
+        requested_limit=1,
+        requested_tailoring_states=["unavailable"],
+        requested_preference_ids=["pref-a"],
+        validated_preference_ids=["pref-a"],
+        owner_user_id="owner-1",
+        effective_output_dir=tmp_path,
+        artifact_context={"run_id": "run-1"},
+        job_metadata_by_key={},
+    )
+
+    assert [row["job_doc_id"] for row in selected] == ["eligible-high"]
+    assert captured["owner"] == "owner-1"
+    assert captured["preferences"] == (["pref-a"], ["pref-a"])
+    assert captured["tailoring"] == [
+        (["unavailable"], tmp_path),
+        (["unavailable"], tmp_path),
+    ]
 
 
 def test_authenticated_browse_tailoring_filter_uses_run_scoped_config_output_dir(

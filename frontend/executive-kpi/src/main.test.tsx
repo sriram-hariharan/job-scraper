@@ -156,6 +156,7 @@ it("hydrates and updates all Planning islands from the existing Planning bridge 
     metrics: { total: 1, readyForReview: 0, packetReady: 0, needsDecision: 1 },
     filters: { actions: [], winnerBuckets: [], tailoringStates: [], preferenceIds: [], undecidedOnly: false, limit: 15 },
     preferenceOptions: [],
+    bulkSuggestions: { eligibleCount: 0, available: false, isRunning: false },
   };
 
   await act(async () => {

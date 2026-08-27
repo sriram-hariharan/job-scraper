@@ -102,6 +102,7 @@ _PARITY_RESULT_FIELDS = {
     "production_task_contract_sha256",
     "production_contract_valid",
     "production_validation_errors",
+    "production_contract_failures",
     "production_normalized_output",
     "benchmark_projection",
     "benchmark_quality",
@@ -438,8 +439,19 @@ def _synthetic_material(
 def _response_contract(
     workload_id: str,
     production_contract: Mapping[str, Any],
+    *,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> Dict[str, Any]:
+    from src.ai.llm_client import groq_workload_requires_json_object
+
     mode = _RESPONSE_MODES[workload_id]
+    # Qualification must benchmark the exact mode production will use, so the
+    # same workload-scoped compatibility authority decides both.
+    if mode == "structured_json" and groq_workload_requires_json_object(
+        provider, model, workload_id
+    ):
+        mode = "json_object"
     output = production_contract["output_contract"]
     schema = None
     schema_name = None
@@ -518,7 +530,12 @@ def build_production_parity_request(
         "model": packet["model"],
         "production_task_contract_sha256": current_digest,
         "messages": messages,
-        "response_contract": _response_contract(workload_id, production_contract),
+        "response_contract": _response_contract(
+            workload_id,
+            production_contract,
+            provider=packet["provider"],
+            model=packet["model"],
+        ),
         "task_parameters": task_parameters,
         "local_validation_context": local_context,
         "fallback": False,
@@ -624,7 +641,12 @@ def validate_production_parity_request(
         "production-parity prompt contract mismatch",
     )
     response = request.get("response_contract")
-    expected_response = _response_contract(workload_id, production_contract)
+    expected_response = _response_contract(
+        workload_id,
+        production_contract,
+        provider=request.get("provider"),
+        model=request.get("model"),
+    )
     _require(
         isinstance(response, dict)
         and response == expected_response
@@ -658,11 +680,65 @@ def validate_production_parity_request(
     return True
 
 
+MAXIMUM_PRODUCTION_CONTRACT_FAILURES = 4
+_CONTRACT_FAILURE_FIELDS = {"code", "index", "count"}
+_GENERIC_CONTRACT_FAILURE_CODE = "production_contract_invalid"
+
+
+def _safe_contract_failure_projection(exc: BaseException) -> list[Dict[str, Any]]:
+    """Project a normalization failure onto bounded, non-sensitive metadata.
+
+    Reads only explicitly safe typed attributes. Anything untyped or carrying an
+    unrecognized code degrades to the existing generic code, so provider text
+    can never reach persisted evidence through this path.
+    """
+
+    from src.tailoring.llm import (
+        LIVE_LLM_CONTRACT_FAILURE_CODES,
+        LiveLlmContractError,
+    )
+
+    code = ""
+    index: int | None = None
+    count: int | None = None
+    if isinstance(exc, ProductionResponseParseError):
+        code = ProductionResponseParseError.code
+    elif isinstance(exc, LiveLlmContractError):
+        candidate = str(getattr(exc, "code", "") or "")
+        # Closed vocabulary: only codes this validator declares are emitted.
+        if candidate in LIVE_LLM_CONTRACT_FAILURE_CODES:
+            code = candidate
+            raw_index = getattr(exc, "index", None)
+            raw_count = getattr(exc, "count", None)
+            index = int(raw_index) if isinstance(raw_index, int) else None
+            count = int(raw_count) if isinstance(raw_count, int) else None
+    if not code:
+        code = _GENERIC_CONTRACT_FAILURE_CODE
+    return [{"code": code, "index": index, "count": count}][
+        :MAXIMUM_PRODUCTION_CONTRACT_FAILURES
+    ]
+
+
+class ProductionResponseParseError(ValueError):
+    """The response never parsed into a JSON object at the known parse stage.
+
+    Carries only a stable stage-owned code. The underlying parser message can
+    embed a raw provider preview, so the cause is deliberately suppressed and
+    the original text is never read, stored, or re-raised.
+    """
+
+    code = "json_parse_failed"
+
+
 def _parse_json_object(raw_response: Any, parser) -> Dict[str, Any]:
     if isinstance(raw_response, dict):
         return deepcopy(raw_response)
-    parsed = parser(str(raw_response or ""))
-    _require(isinstance(parsed, dict), "production response is not an object")
+    try:
+        parsed = parser(str(raw_response or ""))
+    except Exception:
+        raise ProductionResponseParseError(ProductionResponseParseError.code) from None
+    if not isinstance(parsed, dict):
+        raise ProductionResponseParseError(ProductionResponseParseError.code) from None
     return parsed
 
 
@@ -939,6 +1015,45 @@ def _claim_tokens(text: str) -> list[str]:
     )
 
 
+def _benchmark_scaffold_claim_tokens(context: Mapping[str, Any]) -> set[str]:
+    """Benchmark-owned context tokens that assert nothing about the candidate.
+
+    Derived structurally: every claim token appearing in a synthetic replacement
+    value the benchmark injected into the prompt, minus the tokens that came
+    from the candidate's own evidence. So `<matched_required>`/`<evidence_text>`
+    values stay gradeable (they ARE evidence), while gap and context labels such
+    as the `<missing_required>` placeholder are recognized as scaffolding. A
+    fixture that deliberately used a synthetic token as candidate evidence would
+    appear in `evidence_tokens` and therefore remain gradeable.
+    """
+
+    replacements = context.get("replacements")
+    if not isinstance(replacements, Mapping):
+        return set()
+    evidence_tokens = set(
+        _claim_tokens(" ".join(_strings(context.get("evidence_tokens"))))
+    )
+    scaffold: set[str] = set()
+    for value in replacements.values():
+        if not isinstance(value, str):
+            continue
+        scaffold.update(_claim_tokens(value))
+    return scaffold - evidence_tokens
+
+
+def _evidence_bearing_claim_tokens(
+    text: str,
+    context: Mapping[str, Any],
+) -> list[str]:
+    """Claim tokens minus benchmark-owned scaffolding, grading otherwise intact."""
+
+    return [
+        token
+        for token in _claim_tokens(text)
+        if token not in _benchmark_scaffold_claim_tokens(context)
+    ]
+
+
 def _benchmark_projection(
     request: Mapping[str, Any],
     normalized: Mapping[str, Any],
@@ -1020,7 +1135,7 @@ def _benchmark_projection(
                 {
                     "suggestion_id": "suggestion_alpha",
                     "source_bullet_id": context["source_bullet_id"],
-                    "claims": _claim_tokens(direction_text),
+                    "claims": _evidence_bearing_claim_tokens(direction_text, context),
                     "evidence_tokens": context["evidence_tokens"],
                 }
             ],
@@ -1148,13 +1263,18 @@ def validate_and_grade_production_parity_response(
         "production task-contract fingerprint is stale or mismatched",
     )
     errors: list[str] = []
+    contract_failures: list[Dict[str, Any]] = []
     try:
         normalized = _normalize_production_response(request, raw_response)
         production_valid = True
-    except Exception:
+    except Exception as exc:
         normalized = {}
         production_valid = False
+        # Generic code preserved for existing callers; structured detail is
+        # additive and read ONLY from explicitly safe typed attributes -- never
+        # from str(exc), repr(exc), exc.args, __cause__ or a traceback.
         errors = ["production_contract_invalid"]
+        contract_failures = _safe_contract_failure_projection(exc)
     benchmark_projection = _benchmark_projection(request, normalized) if production_valid else {}
     benchmark_quality = _grade_projection(
         request,
@@ -1172,6 +1292,7 @@ def validate_and_grade_production_parity_response(
         "production_task_contract_sha256": current_digest,
         "production_contract_valid": production_valid,
         "production_validation_errors": errors,
+        "production_contract_failures": deepcopy(contract_failures),
         "production_normalized_output": deepcopy(normalized),
         "benchmark_projection": deepcopy(benchmark_projection),
         "benchmark_quality": benchmark_quality,
@@ -1241,6 +1362,22 @@ def validate_production_parity_result(
         isinstance(result.get("production_contract_valid"), bool)
         and isinstance(result.get("production_validation_errors"), list),
         "production contract validity evidence is invalid",
+    )
+    failures = result.get("production_contract_failures")
+    _require(
+        isinstance(failures, list)
+        and len(failures) <= MAXIMUM_PRODUCTION_CONTRACT_FAILURES
+        and all(
+            isinstance(row, dict)
+            and set(row) == _CONTRACT_FAILURE_FIELDS
+            and isinstance(row["code"], str)
+            and bool(row["code"])
+            and (row["index"] is None or isinstance(row["index"], int))
+            and (row["count"] is None or isinstance(row["count"], int))
+            for row in failures
+        )
+        and (result["production_contract_valid"] is not True or not failures),
+        "production contract failure projection is invalid",
     )
     authority = result.get("authority_invariants")
     _require(

@@ -518,7 +518,9 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             ("openai", "gpt-5-mini"),
         ],
         "critic_evaluation": [],
-        "tailoring_generation": [],
+        "tailoring_generation": [
+            ("groq", "openai/gpt-oss-120b"),
+        ],
         "tailoring_refinement": [
             ("groq", "openai/gpt-oss-20b"),
             ("groq", "openai/gpt-oss-120b"),
@@ -553,7 +555,7 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             assert row["recommended_option"] is None
             assert row["qualified_options"] == []
 
-    assert actual_total == 19
+    assert actual_total == 20
     assert {
         mode: sum(row["execution_mode"] == mode for row in workloads)
         for mode in (
@@ -562,8 +564,8 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             "blocked_non_live",
         )
     } == {
-        "qualified_provider_model": 8,
-        "deterministic": 4,
+        "qualified_provider_model": 9,
+        "deterministic": 3,
         "blocked_non_live": 0,
     }
 
@@ -574,6 +576,29 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
     assert job_fit["qualified_options"] == JOB_FIT_OPTIONS
     assert job_fit["effective_selection"] == JOB_FIT_OPTIONS[0]
     assert job_fit["effective_selection_source"] == (
+        "applylens_recommended"
+    )
+
+    tailoring_generation = by_workload["tailoring_generation"]
+    assert tailoring_generation["recommendation_status"] == "recommended"
+    assert tailoring_generation["execution_mode"] == (
+        "qualified_provider_model"
+    )
+    assert tailoring_generation["recommended_option"] == {
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+    }
+    assert tailoring_generation["qualified_options"] == [
+        {
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+        }
+    ]
+    assert tailoring_generation["effective_selection"] == {
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+    }
+    assert tailoring_generation["effective_selection_source"] == (
         "applylens_recommended"
     )
 

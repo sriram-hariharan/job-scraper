@@ -762,12 +762,90 @@ def classify_sdk_exception(exc: BaseException) -> str:
     return "unknown_provider_outcome"
 
 
+def _safe_sdk_status_code(exc: BaseException) -> int | None:
+    """Return only the SDK's declared integer status attribute, or None.
+
+    Mirrors the coercion `classify_sdk_exception` already performs. Reads a
+    single declared attribute; never the response, body, message or args.
+    """
+
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, bool):
+        return None
+    try:
+        return int(status_code)
+    except (TypeError, ValueError):
+        return None
+
+
+PROVIDER_ERROR_DIAGNOSTIC_FIELDS = (
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+    "has_failed_generation",
+)
+
+
+def _safe_sdk_provider_error(exc: BaseException) -> Dict[str, Any]:
+    """Project the SDK error envelope onto bounded, non-textual metadata.
+
+    Reuses the repository's established provider-error allowlists so only
+    categorical tokens already vetted elsewhere can survive; anything
+    unrecognized becomes None. `message`, `failed_generation` contents, and
+    `param` VALUES are never read for content -- `param` is a parameter *name*
+    drawn from a closed allowlist, and failed_generation is reduced to a
+    presence boolean.
+    """
+
+    from src.ai.llm_client import (
+        _SAFE_PROVIDER_ERROR_CODES,
+        _SAFE_PROVIDER_ERROR_PARAMS,
+        _SAFE_PROVIDER_ERROR_TYPES,
+        _allowlisted_provider_error_token,
+    )
+
+    empty = {
+        "provider_error_type": None,
+        "provider_error_code": None,
+        "provider_error_param": None,
+        "has_failed_generation": False,
+    }
+    body = getattr(exc, "body", None)
+    # body is `object | None`: the decoded JSON when parseable, otherwise the
+    # raw response. Only a mapping is inspected.
+    if not isinstance(body, Mapping):
+        return empty
+    error = body.get("error")
+    error = error if isinstance(error, Mapping) else body
+    return {
+        "provider_error_type": _allowlisted_provider_error_token(
+            error.get("type"), _SAFE_PROVIDER_ERROR_TYPES
+        )
+        or None,
+        "provider_error_code": _allowlisted_provider_error_token(
+            error.get("code"), _SAFE_PROVIDER_ERROR_CODES
+        )
+        or None,
+        "provider_error_param": _allowlisted_provider_error_token(
+            error.get("param"), _SAFE_PROVIDER_ERROR_PARAMS
+        )
+        or None,
+        "has_failed_generation": bool(
+            "failed_generation" in error or "failed_generation" in body
+        ),
+    }
+
+
 def _raise_bounded_sdk_failure(exc: BaseException) -> None:
     category = classify_sdk_exception(exc)
+    status_code = _safe_sdk_status_code(exc)
+    provider_error = _safe_sdk_provider_error(exc)
     if category == "ambiguous_timeout":
         raise AmbiguousTransportTimeout("ambiguous_timeout") from None
     if category.startswith("definitive_"):
-        raise DefinitiveTransportFailure(category) from None
+        raise DefinitiveTransportFailure(
+            category, status_code=status_code, provider_error=provider_error
+        ) from None
     raise UnknownProviderOutcome("unknown_provider_outcome") from None
 
 

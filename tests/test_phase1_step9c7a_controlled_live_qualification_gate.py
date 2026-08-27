@@ -20,7 +20,10 @@ from src.evaluation.controlled_provider_benchmark_plan import (
     build_controlled_provider_benchmark_plan,
 )
 from src.evaluation.provider_fixture_benchmark import load_fixture_case_corpus
-from src.evaluation.provider_benchmark_contract import WORKLOAD_ORDER
+from src.evaluation.provider_benchmark_contract import (
+    HARD_FAILURE_ORDER,
+    WORKLOAD_ORDER,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -804,6 +807,127 @@ def test_evidence_is_bounded_nonqualifying_and_not_automatically_persisted(
         "raw_request_persisted_count": 0,
     }
     assert list(tmp_path.rglob("*.json")) == []
+
+
+def test_hard_failure_evidence_canonical_json_round_trip_is_valid(
+    plan,
+    universe,
+):
+    row = next(
+        item
+        for item in universe
+        if item["live_qualification_eligible"]
+        and item["provider"] == "groq"
+        and item["model"] == "openai/gpt-oss-120b"
+        and item["workload_id"] == "tailoring_generation"
+    )
+    authorization, pricing = _valid_inputs(plan, [row])
+    evidence = _execute(
+        plan,
+        [row],
+        dispatcher=RecordingDispatcher(plan, mode="hard_failure"),
+        authorization=authorization,
+        pricing=pricing,
+    )
+    hard_failures = evidence["failure_diagnostics"][0]["hard_failures"]
+
+    assert hard_failures["schema_invalid_result_accepted"] == 1
+    assert all(
+        value == 0
+        for key, value in hard_failures.items()
+        if key != "schema_invalid_result_accepted"
+    )
+    assert live.validate_live_qualification_evidence(
+        evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    original_digest = live.live_qualification_evidence_sha256(
+        evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+
+    serialized = live.serialize_live_qualification_evidence(
+        evidence,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    reloaded = json.loads(serialized)
+    reloaded_failures = reloaded["failure_diagnostics"][0]["hard_failures"]
+    assert tuple(reloaded_failures) != tuple(HARD_FAILURE_ORDER)
+    assert set(reloaded_failures) == set(HARD_FAILURE_ORDER)
+    assert live.validate_live_qualification_evidence(
+        reloaded,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    assert live.live_qualification_evidence_sha256(
+        reloaded,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    ) == original_digest
+
+    context = live.build_live_qualification_validation_context(
+        reloaded,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    assert live.validate_live_qualification_validation_context(
+        json.loads(
+            live.serialize_live_qualification_validation_context(
+                context,
+                evidence=reloaded,
+                plan=plan,
+            )
+        ),
+        evidence=reloaded,
+        plan=plan,
+    )
+    serialized_lower = serialized.lower()
+    assert OPERATOR_SECRET.lower() not in serialized_lower
+    assert '"raw_response"' not in serialized_lower
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "invalid_value"])
+def test_hard_failure_evidence_key_and_value_schema_stays_fail_closed(
+    mutation,
+    plan,
+    universe,
+):
+    row = _eligible(universe)
+    authorization, pricing = _valid_inputs(plan, [row])
+    evidence = _execute(
+        plan,
+        [row],
+        dispatcher=RecordingDispatcher(plan, mode="hard_failure"),
+        authorization=authorization,
+        pricing=pricing,
+    )
+    hard_failures = evidence["failure_diagnostics"][0]["hard_failures"]
+    if mutation == "missing":
+        hard_failures.pop(HARD_FAILURE_ORDER[0])
+    elif mutation == "extra":
+        hard_failures["unexpected_failure"] = 0
+    else:
+        hard_failures[HARD_FAILURE_ORDER[0]] = "1"
+
+    with pytest.raises(
+        ValueError,
+        match="live evidence failure diagnostic counters are invalid",
+    ):
+        live.validate_live_qualification_evidence(
+            evidence,
+            plan=plan,
+            authorization=authorization,
+            pricing=pricing,
+        )
 
 
 def test_explicit_persistence_is_exclusive_symlink_safe_and_0600(

@@ -74,6 +74,7 @@ function planningState(overrides: Partial<PlanningWorklistState> = {}): Planning
       { role_family_id: "applied_ai", display_name: "Applied AI" },
       { role_family_id: "data_engineering", display_name: "Data Engineering" },
     ],
+    bulkSuggestions: { eligibleCount: 12, available: true, isRunning: false },
     ...overrides,
   };
 }
@@ -145,6 +146,37 @@ it("publishes one existing bridge action from top and bottom pagination, sorting
   listener.stop();
 });
 
+it("renders the all-result bulk heading action and publishes only an explicit bulk event", () => {
+  const listener = listenForActions();
+  const { container } = render(<PlanningWorklist state={planningState()} />);
+
+  const action = screen.getByRole("button", { name: /bulk generate suggestions.*12 eligible/i });
+  expect(action).toBeEnabled();
+  expect(action).toHaveTextContent("Bulk generate suggestions");
+  expect(action).toHaveTextContent("12 eligible");
+  expect(container.querySelector(".shared-table-heading-actions")).toContainElement(action);
+  expect(listener.actions).toEqual([]);
+
+  fireEvent.click(action);
+  expect(lastAction(listener.actions)).toEqual({ type: "bulk_generate_suggestions" });
+  expect(screen.getByRole("button", { name: "Generate Suggestions" })).toBeInTheDocument();
+  listener.stop();
+});
+
+it("disables bulk generation when no jobs are eligible or a batch is running", () => {
+  const { rerender } = render(<PlanningWorklist state={planningState({
+    bulkSuggestions: { eligibleCount: 0, available: false, isRunning: false },
+  })} />);
+  const emptyAction = screen.getByRole("button", { name: /bulk generate suggestions.*0 eligible/i });
+  expect(emptyAction).toBeDisabled();
+  expect(emptyAction).toHaveAttribute("title", "No Planning jobs currently need suggestions.");
+
+  rerender(<PlanningWorklist state={planningState({
+    bulkSuggestions: { eligibleCount: 3, available: false, isRunning: true },
+  })} />);
+  expect(screen.getByRole("button", { name: /bulk generate suggestions.*3 eligible/i })).toBeDisabled();
+});
+
 it("uses Planning-specific validated column sizing and a real Posted at resize boundary", () => {
   localStorage.setItem(PLANNING_COLUMN_WIDTH_STORAGE_KEY, JSON.stringify({ version: 1, widths: { posted_at: 164, unknown: 999 } }));
   const { container, unmount } = render(<PlanningWorklist state={planningState()} />);
@@ -189,10 +221,14 @@ it("uses the shared controlled filters without requesting until Apply", () => {
   expect(screen.getByRole("button", { name: "Preferences 2 selected" })).toHaveAttribute("aria-expanded", "true");
   expect(listener.actions.some((action) => action.type === "apply_filters")).toBe(false);
 
+  const limit = screen.getByRole("spinbutton", { name: "Limit" });
+  expect(limit).not.toHaveAttribute("max");
+  fireEvent.change(limit, { target: { value: "1000" } });
+
   fireEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
   expect(lastAction(listener.actions)).toEqual(expect.objectContaining({
     type: "apply_filters",
-    filters: expect.objectContaining({ actions: ["APPLY"], preferenceIds: ["applied_ai", "data_engineering"], limit: 15 }),
+    filters: expect.objectContaining({ actions: ["APPLY"], preferenceIds: ["applied_ai", "data_engineering"], limit: 1000 }),
   }));
 
   fireEvent.click(screen.getByRole("button", { name: "Clear" }));

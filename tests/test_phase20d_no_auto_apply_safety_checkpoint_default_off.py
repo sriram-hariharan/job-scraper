@@ -2991,6 +2991,42 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         for marker in FORBIDDEN_RUNTIME_MARKERS:
             assert marker not in added_lines
         return
+    planning_bulk_suggestions_runtime_files = {
+        ROOT / "src/agents/tailoring_generation_authoritative_graph.py",
+        ROOT / "src/ai/llm_client.py",
+        ROOT / "src/ai/user_provider_runtime.py",
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/styles.css",
+        ROOT / "src/evaluation/controlled_groq_canary_transport.py",
+        ROOT / "src/evaluation/controlled_live_provider_qualification.py",
+        ROOT / "src/evaluation/controlled_production_parity_benchmark.py",
+        ROOT / "src/evaluation/controlled_provider_benchmark_harness.py",
+        ROOT / "src/evaluation/provider_fixture_benchmark.py",
+        ROOT / "src/evaluation/provider_model_recommendation_policy.py",
+        ROOT / "src/tailoring/llm.py",
+    }
+    if set(changed_runtime_files) == planning_bulk_suggestions_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
     notification_bridge_runtime_files = {
         ROOT / relative_path
         for relative_path in NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES

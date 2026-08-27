@@ -24,7 +24,7 @@ RECOMMENDATION_POLICY_VERSION = "provider-model-recommendation-policy-v1"
 RECOMMENDATION_POLICY_SCOPE = "evaluation_readonly_recommendation_only"
 
 SOURCE_QUALIFICATION_REGISTRY_SHA256 = (
-    "db8603718e0be6b441db04ee1cca87956272e016aa53c2f2c6aaf326d1d60030"
+    "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
 )
 
 RECOMMENDATION_STATUSES = (
@@ -124,6 +124,23 @@ _FROZEN_RECOMMENDATIONS: Mapping[str, Mapping[str, Any]] = {
             "6e15835e144bdea42b67babed9a0a467c74893acadaf6b4994203bfbc49db396"
         ),
     },
+    "tailoring_generation": {
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "selection_basis": "sole_qualified_candidate",
+        "task_contract_sha256": (
+            "69636a86bf36af7f6c8757d615ec76a9e9d4cfea72661d1ca4c515a8a124c0ac"
+        ),
+        "qualification_binding_sha256": (
+            "9e03738f97fea61d589fe2810f180dc504fc2a88d4dfdc81bd4cee6e1d0b1ad3"
+        ),
+        "evidence_sha256": (
+            "9f5b504ec4b36b041b7a134e1871c54cd6bd8f4af13ca61e92377fb2520acd52"
+        ),
+        "review_sha256": (
+            "e0e84260678e406fcccf48690ddc226cda643c61627ef682cd80003c58279a00"
+        ),
+    },
     "tailoring_refinement": {
         "provider": "groq",
         "model": "openai/gpt-oss-120b",
@@ -165,7 +182,6 @@ _FAIL_CLOSED_WORKLOADS = frozenset(
         "job_fit_evaluation",
         "resume_fallback_ranking",
         "critic_evaluation",
-        "tailoring_generation",
         "manual_scan_phrase",
     }
 )

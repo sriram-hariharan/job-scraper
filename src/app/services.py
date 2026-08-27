@@ -14289,6 +14289,31 @@ def _derive_workspace_button_state_from_raw_payload(
                 return dict(value)
         return {}
 
+    def _has_grounded_bullet_diagnosis(value: Any) -> bool:
+        if not isinstance(value, dict):
+            return False
+
+        has_source_identity = any(
+            _clean_text(value.get(key))
+            for key in ("source", "entry_id", "bullet_id")
+        )
+        has_resume_evidence = any(
+            _clean_text(value.get(key))
+            for key in (
+                "parent_bullet",
+                "original_text",
+                "current_evidence",
+                "recommended_rewrite",
+                "structural_clause_text",
+            )
+        )
+        has_grounded_signals = any(
+            _clean_text(item)
+            for key in ("jd_signal_terms", "overlaps", "likely_impacted_dimensions")
+            for item in list(value.get(key, []) or [])
+        )
+        return has_resume_evidence and (has_source_identity or has_grounded_signals)
+
     app_ready = list(payload_data.get("app_ready_replacements", []) or [])
     direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
     ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
@@ -14373,12 +14398,17 @@ def _derive_workspace_button_state_from_raw_payload(
 
     actionable_count = ready_count + direct_apply_optional_count + ai_optimize_optional_count
 
+    grounded_bullet_diagnosis_count = sum(
+        1
+        for diagnosis in list(payload_data.get("bullet_diagnoses", []) or [])
+        if _has_grounded_bullet_diagnosis(diagnosis)
+    )
     legacy_review_count = max(
         len(list(payload_data.get("top_edit_priorities", []) or [])),
         len(list(payload_data.get("edit_cards", []) or [])),
         len(list(payload_data.get("rewrite_candidates", []) or [])),
         len(list(payload_data.get("bullet_reuse_candidates", []) or [])),
-        len(list(payload_data.get("bullet_diagnoses", []) or [])),
+        grounded_bullet_diagnosis_count,
     )
     anchor_count = max(
         len(list(payload_data.get("anchor_cards", []) or [])),
@@ -14390,7 +14420,7 @@ def _derive_workspace_button_state_from_raw_payload(
     if actionable_count > 0:
         workspace_state = "ready"
     elif review_count > 0 or anchor_count > 0:
-        workspace_state = "review"
+        workspace_state = "no_safe_rewrites"
     else:
         workspace_state = "empty"
 
@@ -15003,6 +15033,17 @@ def _find_planning_row_for_regeneration(
     raise ValueError("Could not find planning row for targeted regeneration.")
 
 
+ALLOWED_TAILORING_PARSE_RETRY_LIMITS = (0, 1)
+
+
+def _normalize_tailoring_parse_retry_limit(value: Any) -> int:
+    """Validate the bounded parse-retry allowance sent by a caller."""
+
+    if type(value) is not int or value not in ALLOWED_TAILORING_PARSE_RETRY_LIMITS:
+        raise ValueError("parse_retry_limit must be 0 or 1.")
+    return value
+
+
 def regenerate_selected_resume_tailoring_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     job_corpus: Path = DEFAULT_CORPUS_PATH,
@@ -15012,8 +15053,12 @@ def regenerate_selected_resume_tailoring_payload(
     selected_resume: str = "",
     generate_llm_tailoring: bool = False,
     refresh_llm_tailoring: bool = False,
+    parse_retry_limit: int = 1,
     owner_user_id: str = "",
 ) -> Dict[str, Any]:
+    normalized_parse_retry_limit = _normalize_tailoring_parse_retry_limit(
+        parse_retry_limit
+    )
     ja = _job_app()
     merged_rows = ja._build_job_index(output_dir)
     target_row = _find_planning_row_for_regeneration(
@@ -15130,6 +15175,9 @@ def regenerate_selected_resume_tailoring_payload(
                 str(tailoring_llm_json_path),
             ]
         )
+        tailoring_cmd.extend(
+            ["--parse-retry-limit", str(normalized_parse_retry_limit)]
+        )
         if refresh_llm_tailoring:
             tailoring_cmd.append("--refresh-llm-cache")
         if (
@@ -15228,6 +15276,16 @@ def regenerate_selected_resume_tailoring_payload(
 
     _write_csv_rows(manifest_path, fieldnames, manifest_rows)
 
+    workspace_state = _tailoring_workspace_button_state(
+        {
+            "tailoring_json": str(tailoring_json_path),
+            "tailoring_md": str(tailoring_md_path),
+            "tailoring_llm_json": llm_json_value,
+            "packet_json": str(packet_json_path),
+        },
+        output_dir=Path(output_dir),
+    )
+
     return {
         "ok": True,
         "job_doc_id": job_doc_id_value,
@@ -15242,6 +15300,15 @@ def regenerate_selected_resume_tailoring_payload(
         "training_log_jsonl": str(training_log_jsonl_path),
         "llm_tailoring_status": llm_status["llm_tailoring_status"],
         "manifest_path": str(manifest_path),
+        "tailoring_workspace_state": workspace_state[
+            "tailoring_workspace_state"
+        ],
+        "tailoring_actionable_replacement_count": workspace_state[
+            "tailoring_actionable_replacement_count"
+        ],
+        "tailoring_review_replacement_count": workspace_state[
+            "tailoring_review_replacement_count"
+        ],
     }
 
 def _normalize_application_status(value: Any) -> str:
@@ -31070,6 +31137,127 @@ def _sort_browse_rows(
     return populated + missing
 
 
+def _select_planning_browse_rows(
+    ja: Any,
+    rows: List[Dict[str, Any]],
+    *,
+    resolved_filters: Dict[str, Any],
+    requested_limit: int,
+    requested_tailoring_states: List[str],
+    requested_preference_ids: List[str],
+    validated_preference_ids: List[str],
+    owner_user_id: str,
+    effective_output_dir: Path,
+    artifact_context: Optional[Dict[str, Any]],
+    job_metadata_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Return the authoritative filtered result before page slicing."""
+
+    selection_filters = dict(resolved_filters)
+    selection_filters["limit"] = max(len(rows), 1)
+    selection_filters.pop("page", None)
+    selection_filters.pop("tailoring_state", None)
+
+    selected = ja._select_browse_rows(rows, _make_args(**selection_filters))
+    selected = _overlay_application_actions(
+        selected,
+        owner_user_id=owner_user_id,
+    )
+    selected = _exclude_applied_rows(selected)
+
+    if requested_preference_ids:
+        selected = (
+            _overlay_job_metadata_from_map(selected, job_metadata_by_key)
+            if artifact_context
+            else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+        )
+        selected = _filter_browse_rows_by_preference_ids(
+            selected,
+            requested_ids=requested_preference_ids,
+            validated_ids=validated_preference_ids,
+        )
+
+    if requested_tailoring_states:
+        enriched_selected: List[Dict[str, Any]] = []
+        for row in selected:
+            matches, enriched_row = _row_matches_tailoring_state_filter(
+                row,
+                requested_tailoring_states,
+                output_dir=effective_output_dir,
+            )
+            if matches:
+                enriched_selected.append(enriched_row)
+        selected = enriched_selected
+
+    selected = _sort_browse_rows(
+        selected,
+        sort_key=resolved_filters.get("sort_key", ""),
+        sort_dir=resolved_filters.get("sort_dir", "asc"),
+    )
+    selected = selected[:requested_limit]
+    return selected
+
+
+_PLANNING_BULK_SUGGESTION_FIELDS = (
+    "job_doc_id",
+    "job_url",
+    "queue_rank",
+    "job_company",
+    "job_title",
+    "action",
+    "winner_bucket",
+    "role_family",
+    "winner_resume",
+    "runner_up_resume",
+    "runnerup_resume",
+    "operator_selected_resume",
+    "selected_resume",
+    "tailoring_json",
+    "tailoring_json_key",
+    "tailoring_md",
+    "tailoring_llm_json",
+    "packet_json",
+    "packet_json_key",
+    "planning_output_dir",
+    "output_dir",
+    "packet_output_dir",
+    "artifact_output_dir",
+    "run_id",
+    "llm_tailoring_status",
+    "tailoring_status",
+    "tailoring_workspace_state",
+    "tailoring_actionable_replacement_count",
+    "tailoring_review_replacement_count",
+)
+
+
+def _planning_bulk_suggestion_projection(
+    rows: List[Dict[str, Any]],
+    *,
+    effective_output_dir: Path,
+    pipeline_run_id: str,
+) -> List[Dict[str, Any]]:
+    """Build a compact projection bounded naturally by owner/run Planning rows."""
+
+    projected: List[Dict[str, Any]] = []
+    for row in rows:
+        _, enriched_row = _row_matches_tailoring_state_filter(
+            row,
+            [],
+            output_dir=effective_output_dir,
+        )
+        compact = {
+            field: enriched_row.get(field)
+            for field in _PLANNING_BULK_SUGGESTION_FIELDS
+            if field in enriched_row
+        }
+        if pipeline_run_id:
+            compact["pipeline_run_id"] = pipeline_run_id
+            compact["planning_output_dir"] = str(effective_output_dir)
+        projected.append(compact)
+    return projected
+
+
 def browse_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     owner_user_id: str = "",
@@ -31150,51 +31338,66 @@ def browse_payload(
         rows = _overlay_tailoring_decisions(rows, tailoring_decision_by_key)
         rows = _overlay_operator_review(rows, operator_review_by_key)
 
-        selection_filters = dict(resolved_filters)
-        selection_filters["limit"] = max(len(rows), 1)
-        selection_filters.pop("page", None)
-        selection_filters.pop("tailoring_state", None)
-
-        args = _make_args(**selection_filters)
-        selected = ja._select_browse_rows(rows, args)
-
-        selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
-
-        selected = _exclude_applied_rows(selected)
-
-        if requested_preference_ids:
-            selected = (
-                _overlay_job_metadata_from_map(selected, job_metadata_by_key)
-                if artifact_context
-                else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
-            )
-            selected = _filter_browse_rows_by_preference_ids(
-                selected,
-                requested_ids=requested_preference_ids,
-                validated_ids=validated_preference_ids,
-            )
-
-        if requested_tailoring_states:
-            enriched_selected: List[Dict[str, Any]] = []
-            for row in selected:
-                matches, enriched_row = _row_matches_tailoring_state_filter(
-                    row,
-                    requested_tailoring_states,
-                    output_dir=effective_output_dir,
-                )
-                if matches:
-                    enriched_selected.append(enriched_row)
-            selected = enriched_selected
-
-        selected = _sort_browse_rows(
-            selected,
-            sort_key=resolved_filters.get("sort_key", ""),
-            sort_dir=resolved_filters.get("sort_dir", "asc"),
+        selected = _select_planning_browse_rows(
+            ja,
+            rows,
+            resolved_filters=resolved_filters,
+            requested_limit=requested_limit,
+            requested_tailoring_states=requested_tailoring_states,
+            requested_preference_ids=requested_preference_ids,
+            validated_preference_ids=validated_preference_ids,
+            owner_user_id=owner_user_id,
+            effective_output_dir=effective_output_dir,
+            artifact_context=artifact_context,
+            job_metadata_by_key=job_metadata_by_key,
         )
 
-        selected = selected[:requested_limit]
-
         total_count = len(selected)
+        pipeline_run_id = (
+            _clean_text(artifact_context.get("run_id"))
+            if artifact_context
+            else ""
+        )
+        bulk_selection_filters = dict(resolved_filters)
+        bulk_selection_filters.update(
+            {
+                "action": [],
+                "needs_review": "",
+                "is_tie": "",
+                "fallback_status": [],
+                "winner_bucket": [],
+                "company_contains": "",
+                "title_contains": "",
+                "undecided_only": "",
+                "preference_id": [],
+                "tailoring_state": [],
+                "sort_key": "queue_rank",
+                "sort_dir": "asc",
+            }
+        )
+        bulk_universe = _select_planning_browse_rows(
+            ja,
+            rows,
+            resolved_filters=bulk_selection_filters,
+            requested_limit=max(len(rows), 1),
+            requested_tailoring_states=[],
+            requested_preference_ids=[],
+            validated_preference_ids=[],
+            owner_user_id=owner_user_id,
+            effective_output_dir=effective_output_dir,
+            artifact_context=artifact_context,
+            job_metadata_by_key=job_metadata_by_key,
+        )
+        bulk_universe = (
+            _overlay_job_metadata_from_map(bulk_universe, job_metadata_by_key)
+            if artifact_context
+            else _overlay_job_metadata(bulk_universe, job_corpus=DEFAULT_CORPUS_PATH)
+        )
+        bulk_suggestion_rows = _planning_bulk_suggestion_projection(
+            bulk_universe,
+            effective_output_dir=effective_output_dir,
+            pipeline_run_id=pipeline_run_id,
+        )
         total_pages = max((total_count + page_size - 1) // page_size, 1)
         current_page = min(current_page, total_pages)
 
@@ -31248,8 +31451,9 @@ def browse_payload(
             "total_pages": total_pages,
             "has_prev_page": current_page > 1,
             "has_next_page": current_page < total_pages,
-            "pipeline_run_id": _clean_text(artifact_context.get("run_id")) if artifact_context else "",
+            "pipeline_run_id": pipeline_run_id,
             "planning_output_dir": str(effective_output_dir),
+            "bulk_suggestion_rows": bulk_suggestion_rows,
         }
 
         return payload

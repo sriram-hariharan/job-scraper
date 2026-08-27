@@ -99,6 +99,11 @@ export type PlanningWorklistState = {
   metrics: PlanningMetrics;
   filters: PlanningFilters;
   preferenceOptions: PlanningPreferenceOption[];
+  bulkSuggestions: {
+    eligibleCount: number;
+    available: boolean;
+    isRunning: boolean;
+  };
 };
 
 export type PlanningWorklistAction =
@@ -108,6 +113,7 @@ export type PlanningWorklistAction =
   | { type: "filters_change"; filters: PlanningFilters }
   | { type: "apply_filters"; filters: PlanningFilters }
   | { type: "clear_filters" }
+  | { type: "bulk_generate_suggestions" }
   | { type: "next_step"; row: PlanningRow };
 
 export const DEFAULT_PLANNING_STATE: PlanningWorklistState = {
@@ -134,6 +140,7 @@ export const DEFAULT_PLANNING_STATE: PlanningWorklistState = {
     limit: 15,
   },
   preferenceOptions: [],
+  bulkSuggestions: { eligibleCount: 0, available: false, isRunning: false },
 };
 
 const PLANNING_ACTION_OPTIONS: SharedFilterOption[] = [
@@ -513,11 +520,10 @@ export function PlanningFiltersToolbar({ state }: { state: PlanningWorklistState
           id="planningLimitInput"
           type="number"
           min={1}
-          max={100}
           value={filters.limit}
           onChange={(event) => updateFilters({
             ...filters,
-            limit: Math.min(100, Math.max(1, Number(event.target.value) || 15)),
+            limit: Math.max(1, Math.floor(Number(event.target.value) || 15)),
           })}
         />
       </label>
@@ -592,6 +598,20 @@ export function PlanningWorklist({ state }: { state: PlanningWorklistState }) {
       title="Planning worklist"
       subtitle={`Planning view · ${state.pagination.totalCount} total job${state.pagination.totalCount === 1 ? "" : "s"}`}
       count={state.pagination.totalCount}
+      headingActions={(
+        <button
+          type="button"
+          className="planning-react-bulk-generate"
+          disabled={!state.bulkSuggestions.available || state.bulkSuggestions.isRunning}
+          title={state.bulkSuggestions.eligibleCount > 0
+            ? `Generate suggestions for ${state.bulkSuggestions.eligibleCount} eligible Planning job${state.bulkSuggestions.eligibleCount === 1 ? "" : "s"}.`
+            : "No Planning jobs currently need suggestions."}
+          onClick={() => publishPlanningAction({ type: "bulk_generate_suggestions" })}
+        >
+          <span>Bulk generate suggestions</span>
+          <small>{state.bulkSuggestions.eligibleCount} eligible</small>
+        </button>
+      )}
       table={table}
       columns={columns}
       status={state.status}

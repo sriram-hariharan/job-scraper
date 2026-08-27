@@ -24969,11 +24969,10 @@ function OL({ state: e }) {
 					}), /* @__PURE__ */ (0, Y.jsx)("input", {
 						type: "number",
 						min: 1,
-						max: 200,
 						value: t.limit,
 						onChange: (e) => n((t) => ({
 							...t,
-							limit: Math.min(200, Math.max(1, Number(e.target.value) || 15))
+							limit: Math.max(1, Math.floor(Number(e.target.value) || 15))
 						}))
 					})]
 				}),
@@ -29791,7 +29790,12 @@ var gB = "applylens:planning-worklist-state", _B = "applylens:planning-worklist-
 		undecidedOnly: !1,
 		limit: 15
 	},
-	preferenceOptions: []
+	preferenceOptions: [],
+	bulkSuggestions: {
+		eligibleCount: 0,
+		available: !1,
+		isRunning: !1
+	}
 }, bB = [
 	{
 		value: "APPLY",
@@ -30297,11 +30301,10 @@ function zB({ state: e }) {
 					id: "planningLimitInput",
 					type: "number",
 					min: 1,
-					max: 100,
 					value: t.limit,
 					onChange: (e) => r({
 						...t,
-						limit: Math.min(100, Math.max(1, Number(e.target.value) || 15))
+						limit: Math.max(1, Math.floor(Number(e.target.value) || 15))
 					})
 				})]
 			}),
@@ -30377,6 +30380,14 @@ function BB({ state: e }) {
 		title: "Planning worklist",
 		subtitle: `Planning view · ${e.pagination.totalCount} total job${e.pagination.totalCount === 1 ? "" : "s"}`,
 		count: e.pagination.totalCount,
+		headingActions: /* @__PURE__ */ (0, Y.jsxs)("button", {
+			type: "button",
+			className: "planning-react-bulk-generate",
+			disabled: !e.bulkSuggestions.available || e.bulkSuggestions.isRunning,
+			title: e.bulkSuggestions.eligibleCount > 0 ? `Generate suggestions for ${e.bulkSuggestions.eligibleCount} eligible Planning job${e.bulkSuggestions.eligibleCount === 1 ? "" : "s"}.` : "No Planning jobs currently need suggestions.",
+			onClick: () => wB({ type: "bulk_generate_suggestions" }),
+			children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Bulk generate suggestions" }), /* @__PURE__ */ (0, Y.jsxs)("small", { children: [e.bulkSuggestions.eligibleCount, " eligible"] })]
+		}),
 		table: c,
 		columns: a,
 		status: e.status,

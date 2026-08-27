@@ -1268,6 +1268,40 @@ html[data-theme="dark"] .executive-queue-badge--later { color: #fcd34d; }
 .shared-table-heading-with-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: flex-start; gap: 14px 28px; }
 .shared-table-heading-copy { min-width: 0; }
 .shared-table-heading-actions { display: flex; min-width: 0; align-items: flex-start; }
+.planning-react-bulk-generate {
+  display: inline-flex;
+  min-height: 42px;
+  padding: 7px 12px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid #ddcde4;
+  border-radius: 8px;
+  background: #f1eaf4;
+  background-image: none;
+  color: #5f4168;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.25;
+  text-align: left;
+}
+.planning-react-bulk-generate small { color: #72587c; font-size: 10px; font-weight: 750; }
+.planning-react-bulk-generate:hover:not(:disabled) { border-color: #ddcde4; background: #e9deee; }
+.planning-react-bulk-generate:focus-visible { outline: 3px solid color-mix(in srgb, #72587c 36%, transparent); outline-offset: 2px; }
+.planning-react-bulk-generate:disabled { cursor: not-allowed; opacity: 0.52; }
+html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate {
+  border-color: #514359;
+  background: #2d2731;
+  background-image: none;
+  color: #e8dceb;
+}
+html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate small { color: #bfaac5; }
+html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate:hover:not(:disabled) {
+  border-color: #514359;
+  background: #37303c;
+}
 .shared-table-title-line { display: flex; align-items: center; gap: 9px; }
 .shared-table-title-line h2 { margin: 0; color: var(--queue-ink); font-size: 18px; }
 .shared-table-title-line > span {

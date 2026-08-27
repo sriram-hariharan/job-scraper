@@ -194,16 +194,14 @@ def _valid_response(workload_id):
                     "prefix": "Lead with",
                     "source": "synthetic_source",
                     "direction": (
-                        "Lead with python sql and airflow evidence for supported "
-                        "delivery outcomes"
+                        "Lead with python sql and airflow terms in the opening clause"
                     ),
                 },
                 {
                     "prefix": "Support with",
                     "source": "synthetic_source",
                     "direction": (
-                        "Support with airflow workflow evidence while preserving "
-                        "the original scope"
+                        "Support with python sql and airflow as supplied evidence"
                     ),
                 },
                 {
@@ -898,6 +896,74 @@ def test_openai_json_object_parity_emits_no_schema_and_preserves_bounds(plan):
         scheduled=scheduled,
         plan=plan,
     )
+
+
+def test_groq_gpt_oss_120b_keeps_workload_scoped_response_modes(plan):
+    requests = {}
+    for workload_id in ("tailoring_generation", "jd_intelligence"):
+        row = next(
+            item
+            for item in plan["staged_matrix"]
+            if item["workload_id"] == workload_id
+            and item["provider"] == "groq"
+            and item["model"] == "openai/gpt-oss-120b"
+        )
+        packet = build_transmittable_request_packet(
+            case_alias=row["case_alias"],
+            provider=row["provider"],
+            model=row["model"],
+            plan=plan,
+        )
+        requests[workload_id] = parity.build_production_parity_request(
+            packet,
+            plan=plan,
+        )
+
+    tailoring = requests["tailoring_generation"]
+    assert tailoring["response_contract"]["mode"] == "json_object"
+    assert tailoring["response_contract"]["schema_name"] is None
+    assert tailoring["response_contract"]["strict"] is False
+    assert tailoring["response_contract"]["schema"] is None
+    assert tailoring["task_parameters"]["max_tokens"] == 700
+
+    jd_intelligence = requests["jd_intelligence"]
+    assert jd_intelligence["response_contract"]["mode"] == "structured_json"
+    assert jd_intelligence["response_contract"]["strict"] is True
+    assert isinstance(jd_intelligence["response_contract"]["schema"], dict)
+
+
+def test_groq_gpt_oss_120b_tailoring_prompt_operationalizes_bare_tool_safety(
+    plan,
+):
+    row = next(
+        item
+        for item in plan["staged_matrix"]
+        if item["workload_id"] == "tailoring_generation"
+        and item["provider"] == "groq"
+        and item["model"] == "openai/gpt-oss-120b"
+    )
+    packet = build_transmittable_request_packet(
+        case_alias=row["case_alias"],
+        provider=row["provider"],
+        model=row["model"],
+        plan=plan,
+    )
+    request = parity.build_production_parity_request(packet, plan=plan)
+    prompt = "\n".join(message["content"] for message in request["messages"])
+
+    assert row["case_alias"] == "case_3dddc5f43be918e0932d3bb2"
+    assert "emphasize Python as supported source evidence" in prompt
+    assert "surface SQL prominently as supported evidence" in prompt
+    assert "retain Airflow visibly as supporting evidence" in prompt
+    assert "not evidenced" in prompt
+    assert "candidate lacks" in prompt
+    assert "supports=['python']" in prompt
+    assert "Evidence unit: python, sql, airflow" in prompt
+    assert "Parent bullet: Delivered python, sql, airflow." in prompt
+    assert "Missing required: ['synthetic_requirement_gap']" in prompt
+    assert "risk-reduction outcome" not in prompt
+    assert "error-reduction context" not in prompt
+    assert request["task_parameters"]["max_tokens"] == 700
 
 
 def test_openai_parity_rejects_unsupported_mode_and_model_mismatch(plan):

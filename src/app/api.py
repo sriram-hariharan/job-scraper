@@ -3337,7 +3337,7 @@ def browse(
     sort_key: str = "",
     sort_dir: str = "asc",
     page: int = 1,
-    limit: int = 15,
+    limit: int = Query(default=15, ge=1),
 ):
     return services.browse_payload(
         output_dir=Path(output_dir),
@@ -3772,6 +3772,7 @@ def planning_regenerate_selected_resume(
             selected_resume=str(payload.get("selected_resume", "") or ""),
             generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
             refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
+            parse_retry_limit=payload.get("parse_retry_limit", 1),
             owner_user_id=owner_user_id,
         )
     except services.SelectedResumeRegenerationError:

@@ -292,11 +292,10 @@ function QueueFiltersToolbar({ state }: { state: ExecutiveQueueState }) {
           <input
             type="number"
             min={1}
-            max={200}
             value={filters.limit}
             onChange={(event) => setFilters((current) => ({
               ...current,
-              limit: Math.min(200, Math.max(1, Number(event.target.value) || 15)),
+              limit: Math.max(1, Math.floor(Number(event.target.value) || 15)),
             }))}
           />
         </label>

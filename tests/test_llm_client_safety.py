@@ -779,6 +779,10 @@ def test_public_signatures_remain_compatible_with_appended_provider_client(
         "fallback_provider",
         "fallback_model",
         "provider_client",
+        # Appended, optional, defaults to None: carries workload identity so the
+        # workload-scoped Groq response-mode compatibility rule can be applied.
+        # Same additive pattern as provider_client; existing callers unaffected.
+        "workload_id",
     ]
     assert list(inspect.signature(module.run_chat_completion).parameters) == expected
     assert list(

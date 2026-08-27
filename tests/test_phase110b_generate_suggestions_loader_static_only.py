@@ -6,8 +6,10 @@ import subprocess
 
 
 PLANNING_JS = Path("src/app/static/planning.js")
+APP_JS = Path("src/app/static/app.js")
 PLANNING_UI = Path("src/app/planning_ui.py")
 STYLES_CSS = Path("src/app/static/styles.css")
+FRONTEND_STYLES_CSS = Path("frontend/executive-kpi/src/styles.css")
 TAILORING_PREMIUM_CSS = Path("src/app/static/tailoring_workspace_premium.css")
 SCAN_WORKSPACE_CSS = Path("src/app/static/scan_workspace.css")
 SCAN_WORKSPACE_REVIEW_CSS = Path("src/app/static/scan_workspace_review.css")
@@ -80,15 +82,18 @@ def _evaluate_generate_suggestions_cases():
         "resolveGenerateSuggestionsSelectedResume",
         "canGenerateSuggestionsForRow",
         "buildGenerateSuggestionsPayload",
+        "buildBulkGenerateSuggestionsPayload",
         "resolvePlanningRowOutputDir",
         "buildGenerateSuggestionsEndpoint",
         "getWorkspaceBlockedReason",
         "resolvePlanningWorklistAction",
+        "getPlanningBulkSuggestionSummary",
         "buildTailoringButtonHtml",
     ]
     functions = "\n\n".join(_function_source(source, name) for name in function_names)
     script = f"""
 const escapeHtml = (value) => String(value ?? "");
+const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;
 {functions}
 const labelFor = (row) => {{
   const html = buildTailoringButtonHtml(row);
@@ -181,7 +186,223 @@ const rows = {{
     packet_json: "packet.json",
   }}),
 }};
+const bulkRows = [
+  {{ job_doc_id: "packet", winner_resume: "Winner.pdf", packet_json: "packet.json" }},
+  {{ job_doc_id: "ready", winner_resume: "Winner.pdf", tailoring_json: "tailoring.json", tailoring_workspace_state: "ready", tailoring_actionable_replacement_count: 2 }},
+  {{ job_doc_id: "blocked", winner_resume: "Winner.pdf", tailoring_json: "blocked.json", tailoring_workspace_state: "unavailable", tailoring_actionable_replacement_count: 0 }},
+  {{ job_doc_id: "missing-resume" }},
+];
+const bulkSummary = getPlanningBulkSuggestionSummary(bulkRows);
+rows.bulkSummary = {{
+  eligibleCount: bulkSummary.eligibleCount,
+  alreadyPrepared: bulkSummary.alreadyPrepared,
+  unavailable: bulkSummary.unavailable,
+  candidateIds: bulkSummary.candidateRows.map((row) => row.job_doc_id),
+  payload: buildBulkGenerateSuggestionsPayload(bulkSummary.candidateRows[0]),
+  singleRowPayload: buildGenerateSuggestionsPayload(bulkSummary.candidateRows[0]),
+}};
 console.log(JSON.stringify(rows));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def _evaluate_bulk_generate_suggestions_execution():
+    source = _source()
+    execute_source = _async_function_source(source, "executeBulkGenerateSuggestions")
+    acknowledge_source = _async_function_source(
+        source, "acknowledgeBulkGenerateSuggestionsCompletion"
+    )
+    script = f"""
+let bulkGenerateSuggestionsState = {{
+  candidateRows: [{{ job_doc_id: "A" }}, {{ job_doc_id: "B" }}, {{ job_doc_id: "C" }}],
+  total: 3,
+  completed: 0,
+  succeeded: 0,
+  needsAttention: 0,
+  currentIndex: -1,
+  isRunning: false,
+  stopRequested: false,
+  results: [],
+}};
+let active = 0;
+let maxActive = 0;
+let order = [];
+let renderStates = [];
+let publishCalls = 0;
+let refreshCalls = 0;
+let retryLimits = [];
+const publishPlanningWorklistState = () => {{ publishCalls += 1; }};
+const renderBulkGenerateSuggestionsOverlay = (state) => {{ renderStates.push(state); }};
+const buildGenerateSuggestionsEndpoint = () => "/planning/regenerate-selected-resume";
+const buildGenerateSuggestionsPayload = (row, {{ parseRetryLimit = 1 }} = {{}}) => ({{ job_doc_id: row.job_doc_id, generate_llm_tailoring: true, refresh_llm_tailoring: false, parse_retry_limit: parseRetryLimit === 0 ? 0 : 1 }});
+const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;
+const buildBulkGenerateSuggestionsPayload = (row) => buildGenerateSuggestionsPayload(row, {{ parseRetryLimit: BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT }});
+const bulkGenerateSuggestionsJobLabel = (row) => row.job_doc_id;
+const classifyBulkGenerateSuggestionsResponse = (row) => ({{ status: "success", label: row.job_doc_id, error: "" }});
+const extractGenerateSuggestionsError = () => "safe failure";
+let postJson = async (_url, payload) => {{
+  order.push(`start-${{payload.job_doc_id}}`);
+  retryLimits.push(payload.parse_retry_limit);
+  active += 1;
+  maxActive = Math.max(maxActive, active);
+  await Promise.resolve();
+  active -= 1;
+  order.push(`end-${{payload.job_doc_id}}`);
+  if (payload.job_doc_id === "B") throw new Error("failure");
+  return {{ ok: true }};
+}};
+{execute_source}
+const getBulkGenerateSuggestionsOverlay = () => ({{ dataset: {{ workflowState: "complete" }} }});
+const closeBulkGenerateSuggestionsOverlay = () => undefined;
+const loadPlanningTable = async () => {{ refreshCalls += 1; }};
+{acknowledge_source}
+(async () => {{
+  await executeBulkGenerateSuggestions();
+  const completed = {{
+    order: order.slice(),
+    maxActive,
+    completed: bulkGenerateSuggestionsState.completed,
+    succeeded: bulkGenerateSuggestionsState.succeeded,
+    needsAttention: bulkGenerateSuggestionsState.needsAttention,
+    statuses: bulkGenerateSuggestionsState.results.map((result) => result.status),
+    publishCalls,
+    retryLimits: retryLimits.slice(),
+  }};
+  await acknowledgeBulkGenerateSuggestionsCompletion();
+  completed.refreshCalls = refreshCalls;
+
+  order = [];
+  bulkGenerateSuggestionsState = {{
+    candidateRows: [{{ job_doc_id: "A" }}, {{ job_doc_id: "B" }}, {{ job_doc_id: "C" }}],
+    total: 3,
+    completed: 0,
+    succeeded: 0,
+    needsAttention: 0,
+    currentIndex: -1,
+    isRunning: false,
+    stopRequested: false,
+    results: [],
+  }};
+  const originalPost = postJson;
+  postJson = async (url, payload) => {{
+    const response = await originalPost(url, payload);
+    bulkGenerateSuggestionsState.stopRequested = true;
+    return response;
+  }};
+  await executeBulkGenerateSuggestions();
+  const stopped = {{
+    order: order.slice(),
+    completed: bulkGenerateSuggestionsState.completed,
+    succeeded: bulkGenerateSuggestionsState.succeeded,
+    needsAttention: bulkGenerateSuggestionsState.needsAttention,
+    remaining: bulkGenerateSuggestionsState.total - bulkGenerateSuggestionsState.completed,
+    finalRender: renderStates[renderStates.length - 1],
+  }};
+  console.log(JSON.stringify({{ completed, stopped }}));
+}})();
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def test_planning_and_executive_legacy_limit_normalizers_preserve_high_values():
+    planning_normalize = _function_source(_source(), "normalizePlanningFilters")
+    executive_normalize = _function_source(
+        APP_JS.read_text(encoding="utf-8"), "normalizeQueueFilters"
+    )
+    script = f"""
+const normalizePlanningFilterValues = (values) => Array.isArray(values) ? values : [];
+{planning_normalize}
+{executive_normalize}
+console.log(JSON.stringify({{
+  planning: normalizePlanningFilters({{ limit: 1000 }}).limit,
+  executive: normalizeQueueFilters({{ limit: 1000 }}).limit,
+}}));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert json.loads(completed.stdout) == {"planning": 1000, "executive": 1000}
+    assert "Math.min(100" not in planning_normalize
+    assert "Math.min(200" not in executive_normalize
+
+
+def _evaluate_bulk_generate_suggestions_selection():
+    source = _source()
+    functions = "\n\n".join(
+        (
+            _function_source(source, "normalizeBulkGenerateSuggestionsCount"),
+            _function_source(source, "getPlanningBulkSuggestionSelection"),
+            _function_source(source, "resetBulkGenerateSuggestionsConfiguration"),
+        )
+    )
+    script = f"""
+let bulkGenerateSuggestionsState = {{}};
+const planningTableState = {{ bulkSuggestionRows: [] }};
+const resetBulkGenerateSuggestionsState = () => undefined;
+const resolvePlanningWorklistAction = (row) => ({{ kind: row.kind }});
+{functions}
+const rows = [
+  {{ job_doc_id: "D", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "B", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "A", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "C", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "E", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "F", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "other-match", kind: "generate_suggestions", action: "APPLY", winner_bucket: "solid", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "other-state", kind: "generate_suggestions", action: "APPLY", winner_bucket: "weak", tailoring_workspace_state: "missing", role_family: "applied_ai" }},
+  {{ job_doc_id: "other-preference", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "data_engineering" }},
+  {{ job_doc_id: "other-review", kind: "generate_suggestions", action: "MAYBE_TAILOR", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "open", kind: "open_workspace", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "blocked", kind: "blocked", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "unavailable", kind: "unavailable", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+];
+const config = {{
+  requestedCount: 3,
+  reviewAction: "APPLY",
+  winnerBucket: "strong",
+  preferenceId: "applied_ai",
+}};
+const limited = getPlanningBulkSuggestionSelection(rows, config);
+const overAvailable = getPlanningBulkSuggestionSelection(rows, {{ ...config, requestedCount: 20 }});
+const unbounded = getPlanningBulkSuggestionSelection(rows, {{ ...config, requestedCount: 1000 }});
+resetBulkGenerateSuggestionsConfiguration(24);
+const defaultLarge = bulkGenerateSuggestionsState.requestedCount;
+resetBulkGenerateSuggestionsConfiguration(4);
+const defaultSmall = bulkGenerateSuggestionsState.requestedCount;
+console.log(JSON.stringify({{
+  limited: {{
+    eligibleCount: limited.eligibleCount,
+    filteredCount: limited.filteredCount,
+    selectedCount: limited.selectedCount,
+    ids: limited.candidateRows.map((row) => row.job_doc_id),
+  }},
+  unbounded: {{
+    overAvailableCount: overAvailable.selectedCount,
+    selectedCount: unbounded.selectedCount,
+    ids: unbounded.candidateRows.map((row) => row.job_doc_id),
+  }},
+  defaults: [defaultLarge, defaultSmall],
+  normalized: [
+    normalizeBulkGenerateSuggestionsCount("1000"),
+    normalizeBulkGenerateSuggestionsCount("0"),
+    normalizeBulkGenerateSuggestionsCount("1.5"),
+  ],
+}}));
 """
     completed = subprocess.run(
         ["node", "-e", script],
@@ -417,6 +638,280 @@ def test_generate_suggestions_button_uses_existing_workspace_when_artifacts_exis
     assert 'data-generate-suggestions="true"' in button_source
     assert '"Regenerate"' not in button_source
     assert '"Generate LLM tailoring"' not in button_source
+
+
+def test_bulk_generation_reuses_exact_action_resolution_and_single_row_payload():
+    cases = _evaluate_generate_suggestions_cases()
+    bulk = cases["bulkSummary"]
+
+    assert bulk == {
+        "eligibleCount": 1,
+        "alreadyPrepared": 1,
+        "unavailable": 2,
+        "candidateIds": ["packet"],
+        "payload": {
+            "pipeline_run_id": "",
+            "job_doc_id": "packet",
+            "queue_rank": "",
+            "selected_resume": "Winner.pdf",
+            "generate_llm_tailoring": True,
+            "refresh_llm_tailoring": False,
+            "parse_retry_limit": 0,
+        },
+        "singleRowPayload": {
+            "pipeline_run_id": "",
+            "job_doc_id": "packet",
+            "queue_rank": "",
+            "selected_resume": "Winner.pdf",
+            "generate_llm_tailoring": True,
+            "refresh_llm_tailoring": False,
+            "parse_retry_limit": 1,
+        },
+    }
+
+    source = _source()
+    summary_source = _function_source(source, "getPlanningBulkSuggestionSummary")
+    assert "resolvePlanningWorklistAction(row)" in summary_source
+    assert 'action.kind === "generate_suggestions"' in summary_source
+    assert 'action.kind === "open_workspace"' in summary_source
+
+
+def test_bulk_generation_is_sequential_continues_after_failure_stops_and_refreshes_once():
+    cases = _evaluate_bulk_generate_suggestions_execution()
+
+    assert cases["completed"] == {
+        "order": ["start-A", "end-A", "start-B", "end-B", "start-C", "end-C"],
+        "maxActive": 1,
+        "completed": 3,
+        "succeeded": 2,
+        "needsAttention": 1,
+        "statuses": ["success", "needs_attention", "success"],
+        "publishCalls": 2,
+        "retryLimits": [0, 0, 0],
+        "refreshCalls": 1,
+    }
+    assert cases["stopped"] == {
+        "order": ["start-A", "end-A"],
+        "completed": 1,
+        "succeeded": 1,
+        "needsAttention": 0,
+        "remaining": 2,
+        "finalRender": "stopped",
+    }
+
+    source = _source()
+    execute_source = _async_function_source(source, "executeBulkGenerateSuggestions")
+    assert "Promise.all" not in execute_source
+    assert "buildBulkGenerateSuggestionsPayload(row)" in execute_source
+    assert (
+        "const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;" in _source()
+    )
+    assert "await postJson(" in execute_source
+    assert "loadPlanningTable" not in execute_source
+    assert "retry" not in execute_source.lower()
+
+
+def test_bulk_configuration_intersects_filters_preserves_order_and_has_no_count_cap():
+    cases = _evaluate_bulk_generate_suggestions_selection()
+
+    assert cases["limited"] == {
+        "eligibleCount": 10,
+        "filteredCount": 6,
+        "selectedCount": 3,
+        "ids": ["D", "B", "A"],
+    }
+    assert cases["unbounded"] == {
+        "overAvailableCount": 6,
+        "selectedCount": 6,
+        "ids": ["D", "B", "A", "C", "E", "F"],
+    }
+    assert cases["defaults"] == [10, 4]
+    assert cases["normalized"] == [1000, 0, 0]
+
+
+def test_bulk_http_200_llm_failure_is_not_counted_as_prepared_success():
+    source = _source()
+    classify_source = _function_source(
+        source, "classifyBulkGenerateSuggestionsResponse"
+    )
+    failure_message_source = _function_source(
+        source, "generateSuggestionsLlmFailureMessage"
+    )
+    script = f"""
+const bulkGenerateSuggestionsJobLabel = (row) => row.job_title;
+const buildGenerateSuggestionsWorkspaceRow = (row, response) => ({{ ...row, ...response }});
+const resolvePlanningWorklistAction = (row) => ({{
+  kind: row.tailoring_workspace_state === "ready" ? "open_workspace" : "unavailable",
+  blockedReason: row.tailoring_workspace_state === "ready" ? "" : "No usable workspace",
+}});
+{failure_message_source}
+{classify_source}
+console.log(JSON.stringify({{
+  failed: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "A" }},
+    {{ ok: true, llm_tailoring_status: "failed", tailoring_workspace_state: "ready" }}
+  ),
+  ready: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "B" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "ready" }}
+  ),
+  unusable: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "C" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "unavailable" }}
+  ),
+  empty: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "D" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "empty" }}
+  ),
+  noSafeRewrites: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "E" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "no_safe_rewrites" }}
+  ),
+}}));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    cases = json.loads(completed.stdout)
+    assert cases["failed"]["status"] == "needs_attention"
+    assert cases["failed"]["outcome"] == "failed"
+    assert "no suggestions were" in cases["failed"]["error"]
+    assert "Nothing was submitted." in cases["failed"]["error"]
+    assert cases["ready"]["status"] == "success"
+    assert cases["ready"]["outcome"] == "generated"
+    assert cases["unusable"]["status"] == "needs_attention"
+    assert cases["empty"] == {
+        "status": "success",
+        "outcome": "empty",
+        "label": "D",
+        "error": "",
+    }
+    assert cases["noSafeRewrites"] == {
+        "status": "success",
+        "outcome": "no_safe_rewrites",
+        "label": "E",
+        "error": "",
+    }
+
+
+def test_bulk_completion_detail_separates_empty_review_and_failure_outcomes():
+    render_source = _function_source(_source(), "renderBulkGenerateSuggestionsResults")
+
+    assert 'result.outcome === "empty"' in render_source
+    assert 'result.outcome === "no_safe_rewrites"' in render_source
+    assert 'result.status === "needs_attention"' in render_source
+    assert "No grounded rewrite evidence" in render_source
+    assert "Review guidance" in render_source
+    assert "Needs attention" in render_source
+
+
+def test_bulk_tailoring_primary_action_uses_restrained_soft_plum_tokens():
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    tailoring_tokens = styles.split(".workflow-overlay--tailoring {", 1)[1].split("}", 1)[0]
+    light_tokens = styles.split(
+        'html[data-theme="light"] .workflow-overlay--tailoring {', 1
+    )[1].split("}", 1)[0]
+
+    for tokens in (tailoring_tokens, light_tokens):
+        assert "--workflow-action-bg: #72587c;" in tokens
+        assert "linear-gradient" not in tokens
+        assert "#4f46e5" not in tokens
+        assert "#7c3aed" not in tokens
+    assert "--workflow-accent: #bfaac5;" in tailoring_tokens
+    assert "--workflow-accent: #72587c;" in light_tokens
+
+
+def test_bulk_configuration_progress_and_safety_contract_is_explicit_and_bounded():
+    source = _source()
+    ui = PLANNING_UI.read_text(encoding="utf-8")
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    frontend_styles = FRONTEND_STYLES_CSS.read_text(encoding="utf-8")
+    open_source = _function_source(source, "openBulkGenerateSuggestionsConfirmation")
+    update_source = _function_source(source, "updateBulkGenerateSuggestionsConfiguration")
+    start_source = _async_function_source(source, "startBulkGenerateSuggestionsExecution")
+    keydown_source = _function_source(source, "handleBulkGenerateSuggestionsDialogKeydown")
+    execute_source = _async_function_source(source, "executeBulkGenerateSuggestions")
+    stop_source = _function_source(source, "stopBulkGenerateSuggestionsAfterCurrent")
+    overlay_source = _function_source(source, "renderBulkGenerateSuggestionsOverlay")
+
+    for element_id in (
+        "bulkGenerateSuggestionsOverlay",
+        "bulkGenerateSuggestionsControls",
+        "bulkGenerateSuggestionsNumber",
+        "bulkGenerateSuggestionsReviewFilter",
+        "bulkGenerateSuggestionsMatchFilter",
+        "bulkGenerateSuggestionsPreferenceFilter",
+        "bulkGenerateSuggestionsSummary",
+        "bulkGenerateSuggestionsCurrent",
+        "bulkGenerateSuggestionsResults",
+        "bulkGenerateSuggestionsSecondaryBtn",
+        "bulkGenerateSuggestionsPrimaryBtn",
+    ):
+        assert f'id="{element_id}"' in ui
+        assert f'qs("{element_id}")' in source
+
+    assert 'id="bulkGenerateSuggestionsTailoringFilter"' not in ui
+    assert 'qs("bulkGenerateSuggestionsTailoringFilter")' not in source
+
+    assert "Nothing will be submitted to employers." in ui
+    assert "Choose which eligible Planning jobs should receive tailoring suggestions." in ui
+    assert "Enter a positive whole number." in ui
+    assert "bulk-generate-suggestions-summary" in styles
+    assert "getPlanningBulkSuggestionSummary()" in open_source
+    assert "resetBulkGenerateSuggestionsConfiguration(scopeSummary.eligibleCount)" in open_source
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection())' in open_source
+    assert "getPlanningBulkSuggestionSelection()" in update_source
+    assert "resetBulkGenerateSuggestionsState(selection.candidateRows)" in start_source
+    assert "await executeBulkGenerateSuggestions()" in start_source
+    assert "postJson" not in open_source + update_source
+    assert 'primaryBtn.textContent = "Generate suggestions"' in overlay_source
+    assert "Generate suggestion for 1 job" not in overlay_source
+    assert "Generate suggestions for ${selection.selectedCount} jobs" not in overlay_source
+    assert "primaryBtn.disabled = selection.selectedCount === 0" in overlay_source
+    assert 'event.key === "Escape" && state === "confirm"' in keydown_source
+    assert 'event.key !== "Tab"' in keydown_source
+    assert "closeBulkGenerateSuggestionsOverlay()" in keydown_source
+    assert "generateSuggestionsState.isRunning" in open_source
+    assert "bulkGenerateSuggestionsState.isRunning" in open_source
+    assert "Stop after current" in overlay_source
+    assert "were not started" in overlay_source
+    assert "setInterval" not in overlay_source + execute_source
+    assert "abort" not in stop_source.lower()
+    assert 'overlay.setAttribute("aria-busy", state === "running" ? "true" : "false")' in overlay_source
+    assert execute_source.index("bulkGenerateSuggestionsState.isRunning = true") < execute_source.index(
+        'renderBulkGenerateSuggestionsOverlay("running")'
+    )
+    assert '.workflow-overlay--tailoring[data-workflow-state="running"] .workflow-dialog-status-icon::after {' in styles
+    assert '.workflow-overlay--tailoring:not(.is-success):not(.is-error) .workflow-dialog-status-icon::after {' not in styles
+    assert '.bulk-generate-suggestions-fullpage[data-workflow-state="confirm"] .workflow-dialog-status-icon::after {' in styles
+    assert "animation: none;" in styles
+    assert ".workflow-overlay--tailoring.is-stopped .workflow-dialog-status-icon" in styles
+
+    assert "border: 1px solid #ddcde4;" in frontend_styles
+    assert "background: #f1eaf4;" in frontend_styles
+    assert "color: #5f4168;" in frontend_styles
+    assert ".planning-react-bulk-generate small { color: #72587c;" in frontend_styles
+    assert 'html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate {' in frontend_styles
+    assert "border-color: #514359;" in frontend_styles
+    assert "background: #2d2731;" in frontend_styles
+    assert "color: #e8dceb;" in frontend_styles
+    assert 'html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate small { color: #bfaac5; }' in frontend_styles
+    bulk_style_start = frontend_styles.index(".planning-react-bulk-generate {")
+    bulk_style_end = frontend_styles.index(".shared-table-title-line", bulk_style_start)
+    assert "gradient" not in frontend_styles[bulk_style_start:bulk_style_end]
+
+    guarded_bulk_source = open_source + update_source + start_source + execute_source + stop_source + overlay_source
+    for forbidden in (
+        "/application-actions",
+        "mark_applied",
+        "submit_application",
+        "application_status",
+        "Promise.all",
+    ):
+        assert forbidden not in guarded_bulk_source
 
 
 def test_packet_only_rows_render_generate_suggestions_not_open_workspace():

@@ -74,8 +74,8 @@ LLM_TAILOR_MODEL = os.getenv(
 ).strip()
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
-LLM_TAILOR_PROMPT_VERSION = "v6"
-TAILORING_GENERATION_TRANSFORMATION_CONTRACT_VERSION = "tailoring-generation-validation-v1"
+LLM_TAILOR_PROMPT_VERSION = "v9"
+TAILORING_GENERATION_TRANSFORMATION_CONTRACT_VERSION = "tailoring-generation-validation-v5"
 
 TAILOR_LLM_FALLBACK_ENABLED = (
     os.getenv(
@@ -345,6 +345,10 @@ You MUST obey these rules:
 15. Do not concentrate 3 or more Lead with / Support with items on the same source label.
 16. Lead with / Support with direction fragments must be at least 5 words and materially specific.
 17. Avoid ultra-short fragments like "excel reporting" or "sql visibility".
+18. A missing requirement means not evidenced in the supplied material; never claim the candidate lacks or has no experience with it.
+19. A tool or skill name alone does not establish activities, achievements, outcomes, responsibilities, or methods.
+20. For bare tool evidence, stay at the tool-token level: "emphasize Python as supported source evidence", "surface SQL prominently as supported evidence", or "retain Airflow visibly as supporting evidence".
+21. Unless source text explicitly states them, never attach development, querying, orchestration, pipeline impact, production ownership, architecture, optimization, implementation, automation, or measurable impact to a tool.
 """
 
 TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT = """
@@ -366,6 +370,10 @@ You MUST obey these rules:
 13. Do not put rewrite directions, writing advice, or "Lead with..." text into patch_text.
 14. Preserve original factual claims unless a changed fact is present in source evidence.
 15. If unsupported_risk_signals would be non-empty, omit the concrete candidate and keep direction-only guidance.
+16. A missing requirement means not evidenced in the supplied material; never claim the candidate lacks or has no experience with it.
+17. A tool or skill name alone does not establish activities, achievements, outcomes, responsibilities, or methods.
+18. For bare tool evidence, stay at the tool-token level: "emphasize Python as supported source evidence", "surface SQL prominently as supported evidence", or "retain Airflow visibly as supporting evidence".
+19. Unless source text explicitly states them, never attach development, querying, orchestration, pipeline impact, production ownership, architecture, optimization, implementation, automation, or measurable impact to a tool.
 """
 
 TAILORING_GENERATION_RETRY_SYSTEM_PROMPT = """
@@ -385,6 +393,10 @@ You MUST obey these rules:
 11. Lead with / Support with direction fragments must be at least 5 words.
 12. Do not concentrate 3 or more Lead with / Support with items on the same source label.
 13. Use ONLY the supplied evidence. Do NOT invent anything.
+14. Describe missing requirements only as not evidenced; never claim the candidate lacks or has no experience with them.
+15. Do not infer activities, achievements, outcomes, responsibilities, or methods from a tool or skill name alone.
+16. For bare tool evidence, stay at the tool-token level: "emphasize Python as supported source evidence", "surface SQL prominently as supported evidence", or "retain Airflow visibly as supporting evidence".
+17. Unless source text explicitly states them, never attach development, querying, orchestration, pipeline impact, production ownership, architecture, optimization, implementation, automation, or measurable impact to a tool.
 """
 
 TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT = """
@@ -401,6 +413,10 @@ You MUST obey these rules:
 8. concrete_replacement_candidates may be [].
 9. concrete patch_text must be a complete replacement bullet, not an instruction.
 10. Use ONLY the supplied evidence. Do NOT invent tools, metrics, domains, employers, responsibilities, outcomes, or unsupported claims.
+11. Describe missing requirements only as not evidenced; never claim the candidate lacks or has no experience with them.
+12. Do not infer activities, achievements, outcomes, responsibilities, or methods from a tool or skill name alone.
+13. For bare tool evidence, stay at the tool-token level: "emphasize Python as supported source evidence", "surface SQL prominently as supported evidence", or "retain Airflow visibly as supporting evidence".
+14. Unless source text explicitly states them, never attach development, querying, orchestration, pipeline impact, production ownership, architecture, optimization, implementation, automation, or measurable impact to a tool.
 """
 
 PATCH_REFINEMENT_WRITER_SYSTEM_PROMPT = """
@@ -835,7 +851,10 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append("7. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.")
     lines.append("8. Do not return only gap-explicit directions when anchor bullets exist.")
     lines.append("9. Every Lead with / Support with item must reference a specific source entry.")
-    lines.append("10. Keep gap explicit only for truly unsupported skills.")
+    lines.append("10. Keep gap explicit only for requirements not evidenced in the supplied material; describe evidence status, not candidate experience.")
+    lines.append("11. A tool or skill name alone does not establish activities, achievements, outcomes, responsibilities, or methods.")
+    lines.append('12. For bare tool evidence, use tool-level visibility wording such as "emphasize Python as supported source evidence", "surface SQL prominently as supported evidence", or "retain Airflow visibly as supporting evidence".')
+    lines.append("13. Unless the source text explicitly states them, do not attach development, querying, orchestration, pipeline impact, production ownership, architecture, optimization, implementation, automation, or measurable impact to a tool.")
     lines.append("")
     lines.append("Job:")
     lines.append(f"- Company: {job.get('company', '')}")
@@ -894,6 +913,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append('- Allowed prefix values only: "Lead with", "Support with", "Keep gap explicit", "Do not add"')
     lines.append('- For "Lead with" and "Support with", source is REQUIRED and must be the exact source label copied from the evidence.')
     lines.append('- For "Keep gap explicit" and "Do not add", source may be an empty string.')
+    lines.append('- Gap-style directions must say the requirement is not evidenced; never say the candidate lacks or has no experience with it.')
     lines.append('- Never return free-form string items inside rewrite_directions.')
     lines.append('- When using Lead with or Support with, copy the exact source label only, for example: "Data Analyst II @ Accenture".')
     lines.append('- Never use section labels like "Primary anchor evidence units 1", "Secondary supporting evidence units", or wrappers like "[experience] ... | type=same_source_context" as the source.')
@@ -901,7 +921,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append('- direction must be a short edit-instruction fragment, not a full rewritten bullet.')
     lines.append('- For "Lead with" and "Support with", direction must be 20 words or fewer.')
     lines.append('- Do NOT paste or closely paraphrase the evidence bullet text into direction.')
-    lines.append('- Good direction example: "sql and python in opening clause; preserve risk-reduction outcome"')
+    lines.append('- Good direction example: "surface SQL and Python prominently as supported evidence"')
     lines.append('- Bad direction example: "Drove lapse and retention risk assessments using Python and customer segmentation with SQL..."')
     lines.append('- Use at most 1 combined gap-style item across "Keep gap explicit" and "Do not add" when anchor evidence exists.')
     lines.append('- When 2 or more anchor sources exist, include at least 2 source-tied Lead/Support items before any gap-style item.')
@@ -910,7 +930,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append('- Do not concentrate 3 or more Lead/Support items on the same source label when multiple valid sources exist.')
     lines.append('- For "Lead with" and "Support with", direction must be at least 5 words and materially specific.')
     lines.append('- Bad direction example: "excel reporting"')
-    lines.append('- Good direction example: "excel reporting consistency in support clause; preserve recurring error-reduction context"')
+    lines.append('- Good direction example: "surface Excel reporting prominently as supported evidence"')
 
     return "\n".join(lines)
 
@@ -991,6 +1011,10 @@ def _build_live_concrete_rewrite_prompt(
     lines.append("7. Direction-only guidance is allowed, but it is non-actionable.")
     lines.append("8. If no safe literal replacement bullet can be written from the original_text, return concrete_replacement_candidates: [].")
     lines.append("9. When original_text already supports a safe concrete wording improvement, return up to 2 conservative concrete_replacement_candidates.")
+    lines.append("10. A missing requirement means not evidenced in the supplied material; never claim the candidate lacks or has no experience with it.")
+    lines.append("11. A tool or skill name alone does not establish activities, achievements, outcomes, responsibilities, or methods.")
+    lines.append('12. For bare tool evidence, use tool-level visibility wording such as "emphasize Python as supported source evidence", "surface SQL prominently as supported evidence", or "retain Airflow visibly as supporting evidence".')
+    lines.append("13. Unless the source text explicitly states them, do not attach development, querying, orchestration, pipeline impact, production ownership, architecture, optimization, implementation, automation, or measurable impact to a tool.")
     lines.append("")
     lines.append("Job:")
     lines.append(f"- Company: {job.get('company', '')}")
@@ -1083,6 +1107,7 @@ def _build_live_concrete_rewrite_prompt(
     lines.append('- rewrite_directions items must be objects with exactly these keys: {"prefix": "...", "source": "...", "direction": "..."}')
     lines.append('- Allowed rewrite_directions prefix values only: "Lead with", "Support with", "Keep gap explicit", "Do not add".')
     lines.append('- For "Lead with" and "Support with", source is REQUIRED and must be the exact source label copied from the evidence.')
+    lines.append('- Gap-style directions must say the requirement is not evidenced; never say the candidate lacks or has no experience with it.')
     lines.append('- Direction fragments must be short edit-instruction fragments, not full rewritten bullets.')
     lines.append("- concrete_replacement_candidates must be an array.")
     lines.append("- Concrete patch_text must preserve original factual claims unless the changed fact is present in source evidence.")
@@ -1500,13 +1525,17 @@ def _normalize_live_direction_fragment(prefix: str, direction: str) -> str:
 def _live_rewrite_similarity_ratio(a: str, b: str) -> float:
     from difflib import SequenceMatcher
 
-    a_norm = re.sub(r"\s+", " ", str(a or "").strip().lower())
-    b_norm = re.sub(r"\s+", " ", str(b or "").strip().lower())
+    a_norm = _live_rewrite_normalized_text(a)
+    b_norm = _live_rewrite_normalized_text(b)
 
     if not a_norm or not b_norm:
         return 0.0
 
     return SequenceMatcher(None, a_norm, b_norm).ratio()
+
+
+def _live_rewrite_normalized_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
 
 def _live_rewrite_source_texts_for_label(
@@ -1527,7 +1556,7 @@ def _live_rewrite_source_texts_for_label(
 
     for bucket in ("anchors", "supports", "context"):
         for row in list(evidence_layers.get(bucket, []) or [])[:4]:
-            if _display_row_source(row) != canonical:
+            if _cleanup_live_source_label(_display_row_source(row)) != canonical:
                 continue
 
             for value in (row.get("text"), row.get("parent_bullet")):
@@ -2275,6 +2304,163 @@ def _coerce_live_rewrite_direction(item: Any) -> str:
     text = f"Do not add {text}".strip()
     return text if text.endswith(".") else f"{text}."
 
+
+_LIVE_CANDIDATE_ABSENCE_PATTERNS = (
+    re.compile(r"\bcandidate\s+(?:lacks?|has\s+no|does\s+not\s+have|doesn't\s+have)\b", re.IGNORECASE),
+    re.compile(r"\b(?:lacks?|has\s+no|does\s+not\s+have|doesn't\s+have|without)\s+(?:any\s+)?experience\b", re.IGNORECASE),
+    re.compile(r"\bno\s+experience\s+(?:with|in)\b", re.IGNORECASE),
+    re.compile(r"\bunfamiliar\s+with\b", re.IGNORECASE),
+    re.compile(r"\bdoes\s+not\s+know\b", re.IGNORECASE),
+)
+
+_LIVE_FACTUAL_EXPANSION_CONCEPT_PATTERNS = {
+    "achievement": re.compile(r"\bachiev(?:e|es|ed|ing|ement|ements)\b", re.IGNORECASE),
+    "architecture": re.compile(r"\barchitect(?:ure|ures|ural|ed|ing)?\b", re.IGNORECASE),
+    "automation": re.compile(r"\bautomat(?:e|es|ed|ing|ion|ions)\b", re.IGNORECASE),
+    "development": re.compile(r"\bdevelop(?:s|ed|ing|ment|ments|er|ers)?\b", re.IGNORECASE),
+    "impact": re.compile(r"\bimpact(?:s|ed|ing|ful)?\b", re.IGNORECASE),
+    "implementation": re.compile(
+        r"\bimplement(?:s|ed|ing|ation|ations)?\b", re.IGNORECASE
+    ),
+    "kubernetes": re.compile(r"\bkubernetes\b", re.IGNORECASE),
+    "measurement": re.compile(r"\bmeasur(?:e|es|ed|ing|able|ement|ements)\b", re.IGNORECASE),
+    "optimization": re.compile(r"\boptimi[sz](?:e|es|ed|ing|ation|ations)\b", re.IGNORECASE),
+    "orchestration": re.compile(r"\borchestrat(?:e|es|ed|ing|ion|ions|or|ors)\b", re.IGNORECASE),
+    "outcome": re.compile(r"\boutcomes?\b", re.IGNORECASE),
+    "ownership": re.compile(r"\bown(?:s|ed|ing|ership)\b", re.IGNORECASE),
+    "pipeline": re.compile(r"\bpipelines?\b", re.IGNORECASE),
+    "production": re.compile(r"\bproduction\b", re.IGNORECASE),
+    "querying": re.compile(r"\bquer(?:y|ies|ied|ying)\b", re.IGNORECASE),
+    "workflow": re.compile(r"\bworkflows?\b", re.IGNORECASE),
+}
+
+
+def _live_all_evidence_texts(payload: Dict[str, Any]) -> List[str]:
+    texts: List[str] = []
+    for row in _live_evidence_rows(payload):
+        for value in (row.get("text"), row.get("parent_bullet")):
+            text = re.sub(r"\s+", " ", str(value or "").strip())
+            if text:
+                texts.append(text)
+    return _unique_preserve_order(texts)
+
+
+def _live_direction_claims_candidate_absence(
+    direction: str,
+    payload: Dict[str, Any],
+) -> bool:
+    direction_text = re.sub(r"\s+", " ", str(direction or "").strip())
+    matches = [
+        match
+        for pattern in _LIVE_CANDIDATE_ABSENCE_PATTERNS
+        if (match := pattern.search(direction_text)) is not None
+    ]
+    if not matches:
+        return False
+    normalized_evidence = [
+        _live_rewrite_normalized_text(source_text)
+        for source_text in _live_all_evidence_texts(payload)
+    ]
+    for match in matches:
+        # Bind the negative predicate and its object, not merely generic words
+        # such as "lacks" or "experience". This prevents evidence about one
+        # requirement from authorizing a negative biography claim about another.
+        claim = _live_rewrite_normalized_text(direction_text[match.start():])
+        if claim and any(claim in source_text for source_text in normalized_evidence):
+            return False
+    return True
+
+
+def _live_direction_unsupported_factual_concepts(
+    direction: str,
+    source_texts: List[str],
+) -> List[str]:
+    unsupported: List[str] = []
+    for concept, pattern in _LIVE_FACTUAL_EXPANSION_CONCEPT_PATTERNS.items():
+        if not pattern.search(str(direction or "")):
+            continue
+        if any(pattern.search(source_text) for source_text in source_texts):
+            continue
+        unsupported.append(concept)
+    return unsupported
+
+
+# Closed vocabulary of live tailoring contract rejection codes. Every member is
+# a fixed identifier: no provider-derived text ever appears here.
+LIVE_LLM_CONTRACT_FAILURE_CODES = frozenset({
+    "live_llm_contract_not_object",
+    "live_llm_contract_rewrite_directions_not_list",
+    "live_llm_contract_empty_rewrite_directions",
+    "live_llm_contract_direction_not_object",
+    "live_llm_contract_direction_bad_prefix",
+    "live_llm_contract_direction_missing_direction",
+    "live_llm_contract_direction_missing_source",
+    "live_llm_contract_direction_unknown_source",
+    "live_llm_contract_direction_too_short",
+    "live_llm_contract_direction_too_long",
+    "live_llm_contract_direction_copies_source_text",
+    "live_llm_contract_direction_candidate_absence_claim",
+    "live_llm_contract_direction_unsupported_factual_expansion",
+    "live_llm_contract_no_valid_rewrite_or_concrete_candidate",
+    "live_llm_contract_anchor_case_requires_3_directions",
+    "live_llm_contract_anchor_case_requires_anchor_direction",
+    "live_llm_contract_anchor_case_requires_2_source_tied_directions",
+    "live_llm_contract_anchor_case_allows_max_1_gap_direction",
+    "live_llm_contract_anchor_case_excessive_single_source_reuse",
+})
+
+
+LIVE_LLM_MAX_PARSE_RETRY_LIMIT = 1
+LIVE_LLM_DEFAULT_PARSE_RETRY_LIMIT = 1
+LIVE_LLM_ALLOWED_PARSE_RETRY_LIMITS = (0, 1)
+
+
+def normalize_live_llm_parse_retry_limit(value: Any) -> int:
+    """Return an exact allowed parse-retry limit or fail closed."""
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("parse_retry_limit must be an int in (0, 1)")
+    if value not in LIVE_LLM_ALLOWED_PARSE_RETRY_LIMITS:
+        raise ValueError("parse_retry_limit must be an int in (0, 1)")
+    return int(value)
+
+
+class LiveLlmContractError(ValueError):
+    """A live tailoring contract rejection carrying a bounded machine code.
+
+    Subclasses ValueError so every existing caller and message assertion keeps
+    working unchanged: ``str(exc)`` stays byte-identical to the message this
+    validator has always raised. The added attributes are the only values that
+    are safe to persist -- ``code`` is drawn from a fixed vocabulary and
+    ``index``/``count`` are integers. Provider-derived text (prefixes, source
+    labels, response fragments) stays in the message only and must never be
+    read by the evaluation/evidence layer.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        index: int | None = None,
+        count: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = str(code)
+        self.index = None if index is None else int(index)
+        self.count = None if count is None else int(count)
+
+
+def _live_payload_has_grounded_rewrite_material(payload: Dict[str, Any]) -> bool:
+    """True when the payload supplies at least one citable rewrite source.
+
+    Every rewrite direction must reference an available source label, so an
+    empty label set means no valid non-empty result can exist.
+    """
+
+    return bool(_live_available_source_labels(payload))
+
+
 def _validate_live_llm_parsed_contract(
     parsed: Dict[str, Any],
     payload: Dict[str, Any],
@@ -2282,13 +2468,27 @@ def _validate_live_llm_parsed_contract(
     enable_safe_app_ready_rewrite_promotion: bool = False,
 ) -> Dict[str, Any]:
     if not isinstance(parsed, dict):
-        raise ValueError("live_llm_contract_not_object")
+        raise LiveLlmContractError(
+            "live_llm_contract_not_object",
+            code="live_llm_contract_not_object",
+        )
 
     directions = parsed.get("rewrite_directions", [])
     if not isinstance(directions, list):
-        raise ValueError("live_llm_contract_rewrite_directions_not_list")
-    if not directions and not enable_safe_app_ready_rewrite_promotion:
-        raise ValueError("live_llm_contract_empty_rewrite_directions")
+        raise LiveLlmContractError(
+            "live_llm_contract_rewrite_directions_not_list",
+            code="live_llm_contract_rewrite_directions_not_list",
+        )
+    grounded_rewrite_material = _live_payload_has_grounded_rewrite_material(payload)
+    if (
+        not directions
+        and not enable_safe_app_ready_rewrite_promotion
+        and grounded_rewrite_material
+    ):
+        raise LiveLlmContractError(
+            "live_llm_contract_empty_rewrite_directions",
+            code="live_llm_contract_empty_rewrite_directions",
+        )
 
     anchors = list(((payload.get("evidence_layers", {}) or {}).get("anchors", []) or []))[:4]
     available_source_labels = _live_available_source_labels(payload)
@@ -2310,7 +2510,11 @@ def _validate_live_llm_parsed_contract(
 
     for idx, item in enumerate(directions, start=1):
         if not isinstance(item, dict):
-            raise ValueError(f"live_llm_contract_direction_{idx}_not_object")
+            raise LiveLlmContractError(
+                f"live_llm_contract_direction_{idx}_not_object",
+                code="live_llm_contract_direction_not_object",
+                index=idx,
+            )
 
         prefix = str(item.get("prefix", "") or "").strip()
         source = str(item.get("source", "") or "").strip()
@@ -2320,14 +2524,34 @@ def _validate_live_llm_parsed_contract(
         )
 
         if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
-            raise ValueError(f"live_llm_contract_direction_{idx}_bad_prefix:{prefix}")
+            # `prefix` is provider-controlled: it stays in the message only.
+            raise LiveLlmContractError(
+                f"live_llm_contract_direction_{idx}_bad_prefix:{prefix}",
+                code="live_llm_contract_direction_bad_prefix",
+                index=idx,
+            )
 
         if not direction:
-            raise ValueError(f"live_llm_contract_direction_{idx}_missing_direction")
+            raise LiveLlmContractError(
+                f"live_llm_contract_direction_{idx}_missing_direction",
+                code="live_llm_contract_direction_missing_direction",
+                index=idx,
+            )
+
+        if _live_direction_claims_candidate_absence(direction, payload):
+            raise LiveLlmContractError(
+                f"live_llm_contract_direction_{idx}_candidate_absence_claim",
+                code="live_llm_contract_direction_candidate_absence_claim",
+                index=idx,
+            )
 
         if prefix in {"Lead with", "Support with"}:
             if not source:
-                raise ValueError(f"live_llm_contract_direction_{idx}_missing_source")
+                raise LiveLlmContractError(
+                    f"live_llm_contract_direction_{idx}_missing_source",
+                    code="live_llm_contract_direction_missing_source",
+                    index=idx,
+                )
 
             source_key = source.rstrip(".").strip()
             canonical_source = (
@@ -2337,8 +2561,11 @@ def _validate_live_llm_parsed_contract(
             )
 
             if canonical_source not in alias_map.values() and canonical_source not in available_source_labels:
-                raise ValueError(
-                    f"live_llm_contract_direction_{idx}_unknown_source:{source_key}"
+                # `source_key` is provider-controlled: message only.
+                raise LiveLlmContractError(
+                    f"live_llm_contract_direction_{idx}_unknown_source:{source_key}",
+                    code="live_llm_contract_direction_unknown_source",
+                    index=idx,
                 )
 
             direction_word_count = len(re.findall(r"\b[\w.+/\-]+\b", direction))
@@ -2355,21 +2582,41 @@ def _validate_live_llm_parsed_contract(
                         }
                     )
                     continue
-                raise ValueError(
-                    f"live_llm_contract_direction_{idx}_too_short:{direction_word_count}"
+                raise LiveLlmContractError(
+                    f"live_llm_contract_direction_{idx}_too_short:{direction_word_count}",
+                    code="live_llm_contract_direction_too_short",
+                    index=idx,
+                    count=direction_word_count,
                 )
             if direction_word_count > 20:
-                raise ValueError(
-                    f"live_llm_contract_direction_{idx}_too_long:{direction_word_count}"
+                raise LiveLlmContractError(
+                    f"live_llm_contract_direction_{idx}_too_long:{direction_word_count}",
+                    code="live_llm_contract_direction_too_long",
+                    index=idx,
+                    count=direction_word_count,
                 )
 
             source_texts = _live_rewrite_source_texts_for_label(payload, source_key)
+            unsupported_concepts = _live_direction_unsupported_factual_concepts(
+                direction,
+                source_texts,
+            )
+            if unsupported_concepts:
+                raise LiveLlmContractError(
+                    f"live_llm_contract_direction_{idx}_unsupported_factual_expansion:"
+                    + ",".join(unsupported_concepts),
+                    code="live_llm_contract_direction_unsupported_factual_expansion",
+                    index=idx,
+                    count=len(unsupported_concepts),
+                )
             if any(
                 _live_rewrite_similarity_ratio(direction, source_text) >= 0.82
                 for source_text in source_texts
             ):
-                raise ValueError(
-                    f"live_llm_contract_direction_{idx}_copies_source_text"
+                raise LiveLlmContractError(
+                    f"live_llm_contract_direction_{idx}_copies_source_text",
+                    code="live_llm_contract_direction_copies_source_text",
+                    index=idx,
                 )
 
             lead_support_count += 1
@@ -2389,21 +2636,40 @@ def _validate_live_llm_parsed_contract(
         enable_safe_app_ready_rewrite_promotion
         and not validated
         and not valid_concrete
+        and grounded_rewrite_material
     ):
-        raise ValueError("live_llm_contract_no_valid_rewrite_or_concrete_candidate")
+        raise LiveLlmContractError(
+            "live_llm_contract_no_valid_rewrite_or_concrete_candidate",
+            code="live_llm_contract_no_valid_rewrite_or_concrete_candidate",
+        )
 
     if anchors and not enable_safe_app_ready_rewrite_promotion:
         if len(validated) < 3:
-            raise ValueError("live_llm_contract_anchor_case_requires_3_directions")
+            raise LiveLlmContractError(
+                "live_llm_contract_anchor_case_requires_3_directions",
+                code="live_llm_contract_anchor_case_requires_3_directions",
+                count=len(validated),
+            )
 
         if lead_support_count < 1:
-            raise ValueError("live_llm_contract_anchor_case_requires_anchor_direction")
+            raise LiveLlmContractError(
+                "live_llm_contract_anchor_case_requires_anchor_direction",
+                code="live_llm_contract_anchor_case_requires_anchor_direction",
+            )
 
         if len(anchors) >= 2 and lead_support_count < 2:
-            raise ValueError("live_llm_contract_anchor_case_requires_2_source_tied_directions")
+            raise LiveLlmContractError(
+                "live_llm_contract_anchor_case_requires_2_source_tied_directions",
+                code="live_llm_contract_anchor_case_requires_2_source_tied_directions",
+                count=lead_support_count,
+            )
 
         if gap_direction_count > 1:
-            raise ValueError("live_llm_contract_anchor_case_allows_max_1_gap_direction")
+            raise LiveLlmContractError(
+                "live_llm_contract_anchor_case_allows_max_1_gap_direction",
+                code="live_llm_contract_anchor_case_allows_max_1_gap_direction",
+                count=gap_direction_count,
+            )
 
         if len(available_source_labels) >= 3 and lead_support_sources:
             source_counts = Counter(lead_support_sources)
@@ -2414,9 +2680,13 @@ def _validate_live_llm_parsed_contract(
                     source for source, count in source_counts.items()
                     if count == max_source_reuse
                 ]
-                raise ValueError(
+                # `dominant_sources` are provider-derived labels: message only.
+                # Only the bounded reuse count is safe to expose structurally.
+                raise LiveLlmContractError(
                     "live_llm_contract_anchor_case_excessive_single_source_reuse:"
-                    + ",".join(sorted(dominant_sources))
+                    + ",".join(sorted(dominant_sources)),
+                    code="live_llm_contract_anchor_case_excessive_single_source_reuse",
+                    count=max_source_reuse,
                 )
 
     validated_payload: Dict[str, Any] = {
@@ -3317,8 +3587,24 @@ def build_tailoring_generation_production_task_contract_material() -> Dict[str, 
                 "build_shadow_replacement_plan",
             ],
             "source_grounding": "exact_available_source_labels",
+            "source_label_binding": (
+                "canonical_source_label_normalization_applied_to_request_and_evidence_rows"
+            ),
             "promotion_mode": "changes_prompt_schema_and_allows_validated_concrete_candidates",
-            "parse_failure": "one_retry_with_retry_prompt_then_empty_parsed_result",
+            "parse_failure": (
+                "bounded_caller_parse_retry_limit_0_or_1_then_empty_parsed_result"
+            ),
+            "parse_retry_limits": list(LIVE_LLM_ALLOWED_PARSE_RETRY_LIMITS),
+            "default_parse_retry_limit": LIVE_LLM_DEFAULT_PARSE_RETRY_LIMIT,
+            "ungroundable_empty_result": (
+                "accepted_when_no_available_source_labels_exist"
+            ),
+            "factual_expansion_concepts": sorted(
+                _LIVE_FACTUAL_EXPANSION_CONCEPT_PATTERNS
+            ),
+            "source_supported_activity_concepts": (
+                "implementation_and_automation_activity_require_explicit_source_support"
+            ),
         },
         "task_parameters": {
             "temperature": LLM_TAILOR_TEMPERATURE,
@@ -4520,7 +4806,9 @@ def _run_live_llm_tailoring(
     output_llm_json: str = "",
     refresh_llm_cache: bool = False,
     enable_safe_app_ready_rewrite_promotion: bool = False,
+    parse_retry_limit: int = LIVE_LLM_DEFAULT_PARSE_RETRY_LIMIT,
 ) -> Dict[str, Any]:
+    parse_retry_limit = normalize_live_llm_parse_retry_limit(parse_retry_limit)
     owner_user_id = str(
         os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
     ).strip()
@@ -4566,6 +4854,9 @@ def _run_live_llm_tailoring(
                     "model": "",
                     "resolved_provider": "",
                     "resolved_model": "",
+                    "provider_request_count": 0,
+                    "parse_retry_count": 0,
+                    "parse_retry_limit": parse_retry_limit,
                     "fallback_used": False,
                     "fallback_attempted": False,
                     "fallback_provider": "",
@@ -4587,6 +4878,8 @@ def _run_live_llm_tailoring(
         fallback_enabled = False
         fallback_provider = ""
         fallback_model = ""
+
+    provider_request_count = 0
 
     cache_meta = _compute_live_llm_cache_meta(
         packet,
@@ -4663,6 +4956,8 @@ def _run_live_llm_tailoring(
         attempted_providers.append(fallback_provider)
 
     def _call_llm(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        nonlocal provider_request_count
+        provider_request_count += 1
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -4681,6 +4976,7 @@ def _run_live_llm_tailoring(
                 return_parsed=True,
                 thinking_budget=0,
                 messages=messages,
+                workload_id="tailoring_generation",
             )
         return run_chat_completion_with_metadata(
             provider=requested_provider,
@@ -4697,6 +4993,7 @@ def _run_live_llm_tailoring(
             fallback_provider=fallback_provider,
             fallback_model=fallback_model,
             messages=messages,
+            workload_id="tailoring_generation",
         )
 
     def _raw_text(value: Any) -> str:
@@ -4732,6 +5029,9 @@ def _run_live_llm_tailoring(
                 if resolved_provider
                 else attempted_providers
             ),
+            "provider_request_count": provider_request_count,
+            "parse_retry_count": max(provider_request_count - 1, 0),
+            "parse_retry_limit": parse_retry_limit,
         }
 
     def _success_result(
@@ -4848,6 +5148,21 @@ def _run_live_llm_tailoring(
             retry_raw_response="",
         )
     except Exception as primary_parse_exc:
+        if parse_retry_limit <= 0:
+            return _attach_live_llm_cache_meta(
+                {
+                    **_base_result_meta(primary_result),
+                    "parse_ok": False,
+                    "parse_error": f"Primary parse failed: {primary_parse_exc}",
+                    "retry_used": False,
+                    "raw_response": primary_raw,
+                    "retry_raw_response": "",
+                    "parsed": _empty_live_llm_parsed(),
+                },
+                cache_meta,
+                cache_hit=False,
+            )
+
         retry_prompt = (
             "Return EXACTLY one-line valid JSON only for the task below. "
             "No markdown. No code fences. No commentary. "

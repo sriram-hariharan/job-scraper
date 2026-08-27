@@ -3179,7 +3179,7 @@ function normalizeQueueFilters(filters = {}) {
     actions: actions.map((value) => String(value || "").trim()).filter(Boolean),
     preferenceIds: preferenceIds.map((value) => String(value || "").trim()).filter(Boolean),
     undecidedOnly: Boolean(filters.undecidedOnly),
-    limit: Math.min(200, Math.max(1, Number(filters.limit) || 15)),
+    limit: Math.max(1, Math.floor(Number(filters.limit) || 15)),
   };
 }
 

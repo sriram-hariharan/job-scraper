@@ -3278,10 +3278,10 @@ body.pipeline-workflow-open {
 }
 
 .workflow-overlay--tailoring {
-  --workflow-accent: #7c3aed;
-  --workflow-accent-strong: #6366f1;
-  --workflow-accent-soft: rgba(124, 58, 237, 0.16);
-  --workflow-action-bg: linear-gradient(135deg, #4f46e5, #7c3aed);
+  --workflow-accent: #bfaac5;
+  --workflow-accent-strong: #d5c4da;
+  --workflow-accent-soft: rgba(191, 170, 197, 0.14);
+  --workflow-action-bg: #72587c;
 }
 
 html[data-theme="light"] .workflow-overlay {
@@ -3311,10 +3311,10 @@ html[data-theme="light"] .workflow-overlay--pipeline {
 }
 
 html[data-theme="light"] .workflow-overlay--tailoring {
-  --workflow-accent: #6d28d9;
-  --workflow-accent-strong: #4f46e5;
-  --workflow-accent-soft: rgba(109, 40, 217, 0.11);
-  --workflow-action-bg: linear-gradient(135deg, #4f46e5, #7c3aed);
+  --workflow-accent: #72587c;
+  --workflow-accent-strong: #5f4168;
+  --workflow-accent-soft: rgba(114, 88, 124, 0.11);
+  --workflow-action-bg: #72587c;
 }
 
 html[data-theme="dark"] .workflow-overlay--tailoring,
@@ -4154,7 +4154,7 @@ html[data-theme] body .workflow-overlay--tailoring .workflow-overlay__panel,
   font-weight: 900;
 }
 
-.workflow-overlay--tailoring:not(.is-success):not(.is-error) .workflow-dialog-status-icon::after {
+.workflow-overlay--tailoring[data-workflow-state="running"] .workflow-dialog-status-icon::after {
   content: "";
   width: 18px;
   height: 18px;
@@ -4174,6 +4174,12 @@ html[data-theme] body .workflow-overlay--tailoring .workflow-overlay__panel,
   border-color: color-mix(in srgb, var(--workflow-error) 44%, var(--workflow-card-border));
   background: var(--workflow-error-soft);
   color: var(--workflow-error);
+}
+
+.workflow-overlay--tailoring.is-stopped .workflow-dialog-status-icon {
+  border-color: var(--workflow-card-border);
+  background: var(--workflow-card-bg);
+  color: var(--workflow-muted);
 }
 
 .workflow-overlay--tailoring .workflow-overlay__header h3 {
@@ -4333,6 +4339,169 @@ html[data-theme] body .workflow-overlay--tailoring .workflow-overlay__panel,
   min-width: 198px;
 }
 
+.bulk-generate-suggestions-fullpage[data-workflow-state="confirm"] .workflow-dialog-status-icon::after {
+  content: "✦";
+  width: auto;
+  height: auto;
+  border: 0;
+  color: var(--workflow-accent-strong);
+  animation: none;
+}
+
+.bulk-generate-suggestions-body {
+  min-height: 0;
+}
+
+.bulk-generate-suggestions-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.bulk-generate-suggestions-controls.hidden {
+  display: none;
+}
+
+.bulk-generate-suggestions-controls label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--workflow-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.bulk-generate-suggestions-controls input,
+.bulk-generate-suggestions-controls select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--workflow-card-border);
+  border-radius: 12px;
+  background: var(--workflow-card-bg);
+  color: var(--workflow-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.bulk-generate-suggestions-controls input:hover,
+.bulk-generate-suggestions-controls select:hover {
+  border-color: color-mix(in srgb, var(--workflow-accent) 55%, var(--workflow-card-border));
+}
+
+.bulk-generate-suggestions-controls input:focus-visible,
+.bulk-generate-suggestions-controls select:focus-visible {
+  border-color: var(--workflow-accent-strong);
+  outline: 3px solid color-mix(in srgb, var(--workflow-accent) 24%, transparent);
+  outline-offset: 1px;
+}
+
+.bulk-generate-suggestions-number {
+  grid-template-columns: minmax(120px, 0.45fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.bulk-generate-suggestions-number > span {
+  grid-column: 1;
+}
+
+.bulk-generate-suggestions-number > input {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.bulk-generate-suggestions-number > small {
+  grid-column: 1 / -1;
+  color: var(--workflow-muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.bulk-generate-suggestions-number > .bulk-generate-suggestions-error {
+  color: var(--workflow-error);
+}
+
+.bulk-generate-suggestions-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bulk-generate-suggestions-filter-grid > label:last-child {
+  grid-column: 1 / -1;
+}
+
+.bulk-generate-suggestions-fullpage[data-workflow-state="confirm"] .bulk-generate-suggestions-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bulk-generate-suggestions-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bulk-generate-suggestions-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--workflow-card-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--workflow-accent-soft) 42%, transparent);
+}
+
+.bulk-generate-suggestions-summary span,
+.bulk-generate-suggestions-current span {
+  color: var(--workflow-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.bulk-generate-suggestions-summary strong {
+  color: var(--workflow-text);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.bulk-generate-suggestions-current,
+.bulk-generate-suggestions-results {
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid var(--workflow-card-border);
+  border-radius: 14px;
+  background: var(--workflow-card-bg);
+}
+
+.bulk-generate-suggestions-current strong {
+  overflow-wrap: anywhere;
+  color: var(--workflow-text);
+  font-size: 14px;
+}
+
+.bulk-generate-suggestions-results {
+  max-height: 190px;
+  overflow-y: auto;
+  color: var(--workflow-text);
+}
+
+.bulk-generate-suggestions-results ul {
+  display: grid;
+  gap: 5px;
+  margin: 3px 0 0;
+  padding-left: 20px;
+  color: var(--workflow-muted);
+  font-size: 12px;
+}
+
+.bulk-generate-suggestions-current.hidden,
+.bulk-generate-suggestions-results.hidden {
+  display: none;
+}
+
 @keyframes workflow-step-spin {
   to { transform: rotate(360deg); }
 }
@@ -4403,6 +4572,26 @@ html[data-theme] body .workflow-overlay--tailoring .workflow-overlay__panel,
   .workflow-overlay--tailoring .workflow-overlay__actions button,
   .workflow-overlay--tailoring #generateSuggestionsOpenWorkspaceBtn {
     width: 100%;
+  }
+
+  .bulk-generate-suggestions-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-generate-suggestions-filter-grid,
+  .bulk-generate-suggestions-number {
+    grid-template-columns: 1fr;
+  }
+
+  .bulk-generate-suggestions-number > span,
+  .bulk-generate-suggestions-number > input,
+  .bulk-generate-suggestions-number > small {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .bulk-generate-suggestions-filter-grid > label:last-child {
+    grid-column: 1;
   }
 
   .workflow-overlay--pipeline .workflow-overlay__header {

@@ -120,7 +120,7 @@ def planning_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=planning_tailoring_workflow_polish_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=bulk_generate_suggestions_r2" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=planning_tailoring_workflow_polish_r1" />
@@ -246,6 +246,92 @@ def planning_dashboard() -> str:
           >
             Cancel
           </button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section
+    class="bulk-generate-suggestions-fullpage workflow-overlay workflow-overlay--tailoring hidden"
+    id="bulkGenerateSuggestionsOverlay"
+    aria-live="polite"
+    aria-modal="true"
+    aria-labelledby="bulkGenerateSuggestionsTitle"
+    aria-describedby="bulkGenerateSuggestionsText"
+    aria-busy="false"
+    role="dialog"
+  >
+    <div class="bulk-generate-suggestions-card workflow-overlay__panel">
+      <div class="workflow-overlay__header">
+        <div class="workflow-dialog-status-icon" id="bulkGenerateSuggestionsStatusIcon" aria-hidden="true"></div>
+        <div class="workflow-overlay__header-copy">
+          <div class="subtext workflow-overlay__eyebrow" id="bulkGenerateSuggestionsBadge">
+            Bulk suggestion generation
+          </div>
+          <h3 id="bulkGenerateSuggestionsTitle">Bulk generate suggestions</h3>
+        </div>
+      </div>
+
+      <div class="workflow-overlay__metrics">
+        <div class="subtext workflow-overlay__supporting" id="bulkGenerateSuggestionsText">
+          Choose which eligible Planning jobs should receive tailoring suggestions.
+        </div>
+      </div>
+
+      <div class="bulk-generate-suggestions-body workflow-overlay__body">
+        <div class="bulk-generate-suggestions-controls" id="bulkGenerateSuggestionsControls">
+          <label class="bulk-generate-suggestions-number" for="bulkGenerateSuggestionsNumber">
+            <span>Number of jobs</span>
+            <input
+              id="bulkGenerateSuggestionsNumber"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              aria-describedby="bulkGenerateSuggestionsNumberHelp bulkGenerateSuggestionsNumberError"
+            />
+            <small id="bulkGenerateSuggestionsNumberHelp">Processes the top eligible jobs in Planning priority order.</small>
+            <small class="bulk-generate-suggestions-error hidden" id="bulkGenerateSuggestionsNumberError" role="alert">Enter a positive whole number.</small>
+          </label>
+          <div class="bulk-generate-suggestions-filter-grid">
+            <label>
+              <span>Review readiness</span>
+              <select id="bulkGenerateSuggestionsReviewFilter">
+                <option value="">All</option>
+                <option value="APPLY">Ready for review</option>
+                <option value="APPLY_REVIEW_VARIANTS">Review resume choice</option>
+                <option value="MAYBE_TAILOR">Tailor first</option>
+                <option value="SKIP_FOR_NOW">Review later</option>
+              </select>
+            </label>
+            <label>
+              <span>Match strength</span>
+              <select id="bulkGenerateSuggestionsMatchFilter">
+                <option value="">All</option>
+                <option value="strong">Excellent match</option>
+                <option value="solid">Strong match</option>
+                <option value="moderate">Moderate match</option>
+                <option value="weak">Weak match</option>
+                <option value="filtered_out">No credible match</option>
+              </select>
+            </label>
+            <label>
+              <span>Preferences</span>
+              <select id="bulkGenerateSuggestionsPreferenceFilter">
+                <option value="">All preferences</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="bulk-generate-suggestions-summary" id="bulkGenerateSuggestionsSummary"></div>
+        <div class="bulk-generate-suggestions-current hidden" id="bulkGenerateSuggestionsCurrent"></div>
+        <div class="bulk-generate-suggestions-results hidden" id="bulkGenerateSuggestionsResults"></div>
+      </div>
+
+      <div class="modal-actions bulk-generate-suggestions-actions workflow-overlay__footer">
+        <p class="workflow-overlay__safety">Nothing will be submitted to employers.</p>
+        <div class="workflow-overlay__actions">
+          <button type="button" class="ghost-btn" id="bulkGenerateSuggestionsSecondaryBtn">Cancel</button>
+          <button type="button" class="workflow-primary-action" id="bulkGenerateSuggestionsPrimaryBtn">Generate suggestions</button>
         </div>
       </div>
     </div>
@@ -584,7 +670,7 @@ def planning_dashboard() -> str:
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
-  <script src="/static/planning.js?v=planning_tailoring_workflow_polish_r1"></script>
+  <script src="/static/planning.js?v=bulk_generate_suggestions_r2"></script>
 </body>
 </html>
     """.strip()

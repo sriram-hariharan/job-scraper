@@ -697,7 +697,7 @@ def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
         assert prohibited not in rendered
 
 
-def test_recommended_routes_api_loads_frozen_v1_authority_after_plan_evolves(
+def test_recommended_routes_api_loads_renderer_bound_skill_authority(
     monkeypatch,
 ):
     monkeypatch.setattr(
@@ -735,7 +735,7 @@ def test_recommended_routes_api_loads_frozen_v1_authority_after_plan_evolves(
     }
     assert skill["qualified_options"] == [
         {"provider": "groq", "model": "openai/gpt-oss-20b"},
-        {"provider": "openai", "model": "gpt-5-mini"},
+        {"provider": "groq", "model": "openai/gpt-oss-120b"},
     ]
     assert skill["requested_selection"] is None
     assert skill["requested_selection_status"] == "none"

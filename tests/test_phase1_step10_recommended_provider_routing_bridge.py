@@ -52,12 +52,13 @@ def _job_fit_overlay():
 
 def _recommendation(
     *,
+    workload_id="skill_extraction",
     status="recommended",
     provider="groq",
     model="openai/gpt-oss-20b",
 ):
     return {
-        "workload_id": "skill_extraction",
+        "workload_id": workload_id,
         "recommendation_status": status,
         "provider": provider,
         "model": model,
@@ -161,6 +162,24 @@ def _install_synthetic_routing_sources(monkeypatch):
         "build_job_fit_provider_model_qualification_overlay",
         lambda _payload: _job_fit_overlay(),
     )
+    monkeypatch.setattr(
+        routing,
+        "_build_authoritative_skill_renderer_bound_route",
+        lambda: {
+            **_recommendation(),
+            "selection_basis": "quality",
+            "qualified_options": [
+                {
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                },
+                {
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                },
+            ],
+        },
+    )
     return registry_payload
 
 
@@ -262,6 +281,24 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
         routing,
         "build_job_fit_provider_model_qualification_overlay",
         lambda _payload: _job_fit_overlay(),
+    )
+    monkeypatch.setattr(
+        routing,
+        "_build_authoritative_skill_renderer_bound_route",
+        lambda: {
+            **_recommendation(),
+            "selection_basis": "quality",
+            "qualified_options": [
+                {
+                    "provider": "groq",
+                    "model": "openai/gpt-oss-20b",
+                },
+                {
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                },
+            ],
+        },
     )
 
     payload = routing.list_provider_model_routing_statuses()
@@ -497,7 +534,7 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
     expected_pairs = {
         "skill_extraction": [
             ("groq", "openai/gpt-oss-20b"),
-            ("openai", "gpt-5-mini"),
+            ("groq", "openai/gpt-oss-120b"),
         ],
         "job_fit_evaluation": [
             ("groq", "openai/gpt-oss-20b"),
@@ -975,7 +1012,7 @@ def test_resolve_uses_authoritative_registry_and_exact_workload(
     def fake_read(payload, workload_id):
         observed["payload"] = payload
         observed["workload_id"] = workload_id
-        return _recommendation()
+        return _recommendation(workload_id=workload_id)
 
     monkeypatch.setattr(
         routing,
@@ -984,16 +1021,16 @@ def test_resolve_uses_authoritative_registry_and_exact_workload(
     )
 
     result = routing.resolve_recommended_user_provider_route(
-        "skill_extraction"
+        "grounded_rag_answer"
     )
 
     assert observed == {
         "payload": registry_payload,
-        "workload_id": "skill_extraction",
+        "workload_id": "grounded_rag_answer",
     }
 
     assert result == {
-        "workload_id": "skill_extraction",
+        "workload_id": "grounded_rag_answer",
         "recommendation_status": "recommended",
         "provider": "groq",
         "model": "openai/gpt-oss-20b",
@@ -1028,6 +1065,7 @@ def test_non_recommended_workload_fails_before_runtime(
         routing,
         "read_provider_model_recommendation",
         lambda payload, workload_id: _recommendation(
+            workload_id=workload_id,
             status=status,
             provider=None,
             model=None,
@@ -1052,7 +1090,7 @@ def test_non_recommended_workload_fails_before_runtime(
     ) as exc_info:
         routing.run_recommended_user_chat_completion_with_metadata(
             owner_user_id="owner-1",
-            workload_id="skill_extraction",
+            workload_id="grounded_rag_answer",
             messages=[{"role": "user", "content": "hello"}],
         )
 
@@ -1152,6 +1190,7 @@ def test_invalid_recommended_identity_fails_before_runtime(
         routing,
         "read_provider_model_recommendation",
         lambda payload, workload_id: _recommendation(
+            workload_id=workload_id,
             status="recommended",
             provider="",
             model="",
@@ -1176,7 +1215,7 @@ def test_invalid_recommended_identity_fails_before_runtime(
     ) as exc_info:
         routing.run_recommended_user_chat_completion_with_metadata(
             owner_user_id="owner-1",
-            workload_id="skill_extraction",
+            workload_id="grounded_rag_answer",
             messages=[],
         )
 
@@ -1229,6 +1268,249 @@ def test_policy_error_propagates_before_runtime(
         )
 
     assert runtime_called is False
+
+
+def _stage6b_owner_selections(monkeypatch, selection):
+    monkeypatch.setattr(
+        routing,
+        "list_user_ai_task_model_selections_payload",
+        lambda owner_user_id: {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": (
+                    []
+                    if selection is None
+                    else [
+                        {
+                            "owner_user_id": owner_user_id,
+                            "workload_id": "skill_extraction",
+                            **selection,
+                        }
+                    ]
+                ),
+            }
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "selection",
+        "expected_model",
+        "expected_status",
+        "expected_source",
+    ),
+    (
+        (
+            None,
+            "openai/gpt-oss-20b",
+            "none",
+            "applylens_recommended",
+        ),
+        (
+            {"provider": "groq", "model": "openai/gpt-oss-120b"},
+            "openai/gpt-oss-120b",
+            "qualified",
+            "user_override",
+        ),
+        (
+            {"provider": "openai", "model": "gpt-5-mini"},
+            "openai/gpt-oss-20b",
+            "no_longer_qualified",
+            "applylens_recommended",
+        ),
+    ),
+)
+def test_stage6b_skill_effective_route_and_fake_runtime(
+    monkeypatch,
+    selection,
+    expected_model,
+    expected_status,
+    expected_source,
+):
+    from src.ai import skill_llm_enricher
+
+    _stage6b_owner_selections(monkeypatch, selection)
+    executed = []
+
+    def fake_runtime(**kwargs):
+        executed.append((kwargs["provider"], kwargs["model"]))
+        return {"content": "ok"}
+
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        fake_runtime,
+    )
+    status = routing.read_provider_model_routing_status(
+        "skill_extraction",
+        owner_user_id="owner-stage6b",
+    )
+    owner_route = skill_llm_enricher.resolve_effective_user_provider_route(
+        "owner-stage6b",
+        "skill_extraction",
+    )
+    result = routing.run_effective_user_chat_completion_with_metadata(
+        "owner-stage6b",
+        "skill_extraction",
+        [],
+    )
+
+    assert status["requested_selection"] == selection
+    assert status["requested_selection_status"] == expected_status
+    assert status["effective_selection_source"] == expected_source
+    assert owner_route == {
+        "workload_id": "skill_extraction",
+        "provider": "groq",
+        "model": expected_model,
+        "effective_selection_source": expected_source,
+    }
+    assert executed == [("groq", expected_model)]
+    assert result == {"content": "ok"}
+
+
+def test_stage6b_unrelated_grounded_rag_route_remains_v1(monkeypatch):
+    _stage6b_owner_selections(monkeypatch, None)
+    registry_payload = routing._load_authoritative_qualification_registry()
+    v1_policy = build_provider_model_recommendation_policy(registry_payload)
+    before = next(
+        entry
+        for entry in v1_policy["workloads"]
+        if entry["workload_id"] == "grounded_rag_answer"
+    )
+    after = routing.read_provider_model_routing_status(
+        "grounded_rag_answer",
+        owner_user_id="owner-stage6b",
+    )
+
+    assert (before["provider"], before["model"]) == (
+        "groq",
+        "openai/gpt-oss-20b",
+    )
+    assert after["recommended_option"] == {
+        "provider": before["provider"],
+        "model": before["model"],
+    }
+
+
+@pytest.mark.parametrize(
+    "failure_mode",
+    (
+        "missing",
+        "malformed",
+        "stale_semantics",
+        "stale_task_contract",
+        "20b_evidence",
+        "20b_binding",
+        "120b_evidence",
+        "120b_binding",
+        "candidate_universe",
+        "pin_mismatch",
+    ),
+)
+def test_stage6b_skill_authority_failures_never_fall_back_or_execute(
+    monkeypatch,
+    failure_mode,
+):
+    _stage6b_owner_selections(monkeypatch, None)
+    artifact_path = (
+        ROOT
+        / routing.qualification_registry
+        .RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH
+    )
+    baseline = (
+        routing.qualification_registry
+        .load_renderer_bound_skill_qualification_registry(
+            artifact_path,
+            repository_root=ROOT,
+        )
+    )
+
+    if failure_mode == "missing":
+        def fail_load(*_args, **_kwargs):
+            raise ValueError("renderer-bound Skill registry is missing")
+
+        monkeypatch.setattr(
+            routing.qualification_registry,
+            "load_renderer_bound_skill_qualification_registry",
+            fail_load,
+        )
+    elif failure_mode == "pin_mismatch":
+        original_pin = routing.build_finalized_skill_extraction_renderer_bound_pin
+
+        def mismatched_pin():
+            pin = original_pin()
+            pin["model"] = "openai/gpt-oss-120b"
+            return pin
+
+        monkeypatch.setattr(
+            routing,
+            "build_finalized_skill_extraction_renderer_bound_pin",
+            mismatched_pin,
+        )
+    else:
+        altered = deepcopy(baseline)
+        if failure_mode == "malformed":
+            altered = {}
+        elif failure_mode == "candidate_universe":
+            altered["cells"] = altered["cells"][:-1]
+        else:
+            model = (
+                "openai/gpt-oss-120b"
+                if failure_mode.startswith("120b")
+                else "openai/gpt-oss-20b"
+            )
+            cell = next(
+                candidate
+                for candidate in altered["cells"]
+                if candidate["model"] == model
+            )
+            field = {
+                "stale_semantics": (
+                    "current_workload_qualification_semantics_sha256"
+                ),
+                "stale_task_contract": "current_task_contract_sha256",
+                "20b_evidence": "evidence_sha256",
+                "20b_binding": "qualification_binding_sha256",
+                "120b_evidence": "evidence_sha256",
+                "120b_binding": "qualification_binding_sha256",
+            }[failure_mode]
+            cell[field] = "0" * 64
+        monkeypatch.setattr(
+            routing.qualification_registry,
+            "load_renderer_bound_skill_qualification_registry",
+            lambda *_args, **_kwargs: altered,
+        )
+
+    monkeypatch.setattr(
+        routing,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail(
+            "invalid Skill authority must fail before provider runtime"
+        ),
+    )
+
+    with pytest.raises(
+        routing.EffectiveProviderRoutingUnavailableError
+    ) as exc_info:
+        routing.run_effective_user_chat_completion_with_metadata(
+            "owner-stage6b",
+            "skill_extraction",
+            [],
+        )
+
+    assert exc_info.value.routing_status == "blocked_non_live"
+
+    unrelated = routing.resolve_effective_user_provider_route(
+        "owner-stage6b",
+        "grounded_rag_answer",
+    )
+    assert unrelated == {
+        "workload_id": "grounded_rag_answer",
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+        "effective_selection_source": "applylens_recommended",
+    }
 
 
 def _effective_status(

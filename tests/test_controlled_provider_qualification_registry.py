@@ -2272,3 +2272,34 @@ def test_stage5g_current_skill_winner_pin_preserves_qualified_alternative():
         value is False
         for value in prospective["authority_invariants"].values()
     )
+
+
+def test_stage6b_durable_skill_registry_loads_exact_bounded_authority():
+    artifact_path = ROOT / registry.RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH
+    authority = registry.load_renderer_bound_skill_qualification_registry(
+        artifact_path,
+        repository_root=ROOT,
+    )
+
+    assert registry.validate_renderer_bound_qualification_registry(authority)
+    assert registry.renderer_bound_qualification_registry_sha256(authority) == (
+        "f25765138187aeae4eddc4f955441a738446493fe58ecc537f1cd9584d7c4cce"
+    )
+    assert [
+        (cell["workload_id"], cell["provider"], cell["model"], cell["status"])
+        for cell in authority["cells"]
+    ] == [
+        (
+            "skill_extraction",
+            "groq",
+            "openai/gpt-oss-20b",
+            "qualified",
+        ),
+        (
+            "skill_extraction",
+            "groq",
+            "openai/gpt-oss-120b",
+            "qualified",
+        ),
+        ("skill_extraction", "openai", "gpt-5-mini", "stale"),
+    ]

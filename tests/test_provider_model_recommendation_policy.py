@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 from src.evaluation import provider_model_recommendation_policy as policy
+from src.evaluation import (
+    controlled_provider_qualification_registry as qualification_registry,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -603,3 +606,48 @@ def test_stage5g_finalized_skill_pin_is_exact_advisory_and_copy_contained():
     assert policy.build_finalized_skill_extraction_renderer_bound_pin()[
         "model"
     ] == "openai/gpt-oss-20b"
+
+
+def test_stage6b_durable_skill_authority_is_exact_and_fail_closed():
+    artifact_path = (
+        ROOT
+        / qualification_registry
+        .RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH
+    )
+    authority = (
+        qualification_registry
+        .load_renderer_bound_skill_qualification_registry(
+            artifact_path,
+            repository_root=ROOT,
+        )
+    )
+
+    assert (
+        qualification_registry
+        .renderer_bound_qualification_registry_sha256(authority)
+        == policy
+        .FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_REGISTRY_SHA256
+    )
+    assert policy.validate_finalized_skill_extraction_renderer_bound_authority(
+        authority
+    )
+
+    changed = deepcopy(authority)
+    alternative = next(
+        cell
+        for cell in changed["cells"]
+        if cell["model"] == "openai/gpt-oss-120b"
+    )
+    alternative["evidence_sha256"] = "0" * 64
+    alternative["qualification_binding_sha256"] = (
+        qualification_registry.renderer_bound_qualification_binding_sha256(
+            alternative
+        )
+    )
+    with pytest.raises(
+        ValueError,
+        match="renderer-bound registry digest changed",
+    ):
+        policy.validate_finalized_skill_extraction_renderer_bound_authority(
+            changed
+        )

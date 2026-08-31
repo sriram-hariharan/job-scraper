@@ -576,6 +576,23 @@ _FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_PIN = {
     ],
 }
 
+FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_REGISTRY_SHA256 = (
+    "f25765138187aeae4eddc4f955441a738446493fe58ecc537f1cd9584d7c4cce"
+)
+_FINALIZED_SKILL_EXTRACTION_CONTROLLED_PLAN_SHA256 = (
+    "f074eaa9f4db1e4d58b0f1530503217c76142477548c07a15fc1f2d9fc4e7fae"
+)
+_FINALIZED_SKILL_EXTRACTION_QUALIFIED_CANDIDATE_BINDINGS = {
+    ("groq", "openai/gpt-oss-20b"): (
+        "ca727553032f24749b3ea161188b6c2cd4f7ab4c877b8e7dc7d896a0f186e5ac",
+        "dfe7c0c77150f9a7bfb25f00a5b37ae67f121948f4a63140e9de67e2f515c1df",
+    ),
+    ("groq", "openai/gpt-oss-120b"): (
+        "79e89f604a16f38ea6803bf2669c004b4631ebaf5fd9ef005b3fe57e9f59c6ec",
+        "1b4d7b73c3063fbd5e65b1293223202dfb0c4c01ec6fe28eb141f2eeb83e57a4",
+    ),
+}
+
 
 def validate_renderer_bound_recommendation_pin(pin: Mapping[str, Any]) -> bool:
     """Validate the shape of one explicit next-generation recommendation pin.
@@ -652,6 +669,52 @@ def build_finalized_skill_extraction_renderer_bound_pin() -> Dict[str, Any]:
     pin = deepcopy(_FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_PIN)
     validate_renderer_bound_recommendation_pin(pin)
     return pin
+
+
+def validate_finalized_skill_extraction_renderer_bound_authority(
+    renderer_bound_registry: Dict[str, Any],
+) -> bool:
+    """Validate the exact durable Skill authority selected for app routing."""
+
+    payload = deepcopy(renderer_bound_registry)
+    qualification_registry.validate_renderer_bound_qualification_registry(
+        payload
+    )
+    _require(
+        qualification_registry.renderer_bound_qualification_registry_sha256(
+            payload
+        )
+        == FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_REGISTRY_SHA256,
+        "finalized Skill renderer-bound registry digest changed",
+    )
+    pin = build_finalized_skill_extraction_renderer_bound_pin()
+    _require(
+        production_task_contract_sha256(pin["workload_id"])
+        == pin["expected_current_task_contract_sha256"],
+        "finalized Skill production task contract changed",
+    )
+    validate_renderer_bound_workload_recommendation(payload, pin=pin)
+    cells = _renderer_bound_workload_cells(payload, pin["workload_id"])
+    by_identity = {
+        (cell["provider"], cell["model"]): cell
+        for cell in cells
+    }
+    for identity, (evidence_sha256, binding_sha256) in (
+        _FINALIZED_SKILL_EXTRACTION_QUALIFIED_CANDIDATE_BINDINGS.items()
+    ):
+        cell = by_identity.get(identity)
+        _require(
+            cell is not None
+            and cell["status"] == "qualified"
+            and cell["current_controlled_plan_sha256"]
+            == _FINALIZED_SKILL_EXTRACTION_CONTROLLED_PLAN_SHA256
+            and cell["tested_controlled_plan_sha256"]
+            == _FINALIZED_SKILL_EXTRACTION_CONTROLLED_PLAN_SHA256
+            and cell["evidence_sha256"] == evidence_sha256
+            and cell["qualification_binding_sha256"] == binding_sha256,
+            "finalized Skill qualified candidate authority changed",
+        )
+    return True
 
 
 def _renderer_bound_workload_cells(

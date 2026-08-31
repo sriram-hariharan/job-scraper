@@ -49,6 +49,9 @@ REGISTRY_SCOPE = "evaluation_qualification_state_only"
 REGISTRY_ARTIFACT_PATH = Path(
     "outputs/provider_benchmark/provider-qualification-registry.json"
 )
+RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH = Path(
+    "src/evaluation/renderer_bound_skill_qualification_registry.json"
+)
 QUALIFICATION_STATUSES = ("pending", "qualified", "rejected", "stale")
 
 _HEX_DIGEST_LENGTH = 64
@@ -1908,16 +1911,17 @@ def _prepare_registry_path(
     *,
     repository_root: str | Path,
     require_existing: bool,
+    approved_relative_path: Path = REGISTRY_ARTIFACT_PATH,
 ) -> Path:
     root = Path(repository_root).resolve()
     _require(root.is_dir() and not root.is_symlink(), "repository root is unsafe")
     candidate = Path(artifact_path)
     _require(candidate.is_absolute(), "registry path must be absolute")
     _require(".." not in candidate.parts, "registry path traversal is prohibited")
-    expected = root / REGISTRY_ARTIFACT_PATH
+    expected = root / approved_relative_path
     _require(candidate == expected, "registry path is outside the approved namespace")
     current = root
-    for part in REGISTRY_ARTIFACT_PATH.parts[:-1]:
+    for part in approved_relative_path.parts[:-1]:
         current = current / part
         if current.exists() or current.is_symlink():
             _require(
@@ -1984,6 +1988,62 @@ def load_provider_qualification_registry(
         raise ValueError("persisted qualification registry is malformed") from None
     validate_provider_qualification_registry(registry, plan=plan)
     return deepcopy(registry)
+
+
+def load_renderer_bound_skill_qualification_registry(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Dict[str, Any]:
+    """Load the versioned Skill-only renderer-bound authority artifact."""
+
+    path = _prepare_registry_path(
+        artifact_path,
+        repository_root=repository_root,
+        require_existing=True,
+        approved_relative_path=RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH,
+    )
+    _require(
+        not stat.S_IMODE(path.stat().st_mode) & (stat.S_IWGRP | stat.S_IWOTH),
+        "renderer-bound Skill registry permissions are unsafe",
+    )
+    try:
+        registry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(
+            "persisted renderer-bound Skill registry is malformed"
+        ) from None
+    validate_renderer_bound_qualification_registry(registry)
+    return deepcopy(registry)
+
+
+def write_initial_renderer_bound_skill_qualification_registry(
+    artifact_path: str | Path,
+    registry: Dict[str, Any],
+    *,
+    repository_root: str | Path,
+) -> Path:
+    """Persist one new validated Skill-only renderer-bound authority."""
+
+    encoded = serialize_renderer_bound_qualification_registry(
+        registry
+    ).encode("utf-8")
+    path = _prepare_registry_path(
+        artifact_path,
+        repository_root=repository_root,
+        require_existing=False,
+        approved_relative_path=RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH,
+    )
+    _write_exclusive(path, encoded)
+    loaded = load_renderer_bound_skill_qualification_registry(
+        path,
+        repository_root=repository_root,
+    )
+    _require(
+        loaded == registry,
+        "persisted renderer-bound Skill registry changed during creation",
+    )
+    return path
 
 
 def write_initial_provider_qualification_registry(

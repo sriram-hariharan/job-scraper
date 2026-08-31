@@ -697,6 +697,52 @@ def test_recommended_routes_api_returns_safe_backend_owned_workload_list(
         assert prohibited not in rendered
 
 
+def test_recommended_routes_api_loads_frozen_v1_authority_after_plan_evolves(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        api.provider_model_routing_service,
+        "list_user_ai_task_model_selections_payload",
+        lambda owner_user_id: {
+            "data": {
+                "owner_user_id": owner_user_id,
+                "selections": [],
+            }
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "AI Settings page load must not call a provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-routes"
+    )
+
+    assert response.status_code == 200
+    skill = next(
+        workload
+        for workload in response.json()["workloads"]
+        if workload["workload_id"] == "skill_extraction"
+    )
+    assert skill["recommendation_status"] == "recommended"
+    assert skill["recommended_option"] == {
+        "provider": "groq",
+        "model": "openai/gpt-oss-20b",
+    }
+    assert skill["qualified_options"] == [
+        {"provider": "groq", "model": "openai/gpt-oss-20b"},
+        {"provider": "openai", "model": "gpt-5-mini"},
+    ]
+    assert skill["requested_selection"] is None
+    assert skill["requested_selection_status"] == "none"
+    assert skill["effective_selection"] == skill["recommended_option"]
+    assert skill["effective_selection_source"] == "applylens_recommended"
+
+
 def test_task_route_service_validates_before_exact_owner_scoped_upsert(
     monkeypatch,
 ):

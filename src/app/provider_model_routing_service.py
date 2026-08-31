@@ -28,15 +28,13 @@ from typing import Any, Dict, Optional
 from src.ai.user_provider_runtime import (
     run_user_chat_completion_with_metadata,
 )
-from src.evaluation.controlled_provider_benchmark_plan import (
-    build_controlled_provider_benchmark_plan,
-)
 from src.evaluation import (
     controlled_provider_qualification_registry as qualification_registry,
 )
 from src.evaluation.provider_model_recommendation_policy import (
     build_provider_model_recommendation_policy,
     read_provider_model_recommendation,
+    validate_provider_model_recommendation_policy_source,
 )
 from src.evaluation.job_fit_provider_model_qualification_overlay import (
     build_job_fit_provider_model_qualification_overlay,
@@ -88,13 +86,14 @@ class ProviderModelSelectionNotQualifiedError(ValueError):
 
 
 def _load_authoritative_qualification_registry() -> Dict[str, Any]:
-    plan = build_controlled_provider_benchmark_plan()
-
-    return qualification_registry.load_provider_qualification_registry(
-        _REPOSITORY_ROOT / qualification_registry.REGISTRY_ARTIFACT_PATH,
-        repository_root=_REPOSITORY_ROOT,
-        plan=plan,
+    registry_payload = (
+        qualification_registry.load_provider_qualification_registry(
+            _REPOSITORY_ROOT / qualification_registry.REGISTRY_ARTIFACT_PATH,
+            repository_root=_REPOSITORY_ROOT,
+        )
     )
+    validate_provider_model_recommendation_policy_source(registry_payload)
+    return registry_payload
 
 
 def _owner_requested_selections(
